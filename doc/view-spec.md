@@ -13,9 +13,9 @@ Every entity behaves the same way. The view is determined by whether the entity 
 
 ### When viewing a container (entity with children)
 
-1. **Show all children** of the selected container
-2. **Show edges between children** (sibling relationships)
-3. **If a child has a relationship with an entity inside a sibling container**:
+1. **Show visible children** of the selected container (private children hidden unless expanded)
+2. **Show edges between visible children** (sibling relationships)
+3. **If a visible child has a relationship with an entity inside a sibling container**:
    - Show that related entity explicitly
    - Group it inside its container (the sibling)
    - Only show related entities inside that container, not all its children
@@ -32,16 +32,16 @@ Every entity behaves the same way. The view is determined by whether the entity 
 
 For containers:
 ```
-children = direct_children(selected)
-cross_container_relations = relationships_of(children) that target entities inside sibling containers
+children = visible_children(selected, expanded-containers)  // filters out private unless expanded
+cross_container_relations = relationships_of(children) that target visible entities inside sibling containers
 visible_entities = children ∪ cross_container_relations
 visible_edges = edges_between(children) ∪ edges_from(children, cross_container_relations)
 ```
 
 For leaves:
 ```
-visible_entities = {selected} ∪ relationships(selected)
-visible_edges = edges_involving(selected)
+visible_entities = {selected} ∪ visible_relationships(selected)  // only to/from visible nodes
+visible_edges = edges_involving(selected) where both endpoints visible
 ```
 
 ### Key Principles
@@ -71,6 +71,7 @@ The UI distinguishes between **selection** (highlighting within current view) an
 |--------|----------|
 | **Single click** | Select node, highlight its direct edges. Focus stays on current container. |
 | **Double click** | Navigate into the node (shift focus) - only if node has children. |
+| **Right click** | Toggle private visibility for containers with private children. |
 | **Breadcrumb click** | Navigate to that ancestor container. |
 
 ### Single Click: Selection
@@ -103,6 +104,7 @@ The breadcrumb shows the path from smart-root to the focused container. Clicking
 
 - **Single click** = "peek" (see relationships without changing context)
 - **Double click** = "dive in" (change focus to explore deeper)
+- **Right click** = "reveal/hide" (toggle private children visibility)
 - **Breadcrumb** = "zoom out" (navigate back up the hierarchy)
 
 ## Examples
@@ -165,6 +167,7 @@ Each node has:
 - `label`: Display name
 - `parent`: ID of parent entity (for hierarchy)
 - `children`: Set of child entity IDs
+- `private?`: Boolean indicating if this node is private (only applicable to vars)
 
 ### Edges
 
@@ -174,3 +177,56 @@ Edges exist at three levels, each aggregated from the level below:
 - **Folder edges**: Aggregated from namespace edges (folder-A → folder-B if any ns in A depends on any ns in B)
 
 Self-edges are excluded at all levels.
+
+### Editor State
+
+The editor maintains UI state that affects the projection (what's rendered):
+
+- `selected-id`: Currently highlighted node (for sidebar details and edge highlighting)
+- `view-id`: The container being viewed (`nil` = root)
+- `expanded-containers`: Set of container IDs where private children are visible
+
+## Private Visibility
+
+Containers can have private children (e.g., vars defined with `defn-`). By default, private children are hidden from the view. Users can toggle visibility per-container.
+
+### Visual Indicators
+
+Containers with hidden private children are visually distinguished:
+- **Double border**: Indicates the container has private children that are currently hidden
+- **Solid border**: Container is expanded (showing all children) or has no private children
+
+Private vars (when visible) are styled distinctly:
+- **Dashed border**: Indicates the var is private
+- **Gray background**: Additional visual distinction from public vars
+
+### Toggle Behavior
+
+**Right-click** on a container with private children to toggle visibility:
+- **Collapsed (default)**: Private children are hidden. Edges to/from private vars are not shown.
+- **Expanded**: All children (public and private) are visible. All edges are shown.
+
+### Visibility Rules
+
+A node is visible if:
+1. It is not private, OR
+2. It is private AND its parent container is in `expanded-containers`
+
+An edge is visible if both its source and target nodes are visible.
+
+### Projection Formula (Updated)
+
+The projection function combines the model with editor state:
+
+```
+visible_children(container) =
+  if container in expanded-containers:
+    all children
+  else:
+    children where not private?
+
+visible_edges(children) =
+  edges where both from and to are in visible_children
+```
+
+This keeps the model pure (complete graph with all nodes and edges) while the projection handles filtering based on UI state.

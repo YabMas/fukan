@@ -4,7 +4,19 @@
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.http-kit :as hk]
             [fukan.web.views :as views]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [clojure.string :as str]))
+
+;; -----------------------------------------------------------------------------
+;; Helpers
+
+(defn- parse-expanded-containers
+  "Parse the expanded query param into a set of container IDs.
+   Format: comma-separated list of URL-encoded IDs."
+  [expanded-param]
+  (if (and expanded-param (not= expanded-param ""))
+    (into #{} (str/split expanded-param #","))
+    #{}))
 
 ;; -----------------------------------------------------------------------------
 ;; SSE Handlers
@@ -19,13 +31,14 @@
 
 (defn main-view-handler
   "SSE endpoint that streams the full main view update.
-   
+
    Parameters:
    - id: Entity to navigate to (show its children)
    - select: Node to select and highlight (also determines navigation if id not provided)
-   
+   - expanded: Comma-separated list of container IDs with visible private children
+
    When ?select=xxx is provided without ?id, navigates to the view containing that node.
-   
+
    Patches:
    - Breadcrumb HTML
    - Sidebar HTML (node info for selected node)
@@ -40,22 +53,24 @@
                                             (when (and id (not= id "")) id))
                                 select-id (let [id (get params "select")]
                                             (when (and id (not= id "")) id))
-               ;; If select is provided but id is not, navigate to the container of the selected node
+                                expanded-containers (parse-expanded-containers (get params "expanded"))
+                                ;; If select is provided but id is not, navigate to the container of the selected node
                                 entity-id (or entity-id
                                               (when select-id (find-container-for-node model select-id)))
-               ;; Build editor state
+                                ;; Build editor state
                                 editor-state {:view-id entity-id
-                                              :selected-id (or select-id entity-id)}
-               ;; Render all components
+                                              :selected-id (or select-id entity-id)
+                                              :expanded-containers expanded-containers}
+                                ;; Render all components
                                 graph-data (views/render-graph model editor-state)]
 
-           ;; 1. Patch breadcrumb HTML
+                            ;; 1. Patch breadcrumb HTML
                             (d*/patch-elements! sse (views/render-breadcrumb model editor-state))
 
-           ;; 2. Patch sidebar HTML
+                            ;; 2. Patch sidebar HTML
                             (d*/patch-elements! sse (views/render-sidebar model editor-state))
 
-           ;; 3. Execute script to update graph and URL
+                            ;; 3. Execute script to update graph and URL
                             (d*/execute-script! sse
                                                 (str "if(window.renderGraph)renderGraph("
                                                      (json/generate-string graph-data)

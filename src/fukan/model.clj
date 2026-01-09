@@ -8,17 +8,17 @@
 ;; -----------------------------------------------------------------------------
 ;; ID construction helpers
 
-(defn folder-id
+(defn- folder-id
   "Create a folder node ID from a directory path."
   [path]
   (str "folder:" path))
 
-(defn ns-id
+(defn- ns-id
   "Create a namespace node ID from a namespace symbol."
   [ns-sym]
   (str "ns:" (name ns-sym)))
 
-(defn var-id
+(defn- var-id
   "Create a var node ID from namespace and var name."
   [ns-sym var-name]
   (str "var:" (name ns-sym) "/" (name var-name)))
@@ -52,7 +52,7 @@
     (when idx
       (subs dir-path 0 idx))))
 
-(defn build-folder-nodes
+(defn- build-folder-nodes
   "Build folder nodes from namespace definitions.
    Returns a map of {folder-id -> node}."
   [ns-defs]
@@ -80,7 +80,7 @@
     (when (> (count parts) 1)
       (str/join "/" (butlast parts)))))
 
-(defn build-namespace-nodes
+(defn- build-namespace-nodes
   "Build namespace nodes from namespace definitions.
    Returns a map of {ns-id -> node}."
   [ns-defs]
@@ -101,13 +101,12 @@
 ;; -----------------------------------------------------------------------------
 ;; Var node construction
 
-(defn build-var-nodes
-  "Build var nodes from var definitions (public vars only).
+(defn- build-var-nodes
+  "Build var nodes from var definitions (both public and private).
    Returns a map of {var-id -> node}."
   [var-defs]
   (->> var-defs
-       (remove :private)
-       (map (fn [{:keys [ns name filename row doc]}]
+       (map (fn [{:keys [ns name filename row doc private]}]
               (let [id (var-id ns name)]
                 [id {:id id
                      :kind :var
@@ -117,6 +116,7 @@
                      :filename filename
                      :row row
                      :doc doc
+                     :private? (boolean private)
                      :parent (ns-id ns)
                      :children #{}}])))
        (into {})))
@@ -131,7 +131,7 @@
     (update-in nodes [parent-id :children] conj child-id)
     nodes))
 
-(defn wire-children
+(defn- wire-children
   "Wire up parent-child relationships based on :parent fields."
   [nodes]
   (reduce (fn [acc [id node]]
@@ -142,107 +142,34 @@
           nodes))
 
 ;; -----------------------------------------------------------------------------
-;; Edge construction with private attribution
+;; Edge construction (raw edges)
 
 (defn- build-var-index
-  "Index all var definitions by [ns name] -> {:private? bool, :id string}.
+  "Index all var definitions by [ns name] -> var-id.
    Includes both public and private vars."
   [var-defs]
   (->> var-defs
-       (map (fn [{:keys [ns name private]}]
-              [[ns name] {:private? (boolean private)
-                          :id (var-id ns name)}]))
+       (map (fn [{:keys [ns name]}]
+              [[ns name] (var-id ns name)]))
        (into {})))
 
-(defn- build-internal-call-graph
-  "Build internal call graph: {ns -> {from-var -> #{to-var}}}.
-   Only includes calls within the same namespace."
-  [var-usages var-index]
-  (->> var-usages
-       (filter (fn [{:keys [from to from-var name]}]
-                 (and from-var              ; has a calling var
-                      (= from to)           ; same namespace
-                      (contains? var-index [to name])))) ; target is defined
-       (reduce (fn [acc {:keys [from from-var name]}]
-                 (update-in acc [from from-var] (fnil conj #{}) name))
-               {})))
+(defn- build-edges
+  "Build raw var-to-var edges from actual call relationships.
 
-(defn- build-external-call-graph
-  "Build external call graph: {[ns var] -> #{[target-ns target-var]}}.
-   Only includes calls to different namespaces."
-  [var-usages var-index]
-  (->> var-usages
-       (filter (fn [{:keys [from to from-var name]}]
-                 (and from-var              ; has a calling var
-                      (not= from to)        ; different namespace
-                      (contains? var-index [to name])))) ; target is defined
-       (reduce (fn [acc {:keys [from from-var to name]}]
-                 (update acc [from from-var] (fnil conj #{}) [to name]))
-               {})))
+   Creates a direct edge for each var usage where both the calling var
+   and the called var are defined in the codebase.
 
-(defn- responsibility-set
-  "Compute the set of vars a public var is responsible for.
-   Uses BFS through internal calls to find all reachable private vars.
-   Returns a set of var names (symbols) within the namespace."
-  [public-var internal-calls-for-ns]
-  (loop [visited #{}
-         queue [public-var]]
-    (if (empty? queue)
-      visited
-      (let [current (first queue)
-            callees (get internal-calls-for-ns current #{})
-            new-callees (remove visited callees)]
-        (recur (conj visited current)
-               (into (vec (rest queue)) new-callees))))))
-
-(defn- public-vars-by-ns
-  "Group public var names by namespace.
-   Returns {ns-sym -> #{var-name}}."
-  [var-index]
-  (->> var-index
-       (remove (fn [[_ {:keys [private?]}]] private?))
-       (map (fn [[[ns name] _]] [ns name]))
-       (reduce (fn [acc [ns name]]
-                 (update acc ns (fnil conj #{}) name))
-               {})))
-
-(defn build-edges
-  "Build var-to-var edges with private attribution.
-   
-   For each public var, computes its 'responsibility set' (all private vars
-   reachable through internal calls), then creates edges from the public var
-   to any targets (internal or external) called by vars in the responsibility set.
-   
    Returns a vector of {:from var-id, :to var-id} edges."
   [analysis]
   (let [var-defs (:var-definitions analysis)
         var-usages (:var-usages analysis)
-        var-index (build-var-index var-defs)
-        internal-calls (build-internal-call-graph var-usages var-index)
-        external-calls (build-external-call-graph var-usages var-index)
-        public-vars (public-vars-by-ns var-index)
-        public-var-set (into #{} (for [[ns vars] public-vars, v vars] [ns v]))]
-    (->> (for [ns-sym (keys public-vars)
-               public-var (get public-vars ns-sym)
-               :let [resp-set (responsibility-set public-var
-                                                  (get internal-calls ns-sym {}))
-                     ;; Collect all external calls from the responsibility set
-                     external-targets (mapcat #(get external-calls [ns-sym %])
-                                              resp-set)
-                     ;; Collect internal calls to public vars from the responsibility set
-                     internal-targets (->> resp-set
-                                           (mapcat #(get-in internal-calls [ns-sym %] #{}))
-                                           (filter #(contains? public-var-set [ns-sym %]))
-                                           (remove #{public-var}) ; no self-loops
-                                           (map #(vector ns-sym %)))
-                     ;; Combine all targets
-                     all-targets (concat external-targets internal-targets)]
-               [target-ns target-var] all-targets
-               ;; Only create edges to public vars
-               :when (not (:private? (get var-index [target-ns target-var])))]
-           {:from (var-id ns-sym public-var)
-            :to (var-id target-ns target-var)})
-         ;; Deduplicate edges
+        var-index (build-var-index var-defs)]
+    (->> var-usages
+         (keep (fn [{:keys [from from-var to name]}]
+                 (when-let [from-id (and from-var (get var-index [from from-var]))]
+                   (when-let [to-id (get var-index [to name])]
+                     (when (not= from-id to-id) ; no self-loops
+                       {:from from-id :to to-id})))))
          (into #{})
          (vec))))
 
@@ -357,7 +284,7 @@
         smart-root (find-smart-root all-nodes)
         pruned-nodes (prune-to-smart-root all-nodes smart-root)
 
-        ;; Build var-level edges with private attribution
+        ;; Build raw var-level edges
         var-edges (build-edges analysis)
 
         ;; Build aggregated namespace-level edges

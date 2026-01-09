@@ -181,7 +181,8 @@
         ;; Graph panel with Cytoscape event listeners and loading indicator
        [:div#graph-panel
         {"data-on:cy-select" "@get('/sse/sidebar?id=' + evt.detail.id)"
-         "data-on:cy-navigate" "@get('/sse/view?id=' + evt.detail.id)"
+         "data-on:cy-navigate" "@get('/sse/view?id=' + evt.detail.id + '&expanded=' + window.getExpandedParam())"
+         "data-on:cy-toggle-private" "@get('/sse/view?id=' + (new URLSearchParams(window.location.search).get('id') || '') + '&expanded=' + window.getExpandedParam())"
          "data-indicator" "#loading"}
         [:div#breadcrumb]
         [:div#cy]
@@ -429,10 +430,37 @@
                               (cons {:id current-id :label (breadcrumb-label node)} acc)))))]
         (cons {:id nil :label (or (breadcrumb-label root-node) "root")} path)))))
 
+(defn- node-visible?
+  "Check if a node is visible given the expanded-containers set.
+   A node is visible if it's not private, or if its parent is expanded."
+  [m node-id expanded-containers]
+  (let [node (get-in m [:nodes node-id])]
+    (or (not (:private? node))
+        (contains? expanded-containers (:parent node)))))
+
 (defn- get-children
   "Get the children of an entity (entities whose parent is this entity)."
   [m entity-id]
   (get-in m [:nodes entity-id :children] #{}))
+
+(defn- get-visible-children
+  "Get the visible children of an entity, filtered by expanded-containers.
+   If expanded-containers is nil or entity-id is in it, all children are returned.
+   Otherwise, only public children are returned."
+  [m entity-id expanded-containers]
+  (let [children-ids (get-children m entity-id)]
+    (if (or (nil? expanded-containers)
+            (contains? expanded-containers entity-id))
+      children-ids
+      (into #{}
+            (remove #(:private? (get-in m [:nodes %])))
+            children-ids))))
+
+(defn- has-private-children?
+  "Check if a container has any private children."
+  [m entity-id]
+  (let [children-ids (get-children m entity-id)]
+    (some #(:private? (get-in m [:nodes %])) children-ids)))
 
 (defn- get-child-edges
   "Get edges at the child level (one level down from entity).
@@ -448,15 +476,15 @@
 
 (defn- compute-container-view
   "Compute view when the selected entity is a container (has children).
-   
+
    Shows:
    - The selected container
-   - All children of the container (inside the selected container)
-   - Edges between children (sibling relationships)
-   - External entities that children relate to (grouped in their own containers)
-   - Cross-container edges from children to external entities"
-  [m entity-id]
-  (let [children-ids (get-children m entity-id)
+   - Visible children of the container (filtered by expanded-containers)
+   - Edges between visible children (sibling relationships)
+   - External entities that visible children relate to (grouped in their own containers)
+   - Cross-container edges from visible children to external entities"
+  [m entity-id expanded-containers]
+  (let [children-ids (get-visible-children m entity-id expanded-containers)
         children-set (set children-ids)
 
         ;; Get edges at the child level
@@ -481,6 +509,17 @@
 
         cross-container-edges (concat outgoing-edges incoming-edges)
 
+        ;; Helper to check if an entity is a hidden child of this container
+        hidden-child? (fn [eid]
+                        (and (= (:parent (get-in m [:nodes eid])) entity-id)
+                             (not (contains? children-set eid))))
+
+        ;; Filter cross-container edges to exclude edges to/from hidden private children
+        cross-container-edges (->> cross-container-edges
+                                   (remove (fn [{:keys [from to]}]
+                                             (or (hidden-child? from)
+                                                 (hidden-child? to)))))
+
         ;; Collect the external related entities (entities outside this container)
         external-entities (->> cross-container-edges
                                (mapcat (fn [{:keys [from to]}]
@@ -504,14 +543,18 @@
                        :label (:label (get-in m [:nodes entity-id]))
                        :kind (name (:kind (get-in m [:nodes entity-id])))
                        :originalId entity-id
-                       :childCount (count children-ids)}
+                       :childCount (count children-ids)
+                       :hasPrivateChildren (boolean (has-private-children? m entity-id))
+                       :isExpanded (contains? expanded-containers entity-id)}
 
         ;; All children are simple nodes inside the selected container
         child-nodes (for [cid children-ids
                           :let [node (get-in m [:nodes cid])]
                           :when node]
                       (-> (cytoscape/node->cytoscape node)
-                          (assoc :parent entity-id)))
+                          (assoc :parent entity-id)
+                          (assoc :hasPrivateChildren (boolean (has-private-children? m cid)))
+                          (assoc :isExpanded (contains? expanded-containers cid))))
 
         ;; External container nodes (top-level, not nested)
         external-container-nodes (for [ecid external-containers
@@ -521,7 +564,9 @@
                                     :label (:label node)
                                     :kind (name (:kind node))
                                     :originalId ecid
-                                    :childCount (count (get-children m ecid))})
+                                    :childCount (count (get-children m ecid))
+                                    :hasPrivateChildren (boolean (has-private-children? m ecid))
+                                    :isExpanded (contains? expanded-containers ecid)})
 
         ;; External entity nodes (inside their parent containers)
         external-entity-nodes (for [eid external-entities
@@ -554,18 +599,21 @@
 
 (defn- compute-leaf-view
   "Compute view when the selected entity is a leaf (no children).
-   
+
    Shows:
    - The selected entity
-   - All entities it has relationships with (both directions)
+   - All visible entities it has relationships with (both directions)
    - Grouped by their parent container
-   - Only edges involving the selected entity"
-  [m entity-id]
+   - Only edges involving the selected entity where both endpoints are visible"
+  [m entity-id expanded-containers]
   (let [{:keys [by-from by-to]} (edges-for-entity m entity-id)
 
         ;; Get related entities via edges (both directions)
-        outgoing (get by-from entity-id [])
-        incoming (get by-to entity-id [])
+        ;; Filter to only include edges where both endpoints are visible
+        outgoing (->> (get by-from entity-id [])
+                      (filter #(node-visible? m (:to %) expanded-containers)))
+        incoming (->> (get by-to entity-id [])
+                      (filter #(node-visible? m (:from %) expanded-containers)))
         outgoing-ids (map :to outgoing)
         incoming-ids (map :from incoming)
         related-ids (into #{} (concat outgoing-ids incoming-ids))
@@ -588,7 +636,9 @@
                            :label (:label pnode)
                            :kind (name (:kind pnode))
                            :originalId pid
-                           :childCount (count (get-children m pid))})
+                           :childCount (count (get-children m pid))
+                           :hasPrivateChildren (boolean (has-private-children? m pid))
+                           :isExpanded (contains? expanded-containers pid)})
 
         ;; Entity nodes
         entity-nodes (for [n visible-nodes]
@@ -609,26 +659,26 @@
 
 (defn- compute-graph-
   "Compute graph data for any entity.
-   
+
    For containers (entities with children):
-   - Shows all children
-   - Shows edges between children (sibling relationships)
+   - Shows visible children (filtered by expanded-containers)
+   - Shows edges between visible children (sibling relationships)
    - If children relate to entities in sibling containers, shows those explicitly
-   
+
    For leaves (entities without children):
-   - Shows the entity and all its relationships
+   - Shows the entity and all its visible relationships
    - Groups related entities by their parent container
-   
+
    Returns {:nodes :edges :selectedId} in Cytoscape format."
-  [m entity-id]
+  [m entity-id expanded-containers]
   (let [;; If no entity-id, use root
         entity-id (or entity-id (:id (find-root-node m)))
         children-ids (get-children m entity-id)
 
         ;; Dispatch based on whether entity has children
         base-view (if (seq children-ids)
-                    (compute-container-view m entity-id)
-                    (compute-leaf-view m entity-id))]
+                    (compute-container-view m entity-id expanded-containers)
+                    (compute-leaf-view m entity-id expanded-containers))]
 
     (assoc base-view :selectedId entity-id)))
 
@@ -664,14 +714,14 @@
 ;; Public Render API
 ;;
 ;; All public render functions take (model, editor-state) and return output.
-;; editor-state is a map with :view-id and/or :selected-id
+;; editor-state is a map with :view-id, :selected-id, and/or :expanded-containers
 
 (defn render-graph
   "Render graph data for Cytoscape.
-   Takes model and editor-state with :view-id and :selected-id.
+   Takes model and editor-state with :view-id, :selected-id, and :expanded-containers.
    Returns {:nodes :edges :selectedId :highlightedEdges}."
-  [model {:keys [view-id selected-id]}]
-  (let [graph (compute-graph- model view-id)
+  [model {:keys [view-id selected-id expanded-containers]}]
+  (let [graph (compute-graph- model view-id (or expanded-containers #{}))
         selected-id (or selected-id (:selectedId graph))
         highlighted-edges (compute-highlighted-edges- (:edges graph) selected-id)]
     {:nodes (:nodes graph)

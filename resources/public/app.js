@@ -2,6 +2,26 @@
 // Simplified version using Datastar for state management
 
 // -----------------------------------------------------------------------------
+// Expanded Containers State (for private visibility toggle)
+
+let expandedContainers = new Set();
+
+// Get expanded containers as a comma-separated string for URL params
+window.getExpandedParam = function() {
+  return Array.from(expandedContainers).join(',');
+};
+
+// Toggle a container's expanded state and return the new state
+window.toggleExpanded = function(containerId) {
+  if (expandedContainers.has(containerId)) {
+    expandedContainers.delete(containerId);
+  } else {
+    expandedContainers.add(containerId);
+  }
+  return window.getExpandedParam();
+};
+
+// -----------------------------------------------------------------------------
 // URL Sync for Deep Linking
 
 let skipNextUrlUpdate = false;
@@ -177,6 +197,31 @@ const cy = cytoscape({
         'width': 3,
         'z-index': 1000
       }
+    },
+    // Containers with hidden private children (collapsed)
+    {
+      selector: 'node[hasPrivateChildren][!isExpanded]',
+      style: {
+        'border-style': 'double',
+        'border-width': 4
+      }
+    },
+    // Containers with private children expanded
+    {
+      selector: 'node[hasPrivateChildren][isExpanded]',
+      style: {
+        'border-style': 'solid',
+        'border-width': 3
+      }
+    },
+    // Private vars (shown when parent is expanded)
+    {
+      selector: 'node[private]',
+      style: {
+        'background-color': '#f5f5f5',
+        'border-style': 'dashed',
+        'color': '#7f8c8d'
+      }
     }
   ],
   
@@ -191,7 +236,16 @@ const cy = cytoscape({
 
 window.renderGraph = function(data) {
   if (!data || !data.nodes) return;
-  
+
+  // Sync expandedContainers state from the node data
+  // (nodes with hasPrivateChildren=true and isExpanded=true are expanded)
+  expandedContainers.clear();
+  data.nodes.forEach(n => {
+    if (n.hasPrivateChildren && n.isExpanded) {
+      expandedContainers.add(n.id);
+    }
+  });
+
   // Clear existing elements
   cy.elements().remove();
   
@@ -293,12 +347,31 @@ cy.on('tap', 'node', function(evt) {
 cy.on('dbltap', 'node', function(evt) {
   const node = evt.target;
   const childCount = node.data('childCount');
-  
+
   // Only navigate if it's a container with children
   if ((childCount && childCount > 0) || node.isParent()) {
     graphPanel.dispatchEvent(new CustomEvent('cy-navigate', {
       bubbles: true,
       detail: { id: node.id() }
+    }));
+  }
+});
+
+// Right click (context tap) - toggle private visibility for containers
+cy.on('cxttap', 'node', function(evt) {
+  const node = evt.target;
+  const hasPrivateChildren = node.data('hasPrivateChildren');
+
+  // Only toggle if this container has private children
+  if (hasPrivateChildren) {
+    evt.preventDefault();
+    const containerId = node.id();
+    window.toggleExpanded(containerId);
+
+    // Dispatch event to refresh the view with new expanded state
+    graphPanel.dispatchEvent(new CustomEvent('cy-toggle-private', {
+      bubbles: true,
+      detail: { id: containerId }
     }));
   }
 });
