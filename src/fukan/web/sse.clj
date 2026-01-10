@@ -4,8 +4,21 @@
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.http-kit :as hk]
             [fukan.web.views :as views]
+            [fukan.schema :as schema]
             [cheshire.core :as json]
             [clojure.string :as str]))
+
+;; -----------------------------------------------------------------------------
+;; Schemas
+
+(def ^:private Request
+  [:map
+   [:query-params {:optional true} [:map-of :string :string]]])
+
+(def ^:private SSEResponse :any)
+
+(schema/register! :fukan.web.sse/Request Request)
+(schema/register! :fukan.web.sse/SSEResponse SSEResponse)
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
@@ -43,6 +56,7 @@
    - Breadcrumb HTML
    - Sidebar HTML (node info for selected node)
    - Graph data via script tag"
+  {:malli/schema [:=> [:cat :fukan.model/Model :fukan.web.sse/Request] :fukan.web.sse/SSEResponse]}
   [model request]
   (hk/->sse-response request
                      {hk/on-open
@@ -75,7 +89,7 @@
                                                 (str "if(window.renderGraph)renderGraph("
                                                      (json/generate-string graph-data)
                                                      ");"
-                                                     "if(window.updateUrl)updateUrl(" (json/generate-string (or entity-id "")) ");")))
+                                                     "if(window.updateViewUrl)updateViewUrl(" (json/generate-string (or entity-id "")) ");")))
                           (catch Exception e
                             (println "SSE error:" (.getMessage e))))
                         (d*/close-sse! sse))}))
@@ -83,6 +97,7 @@
 (defn sidebar-handler
   "SSE endpoint that streams just the sidebar content.
    Used when selecting a node without navigating."
+  {:malli/schema [:=> [:cat :fukan.model/Model :fukan.web.sse/Request] :fukan.web.sse/SSEResponse]}
   [model request]
   (hk/->sse-response request
                      {hk/on-open
@@ -92,7 +107,33 @@
                                 node-id (let [id (get params "id")]
                                           (when (and id (not= id "")) id))
                                 editor-state {:selected-id node-id}]
-                            (d*/patch-elements! sse (views/render-sidebar model editor-state)))
+                            (d*/patch-elements! sse (views/render-sidebar model editor-state))
+                            ;; Update URL with selection
+                            (d*/execute-script! sse
+                                                (str "if(window.updateSelectUrl)updateSelectUrl("
+                                                     (json/generate-string (or node-id ""))
+                                                     ");")))
+                          (catch Exception e
+                            (println "SSE error:" (.getMessage e))))
+                        (d*/close-sse! sse))}))
+
+(defn schema-handler
+  "SSE endpoint that streams the schema detail view.
+   Used when clicking on a schema name to view its definition."
+  {:malli/schema [:=> [:cat :fukan.web.sse/Request] :fukan.web.sse/SSEResponse]}
+  [request]
+  (hk/->sse-response request
+                     {hk/on-open
+                      (fn [sse]
+                        (try
+                          (let [params (:query-params request)
+                                schema-id (get params "id")]
+                            (d*/patch-elements! sse (views/render-schema-detail schema-id))
+                            ;; Update URL with schema
+                            (d*/execute-script! sse
+                                                (str "if(window.updateSchemaUrl)updateSchemaUrl("
+                                                     (json/generate-string (or schema-id ""))
+                                                     ");")))
                           (catch Exception e
                             (println "SSE error:" (.getMessage e))))
                         (d*/close-sse! sse))}))

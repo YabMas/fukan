@@ -23,30 +23,88 @@ window.toggleExpanded = function(containerId) {
 
 // -----------------------------------------------------------------------------
 // URL Sync for Deep Linking
+//
+// URL structure: /?id=<view>&select=<selected>&schema=<schema>
+// - id: The current view (container being displayed in graph)
+// - select: The selected node (shown in sidebar)
+// - schema: The schema being viewed (e.g., "fukan.model/Model")
 
 let skipNextUrlUpdate = false;
+let currentViewId = '';
+let currentSelectId = '';
+let currentSchemaId = '';
+
+// Build URL from current state
+function buildUrl() {
+  const params = new URLSearchParams();
+  if (currentViewId) params.set('id', currentViewId);
+  if (currentSelectId) params.set('select', currentSelectId);
+  if (currentSchemaId) params.set('schema', currentSchemaId);
+  const query = params.toString();
+  return query ? '/?' + query : '/';
+}
 
 // Update browser URL without triggering navigation
-window.updateUrl = function(entityId) {
+window.updateUrl = function(viewId, selectId, schemaId) {
   if (skipNextUrlUpdate) {
     skipNextUrlUpdate = false;
     return;
   }
-  const url = entityId ? `/?id=${encodeURIComponent(entityId)}` : '/';
+  // Update current state
+  if (viewId !== undefined) currentViewId = viewId || '';
+  if (selectId !== undefined) currentSelectId = selectId || '';
+  if (schemaId !== undefined) currentSchemaId = schemaId || '';
+
+  const url = buildUrl();
   if (window.location.pathname + window.location.search !== url) {
-    history.pushState({ entityId }, '', url);
+    history.pushState({ viewId: currentViewId, selectId: currentSelectId, schemaId: currentSchemaId }, '', url);
   }
+};
+
+// Update just the view ID (called from SSE after navigation)
+window.updateViewUrl = function(viewId) {
+  window.updateUrl(viewId, viewId, ''); // Navigation clears schema, sets select to view
+};
+
+// Update just the selection (called from SSE after sidebar update)
+window.updateSelectUrl = function(selectId) {
+  window.updateUrl(undefined, selectId, ''); // Selection clears schema
+};
+
+// Update to show schema (called from SSE when viewing schema)
+window.updateSchemaUrl = function(schemaId) {
+  window.updateUrl(undefined, undefined, schemaId);
 };
 
 // Handle browser back/forward
 window.addEventListener('popstate', (event) => {
-  const entityId = event.state?.entityId || new URLSearchParams(window.location.search).get('id') || '';
+  const params = new URLSearchParams(window.location.search);
+  const viewId = event.state?.viewId || params.get('id') || '';
+  const selectId = event.state?.selectId || params.get('select') || '';
+  const schemaId = event.state?.schemaId || params.get('schema') || '';
+
+  // Update local state
+  currentViewId = viewId;
+  currentSelectId = selectId;
+  currentSchemaId = schemaId;
+
   skipNextUrlUpdate = true; // Don't push to history when navigating via back/forward
-  // Trigger Datastar SSE request via custom event
-  document.getElementById('graph-panel').dispatchEvent(new CustomEvent('cy-navigate', {
-    bubbles: true,
-    detail: { id: entityId }
-  }));
+
+  const graphPanel = document.getElementById('graph-panel');
+
+  if (schemaId) {
+    // Restore schema view
+    graphPanel.dispatchEvent(new CustomEvent('cy-schema', {
+      bubbles: true,
+      detail: { id: schemaId }
+    }));
+  } else {
+    // Restore main view with selection
+    graphPanel.dispatchEvent(new CustomEvent('cy-navigate', {
+      bubbles: true,
+      detail: { id: viewId, select: selectId }
+    }));
+  }
 });
 
 // -----------------------------------------------------------------------------
@@ -141,13 +199,13 @@ const cy = cytoscape({
         'display': 'none'
       }
     },
-    // Edges
+    // Edges - blue to match namespace containers
     {
       selector: 'edge',
       style: {
         'width': 2,
-        'line-color': '#95a5a6',
-        'target-arrow-color': '#95a5a6',
+        'line-color': '#2980b9',
+        'target-arrow-color': '#2980b9',
         'target-arrow-shape': 'triangle',
         'curve-style': 'bezier',
         'arrow-scale': 0.8,
@@ -221,6 +279,57 @@ const cy = cytoscape({
         'background-color': '#f5f5f5',
         'border-style': 'dashed',
         'color': '#7f8c8d'
+      }
+    },
+    // Schema node - diamond shape, green theme for data flow
+    {
+      selector: 'node[kind="schema"]',
+      style: {
+        'shape': 'diamond',
+        'background-color': '#e8f5e9',
+        'border-color': '#27ae60',
+        'border-width': 2,
+        'border-style': 'solid',
+        'label': 'data(label)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'width': '90px',
+        'height': '90px',
+        'font-weight': 'bold',
+        'font-size': '11px',
+        'color': '#1b5e20'
+      }
+    },
+    // Selected schema node - red border on diamond (must come after base schema style)
+    {
+      selector: 'node[kind="schema"]:selected',
+      style: {
+        'border-color': '#e74c3c',
+        'border-width': 3,
+        'background-color': '#ffebee'
+      }
+    },
+    // Schema flow edges - dashed green lines for data flow
+    {
+      selector: 'edge[edgeType="schema-flow"]',
+      style: {
+        'line-style': 'dashed',
+        'line-color': '#27ae60',
+        'target-arrow-color': '#27ae60',
+        'line-dash-pattern': [6, 3],
+        'width': 2,
+        'curve-style': 'bezier',
+        'arrow-scale': 0.8
+      }
+    },
+    // Highlighted schema flow edges - red like other highlighted edges
+    {
+      selector: 'edge[edgeType="schema-flow"].highlighted',
+      style: {
+        'line-color': '#e74c3c',
+        'target-arrow-color': '#e74c3c',
+        'width': 3,
+        'z-index': 1000
       }
     }
   ],
@@ -319,23 +428,32 @@ const graphPanel = document.getElementById('graph-panel');
 // Single click - select node and show info
 cy.on('tap', 'node', function(evt) {
   const node = evt.target;
-  
-  // Skip compound parent containers
-  if (node.isParent()) return;
-  
   const nodeId = node.id();
-  
+  const nodeKind = node.data('kind');
+
   // Visual feedback: select and highlight edges
   cy.nodes().unselect();
   cy.edges().removeClass('highlighted');
   node.select();
-  
-  cy.edges().forEach(edge => {
-    if (edge.source().id() === nodeId || edge.target().id() === nodeId) {
-      edge.addClass('highlighted');
-    }
-  });
-  
+
+  if (nodeKind === 'schema') {
+    // For schema nodes, highlight all schema-flow edges with the same schemaKey
+    const schemaKey = node.data('schemaKey');
+    cy.edges().forEach(edge => {
+      if (edge.data('schemaKey') === schemaKey) {
+        edge.addClass('highlighted');
+      }
+    });
+  } else {
+    // For other nodes, highlight only code-flow edges (not schema-flow)
+    cy.edges().forEach(edge => {
+      const isSchemaFlow = edge.data('edgeType') === 'schema-flow';
+      if (!isSchemaFlow && (edge.source().id() === nodeId || edge.target().id() === nodeId)) {
+        edge.addClass('highlighted');
+      }
+    });
+  }
+
   // Dispatch custom event for Datastar to handle
   graphPanel.dispatchEvent(new CustomEvent('cy-select', {
     bubbles: true,
@@ -381,7 +499,7 @@ cy.on('tap', function(evt) {
   if (evt.target === cy) {
     cy.nodes().unselect();
     cy.edges().removeClass('highlighted');
-    
+
     // Clear sidebar by fetching empty node info
     graphPanel.dispatchEvent(new CustomEvent('cy-select', {
       bubbles: true,
@@ -389,3 +507,50 @@ cy.on('tap', function(evt) {
     }));
   }
 });
+
+// -----------------------------------------------------------------------------
+// Initial Page Load
+//
+// Wait for Datastar to process the page before triggering initial load
+
+function initPage() {
+  const params = new URLSearchParams(window.location.search);
+  const viewId = params.get('id') || '';
+  const selectId = params.get('select') || '';
+  const schemaId = params.get('schema') || '';
+
+  // Initialize local state from URL
+  currentViewId = viewId;
+  currentSelectId = selectId || viewId;
+  currentSchemaId = schemaId;
+
+  // Don't add history entry on initial load
+  skipNextUrlUpdate = true;
+
+  // Trigger initial load via Datastar custom events
+  if (schemaId) {
+    // If schema param present, load both graph and schema sidebar
+    graphPanel.dispatchEvent(new CustomEvent('cy-navigate', {
+      bubbles: true,
+      detail: { id: viewId, select: selectId }
+    }));
+    // Then load schema view (overwrites sidebar)
+    setTimeout(() => {
+      skipNextUrlUpdate = true;
+      graphPanel.dispatchEvent(new CustomEvent('cy-schema', {
+        bubbles: true,
+        detail: { id: schemaId }
+      }));
+    }, 100);
+  } else {
+    // Normal load - view with optional selection
+    graphPanel.dispatchEvent(new CustomEvent('cy-navigate', {
+      bubbles: true,
+      detail: { id: viewId, select: selectId }
+    }));
+  }
+}
+
+// Run after Datastar has initialized (it adds data-* attributes)
+// Use a small delay to ensure Datastar has processed the DOM
+setTimeout(initPage, 50);
