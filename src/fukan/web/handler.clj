@@ -50,7 +50,7 @@
                    :headers {"Content-Type" "text/html"}
                    :body (views/render-app-shell)})}]
 
-      ;; SSE endpoints (Datastar)
+     ;; SSE endpoints (Datastar)
      ["/sse/view" {:get (fn [req]
                           (sse/main-view-handler model req))}]
 

@@ -1,9 +1,9 @@
 (ns fukan.model
   "Internal graph model construction from analysis data.
    Builds a hierarchical structure of folders, namespaces, and vars
-   with dependency edges and indexes for efficient querying."
+   with var-level dependency edges. Edge aggregation (ns/folder level)
+   is computed on-demand by the view layer."
   (:require [clojure.string :as str]
-            [clojure.set :as set]
             [fukan.schema :as schema]))
 
 ;; -----------------------------------------------------------------------------
@@ -13,61 +13,32 @@
 (def ^:private NodeKind [:enum :folder :namespace :var :schema])
 
 (def ^:private Node
+  "A node in the graph. Kind-specific fields stored in :data map."
   [:map
    [:id NodeId]
    [:kind NodeKind]
    [:label :string]
    [:parent {:optional true} [:maybe NodeId]]
-   [:children :set]
-   ;; Optional fields depending on kind
-   [:path {:optional true} :string]           ; folder
-   [:ns-sym {:optional true} :symbol]         ; namespace, var
-   [:var-sym {:optional true} :symbol]        ; var
-   [:filename {:optional true} :string]       ; namespace, var
-   [:row {:optional true} :int]               ; var
-   [:doc {:optional true} [:maybe :string]]   ; namespace, var
-   [:private? {:optional true} :boolean]      ; var
-   [:schema-key {:optional true} :keyword]    ; schema
-   [:owner-ns {:optional true} :string]])     ; schema
+   [:children [:set :string]]
+   [:data {:optional true} :map]])  ; kind-specific: path, ns-sym, var-sym, doc, private?, schema-key, etc.
 
 (def ^:private Edge
+  "A directed edge between two nodes. All info derived from connected nodes."
   [:map
    [:from NodeId]
    [:to NodeId]])
 
-(def ^:private SchemaFlowEdge
-  [:map
-   [:from NodeId]
-   [:to NodeId]
-   [:schema-key :keyword]
-   [:edge-type [:enum :schema-flow]]])
-
-(def ^:private EdgeIndex
-  [:map-of NodeId [:vector Edge]])
-
 (def ^:private Model
+  "Simplified model: just nodes and edges. No pre-computed aggregations or indexes."
   [:map
    [:nodes [:map-of NodeId Node]]
-   [:edges [:vector Edge]]
-   [:ns-edges [:vector Edge]]
-   [:folder-edges [:vector Edge]]
-   [:schema-edges [:vector SchemaFlowEdge]]
-   [:edges-by-from EdgeIndex]
-   [:edges-by-to EdgeIndex]
-   [:ns-edges-by-from EdgeIndex]
-   [:ns-edges-by-to EdgeIndex]
-   [:folder-edges-by-from EdgeIndex]
-   [:folder-edges-by-to EdgeIndex]
-   [:schema-edges-by-from EdgeIndex]
-   [:schema-edges-by-to EdgeIndex]])
+   [:edges [:vector Edge]]])
 
 ;; Register for sidebar display
 (schema/register! :fukan.model/NodeId NodeId)
 (schema/register! :fukan.model/NodeKind NodeKind)
 (schema/register! :fukan.model/Node Node)
 (schema/register! :fukan.model/Edge Edge)
-(schema/register! :fukan.model/SchemaFlowEdge SchemaFlowEdge)
-(schema/register! :fukan.model/EdgeIndex EdgeIndex)
 (schema/register! :fukan.model/Model Model)
 
 ;; -----------------------------------------------------------------------------
@@ -135,9 +106,9 @@
                   [id {:id id
                        :kind :folder
                        :label label
-                       :path dir-path
                        :parent (when parent-path (folder-id parent-path))
-                       :children #{}}])))
+                       :children #{}
+                       :data {:path dir-path}}])))
          (into {}))))
 
 ;; -----------------------------------------------------------------------------
@@ -161,11 +132,11 @@
                 [id {:id id
                      :kind :namespace
                      :label (str name)
-                     :ns-sym name
-                     :filename filename
-                     :doc doc
                      :parent (when folder-path (folder-id folder-path))
-                     :children #{}}])))
+                     :children #{}
+                     :data {:ns-sym name
+                            :filename filename
+                            :doc doc}}])))
        (into {})))
 
 ;; -----------------------------------------------------------------------------
@@ -181,14 +152,14 @@
                 [id {:id id
                      :kind :var
                      :label (str name)
-                     :var-sym name
-                     :ns-sym ns
-                     :filename filename
-                     :row row
-                     :doc doc
-                     :private? (boolean private)
                      :parent (ns-id ns)
-                     :children #{}}])))
+                     :children #{}
+                     :data {:var-sym name
+                            :ns-sym ns
+                            :filename filename
+                            :row row
+                            :doc doc
+                            :private? (boolean private)}}])))
        (into {})))
 
 ;; -----------------------------------------------------------------------------
@@ -211,6 +182,22 @@
           nodes
           nodes))
 
+(defn- remove-empty-folders
+  "Remove folder nodes that have no children.
+   Returns updated nodes map."
+  [nodes]
+  (let [;; First, wire children to see which folders are empty
+        wired (wire-children nodes)
+        ;; Find folders with no children
+        empty-folder-ids (->> wired
+                              (filter (fn [[_ node]]
+                                        (and (= :folder (:kind node))
+                                             (empty? (:children node)))))
+                              (map first)
+                              set)]
+    ;; Remove empty folders
+    (apply dissoc nodes empty-folder-ids)))
+
 ;; -----------------------------------------------------------------------------
 ;; Edge construction (raw edges)
 
@@ -224,57 +211,52 @@
        (into {})))
 
 (defn- build-edges
-  "Build raw var-to-var edges from actual call relationships.
+  "Build raw edges from actual call relationships.
 
-   Creates a direct edge for each var usage where both the calling var
-   and the called var are defined in the codebase.
+   Creates edges for each var usage where the target var is defined in the codebase.
+   - When from-var is present: creates var-to-var edge
+   - When from-var is nil (top-level or anonymous): creates ns-to-var edge
 
-   Returns a vector of {:from var-id, :to var-id} edges."
+   Returns a vector of {:from node-id, :to var-id} edges."
   [analysis]
   (let [var-defs (:var-definitions analysis)
         var-usages (:var-usages analysis)
-        var-index (build-var-index var-defs)]
+        var-index (build-var-index var-defs)
+        ;; Set of namespaces that have nodes (to filter external deps)
+        known-ns (into #{} (map :ns var-defs))]
     (->> var-usages
          (keep (fn [{:keys [from from-var to name]}]
-                 (when-let [from-id (and from-var (get var-index [from from-var]))]
-                   (when-let [to-id (get var-index [to name])]
-                     (when (not= from-id to-id) ; no self-loops
+                 (when-let [to-id (get var-index [to name])]
+                   (let [from-id (if from-var
+                                   ;; Normal case: var-to-var edge
+                                   (get var-index [from from-var])
+                                   ;; Top-level/anonymous: ns-to-var edge
+                                   (when (contains? known-ns from)
+                                     (ns-id from)))]
+                     (when (and from-id (not= from-id to-id))
                        {:from from-id :to to-id})))))
          (into #{})
          (vec))))
 
-;; -----------------------------------------------------------------------------
-;; Multi-level edge aggregation
-
 (defn- build-ns-edges
-  "Aggregate var edges into namespace-level edges.
-   Creates edge ns-A -> ns-B if any var in ns-A depends on any var in ns-B.
-   Excludes self-edges."
-  [var-edges nodes]
-  (->> var-edges
-       (map (fn [{:keys [from to]}]
-              (let [from-ns (:parent (get nodes from))
-                    to-ns (:parent (get nodes to))]
-                (when (and from-ns to-ns (not= from-ns to-ns))
-                  {:from from-ns :to to-ns}))))
-       (remove nil?)
-       (into #{})
-       vec))
+  "Build namespace-to-namespace edges from require relationships.
+   Creates edges for each namespace require where both namespaces
+   are defined in the codebase.
 
-(defn- build-folder-edges
-  "Aggregate namespace edges into folder-level edges.
-   Creates edge folder-A -> folder-B if any ns in folder-A depends on any ns in folder-B.
-   Excludes self-edges."
-  [ns-edges nodes]
-  (->> ns-edges
-       (map (fn [{:keys [from to]}]
-              (let [from-folder (:parent (get nodes from))
-                    to-folder (:parent (get nodes to))]
-                (when (and from-folder to-folder (not= from-folder to-folder))
-                  {:from from-folder :to to-folder}))))
-       (remove nil?)
-       (into #{})
-       vec))
+   Returns a vector of {:from ns-id, :to ns-id, :kind :ns-require} edges.
+   The :kind field distinguishes these from var-level edges for filtering."
+  [analysis]
+  (let [ns-defs (:namespace-definitions analysis)
+        ns-usages (:namespace-usages analysis)
+        known-ns (into #{} (map :name ns-defs))]
+    (->> ns-usages
+         (keep (fn [{:keys [from to]}]
+                 (when (and (contains? known-ns from)
+                            (contains? known-ns to)
+                            (not= from to))
+                   {:from (ns-id from) :to (ns-id to) :kind :ns-require})))
+         (into #{})
+         (vec))))
 
 ;; -----------------------------------------------------------------------------
 ;; Smart root detection
@@ -325,10 +307,12 @@
 ;;
 ;; Functions to extract schema references for data flow analysis.
 
-(defn- extract-schema-refs
+(defn extract-schema-refs
   "Extract all qualified keyword schema references from a schema form.
    Returns a set of keywords (e.g., #{:fukan.model/Node :fukan.model/Edge}).
-   Only returns refs that are registered in our schema registry."
+   Only returns refs that are registered in our schema registry.
+
+   Public for use by view layer for IO schema computation."
   [schema-form]
   (let [registered-schemas (set (schema/all-schemas))
         refs (atom #{})]
@@ -349,11 +333,13 @@
       (walk schema-form)
       @refs)))
 
-(defn- extract-fn-schema-flow
+(defn extract-fn-schema-flow
   "Extract input and output schema references from a function schema.
    Expects schema in form [:=> [:cat input1 input2 ...] output].
    Returns {:inputs #{schema-keys...} :outputs #{schema-keys...}}
-   or nil if not a function schema."
+   or nil if not a function schema.
+
+   Public for use by view layer for IO schema computation."
   [fn-schema]
   (when (and (vector? fn-schema) (= :=> (first fn-schema)))
     (let [[_ input output] fn-schema
@@ -379,147 +365,11 @@
                 [id {:id id
                      :kind :schema
                      :label (name k)
-                     :schema-key k
-                     :owner-ns owner-ns
                      :parent parent-ns-id  ; schemas belong to their owning namespace
-                     :children #{}}])))
+                     :children #{}
+                     :data {:schema-key k
+                            :owner-ns owner-ns}}])))
        (into {})))
-
-(defn- collect-schema-producers-consumers
-  "Scan loaded namespaces for vars with :malli/schema metadata.
-   Extracts which namespaces produce (output) and consume (input) each schema.
-
-   Returns {:producers {schema-key -> #{ns-id...}}
-            :consumers {schema-key -> #{ns-id...}}}"
-  [ns-nodes]
-  (let [producers (atom {})
-        consumers (atom {})]
-    ;; Only scan namespaces that are in our model
-    (doseq [[ns-node-id node] ns-nodes
-            :when (= :namespace (:kind node))
-            :let [ns-sym (:ns-sym node)]]
-      (when-let [ns-obj (find-ns ns-sym)]
-        (doseq [[var-sym v] (ns-publics ns-obj)]
-          (when-let [fn-schema (:malli/schema (meta v))]
-            (when-let [{:keys [inputs outputs]} (extract-fn-schema-flow fn-schema)]
-              ;; This namespace produces the output schemas
-              (doseq [out-schema outputs]
-                (swap! producers update out-schema (fnil conj #{}) ns-node-id))
-              ;; This namespace consumes the input schemas
-              (doseq [in-schema inputs]
-                (swap! consumers update in-schema (fnil conj #{}) ns-node-id)))))))
-    {:producers @producers
-     :consumers @consumers}))
-
-(defn- find-data-flow-path
-  "Find the path data takes from producer-ns to consumer-ns using the call graph.
-
-   Data flows: if A calls B (A → B in ns-edges), and B produces data, A receives it.
-   Data passes: if A then calls C (A → C in ns-edges), A can pass the data to C.
-
-   Algorithm:
-   1. Find who calls producer (they receive the data via return value)
-   2. Then follow forward edges (who they call) to trace data passing
-   3. Continue until we reach consumer
-
-   Uses BFS to find shortest path. Returns the path as a vector of ns-ids,
-   or nil if no path exists."
-  [producer-ns consumer-ns callers-index ns-edges-by-from]
-  (if (= producer-ns consumer-ns)
-    [producer-ns] ; Producer and consumer are same namespace
-    ;; Step 1: Find who receives data from producer (callers of producer)
-    (let [initial-receivers (get callers-index producer-ns #{})]
-      (when (seq initial-receivers)
-        ;; Check if consumer directly calls producer
-        (if (contains? initial-receivers consumer-ns)
-          [producer-ns consumer-ns]
-          ;; BFS from receivers, following forward edges (who they call)
-          (loop [queue (into clojure.lang.PersistentQueue/EMPTY
-                             (for [r initial-receivers]
-                               [r [producer-ns r]]))
-                 visited (into #{producer-ns} initial-receivers)]
-            (when-let [[current path] (peek queue)]
-              (if (= current consumer-ns)
-                path ;; Found the consumer
-                ;; Follow forward edges: who does current call?
-                (let [callees (->> (get ns-edges-by-from current [])
-                                   (map :to)
-                                   (remove visited))
-                      new-paths (for [callee callees]
-                                  [callee (conj path callee)])]
-                  (recur (into (pop queue) new-paths)
-                         (into visited callees)))))))))))
-
-(defn- build-schema-flow-edges
-  "Build schema data flow edges that trace the actual path through the call graph.
-
-   Instead of direct producer -> schema -> consumer edges, this traces how data
-   actually flows: producer -> intermediary1 -> intermediary2 -> ... -> consumer
-
-   For terminal outputs (schemas produced but not consumed elsewhere), creates
-   an edge from the producer namespace to the schema node itself.
-
-   Returns vector of {:from :to :schema-key :edge-type}"
-  [producers-consumers ns-edges]
-  (let [{:keys [producers consumers]} producers-consumers
-        all-schemas (into #{} (concat (keys producers) (keys consumers)))
-        ;; Build callers index: who calls each namespace?
-        ;; If A → B is in ns-edges (A calls B), then A is a caller of B
-        callers-index (reduce (fn [acc {:keys [from to]}]
-                                (update acc to (fnil conj #{}) from))
-                              {}
-                              ns-edges)
-        ns-edges-by-from (group-by :from ns-edges)
-
-        ;; Cross-namespace flow edges (existing logic)
-        flow-edges
-        (->> all-schemas
-             (mapcat (fn [schema-key]
-                       (let [producer-nses (get producers schema-key #{})
-                             consumer-nses (get consumers schema-key #{})]
-                         ;; Path-based flow edges: trace from each producer to each consumer
-                         (for [producer-ns producer-nses
-                               consumer-ns consumer-nses
-                               :when (not= producer-ns consumer-ns)
-                               :let [path (find-data-flow-path producer-ns consumer-ns
-                                                               callers-index ns-edges-by-from)]
-                               :when (and path (> (count path) 1))
-                               ;; Create edges for each step in the path
-                               [from-ns to-ns] (partition 2 1 path)]
-                           {:from from-ns
-                            :to to-ns
-                            :schema-key schema-key
-                            :edge-type :schema-flow})))))
-
-        ;; Terminal output edges: producer-ns -> schema node
-        ;; For schemas that are produced but have no consumers
-        terminal-edges
-        (->> all-schemas
-             (mapcat (fn [schema-key]
-                       (let [producer-nses (get producers schema-key #{})
-                             consumer-nses (get consumers schema-key #{})]
-                         ;; Terminal: has producers but no consumers (or only same-ns consumers)
-                         (when (and (seq producer-nses)
-                                    (empty? (remove producer-nses consumer-nses)))
-                           (for [producer-ns producer-nses]
-                             {:from producer-ns
-                              :to (schema-id schema-key)
-                              :schema-key schema-key
-                              :edge-type :schema-flow}))))))]
-    ;; Deduplicate and combine
-    (->> (concat flow-edges terminal-edges)
-         (into #{})
-         (vec))))
-
-(defn- filter-schema-nodes-with-flow
-  "Filter schema nodes to only include those with actual data flow.
-   Returns schemas that have at least one flow edge (based on schema-key)."
-  [schema-nodes schema-edges]
-  (let [schemas-with-flow (->> schema-edges
-                               (map :schema-key)
-                               (into #{}))
-        schema-ids-with-flow (into #{} (map schema-id schemas-with-flow))]
-    (select-keys schema-nodes schema-ids-with-flow)))
 
 ;; -----------------------------------------------------------------------------
 ;; Index building
@@ -527,16 +377,12 @@
 (defn build-model
   "Build the complete model from clj-kondo analysis.
 
-   Returns a map containing:
+   Returns a simplified map containing:
    - :nodes - {id -> node} for all folders, namespaces, vars, and schemas
-   - :edges - vector of {:from :to} var-level edges
-   - :ns-edges - vector of {:from :to} namespace-level edges (aggregated from var edges)
-   - :folder-edges - vector of {:from :to} folder-level edges (aggregated from ns edges)
-   - :schema-edges - vector of schema data flow edges (producer-ns -> schema -> consumer-ns)
-   - :edges-by-from, :edges-by-to - var edge indexes
-   - :ns-edges-by-from, :ns-edges-by-to - namespace edge indexes
-   - :folder-edges-by-from, :folder-edges-by-to - folder edge indexes
-   - :schema-edges-by-from, :schema-edges-by-to - schema flow edge indexes
+   - :edges - vector of {:from :to} edges (var-level and ns-level combined)
+
+   Edge aggregation (folder-level) and schema flow edges are computed
+   on-demand by the view layer, not pre-computed here.
 
    Note: Single-child folder chains are pruned - the root of the tree is the
    first folder with multiple children or non-folder children."
@@ -550,9 +396,14 @@
         ns-nodes (build-namespace-nodes ns-defs)
         var-nodes (build-var-nodes var-defs)
 
-        ;; Merge and wire up relationships
-        all-nodes (-> (merge folder-nodes ns-nodes var-nodes)
-                      wire-children)
+        ;; Merge nodes
+        merged-nodes (merge folder-nodes ns-nodes var-nodes)
+
+        ;; Remove empty folders
+        cleaned-nodes (remove-empty-folders merged-nodes)
+
+        ;; Wire up parent-child relationships
+        all-nodes (wire-children cleaned-nodes)
 
         ;; Find smart starting point and prune ancestors
         smart-root (find-smart-root all-nodes)
@@ -561,32 +412,21 @@
         ;; Build raw var-level edges
         var-edges (build-edges analysis)
 
-        ;; Build aggregated namespace-level edges
-        ns-edges (build-ns-edges var-edges pruned-nodes)
+        ;; Build namespace-level edges from require relationships
+        ns-edges (build-ns-edges analysis)
 
-        ;; Build aggregated folder-level edges
-        folder-edges (build-folder-edges ns-edges pruned-nodes)
+        ;; Combine all edges (var-level + ns-level, deduplicated)
+        all-edges (vec (into (set var-edges) ns-edges))
 
-        ;; Build schema data flow
+        ;; Build schema nodes (only those with registered schemas)
+        ;; Schema flow is computed on-demand, but we include schema nodes
+        ;; so they can be referenced in the graph
         all-schema-nodes (build-schema-nodes)
-        producers-consumers (collect-schema-producers-consumers pruned-nodes)
-        schema-edges (build-schema-flow-edges producers-consumers ns-edges)
-        ;; Only include schemas that have actual flow edges
-        schema-nodes (filter-schema-nodes-with-flow all-schema-nodes schema-edges)
+        ;; For now, include all schema nodes - filtering can happen in views
+        ;; based on whether they're actually used in the current view
 
         ;; Merge schema nodes into final nodes map
-        final-nodes (merge pruned-nodes schema-nodes)]
+        final-nodes (merge pruned-nodes all-schema-nodes)]
 
     {:nodes final-nodes
-     :edges var-edges
-     :ns-edges ns-edges
-     :folder-edges folder-edges
-     :schema-edges schema-edges
-     :edges-by-from (group-by :from var-edges)
-     :edges-by-to (group-by :to var-edges)
-     :ns-edges-by-from (group-by :from ns-edges)
-     :ns-edges-by-to (group-by :to ns-edges)
-     :folder-edges-by-from (group-by :from folder-edges)
-     :folder-edges-by-to (group-by :to folder-edges)
-     :schema-edges-by-from (group-by :from schema-edges)
-     :schema-edges-by-to (group-by :to schema-edges)}))
+     :edges all-edges}))

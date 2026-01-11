@@ -6,6 +6,8 @@
 - **Children**: Entities whose parent is this entity
 - **Relationships**: Edges connecting entities (dependencies in both directions)
 - **Parent/Container**: The containing entity (used for grouping in compound nodes)
+- **Container**: Any entity that has children. This is a current state, not a fixed property.
+- **Leaf**: Any entity that has no children.
 
 ## Unified View Behavior
 
@@ -15,10 +17,10 @@ Every entity behaves the same way. The view is determined by whether the entity 
 
 1. **Show visible children** of the selected container (private children hidden unless expanded)
 2. **Show edges between visible children** (sibling relationships)
-3. **If a visible child has a relationship with an entity inside a sibling container**:
-   - Show that related entity explicitly
+3. **If a visible child has a relationship with a same-type entity inside a sibling container**:
+   - Show that related entity explicitly (same-type only: namespace→namespace, var→var)
    - Group it inside its container (the sibling)
-   - Only show related entities inside that container, not all its children
+   - Only show related entities of the same type, not all children
    - The sibling container serves dual purpose: child AND grouping container
 
 ### When viewing a leaf (entity without children)
@@ -33,7 +35,7 @@ Every entity behaves the same way. The view is determined by whether the entity 
 For containers:
 ```
 children = visible_children(selected, expanded-containers)  // filters out private unless expanded
-cross_container_relations = relationships_of(children) that target visible entities inside sibling containers
+cross_container_relations = same_type_relationships_of(children) targeting entities inside sibling containers
 visible_entities = children ∪ cross_container_relations
 visible_edges = edges_between(children) ∪ edges_from(children, cross_container_relations)
 ```
@@ -48,9 +50,13 @@ visible_edges = edges_involving(selected) where both endpoints visible
 
 1. **No redundant container edges**: When viewing a container, we don't show edges between the container and its nested children's containers. The relationship is shown at the actual entity level.
 
-2. **Containers expand on demand**: A child container (like `web` inside `fukan`) appears as a simple node unless something inside it is related to a sibling. In that case, it expands to show the specific related entities.
+2. **Containers expand on demand**: A child that has children appears as a simple node unless it has edges from/to a sibling. In that case, it expands to show related children inside.
 
-3. **Equal treatment**: All entities follow the same rules. The only distinction is whether they have children or not.
+3. **Same-type drill-down**: When expanding a sibling container, only show children of the same type as the source entity. Namespace edges drill down to namespaces; var edges drill down to vars. This keeps each level focused on structural relationships at that level.
+
+4. **Equal treatment**: All entities follow the same rules. The only distinction is whether they have children or not.
+
+5. **Strict bounding box**: Container views enforce a strict boundary. ONLY entities inside the viewed container are shown. External entities (ancestors, cousins, unrelated namespaces) are NEVER shown. Edges crossing the bounding box are NOT rendered. To see external relationships, navigate to a common ancestor. Note: Leaf views (viewing a var) are different - they show all related entities regardless of container.
 
 ## Edge Aggregation
 
@@ -82,7 +88,7 @@ When a node is single-clicked:
 3. The sidebar shows details for that node
 4. **The focused container does not change**
 
-This allows exploring relationships without losing context. External entities and their edges are already visible in the view (from the container view computation), so highlighting simply reveals which edges belong to the selected node.
+This allows exploring relationships without losing context. Highlighting reveals which edges belong to the selected node.
 
 ### Double Click: Navigation
 
@@ -93,7 +99,6 @@ When a node is double-clicked:
 After navigation, the new container becomes the focused entity:
 - Its children are shown as nodes
 - Sibling edges between children are visible
-- External entities that children relate to are shown in their own containers
 - No node is selected until the user clicks one
 
 ### Breadcrumb
@@ -133,7 +138,7 @@ The breadcrumb shows the path from smart-root to the focused container. Clicking
 - `web` appears as a regular child node (not expanded)
 - Edges: only sibling edges between the 4 namespaces
 
-### Example 3: Viewing `fukan.web.handler` namespace
+### Example 3: Viewing `fukan.web.handler` namespace (strict bounding box)
 
 **Setup**:
 - `fukan.web.handler` has children: `create-handler`, `compute-view`
@@ -141,9 +146,10 @@ The breadcrumb shows the path from smart-root to the focused container. Clicking
 
 **Result**:
 - Show: `create-handler`, `compute-view` as nodes
-- Show: `fukan.cytoscape` container with `node->cytoscape` inside
-- Show: `fukan.model` container with `entity-kind` inside
-- Edges: `create-handler` → `compute-view`, `compute-view` → `node->cytoscape`, `compute-view` → `entity-kind`
+- Do NOT show: `fukan.cytoscape`, `fukan.model` or any vars inside them (strict bounding box)
+- Edges: only `create-handler` → `compute-view` (edges to external entities are not rendered)
+
+To see dependencies on external namespaces, navigate to a common ancestor (e.g., the `fukan` folder).
 
 ### Example 4: Viewing `compute-view` var (leaf)
 
@@ -156,6 +162,22 @@ The breadcrumb shows the path from smart-root to the focused container. Clicking
 - Show: `compute-view` (selected), `node->cytoscape`, `entity-kind`, `create-handler`
 - Group: `compute-view` and `create-handler` in `fukan.web.handler`, `node->cytoscape` in `fukan.cytoscape`, `entity-kind` in `fukan.model`
 - Edges: only those involving `compute-view`
+
+### Example 5: Same-type drill-down
+
+**Setup**:
+- `src/fukan/web` folder has children: `fukan.web.handler`, `fukan.web.sse`, `fukan.web.views`
+- `fukan.web.views` folder has namespace children: `fukan.web.views.graph`, `fukan.web.views.sidebar`
+- `fukan.web.handler` (namespace) depends on namespaces inside `fukan.web.views`
+
+**Result**:
+- Show: `fukan.web.handler`, `fukan.web.sse` as nodes
+- Show: `fukan.web.views` as a compound container with same-type children inside:
+  - `fukan.web.views.graph` (namespace, same type as source)
+  - `fukan.web.views.sidebar` (namespace, same type as source)
+- Edges: `fukan.web.handler` → `fukan.web.views.graph`, etc.
+
+The key: when a **namespace** has edges to entities inside a sibling container, it expands to show **namespace** children (same type). Var children would not appear at this level.
 
 ## Data Model
 

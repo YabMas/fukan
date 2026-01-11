@@ -331,6 +331,52 @@ const cy = cytoscape({
         'width': 3,
         'z-index': 1000
       }
+    },
+    // IO container (Inputs/Outputs) - dashed border, distinct from regular containers
+    {
+      selector: 'node[kind="io-container"]',
+      style: {
+        'shape': 'roundrectangle',
+        'background-color': '#f0f9f0',
+        'border-color': '#27ae60',
+        'border-width': 2,
+        'border-style': 'dashed',
+        'label': 'data(label)',
+        'text-valign': 'top',
+        'text-halign': 'center',
+        'padding': '15px',
+        'font-size': '10px',
+        'font-weight': 'bold',
+        'color': '#27ae60'
+      }
+    },
+    // Input IO container - positioned at top
+    {
+      selector: 'node[kind="io-container"][ioType="input"]',
+      style: {
+        'background-color': '#e3f2fd',
+        'border-color': '#1976d2'
+      }
+    },
+    // Output IO container - positioned at bottom
+    {
+      selector: 'node[kind="io-container"][ioType="output"]',
+      style: {
+        'background-color': '#fff3e0',
+        'border-color': '#f57c00'
+      }
+    },
+    // Positioning edges (subtle - used for layout positioning)
+    {
+      selector: 'edge[edgeType="positioning"]',
+      style: {
+        'width': 1,
+        'line-color': '#ddd',
+        'line-style': 'dotted',
+        'target-arrow-shape': 'triangle',
+        'target-arrow-color': '#ddd',
+        'opacity': 0.4
+      }
     }
   ],
   
@@ -391,20 +437,57 @@ window.renderGraph = function(data) {
   }
   
   // Run layout
-  cy.layout({
+  const layout = cy.layout({
     name: 'dagre',
     rankDir: 'TB',
     nodeSep: 80,
     rankSep: 100,
     edgeSep: 30,
-    animate: true,
-    animationDuration: 300,
-    fit: true,
+    animate: false,  // Disable animation for initial layout
+    fit: false,      // Don't fit yet - we'll reposition IO containers first
     padding: 50,
     nodeDimensionsIncludeLabels: true,
     spacingFactor: 1.2
-  }).run();
-  
+  });
+
+  layout.run();
+
+  // Position IO containers above/below the selected container
+  if (data.selectedId) {
+    const selectedNode = cy.getElementById(data.selectedId);
+    const inputContainer = cy.getElementById('input:' + data.selectedId);
+    const outputContainer = cy.getElementById('output:' + data.selectedId);
+
+    if (selectedNode.length) {
+      const selectedBB = selectedNode.boundingBox();
+      const selectedCenterX = (selectedBB.x1 + selectedBB.x2) / 2;
+      const gap = 80;  // Gap between containers
+
+      // Position input container above
+      if (inputContainer.length) {
+        const inputBB = inputContainer.boundingBox();
+        const inputHeight = inputBB.y2 - inputBB.y1;
+        inputContainer.position({
+          x: selectedCenterX,
+          y: selectedBB.y1 - gap - inputHeight / 2
+        });
+      }
+
+      // Position output container below
+      if (outputContainer.length) {
+        const outputBB = outputContainer.boundingBox();
+        const outputHeight = outputBB.y2 - outputBB.y1;
+        outputContainer.position({
+          x: selectedCenterX,
+          y: selectedBB.y2 + gap + outputHeight / 2
+        });
+      }
+    }
+  }
+
+  // Now fit and animate
+  cy.fit(50);
+
   // Center on selected node after layout completes
   if (data.selectedId) {
     setTimeout(() => {
@@ -416,7 +499,7 @@ window.renderGraph = function(data) {
           duration: 300
         });
       }
-    }, 350);
+    }, 100);
   }
 };
 

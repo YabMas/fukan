@@ -33,16 +33,24 @@
    [:to :symbol]
    [:name :symbol]])
 
+(def ^:private NsUsage
+  [:map
+   [:from :symbol]       ; requiring namespace
+   [:to :symbol]         ; required namespace
+   [:filename :string]])
+
 (def ^:private AnalysisData
   [:map
    [:namespace-definitions [:vector NsDef]]
    [:var-definitions [:vector VarDef]]
-   [:var-usages [:vector VarUsage]]])
+   [:var-usages [:vector VarUsage]]
+   [:namespace-usages {:optional true} [:vector NsUsage]]])
 
 ;; Register for sidebar display
 (schema/register! :fukan.analysis/NsDef NsDef)
 (schema/register! :fukan.analysis/VarDef VarDef)
 (schema/register! :fukan.analysis/VarUsage VarUsage)
+(schema/register! :fukan.analysis/NsUsage NsUsage)
 (schema/register! :fukan.analysis/AnalysisData AnalysisData)
 
 (defn run-kondo
@@ -52,11 +60,12 @@
    - :namespace-definitions - list of {:name :filename ...}
    - :var-definitions - list of {:ns :name :filename :private ...}
    - :var-usages - list of {:from :from-var :to :name ...}
+   - :namespace-usages - list of {:from :to :filename ...}
 
    Throws if clj-kondo fails to run."
   {:malli/schema [:=> [:cat :string] :fukan.analysis/AnalysisData]}
   [src-path]
-  (let [config "{:output {:format :edn} :analysis {:var-usages true :var-definitions {:shallow false}}}"
+  (let [config "{:output {:format :edn} :analysis {:var-usages true :var-definitions {:shallow false} :namespace-usages true}}"
         result (shell/sh "clj-kondo"
                          "--lint" src-path
                          "--config" config

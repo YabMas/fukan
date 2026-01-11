@@ -1,9 +1,16 @@
 (ns user
   "Development helpers for REPL-driven workflow."
-  (:require [fukan.analysis :as analysis]
+  (:require [clj-reload.core :as reload]
+            [fukan.analysis :as analysis]
             [fukan.model :as model]
             [fukan.web.handler :as handler]
             [org.httpkit.server :as http]))
+
+;; Initialize clj-reload - tracks src and dev directories
+;; The 'user namespace is excluded from reloading
+(reload/init
+  {:dirs ["src" "dev"]
+   :no-reload '#{user}})
 
 (defonce ^:private server-state (atom nil))
 
