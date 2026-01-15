@@ -124,7 +124,7 @@
                         (try
                           (let [params (:query-params request)
                                 schema-id (get params "id")]
-                            (d*/patch-elements! sse (views/render-schema-detail schema-id))
+                            (d*/patch-elements! sse (views/render-sidebar nil {:schema-id schema-id}))
                             ;; Update URL with schema
                             (d*/execute-script! sse
                                                 (str "if(window.updateSchemaUrl)updateSchemaUrl("

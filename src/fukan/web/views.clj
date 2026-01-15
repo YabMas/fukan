@@ -8,7 +8,6 @@
             [fukan.web.cytoscape :as cytoscape]
             [fukan.web.views.graph :as views.graph]
             [fukan.web.views.sidebar :as views.sidebar]
-            [fukan.web.views.schema :as views.schema]
             [fukan.web.views.breadcrumb :as views.breadcrumb]))
 
 ;; -----------------------------------------------------------------------------
@@ -18,6 +17,7 @@
   [:map
    [:view-id {:optional true} [:maybe :string]]
    [:selected-id {:optional true} [:maybe :string]]
+   [:schema-id {:optional true} [:maybe :string]]
    [:expanded-containers {:optional true} :set]])
 
 (def ^:schema CytoscapeEdge
@@ -352,11 +352,11 @@
 
 (defn render-sidebar
   "Render the sidebar HTML.
-   Takes model and editor-state with :selected-id."
-  {:malli/schema [:=> [:cat :fukan.model/Model :fukan.web.views/EditorState] :fukan.web.views/Html]}
-  [model {:keys [selected-id]}]
-  (let [data (views.sidebar/compute-sidebar model selected-id)]
-    (views.sidebar/render-sidebar-html data)))
+   Takes model and editor-state with :selected-id or :schema-id."
+  {:malli/schema [:=> [:cat [:maybe :fukan.model/Model] :fukan.web.views/EditorState] :fukan.web.views/Html]}
+  [model {:keys [selected-id schema-id]}]
+  (if schema-id
+    (views.sidebar/render-schema-sidebar schema-id)
+    (let [data (views.sidebar/compute-sidebar model selected-id)]
+      (views.sidebar/render-sidebar-html data))))
 
-;; Re-export schema detail for SSE handler
-(def render-schema-detail views.schema/render-schema-detail)

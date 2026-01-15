@@ -2,7 +2,7 @@
   "Pure functions to compute graph data for Cytoscape visualization.
    Implements view-spec.md behavior with on-demand edge aggregation."
   (:require [fukan.web.views.common :as common]
-            [fukan.model :as model]
+            [fukan.schema :as schema]
             [clojure.string :as str]
             [clojure.set :as set]))
 
@@ -118,6 +118,20 @@
 ;; -----------------------------------------------------------------------------
 ;; IO Schema computation
 
+(defn- extract-fn-schema-flow
+  "Extract input and output schema references from a function schema.
+   Expects schema in form [:=> [:cat input1 input2 ...] output].
+   Returns {:inputs #{schema-keys...} :outputs #{schema-keys...}}
+   or nil if not a function schema."
+  [fn-schema]
+  (when (and (vector? fn-schema) (= :=> (first fn-schema)))
+    (let [[_ input output] fn-schema
+          in-schemas (if (and (vector? input) (= :cat (first input)))
+                       (rest input)
+                       [input])]
+      {:inputs (into #{} (mapcat schema/extract-schema-refs in-schemas))
+       :outputs (schema/extract-schema-refs output)})))
+
 (defn- compute-var-schema-info
   "Get schema info for a var by looking up its malli/schema metadata.
    Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil."
@@ -128,7 +142,7 @@
       (when-let [ns-obj (find-ns ns-sym)]
         (when-let [v (ns-resolve ns-obj var-sym)]
           (when-let [fn-schema (:malli/schema (meta v))]
-            (model/extract-fn-schema-flow fn-schema)))))))
+            (extract-fn-schema-flow fn-schema)))))))
 
 (defn- collect-container-schema-flow
   "Collect schema flow information for all vars inside a container.

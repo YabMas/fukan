@@ -1,7 +1,6 @@
 (ns fukan.web.views.sidebar
   "Render sidebar panels for different node types."
   (:require [hiccup2.core :as h]
-            [fukan.schema :as schema]
             [fukan.web.views.schema :as views.schema]))
 
 ;; -----------------------------------------------------------------------------
@@ -163,9 +162,7 @@
   "Render the sidebar fragment for a namespace node."
   [node deps dependents]
   (let [label (:label node)
-        doc (node-doc node)
-        ;; Get schemas defined in this namespace
-        ns-schemas (schema/schemas-for-ns label)]
+        doc (node-doc node)]
     (str
      (h/html
       [:div#node-info
@@ -174,14 +171,7 @@
        (when doc
          [:div.doc doc])
 
-       ;; Schemas section
-       (when (seq ns-schemas)
-         (list
-          [:h5 "Schemas " [:span.dep-count (str "(" (count ns-schemas) ")")]]
-          [:ul.schema-list
-           (for [schema-key (sort ns-schemas)]
-             [:li {"data-on:click" (str "@get('/sse/schema?id=" (namespace schema-key) "/" (name schema-key) "')")}
-              (name schema-key)])]))
+       (views.schema/render-schema-list label)
 
        [:h5 "Dependencies " [:span.dep-count (str "(" (count deps) ")")]]
        (if (seq deps)
@@ -263,3 +253,9 @@
     {:node node
      :deps (when node (compute-deps model node-id))
      :dependents (when node (compute-dependents model node-id))}))
+
+(defn render-schema-sidebar
+  "Render the sidebar for viewing a schema definition.
+   Takes a schema-id string like 'fukan.model/Model'."
+  [schema-id]
+  (views.schema/render-schema-detail schema-id))

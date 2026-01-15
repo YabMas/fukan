@@ -296,53 +296,6 @@
           (assoc-in [smart-root-id :parent] nil)))))
 
 ;; -----------------------------------------------------------------------------
-;; Schema flow analysis
-;;
-;; Functions to extract schema references for data flow analysis.
-
-(defn extract-schema-refs
-  "Extract all qualified keyword schema references from a schema form.
-   Returns a set of keywords (e.g., #{:fukan.model/Node :fukan.model/Edge}).
-   Only returns refs that are registered in our schema registry.
-
-   Public for use by view layer for IO schema computation."
-  [schema-form]
-  (let [registered-schemas (set (schema/all-schemas))
-        refs (atom #{})]
-    (letfn [(walk [s]
-              (cond
-                ;; Qualified keyword - potential schema reference
-                (qualified-keyword? s)
-                (when (contains? registered-schemas s)
-                  (swap! refs conj s))
-
-                ;; Vector form - recurse into children
-                (vector? s)
-                (doseq [child (rest s)] (walk child))
-
-                ;; Map form - recurse into values
-                (map? s)
-                (doseq [v (vals s)] (walk v))))]
-      (walk schema-form)
-      @refs)))
-
-(defn extract-fn-schema-flow
-  "Extract input and output schema references from a function schema.
-   Expects schema in form [:=> [:cat input1 input2 ...] output].
-   Returns {:inputs #{schema-keys...} :outputs #{schema-keys...}}
-   or nil if not a function schema.
-
-   Public for use by view layer for IO schema computation."
-  [fn-schema]
-  (when (and (vector? fn-schema) (= :=> (first fn-schema)))
-    (let [[_ input output] fn-schema
-          in-schemas (if (and (vector? input) (= :cat (first input)))
-                       (rest input)
-                       [input])]
-      {:inputs (into #{} (mapcat extract-schema-refs in-schemas))
-       :outputs (extract-schema-refs output)})))
-
-;; -----------------------------------------------------------------------------
 ;; Schema flow construction
 
 (defn- build-schema-nodes

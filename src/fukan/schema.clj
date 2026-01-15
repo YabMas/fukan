@@ -59,3 +59,30 @@
           :when (:schema (meta v))]
     (let [k (keyword (str (ns-name ns)) (name sym))]
       (register! k @v))))
+
+;; -----------------------------------------------------------------------------
+;; Schema Analysis
+
+(defn extract-schema-refs
+  "Extract all qualified keyword schema references from a schema form.
+   Returns a set of keywords (e.g., #{:fukan.model/Node :fukan.model/Edge}).
+   Only returns refs that are registered in our schema registry."
+  [schema-form]
+  (let [registered-schemas (set (all-schemas))
+        refs (atom #{})]
+    (letfn [(walk [s]
+              (cond
+                ;; Qualified keyword - potential schema reference
+                (qualified-keyword? s)
+                (when (contains? registered-schemas s)
+                  (swap! refs conj s))
+
+                ;; Vector form - recurse into children
+                (vector? s)
+                (doseq [child (rest s)] (walk child))
+
+                ;; Map form - recurse into values
+                (map? s)
+                (doseq [v (vals s)] (walk v))))]
+      (walk schema-form)
+      @refs)))

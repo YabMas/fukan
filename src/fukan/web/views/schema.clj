@@ -95,6 +95,19 @@
 ;; -----------------------------------------------------------------------------
 ;; Public API
 
+(defn render-schema-list
+  "Render the schemas section for a namespace sidebar.
+   Returns nil if no schemas exist."
+  [ns-str]
+  (let [ns-schemas (schema/schemas-for-ns ns-str)]
+    (when (seq ns-schemas)
+      (list
+        [:h5 "Schemas " [:span.dep-count (str "(" (count ns-schemas) ")")]]
+        [:ul.schema-list
+         (for [schema-key (sort ns-schemas)]
+           [:li {"data-on:click" (str "@get('/sse/schema?id=" (namespace schema-key) "/" (name schema-key) "')")}
+            (name schema-key)])]))))
+
 (defn render-schema-detail
   "Render the sidebar for viewing a schema definition.
    Takes a schema key like 'fukan.model/Model'."
