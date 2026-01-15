@@ -2,22 +2,21 @@
   "Static analysis of Clojure source code via clj-kondo.
    Produces raw analysis data (namespaces, vars, usages)."
   (:require [clojure.java.shell :as shell]
-            [clojure.edn :as edn]
-            [fukan.schema :as schema]))
+            [clojure.edn :as edn]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 ;;
-;; We register schemas for documentation/display purposes.
+;; Schemas are marked with ^:schema metadata for auto-discovery.
 ;; Function schemas are defined inline to avoid compile-time resolution issues.
 
-(def ^:private NsDef
+(def ^:schema NsDef
   [:map
    [:name :symbol]
    [:filename :string]
    [:doc {:optional true} [:maybe :string]]])
 
-(def ^:private VarDef
+(def ^:schema VarDef
   [:map
    [:ns :symbol]
    [:name :symbol]
@@ -26,32 +25,25 @@
    [:doc {:optional true} [:maybe :string]]
    [:private {:optional true} :boolean]])
 
-(def ^:private VarUsage
+(def ^:schema VarUsage
   [:map
    [:from :symbol]
    [:from-var {:optional true} :symbol]
    [:to :symbol]
    [:name :symbol]])
 
-(def ^:private NsUsage
+(def ^:schema NsUsage
   [:map
    [:from :symbol]       ; requiring namespace
    [:to :symbol]         ; required namespace
    [:filename :string]])
 
-(def ^:private AnalysisData
+(def ^:schema AnalysisData
   [:map
    [:namespace-definitions [:vector NsDef]]
    [:var-definitions [:vector VarDef]]
    [:var-usages [:vector VarUsage]]
    [:namespace-usages {:optional true} [:vector NsUsage]]])
-
-;; Register for sidebar display
-(schema/register! :fukan.analysis/NsDef NsDef)
-(schema/register! :fukan.analysis/VarDef VarDef)
-(schema/register! :fukan.analysis/VarUsage VarUsage)
-(schema/register! :fukan.analysis/NsUsage NsUsage)
-(schema/register! :fukan.analysis/AnalysisData AnalysisData)
 
 (defn run-kondo
   "Runs clj-kondo on src-path and returns the analysis map.

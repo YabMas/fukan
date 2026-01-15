@@ -5,7 +5,6 @@
    See AGENTS.md for internal naming conventions."
   (:require [hiccup2.core :as h]
             [cheshire.core :as json]
-            [fukan.schema :as schema]
             [fukan.web.cytoscape :as cytoscape]
             [fukan.web.views.graph :as views.graph]
             [fukan.web.views.sidebar :as views.sidebar]
@@ -15,32 +14,26 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:private EditorState
+(def ^:schema EditorState
   [:map
    [:view-id {:optional true} [:maybe :string]]
    [:selected-id {:optional true} [:maybe :string]]
    [:expanded-containers {:optional true} :set]])
 
-(def ^:private CytoscapeEdge
+(def ^:schema CytoscapeEdge
   [:map
    [:id :string]
    [:source :string]
    [:target :string]])
 
-(def ^:private GraphData
+(def ^:schema GraphData
   [:map
    [:nodes [:vector :map]]
    [:edges [:vector CytoscapeEdge]]
    [:selectedId {:optional true} [:maybe :string]]
    [:highlightedEdges {:optional true} [:vector :string]]])
 
-(def ^:private Html :string)
-
-;; Register for sidebar display
-(schema/register! :fukan.web.views/EditorState EditorState)
-(schema/register! :fukan.web.views/CytoscapeEdge CytoscapeEdge)
-(schema/register! :fukan.web.views/GraphData GraphData)
-(schema/register! :fukan.web.views/Html Html)
+(def ^:schema Html :string)
 
 ;; -----------------------------------------------------------------------------
 ;; CSS

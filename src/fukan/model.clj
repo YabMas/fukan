@@ -9,10 +9,10 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:private NodeId :string)
-(def ^:private NodeKind [:enum :folder :namespace :var :schema])
+(def ^:schema NodeId :string)
+(def ^:schema NodeKind [:enum :folder :namespace :var :schema])
 
-(def ^:private Node
+(def ^:schema Node
   "A node in the graph. Kind-specific fields stored in :data map."
   [:map
    [:id NodeId]
@@ -22,24 +22,17 @@
    [:children [:set :string]]
    [:data {:optional true} :map]])  ; kind-specific: path, ns-sym, var-sym, doc, private?, schema-key, etc.
 
-(def ^:private Edge
+(def ^:schema Edge
   "A directed edge between two nodes. All info derived from connected nodes."
   [:map
    [:from NodeId]
    [:to NodeId]])
 
-(def ^:private Model
+(def ^:schema Model
   "Simplified model: just nodes and edges. No pre-computed aggregations or indexes."
   [:map
    [:nodes [:map-of NodeId Node]]
    [:edges [:vector Edge]]])
-
-;; Register for sidebar display
-(schema/register! :fukan.model/NodeId NodeId)
-(schema/register! :fukan.model/NodeKind NodeKind)
-(schema/register! :fukan.model/Node Node)
-(schema/register! :fukan.model/Edge Edge)
-(schema/register! :fukan.model/Model Model)
 
 ;; -----------------------------------------------------------------------------
 ;; ID construction helpers

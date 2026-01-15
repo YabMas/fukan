@@ -4,21 +4,17 @@
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.http-kit :as hk]
             [fukan.web.views :as views]
-            [fukan.schema :as schema]
             [cheshire.core :as json]
             [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:private Request
+(def ^:schema Request
   [:map
    [:query-params {:optional true} [:map-of :string :string]]])
 
-(def ^:private SSEResponse :any)
-
-(schema/register! :fukan.web.sse/Request Request)
-(schema/register! :fukan.web.sse/SSEResponse SSEResponse)
+(def ^:schema SSEResponse :any)
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers

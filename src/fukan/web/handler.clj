@@ -5,15 +5,13 @@
             [reitit.ring.middleware.parameters :as parameters]
             [fukan.web.views :as views]
             [fukan.web.sse :as sse]
-            [fukan.schema :as schema]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:private Handler :fn)
-(schema/register! :fukan.web.handler/Handler Handler)
+(def ^:schema Handler :fn)
 
 (defn- get-content-type
   "Determine content type based on file extension."

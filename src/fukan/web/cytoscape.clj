@@ -1,13 +1,12 @@
 (ns fukan.web.cytoscape
   "Transforms internal graph-view format to Cytoscape-compatible JSON.
    This is the boundary layer between domain-focused view data and
-   the Cytoscape.js frontend library."
-  (:require [fukan.schema :as schema]))
+   the Cytoscape.js frontend library.")
 
 ;; -----------------------------------------------------------------------------
 ;; Cytoscape Output Schemas
 
-(def ^:private CytoscapeNode
+(def ^:schema CytoscapeNode
   [:map
    [:id :string]
    [:kind :string]
@@ -19,7 +18,7 @@
    [:isExpanded :boolean]
    [:childCount :int]])
 
-(def ^:private CytoscapeEdge
+(def ^:schema CytoscapeEdge
   [:map
    [:id :string]
    [:source :string]
@@ -27,16 +26,12 @@
    [:edgeType :string]
    [:highlighted :boolean]])
 
-(def ^:private CytoscapeGraph
+(def ^:schema CytoscapeGraph
   [:map
    [:nodes [:vector CytoscapeNode]]
    [:edges [:vector CytoscapeEdge]]
    [:selectedId {:optional true} [:maybe :string]]
    [:highlightedEdges {:optional true} [:vector :string]]])
-
-(schema/register! :fukan.web.cytoscape/CytoscapeNode CytoscapeNode)
-(schema/register! :fukan.web.cytoscape/CytoscapeEdge CytoscapeEdge)
-(schema/register! :fukan.web.cytoscape/CytoscapeGraph CytoscapeGraph)
 
 ;; -----------------------------------------------------------------------------
 ;; Transformers

@@ -50,3 +50,12 @@
   "Get all registered schema keywords."
   []
   (keys @custom-schemas))
+
+(defn discover-schemas!
+  "Scan all loaded namespaces for vars with ^:schema metadata and register them."
+  []
+  (doseq [ns (all-ns)
+          [sym v] (ns-publics ns)
+          :when (:schema (meta v))]
+    (let [k (keyword (str (ns-name ns)) (name sym))]
+      (register! k @v))))

@@ -3,6 +3,7 @@
   (:require [clj-reload.core :as reload]
             [fukan.analysis :as analysis]
             [fukan.model :as model]
+            [fukan.schema :as schema]
             [fukan.web.handler :as handler]
             [org.httpkit.server :as http]))
 
@@ -36,6 +37,7 @@
                        (count (:var-definitions analysis)) "var definitions")
             m (model/build-model analysis)
             _ (println "Built" (count (:nodes m)) "nodes," (count (:edges m)) "edges")
+            _ (schema/discover-schemas!)
             h (handler/create-handler m)
             server (http/run-server h {:port port})]
         (reset! server-state {:server server
