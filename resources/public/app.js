@@ -155,14 +155,14 @@ const cy = cytoscape({
         'color': '#2c3e50'
       }
     },
-    // Var node
+    // Var node - blue like namespaces (active children)
     {
       selector: 'node[kind="var"]',
       style: {
         'shape': 'roundrectangle',
-        'background-color': '#fff',
-        'border-color': '#7f8c8d',
-        'border-width': 1,
+        'background-color': '#e8f4f8',
+        'border-color': '#2980b9',
+        'border-width': 2,
         'label': 'data(label)',
         'text-valign': 'center',
         'text-halign': 'center',
@@ -171,6 +171,20 @@ const cy = cytoscape({
         'padding': '15px',
         'font-size': '12px',
         'color': '#2c3e50'
+      }
+    },
+    // Var that defines a schema - diamond shape like schema nodes
+    {
+      selector: 'node[kind="var"][isSchemaVar]',
+      style: {
+        'shape': 'diamond',
+        'background-color': '#e8f5e9',
+        'border-color': '#27ae60',
+        'border-width': 2,
+        'width': '60px',
+        'height': '60px',
+        'font-weight': 'bold',
+        'color': '#1b5e20'
       }
     },
     // External folder container (compound node)
@@ -246,6 +260,14 @@ const cy = cytoscape({
         'padding-top': '55px'
       }
     },
+    // Container namespace (no parent) - grey like folders (context container)
+    {
+      selector: 'node[kind="namespace"]:orphan',
+      style: {
+        'background-color': '#ecf0f1',
+        'border-color': '#bdc3c7'
+      }
+    },
     // Highlighted edges
     {
       selector: 'edge.highlighted',
@@ -272,13 +294,11 @@ const cy = cytoscape({
         'border-width': 3
       }
     },
-    // Private vars (shown when parent is expanded)
+    // Private vars (shown when parent is expanded) - dashed blue border
     {
       selector: 'node[private]',
       style: {
-        'background-color': '#f5f5f5',
-        'border-style': 'dashed',
-        'color': '#7f8c8d'
+        'border-style': 'dashed'
       }
     },
     // Schema node - diamond shape, green theme for data flow

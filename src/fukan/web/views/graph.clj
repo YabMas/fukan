@@ -18,6 +18,15 @@
 (defn- node-var-sym [node]
   (get-in node [:data :var-sym]))
 
+(defn- schema-defining-var?
+  "Check if a var node defines a schema (has corresponding registered schema)."
+  [node]
+  (when (= :var (:kind node))
+    (let [ns-sym (node-ns-sym node)
+          var-sym (node-var-sym node)
+          schema-key (keyword (str ns-sym) (str var-sym))]
+      (some? (schema/get-schema schema-key)))))
+
 ;; -----------------------------------------------------------------------------
 ;; Visibility helpers
 
@@ -202,7 +211,9 @@
      :expandable? (boolean (seq (:children node)))
      :has-private-children? (has-private-children? model id)
      :expanded? (contains? expanded-containers id)
-     :child-count (count (:children node))}))
+     :child-count (count (:children node))
+     :private? (node-private? node)
+     :schema-var? (schema-defining-var? node)}))
 
 ;; -----------------------------------------------------------------------------
 ;; Drill-down expansion helpers
