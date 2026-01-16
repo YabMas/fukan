@@ -3,7 +3,7 @@
    Streams HTML fragments and graph data to the frontend."
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.http-kit :as hk]
-            [fukan.web.views :as views]
+            [fukan.web.views.api :as views]
             [cheshire.core :as json]
             [clojure.string :as str]))
 
@@ -52,7 +52,7 @@
    - Breadcrumb HTML
    - Sidebar HTML (node info for selected node)
    - Graph data via script tag"
-  {:malli/schema [:=> [:cat :fukan.model/Model :fukan.web.sse/Request] :fukan.web.sse/SSEResponse]}
+  {:malli/schema [:=> [:cat :Model :Request] :SSEResponse]}
   [model request]
   (hk/->sse-response request
                      {hk/on-open
@@ -93,7 +93,7 @@
 (defn sidebar-handler
   "SSE endpoint that streams just the sidebar content.
    Used when selecting a node without navigating."
-  {:malli/schema [:=> [:cat :fukan.model/Model :fukan.web.sse/Request] :fukan.web.sse/SSEResponse]}
+  {:malli/schema [:=> [:cat :Model :Request] :SSEResponse]}
   [model request]
   (hk/->sse-response request
                      {hk/on-open
@@ -116,7 +116,7 @@
 (defn schema-handler
   "SSE endpoint that streams the schema detail view.
    Used when clicking on a schema name to view its definition."
-  {:malli/schema [:=> [:cat :fukan.web.sse/Request] :fukan.web.sse/SSEResponse]}
+  {:malli/schema [:=> [:cat :Request] :SSEResponse]}
   [request]
   (hk/->sse-response request
                      {hk/on-open

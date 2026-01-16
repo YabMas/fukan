@@ -1,49 +1,13 @@
-(ns fukan.analysis
-  "Static analysis of Clojure source code via clj-kondo.
-   Produces raw analysis data (namespaces, vars, usages)."
+(ns fukan.model.languages.clojure
+  "Clojure-specific analysis and model construction.
+   Includes clj-kondo analysis and Malli schema node building."
   (:require [clojure.java.shell :as shell]
-            [clojure.edn :as edn]))
+            [clojure.edn :as edn]
+            [fukan.model.core :as core]
+            [fukan.schema :as schema]))
 
 ;; -----------------------------------------------------------------------------
-;; Schemas
-;;
-;; Schemas are marked with ^:schema metadata for auto-discovery.
-;; Function schemas are defined inline to avoid compile-time resolution issues.
-
-(def ^:schema NsDef
-  [:map
-   [:name :symbol]
-   [:filename :string]
-   [:doc {:optional true} [:maybe :string]]])
-
-(def ^:schema VarDef
-  [:map
-   [:ns :symbol]
-   [:name :symbol]
-   [:filename :string]
-   [:row :int]
-   [:doc {:optional true} [:maybe :string]]
-   [:private {:optional true} :boolean]])
-
-(def ^:schema VarUsage
-  [:map
-   [:from :symbol]
-   [:from-var {:optional true} :symbol]
-   [:to :symbol]
-   [:name :symbol]])
-
-(def ^:schema NsUsage
-  [:map
-   [:from :symbol]       ; requiring namespace
-   [:to :symbol]         ; required namespace
-   [:filename :string]])
-
-(def ^:schema AnalysisData
-  [:map
-   [:namespace-definitions [:vector NsDef]]
-   [:var-definitions [:vector VarDef]]
-   [:var-usages [:vector VarUsage]]
-   [:namespace-usages {:optional true} [:vector NsUsage]]])
+;; Static Analysis
 
 (defn run-kondo
   "Runs clj-kondo on src-path and returns the analysis map.
@@ -55,7 +19,7 @@
    - :namespace-usages - list of {:from :to :filename ...}
 
    Throws if clj-kondo fails to run."
-  {:malli/schema [:=> [:cat :string] :fukan.analysis/AnalysisData]}
+  {:malli/schema [:=> [:cat :string] :AnalysisData]}
   [src-path]
   (let [config "{:output {:format :edn} :analysis {:var-usages true :var-definitions {:shallow false} :namespace-usages true}}"
         result (shell/sh "clj-kondo"
@@ -76,3 +40,29 @@
                                         :stdout (:out result)}
                                        e))))]
         (:analysis parsed)))))
+
+;; -----------------------------------------------------------------------------
+;; Schema Node Building
+
+(defn build-schema-nodes
+  "Build schema nodes from all registered Malli schemas.
+   Schema nodes are placed inside their owning namespace container.
+
+   ns-index is a map of {ns-sym -> node-id} for looking up parent namespaces.
+
+   Returns a map of {schema-node-id -> node}."
+  [ns-index]
+  (->> (schema/all-schemas)
+       (map (fn [k]
+              (let [id (core/gen-id)
+                    owner-ns (schema/schema-owner k)
+                    owner-ns-sym (when owner-ns (symbol owner-ns))
+                    parent-ns-id (get ns-index owner-ns-sym)]
+                [id {:id id
+                     :kind :schema
+                     :label (name k)
+                     :parent parent-ns-id  ; schemas belong to their owning namespace
+                     :children #{}
+                     :data {:schema-key k
+                            :owner-ns owner-ns}}])))
+       (into {})))

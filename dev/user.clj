@@ -1,8 +1,7 @@
 (ns user
   "Development helpers for REPL-driven workflow."
   (:require [clj-reload.core :as reload]
-            [fukan.analysis :as analysis]
-            [fukan.model :as model]
+            [fukan.model.api :as model]
             [fukan.schema :as schema]
             [fukan.web.handler :as handler]
             [org.httpkit.server :as http]))
@@ -17,11 +16,11 @@
 
 (defn start
   "Start the web server.
-   
+
    Options:
      :src  - Path to Clojure source directory (required)
      :port - Server port (default: 8080)
-   
+
    Examples:
      (start {:src \"src\"})
      (start {:src \"/path/to/project/src\" :port 3000})"
@@ -32,11 +31,9 @@
     (println "Server already running on port" (:port @server-state))
     (do
       (println "Analyzing" src "...")
-      (let [analysis (analysis/run-kondo src)
-            _ (println "Found" (count (:namespace-definitions analysis)) "namespaces,"
-                       (count (:var-definitions analysis)) "var definitions")
-            m (model/build-model analysis)
+      (let [m (model/build-model src)
             _ (println "Built" (count (:nodes m)) "nodes," (count (:edges m)) "edges")
+            _ (schema/clear-schemas!)
             _ (schema/discover-schemas!)
             h (handler/create-handler m)
             server (http/run-server h {:port port})]

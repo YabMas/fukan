@@ -1,10 +1,9 @@
 (ns fukan.core
   "Application entry point and CLI argument parsing.
    Orchestrates the analysis pipeline and starts the web server.
-   
+
    Usage: clj -M -m fukan.core --src /path/to/src [--port 8080]"
-  (:require [fukan.analysis :as analysis]
-            [fukan.model :as model]
+  (:require [fukan.model.api :as model]
             [fukan.web.handler :as handler]
             [org.httpkit.server :as http]))
 
@@ -25,7 +24,7 @@
 
 (defn -main
   "Main entry point.
-   
+
    Arguments:
      --src PATH   Path to Clojure source directory (required)
      --port PORT  Server port (default: 8080)"
@@ -40,18 +39,13 @@
 
     (println (str "Analyzing " src "..."))
 
-    ;; Run analysis
-    (let [analysis (analysis/run-kondo src)
-          _ (println (str "Found " (count (:namespace-definitions analysis)) " namespaces, "
-                          (count (:var-definitions analysis)) " var definitions"))
-
-          ;; Build model
-          model (model/build-model analysis)
-          _ (println (str "Built " (count (:nodes model)) " nodes, "
-                          (count (:edges model)) " edges"))
+    ;; Build model (runs analysis internally)
+    (let [m (model/build-model src)
+          _ (println (str "Built " (count (:nodes m)) " nodes, "
+                          (count (:edges m)) " edges"))
 
           ;; Create handler
-          handler (handler/create-handler model)]
+          handler (handler/create-handler m)]
 
       ;; Start server
       (http/run-server handler {:port port})

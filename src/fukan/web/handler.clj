@@ -3,7 +3,7 @@
    Delegates view computation and rendering to specialized namespaces."
   (:require [reitit.ring :as ring]
             [reitit.ring.middleware.parameters :as parameters]
-            [fukan.web.views :as views]
+            [fukan.web.views.api :as views]
             [fukan.web.sse :as sse]
             [clojure.java.io :as io]
             [clojure.string :as str]))
@@ -39,7 +39,7 @@
 
    Parameters:
    - model: Internal model with :nodes, :edges, and indexes"
-  {:malli/schema [:=> [:cat :fukan.model/Model] :fukan.web.handler/Handler]}
+  {:malli/schema [:=> [:cat :Model] :Handler]}
   [model]
   (ring/ring-handler
    (ring/router

@@ -1,4 +1,4 @@
-(ns fukan.web.views
+(ns fukan.web.views.api
   "View rendering for the web interface.
 
    All public render functions take the model and an editor-state map.
@@ -20,16 +20,10 @@
    [:schema-id {:optional true} [:maybe :string]]
    [:expanded-containers {:optional true} :set]])
 
-(def ^:schema CytoscapeEdge
-  [:map
-   [:id :string]
-   [:source :string]
-   [:target :string]])
-
 (def ^:schema GraphData
   [:map
    [:nodes [:vector :map]]
-   [:edges [:vector CytoscapeEdge]]
+   [:edges [:vector :CytoscapeEdge]]
    [:selectedId {:optional true} [:maybe :string]]
    [:highlightedEdges {:optional true} [:vector :string]]])
 
@@ -262,7 +256,7 @@
 
 (defn render-app-shell
   "Render the initial HTML page shell."
-  {:malli/schema [:=> [:cat] :fukan.web.views/Html]}
+  {:malli/schema [:=> [:cat] :Html]}
   []
   (str
    "<!DOCTYPE html>"
@@ -333,7 +327,7 @@
 
    Internally, views.graph outputs domain-focused format with Clojure idioms.
    This function transforms to Cytoscape format at the boundary."
-  {:malli/schema [:=> [:cat :fukan.model/Model :fukan.web.views/EditorState] :fukan.web.views/GraphData]}
+  {:malli/schema [:=> [:cat :Model :EditorState] :GraphData]}
   [model {:keys [view-id selected-id] :as editor-state}]
   (let [;; Compute internal graph format (Clojure idioms)
         graph (views.graph/compute-graph model editor-state)
@@ -345,7 +339,7 @@
 (defn render-breadcrumb
   "Render the breadcrumb navigation HTML.
    Takes model and editor-state with :view-id."
-  {:malli/schema [:=> [:cat :fukan.model/Model :fukan.web.views/EditorState] :fukan.web.views/Html]}
+  {:malli/schema [:=> [:cat :Model :EditorState] :Html]}
   [model {:keys [view-id]}]
   (let [items (views.breadcrumb/compute-breadcrumb model view-id)]
     (render-breadcrumb-html items)))
@@ -353,10 +347,9 @@
 (defn render-sidebar
   "Render the sidebar HTML.
    Takes model and editor-state with :selected-id or :schema-id."
-  {:malli/schema [:=> [:cat [:maybe :fukan.model/Model] :fukan.web.views/EditorState] :fukan.web.views/Html]}
+  {:malli/schema [:=> [:cat [:maybe :Model] :EditorState] :Html]}
   [model {:keys [selected-id schema-id]}]
   (if schema-id
     (views.sidebar/render-schema-sidebar schema-id)
     (let [data (views.sidebar/compute-sidebar model selected-id)]
       (views.sidebar/render-sidebar-html data))))
-

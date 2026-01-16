@@ -259,11 +259,48 @@
                                 (not (contains? container-descendants from)))
                        ;; Find direct child containing the target
                        (let [target-child (find-direct-child-of model container-id to)
-                             ;; Type filter: only include if source and target have same kind
                              source-kind (get-in model [:nodes from-ancestor :kind])
-                             target-kind (get-in model [:nodes target-child :kind])]
-                         (when (= source-kind target-kind)
+                             target-child-kind (get-in model [:nodes target-child :kind])
+                             target-kind (get-in model [:nodes to :kind])]
+                         ;; Type filter: compare visible source with target-child kind
+                         ;; Special case: if target-child is a folder (nested containers),
+                         ;; compare with raw target kind to handle ns→ns through folders
+                         (when (or (= source-kind target-child-kind)
+                                   (and (= target-child-kind :folder)
+                                        (= source-kind target-kind)))
                            target-child)))))))
+         (remove nil?)
+         set)))
+
+(defn- find-sources-inside-container
+  "Find direct children of container-id that contain actual edge sources
+   going to entities in external-visible-set (entities not inside the container).
+   Uses raw edges to find actual sources, not aggregated ones.
+   Only returns sources where the source and target have the same :kind."
+  [model container-id external-visible-set]
+  (let [raw-edges (:edges model)
+        container-descendants (all-descendants-of model container-id)]
+    (->> raw-edges
+         (keep (fn [{:keys [from to]}]
+                 ;; Source must be a descendant of the container
+                 (when (contains? container-descendants from)
+                   ;; Target must be reachable from external visible set
+                   (let [to-ancestor (find-visible-ancestor model to external-visible-set)]
+                     (when (and to-ancestor
+                                ;; Target must not be inside the container
+                                (not (contains? container-descendants to)))
+                       ;; Find direct child containing the source
+                       (let [source-child (find-direct-child-of model container-id from)
+                             source-kind (get-in model [:nodes from :kind])
+                             source-child-kind (get-in model [:nodes source-child :kind])
+                             target-kind (get-in model [:nodes to-ancestor :kind])]
+                         ;; Type filter: compare source-child kind with visible target
+                         ;; Special case: if source-child is a folder (nested containers),
+                         ;; compare raw source kind to handle ns→ns through folders
+                         (when (or (= source-child-kind target-kind)
+                                   (and (= source-child-kind :folder)
+                                        (= source-kind target-kind)))
+                           source-child)))))))
          (remove nil?)
          set)))
 
@@ -297,7 +334,7 @@
 ;; Container view computation
 
 (defn- iterate-drill-down
-  "Iteratively expand visible set until all edge targets are visible.
+  "Iteratively expand visible set until all edge endpoints are visible.
 
    Same-type filtering: Only drills into containers when the source and target
    are the same kind (namespace→namespace, var→var). This keeps the structural
@@ -308,7 +345,7 @@
 
    Returns {:visible-set :drill-down-map :edges} where:
    - visible-set: all entities that should be visible
-   - drill-down-map: {container-id -> #{target-children}} for grouping (includes internal deps)
+   - drill-down-map: {container-id -> #{children}} for grouping (includes internal deps)
    - edges: final aggregated edges"
   [model initial-children-set]
   (loop [visible-set initial-children-set
@@ -319,8 +356,13 @@
                                  (map :to)
                                  (filter #(seq (get-in model [:nodes % :children])))
                                  set)
+          ;; Find containers that are edge sources
+          container-sources (->> edges
+                                 (map :from)
+                                 (filter #(seq (get-in model [:nodes % :children])))
+                                 set)
           ;; For each container target, find actual targets inside
-          new-targets-by-container
+          targets-by-container
             (into {}
               (for [cid container-targets
                     :let [;; External sources are visible entities not inside this container
@@ -328,21 +370,32 @@
                           targets (find-targets-inside-container model cid external)]
                     :when (seq targets)]
                 [cid targets]))
-          ;; Expand internal deps for each new container - this may add sibling containers
-          ;; that need drilling down in the next iteration
-          expanded-targets-by-container
+          ;; For each container source, find actual sources inside
+          sources-by-container
             (into {}
-              (for [[cid targets] new-targets-by-container]
-                [cid (expand-internal-deps model cid targets)]))
+              (for [cid container-sources
+                    :let [;; External targets are visible entities not inside this container
+                          external (into #{} (remove #(descendant-of? model % cid) visible-set))
+                          sources (find-sources-inside-container model cid external)]
+                    :when (seq sources)]
+                [cid sources]))
+          ;; Merge targets and sources
+          new-entities-by-container (merge-with set/union targets-by-container sources-by-container)
+          ;; Expand internal deps for each container - this may add sibling containers
+          ;; that need drilling down in the next iteration
+          expanded-entities-by-container
+            (into {}
+              (for [[cid entities] new-entities-by-container]
+                [cid (expand-internal-deps model cid entities)]))
           ;; Combine with existing drill-down-map
-          updated-drill-down-map (merge-with set/union drill-down-map expanded-targets-by-container)
-          ;; Only consider targets that aren't already visible
-          new-targets (set/difference (into #{} (mapcat val expanded-targets-by-container)) visible-set)]
-      (if (empty? new-targets)
+          updated-drill-down-map (merge-with set/union drill-down-map expanded-entities-by-container)
+          ;; Only consider entities that aren't already visible
+          new-entities (set/difference (into #{} (mapcat val expanded-entities-by-container)) visible-set)]
+      (if (empty? new-entities)
         {:visible-set visible-set
          :drill-down-map drill-down-map
          :edges edges}
-        (recur (set/union visible-set new-targets)
+        (recur (set/union visible-set new-entities)
                updated-drill-down-map)))))
 
 (defn- compute-container-view-impl

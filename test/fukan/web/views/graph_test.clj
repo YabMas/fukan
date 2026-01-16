@@ -855,3 +855,103 @@
       ;; Edge should be at namespace level
       (is (contains? (edges-set graph) {:from "ns:alpha" :to "ns:beta.child"})
           "edge should be aggregated to namespace level"))))
+
+;; =============================================================================
+;; Container Source Drill-Down Tests (edge FROM container, not TO)
+;; =============================================================================
+
+(defn build-model-container-as-source
+  "Build model where container has children with outgoing edges,
+   but no incoming edges to the container itself.
+
+   This tests the fix for the bug where drill-down only expanded
+   containers that were edge TARGETS, not edge SOURCES.
+
+   Structure:
+   - folder:root
+     - ns:target.ns (will receive edge from model-folder child)
+     - folder:model-folder
+       - ns:model.build (has edge OUT to target.ns)
+
+   Crucially, there is NO edge from outside INTO model-folder.
+   The only edge is FROM model-folder's child OUT to a sibling."
+  []
+  {:nodes
+   {"folder:root"
+    {:id "folder:root"
+     :kind :folder
+     :label "root"
+     :parent nil
+     :children #{"ns:target.ns" "folder:model-folder"}}
+
+    "ns:target.ns"
+    {:id "ns:target.ns"
+     :kind :namespace
+     :label "target.ns"
+     :parent "folder:root"
+     :children #{"var:target.ns/receive"}
+     :data {:ns-sym 'target.ns}}
+
+    "var:target.ns/receive"
+    {:id "var:target.ns/receive"
+     :kind :var
+     :label "receive"
+     :parent "ns:target.ns"
+     :children #{}
+     :data {:ns-sym 'target.ns :var-sym 'receive :private? false}}
+
+    "folder:model-folder"
+    {:id "folder:model-folder"
+     :kind :folder
+     :label "model-folder"
+     :parent "folder:root"
+     :children #{"ns:model.build"}}
+
+    "ns:model.build"
+    {:id "ns:model.build"
+     :kind :namespace
+     :label "model.build"
+     :parent "folder:model-folder"
+     :children #{"var:model.build/call-target"}
+     :data {:ns-sym 'model.build}}
+
+    "var:model.build/call-target"
+    {:id "var:model.build/call-target"
+     :kind :var
+     :label "call-target"
+     :parent "ns:model.build"
+     :children #{}
+     :data {:ns-sym 'model.build :var-sym 'call-target :private? false}}}
+
+   ;; Only edge: FROM model.build -> TO target.ns
+   ;; model-folder is edge SOURCE but NOT edge TARGET
+   :edges [{:from "var:model.build/call-target" :to "var:target.ns/receive"}]})
+
+(deftest container-source-drill-down
+  (testing "container that is edge SOURCE (not target) should drill down"
+    (let [model (build-model-container-as-source)
+          graph (graph/compute-graph model {:view-id "folder:root"
+                                            :selected-id nil
+                                            :expanded-containers #{}})]
+
+      ;; The model-folder should be drilled into because it's an edge source
+      (is (contains? (node-ids graph) "ns:model.build")
+          "namespace inside container source should be visible")
+
+      ;; The edge should show actual source, not the container
+      (is (contains? (edges-set graph) {:from "ns:model.build" :to "ns:target.ns"})
+          "edge should show ns:model.build, not folder:model-folder")
+
+      ;; The container-to-sibling edge should NOT exist
+      (is (not (contains? (edges-set graph) {:from "folder:model-folder" :to "ns:target.ns"}))
+          "edge should NOT show folder:model-folder as source")))
+
+  (testing "drill-down of source container exposes correct node hierarchy"
+    (let [model (build-model-container-as-source)
+          graph (graph/compute-graph model {:view-id "folder:root"
+                                            :selected-id nil
+                                            :expanded-containers #{}})]
+
+      ;; ns:model.build should be parented under folder:model-folder
+      (is (= "folder:model-folder" (node-parent graph "ns:model.build"))
+          "drilled-down source ns should be nested in its container"))))
