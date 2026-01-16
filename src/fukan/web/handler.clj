@@ -38,9 +38,11 @@
   "Create a Ring handler with all routes.
 
    Parameters:
-   - model: Internal model with :nodes, :edges, and indexes"
-  {:malli/schema [:=> [:cat :Model] :Handler]}
-  [model]
+   - get-model-fn: Zero-arity function that returns the current model.
+                   Called on each request, allowing model refresh without
+                   server restart."
+  {:malli/schema [:=> [:cat :fn] :Handler]}
+  [get-model-fn]
   (ring/ring-handler
    (ring/router
     [["/" {:get (fn [_]
@@ -50,13 +52,13 @@
 
      ;; SSE endpoints (Datastar)
      ["/sse/view" {:get (fn [req]
-                          (sse/main-view-handler model req))}]
+                          (sse/main-view-handler (get-model-fn) req))}]
 
      ["/sse/sidebar" {:get (fn [req]
-                             (sse/sidebar-handler model req))}]
+                             (sse/sidebar-handler (get-model-fn) req))}]
 
      ["/sse/schema" {:get (fn [req]
-                            (sse/schema-handler model req))}]
+                            (sse/schema-handler (get-model-fn) req))}]
 
      ["/public/*path" {:get (fn [{{:keys [path]} :path-params}]
                               (serve-static path))}]]

@@ -1,36 +1,40 @@
 # fukan.web Package Conventions
 
-## Naming Conventions in `fukan.web.views`
+## Architecture: Handler as Orchestrator
 
-### `compute-X-` functions (private)
-- **Input:** model + identifier (e.g., entity-id, node-id)
-- **Output:** data map
-- **Purpose:** Query the model, aggregate and transform data
-- **Example:** `(compute-sidebar- model node-id)` returns `{:node ... :deps ... :dependents ...}`
-
-### `render-X` functions (public)
-- **Input:** model + editor-state map
-- **Output:** HTML string (or JSON data for graph)
-- **Purpose:** Compute data and render output for a UI component
-- **Example:** `(render-sidebar model {:selected-id "var:foo/bar"})` returns HTML
-
-### Typical internal pattern
-```clojure
-(defn render-sidebar [model {:keys [selected-id]}]
-  (let [data (compute-sidebar- model selected-id)]
-    (render-sidebar-html data)))
 ```
+sse.clj (handler) → projection.api (fetch data)
+                  → views.api (render output)
+```
+
+The handler is responsible for:
+1. Parsing request parameters
+2. Calling projection functions to get data
+3. Passing projections to view functions for rendering
+
+Views are pure renderers - they don't fetch data.
+
+## Naming Conventions
+
+### In `fukan.web.sse` (handlers)
+- `compute-X-data` (private): Pre-compute data for views by calling projections
+- `X-handler` (public): SSE endpoint that orchestrates projection + rendering
+
+### In `fukan.web.views`
+- `render-X` (public): Accept pre-computed data, return HTML/JSON
+- `render-X-html` (private): Internal HTML rendering helpers
 
 ## Public API
 
 ```clojure
-;; Render functions (model + editor-state -> output)
-(render-app-shell)                     ; -> HTML (no args)
-(render-graph model editor-state)      ; -> Cytoscape JSON data
-(render-breadcrumb model editor-state) ; -> HTML
-(render-sidebar model editor-state)    ; -> HTML
+;; views.api - render functions accept projections
+(render-app-shell)                                    ; -> HTML (no args)
+(render-graph graph-projection root-node editor-state) ; -> Cytoscape JSON
+(render-breadcrumb path-items)                        ; -> HTML
+(render-sidebar sidebar-data)                         ; -> HTML
 
-;; editor-state shape:
-;; {:selected-id "var:foo/bar"  ; highlighted node
-;;  :view-id "ns:foo"}          ; container being viewed (nil = root)
+;; sse.clj - handlers orchestrate
+(main-view-handler model request)  ; streams graph + breadcrumb + sidebar
+(sidebar-handler model request)    ; streams sidebar only
+(schema-handler model request)     ; streams schema detail
 ```

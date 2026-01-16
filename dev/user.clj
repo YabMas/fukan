@@ -1,17 +1,14 @@
 (ns user
   "Development helpers for REPL-driven workflow."
   (:require [clj-reload.core :as reload]
-            [fukan.model.api :as model]
-            [fukan.web.handler :as handler]
-            [org.httpkit.server :as http]))
+            [fukan.infra.model :as infra-model]
+            [fukan.infra.server :as infra-server]))
 
 ;; Initialize clj-reload - tracks src and dev directories
 ;; The 'user namespace is excluded from reloading
 (reload/init
   {:dirs ["src" "dev"]
    :no-reload '#{user}})
-
-(defonce ^:private server-state (atom nil))
 
 (defn start
   "Start the web server.
@@ -26,42 +23,43 @@
   [{:keys [src port] :or {port 8080}}]
   (when-not src
     (throw (ex-info "Missing required :src option" {})))
-  (if (:server @server-state)
-    (println "Server already running on port" (:port @server-state))
+  (if (infra-server/running?)
+    (println "Server already running on port" (infra-server/get-port))
     (do
-      (println "Analyzing" src "...")
-      (let [m (model/build-model src)
-            _ (println "Built" (count (:nodes m)) "nodes," (count (:edges m)) "edges")
-            h (handler/create-handler m)
-            server (http/run-server h {:port port})]
-        (reset! server-state {:server server
-                              :port port
-                              :src src
-                              :model m})
-        (println (str "\nFukan running at http://localhost:" port))))))
+      (infra-model/load-model src)
+      (infra-server/start-server {:port port
+                                  :get-model-fn infra-model/get-model}))))
 
 (defn stop
   "Stop the running server."
   []
-  (if-let [{:keys [server port]} @server-state]
-    (do
-      (server) ; http-kit stop fn
-      (reset! server-state nil)
-      (println "Server stopped (was on port" (str port ")")))
-    (println "No server running")))
+  (infra-server/stop-server))
 
 (defn restart
   "Restart the server with the same configuration.
    Reloads the analysis from disk."
   []
-  (if-let [{:keys [src port]} @server-state]
-    (do
+  (if-let [src (infra-model/get-src)]
+    (let [port (or (infra-server/get-port) 8080)]
       (stop)
       (start {:src src :port port}))
     (println "No previous configuration. Use (start {:src \"path\"}) instead.")))
+
+(defn refresh
+  "Rebuild model without restarting server.
+   Use this after making changes to the analyzed codebase."
+  []
+  (if (infra-server/running?)
+    (do
+      (infra-model/refresh-model)
+      (println "Model refreshed. Browser will see changes on next request."))
+    (println "Server not running. Use (start {:src \"path\"}) first.")))
 
 (comment
   ;; Quick start for this project
   (start {:src "src"})
   (stop)
-  (restart))
+  (restart)
+
+  ;; After changing analyzed source code
+  (refresh))

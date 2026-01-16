@@ -1,7 +1,6 @@
 (ns fukan.web.views.schema
   "Render Malli schemas to HTML/hiccup."
   (:require [hiccup2.core :as h]
-            [fukan.model.api :as api]
             [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
@@ -98,24 +97,21 @@
 (defn render-schema-list
   "Render the schemas section for a namespace sidebar.
    Returns nil if no schemas exist.
-   Takes the model and namespace string."
-  [model ns-str]
-  (let [ns-schemas (api/schemas-for-ns model ns-str)]
-    (when (seq ns-schemas)
-      (list
-        [:h5 "Schemas " [:span.dep-count (str "(" (count ns-schemas) ")")]]
-        [:ul.schema-list
-         (for [schema-key (sort ns-schemas)]
-           [:li {"data-on:click" (str "@get('/sse/schema?id=" (namespace schema-key) "/" (name schema-key) "')")}
-            (name schema-key)])]))))
+   Takes a collection of schema keys for the namespace."
+  [ns-schemas]
+  (when (seq ns-schemas)
+    (list
+      [:h5 "Schemas " [:span.dep-count (str "(" (count ns-schemas) ")")]]
+      [:ul.schema-list
+       (for [schema-key (sort ns-schemas)]
+         [:li {"data-on:click" (str "@get('/sse/schema?id=" (namespace schema-key) "/" (name schema-key) "')")}
+          (name schema-key)])])))
 
 (defn render-schema-detail
   "Render the sidebar for viewing a schema definition.
-   Takes the model and a schema key string like 'fukan.model/Model'."
-  [model schema-key-str]
-  (let [[ns-part name-part] (str/split schema-key-str #"/" 2)
-        schema-key (keyword ns-part name-part)
-        schema-form (api/get-schema model schema-key)]
+   Takes a schema key string like 'fukan.model/Model' and the pre-computed schema form."
+  [schema-key-str schema-form]
+  (let [[ns-part name-part] (str/split schema-key-str #"/" 2)]
     (str
      (h/html
       (if schema-form

@@ -58,65 +58,6 @@
      [:p.empty-state "Click a node to see details"]])))
 
 ;; -----------------------------------------------------------------------------
-;; Generic dependency computation
-;;
-;; Core principle: When viewing an entity of kind K, aggregate dependencies to kind K.
-
-(defn- find-ancestor-of-kind
-  "Find the first ancestor (or self) of the given kind.
-   Returns nil if no ancestor of that kind exists."
-  [model node-id target-kind]
-  (loop [current node-id]
-    (when current
-      (let [node (get-in model [:nodes current])]
-        (if (= target-kind (:kind node))
-          current
-          (recur (:parent node)))))))
-
-(defn- subtree
-  "Return set of node-id and all its descendants.
-   For edge filtering: includes edges from the entity or anything inside it."
-  [model node-id]
-  (let [node (get-in model [:nodes node-id])]
-    (if-let [children (:children node)]
-      (into #{node-id} (mapcat #(subtree model %) children))
-      #{node-id})))
-
-(defn- compute-deps
-  "Compute dependencies for an entity, aggregated to its own kind.
-   Returns {target-id -> edge-count}."
-  [model entity-id]
-  (let [entity (get-in model [:nodes entity-id])
-        kind (:kind entity)
-        in-subtree (subtree model entity-id)
-        edges (:edges model)]
-    (->> edges
-         ;; Edges FROM this entity or its descendants
-         (filter #(contains? in-subtree (:from %)))
-         ;; Aggregate target to same kind
-         (keep #(find-ancestor-of-kind model (:to %) kind))
-         ;; Exclude self-references
-         (remove #{entity-id})
-         frequencies)))
-
-(defn- compute-dependents
-  "Compute dependents for an entity, aggregated to its own kind.
-   Returns {source-id -> edge-count}."
-  [model entity-id]
-  (let [entity (get-in model [:nodes entity-id])
-        kind (:kind entity)
-        in-subtree (subtree model entity-id)
-        edges (:edges model)]
-    (->> edges
-         ;; Edges TO this entity or its descendants
-         (filter #(contains? in-subtree (:to %)))
-         ;; Aggregate source to same kind
-         (keep #(find-ancestor-of-kind model (:from %) kind))
-         ;; Exclude self-references
-         (remove #{entity-id})
-         frequencies)))
-
-;; -----------------------------------------------------------------------------
 ;; Node type renderers
 
 (defn- render-var-info
@@ -160,7 +101,7 @@
 
 (defn- render-namespace-info
   "Render the sidebar fragment for a namespace node."
-  [model node deps dependents]
+  [ns-schemas node deps dependents]
   (let [label (:label node)
         doc (node-doc node)]
     (str
@@ -171,7 +112,7 @@
        (when doc
          [:div.doc doc])
 
-       (views.schema/render-schema-list model label)
+       (views.schema/render-schema-list ns-schemas)
 
        [:h5 "Dependencies " [:span.dep-count (str "(" (count deps) ")")]]
        (if (seq deps)
@@ -225,9 +166,9 @@
 (defn- render-schema-node-info
   "Render the sidebar fragment for a schema node.
    Delegates to render-schema-detail."
-  [model node]
+  [schema-form node]
   (let [schema-key (node-schema-key node)]
-    (views.schema/render-schema-detail model (str (namespace schema-key) "/" (name schema-key)))))
+    (views.schema/render-schema-detail (str (namespace schema-key) "/" (name schema-key)) schema-form)))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API
@@ -235,28 +176,19 @@
 (defn render-sidebar-html
   "Render the sidebar content for a node.
    Returns empty state if node is nil.
-   Takes model and sidebar data map with :node :deps :dependents."
-  [model {:keys [node deps dependents]}]
+   Takes sidebar data map with :node :deps :dependents :ns-schemas :schema-form."
+  [{:keys [node deps dependents ns-schemas schema-form]}]
   (if node
     (case (:kind node)
       :var (render-var-info node deps dependents)
-      :namespace (render-namespace-info model node deps dependents)
+      :namespace (render-namespace-info ns-schemas node deps dependents)
       :folder (render-folder-info node deps dependents)
-      :schema (render-schema-node-info model node)
+      :schema (render-schema-node-info schema-form node)
       (str (h/html [:div#node-info [:p.empty-state "Unknown node type"]])))
     (render-empty-sidebar)))
 
-(defn compute-sidebar
-  "Compute the sidebar data for a node.
-   Returns {:node :deps :dependents} map."
-  [model node-id]
-  (let [node (get-in model [:nodes node-id])]
-    {:node node
-     :deps (when node (compute-deps model node-id))
-     :dependents (when node (compute-dependents model node-id))}))
-
 (defn render-schema-sidebar
   "Render the sidebar for viewing a schema definition.
-   Takes model and a schema-id string like 'fukan.model/Model'."
-  [model schema-id]
-  (views.schema/render-schema-detail model schema-id))
+   Takes a schema-id string like 'fukan.model/Model' and the pre-computed schema form."
+  [schema-id schema-form]
+  (views.schema/render-schema-detail schema-id schema-form))

@@ -3,9 +3,8 @@
    Orchestrates the analysis pipeline and starts the web server.
 
    Usage: clj -M -m fukan.core --src /path/to/src [--port 8080]"
-  (:require [fukan.model.api :as model]
-            [fukan.web.handler :as handler]
-            [org.httpkit.server :as http]))
+  (:require [fukan.infra.model :as infra-model]
+            [fukan.infra.server :as infra-server]))
 
 (defn- parse-args
   "Parse command line arguments.
@@ -37,17 +36,8 @@
       (println "Usage: clj -M -m fukan.core --src /path/to/src [--port 8080]")
       (System/exit 1))
 
-    (println (str "Analyzing " src "..."))
-
-    ;; Build model (runs analysis internally)
-    (let [m (model/build-model src)
-          _ (println (str "Built " (count (:nodes m)) " nodes, "
-                          (count (:edges m)) " edges"))
-
-          ;; Create handler
-          handler (handler/create-handler m)]
-
-      ;; Start server
-      (http/run-server handler {:port port})
-      (println (str "\nFukan running at http://localhost:" port))
-      (println "Press Ctrl+C to stop"))))
+    ;; Load model and start server
+    (infra-model/load-model src)
+    (infra-server/start-server {:port port
+                                :get-model-fn infra-model/get-model})
+    (println "Press Ctrl+C to stop")))

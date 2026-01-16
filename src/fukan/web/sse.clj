@@ -1,9 +1,12 @@
 (ns fukan.web.sse
   "SSE handlers using Datastar SDK.
-   Streams HTML fragments and graph data to the frontend."
+   Streams HTML fragments and graph data to the frontend.
+
+   Handler is the orchestrator: calls projection.api, then passes results to views."
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.http-kit :as hk]
             [fukan.web.views.api :as views]
+            [fukan.projection.api :as proj]
             [cheshire.core :as json]
             [clojure.string :as str]))
 
@@ -38,6 +41,17 @@
   (when-let [node (get-in model [:nodes node-id])]
     (:parent node)))
 
+(defn- compute-sidebar-data
+  "Pre-compute sidebar data based on selected node.
+   Returns a map suitable for views/render-sidebar."
+  [model selected-id]
+  (let [details (proj/entity-details model selected-id)
+        node (:node details)]
+    (case (:kind node)
+      :namespace (assoc details :ns-schemas (proj/namespace-schemas model (:label node)))
+      :schema (assoc details :schema-form (proj/get-schema model (get-in node [:data :schema-key])))
+      details)))
+
 (defn main-view-handler
   "SSE endpoint that streams the full main view update.
 
@@ -71,14 +85,20 @@
                                 editor-state {:view-id entity-id
                                               :selected-id (or select-id entity-id)
                                               :expanded-containers expanded-containers}
-                                ;; Render all components
-                                graph-data (views/render-graph model editor-state)]
+                                ;; Get projections
+                                graph-projection (proj/entity-graph model {:view-id entity-id
+                                                                           :expanded-containers expanded-containers})
+                                root-node (proj/find-root-node model)
+                                path-items (proj/entity-path model entity-id)
+                                sidebar-data (compute-sidebar-data model (:selected-id editor-state))
+                                ;; Render views
+                                graph-data (views/render-graph graph-projection root-node editor-state)]
 
                             ;; 1. Patch breadcrumb HTML
-                            (d*/patch-elements! sse (views/render-breadcrumb model editor-state))
+                            (d*/patch-elements! sse (views/render-breadcrumb path-items))
 
                             ;; 2. Patch sidebar HTML
-                            (d*/patch-elements! sse (views/render-sidebar model editor-state))
+                            (d*/patch-elements! sse (views/render-sidebar sidebar-data))
 
                             ;; 3. Execute script to update graph and URL
                             (d*/execute-script! sse
@@ -102,8 +122,8 @@
                           (let [params (:query-params request)
                                 node-id (let [id (get params "id")]
                                           (when (and id (not= id "")) id))
-                                editor-state {:selected-id node-id}]
-                            (d*/patch-elements! sse (views/render-sidebar model editor-state))
+                                sidebar-data (compute-sidebar-data model node-id)]
+                            (d*/patch-elements! sse (views/render-sidebar sidebar-data))
                             ;; Update URL with selection
                             (d*/execute-script! sse
                                                 (str "if(window.updateSelectUrl)updateSelectUrl("
@@ -123,8 +143,12 @@
                       (fn [sse]
                         (try
                           (let [params (:query-params request)
-                                schema-id (get params "id")]
-                            (d*/patch-elements! sse (views/render-sidebar model {:schema-id schema-id}))
+                                schema-id (get params "id")
+                                [ns-part name-part] (str/split schema-id #"/" 2)
+                                schema-key (keyword ns-part name-part)
+                                schema-form (proj/get-schema model schema-key)
+                                sidebar-data {:schema-id schema-id :schema-form schema-form}]
+                            (d*/patch-elements! sse (views/render-sidebar sidebar-data))
                             ;; Update URL with schema
                             (d*/execute-script! sse
                                                 (str "if(window.updateSchemaUrl)updateSchemaUrl("

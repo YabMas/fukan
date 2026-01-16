@@ -1,14 +1,12 @@
 (ns fukan.web.views.api
   "View rendering for the web interface.
 
-   All public render functions take the model and an editor-state map.
-   See AGENTS.md for internal naming conventions."
+   Public render functions accept pre-computed projections and return output.
+   The handler (sse.clj) is responsible for fetching projections."
   (:require [hiccup2.core :as h]
-            [cheshire.core :as json]
             [fukan.web.cytoscape :as cytoscape]
             [fukan.web.views.graph :as views.graph]
-            [fukan.web.views.sidebar :as views.sidebar]
-            [fukan.web.views.breadcrumb :as views.breadcrumb]))
+            [fukan.web.views.sidebar :as views.sidebar]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
@@ -317,39 +315,39 @@
 ;; -----------------------------------------------------------------------------
 ;; Public Render API
 ;;
-;; All public render functions take (model, editor-state) and return output.
-;; editor-state is a map with :view-id, :selected-id, and/or :expanded-containers
+;; Render functions accept pre-computed projections and return output.
+;; The handler (sse.clj) is responsible for calling projection.api.
 
 (defn render-graph
   "Render graph data for Cytoscape.
-   Takes model and editor-state with :view-id, :selected-id, and :expanded-containers.
+   Takes pre-computed graph-projection, root-node, and editor-state.
    Returns Cytoscape-compatible {:nodes :edges :selectedId :highlightedEdges}.
 
-   Internally, views.graph outputs domain-focused format with Clojure idioms.
+   views.graph outputs domain-focused format with Clojure idioms.
    This function transforms to Cytoscape format at the boundary."
-  {:malli/schema [:=> [:cat :Model :EditorState] :GraphData]}
-  [model {:keys [view-id selected-id] :as editor-state}]
-  (let [;; Compute internal graph format (Clojure idioms)
-        graph (views.graph/compute-graph model editor-state)
-        selected-id (or selected-id view-id)
-        highlighted-edges (views.graph/compute-highlighted-edges (:edges graph) selected-id)]
+  {:malli/schema [:=> [:cat :map :map :EditorState] :GraphData]}
+  [graph-projection root-node {:keys [view-id selected-id] :as editor-state}]
+  (let [;; Add UI state (selected?, highlighted?)
+        graph (views.graph/add-ui-state graph-projection editor-state root-node)
+        effective-selected-id (or selected-id view-id (:id root-node))
+        highlighted-edges (views.graph/compute-highlighted-edges (:edges graph) effective-selected-id)]
     ;; Transform to Cytoscape format at the boundary
-    (cytoscape/graph->cytoscape graph selected-id highlighted-edges)))
+    (cytoscape/graph->cytoscape graph effective-selected-id highlighted-edges)))
 
 (defn render-breadcrumb
   "Render the breadcrumb navigation HTML.
-   Takes model and editor-state with :view-id."
-  {:malli/schema [:=> [:cat :Model :EditorState] :Html]}
-  [model {:keys [view-id]}]
-  (let [items (views.breadcrumb/compute-breadcrumb model view-id)]
-    (render-breadcrumb-html items)))
+   Takes pre-computed path items (from proj/entity-path)."
+  {:malli/schema [:=> [:cat [:vector :map]] :Html]}
+  [path-items]
+  (render-breadcrumb-html path-items))
 
 (defn render-sidebar
   "Render the sidebar HTML.
-   Takes model and editor-state with :selected-id or :schema-id."
-  {:malli/schema [:=> [:cat [:maybe :Model] :EditorState] :Html]}
-  [model {:keys [selected-id schema-id]}]
-  (if schema-id
-    (views.sidebar/render-schema-sidebar model schema-id)
-    (let [data (views.sidebar/compute-sidebar model selected-id)]
-      (views.sidebar/render-sidebar-html model data))))
+   Takes pre-computed sidebar-data.
+   If :schema-id is present, renders schema detail view.
+   Otherwise renders regular node sidebar."
+  {:malli/schema [:=> [:cat :map] :Html]}
+  [sidebar-data]
+  (if (:schema-id sidebar-data)
+    (views.sidebar/render-schema-sidebar (:schema-id sidebar-data) (:schema-form sidebar-data))
+    (views.sidebar/render-sidebar-html sidebar-data)))

@@ -1,0 +1,547 @@
+(ns fukan.projection.graph
+  "Graph projection functions.
+   Computes visible nodes and edges for entity graph visualization.
+   Returns pure domain data - no UI state like selected? or highlighted?."
+  (:require [fukan.projection.schema :as schema]
+            [fukan.projection.path :as path]
+            [clojure.set :as set]))
+
+;; -----------------------------------------------------------------------------
+;; Node accessor helpers (access via :data map)
+
+(defn- node-private? [node]
+  (get-in node [:data :private?] false))
+
+(defn- node-ns-sym [node]
+  (get-in node [:data :ns-sym]))
+
+(defn- node-var-sym [node]
+  (get-in node [:data :var-sym]))
+
+(defn- schema-defining-var?
+  "Check if a var node defines a schema (has corresponding registered schema).
+   Takes the model to look up schema data."
+  [model node]
+  (when (= :var (:kind node))
+    (let [ns-sym (node-ns-sym node)
+          var-sym (node-var-sym node)
+          schema-key (keyword (str ns-sym) (str var-sym))]
+      (some? (schema/get-schema model schema-key)))))
+
+;; -----------------------------------------------------------------------------
+;; Visibility helpers
+
+(defn- get-children
+  "Get the children of an entity."
+  [model entity-id]
+  (get-in model [:nodes entity-id :children] #{}))
+
+(defn- has-private-children?
+  "Check if a container has any private children."
+  [model entity-id]
+  (let [children-ids (get-children model entity-id)]
+    (some #(node-private? (get-in model [:nodes %])) children-ids)))
+
+(defn- get-visible-children
+  "Get the visible children of an entity, filtered by expanded-containers.
+   When a container has both namespace and var children, prioritize namespaces."
+  [model entity-id expanded-containers]
+  (let [children-ids (get-children model entity-id)
+        child-kinds (into #{} (map #(:kind (get-in model [:nodes %])) children-ids))
+        ;; If both ns and var children, filter out vars (namespaces take precedence)
+        children-ids (if (and (contains? child-kinds :namespace)
+                              (contains? child-kinds :var))
+                       (into #{} (filter #(#{:namespace :folder :schema}
+                                           (:kind (get-in model [:nodes %])))) children-ids)
+                       children-ids)]
+    (if (or (nil? expanded-containers)
+            (contains? expanded-containers entity-id))
+      children-ids
+      (into #{} (remove #(node-private? (get-in model [:nodes %]))) children-ids))))
+
+;; -----------------------------------------------------------------------------
+;; Ancestry helpers
+
+(defn- descendant-of?
+  "Check if node-id is a descendant of ancestor-id."
+  [model node-id ancestor-id]
+  (loop [current (:parent (get-in model [:nodes node-id]))]
+    (cond
+      (nil? current) false
+      (= current ancestor-id) true
+      :else (recur (:parent (get-in model [:nodes current]))))))
+
+(defn- find-visible-ancestor
+  "Walk up parent chain to find first node in visible-set.
+   Returns nil if no ancestor is visible."
+  [model node-id visible-set]
+  (loop [current node-id]
+    (cond
+      (nil? current) nil
+      (contains? visible-set current) current
+      :else (recur (:parent (get-in model [:nodes current]))))))
+
+;; -----------------------------------------------------------------------------
+;; On-demand edge aggregation
+
+(defn- aggregate-edges
+  "Aggregate var-level edges to the visible node level.
+   For each raw edge, find which visible nodes it connects.
+   Returns deduplicated edges between visible nodes.
+
+   Excludes edges where one endpoint is an ancestor of the other -
+   parent-child relationships are implicit in compound node structure."
+  [model visible-set]
+  (let [raw-edges (:edges model)]
+    (->> raw-edges
+         (keep (fn [{:keys [from to]}]
+                 (let [from-visible (find-visible-ancestor model from visible-set)
+                       to-visible (find-visible-ancestor model to visible-set)]
+                   (when (and from-visible to-visible
+                              (not= from-visible to-visible)
+                              ;; No edges between ancestor and descendant
+                              (not (descendant-of? model to-visible from-visible))
+                              (not (descendant-of? model from-visible to-visible)))
+                     {:from from-visible :to to-visible}))))
+         distinct
+         vec)))
+
+;; -----------------------------------------------------------------------------
+;; IO Schema computation
+
+(defn- extract-fn-schema-flow
+  "Extract input and output schema references from a function schema.
+   Expects schema in form [:=> [:cat input1 input2 ...] output].
+   Returns {:inputs #{schema-keys...} :outputs #{schema-keys...}}
+   or nil if not a function schema.
+   Takes the model to determine which keywords are registered schemas."
+  [model fn-schema]
+  (when (and (vector? fn-schema) (= :=> (first fn-schema)))
+    (let [[_ input output] fn-schema
+          in-schemas (if (and (vector? input) (= :cat (first input)))
+                       (rest input)
+                       [input])]
+      {:inputs (into #{} (mapcat #(schema/extract-schema-refs model %) in-schemas))
+       :outputs (schema/extract-schema-refs model output)})))
+
+(defn- compute-var-schema-info
+  "Get schema info for a var by looking up its malli/schema metadata.
+   Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil.
+   Takes the model to determine which keywords are registered schemas."
+  [model node]
+  (when (= :var (:kind node))
+    (let [ns-sym (node-ns-sym node)
+          var-sym (node-var-sym node)]
+      (when-let [ns-obj (find-ns ns-sym)]
+        (when-let [v (ns-resolve ns-obj var-sym)]
+          (when-let [fn-schema (:malli/schema (meta v))]
+            (extract-fn-schema-flow model fn-schema)))))))
+
+(defn- collect-container-schema-flow
+  "Collect schema flow information for all vars inside a container.
+   Returns {:produces #{schema-keys} :consumes #{schema-keys}}"
+  [model container-id]
+  (let [inside? (fn [node-id]
+                  (or (= node-id container-id)
+                      (descendant-of? model node-id container-id)))
+        vars (->> (:nodes model)
+                  vals
+                  (filter #(and (= :var (:kind %))
+                               (inside? (:id %)))))]
+    (reduce (fn [acc node]
+              (if-let [{:keys [inputs outputs]} (compute-var-schema-info model node)]
+                (-> acc
+                    (update :consumes into inputs)
+                    (update :produces into outputs))
+                acc))
+            {:consumes #{} :produces #{}}
+            vars)))
+
+(defn- compute-io-schemas
+  "Compute input and output schemas for a container.
+   Inputs: schemas consumed inside but NOT produced inside
+   Outputs: schemas produced inside (regardless of consumption)
+   Returns {:inputs #{schema-keys} :outputs #{schema-keys}}"
+  [model container-id]
+  (let [{:keys [consumes produces]} (collect-container-schema-flow model container-id)
+        ;; Inputs are consumed but not produced inside
+        inputs (set/difference consumes produces)]
+    {:inputs inputs
+     :outputs produces}))
+
+;; -----------------------------------------------------------------------------
+;; View node construction
+
+(defn- make-view-node
+  "Convert a model node to a projection node with rendering properties.
+   Returns pure domain data - NO selected? or highlighted? fields.
+
+   parent-override can be:
+   - nil: use the node's actual parent
+   - :no-parent: explicitly set parent to nil (for bounding box root)
+   - any other value: use that as the parent"
+  [model node parent-override expanded-containers]
+  (let [id (:id node)
+        kind (:kind node)
+        parent (cond
+                 (= parent-override :no-parent) nil
+                 (some? parent-override) parent-override
+                 :else (:parent node))]
+    {:id id
+     :kind kind
+     :label (:label node)
+     :parent parent
+     :expandable? (boolean (seq (:children node)))
+     :has-private-children? (has-private-children? model id)
+     :expanded? (contains? expanded-containers id)
+     :child-count (count (:children node))
+     :private? (node-private? node)
+     :schema-var? (schema-defining-var? model node)}))
+
+;; -----------------------------------------------------------------------------
+;; Drill-down expansion helpers
+
+(defn- all-descendants-of
+  "Get all descendant node ids of a given node (not including the node itself)."
+  [model node-id]
+  (let [children (get-children model node-id)]
+    (into children
+          (mapcat #(all-descendants-of model %) children))))
+
+(defn- find-direct-child-of
+  "Given a descendant node-id of container-id, find the ancestor
+   that is a direct child of container-id. Returns nil if node-id
+   is not a descendant, or node-id itself if already a direct child."
+  [model container-id node-id]
+  (let [direct-children (get-in model [:nodes container-id :children])]
+    (if (contains? direct-children node-id)
+      node-id
+      (loop [current node-id]
+        (let [parent (:parent (get-in model [:nodes current]))]
+          (cond
+            (nil? parent) nil
+            (= parent container-id) current
+            :else (recur parent)))))))
+
+(defn- find-targets-inside-container
+  "Find direct children of container-id that contain actual edge targets
+   from entities in external-visible-set (entities not inside the container).
+   Uses raw edges to find actual targets, not aggregated ones.
+   Only returns targets where the source and target have the same :kind."
+  [model container-id external-visible-set]
+  (let [raw-edges (:edges model)
+        container-descendants (all-descendants-of model container-id)]
+    (->> raw-edges
+         (keep (fn [{:keys [from to]}]
+                 ;; Target must be a descendant of the container
+                 (when (contains? container-descendants to)
+                   ;; Source must be reachable from external visible set
+                   (let [from-ancestor (find-visible-ancestor model from external-visible-set)]
+                     (when (and from-ancestor
+                                ;; Source must not be inside the container
+                                (not (contains? container-descendants from)))
+                       ;; Find direct child containing the target
+                       (let [target-child (find-direct-child-of model container-id to)
+                             source-kind (get-in model [:nodes from-ancestor :kind])
+                             target-child-kind (get-in model [:nodes target-child :kind])
+                             target-kind (get-in model [:nodes to :kind])]
+                         ;; Type filter: compare visible source with target-child kind
+                         ;; Special case: if target-child is a folder (nested containers),
+                         ;; compare with raw target kind to handle ns→ns through folders
+                         (when (or (= source-kind target-child-kind)
+                                   (and (= target-child-kind :folder)
+                                        (= source-kind target-kind)))
+                           target-child)))))))
+         (remove nil?)
+         set)))
+
+(defn- find-sources-inside-container
+  "Find direct children of container-id that contain actual edge sources
+   going to entities in external-visible-set (entities not inside the container).
+   Uses raw edges to find actual sources, not aggregated ones.
+   Only returns sources where the source and target have the same :kind."
+  [model container-id external-visible-set]
+  (let [raw-edges (:edges model)
+        container-descendants (all-descendants-of model container-id)]
+    (->> raw-edges
+         (keep (fn [{:keys [from to]}]
+                 ;; Source must be a descendant of the container
+                 (when (contains? container-descendants from)
+                   ;; Target must be reachable from external visible set
+                   (let [to-ancestor (find-visible-ancestor model to external-visible-set)]
+                     (when (and to-ancestor
+                                ;; Target must not be inside the container
+                                (not (contains? container-descendants to)))
+                       ;; Find direct child containing the source
+                       (let [source-child (find-direct-child-of model container-id from)
+                             source-kind (get-in model [:nodes from :kind])
+                             source-child-kind (get-in model [:nodes source-child :kind])
+                             target-kind (get-in model [:nodes to-ancestor :kind])]
+                         ;; Type filter: compare source-child kind with visible target
+                         ;; Special case: if source-child is a folder (nested containers),
+                         ;; compare raw source kind to handle ns→ns through folders
+                         (when (or (= source-child-kind target-kind)
+                                   (and (= source-child-kind :folder)
+                                        (= source-kind target-kind)))
+                           source-child)))))))
+         (remove nil?)
+         set)))
+
+(defn- expand-internal-deps
+  "Expand a set of nodes to include their internal dependencies.
+   Given an initial set of node ids inside a container, transitively add
+   any nodes inside the same container that they depend on.
+   This ensures drill-down captures complete dependency chains.
+
+   Returns only direct children of container-id, not grandchildren."
+  [model container-id initial-set]
+  (let [container-descendants (all-descendants-of model container-id)]
+    (loop [expanded initial-set]
+      (let [new-deps (->> (:edges model)
+                          (keep (fn [{:keys [from to]}]
+                                  (let [from-parent (:parent (get-in model [:nodes from]))
+                                        to-parent (:parent (get-in model [:nodes to]))]
+                                    (when (and (contains? expanded from-parent)
+                                               (contains? container-descendants to-parent))
+                                      ;; Return direct child of container, not grandchild
+                                      (find-direct-child-of model container-id to-parent)))))
+                          (remove nil?)
+                          ;; Filter out already-expanded to avoid infinite loop
+                          (remove #(contains? expanded %))
+                          set)]
+        (if (empty? new-deps)
+          expanded
+          (recur (set/union expanded new-deps)))))))
+
+;; -----------------------------------------------------------------------------
+;; Container view computation
+
+(defn- iterate-drill-down
+  "Iteratively expand visible set until all edge endpoints are visible.
+
+   Same-type filtering: Only drills into containers when the source and target
+   are the same kind (namespace→namespace, var→var). This keeps the structural
+   overview clean at each level of the hierarchy.
+
+   Includes internal dep expansion at each step to ensure nested containers
+   are discovered and processed.
+
+   Returns {:visible-set :drill-down-map :edges} where:
+   - visible-set: all entities that should be visible
+   - drill-down-map: {container-id -> #{children}} for grouping (includes internal deps)
+   - edges: final aggregated edges"
+  [model initial-children-set]
+  (loop [visible-set initial-children-set
+         drill-down-map {}]
+    (let [edges (aggregate-edges model visible-set)
+          ;; Find containers that are edge targets
+          container-targets (->> edges
+                                 (map :to)
+                                 (filter #(seq (get-in model [:nodes % :children])))
+                                 set)
+          ;; Find containers that are edge sources
+          container-sources (->> edges
+                                 (map :from)
+                                 (filter #(seq (get-in model [:nodes % :children])))
+                                 set)
+          ;; For each container target, find actual targets inside
+          targets-by-container
+            (into {}
+              (for [cid container-targets
+                    :let [;; External sources are visible entities not inside this container
+                          external (into #{} (remove #(descendant-of? model % cid) visible-set))
+                          targets (find-targets-inside-container model cid external)]
+                    :when (seq targets)]
+                [cid targets]))
+          ;; For each container source, find actual sources inside
+          sources-by-container
+            (into {}
+              (for [cid container-sources
+                    :let [;; External targets are visible entities not inside this container
+                          external (into #{} (remove #(descendant-of? model % cid) visible-set))
+                          sources (find-sources-inside-container model cid external)]
+                    :when (seq sources)]
+                [cid sources]))
+          ;; Merge targets and sources
+          new-entities-by-container (merge-with set/union targets-by-container sources-by-container)
+          ;; Expand internal deps for each container - this may add sibling containers
+          ;; that need drilling down in the next iteration
+          expanded-entities-by-container
+            (into {}
+              (for [[cid entities] new-entities-by-container]
+                [cid (expand-internal-deps model cid entities)]))
+          ;; Combine with existing drill-down-map
+          updated-drill-down-map (merge-with set/union drill-down-map expanded-entities-by-container)
+          ;; Only consider entities that aren't already visible
+          new-entities (set/difference (into #{} (mapcat val expanded-entities-by-container)) visible-set)]
+      (if (empty? new-entities)
+        {:visible-set visible-set
+         :drill-down-map drill-down-map
+         :edges edges}
+        (recur (set/union visible-set new-entities)
+               updated-drill-down-map)))))
+
+(defn- compute-container-view-impl
+  "Generic container view computation. Works for any container type.
+   Returns pure domain data - no selected? or highlighted? fields."
+  [model entity-id expanded-containers children-ids]
+  (let [children-set (set children-ids)
+
+        ;; Iteratively expand visible set until all edge targets are visible
+        ;; (includes internal dep expansion at each step)
+        {:keys [drill-down-map]} (iterate-drill-down model children-set)
+        drill-down-entities (into #{} (mapcat val drill-down-map))
+
+        ;; Build final visible set
+        all-visible (set/union children-set drill-down-entities)
+
+        ;; Compute final edges with fully expanded visible set
+        final-edges (aggregate-edges model all-visible)
+
+        ;; Build view nodes
+        ;; Container node (the viewed entity - no parent for strict bounding box)
+        container-node (make-view-node model (get-in model [:nodes entity-id])
+                                       :no-parent expanded-containers)
+
+        ;; Direct children
+        child-nodes (for [cid children-ids
+                          :let [node (get-in model [:nodes cid])]
+                          :when node]
+                      (make-view-node model node entity-id expanded-containers))
+
+        ;; Drill-down entities (inside container children)
+        drill-down-nodes (for [did drill-down-entities
+                               :let [node (get-in model [:nodes did])
+                                     parent-container (some (fn [[cid entity-set]]
+                                                              (when (contains? entity-set did) cid))
+                                                            drill-down-map)]
+                               :when (and node parent-container)]
+                           (make-view-node model node parent-container expanded-containers))
+
+        ;; Build view edges (internal format, no highlighting)
+        view-edges (map-indexed
+                    (fn [idx {:keys [from to]}]
+                      {:id (str "e" idx)
+                       :from from
+                       :to to
+                       :edge-type :code-flow})
+                    final-edges)
+
+        ;; Compute IO schemas
+        io-data (compute-io-schemas model entity-id)]
+
+    {:nodes (vec (concat [container-node] child-nodes drill-down-nodes))
+     :edges (vec view-edges)
+     :io io-data}))
+
+(defn- compute-container-view
+  "Compute view when the entity is a container (has children).
+   Returns pure domain data."
+  [model entity-id expanded-containers]
+  (let [children-ids (get-visible-children model entity-id expanded-containers)]
+    (compute-container-view-impl model entity-id expanded-containers children-ids)))
+
+;; -----------------------------------------------------------------------------
+;; Leaf view computation
+
+(defn- compute-leaf-view
+  "Compute view when the entity is a leaf (no children).
+   Returns pure domain data - no selected? or highlighted? fields.
+
+   For vars: shows related vars grouped by their parent namespace,
+   with var-level edges."
+  [model entity-id expanded-containers]
+  (let [raw-edges (:edges model)
+
+        ;; Find all related vars via edges
+        outgoing-var-ids (->> raw-edges
+                              (filter #(= entity-id (:from %)))
+                              (map :to)
+                              set)
+        incoming-var-ids (->> raw-edges
+                              (filter #(= entity-id (:to %)))
+                              (map :from)
+                              set)
+        related-var-ids (set/union outgoing-var-ids incoming-var-ids)
+
+        ;; Get the parent namespaces for grouping
+        entity-ns (:parent (get-in model [:nodes entity-id]))
+        related-ns-ids (->> related-var-ids
+                            (map #(:parent (get-in model [:nodes %])))
+                            (remove nil?)
+                            set)
+        all-ns-ids (if entity-ns
+                     (conj related-ns-ids entity-ns)
+                     related-ns-ids)
+
+        ;; Get edges at var level involving the selected entity
+        relevant-edges (->> raw-edges
+                            (filter (fn [{:keys [from to]}]
+                                      (or (= from entity-id) (= to entity-id)))))
+
+        ;; Build namespace nodes for grouping
+        ns-nodes (for [nid all-ns-ids
+                       :let [node (get-in model [:nodes nid])]
+                       :when node]
+                   (make-view-node model node (:parent node) expanded-containers))
+
+        ;; Build var nodes (selected + related)
+        entity-node (make-view-node model (get-in model [:nodes entity-id])
+                                    entity-ns expanded-containers)
+        related-var-nodes (for [vid related-var-ids
+                                :let [node (get-in model [:nodes vid])]
+                                :when node]
+                            (make-view-node model node (:parent node) expanded-containers))
+
+        ;; Get parent folders for grouping namespace nodes
+        folder-ids (->> all-ns-ids
+                        (map #(:parent (get-in model [:nodes %])))
+                        (remove nil?)
+                        set)
+        folder-nodes (for [fid folder-ids
+                           :let [node (get-in model [:nodes fid])]
+                           :when node]
+                       (make-view-node model node nil expanded-containers))
+
+        ;; Build view edges (internal format, no highlighting)
+        view-edges (map-indexed
+                    (fn [idx {:keys [from to]}]
+                      {:id (str "e" idx)
+                       :from from
+                       :to to
+                       :edge-type :code-flow})
+                    relevant-edges)]
+
+    {:nodes (vec (concat folder-nodes ns-nodes related-var-nodes [entity-node]))
+     :edges (vec view-edges)
+     :io nil}))
+
+;; -----------------------------------------------------------------------------
+;; Public API
+
+(defn entity-graph
+  "Compute graph projection for any entity. Returns pure domain data.
+
+   For containers (entities with children):
+   - Shows visible children (filtered by expanded-containers)
+   - Shows edges between visible children
+   - Shows drill-down to entities in sibling containers when related
+
+   For leaves (entities without children):
+   - Shows the entity and all related entities
+   - Groups related entities by their parent container
+
+   Returns {:nodes :edges :io} where:
+   - nodes: vector of projection nodes (no :selected? field)
+   - edges: vector of edges (no :highlighted? field)
+   - io: {:inputs :outputs} schema sets for container views"
+  [model {:keys [view-id expanded-containers]}]
+  (let [;; Default to root if no view-id
+        entity-id (or view-id (:id (path/find-root-node model)))
+        expanded-containers (or expanded-containers #{})
+
+        children-ids (get-children model entity-id)]
+
+    (if (seq children-ids)
+      (compute-container-view model entity-id expanded-containers)
+      (compute-leaf-view model entity-id expanded-containers))))
