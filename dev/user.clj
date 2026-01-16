@@ -2,7 +2,6 @@
   "Development helpers for REPL-driven workflow."
   (:require [clj-reload.core :as reload]
             [fukan.model.api :as model]
-            [fukan.schema :as schema]
             [fukan.web.handler :as handler]
             [org.httpkit.server :as http]))
 
@@ -33,8 +32,6 @@
       (println "Analyzing" src "...")
       (let [m (model/build-model src)
             _ (println "Built" (count (:nodes m)) "nodes," (count (:edges m)) "edges")
-            _ (schema/clear-schemas!)
-            _ (schema/discover-schemas!)
             h (handler/create-handler m)
             server (http/run-server h {:port port})]
         (reset! server-state {:server server

@@ -56,7 +56,7 @@
                              (sse/sidebar-handler model req))}]
 
      ["/sse/schema" {:get (fn [req]
-                            (sse/schema-handler req))}]
+                            (sse/schema-handler model req))}]
 
      ["/public/*path" {:get (fn [{{:keys [path]} :path-params}]
                               (serve-static path))}]]

@@ -2,7 +2,7 @@
   "Pure functions to compute graph data for Cytoscape visualization.
    Implements view-spec.md behavior with on-demand edge aggregation."
   (:require [fukan.web.views.common :as common]
-            [fukan.schema :as schema]
+            [fukan.model.api :as api]
             [clojure.string :as str]
             [clojure.set :as set]))
 
@@ -19,13 +19,14 @@
   (get-in node [:data :var-sym]))
 
 (defn- schema-defining-var?
-  "Check if a var node defines a schema (has corresponding registered schema)."
-  [node]
+  "Check if a var node defines a schema (has corresponding registered schema).
+   Takes the model to look up schema data."
+  [model node]
   (when (= :var (:kind node))
     (let [ns-sym (node-ns-sym node)
           var-sym (node-var-sym node)
           schema-key (keyword (str ns-sym) (str var-sym))]
-      (some? (schema/get-schema schema-key)))))
+      (some? (api/get-schema model schema-key)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Visibility helpers
@@ -131,27 +132,29 @@
   "Extract input and output schema references from a function schema.
    Expects schema in form [:=> [:cat input1 input2 ...] output].
    Returns {:inputs #{schema-keys...} :outputs #{schema-keys...}}
-   or nil if not a function schema."
-  [fn-schema]
+   or nil if not a function schema.
+   Takes the model to determine which keywords are registered schemas."
+  [model fn-schema]
   (when (and (vector? fn-schema) (= :=> (first fn-schema)))
     (let [[_ input output] fn-schema
           in-schemas (if (and (vector? input) (= :cat (first input)))
                        (rest input)
                        [input])]
-      {:inputs (into #{} (mapcat schema/extract-schema-refs in-schemas))
-       :outputs (schema/extract-schema-refs output)})))
+      {:inputs (into #{} (mapcat #(api/extract-schema-refs model %) in-schemas))
+       :outputs (api/extract-schema-refs model output)})))
 
 (defn- compute-var-schema-info
   "Get schema info for a var by looking up its malli/schema metadata.
-   Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil."
-  [node]
+   Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil.
+   Takes the model to determine which keywords are registered schemas."
+  [model node]
   (when (= :var (:kind node))
     (let [ns-sym (node-ns-sym node)
           var-sym (node-var-sym node)]
       (when-let [ns-obj (find-ns ns-sym)]
         (when-let [v (ns-resolve ns-obj var-sym)]
           (when-let [fn-schema (:malli/schema (meta v))]
-            (extract-fn-schema-flow fn-schema)))))))
+            (extract-fn-schema-flow model fn-schema)))))))
 
 (defn- collect-container-schema-flow
   "Collect schema flow information for all vars inside a container.
@@ -165,7 +168,7 @@
                   (filter #(and (= :var (:kind %))
                                (inside? (:id %)))))]
     (reduce (fn [acc node]
-              (if-let [{:keys [inputs outputs]} (compute-var-schema-info node)]
+              (if-let [{:keys [inputs outputs]} (compute-var-schema-info model node)]
                 (-> acc
                     (update :consumes into inputs)
                     (update :produces into outputs))
@@ -213,7 +216,7 @@
      :expanded? (contains? expanded-containers id)
      :child-count (count (:children node))
      :private? (node-private? node)
-     :schema-var? (schema-defining-var? node)}))
+     :schema-var? (schema-defining-var? model node)}))
 
 ;; -----------------------------------------------------------------------------
 ;; Drill-down expansion helpers

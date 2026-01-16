@@ -3,8 +3,7 @@
    Includes clj-kondo analysis and Malli schema node building."
   (:require [clojure.java.shell :as shell]
             [clojure.edn :as edn]
-            [fukan.model.core :as core]
-            [fukan.schema :as schema]))
+            [fukan.model.core :as core]))
 
 ;; -----------------------------------------------------------------------------
 ;; Static Analysis
@@ -42,20 +41,40 @@
         (:analysis parsed)))))
 
 ;; -----------------------------------------------------------------------------
+;; Schema Discovery
+
+(defn discover-schema-data
+  "Scan loaded namespaces for vars with ^:schema metadata.
+   Returns a map of {keyword -> {:schema-form form :owner-ns ns-str}}.
+
+   This is a pure function that reads metadata from the runtime - it does
+   not mutate any global state."
+  []
+  (->> (all-ns)
+       (mapcat (fn [ns]
+                 (for [[sym v] (ns-publics ns)
+                       :when (:schema (meta v))]
+                   [(keyword (name sym))
+                    {:schema-form @v
+                     :owner-ns (str (ns-name ns))}])))
+       (into {})))
+
+;; -----------------------------------------------------------------------------
 ;; Schema Node Building
 
 (defn build-schema-nodes
-  "Build schema nodes from all registered Malli schemas.
+  "Build schema nodes from discovered schema data.
    Schema nodes are placed inside their owning namespace container.
 
    ns-index is a map of {ns-sym -> node-id} for looking up parent namespaces.
+   schema-data is a map of {keyword -> {:schema-form form :owner-ns ns-str}}
+   as returned by discover-schema-data.
 
    Returns a map of {schema-node-id -> node}."
-  [ns-index]
-  (->> (schema/all-schemas)
-       (map (fn [k]
+  [ns-index schema-data]
+  (->> schema-data
+       (map (fn [[k {:keys [schema-form owner-ns]}]]
               (let [id (core/gen-id)
-                    owner-ns (schema/schema-owner k)
                     owner-ns-sym (when owner-ns (symbol owner-ns))
                     parent-ns-id (get ns-index owner-ns-sym)]
                 [id {:id id
@@ -64,5 +83,6 @@
                      :parent parent-ns-id  ; schemas belong to their owning namespace
                      :children #{}
                      :data {:schema-key k
-                            :owner-ns owner-ns}}])))
+                            :owner-ns owner-ns
+                            :schema-form schema-form}}])))
        (into {})))

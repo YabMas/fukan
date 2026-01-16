@@ -1,7 +1,7 @@
 (ns fukan.web.views.schema
   "Render Malli schemas to HTML/hiccup."
   (:require [hiccup2.core :as h]
-            [fukan.schema :as schema]
+            [fukan.model.api :as api]
             [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
@@ -97,9 +97,10 @@
 
 (defn render-schema-list
   "Render the schemas section for a namespace sidebar.
-   Returns nil if no schemas exist."
-  [ns-str]
-  (let [ns-schemas (schema/schemas-for-ns ns-str)]
+   Returns nil if no schemas exist.
+   Takes the model and namespace string."
+  [model ns-str]
+  (let [ns-schemas (api/schemas-for-ns model ns-str)]
     (when (seq ns-schemas)
       (list
         [:h5 "Schemas " [:span.dep-count (str "(" (count ns-schemas) ")")]]
@@ -110,11 +111,11 @@
 
 (defn render-schema-detail
   "Render the sidebar for viewing a schema definition.
-   Takes a schema key like 'fukan.model/Model'."
-  [schema-key-str]
+   Takes the model and a schema key string like 'fukan.model/Model'."
+  [model schema-key-str]
   (let [[ns-part name-part] (str/split schema-key-str #"/" 2)
         schema-key (keyword ns-part name-part)
-        schema-form (schema/get-schema schema-key)]
+        schema-form (api/get-schema model schema-key)]
     (str
      (h/html
       (if schema-form

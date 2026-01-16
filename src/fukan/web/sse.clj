@@ -116,15 +116,15 @@
 (defn schema-handler
   "SSE endpoint that streams the schema detail view.
    Used when clicking on a schema name to view its definition."
-  {:malli/schema [:=> [:cat :Request] :SSEResponse]}
-  [request]
+  {:malli/schema [:=> [:cat :Model :Request] :SSEResponse]}
+  [model request]
   (hk/->sse-response request
                      {hk/on-open
                       (fn [sse]
                         (try
                           (let [params (:query-params request)
                                 schema-id (get params "id")]
-                            (d*/patch-elements! sse (views/render-sidebar nil {:schema-id schema-id}))
+                            (d*/patch-elements! sse (views/render-sidebar model {:schema-id schema-id}))
                             ;; Update URL with schema
                             (d*/execute-script! sse
                                                 (str "if(window.updateSchemaUrl)updateSchemaUrl("

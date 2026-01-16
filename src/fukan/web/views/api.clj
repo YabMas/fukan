@@ -350,6 +350,6 @@
   {:malli/schema [:=> [:cat [:maybe :Model] :EditorState] :Html]}
   [model {:keys [selected-id schema-id]}]
   (if schema-id
-    (views.sidebar/render-schema-sidebar schema-id)
+    (views.sidebar/render-schema-sidebar model schema-id)
     (let [data (views.sidebar/compute-sidebar model selected-id)]
-      (views.sidebar/render-sidebar-html data))))
+      (views.sidebar/render-sidebar-html model data))))

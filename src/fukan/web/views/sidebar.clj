@@ -160,7 +160,7 @@
 
 (defn- render-namespace-info
   "Render the sidebar fragment for a namespace node."
-  [node deps dependents]
+  [model node deps dependents]
   (let [label (:label node)
         doc (node-doc node)]
     (str
@@ -171,7 +171,7 @@
        (when doc
          [:div.doc doc])
 
-       (views.schema/render-schema-list label)
+       (views.schema/render-schema-list model label)
 
        [:h5 "Dependencies " [:span.dep-count (str "(" (count deps) ")")]]
        (if (seq deps)
@@ -225,23 +225,24 @@
 (defn- render-schema-node-info
   "Render the sidebar fragment for a schema node.
    Delegates to render-schema-detail."
-  [node]
+  [model node]
   (let [schema-key (node-schema-key node)]
-    (views.schema/render-schema-detail (str (namespace schema-key) "/" (name schema-key)))))
+    (views.schema/render-schema-detail model (str (namespace schema-key) "/" (name schema-key)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API
 
 (defn render-sidebar-html
   "Render the sidebar content for a node.
-   Returns empty state if node is nil."
-  [{:keys [node deps dependents]}]
+   Returns empty state if node is nil.
+   Takes model and sidebar data map with :node :deps :dependents."
+  [model {:keys [node deps dependents]}]
   (if node
     (case (:kind node)
       :var (render-var-info node deps dependents)
-      :namespace (render-namespace-info node deps dependents)
+      :namespace (render-namespace-info model node deps dependents)
       :folder (render-folder-info node deps dependents)
-      :schema (render-schema-node-info node)
+      :schema (render-schema-node-info model node)
       (str (h/html [:div#node-info [:p.empty-state "Unknown node type"]])))
     (render-empty-sidebar)))
 
@@ -256,6 +257,6 @@
 
 (defn render-schema-sidebar
   "Render the sidebar for viewing a schema definition.
-   Takes a schema-id string like 'fukan.model/Model'."
-  [schema-id]
-  (views.schema/render-schema-detail schema-id))
+   Takes model and a schema-id string like 'fukan.model/Model'."
+  [model schema-id]
+  (views.schema/render-schema-detail model schema-id))
