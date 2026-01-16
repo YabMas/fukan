@@ -340,7 +340,8 @@
                           (keep (fn [{:keys [from to]}]
                                   (let [from-parent (:parent (get-in model [:nodes from]))
                                         to-parent (:parent (get-in model [:nodes to]))]
-                                    (when (and (contains? expanded from-parent)
+                                    (when (and (or (contains? expanded from-parent)
+                                                   (some #(descendant-of? model from-parent %) expanded))
                                                (contains? container-descendants to-parent))
                                       ;; Return direct child of container, not grandchild
                                       (find-direct-child-of model container-id to-parent)))))
