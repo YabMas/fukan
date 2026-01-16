@@ -27,37 +27,47 @@
 
 (defn- compute-deps
   "Compute dependencies for an entity, aggregated to its own kind.
-   Returns {target-id -> edge-count}."
+   Returns {target-id -> {:count n :label str}}."
   [model entity-id]
   (let [entity (get-in model [:nodes entity-id])
         kind (:kind entity)
         in-subtree (subtree model entity-id)
-        edges (:edges model)]
-    (->> edges
-         ;; Edges FROM this entity or its descendants
-         (filter #(contains? in-subtree (:from %)))
-         ;; Aggregate target to same kind
-         (keep #(find-ancestor-of-kind model (:to %) kind))
-         ;; Exclude self-references
-         (remove #{entity-id})
-         frequencies)))
+        edges (:edges model)
+        freqs (->> edges
+                   ;; Edges FROM this entity or its descendants
+                   (filter #(contains? in-subtree (:from %)))
+                   ;; Aggregate target to same kind
+                   (keep #(find-ancestor-of-kind model (:to %) kind))
+                   ;; Exclude self-references
+                   (remove #{entity-id})
+                   frequencies)]
+    (into {}
+          (map (fn [[target-id cnt]]
+                 [target-id {:count cnt
+                             :label (:label (get-in model [:nodes target-id]))}]))
+          freqs)))
 
 (defn- compute-dependents
   "Compute dependents for an entity, aggregated to its own kind.
-   Returns {source-id -> edge-count}."
+   Returns {source-id -> {:count n :label str}}."
   [model entity-id]
   (let [entity (get-in model [:nodes entity-id])
         kind (:kind entity)
         in-subtree (subtree model entity-id)
-        edges (:edges model)]
-    (->> edges
-         ;; Edges TO this entity or its descendants
-         (filter #(contains? in-subtree (:to %)))
-         ;; Aggregate source to same kind
-         (keep #(find-ancestor-of-kind model (:from %) kind))
-         ;; Exclude self-references
-         (remove #{entity-id})
-         frequencies)))
+        edges (:edges model)
+        freqs (->> edges
+                   ;; Edges TO this entity or its descendants
+                   (filter #(contains? in-subtree (:to %)))
+                   ;; Aggregate source to same kind
+                   (keep #(find-ancestor-of-kind model (:from %) kind))
+                   ;; Exclude self-references
+                   (remove #{entity-id})
+                   frequencies)]
+    (into {}
+          (map (fn [[source-id cnt]]
+                 [source-id {:count cnt
+                             :label (:label (get-in model [:nodes source-id]))}]))
+          freqs)))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API
@@ -66,8 +76,8 @@
   "Compute the details for an entity.
    Returns {:node :deps :dependents} map where:
    - :node is the model node
-   - :deps is {target-id -> edge-count} for dependencies
-   - :dependents is {source-id -> edge-count} for dependents"
+   - :deps is {target-id -> {:count n :label str}} for dependencies
+   - :dependents is {source-id -> {:count n :label str}} for dependents"
   [model entity-id]
   (let [node (get-in model [:nodes entity-id])]
     {:node node

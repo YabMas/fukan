@@ -25,8 +25,18 @@
   (when (= :var (:kind node))
     (let [ns-sym (node-ns-sym node)
           var-sym (node-var-sym node)
-          schema-key (keyword (str ns-sym) (str var-sym))]
+          schema-key (keyword (str var-sym))]
       (some? (schema/get-schema model schema-key)))))
+
+(defn- find-schema-node-by-key
+  "Find a schema node by its schema key.
+   Returns the node ID or nil if not found."
+  [model schema-key]
+  (->> (:nodes model)
+       vals
+       (filter #(= :schema (:kind %)))
+       (some #(when (= schema-key (get-in % [:data :schema-key]))
+                (:id %)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Visibility helpers
@@ -53,7 +63,9 @@
                               (contains? child-kinds :var))
                        (into #{} (filter #(#{:namespace :folder :schema}
                                            (:kind (get-in model [:nodes %])))) children-ids)
-                       children-ids)]
+                       children-ids)
+        ;; Filter out schema-defining vars (schema nodes represent them)
+        children-ids (into #{} (remove #(schema-defining-var? model (get-in model [:nodes %]))) children-ids)]
     (if (or (nil? expanded-containers)
             (contains? expanded-containers entity-id))
       children-ids
@@ -168,6 +180,33 @@
         inputs (set/difference consumes produces)]
     {:inputs inputs
      :outputs produces}))
+
+(defn- compute-schema-flow-edges
+  "Compute schema-flow edges for visible var nodes.
+   Returns a vector of edges from vars to their output schemas,
+   and from input schemas to vars.
+
+   Only creates edges where both the var and schema node are visible."
+  [model visible-var-ids visible-node-ids]
+  (->> visible-var-ids
+       (mapcat (fn [var-id]
+                 (let [var-node (get-in model [:nodes var-id])
+                       schema-info (compute-var-schema-info model var-node)]
+                   (when schema-info
+                     (concat
+                      ;; Edges from var to output schemas
+                      (->> (:outputs schema-info)
+                           (keep (fn [schema-key]
+                                   (let [schema-id (find-schema-node-by-key model schema-key)]
+                                     (when (and schema-id (contains? visible-node-ids schema-id))
+                                       {:from var-id :to schema-id :schema-key schema-key})))))
+                      ;; Edges from input schemas to var
+                      (->> (:inputs schema-info)
+                           (keep (fn [schema-key]
+                                   (let [schema-id (find-schema-node-by-key model schema-key)]
+                                     (when (and schema-id (contains? visible-node-ids schema-id))
+                                       {:from schema-id :to var-id :schema-key schema-key}))))))))))
+       vec))
 
 ;; -----------------------------------------------------------------------------
 ;; View node construction
@@ -418,20 +457,41 @@
                                :when (and node parent-container)]
                            (make-view-node model node parent-container expanded-containers))
 
-        ;; Build view edges (internal format, no highlighting)
-        view-edges (map-indexed
-                    (fn [idx {:keys [from to]}]
-                      {:id (str "e" idx)
-                       :from from
-                       :to to
-                       :edge-type :code-flow})
-                    final-edges)
+        ;; Collect all view node IDs for schema-flow edge filtering
+        all-node-ids (set (concat [entity-id]
+                                  children-ids
+                                  drill-down-entities))
+
+        ;; Collect visible var IDs for schema-flow edges
+        visible-var-ids (->> all-node-ids
+                             (filter #(= :var (:kind (get-in model [:nodes %]))))
+                             set)
+
+        ;; Build code-flow edges
+        code-flow-edges (map-indexed
+                         (fn [idx {:keys [from to]}]
+                           {:id (str "e" idx)
+                            :from from
+                            :to to
+                            :edge-type :code-flow})
+                         final-edges)
+
+        ;; Build schema-flow edges
+        schema-flow-raw (compute-schema-flow-edges model visible-var-ids all-node-ids)
+        schema-flow-edges (map-indexed
+                           (fn [idx {:keys [from to schema-key]}]
+                             {:id (str "se" idx)
+                              :from from
+                              :to to
+                              :edge-type :schema-flow
+                              :schema-key (name schema-key)})
+                           schema-flow-raw)
 
         ;; Compute IO schemas
         io-data (compute-io-schemas model entity-id)]
 
     {:nodes (vec (concat [container-node] child-nodes drill-down-nodes))
-     :edges (vec view-edges)
+     :edges (vec (concat code-flow-edges schema-flow-edges))
      :io io-data}))
 
 (defn- compute-container-view

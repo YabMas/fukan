@@ -296,9 +296,10 @@ const cy = cytoscape({
     },
     // Private vars (shown when parent is expanded) - dashed blue border
     {
-      selector: 'node[private]',
+      selector: 'node[kind="var"][private]',
       style: {
-        'border-style': 'dashed'
+        'border-style': 'dashed',
+        'background-color': '#f5f5f5'
       }
     },
     // Schema node - diamond shape, green theme for data flow
@@ -313,8 +314,8 @@ const cy = cytoscape({
         'label': 'data(label)',
         'text-valign': 'center',
         'text-halign': 'center',
-        'width': '90px',
-        'height': '90px',
+        'width': '85px',
+        'height': '85px',
         'font-weight': 'bold',
         'font-size': '11px',
         'color': '#1b5e20'

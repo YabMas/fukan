@@ -38,8 +38,8 @@
 
    Returns {:node :deps :dependents} where:
    - :node is the model node
-   - :deps is {target-id -> edge-count} for outgoing dependencies
-   - :dependents is {source-id -> edge-count} for incoming dependencies"
+   - :deps is {target-id -> {:count n :label str}} for outgoing dependencies
+   - :dependents is {source-id -> {:count n :label str}} for incoming dependencies"
   [model entity-id]
   (details/entity-details model entity-id))
 

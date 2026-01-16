@@ -227,8 +227,10 @@
          ;; Build type nodes (e.g., schema nodes) using ns-index
          type-nodes (type-nodes-fn ns-index)
 
-         ;; Merge type nodes into final nodes map
-         final-nodes (merge pruned-nodes type-nodes)]
+         ;; Merge type nodes into final nodes map and re-wire children
+         ;; (type nodes have parent set but parent's children set needs updating)
+         final-nodes (-> (merge pruned-nodes type-nodes)
+                         core/wire-children)]
 
      {:nodes final-nodes
       :edges all-edges})))

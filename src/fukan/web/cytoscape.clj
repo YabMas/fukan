@@ -57,13 +57,15 @@
 
 (defn edge->cytoscape
   "Transform an internal view edge to Cytoscape format.
-   Converts :from/:to to source/target, keyword edge-type to string."
-  [{:keys [id from to edge-type highlighted?]}]
-  {:id id
-   :source from
-   :target to
-   :edgeType (name edge-type)
-   :highlighted highlighted?})
+   Converts :from/:to to source/target, keyword edge-type to string.
+   Includes schemaKey for schema-flow edges."
+  [{:keys [id from to edge-type highlighted? schema-key]}]
+  (cond-> {:id id
+           :source from
+           :target to
+           :edgeType (name edge-type)
+           :highlighted highlighted?}
+    schema-key (assoc :schemaKey schema-key)))
 
 (defn graph->cytoscape
   "Transform internal graph-view format to Cytoscape-compatible output.

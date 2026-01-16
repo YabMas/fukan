@@ -19,23 +19,6 @@
   (get-in node [:data :schema-key]))
 
 ;; -----------------------------------------------------------------------------
-;; Formatting helpers
-
-(defn- format-var-id
-  "Format a var ID for display (extract ns/name from var:ns/name)."
-  [var-id]
-  (if (and var-id (.startsWith var-id "var:"))
-    (subs var-id 4)
-    var-id))
-
-(defn- format-ns-id
-  "Format a namespace ID for display."
-  [ns-id]
-  (if (and ns-id (.startsWith ns-id "ns:"))
-    (subs ns-id 3)
-    ns-id))
-
-;; -----------------------------------------------------------------------------
 ;; Schema helpers
 
 (defn- get-var-schema
@@ -82,21 +65,21 @@
        [:h5 "Dependencies " [:span.dep-count (str "(" (count deps) ")")]]
        (if (seq deps)
          [:ul
-          (for [[target-id edge-count] deps]
+          (for [[target-id {:keys [count label]}] deps]
             [:li {"data-on:click" (str "@get('/sse/view?select=" target-id "')")}
-             (format-var-id target-id)
-             (when (> edge-count 1)
-               [:span.dep-count (str " (" edge-count ")")])])]
+             label
+             (when (> count 1)
+               [:span.dep-count (str " (" count ")")])])]
          [:p.empty-state "None"])
 
        [:h5 "Dependents " [:span.dep-count (str "(" (count dependents) ")")]]
        (if (seq dependents)
          [:ul
-          (for [[source-id edge-count] dependents]
+          (for [[source-id {:keys [count label]}] dependents]
             [:li {"data-on:click" (str "@get('/sse/view?select=" source-id "')")}
-             (format-var-id source-id)
-             (when (> edge-count 1)
-               [:span.dep-count (str " (" edge-count ")")])])]
+             label
+             (when (> count 1)
+               [:span.dep-count (str " (" count ")")])])]
          [:p.empty-state "None"])]))))
 
 (defn- render-namespace-info
@@ -117,21 +100,21 @@
        [:h5 "Dependencies " [:span.dep-count (str "(" (count deps) ")")]]
        (if (seq deps)
          [:ul
-          (for [[target-id edge-count] deps]
+          (for [[target-id {:keys [count label]}] deps]
             [:li {"data-on:click" (str "@get('/sse/view?select=" target-id "')")}
-             (format-ns-id target-id)
-             (when (> edge-count 1)
-               [:span.dep-count (str " (" edge-count ")")])])]
+             label
+             (when (> count 1)
+               [:span.dep-count (str " (" count ")")])])]
          [:p.empty-state "None"])
 
        [:h5 "Dependents " [:span.dep-count (str "(" (count dependents) ")")]]
        (if (seq dependents)
          [:ul
-          (for [[source-id edge-count] dependents]
+          (for [[source-id {:keys [count label]}] dependents]
             [:li {"data-on:click" (str "@get('/sse/view?select=" source-id "')")}
-             (format-ns-id source-id)
-             (when (> edge-count 1)
-               [:span.dep-count (str " (" edge-count ")")])])]
+             label
+             (when (> count 1)
+               [:span.dep-count (str " (" count ")")])])]
          [:p.empty-state "None"])]))))
 
 (defn- render-folder-info
@@ -146,21 +129,21 @@
        [:h5 "Dependencies " [:span.dep-count (str "(" (count deps) ")")]]
        (if (seq deps)
          [:ul
-          (for [[target-id edge-count] deps]
+          (for [[target-id {:keys [count label]}] deps]
             [:li {"data-on:click" (str "@get('/sse/view?select=" target-id "')")}
-             target-id
-             (when (> edge-count 1)
-               [:span.dep-count (str " (" edge-count ")")])])]
+             label
+             (when (> count 1)
+               [:span.dep-count (str " (" count ")")])])]
          [:p.empty-state "None"])
 
        [:h5 "Dependents " [:span.dep-count (str "(" (count dependents) ")")]]
        (if (seq dependents)
          [:ul
-          (for [[source-id edge-count] dependents]
+          (for [[source-id {:keys [count label]}] dependents]
             [:li {"data-on:click" (str "@get('/sse/view?select=" source-id "')")}
-             source-id
-             (when (> edge-count 1)
-               [:span.dep-count (str " (" edge-count ")")])])]
+             label
+             (when (> count 1)
+               [:span.dep-count (str " (" count ")")])])]
          [:p.empty-state "None"])]))))
 
 (defn- render-schema-node-info
