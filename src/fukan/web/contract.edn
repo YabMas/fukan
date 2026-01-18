@@ -1,0 +1,18 @@
+{:description "HTTP and SSE interface for the Fukan web UI, including rendering and streaming updates."
+ :functions
+ [{:name "create-handler"
+   :schema [:=> [:cat :fn] :Handler]}
+  {:name "main-view-handler"
+   :schema [:=> [:cat :Model :Request] :SSEResponse]}
+  {:name "sidebar-handler"
+   :schema [:=> [:cat :Model :Request] :SSEResponse]}
+  {:name "schema-handler"
+   :schema [:=> [:cat :Model :Request] :SSEResponse]}
+  {:name "render-app-shell"
+   :schema [:=> [:cat] :Html]}
+  {:name "render-graph"
+   :schema [:=> [:cat :Projection :Node :EditorState] :GraphData]}
+  {:name "render-breadcrumb"
+   :schema [:=> [:cat :EntityPath] :Html]}
+  {:name "render-sidebar"
+   :schema [:=> [:cat :EntityDetails] :Html]}]}

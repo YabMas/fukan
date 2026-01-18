@@ -197,42 +197,26 @@
           (when-let [fn-schema (:malli/schema (meta v))]
             (extract-fn-schema-flow model fn-schema)))))))
 
-(defn- collect-schema-flow-for-vars
-  "Collect schema flow information for a set of var IDs.
-   Returns {:produces #{schema-keys} :consumes #{schema-keys}}"
-  [model var-ids]
-  (reduce (fn [acc var-id]
-            (if-let [{:keys [inputs outputs]} (compute-var-schema-info model (get-in model [:nodes var-id]))]
+(defn- contract->io
+  "Derive input/output schema keys from a contract's function schemas."
+  [model contract]
+  (reduce (fn [acc {:keys [schema]}]
+            (if-let [{:keys [inputs outputs]} (extract-fn-schema-flow model schema)]
               (-> acc
-                  (update :consumes into inputs)
-                  (update :produces into outputs))
+                  (update :inputs into inputs)
+                  (update :outputs into outputs))
               acc))
-          {:consumes #{} :produces #{}}
-          var-ids))
+          {:inputs #{} :outputs #{}}
+          (:functions contract)))
 
 (defn- compute-io-schemas
-  "Compute input and output schemas for a container.
-   Inputs: schemas consumed inside but NOT produced inside
-   Outputs: schemas produced inside (regardless of consumption)
-   Only include schemas that are referenced outside the container.
-   Returns {:inputs #{schema-keys} :outputs #{schema-keys}}"
+  "Compute input/output schemas for a container based on its contract.
+   Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or empty sets
+   when no contract is present."
   [model container-id]
-  (let [inside? (fn [node-id]
-                  (or (= node-id container-id)
-                      (descendant-of? model node-id container-id)))
-        var-ids (->> (:nodes model)
-                     vals
-                     (filter #(= :var (:kind %)))
-                     (map :id))
-        inside-var-ids (filter inside? var-ids)
-        outside-var-ids (remove inside? var-ids)
-        {:keys [consumes produces]} (collect-schema-flow-for-vars model inside-var-ids)
-        outside-flow (collect-schema-flow-for-vars model outside-var-ids)
-        outside-refs (set/union (:consumes outside-flow) (:produces outside-flow))
-        ;; Inputs are consumed but not produced inside
-        inputs (set/difference consumes produces)]
-    {:inputs (set/intersection inputs outside-refs)
-     :outputs (set/intersection produces outside-refs)}))
+  (if-let [contract (get-in model [:nodes container-id :data :contract])]
+    (contract->io model contract)
+    {:inputs #{} :outputs #{}}))
 
 (defn- compute-schema-flow-edges
   "Compute schema-flow edges for visible var nodes.

@@ -1,7 +1,9 @@
 (ns fukan.model.build
   "Language-agnostic model construction pipeline.
    Builds the internal graph model from analysis data."
-  (:require [clojure.string :as str]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
             [fukan.model.core :as core]))
 
 ;; -----------------------------------------------------------------------------
@@ -114,6 +116,53 @@
                   (assoc-in [:index [ns name]] id))))
           {:nodes {} :index {}}
           var-defs))
+
+;; -----------------------------------------------------------------------------
+;; Contract construction
+
+(defn- read-contract-file
+  "Read contract.edn from a directory path if present."
+  [dir-path]
+  (when (and dir-path (not= dir-path ""))
+    (let [file (io/file dir-path "contract.edn")]
+      (when (.exists file)
+        (edn/read-string (slurp file))))))
+
+(defn- infer-namespace-contract
+  "Infer a contract for a namespace from public vars with malli schemas."
+  [ns-sym]
+  (when-let [ns-obj (find-ns ns-sym)]
+    (let [description (-> ns-obj meta :doc)
+          functions (->> (ns-publics ns-obj)
+                         (keep (fn [[sym v]]
+                                 (when-let [schema (:malli/schema (meta v))]
+                                   {:name (name sym)
+                                    :schema schema})))
+                         vec)]
+      (when (seq functions)
+        {:description description
+         :functions functions}))))
+
+(defn- attach-contract
+  "Attach a contract to a node's :data map when present."
+  [node contract]
+  (if contract
+    (update node :data #(assoc (or % {}) :contract contract))
+    node))
+
+(defn- attach-contracts
+  "Attach module and namespace contracts to nodes.
+   Folder contracts come from contract.edn; namespace contracts are inferred.
+   Returns updated nodes map."
+  [nodes]
+  (reduce (fn [acc [id node]]
+            (let [contract (case (:kind node)
+                             :folder (read-contract-file (get-in node [:data :path]))
+                             :namespace (infer-namespace-contract (get-in node [:data :ns-sym]))
+                             nil)]
+              (assoc acc id (attach-contract node contract))))
+          {}
+          nodes))
 
 ;; -----------------------------------------------------------------------------
 ;; Edge construction
@@ -230,7 +279,8 @@
          ;; Merge type nodes into final nodes map and re-wire children
          ;; (type nodes have parent set but parent's children set needs updating)
          final-nodes (-> (merge pruned-nodes type-nodes)
-                         core/wire-children)]
+                         core/wire-children)
+         contracted-nodes (attach-contracts final-nodes)]
 
-     {:nodes final-nodes
+     {:nodes contracted-nodes
       :edges all-edges})))

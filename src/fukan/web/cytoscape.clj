@@ -68,7 +68,7 @@
            :target to
            :edgeType (name edge-type)
            :highlighted highlighted?}
-    schema-key (assoc :schemaKey schema-key)))
+    schema-key (assoc :schemaKey (name schema-key))))
 
 (defn graph->cytoscape
   "Transform internal graph-view format to Cytoscape-compatible output.
