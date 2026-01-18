@@ -353,38 +353,79 @@ const cy = cytoscape({
         'z-index': 1000
       }
     },
-    // IO container (Inputs/Outputs) - dashed border, distinct from regular containers
+    // IO container (Inputs/Outputs) - warm yellow, dashed border
     {
       selector: 'node[kind="io-container"]',
       style: {
         'shape': 'roundrectangle',
-        'background-color': '#f0f9f0',
-        'border-color': '#27ae60',
+        'background-color': '#fef9e7',
+        'border-color': '#d4ac0d',
         'border-width': 2,
         'border-style': 'dashed',
         'label': 'data(label)',
         'text-valign': 'top',
         'text-halign': 'center',
-        'padding': '15px',
+        'text-margin-y': '18px',
+        'padding': '40px',
+        'padding-top': '55px',
         'font-size': '10px',
         'font-weight': 'bold',
-        'color': '#27ae60'
+        'color': '#9a7b0a'
       }
     },
-    // Input IO container - positioned at top
+    // IO schema nodes inside IO containers
     {
-      selector: 'node[kind="io-container"][ioType="input"]',
+      selector: 'node[kind="io-schema"]',
       style: {
-        'background-color': '#e3f2fd',
-        'border-color': '#1976d2'
+        'shape': 'roundrectangle',
+        'background-color': '#fcf3cf',
+        'border-color': '#d4ac0d',
+        'border-width': 1,
+        'border-style': 'solid',
+        'label': 'data(label)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'width': 'label',
+        'height': '24px',
+        'padding': '8px',
+        'font-size': '11px',
+        'color': '#7d6608'
       }
     },
-    // Output IO container - positioned at bottom
+    // Invisible spacer nodes to force IO container width
     {
-      selector: 'node[kind="io-container"][ioType="output"]',
+      selector: 'node[kind="io-spacer"]',
       style: {
-        'background-color': '#fff3e0',
-        'border-color': '#f57c00'
+        'width': 1,
+        'height': 1,
+        'opacity': 0,
+        'background-opacity': 0,
+        'border-width': 0,
+        'label': ''
+      }
+    },
+    // Data-flow edges (IO schemas <-> vars) - gold dashed lines
+    {
+      selector: 'edge[edgeType="data-flow"]',
+      style: {
+        'line-style': 'dashed',
+        'line-color': '#d4ac0d',
+        'target-arrow-color': '#d4ac0d',
+        'target-arrow-shape': 'triangle',
+        'line-dash-pattern': [6, 3],
+        'width': 2,
+        'curve-style': 'bezier',
+        'arrow-scale': 0.8
+      }
+    },
+    // Highlighted data-flow edges
+    {
+      selector: 'edge[edgeType="data-flow"].highlighted',
+      style: {
+        'line-color': '#e74c3c',
+        'target-arrow-color': '#e74c3c',
+        'width': 3,
+        'z-index': 1000
       }
     },
     // Positioning edges (subtle - used for layout positioning)
@@ -473,36 +514,65 @@ window.renderGraph = function(data) {
 
   layout.run();
 
-  // Position IO containers above/below the selected container
-  if (data.selectedId) {
-    const selectedNode = cy.getElementById(data.selectedId);
-    const inputContainer = cy.getElementById('input:' + data.selectedId);
-    const outputContainer = cy.getElementById('output:' + data.selectedId);
+  // Position IO containers above/below the root (orphan) container
+  // Find the orphan node - the viewed container has no parent
+  const orphanNode = cy.nodes().filter(n => !n.data('parent') && n.data('kind') !== 'io-container');
+  if (orphanNode.length) {
+    const rootId = orphanNode.first().id();
+    const inputContainer = cy.getElementById('input:' + rootId);
+    const outputContainer = cy.getElementById('output:' + rootId);
 
-    if (selectedNode.length) {
-      const selectedBB = selectedNode.boundingBox();
-      const selectedCenterX = (selectedBB.x1 + selectedBB.x2) / 2;
-      const gap = 80;  // Gap between containers
+    const rootBB = orphanNode.first().boundingBox();
+    const rootCenterX = (rootBB.x1 + rootBB.x2) / 2;
+    const containerWidth = rootBB.x2 - rootBB.x1;
+    const gap = 40;  // Gap between containers
+    const ioPaddingX = 40;
 
-      // Position input container above
-      if (inputContainer.length) {
-        const inputBB = inputContainer.boundingBox();
-        const inputHeight = inputBB.y2 - inputBB.y1;
-        inputContainer.position({
-          x: selectedCenterX,
-          y: selectedBB.y1 - gap - inputHeight / 2
-        });
-      }
+    const ensureIoSpacers = (ioContainer, centerX, width) => {
+      const ioId = ioContainer.id();
+      const spacerOffset = Math.max(0, width / 2 - ioPaddingX);
+      const y = ioContainer.position('y');
 
-      // Position output container below
-      if (outputContainer.length) {
-        const outputBB = outputContainer.boundingBox();
-        const outputHeight = outputBB.y2 - outputBB.y1;
-        outputContainer.position({
-          x: selectedCenterX,
-          y: selectedBB.y2 + gap + outputHeight / 2
-        });
-      }
+      const placeSpacer = (spacerId, x) => {
+        let spacer = cy.getElementById(spacerId);
+        if (!spacer.length) {
+          spacer = cy.add({
+            group: 'nodes',
+            data: {
+              id: spacerId,
+              kind: 'io-spacer',
+              parent: ioId
+            }
+          });
+        }
+        spacer.position({ x, y });
+        spacer.lock();
+      };
+
+      placeSpacer(`io-spacer:left:${ioId}`, centerX - spacerOffset);
+      placeSpacer(`io-spacer:right:${ioId}`, centerX + spacerOffset);
+    };
+
+    // Position input container above, spanning full width
+    if (inputContainer.length) {
+      const inputBB = inputContainer.boundingBox();
+      const inputHeight = inputBB.y2 - inputBB.y1;
+      inputContainer.position({
+        x: rootCenterX,
+        y: rootBB.y1 - gap - inputHeight / 2
+      });
+      ensureIoSpacers(inputContainer, rootCenterX, containerWidth);
+    }
+
+    // Position output container below, spanning full width
+    if (outputContainer.length) {
+      const outputBB = outputContainer.boundingBox();
+      const outputHeight = outputBB.y2 - outputBB.y1;
+      outputContainer.position({
+        x: rootCenterX,
+        y: rootBB.y2 + gap + outputHeight / 2
+      });
+      ensureIoSpacers(outputContainer, rootCenterX, containerWidth);
     }
   }
 

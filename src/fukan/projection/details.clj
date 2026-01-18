@@ -70,6 +70,23 @@
           freqs)))
 
 ;; -----------------------------------------------------------------------------
+;; Schemas
+
+(def ^:schema EntityDepInfo
+  [:map
+   [:count :int]
+   [:label :string]])
+
+(def ^:schema EntityDeps
+  [:map-of :string :EntityDepInfo])
+
+(def ^:schema EntityDetails
+  [:map
+   [:node [:maybe :Node]]
+   [:deps [:maybe :EntityDeps]]
+   [:dependents [:maybe :EntityDeps]]])
+
+;; -----------------------------------------------------------------------------
 ;; Public API
 
 (defn entity-details
@@ -78,6 +95,7 @@
    - :node is the model node
    - :deps is {target-id -> {:count n :label str}} for dependencies
    - :dependents is {source-id -> {:count n :label str}} for dependents"
+  {:malli/schema [:=> [:cat :Model :string] :EntityDetails]}
   [model entity-id]
   (let [node (get-in model [:nodes entity-id])]
     {:node node

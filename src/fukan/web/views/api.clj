@@ -325,7 +325,7 @@
 
    views.graph outputs domain-focused format with Clojure idioms.
    This function transforms to Cytoscape format at the boundary."
-  {:malli/schema [:=> [:cat :map :map :EditorState] :GraphData]}
+  {:malli/schema [:=> [:cat :Projection :Node :EditorState] :GraphData]}
   [graph-projection root-node {:keys [view-id selected-id] :as editor-state}]
   (let [;; Add UI state (selected?, highlighted?)
         graph (views.graph/add-ui-state graph-projection editor-state root-node)
@@ -337,7 +337,7 @@
 (defn render-breadcrumb
   "Render the breadcrumb navigation HTML.
    Takes pre-computed path items (from proj/entity-path)."
-  {:malli/schema [:=> [:cat [:vector :map]] :Html]}
+  {:malli/schema [:=> [:cat :EntityPath] :Html]}
   [path-items]
   (render-breadcrumb-html path-items))
 
@@ -346,7 +346,7 @@
    Takes pre-computed sidebar-data.
    If :schema-id is present, renders schema detail view.
    Otherwise renders regular node sidebar."
-  {:malli/schema [:=> [:cat :map] :Html]}
+  {:malli/schema [:=> [:cat :EntityDetails] :Html]}
   [sidebar-data]
   (if (:schema-id sidebar-data)
     (views.sidebar/render-schema-sidebar (:schema-id sidebar-data) (:schema-form sidebar-data))

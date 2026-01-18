@@ -57,16 +57,17 @@
           (str/starts-with? selected-id "input-schema:")
           (str/starts-with? selected-id "output-schema:")
           (str/starts-with? selected-id "internal-schema:"))
-      (let [;; Extract schema key from various prefixes
-            target-schema-key (cond
-                                (str/starts-with? selected-id "input-schema:") (subs selected-id 13)
-                                (str/starts-with? selected-id "output-schema:") (subs selected-id 14)
-                                (str/starts-with? selected-id "internal-schema:") (subs selected-id 16)
-                                (str/starts-with? selected-id "schema:") (subs selected-id 7))]
-        (->> edges
-             (keep (fn [{:keys [id schema-key]}]
-                     (when (= schema-key target-schema-key) id)))
-             vec))
+       (let [;; Extract schema key from various prefixes
+             target-schema-key (cond
+                                 (str/starts-with? selected-id "input-schema:") (subs selected-id 13)
+                                 (str/starts-with? selected-id "output-schema:") (subs selected-id 14)
+                                 (str/starts-with? selected-id "internal-schema:") (subs selected-id 16)
+                                 (str/starts-with? selected-id "schema:") (subs selected-id 7))
+             target-schema-key (some-> target-schema-key keyword)]
+         (->> edges
+              (keep (fn [{:keys [id schema-key]}]
+                      (when (= schema-key target-schema-key) id)))
+              vec))
 
       ;; Regular nodes - highlight edges by from/to
       :else

@@ -42,7 +42,8 @@
   "Transform an internal view node to Cytoscape format.
    Converts Clojure idioms (kebab-case, ? predicates) to camelCase."
   [{:keys [id kind label parent selected? expandable?
-           has-private-children? expanded? child-count private? schema-var?]}]
+           has-private-children? expanded? child-count private? schema-var?
+           io-type schema-key]}]
   (cond-> {:id id
            :kind (name kind)
            :label label
@@ -53,7 +54,9 @@
            :childCount child-count}
     parent (assoc :parent parent)
     private? (assoc :private private?)
-    schema-var? (assoc :isSchemaVar schema-var?)))
+    schema-var? (assoc :isSchemaVar schema-var?)
+    io-type (assoc :ioType (name io-type))
+    schema-key (assoc :schemaKey (name schema-key))))
 
 (defn edge->cytoscape
   "Transform an internal view edge to Cytoscape format.

@@ -58,6 +58,8 @@ visible_edges = edges_involving(selected) where both endpoints visible
 
 5. **Strict bounding box**: Container views enforce a strict boundary. ONLY entities inside the viewed container are shown. External entities (ancestors, cousins, unrelated namespaces) are NEVER shown. Edges crossing the bounding box are NOT rendered. To see external relationships, navigate to a common ancestor. Note: Leaf views (viewing a var) are different - they show all related entities regardless of container.
 
+6. **IO schema boundary**: Input/output schema nodes represent schemas that cross the container boundary. A schema is shown as an input/output only if it is referenced by vars outside the viewed container. Schemas that are only used internally to the container are hidden at that level, and appear when you navigate into a narrower container where they cross that smaller boundary.
+
 ## Edge Aggregation
 
 Edges are aggregated at the appropriate level:

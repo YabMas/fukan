@@ -18,6 +18,17 @@
       label)))
 
 ;; -----------------------------------------------------------------------------
+;; Schemas
+
+(def ^:schema PathSegment
+  [:map
+   [:id [:maybe :string]]
+   [:label :string]])
+
+(def ^:schema EntityPath
+  [:vector :PathSegment])
+
+;; -----------------------------------------------------------------------------
 ;; Public API
 
 (defn find-root-node
@@ -32,6 +43,7 @@
 (defn entity-path
   "Compute breadcrumb path from root to entity.
    Returns a list of {:id :label} maps."
+  {:malli/schema [:=> [:cat :Model [:maybe :string]] :EntityPath]}
   [model entity-id]
   (let [root-node (find-root-node model)
         root-id (:id root-node)]

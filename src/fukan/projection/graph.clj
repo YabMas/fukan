@@ -7,6 +7,54 @@
             [clojure.set :as set]))
 
 ;; -----------------------------------------------------------------------------
+;; Schemas
+
+(def ^:schema ProjectionNodeKind
+  [:enum :folder :namespace :var :schema :io-container :io-schema])
+
+(def ^:schema ProjectionNode
+  [:map
+   [:id :string]
+   [:kind :ProjectionNodeKind]
+   [:label :string]
+   [:parent {:optional true} [:maybe :string]]
+   [:expandable? :boolean]
+   [:has-private-children? :boolean]
+   [:expanded? :boolean]
+   [:child-count :int]
+   [:private? {:optional true} :boolean]
+   [:schema-var? {:optional true} :boolean]
+   [:io-type {:optional true} [:enum :input :output]]
+   [:schema-key {:optional true} :keyword]])
+
+(def ^:schema ProjectionEdgeType
+  [:enum :code-flow :schema-flow :data-flow])
+
+(def ^:schema ProjectionEdge
+  [:map
+   [:id :string]
+   [:from :string]
+   [:to :string]
+   [:edge-type :ProjectionEdgeType]
+   [:schema-key {:optional true} :keyword]])
+
+(def ^:schema ProjectionIO
+  [:map
+   [:inputs [:set :keyword]]
+   [:outputs [:set :keyword]]])
+
+(def ^:schema Projection
+  [:map
+   [:nodes [:vector :ProjectionNode]]
+   [:edges [:vector :ProjectionEdge]]
+   [:io [:maybe :ProjectionIO]]])
+
+(def ^:schema ProjectionOpts
+  [:map
+   [:view-id {:optional true} [:maybe :string]]
+   [:expanded-containers {:optional true} :set]])
+
+;; -----------------------------------------------------------------------------
 ;; Node accessor helpers (access via :data map)
 
 (defn- node-private? [node]
@@ -149,37 +197,42 @@
           (when-let [fn-schema (:malli/schema (meta v))]
             (extract-fn-schema-flow model fn-schema)))))))
 
-(defn- collect-container-schema-flow
-  "Collect schema flow information for all vars inside a container.
+(defn- collect-schema-flow-for-vars
+  "Collect schema flow information for a set of var IDs.
    Returns {:produces #{schema-keys} :consumes #{schema-keys}}"
-  [model container-id]
-  (let [inside? (fn [node-id]
-                  (or (= node-id container-id)
-                      (descendant-of? model node-id container-id)))
-        vars (->> (:nodes model)
-                  vals
-                  (filter #(and (= :var (:kind %))
-                               (inside? (:id %)))))]
-    (reduce (fn [acc node]
-              (if-let [{:keys [inputs outputs]} (compute-var-schema-info model node)]
-                (-> acc
-                    (update :consumes into inputs)
-                    (update :produces into outputs))
-                acc))
-            {:consumes #{} :produces #{}}
-            vars)))
+  [model var-ids]
+  (reduce (fn [acc var-id]
+            (if-let [{:keys [inputs outputs]} (compute-var-schema-info model (get-in model [:nodes var-id]))]
+              (-> acc
+                  (update :consumes into inputs)
+                  (update :produces into outputs))
+              acc))
+          {:consumes #{} :produces #{}}
+          var-ids))
 
 (defn- compute-io-schemas
   "Compute input and output schemas for a container.
    Inputs: schemas consumed inside but NOT produced inside
    Outputs: schemas produced inside (regardless of consumption)
+   Only include schemas that are referenced outside the container.
    Returns {:inputs #{schema-keys} :outputs #{schema-keys}}"
   [model container-id]
-  (let [{:keys [consumes produces]} (collect-container-schema-flow model container-id)
+  (let [inside? (fn [node-id]
+                  (or (= node-id container-id)
+                      (descendant-of? model node-id container-id)))
+        var-ids (->> (:nodes model)
+                     vals
+                     (filter #(= :var (:kind %)))
+                     (map :id))
+        inside-var-ids (filter inside? var-ids)
+        outside-var-ids (remove inside? var-ids)
+        {:keys [consumes produces]} (collect-schema-flow-for-vars model inside-var-ids)
+        outside-flow (collect-schema-flow-for-vars model outside-var-ids)
+        outside-refs (set/union (:consumes outside-flow) (:produces outside-flow))
         ;; Inputs are consumed but not produced inside
         inputs (set/difference consumes produces)]
-    {:inputs inputs
-     :outputs produces}))
+    {:inputs (set/intersection inputs outside-refs)
+     :outputs (set/intersection produces outside-refs)}))
 
 (defn- compute-schema-flow-edges
   "Compute schema-flow edges for visible var nodes.
@@ -207,6 +260,80 @@
                                      (when (and schema-id (contains? visible-node-ids schema-id))
                                        {:from schema-id :to var-id :schema-key schema-key}))))))))))
        vec))
+
+;; -----------------------------------------------------------------------------
+;; IO Nodes and Data-Flow Edges
+
+(defn- create-io-nodes
+  "Create IO container and schema nodes for a container view.
+   Returns a vector of nodes: IO container + child schema nodes.
+   io-type is :input or :output."
+  [entity-id io-type schema-keys]
+  (when (seq schema-keys)
+    (let [container-id (str (name io-type) ":" entity-id)
+          label (if (= io-type :input) "Inputs" "Outputs")]
+      (into [{:id container-id
+              :kind :io-container
+              :io-type io-type
+              :label label
+              :parent nil
+              :expandable? false
+              :has-private-children? false
+              :expanded? false
+              :child-count (count schema-keys)
+              :private? false}]
+            (for [schema-key schema-keys]
+              {:id (str (name io-type) "-schema:" (name schema-key))
+               :kind :io-schema
+               :io-type io-type
+               :label (name schema-key)
+               :parent container-id
+               :schema-key schema-key
+               :expandable? false
+               :has-private-children? false
+               :expanded? false
+               :child-count 0
+               :private? false})))))
+
+(defn- compute-io-flow-edges
+  "Compute data-flow edges between IO schema nodes and visible nodes.
+   For inputs: edge from input-schema to each visible node that consumes it.
+   For outputs: edge from each visible node that produces it to output-schema."
+  [model entity-id io-data visible-set]
+  (let [inside? (fn [node-id]
+                  (or (= node-id entity-id)
+                      (descendant-of? model node-id entity-id)))
+        var-ids (->> (:nodes model)
+                     vals
+                     (filter #(and (= :var (:kind %))
+                                   (inside? (:id %))))
+                     (map :id))
+        input-keys (:inputs io-data)
+        output-keys (:outputs io-data)
+        edge-nodes
+        (->> var-ids
+             (mapcat (fn [var-id]
+                       (let [var-node (get-in model [:nodes var-id])
+                             var-schema-info (compute-var-schema-info model var-node)
+                             visible-target (find-visible-ancestor model var-id visible-set)]
+                         (when (and var-schema-info visible-target)
+                           (concat
+                            (for [schema-key (:inputs var-schema-info)
+                                  :when (contains? input-keys schema-key)]
+                              {:id (str "io-e:in:" (name schema-key) ":" visible-target)
+                               :from (str "input-schema:" (name schema-key))
+                               :to visible-target
+                               :edge-type :data-flow
+                               :schema-key schema-key})
+                            (for [schema-key (:outputs var-schema-info)
+                                  :when (contains? output-keys schema-key)]
+                              {:id (str "io-e:out:" visible-target ":" (name schema-key))
+                               :from visible-target
+                               :to (str "output-schema:" (name schema-key))
+                               :edge-type :data-flow
+                               :schema-key schema-key}))))))
+             distinct)]
+    (vec edge-nodes)))
 
 ;; -----------------------------------------------------------------------------
 ;; View node construction
@@ -484,15 +611,23 @@
                              {:id (str "se" idx)
                               :from from
                               :to to
-                              :edge-type :schema-flow
-                              :schema-key (name schema-key)})
+                               :edge-type :schema-flow
+                               :schema-key schema-key})
                            schema-flow-raw)
-
+ 
         ;; Compute IO schemas
-        io-data (compute-io-schemas model entity-id)]
+        io-data (compute-io-schemas model entity-id)
+ 
+        ;; Create IO container/schema nodes
+        input-nodes (create-io-nodes entity-id :input (:inputs io-data))
+        output-nodes (create-io-nodes entity-id :output (:outputs io-data))
+ 
+        ;; Compute data-flow edges (IO schemas <-> visible nodes)
+        data-flow-edges (compute-io-flow-edges model entity-id io-data all-node-ids)]
 
-    {:nodes (vec (concat [container-node] child-nodes drill-down-nodes))
-     :edges (vec (concat code-flow-edges schema-flow-edges))
+    {:nodes (vec (concat [container-node] child-nodes drill-down-nodes
+                         input-nodes output-nodes))
+     :edges (vec (concat code-flow-edges schema-flow-edges data-flow-edges))
      :io io-data}))
 
 (defn- compute-container-view
@@ -596,6 +731,7 @@
    - nodes: vector of projection nodes (no :selected? field)
    - edges: vector of edges (no :highlighted? field)
    - io: {:inputs :outputs} schema sets for container views"
+  {:malli/schema [:=> [:cat :Model :ProjectionOpts] :Projection]}
   [model {:keys [view-id expanded-containers]}]
   (let [;; Default to root if no view-id
         entity-id (or view-id (:id (path/find-root-node model)))
