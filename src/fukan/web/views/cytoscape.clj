@@ -1,4 +1,4 @@
-(ns fukan.web.cytoscape
+(ns fukan.web.views.cytoscape
   "Transforms internal graph-view format to Cytoscape-compatible JSON.
    This is the boundary layer between domain-focused view data and
    the Cytoscape.js frontend library.")
@@ -43,7 +43,7 @@
    Converts Clojure idioms (kebab-case, ? predicates) to camelCase."
   [{:keys [id kind label parent selected? expandable?
            has-private-children? expanded? child-count private? schema-var?
-           io-type schema-key]}]
+           io-type schema-key owned?]}]
   (cond-> {:id id
            :kind (name kind)
            :label label
@@ -56,7 +56,8 @@
     private? (assoc :private private?)
     schema-var? (assoc :isSchemaVar schema-var?)
     io-type (assoc :ioType (name io-type))
-    schema-key (assoc :schemaKey (name schema-key))))
+    schema-key (assoc :schemaKey (name schema-key))
+    (some? owned?) (assoc :isOwned owned?)))
 
 (defn edge->cytoscape
   "Transform an internal view edge to Cytoscape format.

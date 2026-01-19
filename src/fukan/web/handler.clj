@@ -3,7 +3,7 @@
    Delegates view computation and rendering to specialized namespaces."
   (:require [reitit.ring :as ring]
             [reitit.ring.middleware.parameters :as parameters]
-            [fukan.web.views.api :as views]
+            [fukan.web.views.shell :as views.shell]
             [fukan.web.sse :as sse]
             [clojure.java.io :as io]
             [clojure.string :as str]))
@@ -48,7 +48,7 @@
     [["/" {:get (fn [_]
                   {:status 200
                    :headers {"Content-Type" "text/html"}
-                   :body (views/render-app-shell)})}]
+                   :body (views.shell/render-app-shell)})}]
 
      ;; SSE endpoints (Datastar)
      ["/sse/view" {:get (fn [req]

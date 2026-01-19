@@ -3,7 +3,8 @@
    Includes clj-kondo analysis and Malli schema node building."
   (:require [clojure.java.shell :as shell]
             [clojure.edn :as edn]
-            [fukan.model.core :as core]))
+            [clojure.repl :as repl]
+            [fukan.model.build :as build]))
 
 ;; -----------------------------------------------------------------------------
 ;; Static Analysis
@@ -43,21 +44,70 @@
 ;; -----------------------------------------------------------------------------
 ;; Schema Discovery
 
+(defn- extract-source-schema-refs
+  "Extract symbol references from schema source string.
+   Returns a set of keywords for symbols that match registered schema names."
+  [source-str registered-schema-names]
+  (when source-str
+    ;; Parse the source to find all symbols
+    (let [form (try (read-string source-str) (catch Exception _ nil))]
+      (when (and (seq? form) (= 'def (first form)))
+        ;; Get the schema body (3rd or 4th element depending on docstring)
+        (let [body (if (string? (nth form 2 nil))
+                     (nth form 3 nil)  ; has docstring
+                     (nth form 2 nil))  ; no docstring
+              refs (atom #{})]
+          (letfn [(walk [x]
+                    (cond
+                      ;; Symbol that matches a registered schema name
+                      (and (symbol? x)
+                           (contains? registered-schema-names (keyword (name x))))
+                      (swap! refs conj (keyword (name x)))
+
+                      ;; Vector - recurse
+                      (vector? x)
+                      (doseq [child x] (walk child))
+
+                      ;; Map - recurse into values
+                      (map? x)
+                      (doseq [v (vals x)] (walk v))
+
+                      ;; Seq - recurse
+                      (seq? x)
+                      (doseq [child x] (walk child))))]
+            (walk body)
+            @refs))))))
+
 (defn discover-schema-data
   "Scan loaded namespaces for vars with ^:schema metadata.
-   Returns a map of {keyword -> {:schema-form form :owner-ns ns-str}}.
+   Returns a map of {keyword -> {:schema-form form :owner-ns ns-str :schema-refs #{...}}}.
+
+   :schema-refs contains keywords for other schemas referenced in the source form.
 
    This is a pure function that reads metadata from the runtime - it does
    not mutate any global state."
   []
-  (->> (all-ns)
-       (mapcat (fn [ns]
-                 (for [[sym v] (ns-publics ns)
-                       :when (:schema (meta v))]
-                   [(keyword (name sym))
-                    {:schema-form @v
-                     :owner-ns (str (ns-name ns))}])))
-       (into {})))
+  (let [;; First pass: collect all schema names
+        all-schemas (->> (all-ns)
+                         (mapcat (fn [ns]
+                                   (for [[sym v] (ns-publics ns)
+                                         :when (:schema (meta v))]
+                                     (keyword (name sym)))))
+                         set)
+        ;; Second pass: build schema data with refs
+        schema-data (->> (all-ns)
+                         (mapcat (fn [ns]
+                                   (for [[sym v] (ns-publics ns)
+                                         :when (:schema (meta v))]
+                                     (let [full-sym (symbol (str (ns-name ns)) (str sym))
+                                           source (try (repl/source-fn full-sym) (catch Exception _ nil))
+                                           refs (extract-source-schema-refs source all-schemas)]
+                                       [(keyword (name sym))
+                                        {:schema-form @v
+                                         :owner-ns (str (ns-name ns))
+                                         :schema-refs (or refs #{})}]))))
+                         (into {}))]
+    schema-data))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema Node Building
@@ -67,14 +117,14 @@
    Schema nodes are placed inside their owning namespace container.
 
    ns-index is a map of {ns-sym -> node-id} for looking up parent namespaces.
-   schema-data is a map of {keyword -> {:schema-form form :owner-ns ns-str}}
+   schema-data is a map of {keyword -> {:schema-form form :owner-ns ns-str :schema-refs #{...}}}
    as returned by discover-schema-data.
 
    Returns a map of {schema-node-id -> node}."
   [ns-index schema-data]
   (->> schema-data
-       (map (fn [[k {:keys [schema-form owner-ns]}]]
-              (let [id (core/gen-id)
+       (map (fn [[k {:keys [schema-form owner-ns schema-refs]}]]
+              (let [id (build/gen-id)
                     owner-ns-sym (when owner-ns (symbol owner-ns))
                     parent-ns-id (get ns-index owner-ns-sym)]
                 [id {:id id
@@ -84,5 +134,6 @@
                      :children #{}
                      :data {:schema-key k
                             :owner-ns owner-ns
-                            :schema-form schema-form}}])))
+                            :schema-form schema-form
+                            :schema-refs (or schema-refs #{})}}])))
        (into {})))

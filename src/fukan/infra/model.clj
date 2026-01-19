@@ -2,15 +2,25 @@
   "Model lifecycle management.
    Handles loading, storing, and refreshing the model independently
    from the server lifecycle."
-  (:require [fukan.model.api :as model]))
+  (:require [fukan.model.build :as build]
+            [fukan.model.languages.clojure :as clj-lang]))
 
 (defonce ^:private state (atom {:model nil :src nil}))
+
+(defn- build-model
+  "Build the complete model from Clojure source code."
+  [src-path]
+  (let [analysis (clj-lang/run-kondo src-path)
+        schema-data (clj-lang/discover-schema-data)
+        type-nodes-fn (fn [ns-index]
+                        (clj-lang/build-schema-nodes ns-index schema-data))]
+    (build/build-model analysis {:type-nodes-fn type-nodes-fn})))
 
 (defn load-model
   "Build model from src path and store it. Returns the model."
   [src]
   (println "Analyzing" src "...")
-  (let [m (model/build-model src)]
+  (let [m (build-model src)]
     (println "Built" (count (:nodes m)) "nodes," (count (:edges m)) "edges")
     (reset! state {:model m :src src})
     m))

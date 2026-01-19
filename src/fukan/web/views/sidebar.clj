@@ -4,6 +4,11 @@
             [fukan.web.views.schema :as views.schema]))
 
 ;; -----------------------------------------------------------------------------
+;; Schemas
+
+(def ^:schema Html :string)
+
+;; -----------------------------------------------------------------------------
 ;; Node data accessors (via :data map)
 
 (defn- node-ns-sym [node]
@@ -153,25 +158,70 @@
   (let [schema-key (node-schema-key node)]
     (views.schema/render-schema-detail (str (namespace schema-key) "/" (name schema-key)) schema-form)))
 
+(defn- render-interface-info
+  "Render the sidebar fragment for an interface node."
+  [node]
+  (let [description (get-in node [:data :description])
+        functions (get-in node [:data :functions])]
+    (str
+     (h/html
+      [:div#node-info
+       [:h4 "Interface"]
+       (when description
+         [:div.doc description])
+       (when (seq functions)
+         (list
+          [:h5 "Functions"]
+          [:ul.schema-list
+           (for [fn-name functions]
+             [:li fn-name])]))]))))
+
+(defn- render-edge-info
+  "Render the sidebar fragment for an edge selection.
+   Shows the target functions being called."
+  [node underlying-edges total-count]
+  (let [called-fns (->> underlying-edges
+                        (map :to-var)
+                        (distinct)
+                        (sort-by :label))]
+    (str
+     (h/html
+      [:div#node-info
+       [:h5 "Functions Called " [:span.dep-count (str "(" (count called-fns) ")")]]
+       (if (seq called-fns)
+         [:ul
+          (for [{:keys [id label signature]} called-fns]
+            [:li
+             {"data-on:click" (str "@get('/sse/view?select=" id "')")}
+             label
+             (when signature
+               (views.schema/render-fn-signature signature))])]
+         [:p.empty-state "No direct function calls"])]))))
+
 ;; -----------------------------------------------------------------------------
 ;; Public API
 
 (defn render-sidebar-html
-  "Render the sidebar content for a node.
+  "Render the sidebar content for a node or edge.
    Returns empty state if node is nil.
-   Takes sidebar data map with :node :deps :dependents :ns-schemas :schema-form."
-  [{:keys [node deps dependents ns-schemas schema-form]}]
+   Takes sidebar data map with :node :deps :dependents :ns-schemas :schema-form
+   or for edges: :node :underlying-edges :total-count."
+  {:malli/schema [:=> [:cat :EntityDetails] :Html]}
+  [{:keys [node deps dependents ns-schemas schema-form underlying-edges total-count]}]
   (if node
     (case (:kind node)
       :var (render-var-info node deps dependents)
       :namespace (render-namespace-info ns-schemas node deps dependents)
       :folder (render-folder-info node deps dependents)
       :schema (render-schema-node-info schema-form node)
+      :interface (render-interface-info node)
+      :edge (render-edge-info node underlying-edges total-count)
       (str (h/html [:div#node-info [:p.empty-state "Unknown node type"]])))
     (render-empty-sidebar)))
 
 (defn render-schema-sidebar
   "Render the sidebar for viewing a schema definition.
    Takes a schema-id string like 'fukan.model/Model' and the pre-computed schema form."
+  {:malli/schema [:=> [:cat :string :any] :Html]}
   [schema-id schema-form]
   (views.schema/render-schema-detail schema-id schema-form))

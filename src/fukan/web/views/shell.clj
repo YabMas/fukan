@@ -1,29 +1,9 @@
-(ns fukan.web.views.api
-  "View rendering for the web interface.
-
-   Public render functions accept pre-computed projections and return output.
-   The handler (sse.clj) is responsible for fetching projections."
-  (:require [hiccup2.core :as h]
-            [fukan.web.cytoscape :as cytoscape]
-            [fukan.web.views.graph :as views.graph]
-            [fukan.web.views.sidebar :as views.sidebar]))
+(ns fukan.web.views.shell
+  "Render the initial HTML page shell."
+  (:require [hiccup2.core :as h]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
-
-(def ^:schema EditorState
-  [:map
-   [:view-id {:optional true} [:maybe :string]]
-   [:selected-id {:optional true} [:maybe :string]]
-   [:schema-id {:optional true} [:maybe :string]]
-   [:expanded-containers {:optional true} :set]])
-
-(def ^:schema GraphData
-  [:map
-   [:nodes [:vector :map]]
-   [:edges [:vector :CytoscapeEdge]]
-   [:selectedId {:optional true} [:maybe :string]]
-   [:highlightedEdges {:optional true} [:vector :string]]])
 
 (def ^:schema Html :string)
 
@@ -247,10 +227,66 @@
   }
   .back-link:hover {
     color: #2980b9;
+  }
+  .edge-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+  }
+  .edge-endpoint {
+    color: #2980b9;
+    cursor: pointer;
+  }
+  .edge-endpoint:hover {
+    text-decoration: underline;
+  }
+  .edge-arrow {
+    color: #7f8c8d;
+    margin: 0 0.25rem;
+  }
+  .edge-type {
+    color: #7f8c8d;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    text-transform: capitalize;
+  }
+  .edge-calls {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+  .edge-call {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border-left: 3px solid #2980b9;
+  }
+  .edge-call .caller,
+  .edge-call .callee {
+    color: #2980b9;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .edge-call .caller:hover,
+  .edge-call .callee:hover {
+    text-decoration: underline;
+  }
+  .edge-call .call-arrow {
+    color: #95a5a6;
+    font-size: 0.75rem;
+    text-align: center;
+    margin: 0.25rem 0;
+  }
+  .edge-call .signature {
+    margin: 0.25rem 0;
+    padding: 0.5rem;
+    font-size: 0.8rem;
   }")
 
 ;; -----------------------------------------------------------------------------
-;; App Shell
+;; Public API
 
 (defn render-app-shell
   "Render the initial HTML page shell."
@@ -290,64 +326,3 @@
       ;; Initial load trigger - handled by app.js initPage()
       [:div#init-trigger]
       [:script {:src "/public/app.js"}]]])))
-
-;; -----------------------------------------------------------------------------
-;; Breadcrumb
-
-(defn- render-breadcrumb-html
-  "Render breadcrumb items to HTML.
-   Dispatches cy-navigate event for consistent navigation handling."
-  [items]
-  (str
-   (h/html
-    [:div#breadcrumb
-     (for [[idx {:keys [id label]}] (map-indexed vector items)
-           :let [is-last (= idx (dec (count items)))
-                 ;; Dispatch cy-navigate event via vanilla JS - bubbles up to graph-panel
-                 dispatch-js (str "evt.target.dispatchEvent(new CustomEvent('cy-navigate', {bubbles: true, detail: {id: '" (or id "") "'}}))")]]
-       (list
-        (when (pos? idx)
-          [:span.separator (h/raw "&rsaquo;")])
-        (if is-last
-          [:span.crumb.current label]
-          [:span.crumb {"data-on:click" dispatch-js} label])))])))
-
-;; -----------------------------------------------------------------------------
-;; Public Render API
-;;
-;; Render functions accept pre-computed projections and return output.
-;; The handler (sse.clj) is responsible for calling projection.api.
-
-(defn render-graph
-  "Render graph data for Cytoscape.
-   Takes pre-computed graph-projection, root-node, and editor-state.
-   Returns Cytoscape-compatible {:nodes :edges :selectedId :highlightedEdges}.
-
-   views.graph outputs domain-focused format with Clojure idioms.
-   This function transforms to Cytoscape format at the boundary."
-  {:malli/schema [:=> [:cat :Projection :Node :EditorState] :GraphData]}
-  [graph-projection root-node {:keys [view-id selected-id] :as editor-state}]
-  (let [;; Add UI state (selected?, highlighted?)
-        graph (views.graph/add-ui-state graph-projection editor-state root-node)
-        effective-selected-id (or selected-id view-id (:id root-node))
-        highlighted-edges (views.graph/compute-highlighted-edges (:edges graph) effective-selected-id)]
-    ;; Transform to Cytoscape format at the boundary
-    (cytoscape/graph->cytoscape graph effective-selected-id highlighted-edges)))
-
-(defn render-breadcrumb
-  "Render the breadcrumb navigation HTML.
-   Takes pre-computed path items (from proj/entity-path)."
-  {:malli/schema [:=> [:cat :EntityPath] :Html]}
-  [path-items]
-  (render-breadcrumb-html path-items))
-
-(defn render-sidebar
-  "Render the sidebar HTML.
-   Takes pre-computed sidebar-data.
-   If :schema-id is present, renders schema detail view.
-   Otherwise renders regular node sidebar."
-  {:malli/schema [:=> [:cat :EntityDetails] :Html]}
-  [sidebar-data]
-  (if (:schema-id sidebar-data)
-    (views.sidebar/render-schema-sidebar (:schema-id sidebar-data) (:schema-form sidebar-data))
-    (views.sidebar/render-sidebar-html sidebar-data)))

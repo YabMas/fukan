@@ -28,7 +28,7 @@
    [:schema-key {:optional true} :keyword]])
 
 (def ^:schema ProjectionEdgeType
-  [:enum :code-flow :schema-flow :data-flow])
+  [:enum :code-flow :schema-flow :data-flow :schema-composition])
 
 (def ^:schema ProjectionEdge
   [:map
@@ -86,6 +86,15 @@
        (some #(when (= schema-key (get-in % [:data :schema-key]))
                 (:id %)))))
 
+(defn- schema-owner-ns-id
+  "Get the namespace node ID that owns a schema."
+  [model schema-key]
+  (->> (:nodes model)
+       vals
+       (filter #(= :schema (:kind %)))
+       (some #(when (= schema-key (get-in % [:data :schema-key]))
+                (:parent %)))))
+
 ;; -----------------------------------------------------------------------------
 ;; Visibility helpers
 
@@ -113,7 +122,9 @@
                                            (:kind (get-in model [:nodes %])))) children-ids)
                        children-ids)
         ;; Filter out schema-defining vars (schema nodes represent them)
-        children-ids (into #{} (remove #(schema-defining-var? model (get-in model [:nodes %]))) children-ids)]
+        children-ids (into #{} (remove #(schema-defining-var? model (get-in model [:nodes %]))) children-ids)
+        ;; Filter out schema nodes - they appear only as IO schemas
+        children-ids (into #{} (remove #(= :schema (:kind (get-in model [:nodes %])))) children-ids)]
     (if (or (nil? expanded-containers)
             (contains? expanded-containers entity-id))
       children-ids
@@ -245,14 +256,35 @@
                                        {:from schema-id :to var-id :schema-key schema-key}))))))))))
        vec))
 
+(defn- compute-schema-composition-edges
+  "Compute edges between schema nodes based on composition.
+   Returns edges from a schema to schemas it references.
+   Uses pre-computed :schema-refs from node data (extracted from source form).
+   Only creates edges where both schema nodes are visible."
+  [model visible-schema-ids]
+  (->> visible-schema-ids
+       (mapcat (fn [schema-id]
+                 (let [schema-node (get-in model [:nodes schema-id])
+                       refs (get-in schema-node [:data :schema-refs] #{})]
+                   (for [ref-key refs
+                         :let [ref-id (find-schema-node-by-key model ref-key)]
+                         :when (and ref-id (contains? visible-schema-ids ref-id))]
+                     {:from schema-id
+                      :to ref-id
+                      :edge-type :schema-composition}))))
+       distinct
+       vec))
+
 ;; -----------------------------------------------------------------------------
 ;; IO Nodes and Data-Flow Edges
 
 (defn- create-io-nodes
   "Create IO container and schema nodes for a container view.
    Returns a vector of nodes: IO container + child schema nodes.
-   io-type is :input or :output."
-  [entity-id io-type schema-keys]
+   io-type is :input or :output.
+   owned-ns-ids is a set of namespace IDs inside the current container.
+   IO containers are orphans - positioned by JS relative to main container."
+  [model entity-id io-type schema-keys owned-ns-ids]
   (when (seq schema-keys)
     (let [container-id (str (name io-type) ":" entity-id)
           label (if (= io-type :input) "Inputs" "Outputs")]
@@ -260,13 +292,15 @@
               :kind :io-container
               :io-type io-type
               :label label
-              :parent nil
+              :parent nil  ;; IO containers are orphans, positioned by JS
               :expandable? false
               :has-private-children? false
               :expanded? false
               :child-count (count schema-keys)
               :private? false}]
-            (for [schema-key schema-keys]
+            (for [schema-key schema-keys
+                  :let [owner-ns-id (schema-owner-ns-id model schema-key)
+                        owned? (contains? owned-ns-ids owner-ns-id)]]
               {:id (str (name io-type) "-schema:" (name schema-key))
                :kind :io-schema
                :io-type io-type
@@ -277,7 +311,8 @@
                :has-private-children? false
                :expanded? false
                :child-count 0
-               :private? false})))))
+               :private? false
+               :owned? owned?})))))
 
 (defn- compute-io-flow-edges
   "Compute data-flow edges between IO schema nodes and visible nodes.
@@ -579,6 +614,11 @@
                              (filter #(= :var (:kind (get-in model [:nodes %]))))
                              set)
 
+        ;; Collect visible schema IDs for schema-composition edges
+        visible-schema-ids (->> all-node-ids
+                                (filter #(= :schema (:kind (get-in model [:nodes %]))))
+                                set)
+
         ;; Build code-flow edges
         code-flow-edges (map-indexed
                          (fn [idx {:keys [from to]}]
@@ -595,23 +635,38 @@
                              {:id (str "se" idx)
                               :from from
                               :to to
-                               :edge-type :schema-flow
-                               :schema-key schema-key})
+                              :edge-type :schema-flow
+                              :schema-key schema-key})
                            schema-flow-raw)
- 
+
+        ;; Build schema-composition edges
+        schema-composition-raw (compute-schema-composition-edges model visible-schema-ids)
+        schema-composition-edges (map-indexed
+                                   (fn [idx {:keys [from to]}]
+                                     {:id (str "sce" idx)
+                                      :from from
+                                      :to to
+                                      :edge-type :schema-composition})
+                                   schema-composition-raw)
+
         ;; Compute IO schemas
         io-data (compute-io-schemas model entity-id)
- 
-        ;; Create IO container/schema nodes
-        input-nodes (create-io-nodes entity-id :input (:inputs io-data))
-        output-nodes (create-io-nodes entity-id :output (:outputs io-data))
- 
+
+        ;; Compute owned namespace IDs (only namespaces VISIBLE in the graph)
+        owned-ns-ids (->> all-node-ids
+                          (filter #(= :namespace (:kind (get-in model [:nodes %]))))
+                          set)
+
+        ;; Create IO container/schema nodes (orphans - positioned by JS)
+        input-nodes (create-io-nodes model entity-id :input (:inputs io-data) owned-ns-ids)
+        output-nodes (create-io-nodes model entity-id :output (:outputs io-data) owned-ns-ids)
+
         ;; Compute data-flow edges (IO schemas <-> visible nodes)
         data-flow-edges (compute-io-flow-edges model entity-id io-data all-node-ids)]
 
     {:nodes (vec (concat [container-node] child-nodes drill-down-nodes
                          input-nodes output-nodes))
-     :edges (vec (concat code-flow-edges schema-flow-edges data-flow-edges))
+     :edges (vec (concat code-flow-edges schema-flow-edges schema-composition-edges data-flow-edges))
      :io io-data}))
 
 (defn- compute-container-view

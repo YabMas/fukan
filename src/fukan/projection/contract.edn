@@ -1,8 +1,5 @@
 {:description "Projection API for building graph views, entity details, and navigation paths from the model."
  :functions
- [{:name "entity-graph"
-   :schema [:=> [:cat :Model :ProjectionOpts] :Projection]}
-  {:name "entity-details"
-   :schema [:=> [:cat :Model :string] :EntityDetails]}
-  {:name "entity-path"
-   :schema [:=> [:cat :Model [:maybe :string]] :EntityPath]}]}
+ [fukan.projection.graph/entity-graph
+  fukan.projection.details/entity-details
+  fukan.projection.path/entity-path]}

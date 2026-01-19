@@ -1,0 +1,7 @@
+{:description "View rendering functions for the Fukan web UI. Transforms projections into HTML and Cytoscape formats."
+ :functions [fukan.web.views.shell/render-app-shell
+             fukan.web.views.graph/render-graph
+             fukan.web.views.breadcrumb/render-breadcrumb
+             fukan.web.views.sidebar/render-sidebar-html
+             fukan.web.views.sidebar/render-schema-sidebar
+             fukan.web.views.cytoscape/graph->cytoscape]}

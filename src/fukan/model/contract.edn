@@ -1,0 +1,2 @@
+{:description "Internal graph model construction from source code."
+ :functions [fukan.model.build/build-model]}

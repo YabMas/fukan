@@ -353,6 +353,29 @@ const cy = cytoscape({
         'z-index': 1000
       }
     },
+    // Schema composition edges - purple solid lines for composition relationships
+    {
+      selector: 'edge[edgeType="schema-composition"]',
+      style: {
+        'line-style': 'solid',
+        'line-color': '#9b59b6',
+        'target-arrow-color': '#9b59b6',
+        'target-arrow-shape': 'triangle',
+        'width': 1.5,
+        'curve-style': 'bezier',
+        'arrow-scale': 0.8
+      }
+    },
+    // Highlighted schema composition edges
+    {
+      selector: 'edge[edgeType="schema-composition"].highlighted',
+      style: {
+        'line-color': '#e74c3c',
+        'target-arrow-color': '#e74c3c',
+        'width': 3,
+        'z-index': 1000
+      }
+    },
     // IO container (Inputs/Outputs) - warm yellow, dashed border
     {
       selector: 'node[kind="io-container"]',
@@ -390,6 +413,14 @@ const cy = cytoscape({
         'padding': '8px',
         'font-size': '11px',
         'color': '#7d6608'
+      }
+    },
+    // Owned IO schema nodes - thicker border to show ownership
+    {
+      selector: 'node[kind="io-schema"][?isOwned]',
+      style: {
+        'border-width': 3,
+        'border-color': '#9a7b0a'
       }
     },
     // Invisible spacer nodes to force IO container width
@@ -515,8 +546,11 @@ window.renderGraph = function(data) {
   layout.run();
 
   // Position IO containers above/below the root (orphan) container
-  // Find the orphan node - the viewed container has no parent
-  const orphanNode = cy.nodes().filter(n => !n.data('parent') && n.data('kind') !== 'io-container');
+  // Find the main container - it's the orphan that's a folder or namespace
+  const orphanNode = cy.nodes().filter(n =>
+    !n.data('parent') &&
+    (n.data('kind') === 'folder' || n.data('kind') === 'namespace')
+  );
   if (orphanNode.length) {
     const rootId = orphanNode.first().id();
     const inputContainer = cy.getElementById('input:' + rootId);
@@ -628,10 +662,44 @@ cy.on('tap', 'node', function(evt) {
     });
   }
 
+  // For io-schema nodes, dispatch schema event instead of select
+  if (nodeKind === 'io-schema') {
+    const schemaKey = node.data('schemaKey');
+    if (schemaKey) {
+      graphPanel.dispatchEvent(new CustomEvent('cy-schema', {
+        bubbles: true,
+        detail: { id: schemaKey }
+      }));
+      return;
+    }
+  }
+
   // Dispatch custom event for Datastar to handle
   graphPanel.dispatchEvent(new CustomEvent('cy-select', {
     bubbles: true,
     detail: { id: nodeId }
+  }));
+});
+
+// Single click on edge - select edge and show info
+cy.on('tap', 'edge', function(evt) {
+  const edge = evt.target;
+  const source = edge.data('source');
+  const target = edge.data('target');
+  const edgeType = edge.data('edgeType') || 'code-flow';
+  // Use ~ as delimiter since it's URL-safe and won't appear in UUIDs
+  const edgeId = `edge~${source}~${target}~${edgeType}`;
+  console.log('Edge clicked, dispatching cy-select with id:', edgeId);
+
+  // Visual feedback: highlight edge, deselect nodes
+  cy.nodes().unselect();
+  cy.edges().removeClass('highlighted');
+  edge.addClass('highlighted');
+
+  // Use same event as nodes - unified selection
+  graphPanel.dispatchEvent(new CustomEvent('cy-select', {
+    bubbles: true,
+    detail: { id: edgeId }
   }));
 });
 
