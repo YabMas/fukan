@@ -159,6 +159,12 @@
     margin-right: 0.5rem;
     vertical-align: middle;
   }
+  .sig {
+    padding-left: 1em;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.8rem;
+    color: #7f8c8d;
+  }
   .signature {
     margin: 0.75rem 0;
     padding: 0.75rem;

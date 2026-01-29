@@ -1,6 +1,7 @@
 (ns fukan.web.views.sidebar
   "Render sidebar panels for different node types."
   (:require [hiccup2.core :as h]
+            [clojure.string :as str]
             [fukan.web.views.schema :as views.schema]))
 
 ;; -----------------------------------------------------------------------------
@@ -22,6 +23,38 @@
 
 (defn- node-schema-key [node]
   (get-in node [:data :schema-key]))
+
+;; -----------------------------------------------------------------------------
+;; Plain-text schema helpers
+
+(defn- schema->str
+  "Convert a malli schema form to a short plain-text string."
+  [form]
+  (cond
+    (keyword? form) (name form)
+    (and (vector? form) (seq form))
+    (let [[t & args] form]
+      (case t
+        :vector (str "[" (schema->str (first args)) "]")
+        :set    (str "#{" (schema->str (first args)) "}")
+        :map-of (str "{" (schema->str (first args)) " " (schema->str (second args)) "}")
+        :maybe  (str (schema->str (first args)) "?")
+        :cat    (str/join ", " (map schema->str args))
+        :or     (str/join " | " (map schema->str args))
+        :enum   (str/join " | " (map pr-str args))
+        :tuple  (str "[" (str/join ", " (map schema->str args)) "]")
+        (name t)))
+    :else (pr-str form)))
+
+(defn- fn-signature-str
+  "Format a [:=> ...] schema as 'input -> output' string."
+  [schema]
+  (when (and (vector? schema) (= :=> (first schema)))
+    (let [[_ input output] schema
+          ins (if (and (vector? input) (= :cat (first input)))
+                (rest input)
+                [input])]
+      (str (str/join ", " (map schema->str ins)) " → " (schema->str output)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema helpers
@@ -125,11 +158,26 @@
 (defn- render-folder-info
   "Render the sidebar fragment for a folder node."
   [node deps dependents]
-  (let [label (:label node)]
+  (let [label (:label node)
+        contract (get-in node [:data :contract])
+        description (:description contract)
+        functions (:functions contract)]
     (str
      (h/html
       [:div#node-info
        [:h4 label]
+
+       (when description
+         [:div.doc description])
+
+       (when (seq functions)
+         (list
+          [:h5 "Public API " [:span.dep-count (str "(" (count functions) ")")]]
+          [:ul
+           (for [{:keys [name schema]} (sort-by :name functions)]
+             [:li name
+              (when-let [sig (fn-signature-str schema)]
+                [:div.sig sig])])]))
 
        [:h5 "Dependencies " [:span.dep-count (str "(" (count deps) ")")]]
        (if (seq deps)
