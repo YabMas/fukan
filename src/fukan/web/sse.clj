@@ -47,15 +47,10 @@
     (:parent node)))
 
 (defn- compute-sidebar-data
-  "Pre-compute sidebar data based on selected node.
-   Returns a map suitable for views/render-sidebar."
+  "Compute normalized entity detail for sidebar rendering.
+   All kind-specific enrichment is handled by the projection layer."
   [model selected-id]
-  (let [details (proj.details/entity-details model selected-id)
-        node (:node details)]
-    (case (:kind node)
-      :namespace (assoc details :ns-schemas (proj.schema/schemas-for-ns model (:label node)))
-      :schema (assoc details :schema-form (proj.schema/get-schema model (get-in node [:data :schema-key])))
-      details)))
+  (proj.details/entity-details model selected-id))
 
 (defn main-view-handler
   "SSE endpoint that streams the full main view update.
@@ -148,10 +143,10 @@
                         (try
                           (let [params (:query-params request)
                                 schema-id (get params "id")
-                                [ns-part name-part] (str/split schema-id #"/" 2)
-                                schema-key (keyword ns-part name-part)
-                                schema-form (proj.schema/get-schema model schema-key)]
-                            (d*/patch-elements! sse (views.sidebar/render-schema-sidebar schema-id schema-form))
+                                schema-key (keyword schema-id)
+                                node-id (proj.schema/find-schema-node-id model schema-key)
+                                sidebar-data (compute-sidebar-data model node-id)]
+                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data))
                             ;; Update URL with schema
                             (d*/execute-script! sse
                                                 (str "if(window.updateSchemaUrl)updateSchemaUrl("

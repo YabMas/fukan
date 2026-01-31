@@ -4,8 +4,24 @@
 
 Some packages contain their own `CLAUDE.md` with package-specific conventions:
 
+- `src/fukan/infra/CLAUDE.md` - infrastructure lifecycle and dependency direction
+- `src/fukan/model/CLAUDE.md` - build pipeline, schema conventions, data shapes
+- `src/fukan/model/languages/CLAUDE.md` - language analysis and schema discovery
+- `src/fukan/projection/CLAUDE.md` - projection functions, edge types, IO pattern
 - `src/fukan/web/CLAUDE.md` - naming conventions for web module
 - `src/fukan/web/views/CLAUDE.md` - view-spec implementation guide
+
+---
+
+## contract.edn Convention
+
+`contract.edn` defines a module's **external boundary** — the functions that callers outside the module use. It is not an inventory of all public vars.
+
+- **In contract:** Functions called by other modules (the module's external API).
+- **Not in contract:** Functions that are `defn` (public) only because they're called cross-namespace *within* the module. These are internal implementation details that happen to need Clojure-level visibility.
+- **Should be `defn-`:** Functions only called within their own namespace.
+
+When reviewing, a public var missing from the contract is only a warning if it's called from outside the module. If it's only called within the module, it's correctly absent.
 
 ---
 

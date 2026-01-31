@@ -1,6 +1,6 @@
 (ns fukan.web.views.graph
   "Adds UI state (selected?, highlighted?) to projection data.
-   Implements view-spec.md behavior for Cytoscape visualization."
+   Implements spec.md behavior for Cytoscape visualization."
   (:require [clojure.string :as str]
             [fukan.web.views.cytoscape :as cytoscape]))
 
@@ -27,9 +27,21 @@
         edges))
 
 ;; -----------------------------------------------------------------------------
-;; Public API
+;; Helpers
 
-(defn add-ui-state
+(defn- strip-schema-prefix
+  "Strip a schema prefix from a node ID and return the keyword.
+   Handles schema:, input-schema:, output-schema:, internal-schema: prefixes."
+  [id]
+  (some (fn [prefix]
+          (when (str/starts-with? id prefix)
+            (keyword (subs id (count prefix)))))
+        ["input-schema:" "output-schema:" "internal-schema:" "schema:"]))
+
+;; -----------------------------------------------------------------------------
+;; UI State
+
+(defn- add-ui-state
   "Add UI state to graph projection data.
 
    Takes a graph projection (from proj/entity-graph) and editor-state.
@@ -50,7 +62,7 @@
         (update :nodes add-node-selection effective-selected-id)
         (update :edges add-edge-highlighting effective-selected-id))))
 
-(defn compute-highlighted-edges
+(defn- compute-highlighted-edges
   "Compute which edges should be highlighted for a selected node.
    For schema nodes, highlights all edges with matching schema-key.
    For other nodes, highlights edges where node is from or to.
@@ -58,26 +70,13 @@
    Works with internal edge format (:from/:to, :schema-key)."
   [edges selected-id]
   (when selected-id
-    (cond
+    (if-let [target-schema-key (strip-schema-prefix selected-id)]
       ;; Schema nodes - highlight by schema-key
-      (or (str/starts-with? selected-id "schema:")
-          (str/starts-with? selected-id "input-schema:")
-          (str/starts-with? selected-id "output-schema:")
-          (str/starts-with? selected-id "internal-schema:"))
-       (let [;; Extract schema key from various prefixes
-             target-schema-key (cond
-                                 (str/starts-with? selected-id "input-schema:") (subs selected-id 13)
-                                 (str/starts-with? selected-id "output-schema:") (subs selected-id 14)
-                                 (str/starts-with? selected-id "internal-schema:") (subs selected-id 16)
-                                 (str/starts-with? selected-id "schema:") (subs selected-id 7))
-             target-schema-key (some-> target-schema-key keyword)]
-         (->> edges
-              (keep (fn [{:keys [id schema-key]}]
-                      (when (= schema-key target-schema-key) id)))
-              vec))
-
+      (->> edges
+           (keep (fn [{:keys [id schema-key]}]
+                   (when (= schema-key target-schema-key) id)))
+           vec)
       ;; Regular nodes - highlight edges by from/to
-      :else
       (->> edges
            (keep (fn [{:keys [id from to]}]
                    (when (or (= from selected-id) (= to selected-id))

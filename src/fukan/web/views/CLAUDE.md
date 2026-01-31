@@ -1,10 +1,14 @@
 # View Spec Implementation Guide
 
-This module implements `view-spec.md`. Read it first.
+This module implements the view and interaction layer. Read these specs for context:
+
+- `../../model/spec.md` — graph model vocabulary (entities, edges, hierarchy)
+- `../../projection/spec.md` — projection rules this module renders
+- `spec.md` — view rendering and interaction spec (this module's own spec)
 
 ## Core Principle: Match the Spec's Abstraction Level
 
-The view-spec describes behavior in terms of **containers** and **children** - not folders, namespaces, or vars. Your code should do the same.
+The specs describe behavior in terms of **containers** and **children** — not folders, namespaces, or vars. Your code should do the same.
 
 **Wrong:** Type-specific branches for spec-level behavior
 ```clojure
@@ -28,10 +32,10 @@ When spec behavior is split across type-specific branches:
 
 ### How to Apply
 
-1. **Read the spec rule** - e.g., "no edges between container and children"
-2. **Notice if it mentions types** - if not, your code shouldn't branch on types
+1. **Read the spec rule** — e.g., "no edges between container and children"
+2. **Notice if it mentions types** — if not, your code shouldn't branch on types
 3. **Write one implementation** that expresses the rule directly
-4. **Test the invariant generically** - verify across all types, not per-type
+4. **Test the invariant generically** — verify across all types, not per-type
 
 ### Testing Invariants
 
@@ -46,3 +50,17 @@ Tests should verify spec rules hold regardless of type:
 ;; Weak: only tests one type
 (deftest no-folder-child-edges ...)
 ```
+
+## Sidebar: Generic Entity Detail
+
+The sidebar uses a **generic renderer** (`render-entity-detail`) for all non-edge entity kinds. The projection layer normalizes entities into a uniform shape; the view just iterates sections.
+
+```clojure
+(render-sidebar-html entity-detail)
+;; entity-detail is the normalized map from projection/details
+;; Dispatches: edge -> render-edge-detail, else -> render-entity-detail
+```
+
+**No type-specific renderers.** The `:interface` section dispatches by `:type` field (`:fn-list`, `:fn-inline`, `:schema-def`, `:name-list`) — this is data-driven, not kind-driven.
+
+Shared components: `render-fn-list`, `render-dep-list`, `render-description`, `render-schema-refs`, `render-interface`.

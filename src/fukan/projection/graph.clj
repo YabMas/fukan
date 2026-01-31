@@ -76,24 +76,6 @@
           schema-key (keyword (str var-sym))]
       (some? (schema/get-schema model schema-key)))))
 
-(defn- find-schema-node-by-key
-  "Find a schema node by its schema key.
-   Returns the node ID or nil if not found."
-  [model schema-key]
-  (->> (:nodes model)
-       vals
-       (filter #(= :schema (:kind %)))
-       (some #(when (= schema-key (get-in % [:data :schema-key]))
-                (:id %)))))
-
-(defn- schema-owner-ns-id
-  "Get the namespace node ID that owns a schema."
-  [model schema-key]
-  (->> (:nodes model)
-       vals
-       (filter #(= :schema (:kind %)))
-       (some #(when (= schema-key (get-in % [:data :schema-key]))
-                (:parent %)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Visibility helpers
@@ -245,13 +227,13 @@
                       ;; Edges from var to output schemas
                       (->> (:outputs schema-info)
                            (keep (fn [schema-key]
-                                   (let [schema-id (find-schema-node-by-key model schema-key)]
+                                   (let [schema-id (schema/find-schema-node-id model schema-key)]
                                      (when (and schema-id (contains? visible-node-ids schema-id))
                                        {:from var-id :to schema-id :schema-key schema-key})))))
                       ;; Edges from input schemas to var
                       (->> (:inputs schema-info)
                            (keep (fn [schema-key]
-                                   (let [schema-id (find-schema-node-by-key model schema-key)]
+                                   (let [schema-id (schema/find-schema-node-id model schema-key)]
                                      (when (and schema-id (contains? visible-node-ids schema-id))
                                        {:from schema-id :to var-id :schema-key schema-key}))))))))))
        vec))
@@ -267,7 +249,7 @@
                  (let [schema-node (get-in model [:nodes schema-id])
                        refs (get-in schema-node [:data :schema-refs] #{})]
                    (for [ref-key refs
-                         :let [ref-id (find-schema-node-by-key model ref-key)]
+                         :let [ref-id (schema/find-schema-node-id model ref-key)]
                          :when (and ref-id (contains? visible-schema-ids ref-id))]
                      {:from schema-id
                       :to ref-id
@@ -299,7 +281,7 @@
               :child-count (count schema-keys)
               :private? false}]
             (for [schema-key schema-keys
-                  :let [owner-ns-id (schema-owner-ns-id model schema-key)
+                  :let [owner-ns-id (schema/schema-owner-ns-id model schema-key)
                         owned? (contains? owned-ns-ids owner-ns-id)]]
               {:id (str (name io-type) "-schema:" (name schema-key))
                :kind :io-schema
@@ -567,6 +549,21 @@
         (recur (set/union visible-set new-entities)
                updated-drill-down-map)))))
 
+(defn- compute-io-layer
+  "Compute IO nodes and data-flow edges for a container view.
+   Returns {:nodes [...] :edges [...] :io {:inputs #{} :outputs #{}}}."
+  [model entity-id all-node-ids]
+  (let [io-data (compute-io-schemas model entity-id)
+        owned-ns-ids (->> all-node-ids
+                          (filter #(= :namespace (:kind (get-in model [:nodes %]))))
+                          set)
+        input-nodes (create-io-nodes model entity-id :input (:inputs io-data) owned-ns-ids)
+        output-nodes (create-io-nodes model entity-id :output (:outputs io-data) owned-ns-ids)
+        data-flow-edges (compute-io-flow-edges model entity-id io-data all-node-ids)]
+    {:nodes (concat input-nodes output-nodes)
+     :edges data-flow-edges
+     :io io-data}))
+
 (defn- compute-container-view-impl
   "Generic container view computation. Works for any container type.
    Returns pure domain data - no selected? or highlighted? fields."
@@ -649,25 +646,14 @@
                                       :edge-type :schema-composition})
                                    schema-composition-raw)
 
-        ;; Compute IO schemas
-        io-data (compute-io-schemas model entity-id)
-
-        ;; Compute owned namespace IDs (only namespaces VISIBLE in the graph)
-        owned-ns-ids (->> all-node-ids
-                          (filter #(= :namespace (:kind (get-in model [:nodes %]))))
-                          set)
-
-        ;; Create IO container/schema nodes (orphans - positioned by JS)
-        input-nodes (create-io-nodes model entity-id :input (:inputs io-data) owned-ns-ids)
-        output-nodes (create-io-nodes model entity-id :output (:outputs io-data) owned-ns-ids)
-
-        ;; Compute data-flow edges (IO schemas <-> visible nodes)
-        data-flow-edges (compute-io-flow-edges model entity-id io-data all-node-ids)]
+        ;; Compute IO layer (synthetic IO nodes + data-flow edges)
+        io-layer (compute-io-layer model entity-id all-node-ids)]
 
     {:nodes (vec (concat [container-node] child-nodes drill-down-nodes
-                         input-nodes output-nodes))
-     :edges (vec (concat code-flow-edges schema-flow-edges schema-composition-edges data-flow-edges))
-     :io io-data}))
+                         (:nodes io-layer)))
+     :edges (vec (concat code-flow-edges schema-flow-edges schema-composition-edges
+                         (:edges io-layer)))
+     :io (:io io-layer)}))
 
 (defn- compute-container-view
   "Compute view when the entity is a container (has children).

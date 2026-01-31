@@ -38,7 +38,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Transformers
 
-(defn node->cytoscape
+(defn- node->cytoscape
   "Transform an internal view node to Cytoscape format.
    Converts Clojure idioms (kebab-case, ? predicates) to camelCase."
   [{:keys [id kind label parent selected? expandable?
@@ -59,7 +59,7 @@
     schema-key (assoc :schemaKey (name schema-key))
     (some? owned?) (assoc :isOwned owned?)))
 
-(defn edge->cytoscape
+(defn- edge->cytoscape
   "Transform an internal view edge to Cytoscape format.
    Converts :from/:to to source/target, keyword edge-type to string.
    Includes schemaKey for schema-flow edges."

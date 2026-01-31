@@ -29,9 +29,9 @@ Views are pure renderers - they don't fetch data.
 ```clojure
 ;; views.api - render functions accept projections
 (render-app-shell)                                    ; -> HTML (no args)
-(render-graph graph-projection root-node editor-state) ; -> Cytoscape JSON
+(render-graph graph-projection editor-state)           ; -> Cytoscape JSON
 (render-breadcrumb path-items)                        ; -> HTML
-(render-sidebar sidebar-data)                         ; -> HTML
+(render-sidebar-html entity-detail)                    ; -> HTML
 
 ;; sse.clj - handlers orchestrate
 (main-view-handler model request)  ; streams graph + breadcrumb + sidebar

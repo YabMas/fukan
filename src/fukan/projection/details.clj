@@ -1,7 +1,8 @@
 (ns fukan.projection.details
   "Entity details projection functions.
-   Computes dependency information for entities."
-  (:require [clojure.string :as str]))
+   Computes normalized entity detail structures for rendering."
+  (:require [clojure.string :as str]
+            [fukan.projection.schema :as proj.schema]))
 
 ;; -----------------------------------------------------------------------------
 ;; Private helpers
@@ -71,6 +72,183 @@
           freqs)))
 
 ;; -----------------------------------------------------------------------------
+;; Schema lookup
+
+(defn- get-var-schema
+  "Get the malli schema from a var's metadata, if present."
+  [ns-sym var-sym]
+  (try
+    (when-let [v (ns-resolve (find-ns ns-sym) var-sym)]
+      (:malli/schema (meta v)))
+    (catch Exception _ nil)))
+
+(defn- schema-var?
+  "Check if a var has ^:schema metadata (is a schema definition, not a function)."
+  [ns-sym var-sym]
+  (try
+    (when-let [v (ns-resolve (find-ns ns-sym) var-sym)]
+      (boolean (:schema (meta v))))
+    (catch Exception _ false)))
+
+;; -----------------------------------------------------------------------------
+;; Normalization helpers
+
+(defn- extract-description
+  "Extract description text from a node.
+   Tries :data :doc, :data :contract :description, :data :description."
+  [node]
+  (or (get-in node [:data :doc])
+      (get-in node [:data :contract :description])
+      (get-in node [:data :description])))
+
+(defn- extract-interface
+  "Extract interface data from a node based on its kind.
+   Returns {:type :items} or nil."
+  [model node]
+  (case (:kind node)
+    :folder
+    (when-let [fns (seq (get-in node [:data :contract :functions]))]
+      {:type :fn-list
+       :items (vec (sort-by :name fns))})
+
+    :namespace
+    (let [ns-sym (get-in node [:data :ns-sym])
+          children-ids (:children node)
+          public-fns (->> children-ids
+                          (map #(get-in model [:nodes %]))
+                          (filter #(= :var (:kind %)))
+                          (remove #(get-in % [:data :private?]))
+                          (remove #(schema-var? ns-sym (get-in % [:data :var-sym])))
+                          (map (fn [child]
+                                 (let [var-sym (get-in child [:data :var-sym])]
+                                   {:name (str var-sym)
+                                    :schema (get-var-schema ns-sym var-sym)
+                                    :id (:id child)})))
+                          (sort-by :name)
+                          vec)]
+      (when (seq public-fns)
+        {:type :fn-list
+         :items public-fns}))
+
+    :var
+    (let [ns-sym (get-in node [:data :ns-sym])
+          var-sym (get-in node [:data :var-sym])
+          schema (get-var-schema ns-sym var-sym)]
+      (when schema
+        {:type :fn-inline
+         :items [schema]}))
+
+    :schema
+    (let [schema-key (get-in node [:data :schema-key])
+          schema-form (proj.schema/get-schema model schema-key)]
+      (when schema-form
+        {:type :schema-def
+         :items [schema-form]}))
+
+    :interface
+    (let [fns (get-in node [:data :functions])]
+      (when (seq fns)
+        {:type :name-list
+         :items (vec fns)}))
+
+    nil))
+
+(defn- extract-fn-io
+  "Extract input and output schema references from a function schema.
+   Expects schema in form [:=> [:cat input1 input2 ...] output].
+   Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil."
+  [model fn-schema]
+  (when (and (vector? fn-schema) (= :=> (first fn-schema)))
+    (let [[_ input output] fn-schema
+          in-schemas (if (and (vector? input) (= :cat (first input)))
+                       (rest input)
+                       [input])]
+      {:inputs (into #{} (mapcat #(proj.schema/extract-schema-refs model %) in-schemas))
+       :outputs (proj.schema/extract-schema-refs model output)})))
+
+(defn- extract-dataflow
+  "Extract dataflow (input/output schema types) for an entity.
+   For :folder — aggregates across contract function schemas.
+   For :namespace — aggregates across public var function schemas.
+   For :var — extracts from the single var's function schema.
+   Returns {:inputs [{:key k}] :outputs [{:key k}]} or nil."
+  [model node]
+  (let [aggregate (fn [ios]
+                    (let [{:keys [inputs outputs]}
+                          (reduce (fn [acc {:keys [inputs outputs]}]
+                                    (-> acc
+                                        (update :inputs into (or inputs #{}))
+                                        (update :outputs into (or outputs #{}))))
+                                  {:inputs #{} :outputs #{}}
+                                  ios)]
+                      (when (or (seq inputs) (seq outputs))
+                        {:inputs (->> inputs sort (mapv (fn [k] {:key k})))
+                         :outputs (->> outputs sort (mapv (fn [k] {:key k})))})))]
+    (case (:kind node)
+      :folder
+      (when-let [fns (seq (get-in node [:data :contract :functions]))]
+        (aggregate (keep #(extract-fn-io model (:schema %)) fns)))
+
+      :namespace
+      (let [ns-sym (get-in node [:data :ns-sym])
+            children-ids (:children node)
+            ios (->> children-ids
+                     (map #(get-in model [:nodes %]))
+                     (filter #(= :var (:kind %)))
+                     (remove #(get-in % [:data :private?]))
+                     (remove #(schema-var? ns-sym (get-in % [:data :var-sym])))
+                     (keep (fn [child]
+                             (let [var-sym (get-in child [:data :var-sym])]
+                               (get-var-schema ns-sym var-sym))))
+                     (keep #(extract-fn-io model %)))]
+        (aggregate ios))
+
+      :var
+      (let [ns-sym (get-in node [:data :ns-sym])
+            var-sym (get-in node [:data :var-sym])
+            schema (get-var-schema ns-sym var-sym)]
+        (when schema
+          (when-let [{:keys [inputs outputs]} (extract-fn-io model schema)]
+            (when (or (seq inputs) (seq outputs))
+              {:inputs (->> inputs sort (mapv (fn [k] {:key k})))
+               :outputs (->> outputs sort (mapv (fn [k] {:key k})))}))))
+
+      nil)))
+
+(defn- extract-schemas
+  "Extract schema references relevant to this entity.
+   Returns a vector of {:key schema-keyword} or nil."
+  [model node]
+  (case (:kind node)
+    :namespace
+    (let [ns-schemas (proj.schema/schemas-for-ns model (:label node))]
+      (when (seq ns-schemas)
+        (->> ns-schemas sort (mapv (fn [k] {:key k})))))
+
+    :var
+    (let [ns-sym (get-in node [:data :ns-sym])
+          var-sym (get-in node [:data :var-sym])
+          schema (get-var-schema ns-sym var-sym)]
+      (when schema
+        (let [refs (proj.schema/extract-schema-refs model schema)]
+          (when (seq refs)
+            (->> refs sort (mapv (fn [k] {:key k})))))))
+
+    nil))
+
+(defn- normalize-entity
+  "Assemble the normalized entity detail map."
+  [model node deps dependents]
+  {:label       (:label node)
+   :kind        (:kind node)
+   :description (extract-description node)
+   :interface   (extract-interface model node)
+   :schemas     (extract-schemas model node)
+   :dataflow    (extract-dataflow model node)
+   :deps        deps
+   :dependents  dependents})
+
+;; -----------------------------------------------------------------------------
 ;; Edge Details
 
 (defn- parse-edge-id
@@ -85,14 +263,6 @@
         {:from-id (first parts)
          :to-id (second parts)
          :edge-type (keyword (nth parts 2))}))))
-
-(defn- get-var-schema
-  "Get the malli schema from a var's metadata, if present."
-  [ns-sym var-sym]
-  (try
-    (when-let [v (ns-resolve (find-ns ns-sym) var-sym)]
-      (:malli/schema (meta v)))
-    (catch Exception _ nil)))
 
 (defn- compute-underlying-edges
   "Find all var-level edges that aggregate to this visible edge.
@@ -128,22 +298,22 @@
          vec)))
 
 (defn- compute-edge-details
-  "Compute details for an edge entity.
-   Returns data structure suitable for edge sidebar rendering."
+  "Compute normalized details for an edge entity.
+   Returns {:label :kind :edge :called-fns [...]}"
   [model edge-id]
-  (when-let [{:keys [from-id to-id edge-type]} (parse-edge-id edge-id)]
+  (when-let [{:keys [from-id to-id]} (parse-edge-id edge-id)]
     (let [from-node (get-in model [:nodes from-id])
           to-node (get-in model [:nodes to-id])
-          underlying-edges (compute-underlying-edges model from-id to-id)]
-      {:node {:kind :edge
-              :label (str (:label from-node) " → " (:label to-node))
-              :data {:from-id from-id
-                     :to-id to-id
-                     :from-label (:label from-node)
-                     :to-label (:label to-node)
-                     :edge-type edge-type}}
-       :underlying-edges underlying-edges
-       :total-count (count underlying-edges)})))
+          underlying-edges (compute-underlying-edges model from-id to-id)
+          called-fns (->> underlying-edges
+                          (map :to-var)
+                          (distinct)
+                          (sort-by :label)
+                          (mapv (fn [{:keys [id label signature]}]
+                                  {:name label :schema signature :id id})))]
+      {:label      (str (:label from-node) " → " (:label to-node))
+       :kind       :edge
+       :called-fns called-fns})))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
@@ -156,33 +326,55 @@
 (def ^:schema EntityDeps
   [:map-of :string :EntityDepInfo])
 
-(def ^:schema EntityDetails
+(def ^:schema InterfaceData
   [:map
-   [:node [:maybe :Node]]
-   [:deps [:maybe :EntityDeps]]
-   [:dependents [:maybe :EntityDeps]]])
+   [:type [:enum :fn-list :fn-inline :schema-def :name-list]]
+   [:items :any]])
+
+(def ^:schema SchemaRef
+  [:map [:key :keyword]])
+
+(def ^:schema DataflowData
+  [:map
+   [:inputs [:vector :SchemaRef]]
+   [:outputs [:vector :SchemaRef]]])
+
+(def ^:schema EntityDetails
+  [:or
+   ;; Node entity detail
+   [:map
+    [:label :string]
+    [:kind [:enum :folder :namespace :var :schema :interface]]
+    [:description [:maybe :string]]
+    [:interface [:maybe :InterfaceData]]
+    [:schemas [:maybe [:vector :SchemaRef]]]
+    [:dataflow [:maybe :DataflowData]]
+    [:deps :EntityDeps]
+    [:dependents :EntityDeps]]
+   ;; Edge entity detail
+   [:map
+    [:label :string]
+    [:kind [:= :edge]]
+    [:called-fns [:vector :any]]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Public API
 
 (defn entity-details
-  "Compute the details for an entity (node or edge).
+  "Compute normalized details for an entity (node or edge).
    Edge IDs have format: edge~from-id~to-id~edge-type
 
-   For nodes, returns {:node :deps :dependents} map where:
-   - :node is the model node
-   - :deps is {target-id -> {:count n :label str}} for dependencies
-   - :dependents is {source-id -> {:count n :label str}} for dependents
+   For nodes, returns a normalized map:
+     {:label :kind :description :interface :schemas :deps :dependents}
 
-   For edges, returns {:node :underlying-edges :total-count} where:
-   - :node is a synthetic node with :kind :edge
-   - :underlying-edges is a vector of caller→callee pairs
-   - :total-count is the number of underlying edges"
+   For edges, returns:
+     {:label :kind :edge :called-fns [{:name :schema :id}]}"
   {:malli/schema [:=> [:cat :Model :string] :EntityDetails]}
   [model entity-id]
   (if (str/starts-with? (or entity-id "") "edge~")
     (compute-edge-details model entity-id)
     (let [node (get-in model [:nodes entity-id])]
-      {:node node
-       :deps (when node (compute-deps model entity-id))
-       :dependents (when node (compute-dependents model entity-id))})))
+      (when node
+        (let [deps (compute-deps model entity-id)
+              dependents (compute-dependents model entity-id)]
+          (normalize-entity model node deps dependents))))))

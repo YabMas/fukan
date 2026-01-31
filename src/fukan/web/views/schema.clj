@@ -1,7 +1,6 @@
 (ns fukan.web.views.schema
   "Render Malli schemas to HTML/hiccup."
-  (:require [hiccup2.core :as h]
-            [clojure.string :as str]))
+  (:require [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema Rendering - Direct rendering of Malli schemas to hiccup
@@ -82,7 +81,7 @@
        " : "
        (render-schema-form child-schema)])))
 
-(defn- render-schema-detail-view
+(defn render-schema-detail-view
   "Render the full detail view for a schema form."
   [schema-form]
   (if (and (vector? schema-form) (= :map (first schema-form)))
@@ -91,39 +90,3 @@
     ;; Other schema types - show inline
     [:div (render-schema-form schema-form)]))
 
-;; -----------------------------------------------------------------------------
-;; Public API
-
-(defn render-schema-list
-  "Render the schemas section for a namespace sidebar.
-   Returns nil if no schemas exist.
-   Takes a collection of schema keys for the namespace."
-  [ns-schemas]
-  (when (seq ns-schemas)
-    (list
-      [:h5 "Schemas " [:span.dep-count (str "(" (count ns-schemas) ")")]]
-      [:ul.schema-list
-       (for [schema-key (sort ns-schemas)]
-         [:li {"data-on:click" (str "@get('/sse/schema?id=" (namespace schema-key) "/" (name schema-key) "')")}
-          (name schema-key)])])))
-
-(defn render-schema-detail
-  "Render the sidebar for viewing a schema definition.
-   Takes a schema key string like 'fukan.model/Model' and the pre-computed schema form."
-  [schema-key-str schema-form]
-  (let [[ns-part name-part] (str/split schema-key-str #"/" 2)]
-    (str
-     (h/html
-      (if schema-form
-        [:div#node-info
-         ;; Back link to namespace
-         [:span.back-link
-          {"data-on:click" (str "@get('/sse/view?id=ns:" ns-part "')")}
-          (str "← " ns-part)]
-
-         [:h4 name-part]
-
-         [:div.schema-detail
-          (render-schema-detail-view schema-form)]]
-        [:div#node-info
-         [:p.empty-state (str "Schema not found: " schema-key-str)]])))))
