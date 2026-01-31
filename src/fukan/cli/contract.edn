@@ -1,0 +1,5 @@
+{:description "CLI interfaces for codebase exploration: stdin session loop and stateful REPL gateway."
+ :functions
+ [fukan.cli.explorer/start-session
+  fukan.cli.gateway/exec
+  fukan.cli.gateway/reset-session]}

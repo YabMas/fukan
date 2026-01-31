@@ -36,6 +36,7 @@
   "Start the CLI explorer session.
    Reads commands from stdin, writes EDN to stdout.
    All diagnostic output goes to stderr."
+  {:malli/schema [:=> [:cat :Model :string] :nil]}
   [model src-path]
   (let [state (atom (init-state model src-path))]
     (print-init model src-path)

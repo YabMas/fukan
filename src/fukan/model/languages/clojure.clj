@@ -85,6 +85,7 @@
 
    This is a pure function that reads metadata from the runtime - it does
    not mutate any global state."
+  {:malli/schema [:=> [:cat] :map]}
   []
   (let [;; First pass: collect all schema names
         all-schemas (->> (all-ns)
@@ -120,6 +121,7 @@
    as returned by discover-schema-data.
 
    Returns a map of {schema-node-id -> node}."
+  {:malli/schema [:=> [:cat :map :map] :map]}
   [ns-index schema-data]
   (->> schema-data
        (map (fn [[k {:keys [schema-form owner-ns schema-refs]}]]

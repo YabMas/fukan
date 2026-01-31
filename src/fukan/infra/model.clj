@@ -18,6 +18,7 @@
 
 (defn load-model
   "Build model from src path and store it. Returns the model."
+  {:malli/schema [:=> [:cat :string] :Model]}
   [src]
   (println "Analyzing" src "...")
   (let [m (build-model src)]
@@ -27,12 +28,14 @@
 
 (defn get-model
   "Get the current model. Returns nil if not loaded."
+  {:malli/schema [:=> [:cat] [:maybe :Model]]}
   []
   (:model @state))
 
 (defn refresh-model
   "Rebuild model from the last src path. Returns the model.
    Returns nil if no src path was previously set."
+  {:malli/schema [:=> [:cat] [:maybe :Model]]}
   []
   (if-let [src (:src @state)]
     (load-model src)
@@ -42,5 +45,6 @@
 
 (defn get-src
   "Get the current src path. Returns nil if not loaded."
+  {:malli/schema [:=> [:cat] [:maybe :string]]}
   []
   (:src @state))

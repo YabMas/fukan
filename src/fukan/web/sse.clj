@@ -11,7 +11,6 @@
             [fukan.projection.graph :as proj.graph]
             [fukan.projection.details :as proj.details]
             [fukan.projection.path :as proj.path]
-            [fukan.projection.schema :as proj.schema]
             [cheshire.core :as json]
             [clojure.string :as str]))
 
@@ -144,7 +143,7 @@
                           (let [params (:query-params request)
                                 schema-id (get params "id")
                                 schema-key (keyword schema-id)
-                                node-id (proj.schema/find-schema-node-id model schema-key)
+                                node-id (proj.path/find-schema-node-id model schema-key)
                                 sidebar-data (compute-sidebar-data model node-id)]
                             (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data))
                             ;; Update URL with schema

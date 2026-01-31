@@ -14,6 +14,7 @@
   "Execute a CLI command string. Returns the response EDN map.
    Session state (view-id, history, expanded) persists between calls.
    Model is fetched fresh on each call."
+  {:malli/schema [:=> [:cat :string] :map]}
   [input]
   (let [model (infra-model/get-model)]
     (when-not model
@@ -28,6 +29,7 @@
 
 (defn reset-session
   "Clear session state back to root. Returns :ok."
+  {:malli/schema [:=> [:cat] :keyword]}
   []
   (reset! session {:view-id nil
                    :history []

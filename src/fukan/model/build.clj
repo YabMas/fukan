@@ -90,7 +90,7 @@
     (update-in nodes [parent-id :children] conj child-id)
     nodes))
 
-(defn wire-children
+(defn- wire-children
   "Wire up parent-child relationships based on :parent fields."
   [nodes]
   (reduce (fn [acc [id node]]
@@ -274,18 +274,24 @@
 (defn- resolve-fn-ref
   "Resolve a qualified symbol to {:name :schema}.
    Requires the namespace if not already loaded.
-   Returns nil if var not found or has no schema."
+   Throws if the var is missing or has no :malli/schema metadata."
   [sym]
   (let [ns-sym (symbol (namespace sym))
         var-sym (symbol (name sym))]
     (try
       (require ns-sym)
       (catch Exception _ nil))
-    (when-let [ns-obj (find-ns ns-sym)]
-      (when-let [v (ns-resolve ns-obj var-sym)]
-        (when-let [schema (:malli/schema (meta v))]
-          {:name (name var-sym)
-           :schema schema})))))
+    (let [ns-obj (or (find-ns ns-sym)
+                     (throw (ex-info (str "Contract references unknown namespace: " ns-sym)
+                                     {:sym sym :ns ns-sym})))
+          v      (or (ns-resolve ns-obj var-sym)
+                     (throw (ex-info (str "Contract references unknown var: " sym)
+                                     {:sym sym})))
+          schema (or (:malli/schema (meta v))
+                     (throw (ex-info (str "Contract function missing :malli/schema metadata: " sym)
+                                     {:sym sym})))]
+      {:name (name var-sym)
+       :schema schema})))
 
 (defn- read-contract-file
   "Read contract.edn from a directory path if present.
@@ -297,9 +303,7 @@
         (let [raw (edn/read-string (slurp file))]
           (update raw :functions
                   (fn [fns]
-                    (->> fns
-                         (keep resolve-fn-ref)
-                         vec))))))))
+                    (mapv resolve-fn-ref fns))))))))
 
 (defn- infer-namespace-contract
   "Infer a contract for a namespace from public vars with malli schemas."
