@@ -1,0 +1,291 @@
+(ns fukan.cli.commands
+  "CLI command implementations.
+   Each command takes [model state args] and returns
+   {:response <edn-map> :state-update <fn-or-nil>}."
+  (:require [clojure.string :as str]
+            [fukan.projection.graph :as graph]
+            [fukan.projection.details :as details]
+            [fukan.projection.path :as path]))
+
+;; -----------------------------------------------------------------------------
+;; Helpers
+
+(defn- current-view-id
+  "Get the current view-id, falling back to root."
+  [model state]
+  (or (:view-id state)
+      (:id (path/find-root-node model))))
+
+(defn- entity-exists? [model id]
+  (some? (get-in model [:nodes id])))
+
+(defn- container? [model id]
+  (seq (get-in model [:nodes id :children])))
+
+(defn- build-path [model view-id]
+  (vec (path/entity-path model view-id)))
+
+(defn- project-graph [model state]
+  (graph/entity-graph model {:view-id (current-view-id model state)
+                             :expanded-containers (:expanded state)}))
+
+(defn- node-summary
+  "Summarize a projection node for ls output."
+  [n]
+  (cond-> {:id (:id n)
+           :kind (:kind n)
+           :label (:label n)
+           :expandable? (:expandable? n)
+           :child-count (:child-count n)}
+    (:private? n) (assoc :private? true)))
+
+;; -----------------------------------------------------------------------------
+;; Commands
+
+(defn cmd-ls
+  "List children and edges at current view."
+  [model state _args]
+  (let [view-id (current-view-id model state)
+        view-node (get-in model [:nodes view-id])
+        proj (project-graph model state)
+        ;; Children are nodes whose parent is the view-id
+        children (->> (:nodes proj)
+                      (filter #(= view-id (:parent %)))
+                      (sort-by :label)
+                      (mapv node-summary))
+        ;; Edges between children (exclude IO synthetic nodes)
+        child-ids (into #{} (map :id children))
+        edges (->> (:edges proj)
+                   (filter #(or (contains? child-ids (:from %))
+                                (contains? child-ids (:to %))))
+                   (mapv #(select-keys % [:from :to :edge-type])))]
+    {:response (cond-> {:ok true
+                        :command :ls
+                        :path (build-path model view-id)
+                        :view-id view-id
+                        :view-label (:label view-node)
+                        :view-kind (:kind view-node)
+                        :children children
+                        :edges edges}
+                 (:io proj) (assoc :io (:io proj)))}))
+
+(defn cmd-cd
+  "Navigate into a container or up to parent."
+  [model state args]
+  (let [target (first args)]
+    (cond
+      ;; cd .. — go to parent
+      (= target "..")
+      (let [view-id (current-view-id model state)
+            parent (:parent (get-in model [:nodes view-id]))]
+        (if parent
+          {:response {:ok true :command :cd :view-id parent
+                      :path (build-path model parent)}
+           :state-update #(-> %
+                              (assoc :view-id parent)
+                              (update :history conj view-id))}
+          {:response {:ok false :command :cd
+                      :error "Already at root."}}))
+
+      ;; cd <id>
+      (some? target)
+      (cond
+        (not (entity-exists? model target))
+        {:response {:ok false :command :cd
+                    :error (str "Entity not found: " target)
+                    :entity-id target}}
+
+        (not (container? model target))
+        {:response {:ok false :command :cd
+                    :error "Cannot navigate into leaf entity. Use 'info' instead."
+                    :entity-id target}}
+
+        :else
+        (let [old-view (current-view-id model state)]
+          {:response {:ok true :command :cd :view-id target
+                      :path (build-path model target)}
+           :state-update #(-> %
+                              (assoc :view-id target)
+                              (update :history conj old-view))}))
+
+      :else
+      {:response {:ok false :command :cd
+                  :error "Usage: cd <entity-id> or cd .."}})))
+
+(defn cmd-back
+  "Pop history stack and navigate to previous view."
+  [model state _args]
+  (let [history (:history state)]
+    (if (seq history)
+      (let [prev (peek history)]
+        {:response {:ok true :command :back :view-id prev
+                    :path (build-path model prev)}
+         :state-update #(-> %
+                            (assoc :view-id prev)
+                            (update :history pop))})
+      {:response {:ok false :command :back
+                  :error "No history to go back to."}})))
+
+(defn cmd-info
+  "Entity details (sidebar equivalent)."
+  [model _state args]
+  (let [entity-id (first args)]
+    (if (nil? entity-id)
+      {:response {:ok false :command :info
+                  :error "Usage: info <entity-id>"}}
+      (if-let [d (details/entity-details model entity-id)]
+        {:response (merge {:ok true :command :info :entity-id entity-id} d)}
+        {:response {:ok false :command :info
+                    :error (str "Entity not found: " entity-id)
+                    :entity-id entity-id}}))))
+
+(defn cmd-graph
+  "Full raw projection at current level."
+  [model state _args]
+  (let [proj (project-graph model state)]
+    {:response {:ok true :command :graph
+                :view-id (current-view-id model state)
+                :nodes (:nodes proj)
+                :edges (:edges proj)
+                :io (:io proj)}}))
+
+(defn cmd-find
+  "Search nodes by label (case-insensitive, max 50)."
+  [model _state args]
+  (let [pattern (str/join " " args)]
+    (if (str/blank? pattern)
+      {:response {:ok false :command :find
+                  :error "Usage: find <pattern>"}}
+      (let [pat (str/lower-case pattern)
+            matches (->> (vals (:nodes model))
+                         (filter #(str/includes? (str/lower-case (:label %)) pat))
+                         (take 50)
+                         (mapv (fn [n]
+                                 {:id (:id n)
+                                  :kind (:kind n)
+                                  :label (:label n)
+                                  :parent (:parent n)})))]
+        {:response {:ok true :command :find
+                    :pattern pattern
+                    :count (count matches)
+                    :results matches}}))))
+
+(defn cmd-deps
+  "Dependencies and dependents for an entity."
+  [model _state args]
+  (let [entity-id (first args)]
+    (if (nil? entity-id)
+      {:response {:ok false :command :deps
+                  :error "Usage: deps <entity-id>"}}
+      (if-let [d (details/entity-details model entity-id)]
+        {:response {:ok true :command :deps :entity-id entity-id
+                    :deps (:deps d)
+                    :dependents (:dependents d)}}
+        {:response {:ok false :command :deps
+                    :error (str "Entity not found: " entity-id)
+                    :entity-id entity-id}}))))
+
+(defn cmd-path
+  "Current breadcrumb path."
+  [model state _args]
+  (let [view-id (current-view-id model state)]
+    {:response {:ok true :command :path
+                :path (build-path model view-id)}}))
+
+(defn cmd-expand
+  "Toggle private children visibility — expand."
+  [model state args]
+  (let [entity-id (first args)]
+    (cond
+      (nil? entity-id)
+      {:response {:ok false :command :expand
+                  :error "Usage: expand <entity-id>"}}
+
+      (not (entity-exists? model entity-id))
+      {:response {:ok false :command :expand
+                  :error (str "Entity not found: " entity-id)
+                  :entity-id entity-id}}
+
+      :else
+      {:response {:ok true :command :expand :entity-id entity-id}
+       :state-update #(update % :expanded conj entity-id)})))
+
+(defn cmd-collapse
+  "Toggle private children visibility — collapse."
+  [model state args]
+  (let [entity-id (first args)]
+    (cond
+      (nil? entity-id)
+      {:response {:ok false :command :collapse
+                  :error "Usage: collapse <entity-id>"}}
+
+      (not (entity-exists? model entity-id))
+      {:response {:ok false :command :collapse
+                  :error (str "Entity not found: " entity-id)
+                  :entity-id entity-id}}
+
+      :else
+      {:response {:ok true :command :collapse :entity-id entity-id}
+       :state-update #(update % :expanded disj entity-id)})))
+
+(defn cmd-overview
+  "Model summary stats."
+  [model state _args]
+  (let [nodes (vals (:nodes model))
+        by-kind (frequencies (map :kind nodes))]
+    {:response {:ok true :command :overview
+                :src (:src state)
+                :total-nodes (count nodes)
+                :total-edges (count (:edges model))
+                :by-kind by-kind}}))
+
+(defn cmd-help
+  "List commands with usage."
+  [_model _state _args]
+  {:response {:ok true :command :help
+              :commands [{:name "ls" :usage "ls" :description "List children and edges at current view"}
+                         {:name "cd" :usage "cd <id> | cd .." :description "Navigate into container or up to parent"}
+                         {:name "back" :usage "back" :description "Navigate to previous view (pop history)"}
+                         {:name "info" :usage "info <id>" :description "Entity details (sidebar equivalent)"}
+                         {:name "graph" :usage "graph" :description "Full raw projection at current level"}
+                         {:name "find" :usage "find <pattern>" :description "Search nodes by label (case-insensitive, max 50)"}
+                         {:name "deps" :usage "deps <id>" :description "Dependencies and dependents for an entity"}
+                         {:name "path" :usage "path" :description "Current breadcrumb path"}
+                         {:name "expand" :usage "expand <id>" :description "Show private children of a container"}
+                         {:name "collapse" :usage "collapse <id>" :description "Hide private children of a container"}
+                         {:name "overview" :usage "overview" :description "Model summary stats"}
+                         {:name "help" :usage "help" :description "List commands with usage"}
+                         {:name "quit" :usage "quit" :description "Exit"}]}})
+
+;; -----------------------------------------------------------------------------
+;; Dispatch
+
+(def ^:private dispatch-table
+  {"ls"       cmd-ls
+   "cd"       cmd-cd
+   "back"     cmd-back
+   "info"     cmd-info
+   "graph"    cmd-graph
+   "find"     cmd-find
+   "deps"     cmd-deps
+   "path"     cmd-path
+   "expand"   cmd-expand
+   "collapse" cmd-collapse
+   "overview" cmd-overview
+   "help"     cmd-help})
+
+(defn parse-input
+  "Parse a line of input into {:command \"name\" :args [\"arg1\" ...]}."
+  [line]
+  (when-not (str/blank? line)
+    (let [parts (str/split (str/trim line) #"\s+")]
+      {:command (first parts)
+       :args (vec (rest parts))})))
+
+(defn dispatch
+  "Dispatch a parsed command. Returns {:response :state-update}."
+  [model state {:keys [command args]}]
+  (if-let [handler (get dispatch-table command)]
+    (handler model state args)
+    {:response {:ok false :command (keyword (or command "nil"))
+                :error (str "Unknown command: " command ". Type 'help' for usage.")}}))
