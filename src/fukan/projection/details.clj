@@ -254,7 +254,7 @@
 (defn- parse-edge-id
   "Parse an edge ID into components.
    Edge ID format: edge~{from-id}~{to-id}~{edge-type}
-   Uses ~ as delimiter since it's URL-safe and won't appear in UUIDs.
+   Uses ~ as delimiter since it's URL-safe and won't appear in node IDs.
    Returns {:from-id :to-id :edge-type} or nil if invalid."
   [edge-id]
   (when (str/starts-with? edge-id "edge~")

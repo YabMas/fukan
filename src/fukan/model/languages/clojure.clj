@@ -3,8 +3,7 @@
    Includes clj-kondo analysis and Malli schema node building."
   (:require [clojure.java.shell :as shell]
             [clojure.edn :as edn]
-            [clojure.repl :as repl]
-            [fukan.model.build :as build]))
+            [clojure.repl :as repl]))
 
 ;; -----------------------------------------------------------------------------
 ;; Static Analysis
@@ -124,7 +123,7 @@
   [ns-index schema-data]
   (->> schema-data
        (map (fn [[k {:keys [schema-form owner-ns schema-refs]}]]
-              (let [id (build/gen-id)
+              (let [id (str "schema:" (clojure.core/name k))
                     owner-ns-sym (when owner-ns (symbol owner-ns))
                     parent-ns-id (get ns-index owner-ns-sym)]
                 [id {:id id

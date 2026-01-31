@@ -3,12 +3,15 @@
    Generic renderer dispatches on normalized entity detail shape."
   (:require [hiccup2.core :as h]
             [clojure.string :as str]
-            [fukan.web.views.schema :as views.schema]))
+            [fukan.web.views.schema :as views.schema])
+  (:import [java.net URLEncoder]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
 (def ^:schema Html :string)
+
+(defn- url-encode [s] (URLEncoder/encode (str s) "UTF-8"))
 
 ;; -----------------------------------------------------------------------------
 ;; Plain-text schema helpers
@@ -53,7 +56,7 @@
   [:ul
    (for [{:keys [name schema id]} fns]
      (let [attrs (when id
-                   {"data-on:click" (str "@get('/sse/view?select=" id "')")})]
+                   {"data-on:click" (str "@get('/sse/view?select=" (url-encode id) "')")})]
        [:li attrs
         name
         (when-let [sig (fn-signature-str schema)]
@@ -67,7 +70,7 @@
    (if (seq items)
      [:ul
       (for [[target-id {:keys [count label]}] items]
-        [:li {"data-on:click" (str "@get('/sse/view?select=" target-id "')")}
+        [:li {"data-on:click" (str "@get('/sse/view?select=" (url-encode target-id) "')")}
          label
          (when (> count 1)
            [:span.dep-count (str " (" count ")")])])]
@@ -83,7 +86,7 @@
   "Build the SSE schema click URL for a schema keyword.
    Handles both qualified (:ns/Name) and unqualified (:Name) keywords."
   [key]
-  (str "@get('/sse/schema?id=" (subs (str key) 1) "')"))
+  (str "@get('/sse/schema?id=" (url-encode (subs (str key) 1)) "')"))
 
 (defn- render-schema-refs
   "Render a clickable schema reference list. Returns nil if schemas is nil."

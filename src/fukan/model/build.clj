@@ -81,14 +81,6 @@
    [:edges [:vector Edge]]])
 
 ;; -----------------------------------------------------------------------------
-;; ID Generation
-
-(defn gen-id
-  "Generate a UUID for a node."
-  []
-  (str (random-uuid)))
-
-;; -----------------------------------------------------------------------------
 ;; Tree Operations
 
 (defn- add-child-to-parent
@@ -200,7 +192,7 @@
   [ns-defs]
   (let [all-dirs (extract-all-dirs ns-defs)]
     (reduce (fn [acc dir-path]
-              (let [id (gen-id)
+              (let [id dir-path
                     label (last (str/split dir-path #"/"))
                     parent-path (dir-parent dir-path)
                     parent-id (get-in acc [:index parent-path])
@@ -232,7 +224,7 @@
    Returns {:nodes {id -> node}, :index {ns-sym -> id}}."
   [ns-defs folder-index]
   (reduce (fn [acc {:keys [name filename doc]}]
-            (let [id (gen-id)
+            (let [id (str name)
                   folder-path (file-to-folder filename)
                   parent-id (get folder-index folder-path)
                   node {:id id
@@ -257,7 +249,7 @@
    Returns {:nodes {id -> node}, :index {[ns-sym var-name] -> id}}."
   [var-defs ns-index]
   (reduce (fn [acc {:keys [ns name filename row doc private]}]
-            (let [id (gen-id)
+            (let [id (str ns "/" name)
                   parent-id (get ns-index ns)
                   node {:id id
                         :kind :var
