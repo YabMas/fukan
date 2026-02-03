@@ -40,6 +40,7 @@
   []
   (if-let [src (infra-model/get-src)]
     (let [port (or (infra-server/get-port) 8080)]
+      (reload/reload)
       (stop)
       (start {:src src :port port}))
     (println "No previous configuration. Use (start {:src \"path\"}) instead.")))
@@ -50,6 +51,7 @@
   []
   (if (infra-server/running?)
     (do
+      (reload/reload)
       (infra-model/refresh-model)
       (println "Model refreshed. Browser will see changes on next request."))
     (println "Server not running. Use (start {:src \"path\"}) first.")))

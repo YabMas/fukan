@@ -83,10 +83,9 @@ The sidebar renders a **normalized entity detail** structure from the projection
 
 1. **Label** — entity name + kind badge
 2. **Description** — from doc, contract description, or data description (when available)
-3. **Interface** — dispatches by `:type` to sub-renderers (when available). For container entities with `:fn-list` interface type, dataflow IO types (inputs/outputs) are rendered as subsections within the Public API heading, before the functions list.
-4. **Schemas** — clickable schema references (when available)
-5. **Dependencies** — entities this one depends on (always, shows "None" if empty)
-6. **Dependents** — entities that depend on this one (always, shows "None" if empty)
+3. **Interface** — dispatches by `:type` to sub-renderers (when available). For containers (`:fn-list`), renders Inputs, Outputs, and Public API as sibling top-level sections. For leaves (`:fn-inline`), renders Inputs and Outputs only.
+4. **Dependencies** — entities this one depends on (always, shows "None" if empty)
+5. **Dependents** — entities that depend on this one (always, shows "None" if empty)
 
 ### Edge entities
 
@@ -97,5 +96,4 @@ Edges show: label + called functions list. They use shared components (`render-f
 - `render-fn-list` — function list with optional signatures and click handlers
 - `render-dep-list` — dependency/dependent section with heading and counts
 - `render-description` — description text block
-- `render-schema-refs` — clickable schema reference list
 - `render-interface` — dispatches to sub-renderers by interface type

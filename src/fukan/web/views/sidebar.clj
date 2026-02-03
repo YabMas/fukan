@@ -85,53 +85,42 @@
   [key]
   (str "@get('/sse/schema?id=" (url-encode (subs (str key) 1)) "')"))
 
-(defn- render-schema-refs
-  "Render a clickable schema reference list. Returns nil if schemas is nil."
-  [schemas]
-  (when (seq schemas)
-    (list
-     [:h5 "Schemas " [:span.dep-count (str "(" (count schemas) ")")]]
-     [:ul.schema-list
-      (for [{:keys [key]} (sort-by :key schemas)]
-        [:li {"data-on:click" (schema-click-url key)}
-         (name key)])])))
-
 (defn- render-io-sections
   "Render input and output schema type lists.
-   Returns nil if both empty."
+   Always renders both headings with counts; shows 'None' when empty."
   [{:keys [inputs outputs]}]
-  (when (or (seq inputs) (seq outputs))
-    (list
-     (when (seq inputs)
-       (list
-        [:h6 "Inputs"]
-        [:ul
-         (for [{:keys [key]} inputs]
-           [:li {"data-on:click" (schema-click-url key)}
-            (name key)])]))
-     (when (seq outputs)
-       (list
-        [:h6 "Outputs"]
-        [:ul
-         (for [{:keys [key]} outputs]
-           [:li {"data-on:click" (schema-click-url key)}
-            (name key)])])))))
+  (list
+   [:h5 "Inputs " [:span.dep-count (str "(" (count inputs) ")")]]
+   (if (seq inputs)
+     [:ul
+      (for [{:keys [key]} inputs]
+        [:li {"data-on:click" (schema-click-url key)}
+         (name key)])]
+     [:p.empty-state "None"])
+   [:h5 "Outputs " [:span.dep-count (str "(" (count outputs) ")")]]
+   (if (seq outputs)
+     [:ul
+      (for [{:keys [key]} outputs]
+        [:li {"data-on:click" (schema-click-url key)}
+         (name key)])]
+     [:p.empty-state "None"])))
 
 (defn- render-interface
   "Render the interface section based on its type.
    Dispatches to the appropriate sub-renderer.
-   For :fn-list, nests IO types and functions under Public API."
+   Containers (:fn-list) show Inputs, Outputs, and Public API.
+   Leaves (:fn-inline) show Inputs and Outputs only.
+   Schema defs and name-lists render their own content without IO sections."
   [{:keys [type items]} dataflow]
   (case type
     :fn-list
     (list
-     [:h5 "Public API " [:span.dep-count (str "(" (count items) ")")]]
      (render-io-sections dataflow)
-     [:h6 "Functions"]
+     [:h5 "Public API " [:span.dep-count (str "(" (count items) ")")]]
      (render-fn-list items))
 
     :fn-inline
-    (views.schema/render-fn-signature (first items))
+    (render-io-sections dataflow)
 
     :schema-def
     [:div.schema-detail
@@ -162,8 +151,8 @@
 
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
-   Iterates through sections in order: label, description, interface, schemas, deps, dependents."
-  [{:keys [label kind parent description interface schemas dataflow deps dependents]}]
+   Iterates through sections in order: label, description, interface, deps, dependents."
+  [{:keys [label kind parent description interface dataflow deps dependents]}]
   (str
    (h/html
     [:div#node-info
@@ -176,8 +165,6 @@
 
      (when interface
        (render-interface interface dataflow))
-
-     (render-schema-refs schemas)
 
      (render-dep-list "Dependencies" deps)
      (render-dep-list "Dependents" dependents)])))
@@ -207,4 +194,3 @@
       (render-edge-detail entity-detail)
       (render-entity-detail entity-detail))
     (render-empty-sidebar)))
-

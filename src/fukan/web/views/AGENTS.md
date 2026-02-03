@@ -63,4 +63,4 @@ The sidebar uses a **generic renderer** (`render-entity-detail`) for all non-edg
 
 **No type-specific renderers.** The `:interface` section dispatches by `:type` field (`:fn-list`, `:fn-inline`, `:schema-def`, `:name-list`) — this is data-driven, not kind-driven.
 
-Shared components: `render-fn-list`, `render-dep-list`, `render-description`, `render-schema-refs`, `render-interface`.
+Shared components: `render-fn-list`, `render-dep-list`, `render-description`, `render-interface`.
