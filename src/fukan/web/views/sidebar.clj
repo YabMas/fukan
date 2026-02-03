@@ -6,10 +6,7 @@
             [fukan.web.views.schema :as views.schema])
   (:import [java.net URLEncoder]))
 
-;; -----------------------------------------------------------------------------
-;; Schemas
-
-(def ^:schema Html :string)
+;; Html schema defined in fukan.web.views.shell
 
 (defn- url-encode [s] (URLEncoder/encode (str s) "UTF-8"))
 
@@ -99,13 +96,12 @@
         [:li {"data-on:click" (schema-click-url key)}
          (name key)])])))
 
-(defn- render-dataflow
-  "Render a Dataflow section showing input and output schema types.
-   Returns nil if dataflow is nil."
+(defn- render-io-sections
+  "Render input and output schema type lists.
+   Returns nil if both empty."
   [{:keys [inputs outputs]}]
   (when (or (seq inputs) (seq outputs))
     (list
-     [:h5 "Dataflow"]
      (when (seq inputs)
        (list
         [:h6 "Inputs"]
@@ -123,12 +119,15 @@
 
 (defn- render-interface
   "Render the interface section based on its type.
-   Dispatches to the appropriate sub-renderer."
-  [{:keys [type items]}]
+   Dispatches to the appropriate sub-renderer.
+   For :fn-list, nests IO types and functions under Public API."
+  [{:keys [type items]} dataflow]
   (case type
     :fn-list
     (list
      [:h5 "Public API " [:span.dep-count (str "(" (count items) ")")]]
+     (render-io-sections dataflow)
+     [:h6 "Functions"]
      (render-fn-list items))
 
     :fn-inline
@@ -163,22 +162,22 @@
 
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
-   Iterates through sections in order: label, description, interface, schemas, dataflow, deps, dependents."
-  [{:keys [label kind description interface schemas dataflow deps dependents]}]
+   Iterates through sections in order: label, description, interface, schemas, deps, dependents."
+  [{:keys [label kind parent description interface schemas dataflow deps dependents]}]
   (str
    (h/html
     [:div#node-info
+     (when parent
+       [:span.back-link {"data-on:click" (str "@get('/sse/view?select=" (url-encode (:id parent)) "')")}
+        (str "\u2190 " (:label parent))])
      [:h4 label " " [:span.kind-badge (name kind)]]
 
      (render-description description)
 
      (when interface
-       (render-interface interface))
+       (render-interface interface dataflow))
 
      (render-schema-refs schemas)
-
-     (when dataflow
-       (render-dataflow dataflow))
 
      (render-dep-list "Dependencies" deps)
      (render-dep-list "Dependents" dependents)])))

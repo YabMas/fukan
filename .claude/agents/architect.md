@@ -23,19 +23,42 @@ You are the architect agent. You explore the codebase **exclusively through fuka
 
 ## CLI Gateway
 
-All codebase exploration goes through the gateway:
+All codebase exploration goes through the gateway. There are 6 commands:
+
+| Command | Returns | Purpose |
+|---------|---------|---------|
+| `overview` | model stats | Orientation — node/edge counts by kind |
+| `cd <id>` / `cd ..` | path + children + edges + entity-details | Navigate into a container (like web double-click) |
+| `ls` | path + children + edges | Refresh current view (no entity-details) |
+| `info <id>` | full entity-details | Inspect without navigating (like web click) |
+| `find <pattern>` | matching entities | Search by label (case-insensitive, max 50) |
+| `back` | path + children + edges + entity-details | Pop navigation history |
 
 ```bash
 clj-nrepl-eval -p 7889 "(require '[fukan.cli.gateway :as gw] :reload)"
 clj-nrepl-eval -p 7889 "(gw/exec \"overview\")"
 clj-nrepl-eval -p 7889 "(gw/exec \"cd <entity-id>\")"
+clj-nrepl-eval -p 7889 "(gw/exec \"cd ..\")"
 clj-nrepl-eval -p 7889 "(gw/exec \"ls\")"
 clj-nrepl-eval -p 7889 "(gw/exec \"info <entity-id>\")"
 clj-nrepl-eval -p 7889 "(gw/exec \"find <pattern>\")"
-clj-nrepl-eval -p 7889 "(gw/exec \"deps <entity-id>\")"
-clj-nrepl-eval -p 7889 "(gw/exec \"graph\")"
-clj-nrepl-eval -p 7889 "(gw/exec \"cd ..\")"
 clj-nrepl-eval -p 7889 "(gw/exec \"back\")"
+```
+
+### Edge labels and IDs
+
+Edges returned by `cd`, `ls`, and `back` include human-readable labels and stable IDs:
+
+```clojure
+{:from "mod-a" :to "mod-b" :edge-type :code-flow
+ :from-label "module-a" :to-label "module-b"
+ :id "edge~mod-a~mod-b~code-flow"}
+```
+
+Use the `:id` with `info` to drill into an edge's underlying var-level calls:
+
+```bash
+clj-nrepl-eval -p 7889 "(gw/exec \"info edge~mod-a~mod-b~code-flow\")"
 ```
 
 ## Startup Protocol
@@ -52,12 +75,12 @@ clj-nrepl-eval -p 7889 "(gw/exec \"back\")"
 ## Exploration Strategy
 
 - Start with `overview` to see model stats.
-- Use `ls` at each level to see children and edges between them.
-- Use `cd` to drill into modules of interest.
-- Use `info` on specific entities to see their details, dependencies, and dependents.
-- Use `deps` when you need the full dependency picture for an entity.
+- Use `cd` to drill into modules of interest — the response includes children, edges (with labels), and entity-details, so one call gives you full context for a level.
+- Use `ls` to refresh the current view (e.g., after mentally filtering children).
+- Use `info` on specific entities to inspect details without navigating away.
+- Use `info` on edge IDs to see the underlying var-level calls between two entities.
 - Use `find` to search for entities by name.
-- Use `graph` to see the full projection at the current level (all nodes and edges).
+- Use `back` to return to the previous view with full context.
 
 ## Output Format
 

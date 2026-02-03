@@ -1,2 +1,6 @@
-{:description "Web UI module. Serves the Fukan application over HTTP with SSE-driven views."
- :functions [fukan.web.handler/create-handler]}
+{:description "Pure rendering functions for the Fukan web UI views."
+ :functions
+ [fukan.web.views.shell/render-app-shell
+  fukan.web.views.graph/render-graph
+  fukan.web.views.breadcrumb/render-breadcrumb
+  fukan.web.views.sidebar/render-sidebar-html]}

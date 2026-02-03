@@ -70,10 +70,10 @@ The breadcrumb shows the path from smart-root to the focused container. Clicking
 ## Rendering Pipeline
 
 ```
-projection domain data -> add UI state (selected?, highlighted?) -> cytoscape transform
+projection domain data -> add UI state (selected?) -> cytoscape transform
 ```
 
-The view layer adds UI-specific state (`selected?`, `highlighted?`) to projection data, then transforms the result into the visualization format.
+The view layer adds UI-specific state (`selected?`) to projection nodes, then transforms the result into the visualization format. Edge highlighting is driven entirely by the `highlightedEdges` array in the Cytoscape output, computed from the selected node's edges (with schema-key matching for schema nodes).
 
 ## Entity Detail Sidebar
 
@@ -83,11 +83,10 @@ The sidebar renders a **normalized entity detail** structure from the projection
 
 1. **Label** — entity name + kind badge
 2. **Description** — from doc, contract description, or data description (when available)
-3. **Interface** — dispatches by `:type` to sub-renderers (when available)
+3. **Interface** — dispatches by `:type` to sub-renderers (when available). For container entities with `:fn-list` interface type, dataflow IO types (inputs/outputs) are rendered as subsections within the Public API heading, before the functions list.
 4. **Schemas** — clickable schema references (when available)
-5. **Dataflow** — input/output schema types flowing through the entity (when available)
-6. **Dependencies** — entities this one depends on (always, shows "None" if empty)
-7. **Dependents** — entities that depend on this one (always, shows "None" if empty)
+5. **Dependencies** — entities this one depends on (always, shows "None" if empty)
+6. **Dependents** — entities that depend on this one (always, shows "None" if empty)
 
 ### Edge entities
 

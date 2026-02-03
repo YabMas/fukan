@@ -50,6 +50,5 @@
       ;; Default: web mode
       (do
         (infra-model/load-model src)
-        (infra-server/start-server {:port port
-                                    :get-model-fn infra-model/get-model})
+        (infra-server/start-server {:port port})
         (println "Press Ctrl+C to stop")))))

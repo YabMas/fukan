@@ -1,5 +1,5 @@
 (ns fukan.web.views.graph
-  "Adds UI state (selected?, highlighted?) to projection data.
+  "Adds UI state (selected?) to projection data.
    Implements spec.md behavior for Cytoscape visualization."
   (:require [clojure.string :as str]
             [fukan.web.views.cytoscape :as cytoscape]))
@@ -16,15 +16,6 @@
   "Add :selected? field to projection nodes based on selected-id."
   [nodes selected-id]
   (mapv (fn [n] (assoc n :selected? (= (:id n) selected-id))) nodes))
-
-(defn- add-edge-highlighting
-  "Add :highlighted? field to projection edges based on selected-id."
-  [edges selected-id]
-  (mapv (fn [e]
-          (assoc e :highlighted?
-                 (or (= (:from e) selected-id)
-                     (= (:to e) selected-id))))
-        edges))
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
@@ -45,11 +36,12 @@
   "Add UI state to graph projection data.
 
    Takes a graph projection (from proj/entity-graph) and editor-state.
-   Adds :selected? to nodes and :highlighted? to edges.
+   Adds :selected? to nodes. Edge highlighting is driven entirely by
+   the top-level highlightedEdges array computed by compute-highlighted-edges.
 
    Returns {:nodes :edges :io} where:
    - nodes: vector of view nodes with rendering properties + :selected?
-   - edges: vector of edges with :highlighted?
+   - edges: vector of edges (unmodified)
    - io: {:inputs :outputs} schema sets for container views"
   [graph-projection {:keys [view-id selected-id]}]
   (let [nodes (:nodes graph-projection)
@@ -57,10 +49,8 @@
         effective-selected-id (or selected-id
                                   view-id
                                   (find-projection-root nodes))]
-    ;; Add UI state
-    (-> graph-projection
-        (update :nodes add-node-selection effective-selected-id)
-        (update :edges add-edge-highlighting effective-selected-id))))
+    ;; Add UI state - only node selection; edge highlighting via highlightedEdges
+    (update graph-projection :nodes add-node-selection effective-selected-id)))
 
 (defn- compute-highlighted-edges
   "Compute which edges should be highlighted for a selected node.
@@ -112,7 +102,7 @@
   {:malli/schema [:=> [:cat :Projection :EditorState] :GraphData]}
   [graph-projection {:keys [view-id selected-id] :as editor-state}]
   (let [nodes (:nodes graph-projection)
-        ;; Add UI state (selected?, highlighted?)
+        ;; Add UI state (selected?)
         graph (add-ui-state graph-projection editor-state)
         effective-selected-id (or selected-id view-id (find-projection-root nodes))
         highlighted-edges (compute-highlighted-edges (:edges graph) effective-selected-id)]

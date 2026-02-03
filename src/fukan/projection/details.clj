@@ -40,8 +40,8 @@
                    (filter #(contains? in-subtree (:from %)))
                    ;; Aggregate target to same kind
                    (keep #(find-ancestor-of-kind model (:to %) kind))
-                   ;; Exclude self-references
-                   (remove #{entity-id})
+                   ;; Exclude self and descendants
+                   (remove #(contains? in-subtree %))
                    frequencies)]
     (into {}
           (map (fn [[target-id cnt]]
@@ -62,8 +62,8 @@
                    (filter #(contains? in-subtree (:to %)))
                    ;; Aggregate source to same kind
                    (keep #(find-ancestor-of-kind model (:from %) kind))
-                   ;; Exclude self-references
-                   (remove #{entity-id})
+                   ;; Exclude self and descendants
+                   (remove #(contains? in-subtree %))
                    frequencies)]
     (into {}
           (map (fn [[source-id cnt]]
@@ -108,8 +108,16 @@
   (case (:kind node)
     :folder
     (when-let [fns (seq (get-in node [:data :contract :functions]))]
-      {:type :fn-list
-       :items (vec (sort-by :name fns))})
+      (let [var-nodes (->> (:children node)
+                           (mapcat #(:children (get-in model [:nodes %])))
+                           (map #(get-in model [:nodes %]))
+                           (filter #(= :var (:kind %))))
+            name->id (into {} (map (fn [v] [(:label v) (:id v)])) var-nodes)]
+        {:type :fn-list
+         :items (->> fns
+                     (mapv #(assoc % :id (name->id (:name %))))
+                     (sort-by :name)
+                     vec)}))
 
     :namespace
     (let [ns-sym (get-in node [:data :ns-sym])
@@ -236,11 +244,19 @@
 
     nil))
 
+(defn- extract-parent
+  "Extract parent reference {:id :label} or nil if at root."
+  [model node]
+  (when-let [parent-id (:parent node)]
+    (when-let [parent (get-in model [:nodes parent-id])]
+      {:id parent-id :label (:label parent)})))
+
 (defn- normalize-entity
   "Assemble the normalized entity detail map."
   [model node deps dependents]
   {:label       (:label node)
    :kind        (:kind node)
+   :parent      (extract-parent model node)
    :description (extract-description node)
    :interface   (extract-interface model node)
    :schemas     (extract-schemas model node)
@@ -345,6 +361,7 @@
    [:map
     [:label :string]
     [:kind [:enum :folder :namespace :var :schema :interface]]
+    [:parent [:maybe [:map [:id :string] [:label :string]]]]
     [:description [:maybe :string]]
     [:interface [:maybe :InterfaceData]]
     [:schemas [:maybe [:vector :SchemaRef]]]

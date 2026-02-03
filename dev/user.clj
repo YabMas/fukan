@@ -27,8 +27,7 @@
     (println "Server already running on port" (infra-server/get-port))
     (do
       (infra-model/load-model src)
-      (infra-server/start-server {:port port
-                                  :get-model-fn infra-model/get-model}))))
+      (infra-server/start-server {:port port}))))
 
 (defn stop
   "Stop the running server."

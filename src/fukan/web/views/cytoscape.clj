@@ -25,8 +25,7 @@
    [:id :string]
    [:source :string]
    [:target :string]
-   [:edgeType :string]
-   [:highlighted :boolean]])
+   [:edgeType :string]])
 
 (def ^:schema CytoscapeGraph
   [:map
@@ -62,13 +61,13 @@
 (defn- edge->cytoscape
   "Transform an internal view edge to Cytoscape format.
    Converts :from/:to to source/target, keyword edge-type to string.
-   Includes schemaKey for schema-flow edges."
-  [{:keys [id from to edge-type highlighted? schema-key]}]
+   Includes schemaKey for schema-flow edges.
+   Edge highlighting is driven by the top-level highlightedEdges array."
+  [{:keys [id from to edge-type schema-key]}]
   (cond-> {:id id
            :source from
            :target to
-           :edgeType (name edge-type)
-           :highlighted highlighted?}
+           :edgeType (name edge-type)}
     schema-key (assoc :schemaKey (name schema-key))))
 
 (defn graph->cytoscape

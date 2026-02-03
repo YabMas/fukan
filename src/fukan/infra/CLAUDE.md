@@ -28,13 +28,14 @@ Both files use **private atoms** (`defonce ^:private state`). State is never exp
 infra → model.build (to construct models)
 infra → model.languages.clojure (to run analysis)
 infra → web.handler (to create HTTP handler)
+web.handler → infra.model (to call get-model on each request)
 ```
 
-Nothing calls into infra except `user.clj` (the dev namespace). Infra is the top of the dependency tree at runtime.
+Nothing calls into infra except `user.clj` (the dev namespace) and `web.handler` (which reads the model atom via `get-model`). Infra is the top of the dependency tree at runtime.
 
 ## Key Patterns
 
 - `load-model` prints progress to stdout — this is intentional for REPL feedback
-- `start-server` takes a `:get-model-fn` (not a model) so the server always sees the latest model
+- `start-server` only takes `:port`; the handler calls `infra.model/get-model` directly on each request
 - `refresh-model` reuses the last `src` path — no args needed for re-analysis
 - Guard against double-start: `start-server` checks `@state` before binding a port

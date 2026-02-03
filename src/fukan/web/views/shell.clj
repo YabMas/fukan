@@ -91,6 +91,11 @@
     color: #34495e;
     font-size: 0.9rem;
   }
+  #node-info h6 {
+    margin: 0.5rem 0 0.15rem 0;
+    color: #5a6c7d;
+    font-size: 0.82rem;
+  }
   #node-info ul {
     padding-left: 1.2rem;
     margin: 0;

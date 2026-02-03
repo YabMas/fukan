@@ -2,10 +2,7 @@
   "Render breadcrumb navigation."
   (:require [hiccup2.core :as h]))
 
-;; -----------------------------------------------------------------------------
-;; Schemas
-
-(def ^:schema Html :string)
+;; Html schema defined in fukan.web.views.shell
 
 ;; -----------------------------------------------------------------------------
 ;; Public API

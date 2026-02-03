@@ -1,18 +1,21 @@
 (ns fukan.web.views.schema
   "Render Malli schemas to HTML/hiccup."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str])
+  (:import [java.net URLEncoder]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema Rendering - Direct rendering of Malli schemas to hiccup
 
 (declare render-schema-form)
 
+(defn- url-encode [s] (URLEncoder/encode (str s) "UTF-8"))
+
 (defn- render-schema-ref
   "Render a clickable schema reference."
   [schema-key]
   (let [k (if (keyword? schema-key) schema-key (keyword schema-key))]
     [:span.schema-ref
-     {"data-on:click" (str "@get('/sse/schema?id=" (namespace k) "/" (name k) "')")}
+     {"data-on:click" (str "@get('/sse/schema?id=" (url-encode (str (namespace k) "/" (name k))) "')")}
      (name k)]))
 
 (defn- render-schema-form

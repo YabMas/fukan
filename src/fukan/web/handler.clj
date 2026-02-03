@@ -3,6 +3,7 @@
    Delegates view computation and rendering to specialized namespaces."
   (:require [reitit.ring :as ring]
             [reitit.ring.middleware.parameters :as parameters]
+            [fukan.infra.model :as model]
             [fukan.web.views.shell :as views.shell]
             [fukan.web.sse :as sse]
             [clojure.java.io :as io]
@@ -36,13 +37,10 @@
 
 (defn create-handler
   "Create a Ring handler with all routes.
-
-   Parameters:
-   - get-model-fn: Zero-arity function that returns the current model.
-                   Called on each request, allowing model refresh without
-                   server restart."
-  {:malli/schema [:=> [:cat :fn] :Handler]}
-  [get-model-fn]
+   Calls `fukan.infra.model/get-model` on each request, allowing model
+   refresh without server restart."
+  {:malli/schema [:=> [:cat] :Handler]}
+  []
   (ring/ring-handler
    (ring/router
     [["/" {:get (fn [_]
@@ -52,13 +50,13 @@
 
      ;; SSE endpoints (Datastar)
      ["/sse/view" {:get (fn [req]
-                          (sse/main-view-handler (get-model-fn) req))}]
+                          (sse/main-view-handler (model/get-model) req))}]
 
      ["/sse/sidebar" {:get (fn [req]
-                             (sse/sidebar-handler (get-model-fn) req))}]
+                             (sse/sidebar-handler (model/get-model) req))}]
 
      ["/sse/schema" {:get (fn [req]
-                            (sse/schema-handler (get-model-fn) req))}]
+                            (sse/schema-handler (model/get-model) req))}]
 
      ["/public/*path" {:get (fn [{{:keys [path]} :path-params}]
                               (serve-static path))}]]
