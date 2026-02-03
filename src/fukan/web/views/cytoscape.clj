@@ -17,8 +17,7 @@
    [:hasPrivateChildren :boolean]
    [:isExpanded :boolean]
    [:childCount :int]
-   [:private {:optional true} :boolean]
-   [:isSchemaVar {:optional true} :boolean]])
+   [:private {:optional true} :boolean]])
 
 (def ^:schema CytoscapeEdge
   [:map
@@ -41,7 +40,7 @@
   "Transform an internal view node to Cytoscape format.
    Converts Clojure idioms (kebab-case, ? predicates) to camelCase."
   [{:keys [id kind label parent selected? expandable?
-           has-private-children? expanded? child-count private? schema-var?
+           has-private-children? expanded? child-count private?
            io-type schema-key owned?]}]
   (cond-> {:id id
            :kind (name kind)
@@ -53,7 +52,6 @@
            :childCount child-count}
     parent (assoc :parent parent)
     private? (assoc :private private?)
-    schema-var? (assoc :isSchemaVar schema-var?)
     io-type (assoc :ioType (name io-type))
     schema-key (assoc :schemaKey (name schema-key))
     (some? owned?) (assoc :isOwned owned?)))

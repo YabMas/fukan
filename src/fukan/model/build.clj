@@ -56,7 +56,7 @@
 ;; Model Schemas
 
 (def ^:schema NodeId :string)
-(def ^:schema NodeKind [:enum :folder :namespace :var :schema])
+(def ^:schema NodeKind [:enum :container :function :schema])
 
 (def ^:schema Node
   "A node in the graph. Kind-specific fields stored in :data map."
@@ -66,7 +66,7 @@
    [:label :string]
    [:parent {:optional true} [:maybe NodeId]]
    [:children [:set :string]]
-   [:data {:optional true} :map]])  ; kind-specific: path, ns-sym, var-sym, doc, private?, schema-key, etc.
+   [:data {:optional true} :map]])  ; polymorphic by :kind — see NodeData
 
 (def ^:schema Edge
   "A directed edge between two nodes. All info derived from connected nodes."
@@ -102,14 +102,15 @@
 
 (defn- remove-empty-folders
   "Remove folder nodes that have no children.
+   folder-ids is the set of node IDs that were created as directory nodes.
    Returns updated nodes map."
-  [nodes]
+  [nodes folder-ids]
   (let [;; First, wire children to see which folders are empty
         wired (wire-children nodes)
         ;; Find folders with no children
         empty-folder-ids (->> wired
-                              (filter (fn [[_ node]]
-                                        (and (= :folder (:kind node))
+                              (filter (fn [[id node]]
+                                        (and (contains? folder-ids id)
                                              (empty? (:children node)))))
                               (map first)
                               set)]
@@ -117,10 +118,11 @@
     (apply dissoc nodes empty-folder-ids)))
 
 (defn- find-smart-root
-  "Find a smart starting container by skipping single-child folders.
+  "Find a smart starting container by skipping single-child folder containers.
+   folder-ids is the set of node IDs that were created as directory nodes.
    Returns the ID of the deepest folder that has multiple children
    or non-folder children."
-  [nodes]
+  [nodes folder-ids]
   (loop [container-id nil]
     (let [children (->> (vals nodes)
                         (filter (fn [node]
@@ -129,10 +131,10 @@
                                     ;; Root level: no parent or parent not in nodes
                                     (let [p (:parent node)]
                                       (or (nil? p) (not (contains? nodes p)))))))
-                        (remove #(= (:kind %) :var)))] ; Folders and namespaces only
+                        (remove #(= (:kind %) :function)))] ; Containers only
       ;; If exactly one child and it's a folder, descend
       (if (and (= 1 (count children))
-               (= :folder (:kind (first children))))
+               (contains? folder-ids (:id (first children))))
         (recur (:id (first children)))
         container-id))))
 
@@ -197,11 +199,11 @@
                     parent-path (dir-parent dir-path)
                     parent-id (get-in acc [:index parent-path])
                     node {:id id
-                          :kind :folder
+                          :kind :container
                           :label label
                           :parent parent-id
                           :children #{}
-                          :data {:path dir-path}}]
+                          :data {:kind :container}}]
                 (-> acc
                     (assoc-in [:nodes id] node)
                     (assoc-in [:index dir-path] id))))
@@ -228,12 +230,11 @@
                   folder-path (file-to-folder filename)
                   parent-id (get folder-index folder-path)
                   node {:id id
-                        :kind :namespace
+                        :kind :container
                         :label (str name)
                         :parent parent-id
                         :children #{}
-                        :data {:ns-sym name
-                               :filename filename
+                        :data {:kind :container
                                :doc doc}}]
               (-> acc
                   (assoc-in [:nodes id] node)
@@ -248,18 +249,15 @@
   "Build var nodes from var definitions.
    Returns {:nodes {id -> node}, :index {[ns-sym var-name] -> id}}."
   [var-defs ns-index]
-  (reduce (fn [acc {:keys [ns name filename row doc private]}]
+  (reduce (fn [acc {:keys [ns name doc private]}]
             (let [id (str ns "/" name)
                   parent-id (get ns-index ns)
                   node {:id id
-                        :kind :var
+                        :kind :function
                         :label (str name)
                         :parent parent-id
                         :children #{}
-                        :data {:var-sym name
-                               :ns-sym ns
-                               :filename filename
-                               :row row
+                        :data {:kind :function
                                :doc doc
                                :private? (boolean private)}}]
               (-> acc
@@ -306,19 +304,54 @@
                     (mapv resolve-fn-ref fns))))))))
 
 (defn- infer-namespace-contract
-  "Infer a contract for a namespace from public vars with malli schemas."
-  [ns-sym]
-  (when-let [ns-obj (find-ns ns-sym)]
-    (let [description (-> ns-obj meta :doc)
-          functions (->> (ns-publics ns-obj)
-                         (keep (fn [[sym v]]
-                                 (when-let [schema (:malli/schema (meta v))]
-                                   {:name (name sym)
-                                    :schema schema})))
-                         vec)]
-      (when (seq functions)
-        {:description description
-         :functions functions}))))
+  "Infer a contract for a namespace from its child function nodes.
+   Reads signatures from already-built nodes instead of going to runtime.
+   Excludes schema-defining vars (they have corresponding schema nodes)."
+  [nodes ns-id]
+  (let [ns-sym (symbol ns-id)
+        ns-obj (find-ns ns-sym)
+        description (when ns-obj (-> ns-obj meta :doc))
+        schema-var-ids (->> (vals nodes)
+                            (filter #(and (= :schema (:kind %))
+                                          (= ns-id (:parent %))))
+                            (map (fn [sn] (str ns-id "/" (:label sn))))
+                            set)
+        functions (->> (vals nodes)
+                       (filter #(and (= :function (:kind %))
+                                     (= ns-id (:parent %))
+                                     (not (get-in % [:data :private?]))
+                                     (not (contains? schema-var-ids (:id %)))
+                                     (get-in % [:data :signature])))
+                       (mapv (fn [node]
+                               {:name (:label node)
+                                :schema (get-in node [:data :signature])})))]
+    (when (seq functions)
+      {:description description
+       :functions functions})))
+
+(defn- attach-var-signatures
+  "Attach :signature to function nodes that have :malli/schema metadata.
+   Excludes vars that define schemas (they have a corresponding schema node)."
+  [nodes]
+  (let [schema-var-ids (->> (vals nodes)
+                            (filter #(= :schema (:kind %)))
+                            (map (fn [sn] (str (:parent sn) "/" (:label sn))))
+                            set)]
+    (reduce (fn [acc [id node]]
+              (if (and (= :function (:kind node))
+                       (not (contains? schema-var-ids id)))
+                (let [[ns-str var-str] (str/split id #"/" 2)
+                      ns-sym (symbol ns-str)
+                      var-sym (symbol var-str)
+                      schema (try (some-> (find-ns ns-sym)
+                                          (ns-resolve var-sym)
+                                          meta :malli/schema)
+                                  (catch Exception _ nil))]
+                  (if schema
+                    (assoc acc id (assoc-in node [:data :signature] schema))
+                    (assoc acc id node)))
+                (assoc acc id node)))
+            {} nodes)))
 
 (defn- attach-contract
   "Attach a contract to a node's :data map when present."
@@ -328,16 +361,19 @@
     node))
 
 (defn- attach-contracts
-  "Attach module and namespace contracts to nodes.
-   Folder contracts come from contract.edn; namespace contracts are inferred.
+  "Attach module and namespace contracts to container nodes.
+   Folder contracts come from contract.edn (using node ID as path);
+   namespace contracts are inferred from child function nodes.
    Returns updated nodes map."
   [nodes]
   (reduce (fn [acc [id node]]
-            (let [contract (case (:kind node)
-                             :folder (read-contract-file (get-in node [:data :path]))
-                             :namespace (infer-namespace-contract (get-in node [:data :ns-sym]))
-                             nil)]
-              (assoc acc id (attach-contract node contract))))
+            (if (= :container (:kind node))
+              ;; Try folder contract first (contract.edn at node's path),
+              ;; then fall back to inferred namespace contract
+              (let [contract (or (read-contract-file id)
+                                 (infer-namespace-contract nodes id))]
+                (assoc acc id (attach-contract node contract)))
+              (assoc acc id node)))
           {}
           nodes))
 
@@ -419,6 +455,7 @@
          {:keys [nodes index]} (build-folder-nodes ns-defs)
          folder-nodes nodes
          folder-index index
+         folder-ids (set (keys folder-nodes))
 
          {:keys [nodes index]} (build-namespace-nodes ns-defs folder-index)
          ns-nodes nodes
@@ -432,13 +469,13 @@
          merged-nodes (merge folder-nodes ns-nodes var-nodes)
 
          ;; Remove empty folders
-         cleaned-nodes (remove-empty-folders merged-nodes)
+         cleaned-nodes (remove-empty-folders merged-nodes folder-ids)
 
          ;; Wire up parent-child relationships
          all-nodes (wire-children cleaned-nodes)
 
          ;; Find smart starting point and prune ancestors
-         smart-root (find-smart-root all-nodes)
+         smart-root (find-smart-root all-nodes folder-ids)
          pruned-nodes (prune-to-smart-root all-nodes smart-root)
 
          ;; Build raw var-level edges
@@ -457,7 +494,13 @@
          ;; (type nodes have parent set but parent's children set needs updating)
          final-nodes (-> (merge pruned-nodes type-nodes)
                          wire-children)
-         contracted-nodes (attach-contracts final-nodes)]
+
+         ;; Attach function signatures from runtime metadata
+         ;; (runs after schema nodes merged so schema-defining vars are excluded)
+         signed-nodes (attach-var-signatures final-nodes)
+
+         ;; Attach contracts to containers
+         contracted-nodes (attach-contracts signed-nodes)]
 
      {:nodes contracted-nodes
       :edges all-edges})))

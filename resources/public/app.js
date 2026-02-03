@@ -115,29 +115,9 @@ const cy = cytoscape({
   elements: [],
   
   style: [
-    // Folder node
+    // Container node (folders and namespaces)
     {
-      selector: 'node[kind="folder"]',
-      style: {
-        'shape': 'roundrectangle',
-        'background-color': '#ecf0f1',
-        'border-color': '#bdc3c7',
-        'border-width': 2,
-        'border-style': 'solid',
-        'label': 'data(label)',
-        'text-valign': 'center',
-        'text-halign': 'center',
-        'text-wrap': 'wrap',
-        'text-max-width': '150px',
-        'padding': '25px',
-        'font-weight': 'bold',
-        'font-size': '14px',
-        'color': '#7f8c8d'
-      }
-    },
-    // Namespace node
-    {
-      selector: 'node[kind="namespace"]',
+      selector: 'node[kind="container"]',
       style: {
         'shape': 'roundrectangle',
         'background-color': '#e8f4f8',
@@ -155,9 +135,9 @@ const cy = cytoscape({
         'color': '#2c3e50'
       }
     },
-    // Var node - blue like namespaces (active children)
+    // Function node
     {
-      selector: 'node[kind="var"]',
+      selector: 'node[kind="function"]',
       style: {
         'shape': 'roundrectangle',
         'background-color': '#e8f4f8',
@@ -171,20 +151,6 @@ const cy = cytoscape({
         'padding': '15px',
         'font-size': '12px',
         'color': '#2c3e50'
-      }
-    },
-    // Var that defines a schema - diamond shape like schema nodes
-    {
-      selector: 'node[kind="var"][isSchemaVar]',
-      style: {
-        'shape': 'diamond',
-        'background-color': '#e8f5e9',
-        'border-color': '#27ae60',
-        'border-width': 2,
-        'width': '60px',
-        'height': '60px',
-        'font-weight': 'bold',
-        'color': '#1b5e20'
       }
     },
     // External folder container (compound node)
@@ -238,9 +204,9 @@ const cy = cytoscape({
         'border-width': 3
       }
     },
-    // Folder as compound parent
+    // Container as compound parent
     {
-      selector: 'node[kind="folder"]:parent',
+      selector: 'node[kind="container"]:parent',
       style: {
         'text-valign': 'top',
         'text-halign': 'center',
@@ -249,20 +215,9 @@ const cy = cytoscape({
         'padding-top': '55px'
       }
     },
-    // Namespace as compound parent
+    // Top-level container (no parent) - grey (context container)
     {
-      selector: 'node[kind="namespace"]:parent',
-      style: {
-        'text-valign': 'top',
-        'text-halign': 'center',
-        'text-margin-y': '18px',
-        'padding': '40px',
-        'padding-top': '55px'
-      }
-    },
-    // Container namespace (no parent) - grey like folders (context container)
-    {
-      selector: 'node[kind="namespace"]:orphan',
+      selector: 'node[kind="container"]:orphan',
       style: {
         'background-color': '#ecf0f1',
         'border-color': '#bdc3c7'
@@ -294,9 +249,9 @@ const cy = cytoscape({
         'border-width': 3
       }
     },
-    // Private vars (shown when parent is expanded) - dashed blue border
+    // Private functions (shown when parent is expanded) - dashed blue border
     {
-      selector: 'node[kind="var"][private]',
+      selector: 'node[kind="function"][private]',
       style: {
         'border-style': 'dashed',
         'background-color': '#f5f5f5'

@@ -9,12 +9,10 @@
 
 (defn- breadcrumb-label
   "Get a short label for breadcrumb display.
-   For namespaces, returns just the last segment (e.g. 'handler' instead of 'fukan.web.handler')."
+   For containers with dotted labels (namespaces), returns just the last segment."
   [node]
-  (let [label (:label node)
-        kind (:kind node)]
-    (if (= kind :namespace)
-      ;; Extract last segment of namespace
+  (let [label (:label node)]
+    (if (str/includes? label ".")
       (last (str/split label #"\."))
       label)))
 
@@ -41,11 +39,11 @@
 
 (defn find-root-node
   "Find the root node (node with parent = nil).
-   Root should be a folder or namespace, not a var or schema."
+   Root should be a container, not a function or schema."
   [model]
   (->> (vals (:nodes model))
        (filter #(nil? (:parent %)))
-       (filter #(#{:folder :namespace} (:kind %)))
+       (filter #(= :container (:kind %)))
        first))
 
 (defn entity-path

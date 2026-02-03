@@ -72,23 +72,20 @@
           freqs)))
 
 ;; -----------------------------------------------------------------------------
-;; Schema lookup
+;; Tree helpers
 
-(defn- get-var-schema
-  "Get the malli schema from a var's metadata, if present."
-  [ns-sym var-sym]
-  (try
-    (when-let [v (ns-resolve (find-ns ns-sym) var-sym)]
-      (:malli/schema (meta v)))
-    (catch Exception _ nil)))
-
-(defn- schema-var?
-  "Check if a var has ^:schema metadata (is a schema definition, not a function)."
-  [ns-sym var-sym]
-  (try
-    (when-let [v (ns-resolve (find-ns ns-sym) var-sym)]
-      (boolean (:schema (meta v))))
-    (catch Exception _ false)))
+(defn- all-leaf-descendants
+  "Get all function-kind descendants of a node.
+   Traverses the tree recursively to find leaves at any depth."
+  [model node-id]
+  (let [children (get-in model [:nodes node-id :children] #{})]
+    (->> children
+         (mapcat (fn [cid]
+                   (let [child (get-in model [:nodes cid])]
+                     (if (= :function (:kind child))
+                       [cid]
+                       (all-leaf-descendants model cid)))))
+         vec)))
 
 ;; -----------------------------------------------------------------------------
 ;; Normalization helpers
@@ -105,61 +102,30 @@
   "Extract interface data from a node based on its kind.
    Returns {:type :items} or nil."
   [model node]
-  (case (:kind node)
-    :folder
-    (when-let [fns (seq (get-in node [:data :contract :functions]))]
-      (let [var-nodes (->> (:children node)
-                           (mapcat #(:children (get-in model [:nodes %])))
-                           (map #(get-in model [:nodes %]))
-                           (filter #(= :var (:kind %))))
-            name->id (into {} (map (fn [v] [(:label v) (:id v)])) var-nodes)]
-        {:type :fn-list
-         :items (->> fns
-                     (mapv #(assoc % :id (name->id (:name %))))
-                     (sort-by :name)
-                     vec)}))
+  (let [data (:data node)]
+    (case (:kind data)
+      :container
+      (when-let [fns (seq (get-in data [:contract :functions]))]
+        (let [leaf-nodes (->> (all-leaf-descendants model (:id node))
+                              (map #(get-in model [:nodes %])))
+              name->id (into {} (map (fn [v] [(:label v) (:id v)])) leaf-nodes)]
+          {:type :fn-list
+           :items (->> fns
+                       (mapv #(assoc % :id (name->id (:name %))))
+                       (sort-by :name)
+                       vec)}))
 
-    :namespace
-    (let [ns-sym (get-in node [:data :ns-sym])
-          children-ids (:children node)
-          public-fns (->> children-ids
-                          (map #(get-in model [:nodes %]))
-                          (filter #(= :var (:kind %)))
-                          (remove #(get-in % [:data :private?]))
-                          (remove #(schema-var? ns-sym (get-in % [:data :var-sym])))
-                          (map (fn [child]
-                                 (let [var-sym (get-in child [:data :var-sym])]
-                                   {:name (str var-sym)
-                                    :schema (get-var-schema ns-sym var-sym)
-                                    :id (:id child)})))
-                          (sort-by :name)
-                          vec)]
-      (when (seq public-fns)
-        {:type :fn-list
-         :items public-fns}))
-
-    :var
-    (let [ns-sym (get-in node [:data :ns-sym])
-          var-sym (get-in node [:data :var-sym])
-          schema (get-var-schema ns-sym var-sym)]
-      (when schema
+      :function
+      (when-let [sig (:signature data)]
         {:type :fn-inline
-         :items [schema]}))
+         :items [sig]})
 
-    :schema
-    (let [schema-key (get-in node [:data :schema-key])
-          schema-form (proj.schema/get-schema model schema-key)]
-      (when schema-form
+      :schema
+      (when-let [s (:schema data)]
         {:type :schema-def
-         :items [schema-form]}))
+         :items [s]})
 
-    :interface
-    (let [fns (get-in node [:data :functions])]
-      (when (seq fns)
-        {:type :name-list
-         :items (vec fns)}))
-
-    nil))
+      nil)))
 
 (defn- extract-fn-io
   "Extract input and output schema references from a function schema.
@@ -176,12 +142,12 @@
 
 (defn- extract-dataflow
   "Extract dataflow (input/output schema types) for an entity.
-   For :folder — aggregates across contract function schemas.
-   For :namespace — aggregates across public var function schemas.
-   For :var — extracts from the single var's function schema.
+   For :container — aggregates across contract function schemas.
+   For :function — extracts from the single function's schema.
    Returns {:inputs [{:key k}] :outputs [{:key k}]} or nil."
   [model node]
-  (let [aggregate (fn [ios]
+  (let [data (:data node)
+        aggregate (fn [ios]
                     (let [{:keys [inputs outputs]}
                           (reduce (fn [acc {:keys [inputs outputs]}]
                                     (-> acc
@@ -192,34 +158,17 @@
                       (when (or (seq inputs) (seq outputs))
                         {:inputs (->> inputs sort (mapv (fn [k] {:key k})))
                          :outputs (->> outputs sort (mapv (fn [k] {:key k})))})))]
-    (case (:kind node)
-      :folder
-      (when-let [fns (seq (get-in node [:data :contract :functions]))]
+    (case (:kind data)
+      :container
+      (when-let [fns (seq (get-in data [:contract :functions]))]
         (aggregate (keep #(extract-fn-io model (:schema %)) fns)))
 
-      :namespace
-      (let [ns-sym (get-in node [:data :ns-sym])
-            children-ids (:children node)
-            ios (->> children-ids
-                     (map #(get-in model [:nodes %]))
-                     (filter #(= :var (:kind %)))
-                     (remove #(get-in % [:data :private?]))
-                     (remove #(schema-var? ns-sym (get-in % [:data :var-sym])))
-                     (keep (fn [child]
-                             (let [var-sym (get-in child [:data :var-sym])]
-                               (get-var-schema ns-sym var-sym))))
-                     (keep #(extract-fn-io model %)))]
-        (aggregate ios))
-
-      :var
-      (let [ns-sym (get-in node [:data :ns-sym])
-            var-sym (get-in node [:data :var-sym])
-            schema (get-var-schema ns-sym var-sym)]
-        (when schema
-          (when-let [{:keys [inputs outputs]} (extract-fn-io model schema)]
-            (when (or (seq inputs) (seq outputs))
-              {:inputs (->> inputs sort (mapv (fn [k] {:key k})))
-               :outputs (->> outputs sort (mapv (fn [k] {:key k})))}))))
+      :function
+      (when-let [sig (:signature data)]
+        (when-let [{:keys [inputs outputs]} (extract-fn-io model sig)]
+          (when (or (seq inputs) (seq outputs))
+            {:inputs (->> inputs sort (mapv (fn [k] {:key k})))
+             :outputs (->> outputs sort (mapv (fn [k] {:key k})))})))
 
       nil)))
 
@@ -227,22 +176,20 @@
   "Extract schema references relevant to this entity.
    Returns a vector of {:key schema-keyword} or nil."
   [model node]
-  (case (:kind node)
-    :namespace
-    (let [ns-schemas (proj.schema/schemas-for-ns model (:label node))]
-      (when (seq ns-schemas)
-        (->> ns-schemas sort (mapv (fn [k] {:key k})))))
+  (let [data (:data node)]
+    (case (:kind data)
+      :container
+      (let [ns-schemas (proj.schema/schemas-for-ns model (:id node))]
+        (when (seq ns-schemas)
+          (->> ns-schemas sort (mapv (fn [k] {:key k})))))
 
-    :var
-    (let [ns-sym (get-in node [:data :ns-sym])
-          var-sym (get-in node [:data :var-sym])
-          schema (get-var-schema ns-sym var-sym)]
-      (when schema
-        (let [refs (proj.schema/extract-schema-refs model schema)]
+      :function
+      (when-let [sig (:signature data)]
+        (let [refs (proj.schema/extract-schema-refs model sig)]
           (when (seq refs)
-            (->> refs sort (mapv (fn [k] {:key k})))))))
+            (->> refs sort (mapv (fn [k] {:key k}))))))
 
-    nil))
+      nil)))
 
 (defn- extract-parent
   "Extract parent reference {:id :label} or nil if at root."
@@ -281,35 +228,29 @@
          :edge-type (keyword (nth parts 2))}))))
 
 (defn- compute-underlying-edges
-  "Find all var-level edges that aggregate to this visible edge.
+  "Find all function-level edges that aggregate to this visible edge.
    Returns a vector of {:from-var {:id :label :signature} :to-var {...}}
-   Only includes edges where both endpoints are vars (excludes require relationships)."
+   Only includes edges where both endpoints are functions (excludes require relationships)."
   [model from-id to-id]
   (let [from-subtree (subtree model from-id)
         to-subtree (subtree model to-id)
         raw-edges (:edges model)
-        ;; Find all raw edges where source is in from-subtree and target is in to-subtree
-        ;; Filter to only var-level edges (both endpoints must be vars)
         matching-edges (->> raw-edges
                             (filter (fn [{:keys [from to]}]
                                       (and (contains? from-subtree from)
                                            (contains? to-subtree to)
-                                           (= :var (:kind (get-in model [:nodes from])))
-                                           (= :var (:kind (get-in model [:nodes to])))))))]
+                                           (= :function (:kind (get-in model [:nodes from])))
+                                           (= :function (:kind (get-in model [:nodes to])))))))]
     (->> matching-edges
          (map (fn [{:keys [from to]}]
                 (let [from-node (get-in model [:nodes from])
-                      to-node (get-in model [:nodes to])
-                      from-ns-sym (get-in from-node [:data :ns-sym])
-                      from-var-sym (get-in from-node [:data :var-sym])
-                      to-ns-sym (get-in to-node [:data :ns-sym])
-                      to-var-sym (get-in to-node [:data :var-sym])]
+                      to-node (get-in model [:nodes to])]
                   {:from-var {:id from
                               :label (:label from-node)
-                              :signature (get-var-schema from-ns-sym from-var-sym)}
+                              :signature (get-in from-node [:data :signature])}
                    :to-var {:id to
                             :label (:label to-node)
-                            :signature (get-var-schema to-ns-sym to-var-sym)}})))
+                            :signature (get-in to-node [:data :signature])}})))
          (sort-by (fn [e] [(get-in e [:from-var :label]) (get-in e [:to-var :label])]))
          vec)))
 
@@ -360,7 +301,7 @@
    ;; Node entity detail
    [:map
     [:label :string]
-    [:kind [:enum :folder :namespace :var :schema :interface]]
+    [:kind [:enum :container :function :schema]]
     [:parent [:maybe [:map [:id :string] [:label :string]]]]
     [:description [:maybe :string]]
     [:interface [:maybe :InterfaceData]]

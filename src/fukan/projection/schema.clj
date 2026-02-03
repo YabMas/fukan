@@ -29,14 +29,14 @@
   [model schema-key]
   (->> (schema-nodes model)
        (some #(when (= schema-key (get-in % [:data :schema-key]))
-                (get-in % [:data :schema-form])))))
+                (get-in % [:data :schema])))))
 
 (defn schemas-for-ns
-  "Get all schema keywords defined in a namespace.
+  "Get all schema keywords defined in a container.
    Returns a set of keywords."
-  [model ns-str]
+  [model container-id]
   (->> (schema-nodes model)
-       (filter #(= ns-str (get-in % [:data :owner-ns])))
+       (filter #(= container-id (:parent %)))
        (map #(get-in % [:data :schema-key]))
        set))
 
@@ -59,8 +59,8 @@
        (some #(when (= schema-key (get-in % [:data :schema-key]))
                 (:id %)))))
 
-(defn schema-owner-ns-id
-  "Get the namespace node ID that owns a schema.
+(defn schema-owner-id
+  "Get the container node ID that owns a schema.
    Returns the parent node ID or nil if not found."
   [model schema-key]
   (->> (schema-nodes model)

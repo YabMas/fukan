@@ -10,7 +10,7 @@
 ;; Schemas
 
 (def ^:schema ProjectionNodeKind
-  [:enum :folder :namespace :var :schema :io-container :io-schema])
+  [:enum :container :function :schema :io-container :io-schema])
 
 (def ^:schema ProjectionNode
   [:map
@@ -23,7 +23,6 @@
    [:expanded? :boolean]
    [:child-count :int]
    [:private? {:optional true} :boolean]
-   [:schema-var? {:optional true} :boolean]
    [:io-type {:optional true} [:enum :input :output]]
    [:schema-key {:optional true} :keyword]])
 
@@ -60,22 +59,6 @@
 (defn- node-private? [node]
   (get-in node [:data :private?] false))
 
-(defn- node-ns-sym [node]
-  (get-in node [:data :ns-sym]))
-
-(defn- node-var-sym [node]
-  (get-in node [:data :var-sym]))
-
-(defn- schema-defining-var?
-  "Check if a var node defines a schema (has corresponding registered schema).
-   Takes the model to look up schema data."
-  [model node]
-  (when (= :var (:kind node))
-    (let [ns-sym (node-ns-sym node)
-          var-sym (node-var-sym node)
-          schema-key (keyword (str var-sym))]
-      (some? (schema/get-schema model schema-key)))))
-
 
 ;; -----------------------------------------------------------------------------
 ;; Visibility helpers
@@ -93,18 +76,9 @@
 
 (defn- get-visible-children
   "Get the visible children of an entity, filtered by expanded-containers.
-   When a container has both namespace and var children, prioritize namespaces."
+   Filters out schema nodes (they appear only as IO schemas)."
   [model entity-id expanded-containers]
   (let [children-ids (get-children model entity-id)
-        child-kinds (into #{} (map #(:kind (get-in model [:nodes %])) children-ids))
-        ;; If both ns and var children, filter out vars (namespaces take precedence)
-        children-ids (if (and (contains? child-kinds :namespace)
-                              (contains? child-kinds :var))
-                       (into #{} (filter #(#{:namespace :folder :schema}
-                                           (:kind (get-in model [:nodes %])))) children-ids)
-                       children-ids)
-        ;; Filter out schema-defining vars (schema nodes represent them)
-        children-ids (into #{} (remove #(schema-defining-var? model (get-in model [:nodes %]))) children-ids)
         ;; Filter out schema nodes - they appear only as IO schemas
         children-ids (into #{} (remove #(= :schema (:kind (get-in model [:nodes %])))) children-ids)]
     (if (or (nil? expanded-containers)
@@ -178,17 +152,13 @@
        :outputs (schema/extract-schema-refs model output)})))
 
 (defn- compute-var-schema-info
-  "Get schema info for a var by looking up its malli/schema metadata.
+  "Get schema info for a function node from its :signature data.
    Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil.
    Takes the model to determine which keywords are registered schemas."
   [model node]
-  (when (= :var (:kind node))
-    (let [ns-sym (node-ns-sym node)
-          var-sym (node-var-sym node)]
-      (when-let [ns-obj (find-ns ns-sym)]
-        (when-let [v (ns-resolve ns-obj var-sym)]
-          (when-let [fn-schema (:malli/schema (meta v))]
-            (extract-fn-schema-flow model fn-schema)))))))
+  (when (= :function (:kind node))
+    (when-let [fn-schema (get-in node [:data :signature])]
+      (extract-fn-schema-flow model fn-schema))))
 
 (defn- contract->io
   "Derive input/output schema keys from a contract's function schemas."
@@ -241,16 +211,20 @@
 (defn- compute-schema-composition-edges
   "Compute edges between schema nodes based on composition.
    Returns edges from a schema to schemas it references.
-   Uses pre-computed :schema-refs from node data (extracted from source form).
+   Derives refs on-demand from the schema form.
    Only creates edges where both schema nodes are visible."
   [model visible-schema-ids]
   (->> visible-schema-ids
        (mapcat (fn [schema-id]
                  (let [schema-node (get-in model [:nodes schema-id])
-                       refs (get-in schema-node [:data :schema-refs] #{})]
+                       schema-form (get-in schema-node [:data :schema])
+                       refs (when schema-form
+                              (schema/extract-schema-refs model schema-form))]
                    (for [ref-key refs
                          :let [ref-id (schema/find-schema-node-id model ref-key)]
-                         :when (and ref-id (contains? visible-schema-ids ref-id))]
+                         :when (and ref-id
+                                    (not= ref-id schema-id)
+                                    (contains? visible-schema-ids ref-id))]
                      {:from schema-id
                       :to ref-id
                       :edge-type :schema-composition}))))
@@ -281,8 +255,8 @@
               :child-count (count schema-keys)
               :private? false}]
             (for [schema-key schema-keys
-                  :let [owner-ns-id (schema/schema-owner-ns-id model schema-key)
-                        owned? (contains? owned-ns-ids owner-ns-id)]]
+                  :let [owner-id (schema/schema-owner-id model schema-key)
+                        owned? (contains? owned-ns-ids owner-id)]]
               {:id (str (name io-type) "-schema:" (name schema-key))
                :kind :io-schema
                :io-type io-type
@@ -306,7 +280,7 @@
                       (descendant-of? model node-id entity-id)))
         var-ids (->> (:nodes model)
                      vals
-                     (filter #(and (= :var (:kind %))
+                     (filter #(and (= :function (:kind %))
                                    (inside? (:id %))))
                      (map :id))
         input-keys (:inputs io-data)
@@ -362,8 +336,7 @@
      :has-private-children? (has-private-children? model id)
      :expanded? (contains? expanded-containers id)
      :child-count (count (:children node))
-     :private? (node-private? node)
-     :schema-var? (schema-defining-var? model node)}))
+     :private? (node-private? node)}))
 
 ;; -----------------------------------------------------------------------------
 ;; Drill-down expansion helpers
@@ -413,10 +386,10 @@
                              target-child-kind (get-in model [:nodes target-child :kind])
                              target-kind (get-in model [:nodes to :kind])]
                          ;; Type filter: compare visible source with target-child kind
-                         ;; Special case: if target-child is a folder (nested containers),
-                         ;; compare with raw target kind to handle ns→ns through folders
+                         ;; Special case: if target-child is a container (nested containers),
+                         ;; compare with raw target kind to handle container→container nesting
                          (when (or (= source-kind target-child-kind)
-                                   (and (= target-child-kind :folder)
+                                   (and (= target-child-kind :container)
                                         (= source-kind target-kind)))
                            target-child)))))))
          (remove nil?)
@@ -445,10 +418,10 @@
                              source-child-kind (get-in model [:nodes source-child :kind])
                              target-kind (get-in model [:nodes to-ancestor :kind])]
                          ;; Type filter: compare source-child kind with visible target
-                         ;; Special case: if source-child is a folder (nested containers),
-                         ;; compare raw source kind to handle ns→ns through folders
+                         ;; Special case: if source-child is a container (nested containers),
+                         ;; compare raw source kind to handle container→container nesting
                          (when (or (= source-child-kind target-kind)
-                                   (and (= source-child-kind :folder)
+                                   (and (= source-child-kind :container)
                                         (= source-kind target-kind)))
                            source-child)))))))
          (remove nil?)
@@ -555,7 +528,7 @@
   [model entity-id all-node-ids]
   (let [io-data (compute-io-schemas model entity-id)
         owned-ns-ids (->> all-node-ids
-                          (filter #(= :namespace (:kind (get-in model [:nodes %]))))
+                          (filter #(= :container (:kind (get-in model [:nodes %]))))
                           set)
         input-nodes (create-io-nodes model entity-id :input (:inputs io-data) owned-ns-ids)
         output-nodes (create-io-nodes model entity-id :output (:outputs io-data) owned-ns-ids)
@@ -606,9 +579,9 @@
                                   children-ids
                                   drill-down-entities))
 
-        ;; Collect visible var IDs for schema-flow edges
+        ;; Collect visible function IDs for schema-flow edges
         visible-var-ids (->> all-node-ids
-                             (filter #(= :var (:kind (get-in model [:nodes %]))))
+                             (filter #(= :function (:kind (get-in model [:nodes %]))))
                              set)
 
         ;; Collect visible schema IDs for schema-composition edges
