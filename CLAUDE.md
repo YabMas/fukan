@@ -52,6 +52,7 @@ The REPL session persists between evaluations - namespaces and state are maintai
 2. If nREPL exists on port 7889 in this directory, USE IT - do not start another
 3. If no nREPL, ask user to start one (do NOT start in background)
 4. Start server: `clj-nrepl-eval -p 7889 "(user/start {:src \"src\"})"`
+5. Web UI runs on **port 8080** by default: `http://localhost:8080`
 
 ### After Editing Code
 1. Reload changed namespaces: `clj-nrepl-eval -p 7889 "(reload/reload)"`
