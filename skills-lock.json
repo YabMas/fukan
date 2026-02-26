@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "hugoduncan-babashkaprocess": {
+      "source": "smithery/ai",
+      "sourceType": "well-known",
+      "computedHash": "015e5481fa580b222c1e808fe4cf171ebc4d4778022317b255b3b160efca40dd"
+    }
+  }
+}

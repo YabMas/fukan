@@ -1,0 +1,47 @@
+{:skill {:name "babashka.process"
+         :version "1.0.0"
+         :description "Clojure library for spawning sub-processes and shell operations"}
+
+ :library {:name "babashka/process"
+           :version "0.6.25"
+           :url "https://github.com/babashka/process"
+           :license "EPL-1.0"}
+
+ :tags ["shell" "process" "subprocess" "cli" "command-line" "pipes" "streaming"]
+
+ :use-cases ["Running external commands"
+             "Shell scripting in Clojure"
+             "Process pipelines"
+             "Streaming process output"
+             "Build automation"
+             "System administration scripts"
+             "Interactive process control"]
+
+ :features ["High-level shell function"
+            "Low-level process control"
+            "Process pipelines"
+            "I/O streaming"
+            "Environment variable control"
+            "Working directory control"
+            "Exit code checking"
+            "Process destruction"
+            "Pre-start and exit hooks"
+            "String tokenization"]
+
+ :files {:skill "SKILL.md"
+         :examples "examples.clj"}
+
+ :learning-path [{:level "beginner"
+                  :topics ["shell function" "basic commands" "capturing output"]}
+                 {:level "intermediate"
+                  :topics ["process function" "piping" "environment" "error handling"]}
+                 {:level "advanced"
+                  :topics ["streaming" "interactive processes" "pipelines" "hooks"]}]
+
+ :platform {:babashka true
+            :jvm true
+            :clojurescript false}
+
+ :api-coverage {:complete ["shell" "process" "check" "sh" "$" "tokenize"
+                           "alive?" "destroy" "destroy-tree" "pb" "pipeline"
+                           "exec" "start" "parse-args" "process*" "null-file"]}}
