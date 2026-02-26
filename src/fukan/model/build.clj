@@ -425,6 +425,24 @@
          (into #{})
          (vec))))
 
+(defn- remove-schema-defining-vars
+  "Remove function nodes whose vars define schemas.
+   These are redundant — the schema node represents them."
+  [nodes]
+  (let [schema-var-ids (->> (vals nodes)
+                            (filter #(= :schema (:kind %)))
+                            (map (fn [sn] (str (:parent sn) "/" (:label sn))))
+                            set)
+        cleaned (apply dissoc nodes schema-var-ids)]
+    ;; Also remove from parent children sets
+    (reduce (fn [acc var-id]
+              (let [parent-id (:parent (get nodes var-id))]
+                (if (and parent-id (contains? acc parent-id))
+                  (update-in acc [parent-id :children] disj var-id)
+                  acc)))
+            cleaned
+            schema-var-ids)))
+
 ;; -----------------------------------------------------------------------------
 ;; Main build function
 
@@ -492,8 +510,11 @@
 
          ;; Merge type nodes into final nodes map and re-wire children
          ;; (type nodes have parent set but parent's children set needs updating)
-         final-nodes (-> (merge pruned-nodes type-nodes)
-                         wire-children)
+         merged-with-types (-> (merge pruned-nodes type-nodes)
+                               wire-children)
+
+         ;; Remove var nodes that define schemas — they're represented by schema nodes
+         final-nodes (remove-schema-defining-vars merged-with-types)
 
          ;; Attach function signatures from runtime metadata
          ;; (runs after schema nodes merged so schema-defining vars are excluded)
