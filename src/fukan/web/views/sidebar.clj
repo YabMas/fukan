@@ -40,7 +40,7 @@
           ins (if (and (vector? input) (= :cat (first input)))
                 (rest input)
                 [input])]
-      (str (str/join ", " (map schema->str ins)) " → " (schema->str output)))))
+      (str (str/join ", " (map schema->str ins)) " \u2192 " (schema->str output)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Shared components
@@ -107,13 +107,31 @@
          (name key)])]
      [:p.empty-state "None"])))
 
+;; -----------------------------------------------------------------------------
+;; Schema navigation
+
+(defn- render-schema-trail
+  "Render navigation breadcrumb for schema drill-down.
+   trail is a vector of schema ID strings that were navigated through."
+  [trail]
+  (when (seq trail)
+    [:div.schema-trail
+     (for [schema-id trail]
+       [:span.trail-item
+        {"data-on:click" (str "@get('/sse/schema?id=" (url-encode schema-id) "')")}
+        schema-id])
+     [:span.trail-sep "\u203a"]]))
+
+;; -----------------------------------------------------------------------------
+;; Interface rendering
+
 (defn- render-interface
   "Render the interface section based on its type.
    Dispatches to the appropriate sub-renderer.
    Containers (:fn-list) show Inputs, Outputs, and Public API.
    Leaves (:fn-inline) show Inputs and Outputs only.
    Schema defs and name-lists render their own content without IO sections."
-  [{:keys [type items]} dataflow]
+  [{:keys [type items registry]} dataflow nav]
   (case type
     :fn-list
     (list
@@ -125,8 +143,11 @@
     (render-io-sections dataflow)
 
     :schema-def
-    [:div.schema-detail
-     (views.schema/render-schema-detail-view (first items))]
+    (let [trail (or (:trail nav) [])
+          current (:current nav)
+          link-trail (if current (conj trail current) trail)]
+      [:div.schema-detail
+       (views.schema/render-schema-detail-view (first items) (or registry {}) link-trail)])
 
     :name-list
     (list
@@ -154,10 +175,13 @@
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
    Iterates through sections in order: label, description, interface, deps, dependents."
-  [{:keys [label kind parent description interface dataflow]}]
+  [{:keys [label kind parent description interface dataflow nav]}]
   (str
    (h/html
     [:div#node-info
+     ;; Schema navigation trail (when drilling down through schemas)
+     (render-schema-trail (:trail nav))
+
      (when parent
        [:span.back-link {"data-on:click" (str "@get('/sse/view?select=" (url-encode (:id parent)) "')")}
         (str "\u2190 " (:label parent))])
@@ -166,7 +190,7 @@
      (render-description description)
 
      (when interface
-       (render-interface interface dataflow))])))
+       (render-interface interface dataflow nav))])))
 
 (defn- render-edge-detail
   "Dedicated renderer for edge entities."

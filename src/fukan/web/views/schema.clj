@@ -1,26 +1,68 @@
 (ns fukan.web.views.schema
-  "Render Malli schemas to HTML/hiccup."
+  "Render Malli schemas to HTML/hiccup.
+   Supports registry-aware rendering for the detail view and
+   plain rendering for function signatures."
   (:require [clojure.string :as str])
   (:import [java.net URLEncoder]))
 
 ;; -----------------------------------------------------------------------------
-;; Schema Rendering - Direct rendering of Malli schemas to hiccup
+;; Helpers
 
 (declare render-schema-form)
+(declare render-detail-form)
 
 (defn- url-encode [s] (URLEncoder/encode (str s) "UTF-8"))
 
+(defn- schema-ref-url
+  "Build the SSE URL for navigating to a schema.
+   Handles both qualified and unqualified keywords.
+   Appends trail parameter for drill-down navigation."
+  [schema-key trail]
+  (let [k (if (keyword? schema-key) schema-key (keyword schema-key))
+        id-str (if (namespace k)
+                 (str (namespace k) "/" (name k))
+                 (name k))
+        trail-str (when (seq trail)
+                    (str "&trail=" (url-encode (str/join "," trail))))]
+    (str "@get('/sse/schema?id=" (url-encode id-str) (or trail-str "") "')")))
+
+(defn- malli-props
+  "Extract the Malli property map from a schema form, if present."
+  [schema-form]
+  (when (and (vector? schema-form)
+             (>= (count schema-form) 2)
+             (map? (second schema-form)))
+    (second schema-form)))
+
+(defn- malli-args
+  "Get the args of a schema form, skipping the property map if present."
+  [raw-args]
+  (if (map? (first raw-args)) (rest raw-args) raw-args))
+
+(defn- complex-schema?
+  "Is this schema form complex enough to warrant its own detail view?
+   Maps with entries are complex; everything else is shown inline."
+  [form]
+  (and (vector? form)
+       (= :map (first form))
+       ;; Must have actual entries, not just [:map]
+       (> (count form) 1)
+       (some vector? (rest form))))
+
+;; -----------------------------------------------------------------------------
+;; Plain rendering (for function signatures, no registry)
+
 (defn- render-schema-ref
-  "Render a clickable schema reference."
+  "Render a clickable schema reference (plain mode, no trail)."
   [schema-key]
-  (let [k (if (keyword? schema-key) schema-key (keyword schema-key))]
-    [:span.schema-ref
-     {"data-on:click" (str "@get('/sse/schema?id=" (url-encode (str (namespace k) "/" (name k))) "')")}
-     (name k)]))
+  [:span.schema-ref
+   {"data-on:click" (schema-ref-url schema-key nil)}
+   (name schema-key)])
 
 (defn- render-schema-form
   "Render a Malli schema form directly to hiccup.
-   Handles qualified keywords as clickable refs, and various schema types."
+   Handles qualified keywords as clickable refs, and various schema types.
+   Used for function signatures where registry resolution isn't needed."
   [schema-form]
   (cond
     ;; Qualified keyword - clickable schema reference
@@ -34,12 +76,11 @@
     ;; Vector form like [:vector X], [:map ...], [:=> ...]
     (vector? schema-form)
     (let [[type & raw-args] schema-form
-          ;; Skip Malli property map if present (e.g. [:enum {:description "..."} :a :b])
-          args (if (map? (first raw-args)) (rest raw-args) raw-args)]
+          args (malli-args raw-args)]
       (case type
-        :vector [:span "[" (render-schema-form (first args)) ", ...]"]
-        :set [:span "#{" (render-schema-form (first args)) ", ...}"]
-        :map-of [:span "{" (render-schema-form (first args)) " -> " (render-schema-form (second args)) "}"]
+        :vector [:span "[" (render-schema-form (first args)) "]"]
+        :set [:span "#{" (render-schema-form (first args)) "}"]
+        :map-of [:span "{" (render-schema-form (first args)) " \u2192 " (render-schema-form (second args)) "}"]
         :maybe [:span (render-schema-form (first args)) "?"]
         :or (interpose " | " (map render-schema-form args))
         :and (interpose " & " (map render-schema-form args))
@@ -67,31 +108,149 @@
        "("
        (interpose ", " (map render-schema-form in-schemas))
        ")"
-       [:span.arrow " → "]
+       [:span.arrow " \u2192 "]
        (render-schema-form output)])))
 
-(defn- render-map-schema-entries
-  "Render the entries of a map schema.
-   Handles [:map [:key opts? schema] ...] format."
-  [entries]
+;; -----------------------------------------------------------------------------
+;; Detail rendering (registry-aware, with drill-down navigation)
+
+(defn- render-detail-ref
+  "Render a named schema reference in detail mode.
+   If the resolved form is simple (non-map), shows the shape inline with name annotation.
+   If complex (map), shows as a clickable drill-down link."
+  [schema-key registry trail]
+  (if-let [{:keys [form doc]} (get registry schema-key)]
+    (if (complex-schema? form)
+      ;; Complex: clickable link with description tooltip
+      [:span.schema-ref.schema-drilldown
+       {"data-on:click" (schema-ref-url schema-key trail)
+        :title (or doc (str "Drill into " (name schema-key)))}
+       (name schema-key)]
+      ;; Simple: show resolved form inline, name as annotation
+      [:span
+       (render-detail-form form registry trail)
+       [:span.schema-name " \u2039" (name schema-key) "\u203a"]])
+    ;; Not in registry: show as clickable link
+    [:span.schema-ref
+     {"data-on:click" (schema-ref-url schema-key trail)}
+     (name schema-key)]))
+
+(defn- render-detail-form
+  "Render a Malli schema form to hiccup with registry resolution.
+   Resolves named refs to show their shape inline when simple."
+  [schema-form registry trail]
+  (cond
+    ;; Named schema ref - resolve from registry
+    (qualified-keyword? schema-form)
+    (render-detail-ref schema-form registry trail)
+
+    ;; Unqualified keyword that's in the registry (e.g. :NodeKind)
+    (and (keyword? schema-form) (contains? registry schema-form))
+    (render-detail-ref schema-form registry trail)
+
+    ;; Simple keyword (built-in type like :string, :int)
+    (keyword? schema-form)
+    [:span.type (name schema-form)]
+
+    ;; Vector form
+    (vector? schema-form)
+    (let [[type & raw-args] schema-form
+          args (malli-args raw-args)]
+      (case type
+        :vector [:span "[" (render-detail-form (first args) registry trail) "]"]
+        :set [:span "#{" (render-detail-form (first args) registry trail) "}"]
+        :map-of [:span "{" (render-detail-form (first args) registry trail)
+                 " \u2192 " (render-detail-form (second args) registry trail) "}"]
+        :maybe [:span (render-detail-form (first args) registry trail) "?"]
+        :or [:span.schema-or (interpose [:span.schema-sep " | "]
+                                        (map #(render-detail-form % registry trail) args))]
+        :and (interpose " & " (map #(render-detail-form % registry trail) args))
+        :enum [:span.type (str/join " | " (map pr-str args))]
+        :tuple [:span "[" (interpose ", " (map #(render-detail-form % registry trail) args)) "]"]
+        :cat (interpose ", " (map #(render-detail-form % registry trail) args))
+        :=> (let [[input output] args
+                  ins (if (and (vector? input) (= :cat (first input)))
+                        (rest input)
+                        [input])]
+              [:span "("
+               (interpose ", " (map #(render-detail-form % registry trail) ins))
+               " \u2192 "
+               (render-detail-form output registry trail)
+               ")"])
+        :map [:span.type "map"]
+        :fn [:span.type "fn"]
+        [:span (str type)]))
+
+    :else
+    [:span (pr-str schema-form)]))
+
+;; -----------------------------------------------------------------------------
+;; Map entry rendering
+
+(defn- render-map-entries
+  "Render the entries of a map schema with registry resolution.
+   Each entry shows key, optionality, and the resolved type."
+  [entries registry trail]
   (for [entry entries
         :when (vector? entry)]
-    (let [[k second-elem & rest] entry
+    (let [[k second-elem & rest-elems] entry
           [opts child-schema] (if (map? second-elem)
-                                [second-elem (first rest)]
-                                [{} second-elem])]
+                                [second-elem (first rest-elems)]
+                                [{} second-elem])
+          entry-desc (:description opts)]
       [:div.entry
        [:span.key (str k)]
-       (when (:optional opts) [:span.optional " (optional)"])
-       " : "
-       (render-schema-form child-schema)])))
+       (when (:optional opts) [:span.optional "?"])
+       [:span.entry-sep " : "]
+       [:span.entry-type (render-detail-form child-schema registry trail)]
+       (when entry-desc
+         [:div.entry-doc entry-desc])])))
+
+;; -----------------------------------------------------------------------------
+;; Or-variant rendering
+
+(defn- render-or-variants
+  "Render the variants of an :or schema, each as a separate block."
+  [variants registry trail]
+  [:div.schema-variants
+   (for [[idx variant] (map-indexed vector variants)]
+     (if (and (vector? variant) (= :map (first variant)))
+       ;; Map variant - show entries in a block
+       (let [props (malli-props variant)
+             entries (filter vector? (rest variant))
+             desc (:description props)]
+         [:div.schema-variant
+          [:div.variant-label (str "variant " (inc idx))]
+          (when desc [:div.variant-doc desc])
+          (render-map-entries entries registry trail)])
+       ;; Non-map variant - show inline
+       [:div.schema-variant
+        [:div.variant-label (str "variant " (inc idx))]
+        [:div.entry (render-detail-form variant registry trail)]]))])
+
+;; -----------------------------------------------------------------------------
+;; Public API
 
 (defn render-schema-detail-view
-  "Render the full detail view for a schema form."
-  [schema-form]
-  (if (and (vector? schema-form) (= :map (first schema-form)))
+  "Render the full detail view for a schema form.
+   Shows entries (for maps), variants (for :or), or inline form (for other types).
+   Description is handled by the entity detail renderer, not duplicated here.
+   registry: {keyword -> {:form :doc}} for resolving named refs.
+   trail: vector of schema IDs for drill-down navigation."
+  [schema-form registry trail]
+  (cond
     ;; Map schema - show entries
-    (render-map-schema-entries (rest schema-form))
-    ;; Other schema types - show inline
-    [:div (render-schema-form schema-form)]))
+    (and (vector? schema-form) (= :map (first schema-form)))
+    (let [entries (filter vector? (rest schema-form))]
+      [:div.schema-entries
+       (render-map-entries entries registry trail)])
 
+    ;; Or schema - show variants
+    (and (vector? schema-form) (= :or (first schema-form)))
+    (let [args (malli-args (rest schema-form))]
+      (render-or-variants args registry trail))
+
+    ;; Other schema types - show inline
+    :else
+    [:div.schema-inline
+     (render-detail-form schema-form registry trail)]))

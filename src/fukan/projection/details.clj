@@ -105,6 +105,21 @@
       (get-in node [:data :contract :description])
       (get-in node [:data :description])))
 
+(defn- build-schema-registry
+  "Build a registry of resolved schema refs found in a schema form.
+   Returns {keyword -> {:form schema-form :doc str?}} for all named refs.
+   Only resolves one level (no recursive expansion)."
+  [model schema-form]
+  (let [refs (proj.schema/extract-schema-refs model schema-form)]
+    (into {}
+          (map (fn [k]
+                 (let [form (proj.schema/get-schema model k)
+                       doc (when-let [sid (proj.schema/find-schema-node-id model k)]
+                             (get-in model [:nodes sid :data :doc]))]
+                   [k (cond-> {:form form}
+                        doc (assoc :doc doc))])))
+          refs)))
+
 (defn- extract-interface
   "Extract interface data from a node based on its kind.
    Returns {:type :items} or nil."
@@ -130,7 +145,8 @@
       :schema
       (when-let [s (:schema data)]
         {:type :schema-def
-         :items [s]})
+         :items [s]
+         :registry (build-schema-registry model s)})
 
       nil)))
 
@@ -293,10 +309,17 @@
   [:map-of {:description "Map from entity ID to aggregated dependency info."}
    :string :EntityDepInfo])
 
+(def ^:schema FnEntry
+  [:map {:description "A function in a public API listing: name, optional schema, and optional navigable ID."}
+   [:name :string]
+   [:schema {:optional true} :any]
+   [:id {:optional true} :string]])
+
 (def ^:schema InterfaceData
   [:map {:description "The public interface of an entity, typed by display format (fn-list, fn-inline, schema-def, name-list)."}
    [:type [:enum :fn-list :fn-inline :schema-def :name-list]]
-   [:items :any]])
+   [:items [:vector :any]]
+   [:registry {:optional true} [:map-of :keyword :map]]])
 
 (def ^:schema SchemaRef
   [:map {:description "A reference to a schema type with optional description."}
@@ -325,7 +348,7 @@
    [:map
     [:label :string]
     [:kind [:= :edge]]
-    [:called-fns [:vector :any]]]])
+    [:called-fns [:vector :FnEntry]]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Public API

@@ -7,9 +7,9 @@
 ;; Cytoscape Output Schemas
 
 (def ^:schema CytoscapeNode
-  [:map
+  [:map {:description "A graph node in Cytoscape.js camelCase format with display and interaction state."}
    [:id :string]
-   [:kind :string]
+   [:kind {:description "Node kind as a string: container, function, schema, io-container, io-schema."} :string]
    [:label :string]
    [:parent {:optional true} [:maybe :string]]
    [:selected :boolean]
@@ -20,18 +20,18 @@
    [:private {:optional true} :boolean]])
 
 (def ^:schema CytoscapeEdge
-  [:map
+  [:map {:description "A directed edge in Cytoscape.js format with source/target node IDs and semantic type."}
    [:id :string]
    [:source :string]
    [:target :string]
-   [:edgeType :string]])
+   [:edgeType {:description "Edge type as a string: code-flow, schema-flow, data-flow, schema-composition."} :string]])
 
 (def ^:schema CytoscapeGraph
-  [:map
-   [:nodes [:vector CytoscapeNode]]
-   [:edges [:vector CytoscapeEdge]]
-   [:selectedId {:optional true} [:maybe :string]]
-   [:highlightedEdges {:optional true} [:vector :string]]])
+  [:map {:description "Complete graph payload sent to Cytoscape.js: nodes, edges, and UI selection state."}
+   [:nodes [:vector :CytoscapeNode]]
+   [:edges [:vector :CytoscapeEdge]]
+   [:selectedId {:optional true, :description "Currently selected node ID for highlight."} [:maybe :string]]
+   [:highlightedEdges {:optional true, :description "Edge IDs to visually emphasize (connected to selection)."} [:vector :string]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Transformers

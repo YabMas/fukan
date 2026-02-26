@@ -18,10 +18,11 @@
 ;; Schemas
 
 (def ^:schema Request
-  [:map
+  [:map {:description "Ring request map with parsed query parameters."}
    [:query-params {:optional true} [:map-of :string :string]]])
 
-(def ^:schema SSEResponse :any)
+(def ^:schema SSEResponse
+  [:any {:description "HTTP-kit async SSE response (opaque channel handle)."}])
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
@@ -131,9 +132,17 @@
                             (println "SSE error:" (.getMessage e))))
                         (d*/close-sse! sse))}))
 
+(defn- parse-trail
+  "Parse the trail query param into a vector of schema ID strings.
+   Trail is comma-separated list of schema IDs for drill-down navigation."
+  [trail-param]
+  (when (and trail-param (not= trail-param ""))
+    (str/split trail-param #",")))
+
 (defn schema-handler
   "SSE endpoint that streams the schema detail view.
-   Used when clicking on a schema name to view its definition."
+   Used when clicking on a schema name to view its definition.
+   Supports trail parameter for drill-down navigation breadcrumb."
   {:malli/schema [:=> [:cat :Model :Request] :SSEResponse]}
   [model request]
   (hk/->sse-response request
@@ -142,9 +151,12 @@
                         (try
                           (let [params (:query-params request)
                                 schema-id (get params "id")
+                                trail (parse-trail (get params "trail"))
                                 schema-key (keyword schema-id)
                                 node-id (proj.path/find-schema-node-id model schema-key)
-                                sidebar-data (compute-sidebar-data model node-id)]
+                                sidebar-data (-> (compute-sidebar-data model node-id)
+                                                 (assoc :nav {:trail (vec (or trail []))
+                                                              :current schema-id}))]
                             (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data))
                             ;; Update URL with schema
                             (d*/execute-script! sse

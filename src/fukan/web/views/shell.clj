@@ -5,7 +5,8 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:schema Html :string)
+(def ^:schema Html
+  [:string {:description "Rendered HTML string ready for SSE patch or HTTP response."}])
 
 ;; -----------------------------------------------------------------------------
 ;; CSS
@@ -231,24 +232,122 @@
   }
   .schema-detail {
     margin: 0.75rem 0;
-    padding: 0.75rem;
-    background: #f8f9fa;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
     font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     line-height: 1.6;
+  }
+  .schema-doc {
+    margin: 0 0 0.75rem 0;
+    padding: 0.5rem 0.65rem;
+    background: #f7f8fa;
+    border-left: 3px solid #c4d0dc;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: #3d4f5f;
+  }
+  .schema-entries {
+    padding: 0.5rem 0.65rem;
+    background: #f8f9fa;
+    border: 1px solid #eef0f2;
+    border-radius: 4px;
   }
   .schema-detail .entry {
     padding: 0.2rem 0;
-    padding-left: 1rem;
   }
   .schema-detail .key {
     color: #8e44ad;
   }
   .schema-detail .optional {
     color: #95a5a6;
-    font-size: 0.75rem;
+    font-size: 0.9em;
+  }
+  .entry-sep {
+    color: #95a5a6;
+  }
+  .entry-type {
+    color: #2c3e50;
+  }
+  .entry-doc {
+    padding-left: 1rem;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.78rem;
+    color: #7f8c8d;
+    font-style: italic;
+    margin: 0.1rem 0 0.3rem 0;
+  }
+  .schema-name {
+    color: #95a5a6;
+    font-size: 0.85em;
+  }
+  .schema-or {
+    display: inline;
+  }
+  .schema-sep {
+    color: #95a5a6;
+  }
+  .schema-variants {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .schema-variant {
+    padding: 0.5rem 0.65rem;
+    background: #f8f9fa;
+    border: 1px solid #eef0f2;
+    border-radius: 4px;
+  }
+  .variant-label {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #95a0ab;
+    margin-bottom: 0.25rem;
+  }
+  .variant-doc {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.78rem;
+    color: #7f8c8d;
+    font-style: italic;
+    margin-bottom: 0.35rem;
+  }
+  .schema-inline {
+    padding: 0.5rem 0.65rem;
+    background: #f8f9fa;
+    border: 1px solid #eef0f2;
+    border-radius: 4px;
+  }
+  .schema-drilldown {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+  }
+  .schema-drilldown:hover {
+    text-decoration-style: solid;
+  }
+  .schema-trail {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+    font-size: 0.78rem;
+  }
+  .trail-item {
+    color: #2980b9;
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    transition: background 0.1s;
+  }
+  .trail-item:hover {
+    background: #e8f4f8;
+  }
+  .trail-sep {
+    color: #bdc3c7;
+    font-size: 0.8rem;
   }
   .back-link {
     display: inline-block;

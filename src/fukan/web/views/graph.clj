@@ -77,18 +77,13 @@
 ;; Schemas
 
 (def ^:schema EditorState
-  [:map
-   [:view-id {:optional true} [:maybe :string]]
-   [:selected-id {:optional true} [:maybe :string]]
-   [:schema-id {:optional true} [:maybe :string]]
-   [:expanded-containers {:optional true} :set]])
+  [:map {:description "Client-side UI state for the graph editor: current view, selection, and expanded containers."}
+   [:view-id {:optional true, :description "Container being viewed (its children are shown)."} [:maybe :string]]
+   [:selected-id {:optional true, :description "Currently selected/highlighted node."} [:maybe :string]]
+   [:schema-id {:optional true, :description "Schema being inspected in the sidebar."} [:maybe :string]]
+   [:expanded-containers {:optional true, :description "Set of container IDs whose private children are visible."} :set]])
 
-(def ^:schema GraphData
-  [:map
-   [:nodes [:vector :map]]
-   [:edges [:vector :CytoscapeEdge]]
-   [:selectedId {:optional true} [:maybe :string]]
-   [:highlightedEdges {:optional true} [:vector :string]]])
+(def ^:schema GraphData :CytoscapeGraph)
 
 ;; -----------------------------------------------------------------------------
 ;; Render function

@@ -12,7 +12,8 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:schema Handler :fn)
+(def ^:schema Handler
+  [:fn {:description "Ring handler function: takes a request map, returns a response map."}])
 
 (defn- get-content-type
   "Determine content type based on file extension."

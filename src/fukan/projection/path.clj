@@ -20,12 +20,12 @@
 ;; Schemas
 
 (def ^:schema PathSegment
-  [:map
-   [:id [:maybe :string]]
-   [:label :string]])
+  [:map {:description "One step in a breadcrumb path from root to the current entity."}
+   [:id {:description "Node ID to navigate to, nil for the root."} [:maybe :string]]
+   [:label {:description "Short display label (last dotted segment for namespaces)."} :string]])
 
 (def ^:schema EntityPath
-  [:vector :PathSegment])
+  [:vector {:description "Breadcrumb path from root to an entity, ordered ancestor-first."} :PathSegment])
 
 ;; -----------------------------------------------------------------------------
 ;; Public API
