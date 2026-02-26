@@ -42,6 +42,13 @@
 ;; -----------------------------------------------------------------------------
 ;; Schema Discovery
 
+(defn- malli-description
+  "Extract :description from a Malli schema form's property map.
+   Returns nil for bare types or forms without properties."
+  [form]
+  (when (and (vector? form) (>= (count form) 2) (map? (second form)))
+    (:description (second form))))
+
 (defn discover-schema-data
   "Scan loaded namespaces for vars with ^:schema metadata.
    Returns a map of {keyword -> {:schema-form form :doc str? :owner-ns ns-str}}.
@@ -56,7 +63,7 @@
                        :when (:schema (meta v))]
                    [(keyword (name sym))
                     {:schema-form @v
-                     :doc (:doc (meta v))
+                     :doc (malli-description @v)
                      :owner-ns (str (ns-name ns))}])))
        (into {})))
 

@@ -48,7 +48,8 @@
 (defn- render-fn-list
   "Render a list of functions with optional signatures.
    Each entry is {:name :schema :id (optional)}.
-   When :id is present, the item is clickable."
+   When :id is present, the item is clickable.
+   Docs are available by clicking into the specific function."
   [fns]
   [:ul
    (for [{:keys [name schema id]} fns]
@@ -87,7 +88,8 @@
 
 (defn- render-io-sections
   "Render input and output schema type lists.
-   Always renders both headings with counts; shows 'None' when empty."
+   Always renders both headings with counts; shows 'None' when empty.
+   Schema docs are available by clicking into the specific schema."
   [{:keys [inputs outputs]}]
   (list
    [:h5 "Inputs " [:span.dep-count (str "(" (count inputs) ")")]]

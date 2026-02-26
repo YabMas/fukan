@@ -90,6 +90,13 @@
 ;; -----------------------------------------------------------------------------
 ;; Normalization helpers
 
+(defn- schema-ref-with-doc
+  "Build a schema reference map, including description from the schema node."
+  [model k]
+  (let [doc (when-let [sid (proj.schema/find-schema-node-id model k)]
+              (get-in model [:nodes sid :data :doc]))]
+    (cond-> {:key k} doc (assoc :doc doc))))
+
 (defn- extract-description
   "Extract description text from a node.
    Tries :data :doc, :data :contract :description, :data :description."
@@ -144,9 +151,10 @@
   "Extract dataflow (input/output schema types) for an entity.
    For :container — aggregates across contract function schemas.
    For :function — extracts from the single function's schema.
-   Returns {:inputs [{:key k}] :outputs [{:key k}]} or nil."
+   Returns {:inputs [{:key k :doc str?}] :outputs [{:key k :doc str?}]} or nil."
   [model node]
   (let [data (:data node)
+        ref-fn (partial schema-ref-with-doc model)
         aggregate (fn [ios]
                     (let [{:keys [inputs outputs]}
                           (reduce (fn [acc {:keys [inputs outputs]}]
@@ -156,8 +164,8 @@
                                   {:inputs #{} :outputs #{}}
                                   ios)]
                       (when (or (seq inputs) (seq outputs))
-                        {:inputs (->> inputs sort (mapv (fn [k] {:key k})))
-                         :outputs (->> outputs sort (mapv (fn [k] {:key k})))})))]
+                        {:inputs (->> inputs sort (mapv ref-fn))
+                         :outputs (->> outputs sort (mapv ref-fn))})))]
     (case (:kind data)
       :container
       (when-let [fns (seq (get-in data [:contract :functions]))]
@@ -167,27 +175,28 @@
       (when-let [sig (:signature data)]
         (when-let [{:keys [inputs outputs]} (extract-fn-io model sig)]
           (when (or (seq inputs) (seq outputs))
-            {:inputs (->> inputs sort (mapv (fn [k] {:key k})))
-             :outputs (->> outputs sort (mapv (fn [k] {:key k})))})))
+            {:inputs (->> inputs sort (mapv ref-fn))
+             :outputs (->> outputs sort (mapv ref-fn))})))
 
       nil)))
 
 (defn- extract-schemas
   "Extract schema references relevant to this entity.
-   Returns a vector of {:key schema-keyword} or nil."
+   Returns a vector of {:key schema-keyword :doc str?} or nil."
   [model node]
-  (let [data (:data node)]
+  (let [data (:data node)
+        ref-fn (partial schema-ref-with-doc model)]
     (case (:kind data)
       :container
       (let [ns-schemas (proj.schema/schemas-for-ns model (:id node))]
         (when (seq ns-schemas)
-          (->> ns-schemas sort (mapv (fn [k] {:key k})))))
+          (->> ns-schemas sort (mapv ref-fn))))
 
       :function
       (when-let [sig (:signature data)]
         (let [refs (proj.schema/extract-schema-refs model sig)]
           (when (seq refs)
-            (->> refs sort (mapv (fn [k] {:key k}))))))
+            (->> refs sort (mapv ref-fn)))))
 
       nil)))
 

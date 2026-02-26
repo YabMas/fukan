@@ -284,8 +284,10 @@
           schema (or (:malli/schema (meta v))
                      (throw (ex-info (str "Contract function missing :malli/schema metadata: " sym)
                                      {:sym sym})))]
-      {:name (name var-sym)
-       :schema schema})))
+      (cond-> {:name (name var-sym)
+               :schema schema}
+        (:doc (meta v)) (assoc :doc (:doc (meta v))))))
+)
 
 (defn- read-contract-file
   "Read contract.edn from a directory path if present.
@@ -319,8 +321,10 @@
                                      (not (contains? schema-var-ids (:id %)))
                                      (get-in % [:data :signature])))
                        (mapv (fn [node]
-                               {:name (:label node)
-                                :schema (get-in node [:data :signature])})))]
+                               (cond-> {:name (:label node)
+                                        :schema (get-in node [:data :signature])}
+                                 (get-in node [:data :doc])
+                                 (assoc :doc (get-in node [:data :doc]))))))]
     (when (seq functions)
       {:description description
        :functions functions})))

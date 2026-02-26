@@ -71,11 +71,27 @@
              :edges      edges}
       (:io proj) (assoc :io (:io proj)))))
 
+(defn- strip-ref-docs
+  "Strip :doc from schema refs and interface items for overview display.
+   Docs are available via info on the specific entity."
+  [entity-context]
+  (cond-> entity-context
+    (get-in entity-context [:interface :items])
+    (update-in [:interface :items] #(mapv (fn [item] (if (map? item) (dissoc item :doc) item)) %))
+    (:schemas entity-context)
+    (update :schemas #(mapv (fn [ref] (dissoc ref :doc)) %))
+    (get-in entity-context [:dataflow :inputs])
+    (update-in [:dataflow :inputs] #(mapv (fn [ref] (dissoc ref :doc)) %))
+    (get-in entity-context [:dataflow :outputs])
+    (update-in [:dataflow :outputs] #(mapv (fn [ref] (dissoc ref :doc)) %))))
+
 (defn- build-entity-context
-  "Compute entity-details context for embedding in navigation responses."
+  "Compute entity-details context for embedding in navigation responses.
+   Strips inline docs from references — use info for full detail."
   [model entity-id]
   (when-let [d (details/entity-details model entity-id)]
-    (select-keys d [:description :interface :schemas :dataflow :deps :dependents])))
+    (-> (select-keys d [:description :interface :schemas :dataflow :deps :dependents])
+        strip-ref-docs)))
 
 ;; -----------------------------------------------------------------------------
 ;; Commands
