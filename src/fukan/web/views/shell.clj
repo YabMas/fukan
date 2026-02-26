@@ -63,33 +63,47 @@
     background: #fff;
   }
   #sidebar {
-    width: 320px;
-    border-left: 1px solid #ddd;
-    padding: 1rem;
+    width: 340px;
+    border-left: 1px solid #e0e0e0;
+    padding: 1.25rem;
     overflow-y: auto;
-    background: #fafafa;
-  }
-  #sidebar h3 {
-    margin: 0 0 1rem 0;
-    color: #333;
-    font-size: 1.1rem;
+    background: #fff;
   }
   #node-info {
-    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
   }
   #node-info h4 {
-    margin: 0 0 0.25rem 0;
-    color: #2c3e50;
+    margin: 0;
+    color: #1a1a2e;
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.35;
+    word-break: break-word;
   }
-  #node-info .node-type {
-    font-size: 0.85rem;
-    color: #7f8c8d;
-    margin-bottom: 0.75rem;
+  .kind-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #5a6c7d;
+    background: #f0f1f3;
+    padding: 0.1rem 0.45rem;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-left: 0.35rem;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
   }
   #node-info h5 {
-    margin: 1rem 0 0.5rem 0;
-    color: #34495e;
-    font-size: 0.9rem;
+    margin: 0;
+    padding-top: 1rem;
+    border-top: 1px solid #eef0f2;
+    color: #5a6c7d;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
   #node-info h6 {
     margin: 0.5rem 0 0.15rem 0;
@@ -97,34 +111,41 @@
     font-size: 0.82rem;
   }
   #node-info ul {
-    padding-left: 1.2rem;
-    margin: 0;
+    list-style: none;
+    padding-left: 0;
+    margin: 0.35rem 0 0 0;
   }
   #node-info li {
     cursor: pointer;
-    padding: 0.2rem 0;
+    padding: 0.3rem 0.5rem;
     color: #2980b9;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    transition: background 0.1s;
   }
   #node-info li:hover {
-    text-decoration: underline;
+    background: #f0f5fa;
   }
   .empty-state {
-    color: #95a5a6;
+    color: #b0b8c1;
     font-style: italic;
+    font-size: 0.85rem;
   }
   .dep-count {
-    color: #7f8c8d;
-    font-weight: normal;
+    color: #95a0ab;
+    font-weight: 400;
+    font-size: 0.85rem;
   }
   .doc {
-    margin: 0.75rem 0;
-    padding: 0.75rem;
-    background: #f8f9fa;
-    border-left: 3px solid #3498db;
-    font-size: 0.85rem;
-    line-height: 1.5;
-    color: #2c3e50;
+    margin: 0.5rem 0 0 0;
+    padding: 0.6rem 0.75rem;
+    background: #f7f8fa;
+    border-left: 3px solid #c4d0dc;
+    font-size: 0.84rem;
+    line-height: 1.55;
+    color: #3d4f5f;
     white-space: pre-wrap;
+    border-radius: 0 4px 4px 0;
   }
   .doc-label {
     font-size: 0.75rem;
@@ -165,10 +186,10 @@
     vertical-align: middle;
   }
   .sig {
-    padding-left: 1em;
+    padding-left: 0.5rem;
     font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    font-size: 0.8rem;
-    color: #7f8c8d;
+    font-size: 0.78rem;
+    color: #95a0ab;
   }
   .signature {
     margin: 0.75rem 0;
@@ -195,11 +216,11 @@
   .schema-list {
     list-style: none;
     padding-left: 0;
-    margin: 0;
+    margin: 0.35rem 0 0 0;
   }
   .schema-list li {
     padding: 0.3rem 0.5rem;
-    margin: 0.25rem 0;
+    margin: 0.15rem 0;
     background: #f0f7ee;
     border-radius: 4px;
     font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
@@ -231,10 +252,11 @@
   }
   .back-link {
     display: inline-block;
-    margin-bottom: 0.75rem;
-    color: #7f8c8d;
+    margin-bottom: 0.5rem;
+    color: #95a0ab;
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    transition: color 0.1s;
   }
   .back-link:hover {
     color: #2980b9;
