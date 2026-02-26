@@ -1,0 +1,27 @@
+{:paths ["bin"]
+ :tasks
+ {agent:session:start {:doc "Start a jj workspace session for parallel agent work
+
+  Creates an isolated workspace backed by the same repo. Commits made
+  there are immediately visible from the main workspace.
+
+  Usage: bb agent:session:start <name>
+
+  Example:
+    bb agent:session:start schema-cleanup
+    cd /tmp/fukan-schema-cleanup && claude"
+                       :requires ([tasks.agent-session :as agent-session])
+                       :task (agent-session/start (first *command-line-args*))}
+
+  agent:session:stop {:doc "Stop a jj workspace session
+
+  Abandons empty commits, forgets the workspace, cleans up temp dir.
+  Non-empty commits are preserved in the repo history.
+
+  Usage: bb agent:session:stop <name>"
+                      :requires ([tasks.agent-session :as agent-session])
+                      :task (agent-session/stop (first *command-line-args*))}
+
+  agent:session:list {:doc "List active agent sessions"
+                      :requires ([tasks.agent-session :as agent-session])
+                      :task (agent-session/list-sessions)}}}
