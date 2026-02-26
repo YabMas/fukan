@@ -191,7 +191,7 @@
   (let [all-dirs (extract-all-dirs ns-defs)]
     (reduce (fn [acc dir-path]
               (let [id dir-path
-                    label (last (str/split dir-path #"/"))
+                    label (str/join "." (rest (str/split dir-path #"/")))
                     parent-path (dir-parent dir-path)
                     parent-id (get-in acc [:index parent-path])
                     node {:id id
