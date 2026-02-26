@@ -104,6 +104,15 @@ Reference other schemas by keyword (`:NodeId`), not by Clojure var (`NodeId`). V
 
 ---
 
+## Guardrails
+
+- Don't use re-exports to fix dependency issues — have the downstream namespace compose from available data.
+- Don't introduce intermediate composite data shapes (e.g., `view-data`) — the handler should compose projection + view directly.
+- Don't add artificial limits (e.g., drill-down depth) when natural termination is guaranteed.
+- Schema registry should throw on duplicate key registration to catch name collisions early.
+
+---
+
 # Clojure REPL Evaluation
 
 The command `clj-nrepl-eval` is installed on your path for evaluating Clojure code via nREPL.
