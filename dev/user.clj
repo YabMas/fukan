@@ -10,6 +10,12 @@
   {:dirs ["src" "dev"]
    :no-reload '#{user}})
 
+(defn- reload-code!
+  "Force-reload all loaded namespaces regardless of file timestamps.
+   Uses clj-reload's :only :loaded to avoid timestamp detection issues."
+  []
+  (reload/reload {:only :loaded}))
+
 (defn start
   "Start the web server.
 
@@ -36,25 +42,37 @@
 
 (defn restart
   "Restart the server with the same configuration.
-   Reloads the analysis from disk."
+   Force-reloads all code and rebuilds the model."
   []
   (if-let [src (infra-model/get-src)]
     (let [port (or (infra-server/get-port) 8080)]
-      (reload/reload)
+      (reload-code!)
       (stop)
       (start {:src src :port port}))
     (println "No previous configuration. Use (start {:src \"path\"}) instead.")))
 
 (defn refresh
-  "Rebuild model without restarting server.
-   Use this after making changes to the analyzed codebase."
+  "Reload code and rebuild model without restarting server.
+   Use this after editing any source files."
   []
   (if (infra-server/running?)
     (do
-      (reload/reload)
+      (reload-code!)
       (infra-model/refresh-model)
-      (println "Model refreshed. Browser will see changes on next request."))
+      (println "Refreshed. Browser will see changes on next request."))
     (println "Server not running. Use (start {:src \"path\"}) first.")))
+
+(defn status
+  "Print current development environment status."
+  []
+  (println "Server:" (if (infra-server/running?)
+                       (str "running on port " (infra-server/get-port))
+                       "stopped"))
+  (println "Model:" (if-let [m (infra-model/get-model)]
+                      (str (count (:nodes m)) " nodes, "
+                           (count (:edges m)) " edges"
+                           " (src: " (infra-model/get-src) ")")
+                      "not loaded")))
 
 (comment
   ;; Quick start for this project
@@ -62,5 +80,8 @@
   (stop)
   (restart)
 
-  ;; After changing analyzed source code
-  (refresh))
+  ;; After changing source code
+  (refresh)
+
+  ;; Check what's running
+  (status))

@@ -30,18 +30,24 @@ The pipeline in `build.clj`:
 - Schemas use Malli syntax: `[:map ...]`, `[:enum ...]`, `[:vector ...]`
 - Function schemas use `[:=> [:cat input...] output]` and are attached via `:malli/schema` in the var's metadata map
 - Schema keys are keywords derived from the var name (e.g., `Model`, `Node`, `Edge`)
+- See the root `CLAUDE.md` "Schema Design Guidelines" section for writing conventions
 
 ## Core Data Shapes
 
 **Model**: `{:nodes {NodeId -> Node}, :edges [Edge]}`
 
-**Node**: `{:id NodeId, :kind NodeKind, :label String, :parent NodeId?, :children #{NodeId}, :data Map}`
-- `:kind` is one of `:folder`, `:namespace`, `:var`, `:schema`
-- `:data` holds kind-specific fields: `:path`, `:ns-sym`, `:var-sym`, `:doc`, `:private?`, `:schema-key`, `:contract`
+**Node**: `{:id NodeId, :kind NodeKind, :label String, :parent NodeId?, :children #{NodeId}, :data NodeData?}`
+- `:kind` is one of `:container`, `:function`, `:schema`
+- `:data` is a discriminated union (`NodeData`) — see schema for variants per kind
 
 **Edge**: `{:from NodeId, :to NodeId}` — directed, at leaf level (var-to-var or ns-to-ns)
 
-**Contract**: `{:description String?, :functions [{:name String, :schema MalliSchema}]}`
+**NodeData** (discriminated by `:kind`):
+- **container**: `{:doc?, :contract?}` — directory or namespace
+- **function**: `{:doc?, :private?, :signature?}` — var definition
+- **schema**: `{:schema-key, :schema, :doc?}` — schema definition
+
+**Contract**: `{:description?, :functions [ContractFn]}`
 
 ## Index Maps
 
