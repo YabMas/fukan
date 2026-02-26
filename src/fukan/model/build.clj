@@ -42,10 +42,10 @@
 
 (def ^:schema AnalysisData
   [:map {:description "The normalized output format from any language analyzer."}
-   [:namespace-definitions [:vector NsDef]]
-   [:var-definitions [:vector VarDef]]
-   [:var-usages [:vector VarUsage]]
-   [:namespace-usages {:optional true} [:vector NsUsage]]])
+   [:namespace-definitions [:vector :NsDef]]
+   [:var-definitions [:vector :VarDef]]
+   [:var-usages [:vector :VarUsage]]
+   [:namespace-usages {:optional true} [:vector :NsUsage]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Model Schemas
@@ -57,24 +57,55 @@
   [:enum {:description "Structural kind: container (directory/namespace), function (var), or schema definition."}
    :container :function :schema])
 
+(def ^:schema ContractFn
+  [:map {:description "A public function entry in a module contract."}
+   [:name :symbol]
+   [:schema {:optional true} :any]
+   [:doc {:optional true} :string]])
+
+(def ^:schema Contract
+  [:map {:description "A module's external boundary: the functions that callers outside the module use."}
+   [:description {:optional true} :string]
+   [:functions [:vector :ContractFn]]])
+
+(def ^:schema NodeData
+  [:or {:description "Kind-specific properties attached to a node, discriminated by :kind."}
+   ;; Container data (directory or namespace)
+   [:map {:description "Container node data: documentation and optional module contract."}
+    [:kind [:= :container]]
+    [:doc {:optional true} [:maybe :string]]
+    [:contract {:optional true} :Contract]]
+   ;; Function data (var definition)
+   [:map {:description "Function node data: documentation, visibility, and optional type signature."}
+    [:kind [:= :function]]
+    [:doc {:optional true} [:maybe :string]]
+    [:private? {:optional true} :boolean]
+    [:signature {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]]
+   ;; Schema data (schema definition)
+   [:map {:description "Schema node data: the Malli schema form and its keyword key."}
+    [:kind [:= :schema]]
+    [:schema-key :keyword]
+    [:schema :any]
+    [:doc {:optional true} [:maybe :string]]]])
+
 (def ^:schema Node
   [:map {:description "An entity in the codebase graph: directory, namespace, function, or schema definition."}
-   [:id NodeId]
-   [:kind NodeKind]
+   [:id :NodeId]
+   [:kind :NodeKind]
    [:label :string]
-   [:parent {:optional true} [:maybe NodeId]]
-   [:children [:set :string]]
-   [:data {:optional true :description "Kind-specific properties: :doc, :private?, :schema-key, :schema, :contract, :signature"} :map]])
+   [:parent {:optional true} [:maybe :NodeId]]
+   [:children [:set :NodeId]]
+   [:data {:optional true} :NodeData]])
 
 (def ^:schema Edge
   [:map {:description "A directed dependency between two nodes."}
-   [:from {:description "Node ID of the caller/referencer"} NodeId]
-   [:to {:description "Node ID of the callee/referenced entity"} NodeId]])
+   [:from {:description "Node ID of the caller/referencer"} :NodeId]
+   [:to {:description "Node ID of the callee/referenced entity"} :NodeId]])
 
 (def ^:schema Model
   [:map {:description "The complete graph model of a codebase: all entity nodes and their directed dependency edges."}
-   [:nodes [:map-of NodeId Node]]
-   [:edges [:vector Edge]]])
+   [:nodes [:map-of :NodeId :Node]]
+   [:edges [:vector :Edge]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Tree Operations

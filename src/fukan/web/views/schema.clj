@@ -39,16 +39,6 @@
   [raw-args]
   (if (map? (first raw-args)) (rest raw-args) raw-args))
 
-(defn- complex-schema?
-  "Is this schema form complex enough to warrant its own detail view?
-   Maps with entries are complex; everything else is shown inline."
-  [form]
-  (and (vector? form)
-       (= :map (first form))
-       ;; Must have actual entries, not just [:map]
-       (> (count form) 1)
-       (some vector? (rest form))))
-
 ;; -----------------------------------------------------------------------------
 ;; Plain rendering (for function signatures, no registry)
 
@@ -116,24 +106,13 @@
 
 (defn- render-detail-ref
   "Render a named schema reference in detail mode.
-   If the resolved form is simple (non-map), shows the shape inline with name annotation.
-   If complex (map), shows as a clickable drill-down link."
+   Always shows as a clickable link with the schema name.
+   Description tooltip shown when available."
   [schema-key registry trail]
-  (if-let [{:keys [form doc]} (get registry schema-key)]
-    (if (complex-schema? form)
-      ;; Complex: clickable link with description tooltip
-      [:span.schema-ref.schema-drilldown
-       {"data-on:click" (schema-ref-url schema-key trail)
-        :title (or doc (str "Drill into " (name schema-key)))}
-       (name schema-key)]
-      ;; Simple: show resolved form inline, name as annotation
-      [:span
-       (render-detail-form form registry trail)
-       [:span.schema-name " \u2039" (name schema-key) "\u203a"]])
-    ;; Not in registry: show as clickable link
-    [:span.schema-ref
-     {"data-on:click" (schema-ref-url schema-key trail)}
-     (name schema-key)]))
+  (let [{:keys [doc]} (get registry schema-key)
+        attrs (cond-> {"data-on:click" (schema-ref-url schema-key trail)}
+                doc (assoc :title doc))]
+    [:span.schema-ref.schema-drilldown attrs (name schema-key)]))
 
 (defn- render-detail-form
   "Render a Malli schema form to hiccup with registry resolution.

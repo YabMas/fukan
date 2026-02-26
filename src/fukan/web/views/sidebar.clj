@@ -176,21 +176,23 @@
   "Generic renderer for all non-edge entity types.
    Iterates through sections in order: label, description, interface, deps, dependents."
   [{:keys [label kind parent description interface dataflow nav]}]
-  (str
-   (h/html
-    [:div#node-info
-     ;; Schema navigation trail (when drilling down through schemas)
-     (render-schema-trail (:trail nav))
+  (let [schema-view? (:current nav)]
+    (str
+     (h/html
+      [:div#node-info
+       ;; Schema navigation trail (when drilling down through schemas)
+       (render-schema-trail (:trail nav))
 
-     (when parent
-       [:span.back-link {"data-on:click" (str "@get('/sse/view?select=" (url-encode (:id parent)) "')")}
-        (str "\u2190 " (:label parent))])
-     [:h4 label " " [:span.kind-badge (name kind)]]
+       ;; Back-link to parent entity (hidden during schema drill-down)
+       (when (and parent (not schema-view?))
+         [:span.back-link {"data-on:click" (str "@get('/sse/view?select=" (url-encode (:id parent)) "')")}
+          (str "\u2190 " (:label parent))])
+       [:h4 label " " [:span.kind-badge (name kind)]]
 
-     (render-description description)
+       (render-description description)
 
-     (when interface
-       (render-interface interface dataflow nav))])))
+       (when interface
+         (render-interface interface dataflow nav))]))))
 
 (defn- render-edge-detail
   "Dedicated renderer for edge entities."

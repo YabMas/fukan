@@ -276,10 +276,6 @@
     font-style: italic;
     margin: 0.1rem 0 0.3rem 0;
   }
-  .schema-name {
-    color: #95a5a6;
-    font-size: 0.85em;
-  }
   .schema-or {
     display: inline;
   }
