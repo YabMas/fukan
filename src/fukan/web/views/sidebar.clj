@@ -154,7 +154,7 @@
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
    Iterates through sections in order: label, description, interface, deps, dependents."
-  [{:keys [label kind parent description interface dataflow deps dependents]}]
+  [{:keys [label kind parent description interface dataflow]}]
   (str
    (h/html
     [:div#node-info
@@ -166,10 +166,7 @@
      (render-description description)
 
      (when interface
-       (render-interface interface dataflow))
-
-     (render-dep-list "Dependencies" deps)
-     (render-dep-list "Dependents" dependents)])))
+       (render-interface interface dataflow))])))
 
 (defn- render-edge-detail
   "Dedicated renderer for edge entities."
