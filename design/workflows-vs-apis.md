@@ -106,14 +106,105 @@ contract landscape is the primary artifact; workflows emerge from composition.
 These perspectives complement rather than compete. A system needs both: the right
 abstractions (what to build) and the right orchestration (how to wire it).
 
+## Integration Pattern: Integrant + Mycelium
+
+Fukan uses [Integrant](https://github.com/weavejester/integrant) for system
+lifecycle and [Mycelium](https://github.com/yogthos/mycelium) for workflow
+execution. These are complementary layers with a clean seam between them.
+
+### Three levels of state
+
+| Level        | Managed by  | Scope              | Example                                |
+|--------------|-------------|--------------------|-----------------------------------------|
+| **System**   | Integrant   | Process lifetime   | Model, server, language registry        |
+| **Workflow** | Mycelium    | Single execution   | Analysis data accumulating through build |
+| **Request**  | Function args | Single request   | Projection parameters, view state       |
+
+Integrant replaces the `defonce` atoms. Mycelium's accumulating data map handles
+workflow-scoped state. Request-level state stays as function arguments —
+projections take model + params, return data.
+
+### The seam: Integrant config → Mycelium resources
+
+When Integrant resolves `ig/ref`s and calls `init-key`, the config it passes in
+is a map of live, initialized dependencies. That's exactly what Mycelium expects
+as a resources map. The integration is:
+
+1. **Integrant config** declares components and their dependencies
+2. **`ig/ref`** resolves dependencies before `init-key` runs
+3. **`init-key`** receives a map of live dependencies
+4. **`run-workflow`** executes with those as resources; cells use them
+5. **The result** becomes the component value in the system map
+6. **Other components** reference it via `ig/ref`
+
+```clojure
+;; Integrant config
+{:fukan/model  {:src "src"}
+ :fukan/server {:model (ig/ref :fukan/model), :port 8080}}
+
+;; init-key receives resolved config, passes it as Mycelium resources
+(defmethod ig/init-key :fukan/model [_ {:keys [src]}]
+  (let [result (myc/run-workflow
+                 build-workflow
+                 {:src-path src}    ;; Integrant config → Mycelium resources
+                 {})]
+    (:model result)))
+```
+
+Adding a new resource = adding it to the Integrant config. Any workflow that
+needs it = `ig/ref` it. Cells receive it in the resources map. The wiring stays
+in one place.
+
+### Where each tool applies
+
+**Integrant** manages what exists and how to start/stop it. It owns the system
+shape, dependency wiring, and lifecycle (init, halt, suspend, resume).
+
+**Mycelium** manages how things flow. It owns workflow execution, schema
+validation between stages, and execution traces. It runs inside `init-key` or
+inside request handlers — wherever a workflow is needed.
+
+**Neither** applies to the projection layer. Projections are composable APIs
+that receive the model as an argument. The request handler closes over the
+Integrant system and passes the model to projections. No workflow, no lifecycle —
+just functions with contracts.
+
+### Dev workflow
+
+Integrant's suspend/resume collapses the current refresh-vs-restart distinction
+into a single operation:
+
+```
+(reset)
+  → ig/suspend!                    ;; server pauses, holds port
+  → reload code                    ;; clj-reload
+  → ig/resume
+    → init-key :fukan/model        ;; rebuilds via build workflow
+    → resume-key :fukan/server     ;; swaps handler, unblocks
+```
+
+The server never restarts — it swaps the handler closure. The model rebuilds
+because Integrant knows it needs re-initialization.
+
+### The pattern scales
+
+The same pattern works for future components:
+
+```clojure
+{:fukan/language-registry {:analyzers {...}}
+ :fukan/model             {:src       "src"
+                           :languages (ig/ref :fukan/language-registry)}
+ :fukan/server            {:model (ig/ref :fukan/model), :port 8080}
+ :fukan/agent-api         {:model (ig/ref :fukan/model)
+                           :llm   (ig/ref :fukan/llm-client)}}
+```
+
+Each component declares what it needs. Integrant wires it. Internally, each
+component can use Mycelium workflows, plain functions, or anything else. The
+system shape doesn't change when an `init-key` body switches from function calls
+to `run-workflow`.
+
 ## Directions to Explore
-
-### Mycelium for Fukan's build pipeline
-
-The model build pipeline is a natural Mycelium workflow. Each stage becomes a
-cell with schema-validated inputs and outputs. Benefits: traceable execution,
-pluggable language analyzers, compile-time validation of the pipeline. This is
-also a case study for how well Mycelium scales to a real codebase.
 
 ### Fukan as a tool for seeing the boundary
 
