@@ -60,7 +60,7 @@
 (def ^:schema ContractFn
   [:map {:description "A public function entry in a module contract."}
    [:name :symbol]
-   [:schema {:optional true} :any]
+   [:schema {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]
    [:doc {:optional true} :string]])
 
 (def ^:schema Contract
@@ -85,7 +85,7 @@
    [:map {:description "Schema node data: the Malli schema form and its keyword key."}
     [:kind [:= :schema]]
     [:schema-key :keyword]
-    [:schema :any]
+    [:schema {:description "Malli schema form (arbitrary Malli syntax tree)."} :any]
     [:doc {:optional true} [:maybe :string]]]])
 
 (def ^:schema Node

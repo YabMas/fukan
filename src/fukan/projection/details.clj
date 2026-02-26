@@ -312,14 +312,16 @@
 (def ^:schema FnEntry
   [:map {:description "A function in a public API listing: name, optional schema, and optional navigable ID."}
    [:name :string]
-   [:schema {:optional true} :any]
+   [:schema {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]
    [:id {:optional true} :string]])
 
 (def ^:schema InterfaceData
   [:map {:description "The public interface of an entity, typed by display format (fn-list, fn-inline, schema-def, name-list)."}
    [:type [:enum :fn-list :fn-inline :schema-def :name-list]]
-   [:items [:vector :any]]
-   [:registry {:optional true} [:map-of :keyword :map]]])
+   [:items {:description "Content varies by :type — FnEntry maps for fn-list, schema forms for schema-def, function signatures for fn-inline."}
+    [:vector :any]]
+   [:registry {:optional true, :description "Malli schema registry entries: keyword to schema form for resolving named refs."}
+    [:map-of :keyword :any]]])
 
 (def ^:schema SchemaRef
   [:map {:description "A reference to a schema type with optional description."}
@@ -334,7 +336,7 @@
 (def ^:schema EntityDetails
   [:or {:description "Normalized detail structure for any entity (node or edge)."}
    ;; Node entity detail
-   [:map
+   [:map {:description "Node entity: full detail with interface, schemas, dataflow, and dependencies."}
     [:label :string]
     [:kind [:enum :container :function :schema]]
     [:parent [:maybe [:map [:id :string] [:label :string]]]]
@@ -345,7 +347,7 @@
     [:deps :EntityDeps]
     [:dependents :EntityDeps]]
    ;; Edge entity detail
-   [:map
+   [:map {:description "Edge entity: function calls crossing this dependency."}
     [:label :string]
     [:kind [:= :edge]]
     [:called-fns [:vector :FnEntry]]]])

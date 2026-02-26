@@ -71,7 +71,7 @@
 (defn graph->cytoscape
   "Transform internal graph-view format to Cytoscape-compatible output.
    This is the main entry point called at the web boundary."
-  {:malli/schema [:=> [:cat :map :string [:vector :string]] :CytoscapeGraph]}
+  {:malli/schema [:=> [:cat :Projection :string [:vector :string]] :CytoscapeGraph]}
   [{:keys [nodes edges]} selected-id highlighted-edges]
   {:nodes (mapv node->cytoscape nodes)
    :edges (mapv edge->cytoscape edges)

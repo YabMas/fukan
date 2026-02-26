@@ -53,7 +53,7 @@
 (def ^:schema ProjectionOpts
   [:map {:description "Options for graph projection: which entity to view and which containers are expanded."}
    [:view-id {:optional true} [:maybe :string]]
-   [:expanded-containers {:optional true} :set]])
+   [:expanded-containers {:optional true} [:set :NodeId]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Node accessor helpers (access via :data map)
