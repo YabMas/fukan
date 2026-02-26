@@ -10,10 +10,11 @@
 ;; Schemas
 
 (def ^:schema ProjectionNodeKind
-  [:enum :container :function :schema :io-container :io-schema])
+  [:enum {:description "Node kinds in projections, extending model kinds with synthetic IO nodes."}
+   :container :function :schema :io-container :io-schema])
 
 (def ^:schema ProjectionNode
-  [:map
+  [:map {:description "A node in the projected graph with display properties for visualization."}
    [:id :string]
    [:kind :ProjectionNodeKind]
    [:label :string]
@@ -27,10 +28,11 @@
    [:schema-key {:optional true} :keyword]])
 
 (def ^:schema ProjectionEdgeType
-  [:enum :code-flow :schema-flow :data-flow :schema-composition])
+  [:enum {:description "Edge semantic types: code-flow (call graphs), schema-flow (var-to-schema), data-flow (contract IO), schema-composition (schema-to-schema references)."}
+   :code-flow :schema-flow :data-flow :schema-composition])
 
 (def ^:schema ProjectionEdge
-  [:map
+  [:map {:description "A directed, typed edge in the projected graph."}
    [:id :string]
    [:from :string]
    [:to :string]
@@ -38,18 +40,18 @@
    [:schema-key {:optional true} :keyword]])
 
 (def ^:schema ProjectionIO
-  [:map
+  [:map {:description "Input and output schema key sets for a container's contract boundary."}
    [:inputs [:set :keyword]]
    [:outputs [:set :keyword]]])
 
 (def ^:schema Projection
-  [:map
+  [:map {:description "Complete graph projection result: visible nodes, edges, and IO boundary."}
    [:nodes [:vector :ProjectionNode]]
    [:edges [:vector :ProjectionEdge]]
    [:io [:maybe :ProjectionIO]]])
 
 (def ^:schema ProjectionOpts
-  [:map
+  [:map {:description "Options for graph projection: which entity to view and which containers are expanded."}
    [:view-id {:optional true} [:maybe :string]]
    [:expanded-containers {:optional true} :set]])
 

@@ -13,15 +13,13 @@
 ;; to these generic structures.
 
 (def ^:schema NsDef
-  "A namespace/module definition."
-  [:map
+  [:map {:description "A namespace/module definition."}
    [:name :symbol]
    [:filename :string]
    [:doc {:optional true} [:maybe :string]]])
 
 (def ^:schema VarDef
-  "A variable/function/symbol definition."
-  [:map
+  [:map {:description "A variable/function/symbol definition."}
    [:ns :symbol]
    [:name :symbol]
    [:filename :string]
@@ -30,23 +28,20 @@
    [:private {:optional true} :boolean]])
 
 (def ^:schema VarUsage
-  "A reference from one var to another."
-  [:map
-   [:from :symbol]                         ; source namespace
-   [:from-var {:optional true} :symbol]    ; source var (nil if top-level)
-   [:to :symbol]                           ; target namespace
-   [:name :symbol]])                       ; target var name
+  [:map {:description "A reference from one var to another."}
+   [:from {:description "Namespace containing the call site"} :symbol]
+   [:from-var {:optional true :description "Var at the call site, nil if top-level"} :symbol]
+   [:to {:description "Namespace containing the target var"} :symbol]
+   [:name {:description "Name of the referenced var"} :symbol]])
 
 (def ^:schema NsUsage
-  "A namespace require/import relationship."
-  [:map
-   [:from :symbol]       ; requiring namespace
-   [:to :symbol]         ; required namespace
+  [:map {:description "A namespace require/import relationship."}
+   [:from :symbol]
+   [:to :symbol]
    [:filename :string]])
 
 (def ^:schema AnalysisData
-  "The normalized output format from any language analyzer."
-  [:map
+  [:map {:description "The normalized output format from any language analyzer."}
    [:namespace-definitions [:vector NsDef]]
    [:var-definitions [:vector VarDef]]
    [:var-usages [:vector VarUsage]]
@@ -55,28 +50,29 @@
 ;; -----------------------------------------------------------------------------
 ;; Model Schemas
 
-(def ^:schema NodeId :string)
-(def ^:schema NodeKind [:enum :container :function :schema])
+(def ^:schema NodeId
+  [:string {:description "Unique string identifier for a node in the model graph."}])
+
+(def ^:schema NodeKind
+  [:enum {:description "Structural kind: container (directory/namespace), function (var), or schema definition."}
+   :container :function :schema])
 
 (def ^:schema Node
-  "A node in the graph. Kind-specific fields stored in :data map."
-  [:map
+  [:map {:description "An entity in the codebase graph: directory, namespace, function, or schema definition."}
    [:id NodeId]
    [:kind NodeKind]
    [:label :string]
    [:parent {:optional true} [:maybe NodeId]]
    [:children [:set :string]]
-   [:data {:optional true} :map]])  ; polymorphic by :kind — see NodeData
+   [:data {:optional true :description "Kind-specific properties: :doc, :private?, :schema-key, :schema, :contract, :signature"} :map]])
 
 (def ^:schema Edge
-  "A directed edge between two nodes. All info derived from connected nodes."
-  [:map
-   [:from NodeId]
-   [:to NodeId]])
+  [:map {:description "A directed dependency between two nodes."}
+   [:from {:description "Node ID of the caller/referencer"} NodeId]
+   [:to {:description "Node ID of the callee/referenced entity"} NodeId]])
 
 (def ^:schema Model
-  "Simplified model: just nodes and edges. No pre-computed aggregations or indexes."
-  [:map
+  [:map {:description "The complete graph model of a codebase: all entity nodes and their directed dependency edges."}
    [:nodes [:map-of NodeId Node]]
    [:edges [:vector Edge]]])
 

@@ -276,28 +276,31 @@
 ;; Schemas
 
 (def ^:schema EntityDepInfo
-  [:map
+  [:map {:description "Aggregated dependency count and display label for one target."}
    [:count :int]
    [:label :string]])
 
 (def ^:schema EntityDeps
-  [:map-of :string :EntityDepInfo])
+  [:map-of {:description "Map from entity ID to aggregated dependency info."}
+   :string :EntityDepInfo])
 
 (def ^:schema InterfaceData
-  [:map
+  [:map {:description "The public interface of an entity, typed by display format (fn-list, fn-inline, schema-def, name-list)."}
    [:type [:enum :fn-list :fn-inline :schema-def :name-list]]
    [:items :any]])
 
 (def ^:schema SchemaRef
-  [:map [:key :keyword]])
+  [:map {:description "A reference to a schema type with optional description."}
+   [:key :keyword]
+   [:doc {:optional true} [:maybe :string]]])
 
 (def ^:schema DataflowData
-  [:map
+  [:map {:description "Schema references flowing in and out of an entity's boundary."}
    [:inputs [:vector :SchemaRef]]
    [:outputs [:vector :SchemaRef]]])
 
 (def ^:schema EntityDetails
-  [:or
+  [:or {:description "Normalized detail structure for any entity (node or edge)."}
    ;; Node entity detail
    [:map
     [:label :string]

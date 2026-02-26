@@ -33,7 +33,9 @@
 
     ;; Vector form like [:vector X], [:map ...], [:=> ...]
     (vector? schema-form)
-    (let [[type & args] schema-form]
+    (let [[type & raw-args] schema-form
+          ;; Skip Malli property map if present (e.g. [:enum {:description "..."} :a :b])
+          args (if (map? (first raw-args)) (rest raw-args) raw-args)]
       (case type
         :vector [:span "[" (render-schema-form (first args)) ", ...]"]
         :set [:span "#{" (render-schema-form (first args)) ", ...}"]
