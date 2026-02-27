@@ -130,22 +130,21 @@
           nodes
           nodes))
 
-(defn- remove-empty-folders
-  "Remove folder nodes that have no children.
-   folder-ids is the set of node IDs that were created as directory nodes.
+(defn- remove-empty-containers
+  "Remove container nodes that have no children.
    Returns updated nodes map."
-  [nodes folder-ids]
-  (let [;; First, wire children to see which folders are empty
+  [nodes]
+  (let [;; First, wire children to see which containers are empty
         wired (wire-children nodes)
-        ;; Find folders with no children
-        empty-folder-ids (->> wired
-                              (filter (fn [[id node]]
-                                        (and (contains? folder-ids id)
-                                             (empty? (:children node)))))
-                              (map first)
-                              set)]
-    ;; Remove empty folders
-    (apply dissoc nodes empty-folder-ids)))
+        ;; Find containers with no children
+        empty-ids (->> wired
+                       (filter (fn [[_id node]]
+                                 (and (= :container (:kind node))
+                                      (empty? (:children node)))))
+                       (map first)
+                       set)]
+    ;; Remove empty containers
+    (apply dissoc nodes empty-ids)))
 
 (defn- find-smart-root
   "Find a smart starting container by skipping single-child folder containers.
@@ -520,8 +519,8 @@
          ;; Merge nodes
          merged-nodes (merge folder-nodes ns-nodes var-nodes)
 
-         ;; Remove empty folders
-         cleaned-nodes (remove-empty-folders merged-nodes folder-ids)
+         ;; Remove empty containers
+         cleaned-nodes (remove-empty-containers merged-nodes)
 
          ;; Wire up parent-child relationships
          all-nodes (wire-children cleaned-nodes)
