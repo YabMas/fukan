@@ -138,18 +138,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Spec data extraction
 
-(defn- extract-fields
-  "Extract Field maps from an entity/value declaration.
-   Returns a vector of {:name :type-ref :description?} maps for typed fields."
-  [decl]
-  (->> (:fields decl)
-       (keep (fn [field]
-               (when (= :typed (:field-kind field))
-                 (cond-> {:name (:name field)
-                          :type-ref (pr-str (:type-ref field))}
-                   (:comment field) (assoc :description (:comment field))))))
-       vec))
-
 (defn- extract-surface
   "Extract a Surface map from a surface declaration.
    Fields with specific names map to Surface properties:
@@ -185,7 +173,7 @@
 (defn- build-allium-nodes
   "Build nodes from parsed allium files.
    Each file enriches its parent directory's container node with spec data
-   (description, fields, surface). No declaration children are created —
+   (description, surface). No declaration children are created —
    spec entities exist as data on the container, not as graph nodes."
   [src-path parsed-files]
   (reduce
@@ -201,8 +189,6 @@
                           (some :description entities)
                           ;; Or first surface description
                           (some :description surfaces))
-            fields (when (seq entities)
-                     (vec (mapcat extract-fields entities)))
             surface (when (seq surfaces)
                       (extract-surface (first surfaces)))
 
@@ -213,9 +199,7 @@
                          :parent nil
                          :children #{}
                          :data (cond-> {:kind :container}
-                                 surface (assoc :surface surface)
-                                 (seq fields) (assoc :fields fields)
-                                 true (assoc :spec {:ast ast}))}
+                                 surface (assoc :surface surface))}
                         description (assoc :description description))]
         (assoc acc container-id container)))
     {}

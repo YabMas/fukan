@@ -158,21 +158,12 @@
     (let [contrib (analyzer/allium-contribution "src")
           model-container (get (:nodes contrib) "src/fukan/model")]
       (is (some? model-container) "model folder container should exist")
-      (is (some? (get-in model-container [:data :spec]))
-          "container should have :spec data")
-      (is (map? (get-in model-container [:data :spec :ast]))
-          "spec data should contain parsed AST")))
-
-  (testing "container carries extracted fields"
-    (let [contrib (analyzer/allium-contribution "src")
-          model-container (get (:nodes contrib) "src/fukan/model")]
-      (when-let [fields (get-in model-container [:data :fields])]
-        (is (pos? (count fields))
-            "model spec should have extracted fields")
-        (is (every? :name fields)
-            "every field should have a :name")
-        (is (every? :type-ref fields)
-            "every field should have a :type-ref")))))
+      (is (nil? (get-in model-container [:data :spec]))
+          "container should not carry raw :spec data")
+      (is (nil? (get-in model-container [:data :fields]))
+          "container should not carry :fields")
+      (is (= :container (:kind model-container))
+          "container should have kind :container"))))
 
 (deftest allium-model-integration-test
   (testing "merged Clojure + Allium contribution builds valid model"
@@ -185,13 +176,12 @@
                                     (clj-lang/build-schema-nodes ns-index schema-data))})]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
-      ;; Allium spec data should enrich folder containers
-      (let [;; Find the folder node for fukan/model (may be pruned by smart-root)
-            model-nodes (->> (vals (:nodes model))
-                              (filter #(= :container (:kind %)))
-                              (filter #(some-> (:data %) :spec)))]
-        (is (pos? (count model-nodes))
-            "at least one container should carry spec data from allium"))
+      ;; Allium contribution should merge into model containers
+      (let [allium-dirs (->> (vals (:nodes (analyzer/allium-contribution "src")))
+                              (map :id)
+                              set)]
+        (is (some #(contains? allium-dirs %) (keys (:nodes model)))
+            "model should contain containers from allium contribution"))
       ;; No spec-allium containers should exist
       (is (empty? (->> (keys (:nodes model))
                         (filter #(str/includes? % "spec-allium"))))

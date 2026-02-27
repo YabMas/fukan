@@ -3,7 +3,7 @@
 --
 -- Scope: System model — the structured representation of a system combining
 --   specification and implementation
--- Includes: Node hierarchy, edge semantics, contracts, surfaces, fields,
+-- Includes: Node hierarchy, edge semantics, contracts, surfaces,
 --   structural invariants, spec/impl realization states
 -- Excludes:
 --   - Language-specific analysis (external; produces Contribution)
@@ -59,12 +59,6 @@ external entity SchemaForm {
 external entity FunctionSignature {
     -- A function type schema from the language runtime (e.g., Malli
     -- [:=> [:cat inputs...] output]). Used in contracts and function nodes.
-}
-
-external entity SpecData {
-    -- Raw parsed specification data from an Allium file.
-    -- Opaque at the model level. Carried through for downstream
-    -- consumers: drift detection, spec exploration, future tooling.
 }
 
 ------------------------------------------------------------
@@ -253,9 +247,6 @@ entity Node {
     parent: Node?
     children: Node with parent = this
 
-    -- Spec data
-    spec: SpecData?          -- raw specification data, opaque at model level
-
     -- Derived
     is_leaf: children.count = 0
     is_root: parent = null
@@ -266,7 +257,7 @@ variant Container : Node {
     -- Containers organize the tree hierarchy and define module boundaries.
     --
     -- Three realization states:
-    --   spec-only: has surface and/or fields, no implementation children
+    --   spec-only: has surface, no implementation children
     --   impl-only: has code children, no spec data (imperative shell)
     --   both: spec provides the "what", impl children provide the "how"
     --
@@ -280,7 +271,6 @@ variant Container : Node {
 
     -- Specification-derived
     surface: Surface?
-    fields: List<Field>?
 }
 
 variant Function : Node {
@@ -317,9 +307,9 @@ entity Model {
     -- Structural invariants:
     --
     -- NoEmptyContainers: containers without children are removed during
-    --   build. Exception: spec-only containers with surface or fields
-    --   but no provides operations are retained — they represent
-    --   data-shape definitions that have no child functions.
+    --   build. Exception: spec-only containers with a surface declaration
+    --   are retained — they represent data-shape definitions that may
+    --   have no child functions.
     --
     -- NoSelfEdges: every edge has from != to.
     --
@@ -354,15 +344,14 @@ rule BuildModel {
     --
     -- Contributions from specification and implementation analyzers
     -- are merged additively before this rule fires. Spec analyzers
-    -- produce nodes with descriptions, surfaces, fields, and spec
-    -- data. Impl analyzers produce nodes with code structure,
-    -- schemas, and dependencies.
+    -- produce nodes with descriptions and surfaces. Impl analyzers
+    -- produce nodes with code structure, schemas, and dependencies.
     --
     -- Co-location correspondence: when spec and impl files share
     -- a directory, their contributions merge into the same container
-    -- node. The spec enriches the container with surface, fields,
-    -- and description; the impl populates it with function and
-    -- schema children.
+    -- node. The spec enriches the container with surface and
+    -- description; the impl populates it with function and schema
+    -- children.
     --
     -- Surface materialization: each surface provides operation
     -- becomes a Function child of the container. For spec-only

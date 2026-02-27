@@ -102,13 +102,12 @@
 
 ;; ---------------------------------------------------------------------------
 ;; NoEmptyContainers: every :container has non-empty :children,
-;; unless it carries spec data (surface, fields, or spec).
+;; unless it has a surface declaration.
 
 (defn- has-spec-data?
-  "True if a container node has spec-derived content."
+  "True if a container node has a surface declaration."
   [node]
-  (let [data (:data node)]
-    (or (:surface data) (seq (:fields data)) (:spec data))))
+  (:surface (:data node)))
 
 (defn no-empty-containers?
   "Verify that every container node has at least one child.

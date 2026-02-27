@@ -230,17 +230,15 @@
 (defn- normalize-entity
   "Assemble the normalized entity detail map."
   [model node deps dependents]
-  (cond-> {:label       (:label node)
-           :kind        (:kind node)
-           :parent      (extract-parent model node)
-           :description (extract-description node)
-           :interface   (extract-interface model node)
-           :schemas     (extract-schemas model node)
-           :dataflow    (extract-dataflow model node)
-           :deps        deps
-           :dependents  dependents}
-    (seq (get-in node [:data :fields]))
-    (assoc :fields (get-in node [:data :fields]))))
+  {:label       (:label node)
+   :kind        (:kind node)
+   :parent      (extract-parent model node)
+   :description (extract-description node)
+   :interface   (extract-interface model node)
+   :schemas     (extract-schemas model node)
+   :dataflow    (extract-dataflow model node)
+   :deps        deps
+   :dependents  dependents})
 
 ;; -----------------------------------------------------------------------------
 ;; Edge Details
@@ -352,12 +350,6 @@
    [:inputs [:vector :SchemaRef]]
    [:outputs [:vector :SchemaRef]]])
 
-(def ^:schema FieldRef
-  [:map {:description "A named, typed property from a specification entity."}
-   [:name :string]
-   [:type-ref :string]
-   [:description {:optional true} :string]])
-
 (def ^:schema EntityDetails
   [:or {:description "Normalized detail structure for any entity (node or edge)."}
    ;; Node entity detail
@@ -366,7 +358,6 @@
     [:kind [:enum :container :function :schema]]
     [:parent [:maybe [:map [:id :string] [:label :string]]]]
     [:description [:maybe :string]]
-    [:fields {:optional true} [:vector :FieldRef]]
     [:interface [:maybe :InterfaceData]]
     [:schemas [:maybe [:vector :SchemaRef]]]
     [:dataflow [:maybe :DataflowData]]

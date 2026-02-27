@@ -340,7 +340,7 @@
       (is (not (insta/failure? result)))
       (is (= "1" (:allium-version result)))
       (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 8 (:external-entity types)))  ;; 4 data shapes + 4 boundaries
+        (is (= 7 (:external-entity types)))  ;; 3 data shapes + 4 boundaries
         (is (= 5 (:value types)))  ;; Edge, Field, Surface, Contract, ContractFunction
         (is (= 2 (:entity types)))  ;; Node, Model
         (is (= 3 (:variant types)))  ;; Container, Function, Schema

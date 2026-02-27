@@ -92,9 +92,7 @@
     [:kind [:= :container]]
     [:doc {:optional true} [:maybe :string]]
     [:contract {:optional true} :Contract]
-    [:surface {:optional true} :Surface]
-    [:fields {:optional true} [:vector :Field]]
-    [:spec {:optional true, :description "Raw parsed specification data."} :any]]
+    [:surface {:optional true} :Surface]]
    ;; Function data (var definition)
    [:map {:description "Function node data: documentation, visibility, and optional type signature."}
     [:kind [:= :function]]
@@ -149,14 +147,13 @@
           nodes))
 
 (defn- has-spec-data?
-  "True if a container node has spec-derived content: surface, fields, or spec data."
+  "True if a container node has a surface declaration."
   [node]
-  (let [data (:data node)]
-    (or (:surface data) (seq (:fields data)) (:spec data))))
+  (:surface (:data node)))
 
 (defn- remove-empty-containers
   "Remove container nodes that have no children.
-   Exception: containers with spec data (surface, fields, or spec) are retained
+   Exception: containers with a surface declaration are retained
    even without children — they represent data-shape definitions."
   [nodes]
   (let [;; First, wire children to see which containers are empty
@@ -518,9 +515,9 @@
 
 (defn- merge-node-pair
   "Merge two nodes with the same ID. Deep-merges :data maps for containers
-   so that spec data (surface, fields, description) enriches impl data
-   (doc, contract) rather than overwriting it. Non-container nodes or
-   nodes with different kinds use simple last-wins merge."
+   so that spec data (surface, description) enriches impl data (doc, contract)
+   rather than overwriting it. Non-container nodes or nodes with different
+   kinds use simple last-wins merge."
   [a b]
   (if (and (= :container (:kind a)) (= :container (:kind b)))
     (-> (merge a b)

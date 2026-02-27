@@ -130,7 +130,6 @@ value EntityDetail {
     kind: container | function | schema
     parent: { id: String, label: String }?
     description: String?
-    fields: List<model/Field>?   -- spec-derived typed field shapes
     interface: InterfaceData?
     schemas: List<SchemaRef>?
     dataflow: DataflowData?

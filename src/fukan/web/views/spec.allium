@@ -217,14 +217,13 @@ rule RenderSidebar {
     -- SectionOrder (non-edge entities):
     --   1. Label — entity name + kind badge
     --   2. Description — from doc, contract, or spec description
-    --   3. Fields — typed field shapes from specification (when present)
-    --   4. Interface — dispatched by type, with IO sections:
+    --   3. Interface — dispatched by type, with IO sections:
     --      - fn_list (containers): Inputs, Outputs, Public API
     --      - fn_inline (functions): Inputs, Outputs
     --      - schema_def (schemas): schema detail view with registry
     --      - name_list (interfaces): plain function name list
-    --   5. Dependencies — entities this one depends on ("None" if empty)
-    --   6. Dependents — entities that depend on this one ("None" if empty)
+    --   4. Dependencies — entities this one depends on ("None" if empty)
+    --   5. Dependents — entities that depend on this one ("None" if empty)
     --
     -- EdgeRenderer: label + "Functions Called" list using shared fn-list
     --   component.

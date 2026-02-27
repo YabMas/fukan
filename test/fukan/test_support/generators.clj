@@ -229,23 +229,13 @@
                              (mapv (fn [has-surface?]
                                      (if has-surface? gen-surface (gen/return nil)))
                                    surface-flags))
-             ;; Sometimes attach fields to containers
-             field-flags (gen/vector (gen/frequency [[3 (gen/return false)]
-                                                     [1 (gen/return true)]])
-                                     (count container-names))
-             field-lists (apply gen/tuple
-                                (mapv (fn [has-fields?]
-                                        (if has-fields?
-                                          (gen/vector gen-field 1 3)
-                                          (gen/return nil)))
-                                      field-flags))]
+]
      (let [root-id "root"
            root (make-container root-id "root" nil)
-           containers (mapv (fn [name surface fields]
+           containers (mapv (fn [name surface]
                               (cond-> (make-container (str "ns:" name) name root-id)
-                                surface (assoc-in [:data :surface] surface)
-                                (seq fields) (assoc-in [:data :fields] fields)))
-                            container-names surfaces field-lists)
+                                surface (assoc-in [:data :surface] surface)))
+                            container-names surfaces)
            fn-nodes (vec (mapcat (fn [container fn-names private-flags]
                                    (map (fn [fname priv?]
                                           (make-function
