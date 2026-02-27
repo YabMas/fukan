@@ -1,4 +1,5 @@
-{:description "Language-specific analyzers that produce normalized AnalysisData and type nodes (e.g., schema nodes) for the model build pipeline. Currently implements Clojure via clj-kondo and Malli schema discovery."
+{:description "Language-specific analyzers that produce Contributions for the model build pipeline. Clojure via clj-kondo + Malli schema discovery."
  :functions [fukan.model.languages.clojure/run-kondo
              fukan.model.languages.clojure/discover-schema-data
-             fukan.model.languages.clojure/build-schema-nodes]}
+             fukan.model.languages.clojure/build-schema-nodes
+             fukan.model.languages.clojure/contribution]}

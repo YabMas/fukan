@@ -77,9 +77,9 @@
 
 (deftest fukan-projection-invariants
   (testing "Fukan's own model satisfies projection invariants for every container"
-    (let [analysis (clj-lang/run-kondo "src")
+    (let [contrib (clj-lang/contribution "src")
           schema-data (clj-lang/discover-schema-data)
-          model (build/build-model analysis
+          model (build/build-model contrib
                   {:type-nodes-fn (fn [ns-index]
                                     (clj-lang/build-schema-nodes ns-index schema-data))})
           container-ids (->> (vals (:nodes model))

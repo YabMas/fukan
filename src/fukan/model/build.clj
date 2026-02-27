@@ -203,11 +203,10 @@
                   (rest dir-parts)))))
 
 (defn- extract-all-dirs
-  "Extract all unique directory paths from namespace definitions."
-  [ns-defs]
-  (->> ns-defs
-       (mapcat (fn [{:keys [filename]}]
-                 (parent-dirs filename)))
+  "Extract all unique directory paths from file paths."
+  [filepaths]
+  (->> filepaths
+       (mapcat parent-dirs)
        (into #{})))
 
 (defn- dir-parent
@@ -217,11 +216,11 @@
     (when idx
       (subs dir-path 0 idx))))
 
-(defn- build-folder-nodes
-  "Build folder nodes from namespace definitions.
+(defn- build-folder-nodes-from-files
+  "Build folder nodes from a list of file paths.
    Returns {:nodes {id -> node}, :index {path -> id}}."
-  [ns-defs]
-  (let [all-dirs (extract-all-dirs ns-defs)]
+  [filepaths]
+  (let [all-dirs (extract-all-dirs filepaths)]
     (reduce (fn [acc dir-path]
               (let [id dir-path
                     label (str/join "." (rest (str/split dir-path #"/")))
@@ -240,17 +239,23 @@
             ;; Sort dirs so parents are processed first
             (sort-by count all-dirs))))
 
+(defn build-folder-nodes
+  "Build folder nodes from namespace definitions.
+   Returns {:nodes {id -> node}, :index {path -> id}}."
+  [ns-defs]
+  (build-folder-nodes-from-files (mapv :filename ns-defs)))
+
 ;; -----------------------------------------------------------------------------
 ;; Namespace node construction
 
-(defn- file-to-folder
+(defn file-to-folder
   "Get the folder path for a file."
   [filepath]
   (let [parts (str/split filepath #"/")]
     (when (> (count parts) 1)
       (str/join "/" (butlast parts)))))
 
-(defn- build-namespace-nodes
+(defn build-namespace-nodes
   "Build namespace nodes from namespace definitions.
    Returns {:nodes {id -> node}, :index {ns-sym -> id}}."
   [ns-defs folder-index]
@@ -274,7 +279,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Var node construction
 
-(defn- build-var-nodes
+(defn build-var-nodes
   "Build var nodes from var definitions.
    Returns {:nodes {id -> node}, :index {[ns-sym var-name] -> id}}."
   [var-defs ns-index]
@@ -413,7 +418,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Edge construction
 
-(defn- build-edges
+(defn build-edges
   "Build raw edges from actual call relationships.
 
    Creates edges for each var usage where the target var is defined in the codebase.
@@ -438,7 +443,7 @@
          (into #{})
          (vec))))
 
-(defn- build-ns-edges
+(defn build-ns-edges
   "Build namespace-to-namespace edges from require relationships.
    Creates edges for each namespace require where both namespaces
    are defined in the codebase.
@@ -477,47 +482,67 @@
             schema-var-ids)))
 
 ;; -----------------------------------------------------------------------------
+;; Contribution
+
+(def ^:schema Contribution
+  [:map {:description "A language contribution: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces a contribution; contributions are merged before calling build-model."}
+   [:source-files {:description "File paths for folder hierarchy construction."} [:vector :string]]
+   [:nodes {:description "Pre-built nodes. Container nodes should have :parent nil and :filename in :data for folder parenting."} [:map-of :NodeId :Node]]
+   [:edges {:description "Pre-built edges between nodes."} [:vector :Edge]]])
+
+(defn merge-contributions
+  "Merge multiple language contributions into one.
+   Nodes are merged by ID (last wins). Edges are deduplicated."
+  {:malli/schema [:=> [:cat [:* :Contribution]] :Contribution]}
+  [& contributions]
+  {:source-files (vec (mapcat :source-files contributions))
+   :nodes (apply merge (map :nodes contributions))
+   :edges (vec (into #{} (mapcat :edges contributions)))})
+
+;; -----------------------------------------------------------------------------
 ;; Main build function
 
 (defn build-model
-  "Build the complete model from analysis data.
+  "Build the complete model from a language contribution.
 
-   Returns a map containing:
-   - :nodes - {id -> node} for all folders, namespaces, vars, and optionally type nodes
-   - :edges - vector of {:from :to} edges (var-level and ns-level combined)
+   A contribution contains pre-built nodes and edges from language analyzers.
+   This function handles the language-agnostic pipeline:
+   1. Build folder hierarchy from :source-files
+   2. Parent container nodes under their folders
+   3. Remove empty containers, wire children, smart-root prune
+   4. Apply post-processing hooks (type nodes, signatures, contracts)
 
    Options:
    - :type-nodes-fn - optional function (fn [ns-index] -> nodes-map) to build
                       language-specific type nodes (e.g., schemas). The ns-index
-                      is a map of {ns-sym -> node-id}.
+                      is a map of {ns-sym -> node-id} derived from container nodes."
+  {:malli/schema [:=> [:cat :Contribution [:? :map]] :Model]}
+  ([contribution] (build-model contribution {}))
+  ([contribution {:keys [type-nodes-fn] :or {type-nodes-fn (constantly {})}}]
+   (let [source-files (:source-files contribution)
+         contrib-nodes (:nodes contribution)
+         contrib-edges (:edges contribution)
 
-   Edge aggregation (folder-level) and schema flow edges are computed
-   on-demand by the view layer, not pre-computed here.
-
-   Note: Single-child folder chains are pruned - the root of the tree is the
-   first folder with multiple children or non-folder children."
-  {:malli/schema [:=> [:cat :AnalysisData [:? :map]] :Model]}
-  ([analysis] (build-model analysis {}))
-  ([analysis {:keys [type-nodes-fn] :or {type-nodes-fn (constantly {})}}]
-   (let [ns-defs (:namespace-definitions analysis)
-         var-defs (:var-definitions analysis)
-
-         ;; Build all node types with indexes
-         {:keys [nodes index]} (build-folder-nodes ns-defs)
+         ;; Build folder hierarchy from source files
+         {:keys [nodes index]} (build-folder-nodes-from-files source-files)
          folder-nodes nodes
          folder-index index
          folder-ids (set (keys folder-nodes))
 
-         {:keys [nodes index]} (build-namespace-nodes ns-defs folder-index)
-         ns-nodes nodes
-         ns-index index
+         ;; Set parents on contribution's container nodes from :filename in data
+         parented-nodes (reduce-kv
+                          (fn [acc id node]
+                            (if (and (= :container (:kind node))
+                                     (nil? (:parent node)))
+                              (let [filename (get-in node [:data :filename])
+                                    folder-path (when filename (file-to-folder filename))
+                                    parent-id (when folder-path (get folder-index folder-path))]
+                                (assoc acc id (assoc node :parent parent-id)))
+                              (assoc acc id node)))
+                          {} contrib-nodes)
 
-         {:keys [nodes index]} (build-var-nodes var-defs ns-index)
-         var-nodes nodes
-         var-index index
-
-         ;; Merge nodes
-         merged-nodes (merge folder-nodes ns-nodes var-nodes)
+         ;; Merge folder nodes + contribution nodes
+         merged-nodes (merge folder-nodes parented-nodes)
 
          ;; Remove empty containers
          cleaned-nodes (remove-empty-containers merged-nodes)
@@ -529,20 +554,28 @@
          smart-root (find-smart-root all-nodes folder-ids)
          pruned-nodes (prune-to-smart-root all-nodes smart-root)
 
-         ;; Build raw var-level edges
-         var-edges (build-edges analysis var-index ns-index)
+         ;; Derive ns-index from non-folder container nodes for hooks
+         ns-index (->> (vals pruned-nodes)
+                       (filter #(and (= :container (:kind %))
+                                     (not (contains? folder-ids (:id %)))))
+                       (reduce (fn [acc node]
+                                 (assoc acc (symbol (:id node)) (:id node)))
+                               {}))
 
-         ;; Build namespace-level edges from require relationships
-         ns-edges (build-ns-edges analysis ns-index)
-
-         ;; Combine all edges (var-level + ns-level, deduplicated)
-         all-edges (vec (into (set var-edges) ns-edges))
+         ;; Filter edges to surviving nodes, deduplicate
+         node-ids (set (keys pruned-nodes))
+         all-edges (->> contrib-edges
+                        (filter (fn [{:keys [from to]}]
+                                  (and (contains? node-ids from)
+                                       (contains? node-ids to)
+                                       (not= from to))))
+                        (into #{})
+                        vec)
 
          ;; Build type nodes (e.g., schema nodes) using ns-index
          type-nodes (type-nodes-fn ns-index)
 
          ;; Merge type nodes into final nodes map and re-wire children
-         ;; (type nodes have parent set but parent's children set needs updating)
          merged-with-types (-> (merge pruned-nodes type-nodes)
                                wire-children)
 
@@ -550,7 +583,6 @@
          final-nodes (remove-schema-defining-vars merged-with-types)
 
          ;; Attach function signatures from runtime metadata
-         ;; (runs after schema nodes merged so schema-defining vars are excluded)
          signed-nodes (attach-var-signatures final-nodes)
 
          ;; Attach contracts to containers

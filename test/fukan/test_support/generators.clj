@@ -86,6 +86,82 @@
               :namespace-usages ns-usages})))))))
 
 ;; ---------------------------------------------------------------------------
+;; gen-contribution
+
+(defn gen-contribution
+  "Generate a valid Contribution with containers, functions, and edges.
+   Container nodes have :parent nil and :filename in data (as expected by build-model).
+   Function nodes have :parent pointing to their namespace container."
+  ([] (gen-contribution {}))
+  ([{:keys [min-ns max-ns min-vars-per-ns max-vars-per-ns]
+     :or {min-ns 2 max-ns 6 min-vars-per-ns 1 max-vars-per-ns 5}}]
+   (gen/let [ns-count (gen/choose min-ns max-ns)
+             base-segments (gen/vector gen-ns-segment ns-count)
+             ns-names (gen/return (mapv #(symbol (str "test." %)) (distinct base-segments)))
+             ns-names (gen/return (if (< (count ns-names) 2)
+                                    [(symbol "test.alpha") (symbol "test.beta")]
+                                    ns-names))]
+     (gen/let [var-counts (gen/vector (gen/choose min-vars-per-ns max-vars-per-ns)
+                                      (count ns-names))
+               var-name-lists (apply gen/tuple
+                                     (mapv (fn [cnt]
+                                             (gen/fmap (fn [names] (vec (take cnt (distinct names))))
+                                                       (gen/vector gen-simple-name (max cnt (* cnt 2)))))
+                                           var-counts))]
+       (let [source-files (mapv (fn [ns-sym]
+                                  (str "src/" (str/replace (str ns-sym) "." "/") ".clj"))
+                                ns-names)
+             ns-nodes (into {} (map (fn [ns-sym filepath]
+                                      (let [id (str ns-sym)]
+                                        [id {:id id
+                                             :kind :container
+                                             :label id
+                                             :parent nil
+                                             :children #{}
+                                             :data {:kind :container
+                                                    :filename filepath}}]))
+                                    ns-names source-files))
+             var-nodes (into {} (mapcat (fn [ns-sym var-names]
+                                          (map (fn [vname]
+                                                 (let [id (str ns-sym "/" vname)]
+                                                   [id {:id id
+                                                        :kind :function
+                                                        :label vname
+                                                        :parent (str ns-sym)
+                                                        :children #{}
+                                                        :data {:kind :function
+                                                               :private? false}}]))
+                                               var-names))
+                                        ns-names var-name-lists))
+             all-fn-ids (vec (keys var-nodes))
+             all-ns-ids (vec (map str ns-names))]
+         (gen/let [edge-count (gen/choose 0 (min 20 (* (count all-fn-ids) 2)))
+                   edge-from-idxs (gen/vector (gen/choose 0 (max 0 (dec (count all-fn-ids)))) edge-count)
+                   edge-to-idxs (gen/vector (gen/choose 0 (max 0 (dec (count all-fn-ids)))) edge-count)
+                   ns-edge-count (gen/choose 0 (min 10 (* (count all-ns-ids) 2)))
+                   ns-from-idxs (gen/vector (gen/choose 0 (dec (count all-ns-ids))) ns-edge-count)
+                   ns-to-idxs (gen/vector (gen/choose 0 (dec (count all-ns-ids))) ns-edge-count)]
+           (let [var-edges (->> (map (fn [fi ti]
+                                       (let [from (nth all-fn-ids fi)
+                                             to (nth all-fn-ids ti)]
+                                         (when (not= from to)
+                                           {:from from :to to})))
+                                     edge-from-idxs edge-to-idxs)
+                                (remove nil?)
+                                vec)
+                 ns-edges (->> (map (fn [fi ti]
+                                      (let [from (nth all-ns-ids fi)
+                                            to (nth all-ns-ids ti)]
+                                        (when (not= from to)
+                                          {:from from :to to})))
+                                    ns-from-idxs ns-to-idxs)
+                               (remove nil?)
+                               vec)]
+             {:source-files source-files
+              :nodes (merge ns-nodes var-nodes)
+              :edges (vec (into (set var-edges) ns-edges))})))))))
+
+;; ---------------------------------------------------------------------------
 ;; gen-model
 
 (defn- make-container [id label parent-id]

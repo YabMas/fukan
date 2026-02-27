@@ -1,7 +1,7 @@
 (ns fukan.model.build-test
   "Generative + integration tests for the model build pipeline.
    Verifies that all model invariants from model.allium hold across
-   randomly generated analysis data and Fukan's own source code."
+   randomly generated contributions and Fukan's own source code."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.properties :as prop]
@@ -14,36 +14,36 @@
 ;; Generative: build-model satisfies all model invariants
 
 (defspec build-model-satisfies-all-invariants 100
-  (prop/for-all [analysis (gen/gen-analysis-data)]
-    (let [model (build/build-model analysis)]
+  (prop/for-all [contrib (gen/gen-contribution)]
+    (let [model (build/build-model contrib)]
       (true? (inv/valid-model? model)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Individual invariant defspecs for clearer failure messages
 
 (defspec build-model-tree-structure 100
-  (prop/for-all [analysis (gen/gen-analysis-data)]
-    (let [model (build/build-model analysis)]
+  (prop/for-all [contrib (gen/gen-contribution)]
+    (let [model (build/build-model contrib)]
       (true? (inv/tree-structure? model)))))
 
 (defspec build-model-leaf-strictness 100
-  (prop/for-all [analysis (gen/gen-analysis-data)]
-    (let [model (build/build-model analysis)]
+  (prop/for-all [contrib (gen/gen-contribution)]
+    (let [model (build/build-model contrib)]
       (true? (inv/leaf-strictness? model)))))
 
 (defspec build-model-no-empty-containers 100
-  (prop/for-all [analysis (gen/gen-analysis-data)]
-    (let [model (build/build-model analysis)]
+  (prop/for-all [contrib (gen/gen-contribution)]
+    (let [model (build/build-model contrib)]
       (true? (inv/no-empty-containers? model)))))
 
 (defspec build-model-no-self-edges 100
-  (prop/for-all [analysis (gen/gen-analysis-data)]
-    (let [model (build/build-model analysis)]
+  (prop/for-all [contrib (gen/gen-contribution)]
+    (let [model (build/build-model contrib)]
       (true? (inv/no-self-edges? model)))))
 
 (defspec build-model-edge-integrity 100
-  (prop/for-all [analysis (gen/gen-analysis-data)]
-    (let [model (build/build-model analysis)]
+  (prop/for-all [contrib (gen/gen-contribution)]
+    (let [model (build/build-model contrib)]
       (true? (inv/edge-integrity? model)))))
 
 ;; ---------------------------------------------------------------------------
@@ -51,9 +51,9 @@
 
 (deftest fukan-self-analysis-invariants
   (testing "Fukan's own source code satisfies all model invariants"
-    (let [analysis (clj-lang/run-kondo "src")
+    (let [contrib (clj-lang/contribution "src")
           schema-data (clj-lang/discover-schema-data)
-          model (build/build-model analysis
+          model (build/build-model contrib
                   {:type-nodes-fn (fn [ns-index]
                                     (clj-lang/build-schema-nodes ns-index schema-data))})]
       (is (pos? (count (:nodes model))) "model should have nodes")

@@ -1,10 +1,12 @@
 (ns fukan.model.languages.clojure
   "Clojure-specific analysis and model construction.
-   Runs clj-kondo static analysis to produce AnalysisData, then discovers
-   Malli schema definitions (^:schema vars) and builds schema nodes that
-   integrate into the language-agnostic model graph."
+   Runs clj-kondo static analysis to produce AnalysisData, discovers
+   Malli schema definitions (^:schema vars), and produces a Contribution
+   for the language-agnostic model build pipeline."
   (:require [clojure.java.shell :as shell]
-            [clojure.edn :as edn]))
+            [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [fukan.model.build :as build]))
 
 ;; -----------------------------------------------------------------------------
 ;; Static Analysis
@@ -148,3 +150,50 @@
                             :schema schema-form
                             :doc doc}}])))
        (into {})))
+
+;; -----------------------------------------------------------------------------
+;; Contribution
+
+(defn analysis->contribution
+  "Convert AnalysisData into a language contribution.
+   Builds namespace nodes, var nodes, and edges from the analysis data.
+   Container nodes have :parent nil — build-model assigns folder parents."
+  {:malli/schema [:=> [:cat :AnalysisData] :Contribution]}
+  [analysis]
+  (let [ns-defs (:namespace-definitions analysis)
+        var-defs (:var-definitions analysis)
+
+        ;; Build ns nodes with nil parent (empty folder-index)
+        {ns-nodes :nodes ns-index :index} (build/build-namespace-nodes ns-defs {})
+
+        ;; Add :filename to each ns container node's data for folder parenting
+        ns-filename-map (into {} (map (fn [nd] [(str (:name nd)) (:filename nd)]) ns-defs))
+        ns-nodes (reduce-kv (fn [acc id node]
+                              (if-let [fname (get ns-filename-map id)]
+                                (assoc acc id (assoc-in node [:data :filename] fname))
+                                (assoc acc id node)))
+                            {} ns-nodes)
+
+        ;; Build var nodes
+        {var-nodes :nodes var-index :index} (build/build-var-nodes var-defs ns-index)
+
+        ;; Build edges
+        var-edges (build/build-edges analysis var-index ns-index)
+        ns-edges (build/build-ns-edges analysis ns-index)]
+
+    {:source-files (mapv :filename ns-defs)
+     :nodes (merge ns-nodes var-nodes)
+     :edges (vec (into (set var-edges) ns-edges))}))
+
+(defn contribution
+  "Produce a full Clojure language contribution from source analysis.
+   Runs clj-kondo, augments with Integrant config deps, and converts
+   to a Contribution."
+  {:malli/schema [:=> [:cat :string] :Contribution]}
+  [src-path]
+  (let [analysis (run-kondo src-path)
+        ig-config (some-> (io/resource "fukan/system.edn") slurp)
+        analysis (cond-> analysis
+                   ig-config (update :namespace-usages
+                                     into (extract-integrant-deps ig-config)))]
+    (analysis->contribution analysis)))
