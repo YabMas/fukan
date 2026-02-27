@@ -146,8 +146,7 @@
                                 schema-id (get params "id")
                                 trail (parse-trail (get params "trail"))
                                 schema-key (keyword schema-id)
-                                {:keys [node-id details]}
-                                (proj/schema-lookup model schema-key)
+                                details (proj/inspect model schema-key)
                                 sidebar-data (-> details
                                                  (assoc :nav {:trail (vec (or trail []))
                                                               :current schema-id}))]

@@ -3,8 +3,7 @@
    Computes the ancestor chain from any entity to the tree root for
    breadcrumb rendering, and locates the model's root node (the
    topmost container after smart-root pruning)."
-  (:require [clojure.string :as str]
-            [fukan.projection.schema :as schema]))
+  (:require [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
 ;; Private helpers
@@ -31,13 +30,6 @@
 
 ;; -----------------------------------------------------------------------------
 ;; Public API
-
-(defn find-schema-node-id
-  "Find a schema node's ID by its schema key.
-   Returns the node ID or nil if not found."
-  {:malli/schema [:=> [:cat :Model :keyword] [:maybe :string]]}
-  [model schema-key]
-  (schema/find-schema-node-id model schema-key))
 
 (defn find-root-node
   "Find the root node (node with parent = nil).
