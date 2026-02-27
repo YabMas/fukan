@@ -5,7 +5,6 @@
    for the language-agnostic model build pipeline."
   (:require [clojure.java.shell :as shell]
             [clojure.edn :as edn]
-            [clojure.java.io :as io]
             [fukan.model.build :as build]))
 
 ;; -----------------------------------------------------------------------------
@@ -60,38 +59,6 @@
                      (:analysis parsed)))]
     (update analysis :var-definitions
             into (extract-defmethod-defs (:var-usages analysis)))))
-
-;; -----------------------------------------------------------------------------
-;; Integrant Config Analysis
-
-(defn- integrant-key->ns-sym
-  "Convert an Integrant component key to a Clojure namespace symbol.
-   :fukan.infra/server → fukan.infra.server"
-  [k]
-  (symbol (str (namespace k) "." (name k))))
-
-(defn extract-integrant-deps
-  "Extract namespace-usage edges from an Integrant system config string.
-   Reads the config with a custom #ig/ref reader and maps component
-   dependencies to namespace-level edges.
-
-   Returns a vector of NsUsage maps."
-  [config-str]
-  (let [config (edn/read-string {:readers {'ig/ref identity
-                                           'ig/refset (fn [x] x)}}
-                                config-str)
-        component-keys (set (keys config))]
-    (->> config
-         (mapcat (fn [[from-key from-config]]
-                   (let [refs (->> (tree-seq coll? seq from-config)
-                                   (filter #(and (keyword? %)
-                                                 (namespace %)
-                                                 (contains? component-keys %))))]
-                     (for [ref-key refs]
-                       {:from (integrant-key->ns-sym from-key)
-                        :to (integrant-key->ns-sym ref-key)
-                        :filename "system.edn"}))))
-         vec)))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema Discovery
@@ -186,14 +153,8 @@
      :edges (vec (into (set var-edges) ns-edges))}))
 
 (defn contribution
-  "Produce a full Clojure language contribution from source analysis.
-   Runs clj-kondo, augments with Integrant config deps, and converts
-   to a Contribution."
+  "Produce a full Clojure language contribution from source analysis."
   {:malli/schema [:=> [:cat :string] :Contribution]}
   [src-path]
-  (let [analysis (run-kondo src-path)
-        ig-config (some-> (io/resource "fukan/system.edn") slurp)
-        analysis (cond-> analysis
-                   ig-config (update :namespace-usages
-                                     into (extract-integrant-deps ig-config)))]
-    (analysis->contribution analysis)))
+  (-> (run-kondo src-path)
+      analysis->contribution))

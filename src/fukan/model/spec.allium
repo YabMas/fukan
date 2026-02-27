@@ -133,8 +133,6 @@ external entity ProjectResources {
     provides: contract_edn(path) -> ContractSpec?
         -- Reads and parses a contract.edn file.
         -- Returns null if file does not exist.
-    provides: integrant_config -> SystemConfig?
-        -- Reads system.edn from classpath resources.
 
     -- Guarantees
     guarantee: read_only

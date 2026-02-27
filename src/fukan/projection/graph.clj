@@ -551,12 +551,6 @@
         ;; Iteratively expand visible set until all edge targets are visible
         ;; (includes internal dep expansion at each step)
         {:keys [drill-down-map]} (iterate-drill-down model children-set)
-        ;; When a container is drilled into, show ALL its visible children —
-        ;; not just edge-connected ones. Otherwise siblings with no cross-module
-        ;; edges (e.g., Integrant components wired via config) stay hidden.
-        drill-down-map (into {}
-                         (for [[cid _] drill-down-map]
-                           [cid (get-visible-children model cid expanded-containers)]))
         drill-down-entities (into #{} (mapcat val drill-down-map))
 
         ;; Build final visible set
