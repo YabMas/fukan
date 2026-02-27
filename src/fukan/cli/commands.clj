@@ -88,7 +88,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Commands
 
-(defn cmd-ls
+(defn- cmd-ls
   "List children and edges at current view."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state _args]
@@ -96,7 +96,7 @@
     {:response (merge {:ok true :command :ls}
                       (build-view-context model state view-id))}))
 
-(defn cmd-cd
+(defn- cmd-cd
   "Navigate into a container or up to parent."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state args]
@@ -142,7 +142,7 @@
       {:response {:ok false :command :cd
                   :error "Usage: cd <entity-id> or cd .."}})))
 
-(defn cmd-back
+(defn- cmd-back
   "Pop history stack and navigate to previous view."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state _args]
@@ -158,7 +158,7 @@
       {:response {:ok false :command :back
                   :error "No history to go back to."}})))
 
-(defn cmd-info
+(defn- cmd-info
   "Entity details (sidebar equivalent)."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model _state args]
@@ -172,7 +172,7 @@
                     :error (str "Entity not found: " entity-id)
                     :entity-id entity-id}}))))
 
-(defn cmd-find
+(defn- cmd-find
   "Search nodes by label (case-insensitive, max 50)."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model _state args]
@@ -194,7 +194,7 @@
                     :count (count matches)
                     :results matches}}))))
 
-(defn cmd-overview
+(defn- cmd-overview
   "Model summary stats."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state _args]
@@ -219,6 +219,7 @@
 
 (defn parse-input
   "Parse a line of input into {:command \"name\" :args [\"arg1\" ...]}."
+  {:malli/schema [:=> [:cat [:maybe :string]] [:maybe :map]]}
   [line]
   (when-not (str/blank? line)
     (let [parts (str/split (str/trim line) #"\s+")]
@@ -227,6 +228,7 @@
 
 (defn dispatch
   "Dispatch a parsed command. Returns {:response :state-update}."
+  {:malli/schema [:=> [:cat :Model :map :map] :map]}
   [model state {:keys [command args]}]
   (if-let [handler (get dispatch-table command)]
     (handler model state args)
