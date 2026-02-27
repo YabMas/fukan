@@ -6,12 +6,18 @@
    (re-analyzed from source) without restarting HTTP."
   (:require [fukan.model.build :as build]
             [fukan.model.languages.clojure :as clj-lang]
-            [integrant.core :as ig]))
+            [integrant.core :as ig]
+            [clojure.java.io :as io]))
 
 (defn- build-model
   "Build the complete model from Clojure source code."
   [src-path]
   (let [analysis (clj-lang/run-kondo src-path)
+        ;; Augment with Integrant config deps (wired via #ig/ref, invisible to static analysis)
+        ig-config (some-> (io/resource "fukan/system.edn") slurp)
+        analysis (cond-> analysis
+                   ig-config (update :namespace-usages
+                                     into (clj-lang/extract-integrant-deps ig-config)))
         schema-data (clj-lang/discover-schema-data)
         type-nodes-fn (fn [ns-index]
                         (clj-lang/build-schema-nodes ns-index schema-data))]
