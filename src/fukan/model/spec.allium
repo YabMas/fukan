@@ -287,6 +287,7 @@ variant Function : Node {
     -- to implementation-discovered functions. Correspondence is by name.
     doc: String?
     private: Boolean
+    root: Boolean?        -- true when function is a contract entry point with no code-level callers
     signature: FunctionSignature?
 }
 

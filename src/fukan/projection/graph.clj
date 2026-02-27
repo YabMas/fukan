@@ -27,6 +27,7 @@
    [:expanded? :boolean]
    [:child-count :int]
    [:private? {:optional true} :boolean]
+   [:root? {:optional true} :boolean]
    [:io-type {:optional true} [:enum :input :output]]
    [:schema-key {:optional true} :keyword]])
 
@@ -333,15 +334,16 @@
                  (= parent-override :no-parent) nil
                  (some? parent-override) parent-override
                  :else (:parent node))]
-    {:id id
-     :kind kind
-     :label (:label node)
-     :parent parent
-     :expandable? (boolean (seq (:children node)))
-     :has-private-children? (has-private-children? model id)
-     :expanded? (contains? expanded-containers id)
-     :child-count (count (:children node))
-     :private? (node-private? node)}))
+    (cond-> {:id id
+             :kind kind
+             :label (:label node)
+             :parent parent
+             :expandable? (boolean (seq (:children node)))
+             :has-private-children? (has-private-children? model id)
+             :expanded? (contains? expanded-containers id)
+             :child-count (count (:children node))
+             :private? (node-private? node)}
+      (get-in node [:data :root?]) (assoc :root? true))))
 
 ;; -----------------------------------------------------------------------------
 ;; Drill-down expansion helpers
@@ -460,6 +462,44 @@
           (recur (set/union expanded new-deps)))))))
 
 ;; -----------------------------------------------------------------------------
+;; Root function injection
+
+(defn- find-root-descendants
+  "Find root function nodes that are descendants of entity-id."
+  [model entity-id]
+  (->> (all-descendants-of model entity-id)
+       (filter (fn [nid]
+                 (let [node (get-in model [:nodes nid])]
+                   (and (= :function (:kind node))
+                        (get-in node [:data :root?])))))
+       set))
+
+(defn- root-fn-drill-down
+  "Build drill-down-map entries for root functions.
+   For each root function, traces its ancestry back to entity-id,
+   creating drill-down entries at each intermediate level."
+  [model entity-id root-fn-ids]
+  (let [direct-children (get-in model [:nodes entity-id :children])]
+    (reduce
+      (fn [acc fn-id]
+        (loop [current fn-id
+               entries acc]
+          (let [parent (:parent (get-in model [:nodes current]))]
+            (cond
+              ;; No parent — shouldn't happen for valid descendants
+              (nil? parent) entries
+              ;; Parent is entity-id — current is a direct child, already visible
+              (= parent entity-id) entries
+              ;; Parent is a direct child of entity-id — add current under parent, done
+              (contains? direct-children parent)
+              (update entries parent (fnil conj #{}) current)
+              ;; Intermediate container — add current under parent, continue up
+              :else
+              (recur parent (update entries parent (fnil conj #{}) current))))))
+      {}
+      root-fn-ids)))
+
+;; -----------------------------------------------------------------------------
 ;; Container view computation
 
 (defn- iterate-drill-down
@@ -551,6 +591,11 @@
         ;; Iteratively expand visible set until all edge targets are visible
         ;; (includes internal dep expansion at each step)
         {:keys [drill-down-map]} (iterate-drill-down model children-set)
+
+        ;; Inject root function descendants (contract entry points with no code-level callers)
+        root-fns (find-root-descendants model entity-id)
+        root-drill (root-fn-drill-down model entity-id root-fns)
+        drill-down-map (merge-with set/union drill-down-map root-drill)
         drill-down-entities (into #{} (mapcat val drill-down-map))
 
         ;; Build final visible set

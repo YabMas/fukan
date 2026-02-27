@@ -165,6 +165,40 @@
       true)))
 
 ;; ---------------------------------------------------------------------------
+;; ContractRootsVisible: root function descendants appear in container views.
+
+(defn contract-roots-visible?
+  "Verify that all :root? function descendants of the viewed container
+   appear in the projection."
+  [model opts projection]
+  (let [view-id (:view-id opts)]
+    (if (is-leaf-view? model view-id)
+      true
+      (let [visible-ids (projection-node-ids projection)
+            ;; Walk all descendants to find root functions
+            root-fn-ids (loop [queue (vec (get-in model [:nodes view-id :children] #{}))
+                               roots #{}]
+                          (if (empty? queue)
+                            roots
+                            (let [nid (first queue)
+                                  node (get-in model [:nodes nid])
+                                  rest-queue (subvec queue 1)]
+                              (cond
+                                (nil? node) (recur rest-queue roots)
+                                (and (= :function (:kind node))
+                                     (get-in node [:data :root?]))
+                                (recur rest-queue (conj roots nid))
+                                :else
+                                (recur (into rest-queue (:children node)) roots)))))]
+        (or (first
+              (for [fn-id root-fn-ids
+                    :when (not (contains? visible-ids fn-id))]
+                {:violation :contract-roots-visible
+                 :missing-fn fn-id
+                 :view-id view-id}))
+            true)))))
+
+;; ---------------------------------------------------------------------------
 ;; Composites
 
 (defn valid-container-projection?
@@ -174,7 +208,8 @@
                 no-ancestor-descendant-edges?
                 schema-filtering?
                 private-visibility?
-                no-duplicate-edges?]]
+                no-duplicate-edges?
+                contract-roots-visible?]]
     (reduce (fn [_ check]
               (let [result (check model opts projection)]
                 (if (true? result)

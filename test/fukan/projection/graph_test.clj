@@ -73,6 +73,20 @@
                    opts-gen)))))
 
 ;; ---------------------------------------------------------------------------
+;; Generative: root contract functions visible
+
+(defspec contract-roots-always-visible 100
+  (prop/for-all [model (gen/gen-model)]
+    (let [opts-gen (gen/gen-projection-opts model)]
+      (tgen/generate
+        (tgen/fmap (fn [opts]
+                     (if (and (:view-id opts) (not (is-leaf? model (:view-id opts))))
+                       (let [projection (graph/entity-graph model opts)]
+                         (true? (inv/contract-roots-visible? model opts projection)))
+                       true))
+                   opts-gen)))))
+
+;; ---------------------------------------------------------------------------
 ;; Integration: Fukan's own model satisfies projection invariants
 
 (deftest fukan-projection-invariants
@@ -96,4 +110,6 @@
           (is (true? (inv/schema-filtering? model opts projection))
               (str "schema-filtering failed for " cid))
           (is (true? (inv/no-duplicate-edges? model opts projection))
-              (str "duplicate-edges failed for " cid)))))))
+              (str "duplicate-edges failed for " cid))
+          (is (true? (inv/contract-roots-visible? model opts projection))
+              (str "contract-roots-visible failed for " cid)))))))

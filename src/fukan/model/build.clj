@@ -99,6 +99,7 @@
     [:kind [:= :function]]
     [:doc {:optional true} [:maybe :string]]
     [:private? {:optional true} :boolean]
+    [:root? {:optional true, :description "True when function is a contract entry point with no code-level callers."} :boolean]
     [:signature {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]]
    ;; Schema data (schema definition)
    [:map {:description "Schema node data: the Malli schema form and its keyword key."}
@@ -600,6 +601,44 @@
     {} nodes))
 
 ;; -----------------------------------------------------------------------------
+;; Root function marking
+
+(defn- mark-root-functions
+  "Mark contract functions as :root? when they have no incoming edges from
+   outside their own namespace. These are entry points called by framework
+   machinery (e.g., Integrant) rather than application code."
+  [nodes edges]
+  (let [;; Collect function IDs from namespace-level contracts
+        contract-fn-ids
+        (->> (vals nodes)
+             (filter #(and (= :container (:kind %))
+                           (get-in % [:data :contract])))
+             (mapcat (fn [node]
+                       (let [container-id (:id node)]
+                         (map (fn [cfn] (str container-id "/" (:name cfn)))
+                              (get-in node [:data :contract :functions])))))
+             (filter #(contains? nodes %))
+             set)
+        ;; Check if a function has any caller from outside its namespace
+        has-external-caller?
+        (fn [fn-id]
+          (let [ns-id (:parent (get nodes fn-id))]
+            (some (fn [{:keys [from to]}]
+                    (when (= to fn-id)
+                      (let [from-parent (:parent (get nodes from))]
+                        ;; External if from is not the namespace itself
+                        ;; and from's parent is not the namespace
+                        (and (not= from ns-id)
+                             (not= from-parent ns-id)))))
+                  edges)))]
+    (reduce (fn [acc fn-id]
+              (if (has-external-caller? fn-id)
+                acc
+                (assoc-in acc [fn-id :data :root?] true)))
+            nodes
+            contract-fn-ids)))
+
+;; -----------------------------------------------------------------------------
 ;; Main build function
 
 (defn build-model
@@ -691,7 +730,10 @@
          signed-nodes (attach-var-signatures final-nodes)
 
          ;; Attach contracts to containers
-         contracted-nodes (attach-contracts signed-nodes)]
+         contracted-nodes (attach-contracts signed-nodes)
 
-     {:nodes contracted-nodes
+         ;; Mark contract functions with no external callers as root entry points
+         root-marked-nodes (mark-root-functions contracted-nodes all-edges)]
+
+     {:nodes root-marked-nodes
       :edges all-edges})))

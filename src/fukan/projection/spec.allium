@@ -49,6 +49,7 @@ value ViewNode {
     expanded: Boolean
     child_count: Integer
     private: Boolean?
+    root: Boolean?        -- true for contract entry points with no code-level callers
     io_type: input | output?
     schema_key: String?
 }
