@@ -4,8 +4,9 @@
 
    Usage: clj -M -m fukan.core --src /path/to/src [--port 8080] [--mode web|cli]"
   (:require [fukan.infra.model :as infra-model]
-            [fukan.infra.server :as infra-server]
-            [fukan.cli.explorer :as cli]))
+            [fukan.cli.explorer :as cli]
+            [clojure.java.io :as io]
+            [integrant.core :as ig]))
 
 (defn- parse-args
   "Parse command line arguments.
@@ -22,6 +23,11 @@
           "--mode" (recur remaining (assoc result :mode (keyword value)))
           ;; Treat non-flag arg as src path
           (recur (clojure.core/rest args) (assoc result :src flag)))))))
+
+(defn- read-config
+  "Read the Integrant system configuration from resources."
+  []
+  (ig/read-string (slurp (io/resource "fukan/system.edn"))))
 
 (defn -main
   "Main entry point.
@@ -42,13 +48,16 @@
 
     (case mode
       :cli
-      (let [;; Redirect load-model output to stderr so stdout stays clean for EDN
+      (let [;; Build model directly for CLI — no Integrant needed
+            model-state (atom {:model nil :src nil})
             model (binding [*out* *err*]
-                    (infra-model/load-model src))]
+                    (infra-model/load-model! model-state src))]
         (cli/start-session model src))
 
       ;; Default: web mode
-      (do
-        (infra-model/load-model src)
-        (infra-server/start-server {:port port})
+      (let [config (-> (read-config)
+                       (assoc-in [:fukan.infra/model :src] src)
+                       (assoc-in [:fukan.infra/server :port] port))]
+        (ig/load-namespaces config)
+        (ig/init config)
         (println "Press Ctrl+C to stop")))))

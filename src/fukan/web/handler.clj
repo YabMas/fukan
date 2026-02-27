@@ -1,13 +1,16 @@
 (ns fukan.web.handler
-  "HTTP request handling and routing.
-   Delegates view computation and rendering to specialized namespaces."
+  "HTTP routing and handler construction.
+   Builds the Ring handler with routes for the app shell, static assets,
+   and SSE endpoints. The handler is created once at server start;
+   it fetches the model per-request so code changes take effect without
+   a server restart."
   (:require [reitit.ring :as ring]
             [reitit.ring.middleware.parameters :as parameters]
-            [fukan.infra.model :as model]
             [fukan.web.views.shell :as views.shell]
             [fukan.web.sse :as sse]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [integrant.core :as ig]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
@@ -38,10 +41,10 @@
 
 (defn create-handler
   "Create a Ring handler with all routes.
-   Calls `fukan.infra.model/get-model` on each request, allowing model
-   refresh without server restart."
-  {:malli/schema [:=> [:cat] :Handler]}
-  []
+   Derefs `model-state` on each request, allowing model refresh without
+   server restart."
+  {:malli/schema [:=> [:cat :atom] :Handler]}
+  [model-state]
   (ring/ring-handler
    (ring/router
     [["/" {:get (fn [_]
@@ -51,15 +54,18 @@
 
      ;; SSE endpoints (Datastar)
      ["/sse/view" {:get (fn [req]
-                          (sse/main-view-handler (model/get-model) req))}]
+                          (sse/main-view-handler (:model @model-state) req))}]
 
      ["/sse/sidebar" {:get (fn [req]
-                             (sse/sidebar-handler (model/get-model) req))}]
+                             (sse/sidebar-handler (:model @model-state) req))}]
 
      ["/sse/schema" {:get (fn [req]
-                            (sse/schema-handler (model/get-model) req))}]
+                            (sse/schema-handler (:model @model-state) req))}]
 
      ["/public/*path" {:get (fn [{{:keys [path]} :path-params}]
                               (serve-static path))}]]
 
     {:data {:middleware [parameters/parameters-middleware]}})))
+
+(defmethod ig/init-key :fukan.web/handler [_ {:keys [model-state]}]
+  (create-handler model-state))

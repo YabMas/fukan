@@ -51,24 +51,19 @@ The REPL session persists between evaluations - namespaces and state are maintai
 1. Check for existing nREPL: `clj-nrepl-eval --discover-ports`
 2. If nREPL exists on port 7889 in this directory, USE IT - do not start another
 3. If no nREPL, ask user to start one (do NOT start in background)
-4. Start server: `clj-nrepl-eval -p 7889 "(user/start {:src \"src\"})"`
+4. Start system: `clj-nrepl-eval -p 7889 "(go)"`
 
 ### After Editing Code
-1. Reload changed namespaces: `clj-nrepl-eval -p 7889 "(reload/reload)"`
-   - clj-reload automatically detects changes and reloads in dependency order
-2. Refresh browser to see changes
-3. Do NOT restart server unless model/analysis changed
-
-### When to Restart Server
-Only call `(user/restart)` when:
-- You changed fukan.analysis or fukan.model structure
-- You need to re-analyze the source code (added new files)
-- Something is broken and reload doesn't fix it
+Use `(reset)` — it halts the system, force-reloads all code, and restarts:
+```
+clj-nrepl-eval -p 7889 "(reset)"
+```
+Use `(refresh-model)` to rebuild the model without restarting the server.
 
 ### NEVER DO
 - Start nREPL in background with Bash
 - Run multiple servers on different ports
-- Kill servers via bash - use `(user/stop)` instead
+- Kill servers via bash — use `(halt)` instead
 
 ---
 

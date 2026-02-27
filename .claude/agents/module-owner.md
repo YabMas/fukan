@@ -76,4 +76,4 @@ When done, report:
 - **Files modified**: List each file and what changed
 - **Contract changes**: Any additions/removals to `contract.edn`
 - **Cross-module concerns**: Anything the architect needs to coordinate (e.g., "callers of X need to pass new arg Y")
-- **Restart needed**: Whether model/analysis changes require `(user/restart)` instead of `(reload/reload)`
+- **Reset needed**: Whether changes require `(reset)` instead of `(refresh-model)`

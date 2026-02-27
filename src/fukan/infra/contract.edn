@@ -1,9 +1,3 @@
-{:description "Lifecycle management for the model and HTTP server."
- :functions [fukan.infra.model/load-model
-             fukan.infra.model/get-model
-             fukan.infra.model/refresh-model
-             fukan.infra.model/get-src
-             fukan.infra.server/start-server
-             fukan.infra.server/stop-server
-             fukan.infra.server/running?
-             fukan.infra.server/get-port]}
+{:description "Lifecycle management via Integrant components. The model component (:fukan.infra/model) returns an atom that the handler derefs per-request. The server component (:fukan.infra/server) starts/stops http-kit. Each is independently restartable."
+ :functions [fukan.infra.model/load-model!
+             fukan.infra.model/refresh!]}

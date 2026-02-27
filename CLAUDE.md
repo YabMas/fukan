@@ -139,19 +139,19 @@ The REPL session persists between evaluations - namespaces and state are maintai
 1. Check for existing nREPL: `clj-nrepl-eval --discover-ports`
 2. If nREPL exists on port 7889 in this directory, USE IT - do not start another
 3. If no nREPL, ask user to start one (do NOT start in background)
-4. Start server: `clj-nrepl-eval -p 7889 "(user/start {:src \"src\"})"`
+4. Start system: `clj-nrepl-eval -p 7889 "(go)"`
 5. Web UI runs on **port 8080** by default: `http://localhost:8080`
 
 ### After Editing Code
-Use `(refresh)` — it force-reloads all code and rebuilds the model:
+Use `(reset)` — it halts the system, force-reloads all code, and restarts:
 ```
-clj-nrepl-eval -p 7889 "(refresh)"
+clj-nrepl-eval -p 7889 "(reset)"
 ```
-Then refresh the browser. This is the right command for **all** code changes (views, schemas, model, projection). The handler fetches the model per-request, so changes take effect immediately.
+Then refresh the browser. This is the right command for **all** code changes (views, schemas, model, projection, infra). The handler fetches the model per-request, so view/projection changes take effect immediately after reload.
 
-Use `(restart)` only when you changed **infra** code (server.clj, model.clj, handler.clj routing):
+Use `(refresh-model)` to rebuild the model without restarting the server:
 ```
-clj-nrepl-eval -p 7889 "(restart)"
+clj-nrepl-eval -p 7889 "(refresh-model)"
 ```
 
 Use `(status)` to check what's running:
@@ -160,11 +160,11 @@ clj-nrepl-eval -p 7889 "(status)"
 ```
 
 ### NEVER DO
-- Call `remove-ns` — loses `defonce` atoms, orphans running servers
-- Call `(reload/reload)` directly — use `(refresh)` instead, which force-reloads
+- Call `remove-ns` — orphans running servers
+- Call `(reload/reload)` directly — use `(reset)` instead
 - Start nREPL in background with Bash
 - Run multiple servers on different ports
-- Kill servers via bash — use `(user/stop)` instead
+- Kill servers via bash — use `(halt)` instead
 
 ---
 

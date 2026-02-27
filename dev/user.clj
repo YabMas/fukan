@@ -1,8 +1,15 @@
 (ns user
-  "Development helpers for REPL-driven workflow."
+  "Development helpers for REPL-driven workflow.
+   Uses Integrant for system lifecycle and clj-reload for code reloading."
   (:require [clj-reload.core :as reload]
+            [integrant.core :as ig]
+            [integrant.repl :as ig-repl]
+            [integrant.repl.state :as state]
             [fukan.infra.model :as infra-model]
-            [fukan.infra.server :as infra-server]))
+            [fukan.infra.server]
+            [fukan.web.handler]
+            [fukan.cli.gateway :as gateway]
+            [clojure.java.io :as io]))
 
 ;; Initialize clj-reload - tracks src and dev directories
 ;; The 'user namespace is excluded from reloading
@@ -10,78 +17,68 @@
   {:dirs ["src" "dev"]
    :no-reload '#{user}})
 
-(defn- reload-code!
-  "Force-reload all loaded namespaces regardless of file timestamps.
-   Uses clj-reload's :only :loaded to avoid timestamp detection issues."
+(defn- read-config []
+  (ig/read-string (slurp (io/resource "fukan/system.edn"))))
+
+(ig-repl/set-prep!
+  (fn [] (-> (read-config)
+             (assoc-in [:fukan.infra/model :src] "src"))))
+
+(defn- wire-gateway! []
+  (when-let [model-state (:fukan.infra/model state/system)]
+    (gateway/init! model-state)))
+
+(defn go
+  "Start the Integrant system."
   []
-  (reload/reload {:only :loaded}))
+  (ig-repl/go)
+  (wire-gateway!))
 
-(defn start
-  "Start the web server.
+(defn halt
+  "Stop the Integrant system."
+  []
+  (ig-repl/halt))
 
-   Options:
-     :src  - Path to Clojure source directory (required)
-     :port - Server port (default: 8080)
+(defn reset
+  "Halt the system, force-reload all code, and restart.
+   Use after editing any source files."
+  []
+  (halt)
+  (reload/reload {:only :loaded})
+  (go))
 
-   Examples:
-     (start {:src \"src\"})
-     (start {:src \"/path/to/project/src\" :port 3000})"
-  [{:keys [src port] :or {port 8080}}]
-  (when-not src
-    (throw (ex-info "Missing required :src option" {})))
-  (if (infra-server/running?)
-    (println "Server already running on port" (infra-server/get-port))
+(defn refresh-model
+  "Rebuild model from source without restarting the server.
+   Use after editing the codebase being analyzed."
+  []
+  (if-let [model-state (:fukan.infra/model state/system)]
     (do
-      (infra-model/load-model src)
-      (infra-server/start-server {:port port}))))
-
-(defn stop
-  "Stop the running server."
-  []
-  (infra-server/stop-server))
-
-(defn restart
-  "Restart the server with the same configuration.
-   Force-reloads all code and rebuilds the model."
-  []
-  (if-let [src (infra-model/get-src)]
-    (let [port (or (infra-server/get-port) 8080)]
-      (reload-code!)
-      (stop)
-      (start {:src src :port port}))
-    (println "No previous configuration. Use (start {:src \"path\"}) instead.")))
-
-(defn refresh
-  "Reload code and rebuild model without restarting server.
-   Use this after editing any source files."
-  []
-  (if (infra-server/running?)
-    (do
-      (reload-code!)
-      (infra-model/refresh-model)
+      (infra-model/refresh! model-state)
       (println "Refreshed. Browser will see changes on next request."))
-    (println "Server not running. Use (start {:src \"path\"}) first.")))
+    (println "System not running. Use (go) first.")))
 
 (defn status
   "Print current development environment status."
   []
-  (println "Server:" (if (infra-server/running?)
-                       (str "running on port " (infra-server/get-port))
-                       "stopped"))
-  (println "Model:" (if-let [m (infra-model/get-model)]
-                      (str (count (:nodes m)) " nodes, "
-                           (count (:edges m)) " edges"
-                           " (src: " (infra-model/get-src) ")")
-                      "not loaded")))
+  (if state/system
+    (let [model-state (:fukan.infra/model state/system)
+          {:keys [port]} (:fukan.infra/server state/system)]
+      (println "Server: running on port" port)
+      (if-let [m (:model @model-state)]
+        (println "Model:" (count (:nodes m)) "nodes,"
+                 (count (:edges m)) "edges"
+                 "(src:" (:src @model-state) ")")
+        (println "Model: not loaded")))
+    (println "System: not running")))
 
 (comment
   ;; Quick start for this project
-  (start {:src "src"})
-  (stop)
-  (restart)
+  (go)
+  (halt)
+  (reset)
 
-  ;; After changing source code
-  (refresh)
+  ;; Rebuild model without restarting server
+  (refresh-model)
 
   ;; Check what's running
   (status))

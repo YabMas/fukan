@@ -1,11 +1,12 @@
 (ns fukan.infra.model
-  "Model lifecycle management.
-   Handles loading, storing, and refreshing the model independently
-   from the server lifecycle."
+  "Model lifecycle: load, store, and refresh the graph model.
+   The :fukan.infra/model Integrant component owns a model-state atom —
+   the single source of truth for the current codebase graph.
+   Decoupled from the server lifecycle so the model can be refreshed
+   (re-analyzed from source) without restarting HTTP."
   (:require [fukan.model.build :as build]
-            [fukan.model.languages.clojure :as clj-lang]))
-
-(defonce ^:private state (atom {:model nil :src nil}))
+            [fukan.model.languages.clojure :as clj-lang]
+            [integrant.core :as ig]))
 
 (defn- build-model
   "Build the complete model from Clojure source code."
@@ -16,35 +17,30 @@
                         (clj-lang/build-schema-nodes ns-index schema-data))]
     (build/build-model analysis {:type-nodes-fn type-nodes-fn})))
 
-(defn load-model
-  "Build model from src path and store it. Returns the model."
-  {:malli/schema [:=> [:cat :string] :Model]}
-  [src]
+(defn load-model!
+  "Build model from src path and store it in the model-state atom.
+   Returns the model."
+  {:malli/schema [:=> [:cat :atom :string] :Model]}
+  [model-state src]
   (println "Analyzing" src "...")
   (let [m (build-model src)]
     (println "Built" (count (:nodes m)) "nodes," (count (:edges m)) "edges")
-    (reset! state {:model m :src src})
+    (reset! model-state {:model m :src src})
     m))
 
-(defn get-model
-  "Get the current model. Returns nil if not loaded."
-  {:malli/schema [:=> [:cat] [:maybe :Model]]}
-  []
-  (:model @state))
-
-(defn refresh-model
+(defn refresh!
   "Rebuild model from the last src path. Returns the model.
    Returns nil if no src path was previously set."
-  {:malli/schema [:=> [:cat] [:maybe :Model]]}
-  []
-  (if-let [src (:src @state)]
-    (load-model src)
+  {:malli/schema [:=> [:cat :atom] [:maybe :Model]]}
+  [model-state]
+  (if-let [src (:src @model-state)]
+    (load-model! model-state src)
     (do
-      (println "No src path set. Use load-model first.")
+      (println "No src path set. Use load-model! first.")
       nil)))
 
-(defn get-src
-  "Get the current src path. Returns nil if not loaded."
-  {:malli/schema [:=> [:cat] [:maybe :string]]}
-  []
-  (:src @state))
+(defmethod ig/init-key :fukan.infra/model [_ {:keys [src]}]
+  (let [state (atom {:model nil :src nil})]
+    (when src
+      (load-model! state src))
+    state))
