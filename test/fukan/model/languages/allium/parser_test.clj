@@ -64,6 +64,18 @@
       (is (= :external-entity (:type d)))
       (is (= "Bar" (:name d))))))
 
+(deftest surface-decl-test
+  (testing "surface with fields"
+    (let [d (first-decl "surface PublicAPI {\n    facing: external\n    guarantees: idempotent\n}\n")]
+      (is (= :surface (:type d)))
+      (is (= "PublicAPI" (:name d)))
+      (is (= 2 (count (:fields d))))))
+
+  (testing "surface with description"
+    (let [d (first-decl "surface PublicAPI \"The public boundary.\" {\n    facing: external\n}\n")]
+      (is (= :surface (:type d)))
+      (is (= "The public boundary." (:description d))))))
+
 (deftest entity-decl-test
   (testing "entity with fields"
     (let [d (first-decl "entity Node {\n    kind: String\n    label: String\n}\n")]

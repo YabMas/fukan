@@ -28,8 +28,8 @@
 
   declarations = (declaration _)*
   declaration = use-decl / given-block / enum-decl /
-                external-entity / variant-decl / entity-decl /
-                value-decl / rule-decl
+                external-entity / surface-decl / variant-decl /
+                entity-decl / value-decl / rule-decl
 
   (* ============ Use ============ *)
 
@@ -53,6 +53,10 @@
 
   external-entity = <'external'> __ <'entity'> __ ident _ description-string? _ <'{'> external-body <'}'>
   external-body = #'[^}]*'
+
+  (* ============ Surface ============ *)
+
+  surface-decl = <'surface'> __ ident _ description-string? _ <'{'> _ field-list _ <'}'>
 
   (* ============ Entity / Value ============ *)
 
@@ -248,6 +252,14 @@
        (cond-> {:type :external-entity :name name}
          desc (assoc :description desc)
          body (assoc :body body))))
+
+   ;; Surface
+   :surface-decl
+   (fn [name & args]
+     (let [[desc field-groups] (extract-description args)]
+       (cond-> {:type :surface :name name
+                :fields (flatten-field-groups field-groups)}
+         desc (assoc :description desc))))
 
    ;; Entity / Value
    :entity-decl
