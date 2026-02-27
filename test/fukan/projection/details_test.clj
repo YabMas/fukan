@@ -53,6 +53,23 @@
       (is (some? detail))
       (is (= :edge (:kind detail))))))
 
+(deftest container-with-fields
+  (testing "container with spec fields includes them in detail"
+    (let [model (assoc-in test-model [:nodes "ns:alpha" :data :fields]
+                          [{:name "kind" :type-ref "String"}
+                           {:name "label" :type-ref "String" :description "Display name"}])
+          detail (details/entity-details model "ns:alpha")]
+      (is (some? (:fields detail)))
+      (is (= 2 (count (:fields detail))))
+      (is (= "kind" (-> detail :fields first :name))))))
+
+(deftest container-with-description
+  (testing "top-level :description on node is extracted"
+    (let [model (assoc-in test-model [:nodes "ns:alpha" :description]
+                          "A module for alpha things.")
+          detail (details/entity-details model "ns:alpha")]
+      (is (= "A module for alpha things." (:description detail))))))
+
 (deftest nil-entity
   (testing "nil entity-id returns nil"
     (is (nil? (details/entity-details test-model nil)))))
