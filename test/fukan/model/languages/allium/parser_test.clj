@@ -207,6 +207,25 @@
       (is (= "NodeId" (:comment f))))))
 
 ;; ---------------------------------------------------------------------------
+;; Unit tests — nested variants
+;; ---------------------------------------------------------------------------
+
+(deftest nested-variant-test
+  (testing "value with nested variant blocks"
+    (let [d (first-decl "value V {\n    type: T\n\n    variant foo {\n        items: List<String>\n    }\n\n    variant bar {\n        items: List<Integer>\n        extra: String?\n    }\n}\n")]
+      (is (= :value (:type d)))
+      (is (= "V" (:name d)))
+      ;; 3 fields: one typed + two nested variants
+      (is (= 3 (count (:fields d))))
+      (is (= :typed (-> d :fields first :field-kind)))
+      (is (= :variant (-> d :fields second :field-kind)))
+      (is (= "foo" (-> d :fields second :variant-name)))
+      (is (= 1 (count (-> d :fields second :fields))))
+      (is (= :variant (-> d :fields (nth 2) :field-kind)))
+      (is (= "bar" (-> d :fields (nth 2) :variant-name)))
+      (is (= 2 (count (-> d :fields (nth 2) :fields)))))))
+
+;; ---------------------------------------------------------------------------
 ;; Unit tests — trigger expression
 ;; ---------------------------------------------------------------------------
 
@@ -263,8 +282,12 @@
         (doseq [d (:declarations result)
                 :when (:fields d)
                 field (:fields d)]
-          (is (string? (:name field))
-              (str "missing :name in field: " (pr-str field)))
+          (if (= :variant (:field-kind field))
+            ;; Nested variants use :variant-name instead of :name
+            (is (string? (:variant-name field))
+                (str "missing :variant-name in nested variant: " (pr-str field)))
+            (is (string? (:name field))
+                (str "missing :name in field: " (pr-str field))))
           (is (keyword? (:field-kind field))
               (str "missing :field-kind in field: " (pr-str field)))))))
 
@@ -292,8 +315,8 @@
       (is (not (insta/failure? result)))
       (is (= "1" (:allium-version result)))
       (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 7 (:external-entity types)))  ;; 3 data shapes + 4 boundaries
-        (is (= 3 (:value types)))  ;; Edge, Contract, ContractFunction
+        (is (= 8 (:external-entity types)))  ;; 4 data shapes + 4 boundaries
+        (is (= 5 (:value types)))  ;; Edge, Field, Surface, Contract, ContractFunction
         (is (= 2 (:entity types)))  ;; Node, Model
         (is (= 3 (:variant types)))  ;; Container, Function, Schema
         (is (= 1 (:rule types)))))))
