@@ -46,22 +46,27 @@
 
   (* ============ Enum ============ *)
 
-  enum-decl = <'enum'> __ ident _ <'{'> _ enum-values _ <'}'>
+  enum-decl = <'enum'> __ ident _ description-string? _ <'{'> _ enum-values _ <'}'>
   enum-values = ident (_ <'|'> _ ident)*
 
   (* ============ External Entity ============ *)
 
-  external-entity = <'external'> __ <'entity'> __ ident _ <'{'> external-body <'}'>
+  external-entity = <'external'> __ <'entity'> __ ident _ description-string? _ <'{'> external-body <'}'>
   external-body = #'[^}]*'
 
   (* ============ Entity / Value ============ *)
 
-  entity-decl = <'entity'> __ ident _ <'{'> _ field-list _ <'}'>
-  value-decl  = <'value'> __ ident _ <'{'> _ field-list _ <'}'>
+  entity-decl = <'entity'> __ ident _ description-string? _ <'{'> _ field-list _ <'}'>
+  value-decl  = <'value'> __ ident _ description-string? _ <'{'> _ field-list _ <'}'>
 
   (* ============ Variant ============ *)
 
-  variant-decl = <'variant'> __ ident _ <':'> _ type-ref _ <'{'> _ field-list _ <'}'>
+  variant-decl = <'variant'> __ ident _ description-string? _ <':'> _ type-ref _ <'{'> _ field-list _ <'}'>
+
+  (* ============ Description String ============ *)
+
+  description-string = <'\"'> description-content <'\"'>
+  description-content = #'[^\"]*'
 
   (* ============ Fields ============ *)
 
@@ -106,7 +111,7 @@
 
   (* ============ Rules ============ *)
 
-  rule-decl = <'rule'> __ ident _ <'{'> _ rule-body _ <'}'>
+  rule-decl = <'rule'> __ ident _ description-string? _ <'{'> _ rule-body _ <'}'>
 
   rule-body = rule-clause+
   rule-clause = when-clause / let-clause / requires-clause / ensures-clause
@@ -155,6 +160,21 @@
 ;; Transform helpers
 ;; ---------------------------------------------------------------------------
 
+(defn- extract-description
+  "Split a description map from the head of args.
+   Returns [description rest-args] where description is a string or nil."
+  [args]
+  (if (and (seq args) (map? (first args)) (contains? (first args) :description))
+    [(:description (first args)) (rest args)]
+    [nil args]))
+
+(defn- flatten-field-groups
+  "Flatten potentially nested field group lists into a single vector."
+  [groups]
+  (vec (apply concat
+         (map (fn [x] (if (sequential? x) x [x]))
+              groups))))
+
 ;; ---------------------------------------------------------------------------
 ;; Transform map
 ;; ---------------------------------------------------------------------------
@@ -200,10 +220,16 @@
    (fn [name type-ref]
      {:name name :type-ref type-ref})
 
+   ;; Description string — tagged to distinguish from other string args
+   :description-string (fn [s] {:description s})
+   :description-content str
+
    ;; Enum
    :enum-decl
-   (fn [name values]
-     {:type :enum :name name :values values})
+   (fn [name & args]
+     (let [[desc rest-args] (extract-description args)]
+       (cond-> {:type :enum :name name :values (first rest-args)}
+         desc (assoc :description desc))))
 
    :enum-values
    (fn [& vals]
@@ -216,32 +242,37 @@
        (when-not (str/blank? trimmed) trimmed)))
 
    :external-entity
-   (fn [name & [body]]
-     (cond-> {:type :external-entity :name name}
-       body (assoc :body body)))
+   (fn [name & args]
+     (let [[desc rest-args] (extract-description args)
+           body (first rest-args)]
+       (cond-> {:type :external-entity :name name}
+         desc (assoc :description desc)
+         body (assoc :body body))))
 
    ;; Entity / Value
    :entity-decl
-   (fn [name & field-groups]
-     {:type :entity :name name
-      :fields (vec (apply concat
-                     (map (fn [x] (if (sequential? x) x [x]))
-                          field-groups)))})
+   (fn [name & args]
+     (let [[desc field-groups] (extract-description args)]
+       (cond-> {:type :entity :name name
+                :fields (flatten-field-groups field-groups)}
+         desc (assoc :description desc))))
 
    :value-decl
-   (fn [name & field-groups]
-     {:type :value :name name
-      :fields (vec (apply concat
-                     (map (fn [x] (if (sequential? x) x [x]))
-                          field-groups)))})
+   (fn [name & args]
+     (let [[desc field-groups] (extract-description args)]
+       (cond-> {:type :value :name name
+                :fields (flatten-field-groups field-groups)}
+         desc (assoc :description desc))))
 
    ;; Variant
    :variant-decl
-   (fn [name base & field-groups]
-     {:type :variant :name name :base base
-      :fields (vec (apply concat
-                     (map (fn [x] (if (sequential? x) x [x]))
-                          field-groups)))})
+   (fn [name & args]
+     (let [[desc rest-args] (extract-description args)
+           base (first rest-args)
+           field-groups (rest rest-args)]
+       (cond-> {:type :variant :name name :base base
+                :fields (flatten-field-groups field-groups)}
+         desc (assoc :description desc))))
 
    ;; Fields
    :field-list
@@ -328,8 +359,11 @@
 
    ;; Rules
    :rule-decl
-   (fn [name body]
-     (assoc body :type :rule :name name))
+   (fn [name & args]
+     (let [[desc rest-args] (extract-description args)
+           body (first rest-args)]
+       (cond-> (assoc body :type :rule :name name)
+         desc (assoc :description desc))))
 
    :rule-body
    (fn [& clauses]

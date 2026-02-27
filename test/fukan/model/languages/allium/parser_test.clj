@@ -70,7 +70,14 @@
       (is (= :entity (:type d)))
       (is (= "Node" (:name d)))
       (is (= 2 (count (:fields d))))
-      (is (= "kind" (-> d :fields first :name))))))
+      (is (= "kind" (-> d :fields first :name)))))
+
+  (testing "entity with description string"
+    (let [d (first-decl "entity Node \"An entity in the system model.\" {\n    kind: String\n}\n")]
+      (is (= :entity (:type d)))
+      (is (= "Node" (:name d)))
+      (is (= "An entity in the system model." (:description d)))
+      (is (= 1 (count (:fields d)))))))
 
 (deftest value-decl-test
   (testing "value with fields"
@@ -92,7 +99,13 @@
       (is (= :variant (:type d)))
       (is (= "Container" (:name d)))
       (is (= {:kind :simple :name "Node"} (:base d)))
-      (is (= 1 (count (:fields d)))))))
+      (is (= 1 (count (:fields d))))))
+
+  (testing "variant with description string"
+    (let [d (first-decl "variant Container \"A module.\" : Node {\n    doc: String?\n}\n")]
+      (is (= :variant (:type d)))
+      (is (= "A module." (:description d)))
+      (is (= {:kind :simple :name "Node"} (:base d))))))
 
 (deftest rule-decl-test
   (testing "simple rule with when and ensures"
