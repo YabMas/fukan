@@ -176,10 +176,25 @@
 ;; -----------------------------------------------------------------------------
 ;; Entity renderers
 
+(defn- render-fields
+  "Render a fields section showing typed field shapes.
+   Each field has a name, type-ref, and optional description."
+  [fields]
+  (when (seq fields)
+    (list
+     [:h5 "Fields " [:span.dep-count (str "(" (count fields) ")")]]
+     [:ul.fields-list
+      (for [{:keys [name type-ref description]} fields]
+        [:li
+         [:span.field-name name]
+         [:span.field-type type-ref]
+         (when description
+           [:span.field-desc description])])])))
+
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
-   Iterates through sections in order: label, description, interface, deps, dependents."
-  [{:keys [label kind parent description interface dataflow nav]}]
+   Iterates through sections in order: label, description, fields, interface, deps, dependents."
+  [{:keys [label kind parent description fields interface dataflow nav]}]
   (let [schema-view? (:current nav)]
     (str
      (h/html
@@ -194,6 +209,7 @@
        [:h4 label " " [:span.kind-badge (name kind)]]
 
        (render-description description)
+       (render-fields fields)
 
        (when interface
          (render-interface interface dataflow nav))]))))
