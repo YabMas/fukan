@@ -86,6 +86,34 @@
               :namespace-usages ns-usages})))))))
 
 ;; ---------------------------------------------------------------------------
+;; gen-field, gen-surface
+
+(def gen-field
+  "Generate a valid Field map."
+  (gen/let [name gen-simple-name
+            type-ref (gen/elements ["String" "Integer" "Boolean" "List<String>" "Map<String, Node>"])
+            has-desc? gen/boolean
+            desc gen-simple-name]
+    (cond-> {:name name :type-ref type-ref}
+      has-desc? (assoc :description desc))))
+
+(def gen-surface
+  "Generate a valid Surface with provides operations."
+  (gen/let [has-facing? gen/boolean
+            facing (gen/elements ["internal" "external"])
+            has-desc? gen/boolean
+            desc gen-simple-name
+            provide-count (gen/choose 0 3)
+            provides (gen/vector gen-field provide-count)
+            guarantee-count (gen/choose 0 2)
+            guarantees (gen/vector gen-simple-name guarantee-count)]
+    (cond-> {}
+      has-facing? (assoc :facing facing)
+      has-desc? (assoc :description desc)
+      (seq provides) (assoc :provides provides)
+      (seq guarantees) (assoc :guarantees guarantees))))
+
+;; ---------------------------------------------------------------------------
 ;; gen-contribution
 
 (defn gen-contribution
@@ -107,20 +135,30 @@
                                      (mapv (fn [cnt]
                                              (gen/fmap (fn [names] (vec (take cnt (distinct names))))
                                                        (gen/vector gen-simple-name (max cnt (* cnt 2)))))
-                                           var-counts))]
+                                           var-counts))
+               ;; Sometimes add surfaces with provides to exercise materialization
+               surface-flags (gen/vector (gen/frequency [[4 (gen/return false)]
+                                                          [1 (gen/return true)]])
+                                          (count ns-names))
+               surfaces (apply gen/tuple
+                               (mapv (fn [has-surface?]
+                                       (if has-surface? gen-surface (gen/return nil)))
+                                     surface-flags))]
        (let [source-files (mapv (fn [ns-sym]
                                   (str "src/" (str/replace (str ns-sym) "." "/") ".clj"))
                                 ns-names)
-             ns-nodes (into {} (map (fn [ns-sym filepath]
+             ns-nodes (into {} (map (fn [ns-sym filepath surface]
                                       (let [id (str ns-sym)]
                                         [id {:id id
                                              :kind :container
                                              :label id
                                              :parent nil
                                              :children #{}
-                                             :data {:kind :container
-                                                    :filename filepath}}]))
-                                    ns-names source-files))
+                                             :data (cond-> {:kind :container
+                                                            :filename filepath}
+                                                     surface (assoc :surface
+                                                               (dissoc surface :provides)))}]))
+                                    ns-names source-files surfaces))
              var-nodes (into {} (mapcat (fn [ns-sym var-names]
                                           (map (fn [vname]
                                                  (let [id (str ns-sym "/" vname)]
@@ -160,34 +198,6 @@
              {:source-files source-files
               :nodes (merge ns-nodes var-nodes)
               :edges (vec (into (set var-edges) ns-edges))})))))))
-
-;; ---------------------------------------------------------------------------
-;; gen-field, gen-surface
-
-(def gen-field
-  "Generate a valid Field map."
-  (gen/let [name gen-simple-name
-            type-ref (gen/elements ["String" "Integer" "Boolean" "List<String>" "Map<String, Node>"])
-            has-desc? gen/boolean
-            desc gen-simple-name]
-    (cond-> {:name name :type-ref type-ref}
-      has-desc? (assoc :description desc))))
-
-(def gen-surface
-  "Generate a valid Surface with provides operations."
-  (gen/let [has-facing? gen/boolean
-            facing (gen/elements ["internal" "external"])
-            has-desc? gen/boolean
-            desc gen-simple-name
-            provide-count (gen/choose 0 3)
-            provides (gen/vector gen-field provide-count)
-            guarantee-count (gen/choose 0 2)
-            guarantees (gen/vector gen-simple-name guarantee-count)]
-    (cond-> {}
-      has-facing? (assoc :facing facing)
-      has-desc? (assoc :description desc)
-      (seq provides) (assoc :provides provides)
-      (seq guarantees) (assoc :guarantees guarantees))))
 
 ;; ---------------------------------------------------------------------------
 ;; gen-model
@@ -232,20 +242,40 @@
 ]
      (let [root-id "root"
            root (make-container root-id "root" nil)
+           ;; Materialize surface provides as function children, strip provides
            containers (mapv (fn [name surface]
-                              (cond-> (make-container (str "ns:" name) name root-id)
-                                surface (assoc-in [:data :surface] surface)))
+                              (let [stored-surface (when surface
+                                                     (dissoc surface :provides))]
+                                (cond-> (make-container (str "ns:" name) name root-id)
+                                  (and stored-surface
+                                       (seq (vals stored-surface)))
+                                  (assoc-in [:data :surface] stored-surface))))
                             container-names surfaces)
-           fn-nodes (vec (mapcat (fn [container fn-names private-flags]
-                                   (map (fn [fname priv?]
-                                          (make-function
-                                            (str (:id container) "/" fname)
-                                            fname
-                                            (:id container)
-                                            priv?))
-                                        fn-names private-flags))
-                                 containers fn-name-lists private-flags-lists))
-           all-fn-nodes fn-nodes
+           ;; Function children from provides operations
+           surface-fn-nodes (vec (mapcat
+                                   (fn [container surface]
+                                     (when-let [provides (seq (:provides surface))]
+                                       (map (fn [{:keys [name description]}]
+                                              (make-function
+                                                (str (:id container) "/" name)
+                                                name
+                                                (:id container)
+                                                false))
+                                            provides)))
+                                   containers surfaces))
+           impl-fn-nodes (vec (mapcat (fn [container fn-names private-flags]
+                                        (map (fn [fname priv?]
+                                               (make-function
+                                                 (str (:id container) "/" fname)
+                                                 fname
+                                                 (:id container)
+                                                 priv?))
+                                             fn-names private-flags))
+                                      containers fn-name-lists private-flags-lists))
+           ;; Merge, dedup by ID (impl wins over surface)
+           fn-by-id (merge (into {} (map (fn [n] [(:id n) n]) surface-fn-nodes))
+                           (into {} (map (fn [n] [(:id n) n]) impl-fn-nodes)))
+           all-fn-nodes (vec (vals fn-by-id))
            all-raw (into {root-id root}
                          (map (fn [n] [(:id n) n]))
                          (concat containers all-fn-nodes))

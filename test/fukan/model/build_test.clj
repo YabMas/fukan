@@ -46,6 +46,11 @@
     (let [model (build/build-model contrib)]
       (true? (inv/edge-integrity? model)))))
 
+(defspec build-model-no-unconsumed-provides 100
+  (prop/for-all [contrib (gen/gen-contribution)]
+    (let [model (build/build-model contrib)]
+      (true? (inv/no-unconsumed-provides? model)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Integration: Fukan self-analysis satisfies all model invariants
 
@@ -64,4 +69,5 @@
       (is (true? (inv/no-empty-containers? model)) (str (inv/no-empty-containers? model)))
       (is (true? (inv/no-self-edges? model)) (str (inv/no-self-edges? model)))
       (is (true? (inv/edge-integrity? model)) (str (inv/edge-integrity? model)))
-      (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model))))))
+      (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model)))
+      (is (true? (inv/no-unconsumed-provides? model)) (str (inv/no-unconsumed-provides? model))))))

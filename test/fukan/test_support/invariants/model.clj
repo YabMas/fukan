@@ -182,6 +182,24 @@
           true)))))
 
 ;; ---------------------------------------------------------------------------
+;; NoUnconsumedProvides: no container's surface still has :provides
+;; (they should be materialized as Function children during build).
+
+(defn no-unconsumed-provides?
+  "Verify that no container surface still has :provides.
+   The build pipeline should consume provides into Function children."
+  [{:keys [nodes]}]
+  (or (first
+        (for [[id node] nodes
+              :when (= :container (:kind node))
+              :let [provides (get-in node [:data :surface :provides])]
+              :when (seq provides)]
+          {:violation :no-unconsumed-provides
+           :node-id id
+           :provides-count (count provides)}))
+      true))
+
+;; ---------------------------------------------------------------------------
 ;; Composite
 
 (defn valid-model?
@@ -193,7 +211,8 @@
                 no-empty-containers?
                 no-self-edges?
                 edge-integrity?
-                smart-root-pruning?]]
+                smart-root-pruning?
+                no-unconsumed-provides?]]
     (reduce (fn [_ check]
               (let [result (check model)]
                 (if (true? result)

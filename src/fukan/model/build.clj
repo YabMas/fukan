@@ -78,12 +78,13 @@
    [:description {:optional true} :string]])
 
 (def ^:schema Surface
-  [:map {:description "A module's public boundary contract derived from specification."}
+  [:map {:description "A module's public boundary contract derived from specification.
+                       Surface operations (provides) are consumed during build — they
+                       become Function child nodes and are stripped from stored surfaces."}
    [:facing {:optional true} :string]
    [:description {:optional true} :string]
    [:exposes {:optional true} [:vector :Field]]
-   [:guarantees {:optional true} [:vector :string]]
-   [:provides {:optional true} [:vector :Field]]])
+   [:guarantees {:optional true} [:vector :string]]])
 
 (def ^:schema NodeData
   [:or {:description "Kind-specific properties attached to a node, discriminated by :kind."}
@@ -548,6 +549,63 @@
    :edges (vec (into #{} (mapcat :edges contributions)))})
 
 ;; -----------------------------------------------------------------------------
+;; Surface materialization
+
+(defn- materialize-surface-functions
+  "Materialize surface provides operations as Function child nodes.
+   For each container with surface.provides:
+   - Creates a Function child if no existing child has a matching label
+   - Enriches an existing function's :doc if it matches by name
+   Strips :provides from the stored surface afterward."
+  [nodes]
+  (reduce-kv
+    (fn [acc id node]
+      (if-let [provides (seq (get-in node [:data :surface :provides]))]
+        (let [;; Collect existing child labels for matching
+              child-labels (->> (:children node)
+                                (keep #(get nodes %))
+                                (filter #(= :function (:kind %)))
+                                (map :label)
+                                set)
+              ;; Create or enrich for each provides entry
+              {new-nodes :nodes enrichments :enrichments}
+              (reduce
+                (fn [acc {:keys [name description]}]
+                  (if (contains? child-labels name)
+                    ;; Match: enrich existing function's doc
+                    (let [match-id (str id "/" name)]
+                      (update acc :enrichments conj [match-id description]))
+                    ;; No match: create new Function child
+                    (let [fn-id (str id "/" name)
+                          fn-node {:id fn-id
+                                   :kind :function
+                                   :label name
+                                   :parent id
+                                   :children #{}
+                                   :data {:kind :function
+                                          :private? false
+                                          :doc description}}]
+                      (update acc :nodes assoc fn-id fn-node))))
+                {:nodes {} :enrichments []}
+                provides)
+              ;; Strip :provides from stored surface
+              updated-node (update-in node [:data :surface] dissoc :provides)]
+          (-> acc
+              (assoc id updated-node)
+              ;; Add new function nodes
+              (merge new-nodes)
+              ;; Apply enrichments to existing nodes
+              (as-> m
+                (reduce (fn [m [fn-id desc]]
+                          (if (and desc (contains? m fn-id)
+                                   (nil? (get-in m [fn-id :data :doc])))
+                            (assoc-in m [fn-id :data :doc] desc)
+                            m))
+                        m enrichments))))
+        (assoc acc id node)))
+    {} nodes))
+
+;; -----------------------------------------------------------------------------
 ;; Main build function
 
 (defn build-model
@@ -603,8 +661,12 @@
          smart-root (find-smart-root all-nodes folder-ids)
          pruned-nodes (prune-to-smart-root all-nodes smart-root)
 
+         ;; Materialize surface provides as Function children, re-wire
+         materialized-nodes (-> (materialize-surface-functions pruned-nodes)
+                                wire-children)
+
          ;; Derive ns-index from non-folder container nodes for hooks
-         ns-index (->> (vals pruned-nodes)
+         ns-index (->> (vals materialized-nodes)
                        (filter #(and (= :container (:kind %))
                                      (not (contains? folder-ids (:id %)))))
                        (reduce (fn [acc node]
@@ -612,7 +674,7 @@
                                {}))
 
          ;; Filter edges to surviving nodes, deduplicate
-         node-ids (set (keys pruned-nodes))
+         node-ids (set (keys materialized-nodes))
          all-edges (->> contrib-edges
                         (filter (fn [{:keys [from to]}]
                                   (and (contains? node-ids from)
@@ -625,7 +687,7 @@
          type-nodes (type-nodes-fn ns-index)
 
          ;; Merge type nodes into final nodes map and re-wire children
-         merged-with-types (-> (merge pruned-nodes type-nodes)
+         merged-with-types (-> (merge materialized-nodes type-nodes)
                                wire-children)
 
          ;; Remove var nodes that define schemas — they're represented by schema nodes
