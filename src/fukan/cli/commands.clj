@@ -98,6 +98,7 @@
 
 (defn cmd-ls
   "List children and edges at current view."
+  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state _args]
   (let [view-id (current-view-id model state)]
     {:response (merge {:ok true :command :ls}
@@ -105,6 +106,7 @@
 
 (defn cmd-cd
   "Navigate into a container or up to parent."
+  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state args]
   (let [target (first args)]
     (cond
@@ -150,6 +152,7 @@
 
 (defn cmd-back
   "Pop history stack and navigate to previous view."
+  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state _args]
   (let [history (:history state)]
     (if (seq history)
@@ -165,6 +168,7 @@
 
 (defn cmd-info
   "Entity details (sidebar equivalent)."
+  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model _state args]
   (let [entity-id (first args)]
     (if (nil? entity-id)
@@ -178,6 +182,7 @@
 
 (defn cmd-find
   "Search nodes by label (case-insensitive, max 50)."
+  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model _state args]
   (let [pattern (str/join " " args)]
     (if (str/blank? pattern)
@@ -199,6 +204,7 @@
 
 (defn cmd-overview
   "Model summary stats."
+  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state _args]
   (let [nodes (vals (:nodes model))
         by-kind (frequencies (map :kind nodes))]
