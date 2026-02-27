@@ -123,30 +123,119 @@
       (into #{} (mapcat (fn [p] (extract-type-refs (:type-ref p)))
                         params)))
 
+    :surface
+    (into #{} (mapcat (fn [field] (extract-type-refs (:type-ref field)))
+                      (:fields decl)))
+
     :external-entity #{}
     :enum #{}
     #{}))
+
+;; ---------------------------------------------------------------------------
+;; Spec data extraction
+
+(defn- extract-fields
+  "Extract Field maps from an entity/value declaration.
+   Returns a vector of {:name :type-ref :description?} maps for typed fields."
+  [decl]
+  (->> (:fields decl)
+       (keep (fn [field]
+               (when (= :typed (:field-kind field))
+                 (cond-> {:name (:name field)
+                          :type-ref (pr-str (:type-ref field))}
+                   (:comment field) (assoc :description (:comment field))))))
+       vec))
+
+(defn- extract-surface
+  "Extract a Surface map from a surface declaration.
+   Fields with specific names map to Surface properties:
+     facing, exposes, provides, guarantees."
+  [decl]
+  (let [fields (:fields decl)
+        by-name (group-by :name fields)
+        facing (some-> (get by-name "facing") first :type-ref :name)
+        extract-entries (fn [field-name]
+                          (when-let [entries (get by-name field-name)]
+                            (->> entries
+                                 (mapv (fn [f]
+                                         (cond-> {:name (:name f)
+                                                  :type-ref (if (:type-ref f)
+                                                              (pr-str (:type-ref f))
+                                                              (or (:expr f) ""))}
+                                           (:comment f) (assoc :description (:comment f))))))))]
+    (cond-> {}
+      facing (assoc :facing facing)
+      (:description decl) (assoc :description (:description decl))
+      (seq (get by-name "exposes")) (assoc :exposes (extract-entries "exposes"))
+      (seq (get by-name "provides")) (assoc :provides (extract-entries "provides"))
+      (seq (get by-name "guarantees")) (assoc :guarantees
+                                              (mapv (fn [f]
+                                                      (or (-> f :type-ref :name)
+                                                          (:expr f)
+                                                          ""))
+                                                    (get by-name "guarantees"))))))
+
+(defn- surface-provides-nodes
+  "Materialize Function child nodes from a surface's provides operations.
+   Each provides entry becomes a function child of the container."
+  [container-id surface]
+  (when-let [provides (:provides surface)]
+    (into {}
+      (map (fn [field]
+             (let [id (str container-id "/" (:name field))]
+               [id {:id id
+                    :kind :function
+                    :label (:name field)
+                    :parent container-id
+                    :children #{}
+                    :data {:kind :function
+                           :private? false
+                           :doc (:description field)}}]))
+           provides))))
 
 ;; ---------------------------------------------------------------------------
 ;; Node construction
 
 (defn- build-allium-nodes
   "Build nodes from parsed allium files.
-   Each file → container node. Each named declaration → function (leaf) node."
+   Each file → container node with spec data enrichment.
+   Each named declaration → function (leaf) node.
+   Surface provides operations → additional function children."
   [src-path parsed-files]
   (reduce
     (fn [acc {:keys [filepath ast]}]
       (let [ns-sym (file->ns-sym filepath src-path)
             container-id (str ns-sym)
-            container {:id container-id
-                       :kind :container
-                       :label (str ns-sym)
-                       :parent nil
-                       :children #{}
-                       :data {:kind :container
-                              :filename filepath}}
-            decls (->> (:declarations ast)
-                       (filter #(contains? node-decl-types (:type %))))
+            decls (:declarations ast)
+
+            ;; Extract spec data from declarations
+            entities (->> decls (filter #(#{:entity :value} (:type %))))
+            surfaces (->> decls (filter #(= :surface (:type %))))
+            description (or
+                          ;; First entity/value with a description string
+                          (some :description entities)
+                          ;; Or first surface description
+                          (some :description surfaces))
+            fields (when (seq entities)
+                     (vec (mapcat extract-fields entities)))
+            surface (when (seq surfaces)
+                      (extract-surface (first surfaces)))
+
+            container (cond->
+                        {:id container-id
+                         :kind :container
+                         :label (str ns-sym)
+                         :parent nil
+                         :children #{}
+                         :data (cond-> {:kind :container
+                                        :filename filepath}
+                                 surface (assoc :surface surface)
+                                 (seq fields) (assoc :fields fields)
+                                 true (assoc :spec {:ast ast}))}
+                        description (assoc :description description))
+
+            ;; Named declarations → function children
+            named-decls (->> decls (filter #(contains? node-decl-types (:type %))))
             decl-nodes (into {}
                          (map (fn [decl]
                                 (let [id (str container-id "/" (:name decl))]
@@ -156,9 +245,14 @@
                                        :parent container-id
                                        :children #{}
                                        :data {:kind :function
-                                              :private? false}}])))
-                         decls)]
-        (merge acc {container-id container} decl-nodes)))
+                                              :private? false
+                                              :doc (:description decl)}}])))
+                         named-decls)
+
+            ;; Surface provides → additional function children
+            provides-nodes (when surface
+                             (surface-provides-nodes container-id surface))]
+        (merge acc {container-id container} decl-nodes provides-nodes)))
     {}
     parsed-files))
 

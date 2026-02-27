@@ -149,6 +149,27 @@
       (is (pos? (count (:edges contrib)))
           "should produce edges"))))
 
+(deftest allium-enrichment-test
+  (testing "container nodes carry spec data"
+    (let [contrib (analyzer/allium-contribution "src")
+          model-container (get (:nodes contrib) "fukan.model.spec-allium")]
+      (is (some? model-container) "model spec container should exist")
+      (is (some? (get-in model-container [:data :spec]))
+          "container should have :spec data")
+      (is (map? (get-in model-container [:data :spec :ast]))
+          "spec data should contain parsed AST")))
+
+  (testing "container nodes carry extracted fields"
+    (let [contrib (analyzer/allium-contribution "src")
+          model-container (get (:nodes contrib) "fukan.model.spec-allium")]
+      (when-let [fields (get-in model-container [:data :fields])]
+        (is (pos? (count fields))
+            "model spec should have extracted fields")
+        (is (every? :name fields)
+            "every field should have a :name")
+        (is (every? :type-ref fields)
+            "every field should have a :type-ref")))))
+
 (deftest allium-model-integration-test
   (testing "merged Clojure + Allium contribution builds valid model"
     (let [clj-contrib (clj-lang/contribution "src")
