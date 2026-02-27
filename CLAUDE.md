@@ -13,6 +13,27 @@ Some packages contain their own `CLAUDE.md` with package-specific conventions:
 
 ---
 
+## Functional Core, Imperative Shell — enforced by Allium
+
+The system follows a **functional core, imperative shell** architecture. Allium specs are the enforcement mechanism: if logic can be expressed as an Allium spec (values, rules, invariants), it belongs in the functional core. If it can't — because it involves IO, mutable state, lifecycle, or side effects — it belongs in the thin imperative shell.
+
+**Functional core** (Allium-specced):
+- `model/` — build pipeline, structural invariants
+- `projection/` — pure computation over the model
+- `web/views/` — rendering contracts and interaction rules
+- Pure command logic in `cli/`
+
+**Imperative shell** (not specced, governed by tests + conventions):
+- `infra/` — Integrant lifecycle, atoms, port binding
+- `web/handler.clj` + `web/sse.clj` — HTTP routing, SSE streaming
+- IO edges in `model/languages/` — subprocess invocation, runtime reflection
+
+**Design pressure:** When new logic arrives, the first question is "can I express this as an Allium rule?" If yes, it goes in the core. If not, ask *why* — often the answer is that pure logic is tangled with IO and can be factored out. The shell's job is to wire IO to the core, not to contain domain logic.
+
+**Boundary contracts:** The shell's promises to the core (and vice versa) *are* specced — as `external entity` declarations and rule pre/postconditions. The shell's internal mechanics are not.
+
+---
+
 ## contract.edn Convention
 
 `contract.edn` defines a module's **external boundary** — the functions that callers outside the module use. It is not an inventory of all public vars.
