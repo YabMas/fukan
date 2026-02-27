@@ -192,4 +192,6 @@
       (is (true? (inv/no-empty-containers? model)) (str (inv/no-empty-containers? model)))
       (is (true? (inv/no-self-edges? model)) (str (inv/no-self-edges? model)))
       (is (true? (inv/edge-integrity? model)) (str (inv/edge-integrity? model)))
-      (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model))))))
+      (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model)))
+      (is (true? (inv/surface-function-consistency? model))
+          (str (inv/surface-function-consistency? model))))))

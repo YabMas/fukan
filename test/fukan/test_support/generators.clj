@@ -162,6 +162,34 @@
               :edges (vec (into (set var-edges) ns-edges))})))))))
 
 ;; ---------------------------------------------------------------------------
+;; gen-field, gen-surface
+
+(def gen-field
+  "Generate a valid Field map."
+  (gen/let [name gen-simple-name
+            type-ref (gen/elements ["String" "Integer" "Boolean" "List<String>" "Map<String, Node>"])
+            has-desc? gen/boolean
+            desc gen-simple-name]
+    (cond-> {:name name :type-ref type-ref}
+      has-desc? (assoc :description desc))))
+
+(def gen-surface
+  "Generate a valid Surface with provides operations."
+  (gen/let [has-facing? gen/boolean
+            facing (gen/elements ["internal" "external"])
+            has-desc? gen/boolean
+            desc gen-simple-name
+            provide-count (gen/choose 0 3)
+            provides (gen/vector gen-field provide-count)
+            guarantee-count (gen/choose 0 2)
+            guarantees (gen/vector gen-simple-name guarantee-count)]
+    (cond-> {}
+      has-facing? (assoc :facing facing)
+      has-desc? (assoc :description desc)
+      (seq provides) (assoc :provides provides)
+      (seq guarantees) (assoc :guarantees guarantees))))
+
+;; ---------------------------------------------------------------------------
 ;; gen-model
 
 (defn- make-container [id label parent-id]
@@ -173,8 +201,9 @@
    :data {:kind :function :private? private?}})
 
 (defn gen-model
-  "Generate a valid Model with tree structure and edges.
-   Builds top-down: root → child containers → leaf functions → edges."
+  "Generate a valid Model with tree structure, edges, and optional surfaces.
+   Builds top-down: root → child containers → leaf functions → edges.
+   When a surface has provides, corresponding function children are created."
   ([] (gen-model {}))
   ([{:keys [min-containers max-containers min-fns-per-ns max-fns-per-ns]
      :or {min-containers 2 max-containers 5 min-fns-per-ns 1 max-fns-per-ns 4}}]
@@ -191,12 +220,44 @@
              private-flags-lists (apply gen/tuple
                                         (mapv (fn [cnt]
                                                 (gen/vector gen/boolean cnt))
-                                              fn-counts))]
+                                              fn-counts))
+             ;; Sometimes attach surfaces to containers
+             surface-flags (gen/vector (gen/frequency [[3 (gen/return false)]
+                                                       [1 (gen/return true)]])
+                                       (count container-names))
+             surfaces (apply gen/tuple
+                             (mapv (fn [has-surface?]
+                                     (if has-surface? gen-surface (gen/return nil)))
+                                   surface-flags))
+             ;; Sometimes attach fields to containers
+             field-flags (gen/vector (gen/frequency [[3 (gen/return false)]
+                                                     [1 (gen/return true)]])
+                                     (count container-names))
+             field-lists (apply gen/tuple
+                                (mapv (fn [has-fields?]
+                                        (if has-fields?
+                                          (gen/vector gen-field 1 3)
+                                          (gen/return nil)))
+                                      field-flags))]
      (let [root-id "root"
            root (make-container root-id "root" nil)
-           containers (mapv (fn [name]
-                              (make-container (str "ns:" name) name root-id))
-                            container-names)
+           containers (mapv (fn [name surface fields]
+                              (cond-> (make-container (str "ns:" name) name root-id)
+                                surface (assoc-in [:data :surface] surface)
+                                (seq fields) (assoc-in [:data :fields] fields)))
+                            container-names surfaces field-lists)
+           ;; Materialize function children from surface provides
+           surface-fn-nodes (vec (mapcat
+                                   (fn [container surface]
+                                     (when-let [provides (seq (:provides surface))]
+                                       (map (fn [field]
+                                              (make-function
+                                                (str (:id container) "/" (:name field))
+                                                (:name field)
+                                                (:id container)
+                                                false))
+                                            provides)))
+                                   containers surfaces))
            fn-nodes (vec (mapcat (fn [container fn-names private-flags]
                                    (map (fn [fname priv?]
                                           (make-function
@@ -206,16 +267,20 @@
                                             priv?))
                                         fn-names private-flags))
                                  containers fn-name-lists private-flags-lists))
+           ;; Merge surface fn nodes with regular fn nodes (surface fns take precedence)
+           all-fn-nodes (let [surface-fn-map (into {} (map (fn [n] [(:id n) n]) surface-fn-nodes))
+                              regular-fn-map (into {} (map (fn [n] [(:id n) n]) fn-nodes))]
+                          (vals (merge regular-fn-map surface-fn-map)))
            all-raw (into {root-id root}
                          (map (fn [n] [(:id n) n]))
-                         (concat containers fn-nodes))
+                         (concat containers all-fn-nodes))
            wired (reduce (fn [acc [id node]]
                            (if-let [pid (:parent node)]
                              (update-in acc [pid :children] conj id)
                              acc))
                          all-raw
                          all-raw)
-           leaf-ids (mapv :id fn-nodes)]
+           leaf-ids (vec (map :id all-fn-nodes))]
        (gen/let [edge-count (gen/choose 0 (min 15 (* (count leaf-ids) 2)))
                  edge-from-idxs (gen/vector (gen/choose 0 (max 0 (dec (count leaf-ids)))) edge-count)
                  edge-to-idxs (gen/vector (gen/choose 0 (max 0 (dec (count leaf-ids)))) edge-count)]

@@ -183,6 +183,34 @@
           true)))))
 
 ;; ---------------------------------------------------------------------------
+;; SurfaceFunctionConsistency: every surface provides operation has a
+;; corresponding Function child node.
+
+(defn surface-function-consistency?
+  "Verify that every surface provides operation has a corresponding Function
+   child node under the same container."
+  [{:keys [nodes]}]
+  (or (first
+        (for [[id node] nodes
+              :when (= :container (:kind node))
+              :let [surface (get-in node [:data :surface])]
+              :when surface
+              :let [provides (:provides surface)]
+              :when (seq provides)
+              :let [child-labels (->> (:children node)
+                                      (map #(get nodes %))
+                                      (filter #(= :function (:kind %)))
+                                      (map :label)
+                                      set)]
+              provide provides
+              :when (not (contains? child-labels (:name provide)))]
+          {:violation :surface-function-consistency
+           :container-id id
+           :missing-function (:name provide)
+           :available-children child-labels}))
+      true))
+
+;; ---------------------------------------------------------------------------
 ;; Composite
 
 (defn valid-model?
@@ -194,7 +222,8 @@
                 no-empty-containers?
                 no-self-edges?
                 edge-integrity?
-                smart-root-pruning?]]
+                smart-root-pruning?
+                surface-function-consistency?]]
     (reduce (fn [_ check]
               (let [result (check model)]
                 (if (true? result)
