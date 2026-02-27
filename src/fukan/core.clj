@@ -3,8 +3,7 @@
    Orchestrates the analysis pipeline and starts the web server or CLI explorer.
 
    Usage: clj -M -m fukan.core --src /path/to/src [--port 8080] [--mode web|cli]"
-  (:require [fukan.infra.model :as infra-model]
-            [fukan.cli.explorer :as cli]
+  (:require [fukan.cli.explorer :as cli]
             [clojure.java.io :as io]
             [integrant.core :as ig]))
 
@@ -48,11 +47,12 @@
 
     (case mode
       :cli
-      (let [;; Build model directly for CLI — no Integrant needed
-            model-state (atom {:model nil :src nil})
-            model (binding [*out* *err*]
-                    (infra-model/load-model! model-state src))]
-        (cli/start-session model src))
+      (let [config (-> (read-config)
+                       (assoc-in [:fukan.infra/model :src] src))
+            _ (ig/load-namespaces config)
+            system (ig/init config [:fukan.infra/model])
+            model-state (:fukan.infra/model system)]
+        (cli/start-session (:model @model-state) src))
 
       ;; Default: web mode
       (let [config (-> (read-config)
