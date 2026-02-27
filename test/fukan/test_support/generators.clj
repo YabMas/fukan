@@ -246,18 +246,6 @@
                                 surface (assoc-in [:data :surface] surface)
                                 (seq fields) (assoc-in [:data :fields] fields)))
                             container-names surfaces field-lists)
-           ;; Materialize function children from surface provides
-           surface-fn-nodes (vec (mapcat
-                                   (fn [container surface]
-                                     (when-let [provides (seq (:provides surface))]
-                                       (map (fn [field]
-                                              (make-function
-                                                (str (:id container) "/" (:name field))
-                                                (:name field)
-                                                (:id container)
-                                                false))
-                                            provides)))
-                                   containers surfaces))
            fn-nodes (vec (mapcat (fn [container fn-names private-flags]
                                    (map (fn [fname priv?]
                                           (make-function
@@ -267,10 +255,7 @@
                                             priv?))
                                         fn-names private-flags))
                                  containers fn-name-lists private-flags-lists))
-           ;; Merge surface fn nodes with regular fn nodes (surface fns take precedence)
-           all-fn-nodes (let [surface-fn-map (into {} (map (fn [n] [(:id n) n]) surface-fn-nodes))
-                              regular-fn-map (into {} (map (fn [n] [(:id n) n]) fn-nodes))]
-                          (vals (merge regular-fn-map surface-fn-map)))
+           all-fn-nodes fn-nodes
            all-raw (into {root-id root}
                          (map (fn [n] [(:id n) n]))
                          (concat containers all-fn-nodes))

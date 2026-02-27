@@ -525,6 +525,7 @@
   (if (and (= :container (:kind a)) (= :container (:kind b)))
     (-> (merge a b)
         (assoc :data (merge (:data a) (:data b)))
+        (assoc :parent (or (:parent b) (:parent a)))
         (update :children (fn [c] (into (or (:children a) #{}) (or c #{})))))
     b))
 
@@ -591,8 +592,9 @@
                               (assoc acc id node)))
                           {} contrib-nodes)
 
-         ;; Merge folder nodes + contribution nodes
-         merged-nodes (merge folder-nodes parented-nodes)
+         ;; Merge folder nodes + contribution nodes (deep merge preserves
+         ;; folder parents when enrichment nodes have :parent nil)
+         merged-nodes (merge-node-maps folder-nodes parented-nodes)
 
          ;; Remove empty containers
          cleaned-nodes (remove-empty-containers merged-nodes)

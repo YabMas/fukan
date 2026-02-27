@@ -129,39 +129,43 @@
 ;; Integration: analyze Fukan's own .allium files
 
 (deftest allium-contribution-test
-  (testing "produces nodes and edges from Fukan's allium specs"
+  (testing "produces container nodes enriched with spec data"
     (let [contrib (analyzer/allium-contribution "src")]
       (is (pos? (count (:source-files contrib)))
           "should discover allium files")
       (is (pos? (count (:nodes contrib)))
           "should produce nodes")
-      ;; Each allium file should have a container node
+      ;; Containers use folder-path IDs, not spec-allium
       (let [containers (->> (vals (:nodes contrib))
                              (filter #(= :container (:kind %))))]
         (is (>= (count containers) 2)
-            "should have at least 2 container nodes (model + views specs)"))
-      ;; Each named declaration should have a function node
+            "should have at least 2 container nodes")
+        (is (every? #(str/starts-with? (:id %) "src/") containers)
+            "all containers should use folder-path IDs")
+        (is (every? #(not (str/includes? (:id %) "allium")) containers)
+            "no container should have allium in its ID"))
+      ;; No function children — spec data lives on containers only
       (let [functions (->> (vals (:nodes contrib))
                             (filter #(= :function (:kind %))))]
-        (is (pos? (count functions))
-            "should have function (declaration) nodes"))
-      ;; Should have edges from type references and use declarations
-      (is (pos? (count (:edges contrib)))
-          "should produce edges"))))
+        (is (zero? (count functions))
+            "should not produce function (declaration) nodes"))
+      ;; No edges — use declarations are spec-level, not code dependencies
+      (is (zero? (count (:edges contrib)))
+          "should not produce edges (spec imports are not code deps)"))))
 
 (deftest allium-enrichment-test
-  (testing "container nodes carry spec data"
+  (testing "container uses folder-path ID matching build pipeline"
     (let [contrib (analyzer/allium-contribution "src")
-          model-container (get (:nodes contrib) "fukan.model.spec-allium")]
-      (is (some? model-container) "model spec container should exist")
+          model-container (get (:nodes contrib) "src/fukan/model")]
+      (is (some? model-container) "model folder container should exist")
       (is (some? (get-in model-container [:data :spec]))
           "container should have :spec data")
       (is (map? (get-in model-container [:data :spec :ast]))
           "spec data should contain parsed AST")))
 
-  (testing "container nodes carry extracted fields"
+  (testing "container carries extracted fields"
     (let [contrib (analyzer/allium-contribution "src")
-          model-container (get (:nodes contrib) "fukan.model.spec-allium")]
+          model-container (get (:nodes contrib) "src/fukan/model")]
       (when-let [fields (get-in model-container [:data :fields])]
         (is (pos? (count fields))
             "model spec should have extracted fields")
@@ -181,17 +185,21 @@
                                     (clj-lang/build-schema-nodes ns-index schema-data))})]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
-      ;; Allium containers should be in the model
-      (let [allium-nodes (->> (keys (:nodes model))
-                               (filter #(str/includes? % "allium")))]
-        (is (pos? (count allium-nodes))
-            "model should contain allium-related nodes"))
+      ;; Allium spec data should enrich folder containers
+      (let [;; Find the folder node for fukan/model (may be pruned by smart-root)
+            model-nodes (->> (vals (:nodes model))
+                              (filter #(= :container (:kind %)))
+                              (filter #(some-> (:data %) :spec)))]
+        (is (pos? (count model-nodes))
+            "at least one container should carry spec data from allium"))
+      ;; No spec-allium containers should exist
+      (is (empty? (->> (keys (:nodes model))
+                        (filter #(str/includes? % "spec-allium"))))
+          "no spec-allium nodes should exist in the model")
       ;; All model invariants should hold
       (is (true? (inv/tree-structure? model)) (str (inv/tree-structure? model)))
       (is (true? (inv/leaf-strictness? model)) (str (inv/leaf-strictness? model)))
       (is (true? (inv/no-empty-containers? model)) (str (inv/no-empty-containers? model)))
       (is (true? (inv/no-self-edges? model)) (str (inv/no-self-edges? model)))
       (is (true? (inv/edge-integrity? model)) (str (inv/edge-integrity? model)))
-      (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model)))
-      (is (true? (inv/surface-function-consistency? model))
-          (str (inv/surface-function-consistency? model))))))
+      (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model))))))

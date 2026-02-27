@@ -14,10 +14,6 @@
   "Type names that are language builtins and should not generate edges."
   #{"String" "Boolean" "Integer" "Set" "List" "Map"})
 
-(def ^:private node-decl-types
-  "Declaration types that produce leaf nodes in the model."
-  #{:entity :value :variant :enum :external-entity :rule})
-
 ;; ---------------------------------------------------------------------------
 ;; File / namespace utilities
 
@@ -33,6 +29,14 @@
         last-part (str/replace (last parts) ".allium" "-allium")
         all-parts (conj (vec (butlast parts)) last-part)]
     (symbol (str/join "." all-parts))))
+
+(defn file->parent-folder-path
+  "Return the parent directory path for an allium file.
+   'src/fukan/model/spec.allium' → 'src/fukan/model'
+   This matches the folder node ID convention used by the build pipeline."
+  [filepath]
+  (let [parts (str/split filepath #"/")]
+    (str/join "/" (butlast parts))))
 
 (defn- discover-allium-files
   "Find .allium files recursively under src-path."
@@ -175,37 +179,18 @@
                                                           ""))
                                                     (get by-name "guarantees"))))))
 
-(defn- surface-provides-nodes
-  "Materialize Function child nodes from a surface's provides operations.
-   Each provides entry becomes a function child of the container."
-  [container-id surface]
-  (when-let [provides (:provides surface)]
-    (into {}
-      (map (fn [field]
-             (let [id (str container-id "/" (:name field))]
-               [id {:id id
-                    :kind :function
-                    :label (:name field)
-                    :parent container-id
-                    :children #{}
-                    :data {:kind :function
-                           :private? false
-                           :doc (:description field)}}]))
-           provides))))
-
 ;; ---------------------------------------------------------------------------
 ;; Node construction
 
 (defn- build-allium-nodes
   "Build nodes from parsed allium files.
-   Each file → container node with spec data enrichment.
-   Each named declaration → function (leaf) node.
-   Surface provides operations → additional function children."
+   Each file enriches its parent directory's container node with spec data
+   (description, fields, surface). No declaration children are created —
+   spec entities exist as data on the container, not as graph nodes."
   [src-path parsed-files]
   (reduce
     (fn [acc {:keys [filepath ast]}]
-      (let [ns-sym (file->ns-sym filepath src-path)
-            container-id (str ns-sym)
+      (let [container-id (file->parent-folder-path filepath)
             decls (:declarations ast)
 
             ;; Extract spec data from declarations
@@ -224,102 +209,28 @@
             container (cond->
                         {:id container-id
                          :kind :container
-                         :label (str ns-sym)
+                         :label container-id
                          :parent nil
                          :children #{}
-                         :data (cond-> {:kind :container
-                                        :filename filepath}
+                         :data (cond-> {:kind :container}
                                  surface (assoc :surface surface)
                                  (seq fields) (assoc :fields fields)
                                  true (assoc :spec {:ast ast}))}
-                        description (assoc :description description))
-
-            ;; Named declarations → function children
-            named-decls (->> decls (filter #(contains? node-decl-types (:type %))))
-            decl-nodes (into {}
-                         (map (fn [decl]
-                                (let [id (str container-id "/" (:name decl))]
-                                  [id {:id id
-                                       :kind :function
-                                       :label (:name decl)
-                                       :parent container-id
-                                       :children #{}
-                                       :data {:kind :function
-                                              :private? false
-                                              :doc (:description decl)}}])))
-                         named-decls)
-
-            ;; Surface provides → additional function children
-            provides-nodes (when surface
-                             (surface-provides-nodes container-id surface))]
-        (merge acc {container-id container} decl-nodes provides-nodes)))
+                        description (assoc :description description))]
+        (assoc acc container-id container)))
     {}
     parsed-files))
 
 ;; ---------------------------------------------------------------------------
 ;; Edge construction
 
-(defn- build-alias-map
-  "Build alias → target-ns-str map from use declarations in a file's AST."
-  [ast src-path registry]
-  (into {}
-    (keep (fn [d]
-            (when (= :use (:type d))
-              (let [target-fp (resolve-use-path (:path d) registry)
-                    target-sym (when target-fp (file->ns-sym target-fp src-path))]
-                (when target-sym
-                  [(:alias d) (str target-sym)])))))
-    (:declarations ast)))
-
 (defn- build-allium-edges
   "Build edges from parsed allium files.
-   Type references → declaration-to-declaration edges.
-   Use declarations → container-to-container edges."
-  [src-path parsed-files registry]
-  (let [;; Build per-file data
-        file-data (mapv (fn [{:keys [filepath ast]}]
-                          (let [ns-str (str (file->ns-sym filepath src-path))]
-                            {:ns-str ns-str
-                             :ast ast
-                             :aliases (build-alias-map ast src-path registry)
-                             :decl-names (set (keep :name (:declarations ast)))}))
-                        parsed-files)]
-    (vec (into #{}
-      (mapcat
-        (fn [{:keys [ns-str ast aliases decl-names]}]
-          (let [decls (->> (:declarations ast)
-                           (filter #(contains? node-decl-types (:type %))))]
-            (concat
-              ;; Type reference edges
-              (mapcat
-                (fn [decl]
-                  (let [from-id (str ns-str "/" (:name decl))
-                        refs (extract-declaration-refs decl)]
-                    (keep (fn [{:keys [alias name]}]
-                            (if alias
-                              ;; Qualified ref: resolve alias to target namespace
-                              (let [target-ns (get aliases alias)]
-                                (when target-ns
-                                  (let [to-id (str target-ns "/" name)]
-                                    (when (not= from-id to-id)
-                                      {:from from-id :to to-id}))))
-                              ;; Simple ref: look up in same file only
-                              (when (contains? decl-names name)
-                                (let [to-id (str ns-str "/" name)]
-                                  (when (not= from-id to-id)
-                                    {:from from-id :to to-id})))))
-                          refs)))
-                decls)
-              ;; Use declaration edges (container-to-container)
-              (keep (fn [d]
-                      (when (= :use (:type d))
-                        (let [target-fp (resolve-use-path (:path d) registry)
-                              target-ns (when target-fp
-                                          (str (file->ns-sym target-fp src-path)))]
-                          (when (and target-ns (not= ns-str target-ns))
-                            {:from ns-str :to target-ns}))))
-                    (:declarations ast)))))
-        file-data)))))
+   Currently returns no edges — Allium use declarations are spec-level
+   imports, not implementation dependencies. Code edges from the Clojure
+   analyzer already capture the real dependency graph."
+  [_src-path _parsed-files _registry]
+  [])
 
 ;; ---------------------------------------------------------------------------
 ;; Public API
