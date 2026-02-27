@@ -3,9 +3,7 @@
    Each command takes [model state args] and returns
    {:response <edn-map> :state-update <fn-or-nil>}."
   (:require [clojure.string :as str]
-            [fukan.projection.graph :as graph]
-            [fukan.projection.details :as details]
-            [fukan.projection.path :as path]))
+            [fukan.projection.api :as proj]))
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
@@ -14,20 +12,13 @@
   "Get the current view-id, falling back to root."
   [model state]
   (or (:view-id state)
-      (:id (path/find-root-node model))))
+      (:id (proj/find-root model))))
 
 (defn- entity-exists? [model id]
   (some? (get-in model [:nodes id])))
 
 (defn- container? [model id]
   (seq (get-in model [:nodes id :children])))
-
-(defn- build-path [model view-id]
-  (vec (path/entity-path model view-id)))
-
-(defn- project-graph [model state]
-  (graph/entity-graph model {:view-id (current-view-id model state)
-                             :expanded-containers (:expanded state)}))
 
 (defn- node-summary
   "Summarize a projection node for ls output."
@@ -53,23 +44,24 @@
   "Compute path + children + enriched edges for a view."
   [model state view-id]
   (let [view-node (get-in model [:nodes view-id])
-        proj      (project-graph model (assoc state :view-id view-id))
-        children  (->> (:nodes proj)
+        {:keys [graph path]} (proj/navigate model {:view-id view-id
+                                                   :expanded (:expanded state)})
+        children  (->> (:nodes graph)
                        (filter #(= view-id (:parent %)))
                        (sort-by :label)
                        (mapv node-summary))
         child-ids (into #{} (map :id children))
-        edges     (->> (:edges proj)
+        edges     (->> (:edges graph)
                        (filter #(or (contains? child-ids (:from %))
                                     (contains? child-ids (:to %))))
                        (mapv #(enrich-edge model %)))]
-    (cond-> {:path       (build-path model view-id)
+    (cond-> {:path       (vec path)
              :view-id    view-id
              :view-label (:label view-node)
              :view-kind  (:kind view-node)
              :children   children
              :edges      edges}
-      (:io proj) (assoc :io (:io proj)))))
+      (:io graph) (assoc :io (:io graph)))))
 
 (defn- strip-ref-docs
   "Strip :doc from schema refs and interface items for overview display.
@@ -89,7 +81,7 @@
   "Compute entity-details context for embedding in navigation responses.
    Strips inline docs from references — use info for full detail."
   [model entity-id]
-  (when-let [d (details/entity-details model entity-id)]
+  (when-let [d (proj/inspect model entity-id)]
     (-> (select-keys d [:description :interface :schemas :dataflow :deps :dependents])
         strip-ref-docs)))
 
@@ -174,7 +166,7 @@
     (if (nil? entity-id)
       {:response {:ok false :command :info
                   :error "Usage: info <entity-id>"}}
-      (if-let [d (details/entity-details model entity-id)]
+      (if-let [d (proj/inspect model entity-id)]
         {:response (merge {:ok true :command :info :entity-id entity-id} d)}
         {:response {:ok false :command :info
                     :error (str "Entity not found: " entity-id)

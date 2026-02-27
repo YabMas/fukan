@@ -9,9 +9,7 @@
             [fukan.web.views.graph :as views.graph]
             [fukan.web.views.breadcrumb :as views.breadcrumb]
             [fukan.web.views.sidebar :as views.sidebar]
-            [fukan.projection.graph :as proj.graph]
-            [fukan.projection.details :as proj.details]
-            [fukan.projection.path :as proj.path]
+            [fukan.projection.api :as proj]
             [cheshire.core :as json]
             [clojure.string :as str]))
 
@@ -47,12 +45,6 @@
   (when-let [node (get-in model [:nodes node-id])]
     (:parent node)))
 
-(defn- compute-sidebar-data
-  "Compute normalized entity detail for sidebar rendering.
-   All kind-specific enrichment is handled by the projection layer."
-  [model selected-id]
-  (proj.details/entity-details model selected-id))
-
 (defn main-view-handler
   "SSE endpoint that streams the full main view update.
 
@@ -87,18 +79,18 @@
                                               :selected-id (or select-id entity-id)
                                               :expanded-containers expanded-containers}
                                 ;; Get projections
-                                graph-projection (proj.graph/entity-graph model {:view-id entity-id
-                                                                                 :expanded-containers expanded-containers})
-                                path-items (proj.path/entity-path model entity-id)
-                                sidebar-data (compute-sidebar-data model (:selected-id editor-state))
+                                {:keys [graph path details]}
+                                (proj/navigate model {:view-id entity-id
+                                                      :expanded expanded-containers
+                                                      :selected (:selected-id editor-state)})
                                 ;; Render views
-                                graph-data (views.graph/render-graph graph-projection editor-state)]
+                                graph-data (views.graph/render-graph graph editor-state)]
 
                             ;; 1. Patch breadcrumb HTML
-                            (d*/patch-elements! sse (views.breadcrumb/render-breadcrumb path-items))
+                            (d*/patch-elements! sse (views.breadcrumb/render-breadcrumb path))
 
                             ;; 2. Patch sidebar HTML
-                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data))
+                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html details))
 
                             ;; 3. Execute script to update graph and URL
                             (d*/execute-script! sse
@@ -122,7 +114,7 @@
                           (let [params (:query-params request)
                                 node-id (let [id (get params "id")]
                                           (when (and id (not= id "")) id))
-                                sidebar-data (compute-sidebar-data model node-id)]
+                                sidebar-data (proj/inspect model node-id)]
                             (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data))
                             ;; Update URL with selection
                             (d*/execute-script! sse
@@ -154,8 +146,9 @@
                                 schema-id (get params "id")
                                 trail (parse-trail (get params "trail"))
                                 schema-key (keyword schema-id)
-                                node-id (proj.path/find-schema-node-id model schema-key)
-                                sidebar-data (-> (compute-sidebar-data model node-id)
+                                {:keys [node-id details]}
+                                (proj/schema-lookup model schema-key)
+                                sidebar-data (-> details
                                                  (assoc :nav {:trail (vec (or trail []))
                                                               :current schema-id}))]
                             (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data))

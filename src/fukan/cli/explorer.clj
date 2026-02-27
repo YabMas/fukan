@@ -3,7 +3,7 @@
    Reads commands from stdin, prints EDN responses to stdout.
    Diagnostic output goes to stderr only."
   (:require [fukan.cli.commands :as commands]
-            [fukan.projection.path :as path]))
+            [fukan.projection.api :as proj]))
 
 (defn- init-state
   "Create initial session state."
@@ -23,7 +23,7 @@
 (defn- print-init
   "Print the :init response with model summary."
   [model src-path]
-  (let [root (path/find-root-node model)]
+  (let [root (proj/find-root model)]
     (print-response {:ok true
                      :command :init
                      :src src-path
