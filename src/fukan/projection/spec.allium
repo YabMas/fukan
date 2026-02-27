@@ -1,0 +1,348 @@
+-- allium: 1
+-- projection.allium
+--
+-- Scope: Projection — pure computation from (Model, options) to visible subgraph
+-- Includes: Graph projection, entity details, breadcrumb paths, edge semantics
+-- Excludes:
+--   - Model construction (see model.allium)
+--   - View rendering, UI state, interaction (see views.allium)
+
+use "./model.allium" as model
+
+------------------------------------------------------------
+-- Given
+------------------------------------------------------------
+
+given {
+    model: model/Model
+}
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum EdgeType { code_flow | schema_flow | data_flow | schema_composition }
+-- code_flow:           aggregated from raw model edges (var/ns cross-references)
+-- schema_flow:         var ↔ schema derived from function signatures
+-- data_flow:           IO boundary ↔ code derived from container contracts
+-- schema_composition:  schema → schema derived from schema form cross-references
+
+enum InterfaceType { fn_list | fn_inline | schema_def | name_list }
+-- fn_list:    contract functions with optional schemas (containers)
+-- fn_inline:  single function signature (functions)
+-- schema_def: schema form with one-level registry (schemas)
+-- name_list:  bare names without schemas (interface nodes)
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value ViewNode {
+    -- A node in the projected graph. Pure domain data — no UI state
+    -- (selected?, highlighted?). The view layer adds those.
+    id: String
+    kind: container | function | schema | io_container | io_schema
+    label: String
+    parent: String?
+    expandable: Boolean
+    has_private_children: Boolean
+    expanded: Boolean
+    child_count: Integer
+    private: Boolean?
+    io_type: input | output?
+    schema_key: String?
+}
+
+value ViewEdge {
+    id: String
+    from: String
+    to: String
+    edge_type: EdgeType
+    schema_key: String?
+}
+
+value IOBoundary {
+    -- Schema keys at a container's contract boundary.
+    -- Derived from function signatures in the container's contract.
+    inputs: Set<String>
+    outputs: Set<String>
+}
+
+value Projection {
+    -- The visible subgraph for a given view context.
+    -- This is the primary output of the projection layer.
+    nodes: List<ViewNode>
+    edges: List<ViewEdge>
+    io: IOBoundary?
+}
+
+value PathSegment {
+    -- One step in a breadcrumb path from root to entity.
+    id: String?     -- null for root
+    label: String   -- last dotted segment for namespaces
+}
+
+value DepInfo { count: Integer, label: String }
+value SchemaRef { key: String, doc: String? }
+value FnEntry { name: String, signature: model/FunctionSignature?, id: String? }
+
+value InterfaceData {
+    -- Public interface of an entity, dispatched by kind.
+    type: InterfaceType
+    items: List<Any>
+    registry: Map<String, Any>?  -- schema-def only: one-level resolved refs
+}
+
+value DataflowData {
+    -- Schema types flowing across an entity's boundary.
+    inputs: List<SchemaRef>
+    outputs: List<SchemaRef>
+}
+
+value EntityDetail {
+    -- Normalized detail structure for any node entity.
+    --
+    -- InterfaceDispatch: interface extraction differs by kind:
+    --   container → fn_list from contract functions
+    --   function  → fn_inline from function signature
+    --   schema    → schema_def from schema form + one-level registry
+    --
+    -- SameKindAggregation: deps and dependents are aggregated to the
+    --   same kind as the entity. A namespace's deps are other namespaces;
+    --   a function's deps are other functions. Self-subtree is excluded.
+    label: String
+    kind: container | function | schema
+    parent: { id: String, label: String }?
+    description: String?
+    interface: InterfaceData?
+    schemas: List<SchemaRef>?
+    dataflow: DataflowData?
+    deps: Map<String, DepInfo>
+    dependents: Map<String, DepInfo>
+}
+
+value EdgeDetail {
+    -- Detail structure for an aggregated edge: the underlying
+    -- function-level calls that cross this dependency.
+    kind: edge                -- discriminant for EntityDetail | EdgeDetail union
+    label: String
+    called_fns: List<FnEntry>
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule EntityGraph {
+    -- Compute the visible subgraph for an entity.
+    -- Dispatches to container or leaf view based on whether
+    -- the entity has children.
+    when: EntityGraph(view_id: String?, expanded_containers: Set<String>)
+
+    let entity_id = view_id ?? model.root_nodes.first.id
+
+    ensures:
+        if model.nodes[entity_id].children.count > 0:
+            ContainerView(entity_id, expanded_containers)
+        else:
+            LeafView(entity_id, expanded_containers)
+}
+
+rule ContainerView {
+    -- Compute visible subgraph when viewing a container.
+    --
+    -- Structural invariants:
+    --
+    -- StrictBoundingBox: ONLY entities inside the viewed container
+    --   appear. External entities are never shown. Edges that would
+    --   cross the bounding box are not rendered. To see external
+    --   relationships, navigate to a common ancestor.
+    --
+    -- SameTypeDrillDown: when a visible child has a relationship
+    --   with an entity inside a sibling container, the sibling is
+    --   opened — but only same-kind entities are exposed
+    --   (namespace→namespace, function→function). This keeps each
+    --   hierarchy level focused on same-level relationships.
+    --   When the direct child of the sibling is itself a container
+    --   (nested nesting), the type check looks through to the raw
+    --   target kind — container intermediaries act as passthrough.
+    --
+    -- InternalDepExpansion: when drilling into a sibling container,
+    --   internal dependencies of the exposed entities are also shown.
+    --   This ensures the drill-down view is locally coherent — you
+    --   see not just the related entity but its within-container deps.
+    --
+    -- NoAncestorDescendantEdges: edges between a container and
+    --   its own descendants are suppressed. The parent-child
+    --   relationship is implicit in nesting.
+    --
+    -- SchemaFiltering: schema nodes are excluded from visible
+    --   children. They appear only as synthetic IO schema nodes
+    --   when referenced by the container's contract.
+    --
+    -- PrivateVisibility: private children are hidden unless their
+    --   parent container is in expanded_containers.
+
+    when: ContainerView(entity_id: String, expanded_containers: Set<String>)
+
+    -- 1. Direct children, minus private (unless expanded) and schemas
+    let visible_children = visible_children_of(model, entity_id, expanded_containers)
+
+    -- 2. Iterative drill-down: for each aggregated edge targeting a
+    --    container sibling, find same-type entities inside it.
+    --    Expand internal deps at each step. Repeat until stable.
+    let drill_down = iterate_drill_down(model, visible_children)  -- black box
+
+    let all_visible = visible_children + drill_down.entities
+
+    -- 3. Edge computation across four types
+    let code_edges = aggregate_edges(model, all_visible)          -- black box
+    let schema_flow = schema_flow_edges(model, all_visible)       -- black box
+    let composition = schema_composition_edges(model, all_visible) -- black box
+    let io_layer = io_from_contract(model, entity_id, all_visible) -- black box
+
+    ensures: Projection.created(
+        nodes: view_nodes_for(all_visible, drill_down.grouping),
+        edges: code_edges + schema_flow + composition + io_layer.edges,
+        io: io_layer.boundary
+    )
+}
+
+rule LeafView {
+    -- Compute visible subgraph when viewing a leaf entity.
+    -- Shows the entity and all entities it has relationships with,
+    -- in both directions, grouped by parent container then by folder.
+    -- Only edges involving the selected entity are shown.
+    --
+    -- NoBoundingBox: unlike ContainerView, related entities from anywhere
+    --   in the model are shown — there is no spatial constraint.
+    --
+    -- NoIO: leaf views never produce IO boundary data. IO is a
+    --   container-level concept derived from contracts.
+
+    when: LeafView(entity_id: String, expanded_containers: Set<String>)
+
+    let entity = model.nodes[entity_id]
+    let related_ids = model.edges
+        .filter(e => e.from = entity_id or e.to = entity_id)
+        .map(e => if e.from = entity_id: e.to else: e.from)
+
+    -- Group related entities by parent namespace, then folder
+    let parent_ns_ids = related_ids.map(id => model.nodes[id].parent)
+    let parent_folder_ids = parent_ns_ids.map(id => model.nodes[id].parent)
+
+    ensures: Projection.created(
+        nodes: folder_nodes + ns_nodes + entity_nodes,
+        edges: model.edges.filter(e => e.from = entity_id or e.to = entity_id),
+        io: null
+    )
+}
+
+rule AggregateEdges {
+    -- Sub-rule of ContainerView: aggregate raw model edges to the visible ancestor level.
+    --
+    -- For each raw edge (from, to):
+    --   1. Walk up each endpoint's parent chain to find its first
+    --      visible ancestor
+    --   2. Include iff both ancestors exist, are distinct, and
+    --      neither is an ancestor of the other
+    --   3. Deduplicate
+    --
+    -- All edges produced by this rule have edge_type = code_flow.
+
+    when: AggregateEdges(visible_set: Set<String>)
+
+    ensures: model.edges
+        .map(e => (find_visible_ancestor(e.from, visible_set),
+                   find_visible_ancestor(e.to, visible_set)))
+        .filter((from, to) =>
+            from != null and to != null
+            and from != to
+            and not descendant_of(to, from)
+            and not descendant_of(from, to))
+        .distinct
+}
+
+rule IOSchemaProjection {
+    -- Sub-rule of ContainerView: compute synthetic IO nodes and data-flow edges.
+    --
+    -- ContractDriven: IO schemas are derived from the container's contract.
+    --   Each function signature's inputs and outputs become IO schema keys.
+    --   Containers with no contract produce no IO.
+    --
+    -- SyntheticNodes: IO containers and IO schema nodes are synthetic —
+    --   they have no corresponding model node. IO containers are orphans
+    --   (no parent) and are positioned by the view layer.
+    --
+    -- OwnershipMarking: each IO schema node is marked owned or not-owned
+    --   based on whether the schema's defining namespace is inside the
+    --   viewed container.
+
+    when: IOSchemaProjection(entity_id: String, all_visible: Set<String>)
+
+    let contract = model.nodes[entity_id].contract
+    requires: contract != null
+
+    let io_keys = extract_io_keys(contract)   -- black box
+    -- io_keys: { inputs: Set<String>, outputs: Set<String> }
+
+    -- Synthetic nodes: one IO container per direction, child schema nodes
+    -- Data-flow edges: input-schema → consuming code, producing code → output-schema
+
+    ensures: io_layer.created(
+        nodes: io_container_nodes + io_schema_nodes,
+        edges: data_flow_edges(model, entity_id, io_keys, all_visible),
+        boundary: io_keys
+    )
+}
+
+rule EntityDetails {
+    -- Compute normalized sidebar detail for any entity.
+    --
+    -- For nodes: produce EntityDetail with interface, schemas, dataflow,
+    -- and dependency info. Interface type is determined by node kind.
+    --
+    -- For edges: produce EdgeDetail listing the underlying function-level
+    -- calls that aggregate to this visible edge.
+    --
+    -- Edge IDs encode their endpoints: edge~{from}~{to}~{type}
+
+    when: EntityDetails(entity_id: String)
+
+    ensures:
+        if entity_id.starts_with("edge~"):
+            compute_edge_detail(model, entity_id)     -- black box
+        else:
+            compute_node_detail(model, entity_id)     -- black box
+}
+
+rule EntityPath {
+    -- Compute breadcrumb path from root to entity.
+    -- Returns ordered list of PathSegments, root first.
+    -- Namespace labels are shortened to last dotted segment.
+
+    when: EntityPath(entity_id: String?)
+
+    let root = model.root_nodes.first
+
+    ensures:
+        if entity_id = null or entity_id = root.id:
+            [{id: null, label: short_label(root)}]
+        else:
+            [{id: null, label: short_label(root)}]
+            + walk_parents(entity_id).reverse.map(n => {
+                id: n.id,
+                label: short_label(n)
+            })
+}
+
+rule FindSchemaNodeId {
+    -- Look up a schema node's ID by its schema key.
+    -- Used by the web layer to navigate from schema references
+    -- in the sidebar to their corresponding graph nodes.
+
+    when: FindSchemaNodeId(schema_key: String)
+
+    ensures: model.nodes
+        .find(n => n.kind = Schema and n.schema_key = schema_key)?.id
+}
