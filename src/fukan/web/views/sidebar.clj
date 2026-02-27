@@ -1,6 +1,10 @@
 (ns fukan.web.views.sidebar
-  "Render sidebar panels for entity details.
-   Generic renderer dispatches on normalized entity detail shape."
+  "Render the sidebar panel from normalized entity detail data.
+   A single generic renderer handles all entity kinds — container,
+   function, schema, and edge — by iterating the sections present in
+   the EntityDetails structure: description, interface, schemas,
+   dataflow, and dependencies. Interface rendering dispatches on
+   the :type field (fn-list, fn-inline, schema-def)."
   (:require [hiccup2.core :as h]
             [clojure.string :as str]
             [fukan.web.views.schema :as views.schema])

@@ -1,5 +1,28 @@
 # Workflows vs APIs: Two Perspectives on System Design
 
+## References
+
+This exploration was prompted by the Mycelium project and its surrounding ideas:
+
+- **Blog post**: [Managing Complexity with Mycelium][blog] — yogthos' thesis on
+  why bounded components with schema-enforced contracts are key to scaling
+  AI-assisted development.
+- **Mycelium**: [github.com/yogthos/mycelium][mycelium] (local: `~/Code/mycelium`)
+  — a schema-enforced, composable workflow framework for Clojure, built on
+  Maestro.
+- **Maestro**: [github.com/yogthos/maestro][maestro] (local: `~/Code/maestro`) —
+  a lightweight, purely functional state machine runner (~175 LOC) that provides
+  Mycelium's execution engine.
+- **Integrant**: [github.com/weavejester/integrant][integrant] — a data-driven
+  system lifecycle framework for Clojure.
+
+[blog]: https://yogthos.net/posts/2026-02-25-ai-at-scale.html
+[mycelium]: https://github.com/yogthos/mycelium
+[maestro]: https://github.com/yogthos/maestro
+[integrant]: https://github.com/weavejester/integrant
+
+---
+
 ## The Theme
 
 There are two complementary ways to look at system structure:
@@ -83,12 +106,13 @@ The build pipeline is important but mechanical. The projections are where the
 design leverage lives — where the choice of abstraction determines whether
 everything downstream is simple or complicated.
 
-## Mycelium: A Workflow-First Framework
+---
 
-[Mycelium](https://github.com/yogthos/mycelium) is a schema-enforced workflow
-framework for Clojure by yogthos, built on the
-[Maestro](https://github.com/yogthos/maestro) FSM engine. It shares many values
-with Fukan:
+## Mycelium and Fukan: Shared Values, Different Entry Points
+
+[Mycelium][mycelium] is a schema-enforced workflow framework for Clojure by
+yogthos, built on the [Maestro][maestro] FSM engine. It shares many values with
+Fukan:
 
 - Malli schemas as first-class contracts
 - Explicit boundaries between components
@@ -106,89 +130,50 @@ contract landscape is the primary artifact; workflows emerge from composition.
 These perspectives complement rather than compete. A system needs both: the right
 abstractions (what to build) and the right orchestration (how to wire it).
 
-## Integration Pattern: Integrant + Mycelium
+---
 
-Fukan uses [Integrant](https://github.com/weavejester/integrant) for system
-lifecycle and [Mycelium](https://github.com/yogthos/mycelium) for workflow
-execution. These are complementary layers with a clean seam between them.
+## System Lifecycle: Integrant
+
+[Integrant][integrant] manages system lifecycle through a declarative config map
+where components declare their dependencies via `ig/ref`. It provides:
+
+- Automatic init/halt ordering (topological sort)
+- Suspend/resume for REPL-driven development (handler hot-swap without server
+  restart)
+- Partial system init (useful for testing and CLI mode)
+- The full system shape visible in one place
+
+Fukan adopts Integrant to replace its current `defonce` atom pattern.
 
 ### Three levels of state
 
-| Level        | Managed by  | Scope              | Example                                |
-|--------------|-------------|--------------------|-----------------------------------------|
-| **System**   | Integrant   | Process lifetime   | Model, server, language registry        |
-| **Workflow** | Mycelium    | Single execution   | Analysis data accumulating through build |
+| Level        | Managed by    | Scope            | Example                                 |
+|--------------|---------------|------------------|-----------------------------------------|
+| **System**   | Integrant     | Process lifetime | Model, server, future components        |
+| **Workflow** | (TBD)         | Single execution | Data accumulating through build stages  |
 | **Request**  | Function args | Single request   | Projection parameters, view state       |
 
-Integrant replaces the `defonce` atoms. Mycelium's accumulating data map handles
-workflow-scoped state. Request-level state stays as function arguments —
-projections take model + params, return data.
+Integrant replaces the atoms for system-level state. Request-level state stays as
+function arguments — projections take model + params, return data.
 
-### The seam: Integrant config → Mycelium resources
+### Integration seam with Mycelium
 
-When Integrant resolves `ig/ref`s and calls `init-key`, the config it passes in
-is a map of live, initialized dependencies. That's exactly what Mycelium expects
-as a resources map. The integration is:
+When Integrant resolves `ig/ref`s and calls `init-key`, it passes in a map of
+live, initialized dependencies. That's exactly what Mycelium expects as a
+resources map:
 
 1. **Integrant config** declares components and their dependencies
 2. **`ig/ref`** resolves dependencies before `init-key` runs
 3. **`init-key`** receives a map of live dependencies
-4. **`run-workflow`** executes with those as resources; cells use them
+4. If the init-key runs a Mycelium workflow, those dependencies become resources
 5. **The result** becomes the component value in the system map
-6. **Other components** reference it via `ig/ref`
 
-```clojure
-;; Integrant config
-{:fukan/model  {:src "src"}
- :fukan/server {:model (ig/ref :fukan/model), :port 8080}}
-
-;; init-key receives resolved config, passes it as Mycelium resources
-(defmethod ig/init-key :fukan/model [_ {:keys [src]}]
-  (let [result (myc/run-workflow
-                 build-workflow
-                 {:src-path src}    ;; Integrant config → Mycelium resources
-                 {})]
-    (:model result)))
-```
-
-Adding a new resource = adding it to the Integrant config. Any workflow that
-needs it = `ig/ref` it. Cells receive it in the resources map. The wiring stays
-in one place.
-
-### Where each tool applies
-
-**Integrant** manages what exists and how to start/stop it. It owns the system
-shape, dependency wiring, and lifecycle (init, halt, suspend, resume).
-
-**Mycelium** manages how things flow. It owns workflow execution, schema
-validation between stages, and execution traces. It runs inside `init-key` or
-inside request handlers — wherever a workflow is needed.
-
-**Neither** applies to the projection layer. Projections are composable APIs
-that receive the model as an argument. The request handler closes over the
-Integrant system and passes the model to projections. No workflow, no lifecycle —
-just functions with contracts.
-
-### Dev workflow
-
-Integrant's suspend/resume collapses the current refresh-vs-restart distinction
-into a single operation:
-
-```
-(reset)
-  → ig/suspend!                    ;; server pauses, holds port
-  → reload code                    ;; clj-reload
-  → ig/resume
-    → init-key :fukan/model        ;; rebuilds via build workflow
-    → resume-key :fukan/server     ;; swaps handler, unblocks
-```
-
-The server never restarts — it swaps the handler closure. The model rebuilds
-because Integrant knows it needs re-initialization.
+This means Integrant can be adopted now with plain function calls inside
+init-keys, and individual components can migrate to Mycelium workflows later —
+without changing the system shape. The `init-key` body is the only thing that
+changes.
 
 ### The pattern scales
-
-The same pattern works for future components:
 
 ```clojure
 {:fukan/language-registry {:analyzers {...}}
@@ -200,9 +185,28 @@ The same pattern works for future components:
 ```
 
 Each component declares what it needs. Integrant wires it. Internally, each
-component can use Mycelium workflows, plain functions, or anything else. The
-system shape doesn't change when an `init-key` body switches from function calls
-to `run-workflow`.
+component can use Mycelium workflows, plain functions, or anything else.
+
+---
+
+## Current Status
+
+**Integrant** — adopting now. Replaces the two `defonce` atoms with a declarative
+system config. Immediate benefits: explicit dependency wiring, suspend/resume dev
+workflow, single `(reset)` replacing the refresh/restart distinction.
+
+**Mycelium** — deferred. The conceptual alignment is clear (especially for the
+build pipeline and future workflow-heavy features), but introducing it before
+elaborate workflows naturally emerge in the app would be premature complexity.
+The Integrant seam ensures a clean migration path: when workflows appear, they
+slot into init-keys without restructuring.
+
+**Focus** — get the right building blocks and patterns first. Integrant
+establishes the system-level foundation. The API-oriented design (projections,
+contracts, schemas) continues to drive Fukan's core. Workflow orchestration will
+be introduced when the problem demands it.
+
+---
 
 ## Directions to Explore
 

@@ -1,4 +1,4 @@
-{:description "Pure rendering functions for the Fukan web UI views."
+{:description "Pure rendering functions that transform projection data into HTML fragments and Cytoscape JSON. No data fetching — views receive pre-computed projections and produce output. Includes the app shell, graph visualization, breadcrumb trail, and sidebar panels."
  :functions
  [fukan.web.views.shell/render-app-shell
   fukan.web.views.graph/render-graph

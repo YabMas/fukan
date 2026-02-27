@@ -1,5 +1,7 @@
 (ns fukan.web.views.breadcrumb
-  "Render breadcrumb navigation."
+  "Render breadcrumb navigation from path projection data.
+   Produces an HTML breadcrumb trail from a vector of path items,
+   with each ancestor as a clickable navigation link."
   (:require [hiccup2.core :as h]))
 
 ;; Html schema defined in fukan.web.views.shell

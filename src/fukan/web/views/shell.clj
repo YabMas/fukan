@@ -1,5 +1,8 @@
 (ns fukan.web.views.shell
-  "Render the initial HTML page shell."
+  "Render the initial HTML page shell.
+   Produces the full-page HTML document with layout containers, CSS,
+   and JavaScript dependencies. Loaded once on first navigation;
+   all subsequent updates arrive as SSE fragments into this shell."
   (:require [hiccup2.core :as h]))
 
 ;; -----------------------------------------------------------------------------

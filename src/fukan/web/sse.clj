@@ -1,8 +1,9 @@
 (ns fukan.web.sse
-  "SSE handlers using Datastar SDK.
-   Streams HTML fragments and graph data to the frontend.
-
-   Handler is the orchestrator: calls projections, then passes results to views."
+  "SSE endpoint handlers using the Datastar SDK.
+   Each handler orchestrates a request: calls projection functions to
+   compute data from the model, then passes the result to view renderers
+   that produce HTML fragments or JSON. Streams responses as SSE events
+   for incremental UI updates. This is where projection meets rendering."
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.http-kit :as hk]
             [fukan.web.views.graph :as views.graph]

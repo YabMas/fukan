@@ -1,6 +1,8 @@
 (ns fukan.web.views.graph
-  "Adds UI state (selected?) to projection data.
-   Implements spec.md behavior for Cytoscape visualization."
+  "Enrich graph projection with UI state for Cytoscape rendering.
+   Adds selection and highlight flags to projection nodes and edges,
+   computes highlighted edges (those connected to the selected node),
+   then delegates to cytoscape.clj for the final JSON transform."
   (:require [clojure.string :as str]
             [fukan.web.views.cytoscape :as cytoscape]))
 

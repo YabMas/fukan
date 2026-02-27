@@ -1,7 +1,10 @@
 (ns fukan.projection.graph
-  "Graph projection functions.
-   Computes visible nodes and edges for entity graph visualization.
-   Returns pure domain data - no UI state like selected? or highlighted?."
+  "Graph projection: Model → visible subgraph for visualization.
+   Given a view entity and a set of expanded containers, computes which
+   nodes and edges are visible, aggregates raw edges to the visible level,
+   drills down into containers to reveal connected children, and generates
+   synthetic IO nodes from contract boundaries. Returns pure domain data
+   with no UI state."
   (:require [fukan.projection.schema :as schema]
             [fukan.projection.path :as path]
             [clojure.set :as set]))

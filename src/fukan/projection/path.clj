@@ -1,6 +1,8 @@
 (ns fukan.projection.path
-  "Path and navigation projection functions.
-   Computes breadcrumb paths and finds root nodes."
+  "Navigation projection: breadcrumb paths and root discovery.
+   Computes the ancestor chain from any entity to the tree root for
+   breadcrumb rendering, and locates the model's root node (the
+   topmost container after smart-root pruning)."
   (:require [clojure.string :as str]
             [fukan.projection.schema :as schema]))
 

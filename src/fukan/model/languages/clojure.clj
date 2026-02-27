@@ -1,6 +1,8 @@
 (ns fukan.model.languages.clojure
   "Clojure-specific analysis and model construction.
-   Includes clj-kondo analysis and Malli schema node building."
+   Runs clj-kondo static analysis to produce AnalysisData, then discovers
+   Malli schema definitions (^:schema vars) and builds schema nodes that
+   integrate into the language-agnostic model graph."
   (:require [clojure.java.shell :as shell]
             [clojure.edn :as edn]))
 

@@ -1,4 +1,4 @@
-{:description "Projection API for building graph views, entity details, and navigation paths from the model."
+{:description "Pure functions from Model to visible data: graph projections for visualization, entity detail structures for the sidebar, breadcrumb paths for navigation, and schema queries for cross-cutting lookups. No side effects, no UI state."
  :functions
  [fukan.projection.graph/entity-graph
   fukan.projection.details/entity-details

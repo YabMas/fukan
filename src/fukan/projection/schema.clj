@@ -1,6 +1,10 @@
 (ns fukan.projection.schema
-  "Schema query functions for projection layer.
-   Provides domain queries over schema data in the model.")
+  "Schema query helpers for the projection layer.
+   Provides lookups over schema data in the model: find a schema node
+   by keyword, resolve a keyword to its Malli form, extract schema
+   keyword references from a schema form, and list schemas owned by
+   a namespace. Used by graph and detail projections to compute
+   schema-flow edges and dataflow sections.")
 
 ;; -----------------------------------------------------------------------------
 ;; Private helpers

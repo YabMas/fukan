@@ -1,6 +1,9 @@
 (ns fukan.model.build
   "Language-agnostic model construction pipeline.
-   Builds the internal graph model from analysis data."
+   Transforms normalized analysis data into the graph model: a tree of
+   container, function, and schema nodes connected by directed dependency
+   edges. Handles folder/namespace/var node construction, parent-child
+   wiring, smart-root pruning, edge building, and contract attachment."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]))

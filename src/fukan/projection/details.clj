@@ -1,6 +1,10 @@
 (ns fukan.projection.details
-  "Entity details projection functions.
-   Computes normalized entity detail structures for rendering."
+  "Entity detail projection for the sidebar.
+   Computes a normalized detail structure for any entity — node or edge —
+   including its description, public interface (contract functions or
+   schema form), dataflow (input/output schema references), and
+   aggregated dependency counts. The normalized shape lets the sidebar
+   render all entity kinds with one generic renderer."
   (:require [clojure.string :as str]
             [fukan.projection.schema :as proj.schema]))
 
