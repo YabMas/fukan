@@ -6,12 +6,15 @@
    (re-analyzed from source) without restarting HTTP."
   (:require [fukan.model.build :as build]
             [fukan.model.languages.clojure :as clj-lang]
+            [fukan.model.languages.allium.analyzer :as allium]
             [integrant.core :as ig]))
 
 (defn- build-model
-  "Build the complete model from source code contributions."
+  "Build the complete model from all language contributions."
   [src-path]
-  (let [contrib (clj-lang/contribution src-path)
+  (let [clj-contrib (clj-lang/contribution src-path)
+        allium-contrib (allium/allium-contribution src-path)
+        contrib (build/merge-contributions clj-contrib allium-contrib)
         schema-data (clj-lang/discover-schema-data)
         type-nodes-fn (fn [ns-index]
                         (clj-lang/build-schema-nodes ns-index schema-data))]
