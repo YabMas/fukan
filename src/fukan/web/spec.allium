@@ -1,0 +1,50 @@
+-- allium: 1
+-- web.allium
+--
+-- Scope: HTTP/SSE transport boundary — orchestration between shell and core
+-- Includes: Request handling, SSE streaming, composition guarantees
+-- Excludes:
+--   - Projection computation (see projection.allium)
+--   - View rendering (see views.allium)
+--   - Model construction and lifecycle (see model.allium)
+
+use "./views/spec.allium" as views
+use "../model/spec.allium" as model
+use "../projection/spec.allium" as projection
+
+------------------------------------------------------------
+-- External Entities: Boundaries
+------------------------------------------------------------
+
+-- Boundary: HTTP/SSE transport.
+-- Orchestrates core functions (projection + view) and streams
+-- results to connected browser clients.
+
+external entity ViewTransport {
+    -- Contract: three endpoint types, each composing projection → view.
+    handles:
+        main_view(model, request) -> stream
+            -- Computes graph projection, path, details.
+            -- Renders graph JSON, breadcrumb HTML, sidebar HTML.
+            -- Streams all three as SSE patches.
+        sidebar_update(model, request) -> stream
+            -- Recomputes sidebar only for a new selection.
+        schema_detail(model, request) -> stream
+            -- Navigates into a schema definition with trail tracking.
+
+    -- Composition guarantee
+    guarantee: pure_delegation
+        -- Transport never modifies projection or view output.
+        -- It parses request params, calls core functions, and
+        -- streams the results. No domain logic in the transport.
+
+    -- Delivery semantics
+    guarantee: per_request_model
+        -- Each request dereferences the model atom once. All
+        -- projections within a single request see the same snapshot.
+
+    -- Failure modes
+    failures:
+        entity_not_found        -- requested node/edge ID not in model
+        client_disconnected     -- SSE stream closed by client
+}

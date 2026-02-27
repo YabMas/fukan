@@ -9,7 +9,7 @@
 --   - View rendering and interaction (see views.allium)
 
 ------------------------------------------------------------
--- External Entities
+-- External Entities: Data Shapes
 ------------------------------------------------------------
 
 -- Analysis data arrives from language-specific analyzers (e.g., clj-kondo
@@ -33,6 +33,106 @@ external entity SchemaForm {
 external entity FunctionSignature {
     -- A function type schema from the language runtime (e.g., Malli
     -- [:=> [:cat inputs...] output]). Used in contracts and function nodes.
+}
+
+------------------------------------------------------------
+-- External Entities: Boundaries
+------------------------------------------------------------
+
+-- Boundary: language-specific source analysis.
+-- Produces the AnalysisData consumed by BuildModel.
+-- Currently two implementations: Clojure (clj-kondo) and Allium (instaparse).
+
+external entity SourceAnalyzer {
+    -- Contract
+    analyzes: SourcePath -> AnalysisData
+        -- SourcePath is a filesystem directory path.
+        -- Each analyzer produces an independent AnalysisData from the
+        -- same source path. Results are merged additively before
+        -- BuildModel consumes them.
+
+    -- Failure modes
+    failures:
+        analysis_unavailable    -- analyzer binary not found or not runnable
+        analysis_error          -- analyzer ran but returned non-zero exit
+        parse_failure           -- individual file failed to parse (non-fatal)
+
+    -- Guarantees
+    guarantee: idempotent
+        -- Same source path + same file contents = same AnalysisData.
+    guarantee: parse_failure_isolation
+        -- A single file's parse failure does not prevent analysis of
+        -- other files. Failed files are silently excluded.
+    guarantee: analyzer_independence
+        -- Multiple analyzers produce independent results.
+        -- They are merged additively — no analyzer's output can
+        -- invalidate another's.
+}
+
+-- Boundary: runtime type discovery.
+-- Reads schema metadata from loaded JVM namespaces.
+-- The only boundary that depends on runtime state rather than
+-- filesystem state.
+
+external entity SchemaDiscovery {
+    -- Contract
+    discovers: loaded_namespaces -> Map<SchemaKey, SchemaData>
+        -- Iterates all loaded JVM namespaces, finds vars with
+        -- ^:schema metadata, extracts their Malli schema forms.
+
+    -- Guarantees
+    guarantee: read_only
+        -- Discovery never modifies namespace state.
+    guarantee: load_dependent
+        -- Results depend on which namespaces are loaded at call time.
+        -- Different REPL states may produce different schema sets.
+        -- NOT idempotent across time — loading new namespaces changes
+        -- the result. Idempotent within a single JVM state snapshot.
+}
+
+-- Boundary: filesystem resources.
+-- Read-only access to project files beyond source analysis.
+
+external entity ProjectResources {
+    -- Contract
+    provides: contract_edn(path) -> ContractSpec?
+        -- Reads and parses a contract.edn file.
+        -- Returns null if file does not exist.
+    provides: integrant_config -> SystemConfig?
+        -- Reads system.edn from classpath resources.
+
+    -- Guarantees
+    guarantee: read_only
+    guarantee: optional
+        -- Missing files produce null, not errors.
+        -- The system functions without any of these resources.
+}
+
+-- Boundary: model state management.
+-- The single point of mutable state in the system. The core sees
+-- an immutable Model snapshot; this boundary manages the atom
+-- behind that snapshot.
+
+external entity ModelLifecycle {
+    -- Contract
+    provides: current_model -> Model?
+        -- Returns the most recently built model, or null if not yet loaded.
+    provides: rebuild(source_path) -> Model
+        -- Triggers a full rebuild from source analysis.
+
+    -- State semantics
+    guarantee: snapshot_isolation
+        -- Consumers read an immutable Model. A rebuild produces a new
+        -- Model value; in-flight requests see the previous snapshot
+        -- until the next dereference.
+    guarantee: single_source
+        -- At most one source path is active. Rebuild replaces the
+        -- entire model atomically.
+
+    -- Failure modes
+    failures:
+        not_loaded              -- model requested before first build
+        rebuild_failed          -- source analysis failed (propagated from SourceAnalyzer)
 }
 
 ------------------------------------------------------------

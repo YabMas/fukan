@@ -51,7 +51,8 @@
 
   (* ============ External Entity ============ *)
 
-  external-entity = <'external'> __ <'entity'> __ ident _ <'{'> _ <'}'>
+  external-entity = <'external'> __ <'entity'> __ ident _ <'{'> external-body <'}'>
+  external-body = #'[^}]*'
 
   (* ============ Entity / Value ============ *)
 
@@ -206,9 +207,15 @@
      (vec vals))
 
    ;; External entity
+   :external-body
+   (fn [text]
+     (let [trimmed (str/trim text)]
+       (when-not (str/blank? trimmed) trimmed)))
+
    :external-entity
-   (fn [name]
-     {:type :external-entity :name name})
+   (fn [name & [body]]
+     (cond-> {:type :external-entity :name name}
+       body (assoc :body body)))
 
    ;; Entity / Value
    :entity-decl

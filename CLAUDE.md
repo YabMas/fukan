@@ -9,6 +9,7 @@ Some packages contain their own `CLAUDE.md` with package-specific conventions:
 - `src/fukan/model/languages/CLAUDE.md` - language analysis and schema discovery
 - `src/fukan/projection/CLAUDE.md` - projection functions, edge types, IO pattern
 - `src/fukan/web/CLAUDE.md` - naming conventions for web module
+- `src/fukan/web/spec.allium` - ViewTransport boundary contract
 - `src/fukan/web/views/CLAUDE.md` - view-spec implementation guide
 
 ---
@@ -23,14 +24,25 @@ The system follows a **functional core, imperative shell** architecture. Allium 
 - `web/views/` — rendering contracts and interaction rules
 - Pure command logic in `cli/`
 
-**Imperative shell** (not specced, governed by tests + conventions):
+**Imperative shell** (boundaries specced, internals governed by tests + conventions):
 - `infra/` — Integrant lifecycle, atoms, port binding
 - `web/handler.clj` + `web/sse.clj` — HTTP routing, SSE streaming
 - IO edges in `model/languages/` — subprocess invocation, runtime reflection
 
 **Design pressure:** When new logic arrives, the first question is "can I express this as an Allium rule?" If yes, it goes in the core. If not, ask *why* — often the answer is that pure logic is tangled with IO and can be factored out. The shell's job is to wire IO to the core, not to contain domain logic.
 
-**Boundary contracts:** The shell's promises to the core (and vice versa) *are* specced — as `external entity` declarations and rule pre/postconditions. The shell's internal mechanics are not.
+**Boundary contracts:** Every crossing point between shell and core is described by an enriched `external entity` declaration. These capture:
+- **What the boundary provides** — contract signatures (`analyzes:`, `provides:`, `handles:`)
+- **How it can fail** — named failure modes (`failures:`)
+- **What it guarantees** — observable promises (`guarantee:`)
+
+The shell's *internal mechanics* are not specced. Integrant wiring, Ring middleware, atom implementation — these are declarative config or mechanical plumbing where a spec would just duplicate already-clear code. The enriched boundaries ensure that if you "lose sight" of all unspecced code, you still know what every shell component promises, how it can fail, and what invariants hold across the crossing.
+
+**Boundary spec locations:**
+- `model/spec.allium` — SourceAnalyzer, SchemaDiscovery, ProjectResources, ModelLifecycle
+- `web/spec.allium` — ViewTransport
+
+**Litmus test for new boundaries:** If the boundary describes something you could write a black-box test for without knowing the implementation, it belongs as an enriched external entity. If you need to know internal structure to verify it, it doesn't.
 
 ---
 
