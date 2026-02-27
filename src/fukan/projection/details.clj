@@ -230,15 +230,17 @@
 (defn- normalize-entity
   "Assemble the normalized entity detail map."
   [model node deps dependents]
-  {:label       (:label node)
-   :kind        (:kind node)
-   :parent      (extract-parent model node)
-   :description (extract-description node)
-   :interface   (extract-interface model node)
-   :schemas     (extract-schemas model node)
-   :dataflow    (extract-dataflow model node)
-   :deps        deps
-   :dependents  dependents})
+  (cond-> {:label       (:label node)
+           :kind        (:kind node)
+           :parent      (extract-parent model node)
+           :description (extract-description node)
+           :interface   (extract-interface model node)
+           :schemas     (extract-schemas model node)
+           :dataflow    (extract-dataflow model node)
+           :deps        deps
+           :dependents  dependents}
+    (seq (get-in node [:data :surface :guarantees]))
+    (assoc :guarantees (get-in node [:data :surface :guarantees]))))
 
 ;; -----------------------------------------------------------------------------
 ;; Edge Details
@@ -358,6 +360,7 @@
     [:kind [:enum :container :function :schema]]
     [:parent [:maybe [:map [:id :string] [:label :string]]]]
     [:description [:maybe :string]]
+    [:guarantees {:optional true} [:vector :string]]
     [:interface [:maybe :InterfaceData]]
     [:schemas [:maybe [:vector :SchemaRef]]]
     [:dataflow [:maybe :DataflowData]]

@@ -130,6 +130,7 @@ value EntityDetail {
     kind: container | function | schema
     parent: { id: String, label: String }?
     description: String?
+    guarantees: List<String>?  -- surface-derived invariant promises
     interface: InterfaceData?
     schemas: List<SchemaRef>?
     dataflow: DataflowData?

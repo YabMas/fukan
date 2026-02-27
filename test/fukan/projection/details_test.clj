@@ -60,6 +60,19 @@
           detail (details/entity-details model "ns:alpha")]
       (is (= "A module for alpha things." (:description detail))))))
 
+(deftest container-with-guarantees
+  (testing "container with surface guarantees includes them in detail"
+    (let [model (assoc-in test-model [:nodes "ns:alpha" :data :surface]
+                          {:guarantees ["idempotent" "snapshot_isolation"]})
+          detail (details/entity-details model "ns:alpha")]
+      (is (some? (:guarantees detail)))
+      (is (= ["idempotent" "snapshot_isolation"] (:guarantees detail))))))
+
+(deftest container-without-guarantees
+  (testing "container without surface has no guarantees"
+    (let [detail (details/entity-details test-model "ns:alpha")]
+      (is (nil? (:guarantees detail))))))
+
 (deftest nil-entity
   (testing "nil entity-id returns nil"
     (is (nil? (details/entity-details test-model nil)))))

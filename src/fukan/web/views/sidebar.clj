@@ -176,10 +176,21 @@
 ;; -----------------------------------------------------------------------------
 ;; Entity renderers
 
+(defn- render-guarantees
+  "Render a guarantees section as a bullet list.
+   Returns nil when guarantees are empty or absent."
+  [guarantees]
+  (when (seq guarantees)
+    (list
+     [:h5 "Guarantees"]
+     [:ul
+      (for [g guarantees]
+        [:li g])])))
+
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
-   Iterates through sections in order: label, description, interface, deps, dependents."
-  [{:keys [label kind parent description interface dataflow nav]}]
+   Iterates through sections in order: label, description, guarantees, interface, deps, dependents."
+  [{:keys [label kind parent description guarantees interface dataflow nav]}]
   (let [schema-view? (:current nav)]
     (str
      (h/html
@@ -194,6 +205,7 @@
        [:h4 label " " [:span.kind-badge (name kind)]]
 
        (render-description description)
+       (render-guarantees guarantees)
 
        (when interface
          (render-interface interface dataflow nav))]))))
