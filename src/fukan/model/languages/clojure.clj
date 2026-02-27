@@ -63,6 +63,16 @@
 ;; -----------------------------------------------------------------------------
 ;; Schema Discovery
 
+(def ^:schema SchemaDiscoveryEntry
+  [:map {:description "Discovered metadata for a single ^:schema var."}
+   [:schema-form {:description "The Malli schema form (arbitrary syntax tree)."} :any]
+   [:doc [:maybe :string]]
+   [:owner-ns :string]])
+
+(def ^:schema SchemaDiscoveryData
+  [:map-of {:description "All discovered ^:schema vars keyed by schema keyword."}
+   :keyword :SchemaDiscoveryEntry])
+
 (defn- malli-description
   "Extract :description from a Malli schema form's property map.
    Returns nil for bare types or forms without properties."
@@ -76,7 +86,7 @@
 
    This is a pure function that reads metadata from the runtime - it does
    not mutate any global state."
-  {:malli/schema [:=> [:cat] :map]}
+  {:malli/schema [:=> [:cat] :SchemaDiscoveryData]}
   []
   (->> (all-ns)
        (mapcat (fn [ns]
@@ -100,7 +110,7 @@
    as returned by discover-schema-data.
 
    Returns a map of {schema-node-id -> node}."
-  {:malli/schema [:=> [:cat :map :map] :map]}
+  {:malli/schema [:=> [:cat [:map-of :symbol :NodeId] :SchemaDiscoveryData] [:map-of :NodeId :Node]]}
   [ns-index schema-data]
   (->> schema-data
        (map (fn [[k {:keys [schema-form doc owner-ns]}]]

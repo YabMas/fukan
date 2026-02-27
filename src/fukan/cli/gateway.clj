@@ -4,6 +4,17 @@
    callable via clj-nrepl-eval for agent workflows."
   (:require [fukan.cli.commands :as commands]))
 
+;; -----------------------------------------------------------------------------
+;; Schemas
+
+(def ^:schema CommandResponse
+  [:map {:description "CLI command response: success status, command name, plus command-specific data."}
+   [:ok :boolean]
+   [:command :keyword]])
+
+;; -----------------------------------------------------------------------------
+;; State
+
 (defonce ^:private model-state-ref (atom nil))
 
 (defonce ^:private session (atom {:view-id nil
@@ -20,7 +31,7 @@
   "Execute a CLI command string. Returns the response EDN map.
    Session state (view-id, history, expanded) persists between calls.
    Model is fetched fresh on each call."
-  {:malli/schema [:=> [:cat :string] :map]}
+  {:malli/schema [:=> [:cat :string] :CommandResponse]}
   [input]
   (let [model-state @model-state-ref
         _ (when-not model-state
