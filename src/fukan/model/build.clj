@@ -148,17 +148,25 @@
           nodes
           nodes))
 
+(defn- has-spec-data?
+  "True if a container node has spec-derived content: surface, fields, or spec data."
+  [node]
+  (let [data (:data node)]
+    (or (:surface data) (seq (:fields data)) (:spec data))))
+
 (defn- remove-empty-containers
   "Remove container nodes that have no children.
-   Returns updated nodes map."
+   Exception: containers with spec data (surface, fields, or spec) are retained
+   even without children — they represent data-shape definitions."
   [nodes]
   (let [;; First, wire children to see which containers are empty
         wired (wire-children nodes)
-        ;; Find containers with no children
+        ;; Find containers with no children and no spec data
         empty-ids (->> wired
                        (filter (fn [[_id node]]
                                  (and (= :container (:kind node))
-                                      (empty? (:children node)))))
+                                      (empty? (:children node))
+                                      (not (has-spec-data? node)))))
                        (map first)
                        set)]
     ;; Remove empty containers

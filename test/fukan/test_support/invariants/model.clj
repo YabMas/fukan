@@ -101,15 +101,24 @@
         true)))
 
 ;; ---------------------------------------------------------------------------
-;; NoEmptyContainers: every :container has non-empty :children.
+;; NoEmptyContainers: every :container has non-empty :children,
+;; unless it carries spec data (surface, fields, or spec).
+
+(defn- has-spec-data?
+  "True if a container node has spec-derived content."
+  [node]
+  (let [data (:data node)]
+    (or (:surface data) (seq (:fields data)) (:spec data))))
 
 (defn no-empty-containers?
-  "Verify that every container node has at least one child."
+  "Verify that every container node has at least one child.
+   Exception: containers with spec data are allowed to be childless."
   [{:keys [nodes]}]
   (or (first
         (for [[id node] nodes
               :when (= :container (:kind node))
-              :when (empty? (:children node))]
+              :when (empty? (:children node))
+              :when (not (has-spec-data? node))]
           {:violation :no-empty-containers
            :node-id id
            :label (:label node)}))
