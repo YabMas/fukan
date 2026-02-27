@@ -1,24 +1,50 @@
 -- allium: 1
 -- model.allium
 --
--- Scope: Graph model — the structured representation of a codebase
--- Includes: Node hierarchy, edge semantics, contracts, structural invariants
+-- Scope: System model — the structured representation of a system combining
+--   specification and implementation
+-- Includes: Node hierarchy, edge semantics, contracts, surfaces, fields,
+--   structural invariants, spec/impl realization states
 -- Excludes:
---   - Language-specific analysis (external; produces AnalysisData)
+--   - Language-specific analysis (external; produces Contribution)
+--   - Allium language syntax (external; the spec language itself)
 --   - Projection and filtering (see projection.allium)
 --   - View rendering and interaction (see views.allium)
+--
+-- Design context:
+--   The model represents three realization states:
+--   - Spec-only: design-phase modules with descriptions, surfaces, and
+--     surface-derived function nodes — but no implementation.
+--   - Spec + impl: the richest nodes. Spec provides purpose and contracts;
+--     implementation provides concrete structure.
+--   - Impl-only: imperative shell modules that don't need specs. Populated
+--     from code analysis alone — thinner but perfectly valid.
+--
+--   At the default view level, spec-only and spec+impl look the same: you
+--   see the module's description, its public API (as function children),
+--   and its input/output shapes. The only difference is that implemented
+--   modules can be expanded to reveal their internal structure.
 
 ------------------------------------------------------------
 -- External Entities: Data Shapes
 ------------------------------------------------------------
 
--- Analysis data arrives from language-specific analyzers (e.g., clj-kondo
--- for Clojure). The model module is language-agnostic: it consumes this
--- normalized form without knowing which analyzer produced it.
+-- Contribution is the language-agnostic input to the build pipeline.
+-- Each language analyzer (Clojure, Allium, future languages) independently
+-- produces a Contribution from the same source path. Contributions are
+-- merged additively before the build pipeline constructs the Model.
 
-external entity AnalysisData {
-    -- Normalized analysis output. Contains namespace definitions, variable
-    -- definitions, cross-variable references, and cross-namespace references.
+external entity Contribution {
+    -- Pre-built nodes and edges from a language analyzer.
+    -- Implementation analyzers discover code structure: namespaces,
+    -- functions, schemas, dependencies.
+    -- Specification analyzers discover design structure: entities,
+    -- surfaces, fields, typed relationships.
+    -- Both produce the same shape; the build pipeline merges them.
+
+    source_files: List<String>
+    nodes: Map<String, Node>
+    edges: List<Edge>
 }
 
 -- Language-runtime types, opaque to the model layer. Passed through
@@ -35,19 +61,28 @@ external entity FunctionSignature {
     -- [:=> [:cat inputs...] output]). Used in contracts and function nodes.
 }
 
+external entity SpecData {
+    -- Raw parsed specification data from an Allium file.
+    -- Opaque at the model level. Carried through for downstream
+    -- consumers: drift detection, spec exploration, future tooling.
+}
+
 ------------------------------------------------------------
 -- External Entities: Boundaries
 ------------------------------------------------------------
 
 -- Boundary: language-specific source analysis.
--- Produces the AnalysisData consumed by BuildModel.
--- Currently two implementations: Clojure (clj-kondo) and Allium (instaparse).
+-- Produces Contributions consumed by BuildModel.
+-- Currently two categories:
+--   Implementation: Clojure (clj-kondo + runtime schemas)
+--   Specification: Allium (instaparse parser)
+-- Future: additional implementation languages, alternative spec languages.
 
 external entity SourceAnalyzer {
     -- Contract
-    analyzes: SourcePath -> AnalysisData
+    analyzes: SourcePath -> Contribution
         -- SourcePath is a filesystem directory path.
-        -- Each analyzer produces an independent AnalysisData from the
+        -- Each analyzer produces an independent Contribution from the
         -- same source path. Results are merged additively before
         -- BuildModel consumes them.
 
@@ -59,7 +94,7 @@ external entity SourceAnalyzer {
 
     -- Guarantees
     guarantee: idempotent
-        -- Same source path + same file contents = same AnalysisData.
+        -- Same source path + same file contents = same Contribution.
     guarantee: parse_failure_isolation
         -- A single file's parse failure does not prevent analysis of
         -- other files. Failed files are silently excluded.
@@ -141,15 +176,39 @@ external entity ModelLifecycle {
 
 value Edge {
     -- Directed dependency: 'from' references 'to' by node ID.
-    -- Leaf-level edges are the source of truth (var-to-var, ns-to-var).
+    -- Leaf-level edges are the source of truth (var-to-var, ns-to-var,
+    -- entity-to-entity type references).
     -- Container-level edges are derived on demand by the projection layer.
     from: String   -- NodeId
     to: String     -- NodeId
 }
 
+value Field {
+    -- A named, typed property from a specification entity.
+    -- Describes one aspect of a module's data shape.
+    name: String
+    type_ref: String       -- type as text (e.g., "Candidate", "List<Slot>")
+    description: String?
+}
+
+value Surface {
+    -- A module's public boundary contract derived from specification.
+    -- Defines what the module exposes (readable data) and guarantees
+    -- (invariants that hold).
+    --
+    -- Surface operations (provides) are not stored here — they are
+    -- materialized as Function child nodes during build. This means
+    -- spec-only modules have navigable function children, identical
+    -- in structure to implemented function nodes.
+    facing: String?
+    description: String?
+    exposes: List<Field>?
+    guarantees: List<String>?
+}
+
 value Contract {
-    -- A module's external API boundary: the functions that callers
-    -- outside the module use.
+    -- A module's external API boundary derived from implementation:
+    -- the functions that callers outside the module use.
     --
     -- Two sources:
     -- - Folder contracts: declared explicitly via contract.edn files
@@ -170,7 +229,13 @@ value ContractFunction {
 ------------------------------------------------------------
 
 entity Node {
-    -- An entity in the codebase graph.
+    -- An entity in the system model.
+    --
+    -- Nodes represent both specification concepts and implementation
+    -- artifacts in a unified graph. A node may exist from:
+    --   spec-only: design-phase, no implementation yet
+    --   impl-only: imperative shell, no spec needed
+    --   both: specced functional core with implementation
     --
     -- Structural invariants (hold for all nodes in a well-formed model):
     --
@@ -184,10 +249,14 @@ entity Node {
 
     kind: Container | Function | Schema
     label: String
+    description: String?     -- purpose statement from spec or docstring
 
     -- Hierarchy
     parent: Node?
     children: Node with parent = this
+
+    -- Spec data
+    spec: SpecData?          -- raw specification data, opaque at model level
 
     -- Derived
     is_leaf: children.count = 0
@@ -195,18 +264,39 @@ entity Node {
 }
 
 variant Container : Node {
-    -- Grouping entity: directory or namespace.
-    -- Directories contain namespaces; namespaces contain functions
-    -- and schemas. The nesting follows strict kind ordering.
+    -- A module in the system: directory, namespace, or specification scope.
+    -- Containers organize the tree hierarchy and define module boundaries.
+    --
+    -- Three realization states:
+    --   spec-only: has surface and/or fields, no implementation children
+    --   impl-only: has code children, no spec data (imperative shell)
+    --   both: spec provides the "what", impl children provide the "how"
+    --
+    -- When both surface and contract exist, the surface is the
+    -- authoritative description of the module's public boundary.
+    -- The contract provides implementation-level function details.
+
+    -- Implementation-derived
     doc: String?
     contract: Contract?
+
+    -- Specification-derived
+    surface: Surface?
+    fields: List<Field>?
 }
 
 variant Function : Node {
-    -- A variable or function definition within a namespace.
-    -- Private functions are included in the model with private = true.
-    -- Filtering them from views is the projection layer's responsibility,
-    -- not the model's.
+    -- An operation within a module.
+    --
+    -- Two sources:
+    -- - Implementation: discovered from code analysis (var definitions).
+    --   Has full details: doc, visibility, signature.
+    -- - Specification: materialized from a surface provides operation.
+    --   Has name and signature; private is always false (surface
+    --   operations are by definition public).
+    --
+    -- For spec+impl modules, surface-derived functions may correspond
+    -- to implementation-discovered functions. Correspondence is by name.
     doc: String?
     private: Boolean
     signature: FunctionSignature?
@@ -222,27 +312,32 @@ variant Schema : Node {
 }
 
 entity Model {
-    -- Complete codebase graph. Immutable after construction.
+    -- Complete system model. Immutable after construction.
+    -- Combines specification and implementation into a unified graph
+    -- where both are navigable with the same tools.
     --
     -- Structural invariants:
     --
     -- NoEmptyContainers: containers without children are removed during
-    --   build. A container is a container — directories and namespaces
-    --   are treated uniformly.
+    --   build. Exception: spec-only containers with surface or fields
+    --   but no provides operations are retained — they represent
+    --   data-shape definitions that have no child functions.
     --
     -- NoSelfEdges: every edge has from != to.
     --
     -- EdgeIntegrity: both endpoints of every edge exist in nodes.
-    --   Edges are drawn from two sources: var-level (cross-variable
-    --   references) and namespace-level (require relationships). Both
-    --   are needed — namespace requires capture relationships that may
-    --   have no var-level counterpart (macro usage, side-effecting
-    --   requires). Deduplication happens at the projection layer after
-    --   aggregation to visible ancestors.
+    --   Edges are drawn from multiple sources: var-level references,
+    --   namespace requires, and specification type references. All
+    --   are needed. Deduplication happens at the projection layer.
     --
     -- SmartRootPruning: single-child container chains at the root are
     --   collapsed. The tree starts at the first container with multiple
     --   children or non-container children.
+    --
+    -- SurfaceFunctionConsistency: every surface provides operation has
+    --   a corresponding Function child node. Surface operations are
+    --   materialized as children during build, ensuring spec-only
+    --   modules are navigable.
 
     nodes: Map<String, Node>   -- keyed by NodeId
     edges: List<Edge>
@@ -257,17 +352,36 @@ entity Model {
 ------------------------------------------------------------
 
 rule BuildModel {
-    -- Pure transformation: AnalysisData → immutable Model.
-    -- Nodes are built from namespace/variable definitions and schema
-    -- discovery. Edges are derived from variable usages and namespace
-    -- requires. Empty containers are removed. Single-child root chains
+    -- Pure transformation: merged Contribution → immutable Model.
+    --
+    -- Contributions from specification and implementation analyzers
+    -- are merged additively before this rule fires. Spec analyzers
+    -- produce nodes with descriptions, surfaces, fields, and spec
+    -- data. Impl analyzers produce nodes with code structure,
+    -- schemas, and dependencies.
+    --
+    -- Co-location correspondence: when spec and impl files share
+    -- a directory, their contributions merge into the same container
+    -- node. The spec enriches the container with surface, fields,
+    -- and description; the impl populates it with function and
+    -- schema children.
+    --
+    -- Surface materialization: each surface provides operation
+    -- becomes a Function child of the container. For spec-only
+    -- modules these are the only children. For spec+impl modules
+    -- they coexist with implementation-discovered functions.
+    --
+    -- Nodes are built from source files, specification declarations,
+    -- and code analysis. Edges are derived from code dependencies
+    -- and specification type references. Empty containers are removed
+    -- (with the spec-data exception above). Single-child root chains
     -- are pruned. Contracts are attached from contract.edn or inferred
     -- from function signatures.
-    when: BuildModel(analysis: AnalysisData)
+
+    when: BuildModel(contribution: Contribution)
 
     ensures: Model.created(
-        nodes: build_node_hierarchy(analysis),   -- black box
-        edges: derive_dependencies(analysis)     -- black box
+        nodes: build_node_hierarchy(contribution),   -- black box
+        edges: derive_dependencies(contribution)     -- black box
     )
 }
-
