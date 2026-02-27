@@ -1,0 +1,269 @@
+-- allium: 1
+-- views.allium
+--
+-- Scope: View and interaction layer — rendering and user interaction semantics
+-- Includes: Interaction model, rendering pipeline, sidebar structure, visual indicators
+-- Excludes:
+--   - Projection computation (see projection.allium)
+--   - Model construction (see model.allium)
+--   - HTTP/SSE transport (see web.allium)
+
+use "./projection.allium" as projection
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value EditorState {
+    -- Client-side UI state. Split into two concerns:
+    --
+    -- Projection inputs (determine what's visible):
+    --   view_id + expanded_containers
+    --
+    -- Rendering inputs (determine how it looks):
+    --   selected_id + schema_id
+    view_id: String?                  -- container being viewed (null = root)
+    selected_id: String?              -- currently highlighted node
+    schema_id: String?                -- schema being inspected in sidebar
+    expanded_containers: Set<String>  -- containers whose private children are visible
+}
+
+value CytoscapeGraph {
+    -- Output payload for the Cytoscape.js frontend.
+    -- Domain data transformed to Cytoscape conventions:
+    --   from/to → source/target, kebab-case → camelCase.
+    nodes: List<CytoscapeNode>
+    edges: List<CytoscapeEdge>
+    selected_id: String?
+    highlighted_edges: List<String>
+}
+
+value CytoscapeNode {
+    id: String
+    kind: String           -- "container", "function", "schema", "io-container", "io-schema"
+    label: String
+    parent: String?
+    selected: Boolean
+    expandable: Boolean
+    has_private_children: Boolean
+    is_expanded: Boolean
+    child_count: Integer
+    private: Boolean?
+    io_type: String?       -- "input" or "output"
+    schema_key: String?
+    is_owned: Boolean?     -- IO schema ownership
+}
+
+value CytoscapeEdge {
+    id: String
+    source: String
+    target: String
+    edge_type: String      -- "code-flow", "schema-flow", "data-flow", "schema-composition"
+    schema_key: String?
+}
+
+------------------------------------------------------------
+-- Given
+------------------------------------------------------------
+
+given {
+    editor: EditorState
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+-- ============================================================
+-- Interaction Model
+-- ============================================================
+--
+-- The UI distinguishes selection (highlighting within current view)
+-- from navigation (changing the focused container).
+
+rule SelectNode {
+    -- Single click: select a node without changing the focused container.
+    --
+    -- SelectionDefault: when no explicit selection exists, the effective
+    --   selected node defaults to view_id, then to the root node.
+    --
+    -- SchemaKeyHighlighting: when the selected node is a schema node
+    --   (IO or model schema), edges are highlighted by matching schema-key
+    --   rather than by from/to endpoint. This connects all edges that
+    --   flow through that schema type.
+    --
+    -- RegularHighlighting: for non-schema nodes, all edges where the
+    --   node is either source or target are highlighted.
+
+    when: SelectNode(node_id: String)
+
+    let effective_selected = node_id ?? editor.view_id ?? root_id
+
+    ensures:
+        editor.selected_id = effective_selected
+        -- Sidebar shows details for the selected entity
+        -- Edges involving the selection are highlighted
+}
+
+rule NavigateToNode {
+    -- Double click: navigate into a container to view its children.
+    --
+    -- OnlyContainers: navigation only occurs if the node has children.
+    --   Double-clicking a leaf is treated as a single click (selection only).
+    --
+    -- ClearsSelection: after navigation, no node is selected until the
+    --   user clicks one. The new container becomes the focused entity.
+
+    when: NavigateToNode(node_id: String)
+
+    -- The frontend guards dispatch: only containers are navigable.
+    -- Expandable is a property of the projection's ViewNode.
+    requires: projection_node(node_id).expandable = true
+
+    ensures:
+        editor.view_id = node_id
+        editor.selected_id = null
+}
+
+rule TogglePrivateVisibility {
+    -- Right click on a container: toggle whether its private children
+    --   are visible.
+    --
+    -- AddOrRemove: if the container is in expanded_containers, remove it
+    --   (hide privates). If not, add it (show privates).
+
+    when: TogglePrivateVisibility(container_id: String)
+
+    ensures:
+        if container_id in editor.expanded_containers:
+            editor.expanded_containers = editor.expanded_containers - {container_id}
+        else:
+            editor.expanded_containers = editor.expanded_containers + {container_id}
+}
+
+rule NavigateToAncestor {
+    -- Breadcrumb click: navigate to an ancestor container.
+    -- The breadcrumb shows the path from smart-root to the focused container.
+    -- Clicking any non-current item navigates there.
+
+    when: NavigateToAncestor(ancestor_id: String?)
+
+    ensures:
+        editor.view_id = ancestor_id
+        editor.selected_id = null
+}
+
+rule DrillDownSchema {
+    -- Schema link click: navigate into a schema type's definition.
+    --
+    -- TrailTracking: each drill-down appends to a trail of schema IDs,
+    --   allowing breadcrumb-like back-navigation through schema types.
+    --   The trail is passed as a URL parameter, not stored in editor state.
+    --
+    -- RegistryResolution: schema detail view resolves named refs
+    --   one level deep from the registry, showing their shape inline
+    --   or as clickable drill-down links.
+
+    when: DrillDownSchema(schema_id: String, trail: List<String>?)
+
+    ensures:
+        -- Sidebar shows the schema definition detail view
+        -- Schema refs in the definition are clickable for further drill-down
+}
+
+-- ============================================================
+-- Rendering Pipeline
+-- ============================================================
+--
+-- RenderingPurity: views are pure renderers. They receive pre-computed
+--   projection data and editor state, produce HTML/JSON output, and
+--   never fetch data or compute projections.
+--
+-- DataFlow: handler → projection.api (fetch) → views.api (render)
+--   Views never call back into projection.
+
+rule RenderGraph {
+    -- Transform projection data into Cytoscape output.
+    --
+    -- Pipeline:
+    --   1. Add :selected? to projection nodes (from effective selection)
+    --   2. Compute highlighted edges (from selection + schema-key matching)
+    --   3. Transform to Cytoscape format (kebab→camel, from/to→source/target)
+
+    when: RenderGraph(graph_projection: projection/Projection, editor_state: EditorState)
+
+    let effective_selected = editor_state.selected_id
+        ?? editor_state.view_id
+        ?? graph_projection.root_id
+
+    ensures: CytoscapeGraph.created(
+        nodes: graph_projection.nodes with { selected: id = effective_selected },
+        edges: graph_projection.edges,
+        selected_id: effective_selected,
+        highlighted_edges: compute_highlighted(graph_projection.edges, effective_selected)
+    )
+}
+
+rule RenderSidebar {
+    -- Render entity details for the sidebar panel.
+    --
+    -- Dispatch: edge entities → edge-specific renderer showing called
+    --   functions. All other entities → generic renderer.
+    --
+    -- GenericRenderer: one renderer for all node kinds. The projection
+    --   layer normalizes entities into a uniform shape; the view just
+    --   iterates sections in order.
+    --
+    -- SectionOrder (non-edge entities):
+    --   1. Label — entity name + kind badge
+    --   2. Description — from doc, contract, or data description
+    --   3. Interface — dispatched by type, with IO sections:
+    --      - fn_list (containers): Inputs, Outputs, Public API
+    --      - fn_inline (functions): Inputs, Outputs
+    --      - schema_def (schemas): schema detail view with registry
+    --      - name_list (interfaces): plain function name list
+    --   4. Dependencies — entities this one depends on ("None" if empty)
+    --   5. Dependents — entities that depend on this one ("None" if empty)
+    --
+    -- EdgeRenderer: label + "Functions Called" list using shared fn-list
+    --   component.
+    --
+    -- EmptyState: when no entity is selected, show placeholder text.
+
+    when: RenderSidebar(detail: projection/EntityDetail | projection/EdgeDetail | null)
+
+    ensures:
+        if detail = null:
+            render_empty_sidebar()
+        else if detail.kind = edge:
+            render_edge_detail(detail)       -- projection/EdgeDetail
+        else:
+            render_entity_detail(detail)     -- projection/EntityDetail
+}
+
+rule RenderBreadcrumb {
+    -- Render the navigation breadcrumb from root to focused container.
+    --
+    -- ShortLabels: namespace names show only the last dotted segment.
+    -- CurrentItem: the last item is non-clickable and styled as current.
+    -- ClickableItems: all non-last items dispatch cy-navigate events.
+
+    when: RenderBreadcrumb(path: List<projection/PathSegment>)
+
+    ensures:
+        -- HTML with separator-delimited path items
+        -- Non-last items are clickable, last item shows as current
+}
+
+-- ============================================================
+-- Visual Indicators
+-- ============================================================
+--
+-- DoubleBorder: a container has private children that are currently
+--   hidden (container not in expanded_containers).
+--
+-- DashedBorderGrayBackground: a private leaf node that is currently
+--   visible (its parent is expanded).
+--
+-- SolidBorder: the container is expanded (all children visible)
+--   or has no private children at all.
