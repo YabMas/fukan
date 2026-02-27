@@ -263,16 +263,10 @@
             ;; Sort dirs so parents are processed first
             (sort-by count all-dirs))))
 
-(defn build-folder-nodes
-  "Build folder nodes from namespace definitions.
-   Returns {:nodes {id -> node}, :index {path -> id}}."
-  [ns-defs]
-  (build-folder-nodes-from-files (mapv :filename ns-defs)))
-
 ;; -----------------------------------------------------------------------------
 ;; Namespace node construction
 
-(defn file-to-folder
+(defn- file-to-folder
   "Get the folder path for a file."
   [filepath]
   (let [parts (str/split filepath #"/")]

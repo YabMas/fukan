@@ -26,8 +26,7 @@ These are deliberately separate. The server can restart without rebuilding the m
 ## Dependency Direction
 
 ```
-infra/model.clj → model.build (to construct models)
-infra/model.clj → model.languages.clojure (to run analysis)
+infra/model.clj → model.pipeline (single entry point for model construction)
 web/handler.clj → web.sse, web.views (to build routes)
 ```
 

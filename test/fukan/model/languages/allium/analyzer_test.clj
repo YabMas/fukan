@@ -30,39 +30,39 @@
 (deftest extract-type-refs-simple
   (testing "simple non-builtin type"
     (is (= #{{:name "Node"}}
-           (analyzer/extract-type-refs {:kind :simple :name "Node"}))))
+           (#'analyzer/extract-type-refs {:kind :simple :name "Node"}))))
   (testing "builtin type ignored"
     (is (= #{}
-           (analyzer/extract-type-refs {:kind :simple :name "String"}))))
+           (#'analyzer/extract-type-refs {:kind :simple :name "String"}))))
   (testing "qualified type"
     (is (= #{{:alias "model" :name "Node"}}
-           (analyzer/extract-type-refs {:kind :qualified :ns "model" :name "Node"})))))
+           (#'analyzer/extract-type-refs {:kind :qualified :ns "model" :name "Node"})))))
 
 (deftest extract-type-refs-compound
   (testing "generic with builtin container"
     (is (= #{{:name "Edge"}}
-           (analyzer/extract-type-refs {:kind :generic :name "List"
+           (#'analyzer/extract-type-refs {:kind :generic :name "List"
                                         :params [{:kind :simple :name "Edge"}]}))))
   (testing "generic with non-builtin container"
     (is (= #{{:name "MyList"} {:name "Edge"}}
-           (analyzer/extract-type-refs {:kind :generic :name "MyList"
+           (#'analyzer/extract-type-refs {:kind :generic :name "MyList"
                                         :params [{:kind :simple :name "Edge"}]}))))
   (testing "optional type"
     (is (= #{{:name "Contract"}}
-           (analyzer/extract-type-refs {:kind :optional
+           (#'analyzer/extract-type-refs {:kind :optional
                                         :inner {:kind :simple :name "Contract"}}))))
   (testing "union type"
     (is (= #{{:name "Container"} {:name "Function"}}
-           (analyzer/extract-type-refs {:kind :union
+           (#'analyzer/extract-type-refs {:kind :union
                                         :members [{:kind :simple :name "Container"}
                                                    {:kind :simple :name "Function"}]}))))
   (testing "inline object with type refs"
     (is (= #{{:name "DepInfo"}}
-           (analyzer/extract-type-refs {:kind :inline-obj
+           (#'analyzer/extract-type-refs {:kind :inline-obj
                                         :fields [{:name "count" :type-ref {:kind :simple :name "Integer"}}
                                                   {:name "info" :type-ref {:kind :simple :name "DepInfo"}}]}))))
   (testing "nil type-ref"
-    (is (nil? (analyzer/extract-type-refs nil)))))
+    (is (nil? (#'analyzer/extract-type-refs nil)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Unit: declaration ref extraction
@@ -75,7 +75,7 @@
                           {:name "to" :field-kind :typed
                            :type-ref {:kind :simple :name "Node"}}]}]
       (is (= #{{:name "Node"}}
-             (analyzer/extract-declaration-refs decl)))))
+             (#'analyzer/extract-declaration-refs decl)))))
   (testing "variant with base type"
     (let [decl {:type :variant :name "Container"
                 :base {:kind :simple :name "Node"}
@@ -83,7 +83,7 @@
                            :type-ref {:kind :optional
                                       :inner {:kind :simple :name "String"}}}]}]
       (is (= #{{:name "Node"}}
-             (analyzer/extract-declaration-refs decl)))))
+             (#'analyzer/extract-declaration-refs decl)))))
   (testing "rule with when clause params"
     (let [decl {:type :rule :name "BuildModel"
                 :clauses [{:clause-type :when
@@ -91,10 +91,10 @@
                                       :params [{:name "analysis"
                                                 :type-ref {:kind :simple :name "AnalysisData"}}]}}]}]
       (is (= #{{:name "AnalysisData"}}
-             (analyzer/extract-declaration-refs decl)))))
+             (#'analyzer/extract-declaration-refs decl)))))
   (testing "enum has no type refs"
     (is (= #{}
-           (analyzer/extract-declaration-refs {:type :enum :name "Status"
+           (#'analyzer/extract-declaration-refs {:type :enum :name "Status"
                                                :values ["active" "inactive"]})))))
 
 ;; ---------------------------------------------------------------------------
@@ -106,12 +106,12 @@
                   "views" "src/fukan/web/views/spec.allium"}]
     (testing "resolves ./model.allium"
       (is (= "src/fukan/model/spec.allium"
-             (analyzer/resolve-use-path "./model.allium" registry))))
+             (#'analyzer/resolve-use-path "./model.allium" registry))))
     (testing "resolves ./projection.allium"
       (is (= "src/fukan/projection/spec.allium"
-             (analyzer/resolve-use-path "./projection.allium" registry))))
+             (#'analyzer/resolve-use-path "./projection.allium" registry))))
     (testing "returns nil for unknown path"
-      (is (nil? (analyzer/resolve-use-path "./unknown.allium" registry))))))
+      (is (nil? (#'analyzer/resolve-use-path "./unknown.allium" registry))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Unit: spec registry building
@@ -120,7 +120,7 @@
   (let [files ["src/fukan/model/spec.allium"
                "src/fukan/projection/spec.allium"
                "src/fukan/web/views/spec.allium"]
-        registry (analyzer/build-spec-registry files)]
+        registry (#'analyzer/build-spec-registry files)]
     (is (= "src/fukan/model/spec.allium" (get registry "model")))
     (is (= "src/fukan/projection/spec.allium" (get registry "projection")))
     (is (= "src/fukan/web/views/spec.allium" (get registry "views")))))

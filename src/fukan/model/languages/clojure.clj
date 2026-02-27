@@ -25,7 +25,7 @@
                 :row row
                 :private false}))))
 
-(defn run-kondo
+(defn- run-kondo
   "Runs clj-kondo on src-path and returns the analysis map.
 
    Returns a map containing:
@@ -121,7 +121,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Contribution
 
-(defn analysis->contribution
+(defn- analysis->contribution
   "Convert AnalysisData into a language contribution.
    Builds namespace nodes, var nodes, and edges from the analysis data.
    Container nodes have :parent nil — build-model assigns folder parents."

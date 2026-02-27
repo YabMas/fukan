@@ -30,7 +30,7 @@
         all-parts (conj (vec (butlast parts)) last-part)]
     (symbol (str/join "." all-parts))))
 
-(defn file->parent-folder-path
+(defn- file->parent-folder-path
   "Return the parent directory path for an allium file.
    'src/fukan/model/spec.allium' → 'src/fukan/model'
    This matches the folder node ID convention used by the build pipeline."
@@ -49,7 +49,7 @@
 ;; ---------------------------------------------------------------------------
 ;; Spec registry and use resolution
 
-(defn build-spec-registry
+(defn- build-spec-registry
   "Build a registry mapping parent directory names to filepaths.
    E.g., 'model' → 'src/fukan/model/spec.allium'"
   [filepaths]
@@ -58,7 +58,7 @@
                     [parent-dir fp]))
                 filepaths)))
 
-(defn resolve-use-path
+(defn- resolve-use-path
   "Resolve a use path (e.g., './model.allium') to a filepath via the registry.
    Strips leading './' and trailing '.allium' to get the lookup key."
   [use-path registry]
@@ -70,7 +70,7 @@
 ;; ---------------------------------------------------------------------------
 ;; Type reference extraction
 
-(defn extract-type-refs
+(defn- extract-type-refs
   "Extract all non-builtin type references from a type-ref AST node.
    Returns a set of {:name s} or {:alias s :name s} maps."
   [type-ref]
@@ -103,7 +103,7 @@
 
       #{})))
 
-(defn extract-declaration-refs
+(defn- extract-declaration-refs
   "Collect all type refs from one declaration.
    Returns a set of {:name s} or {:alias s :name s} maps."
   [decl]

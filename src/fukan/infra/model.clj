@@ -4,21 +4,8 @@
    the single source of truth for the current codebase graph.
    Decoupled from the server lifecycle so the model can be refreshed
    (re-analyzed from source) without restarting HTTP."
-  (:require [fukan.model.build :as build]
-            [fukan.model.languages.clojure :as clj-lang]
-            [fukan.model.languages.allium.analyzer :as allium]
+  (:require [fukan.model.pipeline :as pipeline]
             [integrant.core :as ig]))
-
-(defn- build-model
-  "Build the complete model from all language contributions."
-  [src-path]
-  (let [clj-contrib (clj-lang/contribution src-path)
-        allium-contrib (allium/allium-contribution src-path)
-        contrib (build/merge-contributions clj-contrib allium-contrib)
-        schema-data (clj-lang/discover-schema-data)
-        type-nodes-fn (fn [ns-index]
-                        (clj-lang/build-schema-nodes ns-index schema-data))]
-    (build/build-model contrib {:type-nodes-fn type-nodes-fn})))
 
 (defn load-model!
   "Build model from src path and store it in the model-state atom.
@@ -26,7 +13,7 @@
   {:malli/schema [:=> [:cat :atom :string] :Model]}
   [model-state src]
   (println "Analyzing" src "...")
-  (let [m (build-model src)]
+  (let [m (pipeline/build-model src)]
     (println "Built" (count (:nodes m)) "nodes," (count (:edges m)) "edges")
     (reset! model-state {:model m :src src})
     m))
