@@ -1,0 +1,67 @@
+(ns fukan.model.build-test
+  "Generative + integration tests for the model build pipeline.
+   Verifies that all model invariants from model.allium hold across
+   randomly generated analysis data and Fukan's own source code."
+  (:require [clojure.test :refer [deftest is testing]]
+            [clojure.test.check.clojure-test :refer [defspec]]
+            [clojure.test.check.properties :as prop]
+            [fukan.model.build :as build]
+            [fukan.model.languages.clojure :as clj-lang]
+            [fukan.test-support.generators :as gen]
+            [fukan.test-support.invariants.model :as inv]))
+
+;; ---------------------------------------------------------------------------
+;; Generative: build-model satisfies all model invariants
+
+(defspec build-model-satisfies-all-invariants 100
+  (prop/for-all [analysis (gen/gen-analysis-data)]
+    (let [model (build/build-model analysis)]
+      (true? (inv/valid-model? model)))))
+
+;; ---------------------------------------------------------------------------
+;; Individual invariant defspecs for clearer failure messages
+
+(defspec build-model-tree-structure 100
+  (prop/for-all [analysis (gen/gen-analysis-data)]
+    (let [model (build/build-model analysis)]
+      (true? (inv/tree-structure? model)))))
+
+(defspec build-model-leaf-strictness 100
+  (prop/for-all [analysis (gen/gen-analysis-data)]
+    (let [model (build/build-model analysis)]
+      (true? (inv/leaf-strictness? model)))))
+
+(defspec build-model-no-empty-containers 100
+  (prop/for-all [analysis (gen/gen-analysis-data)]
+    (let [model (build/build-model analysis)]
+      (true? (inv/no-empty-containers? model)))))
+
+(defspec build-model-no-self-edges 100
+  (prop/for-all [analysis (gen/gen-analysis-data)]
+    (let [model (build/build-model analysis)]
+      (true? (inv/no-self-edges? model)))))
+
+(defspec build-model-edge-integrity 100
+  (prop/for-all [analysis (gen/gen-analysis-data)]
+    (let [model (build/build-model analysis)]
+      (true? (inv/edge-integrity? model)))))
+
+;; ---------------------------------------------------------------------------
+;; Integration: Fukan self-analysis satisfies all model invariants
+
+(deftest fukan-self-analysis-invariants
+  (testing "Fukan's own source code satisfies all model invariants"
+    (let [analysis (clj-lang/run-kondo "src")
+          schema-data (clj-lang/discover-schema-data)
+          model (build/build-model analysis
+                  {:type-nodes-fn (fn [ns-index]
+                                    (clj-lang/build-schema-nodes ns-index schema-data))})]
+      (is (pos? (count (:nodes model))) "model should have nodes")
+      (is (pos? (count (:edges model))) "model should have edges")
+      (is (true? (inv/tree-structure? model)) (str (inv/tree-structure? model)))
+      (is (true? (inv/leaf-strictness? model)) (str (inv/leaf-strictness? model)))
+      (is (true? (inv/schema-replaces-function? model)) (str (inv/schema-replaces-function? model)))
+      (is (true? (inv/no-empty-containers? model)) (str (inv/no-empty-containers? model)))
+      (is (true? (inv/no-self-edges? model)) (str (inv/no-self-edges? model)))
+      (is (true? (inv/edge-integrity? model)) (str (inv/edge-integrity? model)))
+      (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model))))))

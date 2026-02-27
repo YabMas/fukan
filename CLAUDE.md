@@ -104,6 +104,55 @@ Reference other schemas by keyword (`:NodeId`), not by Clojure var (`NodeId`). V
 
 ---
 
+## Testing (MUST FOLLOW)
+
+Tests are spec-driven: invariant predicates encode Allium spec rules, generators produce valid inputs, and tests verify invariants hold. **Run tests after every implementation change.**
+
+### Running Tests
+
+```
+clj -M:dev:test
+```
+
+Run this after completing any code change — model, projection, view, or schema modifications. All tests must pass before committing.
+
+### When Implementing Changes
+
+1. **Write or update tests alongside code.** If you change behavior covered by an existing test, update the test. If you add new behavior, add a test.
+2. **Run the full suite** after implementation is complete. Fix failures before committing.
+3. **If a test fails**, read the violation map — it describes exactly which invariant broke and why. Fix the implementation, not the test, unless the spec itself changed.
+
+### Test Structure
+
+Tests live in `test/` mirroring `src/`:
+
+| Test file | What it covers |
+|-----------|---------------|
+| `test/fukan/model/build_test.clj` | Model build pipeline — generative (defspec) + self-analysis integration |
+| `test/fukan/projection/graph_test.clj` | Graph projection — generative + self-analysis integration |
+| `test/fukan/projection/details_test.clj` | Entity details — example-based |
+| `test/fukan/projection/path_test.clj` | Breadcrumb paths — example-based |
+| `test/fukan/web/views/graph_test.clj` | View rendering — generative + example-based |
+
+### Test Support
+
+| File | Purpose |
+|------|---------|
+| `test/fukan/test_support/invariants/model.clj` | Model invariant predicates (from model.allium) |
+| `test/fukan/test_support/invariants/projection.clj` | Projection invariant predicates (from projection.allium) |
+| `test/fukan/test_support/invariants/views.clj` | View invariant predicates (from views.allium) |
+| `test/fukan/test_support/generators.clj` | Custom generators for valid test data |
+| `test/fukan/test_support/registry.clj` | Malli schema registry for generators |
+
+### Writing New Tests
+
+- **Generative tests** (`defspec`) for functions with rich input spaces (build-model, entity-graph, render-graph). Use generators from `test_support/generators.clj` and invariant predicates from `test_support/invariants/`.
+- **Example-based tests** (`deftest`) for functions with simple inputs or where specific scenarios matter (details, path, edge cases).
+- **Integration tests** that run against Fukan's own source code catch regressions that random generation won't reach. Add these for new pipeline stages.
+- When adding a new Allium spec invariant, add a corresponding predicate in the relevant `invariants/` file and a defspec that exercises it.
+
+---
+
 ## Guardrails
 
 - Don't use re-exports to fix dependency issues — have the downstream namespace compose from available data.

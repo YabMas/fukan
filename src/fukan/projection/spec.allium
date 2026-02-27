@@ -87,10 +87,26 @@ value SchemaRef { key: String, doc: String? }
 value FnEntry { name: String, signature: model/FunctionSignature?, id: String? }
 
 value InterfaceData {
-    -- Public interface of an entity, dispatched by kind.
+    -- Public interface of an entity, discriminated by display format.
+    -- Each variant carries typed items appropriate to its format.
     type: InterfaceType
-    items: List<Any>
-    registry: Map<String, Any>?  -- schema-def only: one-level resolved refs
+
+    variant fn_list {
+        items: List<FnEntry>
+    }
+
+    variant fn_inline {
+        items: List<FunctionSignature>  -- opaque Malli function schemas
+    }
+
+    variant schema_def {
+        items: List<SchemaForm>         -- opaque Malli schema forms
+        registry: Map<String, { form: SchemaForm, doc: String? }>?
+    }
+
+    variant name_list {
+        items: List<String>
+    }
 }
 
 value DataflowData {

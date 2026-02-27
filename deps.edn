@@ -14,7 +14,8 @@
                     integrant/repl {:mvn/version "0.4.0"}}}
   :test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
-                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}
+                      org.clojure/test.check {:mvn/version "1.1.1"}}
          :main-opts ["-m" "cognitect.test-runner"]}
   :cli {:main-opts ["-m" "fukan.core" "--mode" "cli"]}
   :nrepl

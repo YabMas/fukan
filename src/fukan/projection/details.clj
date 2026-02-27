@@ -320,12 +320,25 @@
    [:id {:optional true} :string]])
 
 (def ^:schema InterfaceData
-  [:map {:description "The public interface of an entity, typed by display format (fn-list, fn-inline, schema-def, name-list)."}
-   [:type [:enum :fn-list :fn-inline :schema-def :name-list]]
-   [:items {:description "Content varies by :type — FnEntry maps for fn-list, schema forms for schema-def, function signatures for fn-inline."}
-    [:vector :any]]
-   [:registry {:optional true, :description "Malli schema registry entries: keyword to schema form for resolving named refs."}
-    [:map-of :keyword :any]]])
+  [:multi {:dispatch :type
+           :description "Public interface of an entity, discriminated by display format."}
+   [:fn-list [:map
+     [:type [:= :fn-list]]
+     [:items [:vector :FnEntry]]]]
+   [:fn-inline [:map
+     [:type [:= :fn-inline]]
+     [:items {:description "Malli function schema forms — legitimate :any."} [:vector :any]]]]
+   [:schema-def [:map
+     [:type [:= :schema-def]]
+     [:items {:description "Malli schema form — legitimate :any."} [:vector :any]]
+     [:registry {:optional true
+                 :description "One-level resolved schema refs: keyword to form and optional doc."}
+      [:map-of :keyword [:map
+        [:form :any]
+        [:doc {:optional true} [:maybe :string]]]]]]]
+   [:name-list [:map
+     [:type [:= :name-list]]
+     [:items [:vector :string]]]]])
 
 (def ^:schema SchemaRef
   [:map {:description "A reference to a schema type with optional description."}
