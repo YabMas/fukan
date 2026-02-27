@@ -71,13 +71,30 @@
    [:description {:optional true} :string]
    [:functions [:vector :ContractFn]]])
 
+(def ^:schema Field
+  [:map {:description "A named, typed property from a specification entity."}
+   [:name :string]
+   [:type-ref :string]
+   [:description {:optional true} :string]])
+
+(def ^:schema Surface
+  [:map {:description "A module's public boundary contract derived from specification."}
+   [:facing {:optional true} :string]
+   [:description {:optional true} :string]
+   [:exposes {:optional true} [:vector :Field]]
+   [:guarantees {:optional true} [:vector :string]]
+   [:provides {:optional true} [:vector :Field]]])
+
 (def ^:schema NodeData
   [:or {:description "Kind-specific properties attached to a node, discriminated by :kind."}
    ;; Container data (directory or namespace)
-   [:map {:description "Container node data: documentation and optional module contract."}
+   [:map {:description "Container node data: documentation, contract, and optional spec data."}
     [:kind [:= :container]]
     [:doc {:optional true} [:maybe :string]]
-    [:contract {:optional true} :Contract]]
+    [:contract {:optional true} :Contract]
+    [:surface {:optional true} :Surface]
+    [:fields {:optional true} [:vector :Field]]
+    [:spec {:optional true, :description "Raw parsed specification data."} :any]]
    ;; Function data (var definition)
    [:map {:description "Function node data: documentation, visibility, and optional type signature."}
     [:kind [:= :function]]
@@ -92,10 +109,11 @@
     [:doc {:optional true} [:maybe :string]]]])
 
 (def ^:schema Node
-  [:map {:description "An entity in the codebase graph: directory, namespace, function, or schema definition."}
+  [:map {:description "An entity in the system model: container, function, or schema definition."}
    [:id :NodeId]
    [:kind :NodeKind]
    [:label :string]
+   [:description {:optional true} :string]
    [:parent {:optional true} [:maybe :NodeId]]
    [:children [:set :NodeId]]
    [:data {:optional true} :NodeData]])
@@ -490,13 +508,37 @@
    [:nodes {:description "Pre-built nodes. Container nodes should have :parent nil and :filename in :data for folder parenting."} [:map-of :NodeId :Node]]
    [:edges {:description "Pre-built edges between nodes."} [:vector :Edge]]])
 
+(defn- merge-node-pair
+  "Merge two nodes with the same ID. Deep-merges :data maps for containers
+   so that spec data (surface, fields, description) enriches impl data
+   (doc, contract) rather than overwriting it. Non-container nodes or
+   nodes with different kinds use simple last-wins merge."
+  [a b]
+  (if (and (= :container (:kind a)) (= :container (:kind b)))
+    (-> (merge a b)
+        (assoc :data (merge (:data a) (:data b)))
+        (update :children (fn [c] (into (or (:children a) #{}) (or c #{})))))
+    b))
+
+(defn- merge-node-maps
+  "Merge multiple node maps with deep merge for shared container IDs."
+  [& nmaps]
+  (reduce (fn [acc nmap]
+            (reduce-kv (fn [m id node]
+                         (if-let [existing (get m id)]
+                           (assoc m id (merge-node-pair existing node))
+                           (assoc m id node)))
+                       acc nmap))
+          {} nmaps))
+
 (defn merge-contributions
   "Merge multiple language contributions into one.
-   Nodes are merged by ID (last wins). Edges are deduplicated."
+   Container nodes with the same ID are deep-merged (spec enriches impl).
+   Other nodes use last-wins. Edges are deduplicated."
   {:malli/schema [:=> [:cat [:* :Contribution]] :Contribution]}
   [& contributions]
   {:source-files (vec (mapcat :source-files contributions))
-   :nodes (apply merge (map :nodes contributions))
+   :nodes (apply merge-node-maps (map :nodes contributions))
    :edges (vec (into #{} (mapcat :edges contributions)))})
 
 ;; -----------------------------------------------------------------------------
