@@ -65,8 +65,11 @@
 
   (* ============ Fields ============ *)
 
-  field-list = (field-entry _ (<','> _)?)*
+  field-list = (field-item _ (<','> _)?)*
+  <field-item> = nested-variant / field-entry
   field-entry = ident _ <':'> _ field-value
+
+  nested-variant = <'variant'> __ ident _ <'{'> _ field-list _ <'}'>
 
   (* Ordered alternation: try relationship, projection, typed-with-comment, typed-field, then derived *)
   field-value = relationship / projection / typed-with-comment / typed-field / derived-value
@@ -244,6 +247,14 @@
    :field-list
    (fn [& entries]
      (vec (remove nil? entries)))
+
+   :nested-variant
+   (fn [name & field-groups]
+     {:field-kind :variant
+      :variant-name name
+      :fields (vec (apply concat
+                     (map (fn [x] (if (sequential? x) x [x]))
+                          field-groups)))})
 
    :field-entry
    (fn [name field-val]

@@ -105,7 +105,10 @@
   [decl]
   (case (:type decl)
     (:entity :value)
-    (into #{} (mapcat (fn [field] (extract-type-refs (:type-ref field)))
+    (into #{} (mapcat (fn [field]
+                        (if (= :variant (:field-kind field))
+                          (mapcat #(extract-type-refs (:type-ref %)) (:fields field))
+                          (extract-type-refs (:type-ref field))))
                       (:fields decl)))
 
     :variant
