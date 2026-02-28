@@ -6,7 +6,8 @@
    aggregated dependency counts. The normalized shape lets the sidebar
    render all entity kinds with one generic renderer."
   (:require [clojure.string :as str]
-            [fukan.projection.schema :as proj.schema]))
+            [fukan.projection.schema :as proj.schema]
+            [fukan.schema.forms :as forms]))
 
 ;; -----------------------------------------------------------------------------
 ;; Private helpers
@@ -159,13 +160,9 @@
    Expects schema in form [:=> [:cat input1 input2 ...] output].
    Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil."
   [model fn-schema]
-  (when (and (vector? fn-schema) (= :=> (first fn-schema)))
-    (let [[_ input output] fn-schema
-          in-schemas (if (and (vector? input) (= :cat (first input)))
-                       (rest input)
-                       [input])]
-      {:inputs (into #{} (mapcat #(proj.schema/extract-schema-refs model %) in-schemas))
-       :outputs (proj.schema/extract-schema-refs model output)})))
+  (when-let [{:keys [inputs output]} (forms/fn-schema-parts fn-schema)]
+    {:inputs (into #{} (mapcat #(proj.schema/extract-schema-refs model %) inputs))
+     :outputs (proj.schema/extract-schema-refs model output)}))
 
 (defn- extract-dataflow
   "Extract dataflow (input/output schema types) for an entity.

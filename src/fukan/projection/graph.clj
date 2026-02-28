@@ -7,6 +7,7 @@
    with no UI state."
   (:require [fukan.projection.schema :as schema]
             [fukan.projection.path :as path]
+            [fukan.schema.forms :as forms]
             [clojure.set :as set]))
 
 ;; -----------------------------------------------------------------------------
@@ -149,13 +150,9 @@
    or nil if not a function schema.
    Takes the model to determine which keywords are registered schemas."
   [model fn-schema]
-  (when (and (vector? fn-schema) (= :=> (first fn-schema)))
-    (let [[_ input output] fn-schema
-          in-schemas (if (and (vector? input) (= :cat (first input)))
-                       (rest input)
-                       [input])]
-      {:inputs (into #{} (mapcat #(schema/extract-schema-refs model %) in-schemas))
-       :outputs (schema/extract-schema-refs model output)})))
+  (when-let [{:keys [inputs output]} (forms/fn-schema-parts fn-schema)]
+    {:inputs (into #{} (mapcat #(schema/extract-schema-refs model %) inputs))
+     :outputs (schema/extract-schema-refs model output)}))
 
 (defn- compute-var-schema-info
   "Get schema info for a function node from its :signature data.

@@ -4,7 +4,8 @@
    by keyword, resolve a keyword to its Malli form, extract schema
    keyword references from a schema form, and list schemas owned by
    a namespace. Used by graph and detail projections to compute
-   schema-flow edges and dataflow sections.")
+   schema-flow edges and dataflow sections."
+  (:require [fukan.schema.forms :as forms]))
 
 ;; -----------------------------------------------------------------------------
 ;; Private helpers
@@ -50,10 +51,7 @@
    Only returns refs that are registered in the model's schema nodes."
   [model schema-form]
   (let [registered-schemas (all-schema-keys model)]
-    (->> (tree-seq coll? seq schema-form)
-         (filter keyword?)
-         (filter #(contains? registered-schemas %))
-         set)))
+    (into #{} (filter registered-schemas) (forms/extract-keyword-refs schema-form))))
 
 (defn find-schema-node-id
   "Find a schema node's ID by its schema key.
