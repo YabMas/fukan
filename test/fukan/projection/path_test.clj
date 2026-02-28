@@ -7,12 +7,12 @@
 ;; Fixture model
 
 (def test-model
-  {:nodes {"root"     {:id "root" :kind :container :label "root" :parent nil
+  {:nodes {"root"     {:id "root" :kind :module :label "root" :parent nil
                         :children #{"ns:alpha"}
-                        :data {:kind :container}}
-           "ns:alpha" {:id "ns:alpha" :kind :container :label "alpha" :parent "root"
+                        :data {:kind :module}}
+           "ns:alpha" {:id "ns:alpha" :kind :module :label "alpha" :parent "root"
                         :children #{"ns:alpha/foo"}
-                        :data {:kind :container}}
+                        :data {:kind :module}}
            "ns:alpha/foo" {:id "ns:alpha/foo" :kind :function :label "foo" :parent "ns:alpha"
                             :children #{}
                             :data {:kind :function :private? false}}}
@@ -27,15 +27,15 @@
       (is (= 1 (count p)))
       (is (nil? (:id (first p)))))))
 
-(deftest container-path
-  (testing "container path has root + container"
+(deftest module-path
+  (testing "module path has root + module"
     (let [p (path/entity-path test-model "ns:alpha")]
       (is (= 2 (count p)))
       (is (nil? (:id (first p))))
       (is (= "ns:alpha" (:id (second p)))))))
 
 (deftest leaf-path
-  (testing "leaf path has root + container + leaf"
+  (testing "leaf path has root + module + leaf"
     (let [p (path/entity-path test-model "ns:alpha/foo")]
       (is (= 3 (count p)))
       (is (= "ns:alpha/foo" (:id (last p)))))))

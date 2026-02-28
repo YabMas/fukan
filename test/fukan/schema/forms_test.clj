@@ -71,10 +71,10 @@
            (forms/extract-keyword-refs [:map [:id :NodeId] [:kind :NodeKind]]))))
 
   (testing "skips :enum values"
-    (is (= #{} (forms/extract-keyword-refs [:enum :container :function :schema]))))
+    (is (= #{} (forms/extract-keyword-refs [:enum :module :function :schema]))))
 
   (testing "skips := values"
-    (is (= #{} (forms/extract-keyword-refs [:= :container]))))
+    (is (= #{} (forms/extract-keyword-refs [:= :module]))))
 
   (testing "skips :fn predicates"
     (is (= #{} (forms/extract-keyword-refs [:fn {:error/message "bad"} (fn [x] (pos? x))]))))

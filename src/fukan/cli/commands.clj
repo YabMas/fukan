@@ -95,7 +95,7 @@
                       (build-view-context model state view-id))}))
 
 (defn- cmd-cd
-  "Navigate into a container or up to parent."
+  "Navigate into a module or up to parent."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state args]
   (let [target (first args)]
@@ -124,7 +124,7 @@
                       :error (str "Entity not found: " target)
                       :entity-id target}}
 
-          (not= :container (:kind detail))
+          (not= :module (:kind detail))
           {:response {:ok false :command :cd
                       :error "Cannot navigate into leaf entity. Use 'info' instead."
                       :entity-id target}}
@@ -196,35 +196,35 @@
                       stats)}))
 
 (defn- cmd-expand
-  "Toggle private child visibility for a container.
+  "Toggle private child visibility for a module.
    Mirrors TogglePrivateVisibility from views.allium."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state args]
-  (let [container-id (first args)]
-    (if (nil? container-id)
+  (let [module-id (first args)]
+    (if (nil? module-id)
       {:response {:ok false :command :expand
-                  :error "Usage: expand <container-id>"}}
-      (let [detail (proj/inspect model container-id)]
+                  :error "Usage: expand <module-id>"}}
+      (let [detail (proj/inspect model module-id)]
         (cond
           (nil? detail)
           {:response {:ok false :command :expand
-                      :error (str "Entity not found: " container-id)
-                      :entity-id container-id}}
+                      :error (str "Entity not found: " module-id)
+                      :entity-id module-id}}
 
-          (not= :container (:kind detail))
+          (not= :module (:kind detail))
           {:response {:ok false :command :expand
-                      :error "Only containers can be expanded."
-                      :entity-id container-id}}
+                      :error "Only modules can be expanded."
+                      :entity-id module-id}}
 
           :else
-          (let [currently-expanded? (contains? (:expanded state) container-id)
+          (let [currently-expanded? (contains? (:expanded state) module-id)
                 new-expanded (if currently-expanded?
-                               (disj (:expanded state) container-id)
-                               (conj (:expanded state) container-id))
+                               (disj (:expanded state) module-id)
+                               (conj (:expanded state) module-id))
                 ;; Build view context with the new expanded set
                 new-state (assoc state :expanded new-expanded)]
             {:response (merge {:ok true :command :expand
-                               :expanded-id container-id
+                               :expanded-id module-id
                                :expanded? (not currently-expanded?)}
                               (build-view-context model new-state (current-view-id model state)))
              :state-update #(assoc % :expanded new-expanded)}))))))

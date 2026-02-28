@@ -13,7 +13,7 @@
 ;; Schemas
 
 (def ^:schema NavigateOpts
-  [:map {:description "Options for navigation: view target, expanded containers, and optional selection."}
+  [:map {:description "Options for navigation: view target, expanded modules, and optional selection."}
    [:view-id {:optional true} [:maybe :string]]
    [:expanded {:optional true} [:set :NodeId]]
    [:selected {:optional true} [:maybe :string]]])
@@ -34,7 +34,7 @@
   {:malli/schema [:=> [:cat :Model :NavigateOpts] :NavigateResult]}
   [model {:keys [view-id expanded selected]}]
   (let [graph-projection (graph/entity-graph model {:view-id view-id
-                                                    :expanded-containers expanded})
+                                                    :expanded-modules expanded})
         path-items (path/entity-path model view-id)]
     (cond-> {:graph graph-projection
              :path path-items}

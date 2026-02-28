@@ -16,27 +16,27 @@
   []
   {:nodes
    {"src/a"
-    {:id "src/a" :kind :container :label "a" :parent nil :children #{"a.core"}
-     :data {:kind :container
+    {:id "src/a" :kind :module :label "a" :parent nil :children #{"a.core"}
+     :data {:kind :module
             :contract {:source :declared
                        :description "Module A"
                        :functions [{:name "fn-a1" :id "a.core/fn-a1"}]}}}
     "a.core"
-    {:id "a.core" :kind :container :label "a.core" :parent "src/a" :children #{"a.core/fn-a1"}
-     :data {:kind :container}}
+    {:id "a.core" :kind :module :label "a.core" :parent "src/a" :children #{"a.core/fn-a1"}
+     :data {:kind :module}}
     "a.core/fn-a1"
     {:id "a.core/fn-a1" :kind :function :label "fn-a1" :parent "a.core" :children #{}
      :data {:kind :function :private? false}}
 
     "src/b"
-    {:id "src/b" :kind :container :label "b" :parent nil :children #{"b.core"}
-     :data {:kind :container
+    {:id "src/b" :kind :module :label "b" :parent nil :children #{"b.core"}
+     :data {:kind :module
             :contract {:source :declared
                        :description "Module B"
                        :functions [{:name "fn-b1" :id "b.core/fn-b1"}]}}}
     "b.core"
-    {:id "b.core" :kind :container :label "b.core" :parent "src/b" :children #{"b.core/fn-b1" "b.core/fn-b2"}
-     :data {:kind :container}}
+    {:id "b.core" :kind :module :label "b.core" :parent "src/b" :children #{"b.core/fn-b1" "b.core/fn-b2"}
+     :data {:kind :module}}
     "b.core/fn-b1"
     {:id "b.core/fn-b1" :kind :function :label "fn-b1" :parent "b.core" :children #{}
      :data {:kind :function :private? false}}
@@ -77,8 +77,8 @@
       (is (zero? (count (:violations report))))
       (is (zero? (:cross-module-edges (:stats report)))))))
 
-(deftest skips-container-targeting-edges
-  (testing "Edges targeting container nodes are not checked — contracts are about functions"
+(deftest skips-module-targeting-edges
+  (testing "Edges targeting module nodes are not checked — contracts are about functions"
     (let [model (update (make-model) :edges conj
                         {:from "a.core" :to "b.core"})
           report (lint/check-contracts model)]

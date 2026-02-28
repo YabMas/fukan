@@ -19,7 +19,7 @@ The pipeline in `build.clj`:
 2. `build-namespace-nodes` — one per namespace definition
 3. `build-var-nodes` — one per var/function definition
 4. `type-nodes-fn` — injected by caller for language-specific nodes (e.g., schema nodes)
-5. `remove-empty-containers` + `wire-children` — cleanup
+5. `remove-empty-modules` + `wire-children` — cleanup
 6. `prune-to-smart-root` — skip single-child folder chains
 7. `build-edges` + `build-ns-edges` — var-level and ns-level edges
 8. `attach-contracts` — folder contracts from `contract.edn`, namespace contracts from `:malli/schema`
@@ -37,13 +37,13 @@ The pipeline in `build.clj`:
 **Model**: `{:nodes {NodeId -> Node}, :edges [Edge]}`
 
 **Node**: `{:id NodeId, :kind NodeKind, :label String, :parent NodeId?, :children #{NodeId}, :data NodeData?}`
-- `:kind` is one of `:container`, `:function`, `:schema`
+- `:kind` is one of `:module`, `:function`, `:schema`
 - `:data` is a discriminated union (`NodeData`) — see schema for variants per kind
 
 **Edge**: `{:from NodeId, :to NodeId}` — directed, at leaf level (var-to-var or ns-to-ns)
 
 **NodeData** (discriminated by `:kind`):
-- **container**: `{:doc?, :contract?}` — directory or namespace
+- **module**: `{:doc?, :contract?}` — directory or namespace
 - **function**: `{:doc?, :private?, :signature?}` — var definition
 - **schema**: `{:schema-key, :schema, :doc?}` — schema definition
 

@@ -172,13 +172,13 @@
 
 (defn- build-allium-nodes
   "Build nodes from parsed allium files.
-   Each file enriches its parent directory's container node with spec data
+   Each file enriches its parent directory's module node with spec data
    (description, surface). No declaration children are created —
-   spec entities exist as data on the container, not as graph nodes."
+   spec entities exist as data on the module, not as graph nodes."
   [src-path parsed-files]
   (reduce
     (fn [acc {:keys [filepath ast]}]
-      (let [container-id (file->parent-folder-path filepath)
+      (let [module-id (file->parent-folder-path filepath)
             decls (:declarations ast)
 
             ;; Extract spec data from declarations
@@ -192,16 +192,16 @@
             surface (when (seq surfaces)
                       (extract-surface (first surfaces)))
 
-            container (cond->
-                        {:id container-id
-                         :kind :container
-                         :label container-id
+            module (cond->
+                        {:id module-id
+                         :kind :module
+                         :label module-id
                          :parent nil
                          :children #{}
-                         :data (cond-> {:kind :container}
+                         :data (cond-> {:kind :module}
                                  surface (assoc :surface surface))}
                         description (assoc :description description))]
-        (assoc acc container-id container)))
+        (assoc acc module-id module)))
     {}
     parsed-files))
 

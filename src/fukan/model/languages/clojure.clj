@@ -105,7 +105,7 @@
 
 (defn build-schema-nodes
   "Build schema nodes from discovered schema data.
-   Schema nodes are placed inside their owning namespace container.
+   Schema nodes are placed inside their owning namespace module.
 
    ns-index is a map of {ns-sym -> node-id} for looking up parent namespaces.
    schema-data is a map of {keyword -> {:schema-form form :doc str? :owner-ns ns-str}}
@@ -198,12 +198,12 @@
               (assoc :source :declared))))))))
 
 (defn resolve-contracts
-  "Pre-resolve contract.edn files for container nodes in the contribution.
-   Attaches contracts to container nodes' :data :contract.
+  "Pre-resolve contract.edn files for module nodes in the contribution.
+   Attaches contracts to module nodes' :data :contract.
    Must be called after namespaces are loaded in the JVM."
   [nodes]
   (reduce (fn [acc [id node]]
-            (if (= :container (:kind node))
+            (if (= :module (:kind node))
               (if-let [contract (read-contract-file id)]
                 (assoc acc id (update node :data #(assoc (or % {}) :contract contract)))
                 (assoc acc id node))
@@ -216,7 +216,7 @@
 (defn- analysis->contribution
   "Convert AnalysisData into a language contribution.
    Builds namespace nodes, var nodes, and edges from the analysis data.
-   Container nodes have :parent nil — build-model assigns folder parents."
+   Module nodes have :parent nil — build-model assigns folder parents."
   {:malli/schema [:=> [:cat :AnalysisData] :Contribution]}
   [analysis]
   (let [ns-defs (:namespace-definitions analysis)
@@ -225,7 +225,7 @@
         ;; Build ns nodes with nil parent (empty folder-index)
         {ns-nodes :nodes ns-index :index} (build/build-namespace-nodes ns-defs {})
 
-        ;; Add :filename to each ns container node's data for folder parenting
+        ;; Add :filename to each ns module node's data for folder parenting
         ns-filename-map (into {} (map (fn [nd] [(str (:name nd)) (:filename nd)]) ns-defs))
         ns-nodes (reduce-kv (fn [acc id node]
                               (if-let [fname (get ns-filename-map id)]
@@ -236,7 +236,7 @@
         ;; Build var nodes
         {var-nodes :nodes var-index :index} (build/build-var-nodes var-defs ns-index)
 
-        ;; Build edges (var-level only — container dependencies are
+        ;; Build edges (var-level only — module dependencies are
         ;; derived from these by the projection layer)
         var-edges (build/build-edges analysis var-index ns-index)]
 

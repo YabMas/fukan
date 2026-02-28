@@ -8,9 +8,9 @@
 ;; Helpers
 
 (defn- descendant-ids
-  "Collect all descendant node IDs of a container by walking :children recursively."
-  [nodes container-id]
-  (loop [queue (vec (:children (get nodes container-id)))
+  "Collect all descendant node IDs of a module by walking :children recursively."
+  [nodes module-id]
+  (loop [queue (vec (:children (get nodes module-id)))
          acc #{}]
     (if (empty? queue)
       acc
@@ -30,9 +30,9 @@
    Returns a lint report with violations and stats."
   {:malli/schema [:=> [:cat :Model] :map]}
   [{:keys [nodes edges]}]
-  (let [;; 1. Collect modules: containers whose contract has :source :declared
+  (let [;; 1. Collect modules: modules whose contract has :source :declared
         modules (->> (vals nodes)
-                     (filter #(and (= :container (:kind %))
+                     (filter #(and (= :module (:kind %))
                                    (= :declared (get-in % [:data :contract :source]))))
                      (map :id)
                      set)

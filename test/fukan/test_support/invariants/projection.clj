@@ -26,10 +26,10 @@
   (empty? (get-in model [:nodes view-id :children] #{})))
 
 ;; ---------------------------------------------------------------------------
-;; StrictBoundingBox: only entities inside the viewed container appear.
+;; StrictBoundingBox: only entities inside the viewed module appear.
 
 (defn strict-bounding-box?
-  "Verify that only entities inside the viewed container appear.
+  "Verify that only entities inside the viewed module appear.
    Synthetic IO nodes (io-container, io-schema) are excluded from check."
   [model opts projection]
   (let [view-id (:view-id opts)
@@ -43,11 +43,11 @@
             {:violation :strict-bounding-box
              :node-id nid
              :view-id view-id
-             :reason "node is outside the viewed container"}))
+             :reason "node is outside the viewed module"}))
         true)))
 
 ;; ---------------------------------------------------------------------------
-;; NoAncestorDescendantEdges: no edge connects a container to its descendant.
+;; NoAncestorDescendantEdges: no edge connects a module to its descendant.
 
 (defn no-ancestor-descendant-edges?
   "Verify that no edge connects a node to its own ancestor or descendant."
@@ -79,7 +79,7 @@
                            (descendant-of? model nid view-id))]
             {:violation :schema-filtering
              :node-id nid
-             :reason "model schema node should not appear in container view"}))
+             :reason "model schema node should not appear in module view"}))
         true)))
 
 ;; ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@
 (defn private-visibility?
   "Verify that private nodes are hidden when their parent is not expanded."
   [model opts projection]
-  (let [expanded (:expanded-containers opts #{})
+  (let [expanded (:expanded-modules opts #{})
         visible-ids (projection-node-ids projection)]
     (or (first
           (for [nid visible-ids
@@ -165,10 +165,10 @@
       true)))
 
 ;; ---------------------------------------------------------------------------
-;; ContractRootsVisible: root function descendants appear in container views.
+;; ContractRootsVisible: root function descendants appear in module views.
 
 (defn contract-roots-visible?
-  "Verify that all :root? function descendants of the viewed container
+  "Verify that all :root? function descendants of the viewed module
    appear in the projection."
   [model opts projection]
   (let [view-id (:view-id opts)]
@@ -201,8 +201,8 @@
 ;; ---------------------------------------------------------------------------
 ;; Composites
 
-(defn valid-container-projection?
-  "Run all container-view invariants."
+(defn valid-module-projection?
+  "Run all module-view invariants."
   [model opts projection]
   (let [checks [strict-bounding-box?
                 no-ancestor-descendant-edges?

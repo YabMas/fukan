@@ -7,12 +7,12 @@ Read `spec.md` in this directory for the full projection specification.
 - **Pure functions**: `(model, opts) -> visible subgraph` with no side effects
 - **No UI state**: Projections produce domain data only — no `selected?`, `highlighted?`, or other rendering concerns
 - **On-demand aggregation**: Edges are aggregated to the visible ancestor level at query time
-- **Same-type enforcement**: Cross-container drill-down only shows children matching the source entity's type
+- **Same-type enforcement**: Cross-module drill-down only shows children matching the source entity's type
 
 ## Module Structure
 
 ```
-graph.clj    — main projection: entity-graph (container + leaf views)
+graph.clj    — main projection: entity-graph (module + leaf views)
 details.clj  — entity detail data for sidebar
 path.clj     — breadcrumb path computation
 schema.clj   — schema registry lookups and reference extraction
@@ -23,7 +23,7 @@ schema.clj   — schema registry lookups and reference extraction
 ```clojure
 ;; graph.clj — main entry point
 (entity-graph model opts)
-;; opts: {:view-id NodeId?, :expanded-containers #{NodeId}}
+;; opts: {:view-id NodeId?, :expanded-modules #{NodeId}}
 ;; returns: {:nodes [ProjectionNode], :edges [ProjectionEdge], :io {:inputs #{kw} :outputs #{kw}}}
 
 ;; details.clj — normalized entity details
@@ -64,20 +64,20 @@ Views never call back into projection — data flows one way.
 
 ## IO Schema Pattern
 
-Container views generate synthetic IO nodes from contracts:
+Module views generate synthetic IO nodes from contracts:
 
-1. `compute-io-schemas` reads the container's `:data :contract`
+1. `compute-io-schemas` reads the module's `:data :contract`
 2. Extracts input/output schema keys from function signatures
 3. `create-io-nodes` builds `:io-container` and `:io-schema` projection nodes
 4. `compute-io-flow-edges` connects them to visible code nodes via `:data-flow` edges
 
-IO containers are orphans (no parent) — positioned by the JS layout engine.
+IO modules are orphans (no parent) — positioned by the JS layout engine.
 
 ## Key Helper: `compute-io-schemas`
 
 ```clojure
-(compute-io-schemas model container-id)
+(compute-io-schemas model module-id)
 ;; -> {:inputs #{:SchemaKey ...}, :outputs #{:SchemaKey ...}}
 ```
 
-Reads the container's contract, extracts function schemas via `extract-fn-schema-flow`, and collects all referenced schema keys into input/output sets.
+Reads the module's contract, extracts function schemas via `extract-fn-schema-flow`, and collects all referenced schema keys into input/output sets.

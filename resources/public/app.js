@@ -2,21 +2,21 @@
 // Simplified version using Datastar for state management
 
 // -----------------------------------------------------------------------------
-// Expanded Containers State (for private visibility toggle)
+// Expanded Modules State (for private visibility toggle)
 
-let expandedContainers = new Set();
+let expandedModules = new Set();
 
-// Get expanded containers as a comma-separated string for URL params
+// Get expanded modules as a comma-separated string for URL params
 window.getExpandedParam = function() {
-  return Array.from(expandedContainers).join(',');
+  return Array.from(expandedModules).join(',');
 };
 
-// Toggle a container's expanded state and return the new state
-window.toggleExpanded = function(containerId) {
-  if (expandedContainers.has(containerId)) {
-    expandedContainers.delete(containerId);
+// Toggle a module's expanded state and return the new state
+window.toggleExpanded = function(moduleId) {
+  if (expandedModules.has(moduleId)) {
+    expandedModules.delete(moduleId);
   } else {
-    expandedContainers.add(containerId);
+    expandedModules.add(moduleId);
   }
   return window.getExpandedParam();
 };
@@ -25,7 +25,7 @@ window.toggleExpanded = function(containerId) {
 // URL Sync for Deep Linking
 //
 // URL structure: /?id=<view>&select=<selected>&schema=<schema>
-// - id: The current view (container being displayed in graph)
+// - id: The current view (module being displayed in graph)
 // - select: The selected node (shown in sidebar)
 // - schema: The schema being viewed (e.g., "fukan.model/Model")
 
@@ -115,9 +115,9 @@ const cy = cytoscape({
   elements: [],
   
   style: [
-    // Container node (folders and namespaces)
+    // Module node (folders and namespaces)
     {
-      selector: 'node[kind="container"]',
+      selector: 'node[kind="module"]',
       style: {
         'shape': 'roundrectangle',
         'background-color': '#e8f4f8',
@@ -179,7 +179,7 @@ const cy = cytoscape({
         'display': 'none'
       }
     },
-    // Edges - blue to match namespace containers
+    // Edges - blue to match namespace modules
     {
       selector: 'edge',
       style: {
@@ -204,9 +204,9 @@ const cy = cytoscape({
         'border-width': 3
       }
     },
-    // Container as compound parent
+    // Module as compound parent
     {
-      selector: 'node[kind="container"]:parent',
+      selector: 'node[kind="module"]:parent',
       style: {
         'text-valign': 'top',
         'text-halign': 'center',
@@ -215,9 +215,9 @@ const cy = cytoscape({
         'padding-top': '55px'
       }
     },
-    // Top-level container (no parent) - grey (context container)
+    // Top-level module (no parent) - grey (context module)
     {
-      selector: 'node[kind="container"]:orphan',
+      selector: 'node[kind="module"]:orphan',
       style: {
         'background-color': '#ecf0f1',
         'border-color': '#bdc3c7'
@@ -440,19 +440,19 @@ const cy = cytoscape({
 window.renderGraph = function(data) {
   if (!data || !data.nodes) return;
 
-  // Sync expandedContainers state from the node data
+  // Sync expandedModules state from the node data
   // (nodes with hasPrivateChildren=true and isExpanded=true are expanded)
-  expandedContainers.clear();
+  expandedModules.clear();
   data.nodes.forEach(n => {
     if (n.hasPrivateChildren && n.isExpanded) {
-      expandedContainers.add(n.id);
+      expandedModules.add(n.id);
     }
   });
 
   // Clear existing elements
   cy.elements().remove();
   
-  // Identify parent nodes (compound containers)
+  // Identify parent nodes (compound modules)
   const parentIds = new Set(data.nodes.map(n => n.parent).filter(Boolean));
   
   // Add parent nodes first
@@ -492,7 +492,7 @@ window.renderGraph = function(data) {
     rankSep: 100,
     edgeSep: 30,
     animate: false,  // Disable animation for initial layout
-    fit: false,      // Don't fit yet - we'll reposition IO containers first
+    fit: false,      // Don't fit yet - we'll reposition IO modules first
     padding: 50,
     nodeDimensionsIncludeLabels: true,
     spacingFactor: 1.2
@@ -500,11 +500,11 @@ window.renderGraph = function(data) {
 
   layout.run();
 
-  // Position IO containers above/below the root (orphan) container
-  // Find the main container - it's the orphan that's a folder or namespace
+  // Position IO containers above/below the root (orphan) module
+  // Find the main module - it's the orphan that's a module node
   const orphanNode = cy.nodes().filter(n =>
     !n.data('parent') &&
-    (n.data('kind') === 'folder' || n.data('kind') === 'namespace')
+    n.data('kind') === 'module'
   );
   if (orphanNode.length) {
     const rootId = orphanNode.first().id();
@@ -658,12 +658,12 @@ cy.on('tap', 'edge', function(evt) {
   }));
 });
 
-// Double click - navigate into container
+// Double click - navigate into module
 cy.on('dbltap', 'node', function(evt) {
   const node = evt.target;
   const childCount = node.data('childCount');
 
-  // Only navigate if it's a container with children
+  // Only navigate if it's a module with children
   if ((childCount && childCount > 0) || node.isParent()) {
     graphPanel.dispatchEvent(new CustomEvent('cy-navigate', {
       bubbles: true,
@@ -672,21 +672,21 @@ cy.on('dbltap', 'node', function(evt) {
   }
 });
 
-// Right click (context tap) - toggle private visibility for containers
+// Right click (context tap) - toggle private visibility for modules
 cy.on('cxttap', 'node', function(evt) {
   const node = evt.target;
   const hasPrivateChildren = node.data('hasPrivateChildren');
 
-  // Only toggle if this container has private children
+  // Only toggle if this module has private children
   if (hasPrivateChildren) {
     evt.preventDefault();
-    const containerId = node.id();
-    window.toggleExpanded(containerId);
+    const moduleId = node.id();
+    window.toggleExpanded(moduleId);
 
     // Dispatch event to refresh the view with new expanded state
     graphPanel.dispatchEvent(new CustomEvent('cy-toggle-private', {
       bubbles: true,
-      detail: { id: containerId }
+      detail: { id: moduleId }
     }));
   }
 });

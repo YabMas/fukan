@@ -9,7 +9,7 @@
 (def ^:schema CytoscapeNode
   [:map {:description "A graph node in Cytoscape.js camelCase format with display and interaction state."}
    [:id :string]
-   [:kind {:description "Node kind as a string: container, function, schema, io-container, io-schema."} :string]
+   [:kind {:description "Node kind as a string: module, function, schema, io-container, io-schema."} :string]
    [:label :string]
    [:parent {:optional true} [:maybe :string]]
    [:selected :boolean]

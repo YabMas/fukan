@@ -110,10 +110,10 @@
           :else true)))))
 
 ;; ---------------------------------------------------------------------------
-;; StateConsistency: view-id is nil or a valid container in the model.
+;; StateConsistency: view-id is nil or a valid module in the model.
 
 (defn state-consistency?
-  "Verify that view-id is nil or points to a valid container in the model."
+  "Verify that view-id is nil or points to a valid module in the model."
   [model state]
   (let [view-id (:view-id state)]
     (if (nil? view-id)
@@ -125,9 +125,9 @@
            :reason "view-id points to non-existent node"
            :view-id view-id}
 
-          (not= :container (:kind node))
+          (not= :module (:kind node))
           {:violation :state-consistency
-           :reason "view-id points to non-container node"
+           :reason "view-id points to non-module node"
            :view-id view-id
            :kind (:kind node)}
 
@@ -137,20 +137,20 @@
 ;; ExpandToggle: expand flips membership in expanded set.
 
 (defn expand-toggles?
-  "Verify that expand flips the container's membership in the expanded set."
-  [model state container-id]
-  (let [was-expanded? (contains? (:expanded state) container-id)
-        parsed {:command "expand" :args [container-id]}
+  "Verify that expand flips the module's membership in the expanded set."
+  [model state module-id]
+  (let [was-expanded? (contains? (:expanded state) module-id)
+        parsed {:command "expand" :args [module-id]}
         {:keys [response state-update]} (commands/dispatch model state parsed)]
     (if-not (:ok response)
       true ;; error responses don't modify expanded — not a violation
       (let [new-state (state-update state)
-            is-expanded? (contains? (:expanded new-state) container-id)]
+            is-expanded? (contains? (:expanded new-state) module-id)]
         (if (= was-expanded? (not is-expanded?))
           true
           {:violation :expand-toggles
            :reason "expand did not flip membership"
-           :container-id container-id
+           :module-id module-id
            :was-expanded? was-expanded?
            :is-expanded? is-expanded?})))))
 

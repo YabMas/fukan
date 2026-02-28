@@ -1,6 +1,6 @@
 (ns fukan.web.views.sidebar
   "Render the sidebar panel from normalized entity detail data.
-   A single generic renderer handles all entity kinds — container,
+   A single generic renderer handles all entity kinds — module,
    function, schema, and edge — by iterating the sections present in
    the EntityDetails structure: description, interface, schemas,
    dataflow, and dependencies. Interface rendering dispatches on
@@ -130,7 +130,7 @@
 (defn- render-interface
   "Render the interface section based on its type.
    Dispatches to the appropriate sub-renderer.
-   Containers (:fn-list) show Inputs, Outputs, and Public API.
+   Modules (:fn-list) show Inputs, Outputs, and Public API.
    Leaves (:fn-inline) show Inputs and Outputs only.
    Schema defs and name-lists render their own content without IO sections."
   [{:keys [type items registry]} dataflow nav]

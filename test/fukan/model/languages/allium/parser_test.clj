@@ -107,14 +107,14 @@
 
 (deftest variant-decl-test
   (testing "variant with base type"
-    (let [d (first-decl "variant Container : Node {\n    doc: String?\n}\n")]
+    (let [d (first-decl "variant Module : Node {\n    doc: String?\n}\n")]
       (is (= :variant (:type d)))
-      (is (= "Container" (:name d)))
+      (is (= "Module" (:name d)))
       (is (= {:kind :simple :name "Node"} (:base d)))
       (is (= 1 (count (:fields d))))))
 
   (testing "variant with description string"
-    (let [d (first-decl "variant Container \"A module.\" : Node {\n    doc: String?\n}\n")]
+    (let [d (first-decl "variant Module \"A module.\" : Node {\n    doc: String?\n}\n")]
       (is (= :variant (:type d)))
       (is (= "A module." (:description d)))
       (is (= {:kind :simple :name "Node"} (:base d))))))
@@ -211,11 +211,11 @@
 
 (deftest projection-field-test
   (testing "projection with predicate"
-    (let [f (-> (first-decl "entity E {\n    containers: nodes where kind = Container\n}\n")
+    (let [f (-> (first-decl "entity E {\n    modules: nodes where kind = Module\n}\n")
                 :fields first)]
       (is (= :projection (:field-kind f)))
       (is (= "nodes" (:source f)))
-      (is (= "kind = Container" (:predicate f))))))
+      (is (= "kind = Module" (:predicate f))))))
 
 (deftest derived-field-test
   (testing "derived value expression"
@@ -343,7 +343,7 @@
         (is (= 7 (:external-entity types)))  ;; 3 data shapes + 4 boundaries
         (is (= 5 (:value types)))  ;; Edge, Field, Surface, Contract, ContractFunction
         (is (= 2 (:entity types)))  ;; Node, Model
-        (is (= 3 (:variant types)))  ;; Container, Function, Schema
+        (is (= 3 (:variant types)))  ;; Module, Function, Schema
         (is (= 1 (:rule types)))))))
 
 (deftest projection-allium-integration-test

@@ -44,7 +44,7 @@
    Returns {:nodes :edges :io} where:
    - nodes: vector of view nodes with rendering properties + :selected?
    - edges: vector of edges (unmodified)
-   - io: {:inputs :outputs} schema sets for container views"
+   - io: {:inputs :outputs} schema sets for module views"
   [graph-projection {:keys [view-id selected-id]}]
   (let [nodes (:nodes graph-projection)
         ;; Determine effective selected-id (defaults to view-id or root)
@@ -79,11 +79,11 @@
 ;; Schemas
 
 (def ^:schema EditorState
-  [:map {:description "Client-side UI state for the graph editor: current view, selection, and expanded containers."}
-   [:view-id {:optional true, :description "Container being viewed (its children are shown)."} [:maybe :string]]
+  [:map {:description "Client-side UI state for the graph editor: current view, selection, and expanded modules."}
+   [:view-id {:optional true, :description "Module being viewed (its children are shown)."} [:maybe :string]]
    [:selected-id {:optional true, :description "Currently selected/highlighted node."} [:maybe :string]]
    [:schema-id {:optional true, :description "Schema being inspected in the sidebar."} [:maybe :string]]
-   [:expanded-containers {:optional true, :description "Set of container IDs whose private children are visible."} :set]])
+   [:expanded-modules {:optional true, :description "Set of module IDs whose private children are visible."} :set]])
 
 (def ^:schema GraphData :CytoscapeGraph)
 

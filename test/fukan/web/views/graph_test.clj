@@ -23,7 +23,7 @@
                            editor-state {:view-id (:view-id opts)
                                          :selected-id nil
                                          :schema-id nil
-                                         :expanded-containers (:expanded-containers opts)}]
+                                         :expanded-modules (:expanded-modules opts)}]
                        (true? (inv/render-pure? views/render-graph projection editor-state))))
                    opts-gen)))))
 
@@ -31,12 +31,12 @@
 ;; Example-based: selection default
 
 (def test-model
-  {:nodes {"root"     {:id "root" :kind :container :label "root" :parent nil
+  {:nodes {"root"     {:id "root" :kind :module :label "root" :parent nil
                         :children #{"ns:a"}
-                        :data {:kind :container}}
-           "ns:a"     {:id "ns:a" :kind :container :label "a" :parent "root"
+                        :data {:kind :module}}
+           "ns:a"     {:id "ns:a" :kind :module :label "a" :parent "root"
                         :children #{"ns:a/f"}
-                        :data {:kind :container}}
+                        :data {:kind :module}}
            "ns:a/f"   {:id "ns:a/f" :kind :function :label "f" :parent "ns:a"
                         :children #{}
                         :data {:kind :function :private? false}}}
@@ -44,15 +44,15 @@
 
 (deftest selection-defaults-to-view-id
   (testing "when selected-id is nil, selection defaults to view-id"
-    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-containers #{}})
-          editor-state {:view-id "root" :selected-id nil :schema-id nil :expanded-containers #{}}
+    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-modules #{}})
+          editor-state {:view-id "root" :selected-id nil :schema-id nil :expanded-modules #{}}
           result (views/render-graph projection editor-state)]
       (is (true? (inv/selection-default? result editor-state))))))
 
 (deftest explicit-selection-honored
   (testing "when selected-id is set, that node is selected"
-    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-containers #{}})
-          editor-state {:view-id "root" :selected-id "ns:a" :schema-id nil :expanded-containers #{}}
+    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-modules #{}})
+          editor-state {:view-id "root" :selected-id "ns:a" :schema-id nil :expanded-modules #{}}
           result (views/render-graph projection editor-state)]
       (is (true? (inv/selection-default? result editor-state))))))
 
@@ -61,8 +61,8 @@
 
 (deftest regular-node-highlighting
   (testing "non-schema node highlights connected edges"
-    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-containers #{}})
-          editor-state {:view-id "root" :selected-id "ns:a" :schema-id nil :expanded-containers #{}}
+    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-modules #{}})
+          editor-state {:view-id "root" :selected-id "ns:a" :schema-id nil :expanded-modules #{}}
           result (views/render-graph projection editor-state)
           effective-selected "ns:a"]
       (is (true? (inv/regular-highlighting? result effective-selected))))))

@@ -1,7 +1,7 @@
 (ns fukan.model.build
   "Language-agnostic model construction pipeline.
    Transforms normalized analysis data into the graph model: a tree of
-   container, function, and schema nodes connected by directed dependency
+   module, function, and schema nodes connected by directed dependency
    edges. Handles folder/namespace/var node construction, parent-child
    wiring, smart-root pruning, edge building, and contract attachment."
   (:require [clojure.string :as str]))
@@ -55,8 +55,8 @@
   [:string {:description "Unique string identifier for a node in the model graph."}])
 
 (def ^:schema NodeKind
-  [:enum {:description "Structural kind: container (directory/namespace), function (var), or schema definition."}
-   :container :function :schema])
+  [:enum {:description "Structural kind: module (directory/namespace), function (var), or schema definition."}
+   :module :function :schema])
 
 (def ^:schema ContractFn
   [:map {:description "A public function entry in a module contract."}
@@ -88,9 +88,9 @@
 
 (def ^:schema NodeData
   [:or {:description "Kind-specific properties attached to a node, discriminated by :kind."}
-   ;; Container data (directory or namespace)
-   [:map {:description "Container node data: documentation, contract, and optional spec data."}
-    [:kind [:= :container]]
+   ;; Module data (directory or namespace)
+   [:map {:description "Module node data: documentation, contract, and optional spec data."}
+    [:kind [:= :module]]
     [:doc {:optional true} [:maybe :string]]
     [:contract {:optional true} :Contract]
     [:surface {:optional true} :Surface]]
@@ -109,7 +109,7 @@
     [:doc {:optional true} [:maybe :string]]]])
 
 (def ^:schema Node
-  [:map {:description "An entity in the system model: container, function, or schema definition."}
+  [:map {:description "An entity in the system model: module, function, or schema definition."}
    [:id :NodeId]
    [:kind :NodeKind]
    [:label :string]
@@ -149,48 +149,48 @@
           nodes))
 
 (defn- has-spec-data?
-  "True if a container node has a surface declaration."
+  "True if a module node has a surface declaration."
   [node]
   (:surface (:data node)))
 
-(defn- remove-empty-containers
-  "Remove container nodes that have no children.
-   Exception: containers with a surface declaration are retained
+(defn- remove-empty-modules
+  "Remove module nodes that have no children.
+   Exception: modules with a surface declaration are retained
    even without children — they represent data-shape definitions."
   [nodes]
-  (let [;; First, wire children to see which containers are empty
+  (let [;; First, wire children to see which modules are empty
         wired (wire-children nodes)
-        ;; Find containers with no children and no spec data
+        ;; Find modules with no children and no spec data
         empty-ids (->> wired
                        (filter (fn [[_id node]]
-                                 (and (= :container (:kind node))
+                                 (and (= :module (:kind node))
                                       (empty? (:children node))
                                       (not (has-spec-data? node)))))
                        (map first)
                        set)]
-    ;; Remove empty containers
+    ;; Remove empty modules
     (apply dissoc nodes empty-ids)))
 
 (defn- find-smart-root
-  "Find a smart starting container by skipping single-child folder containers.
+  "Find a smart starting module by skipping single-child folder modules.
    folder-ids is the set of node IDs that were created as directory nodes.
    Returns the ID of the deepest folder that has multiple children
    or non-folder children."
   [nodes folder-ids]
-  (loop [container-id nil]
+  (loop [module-id nil]
     (let [children (->> (vals nodes)
                         (filter (fn [node]
-                                  (if container-id
-                                    (= (:parent node) container-id)
+                                  (if module-id
+                                    (= (:parent node) module-id)
                                     ;; Root level: no parent or parent not in nodes
                                     (let [p (:parent node)]
                                       (or (nil? p) (not (contains? nodes p)))))))
-                        (remove #(= (:kind %) :function)))] ; Containers only
+                        (remove #(= (:kind %) :function)))] ; Modules only
       ;; If exactly one child and it's a folder, descend
       (if (and (= 1 (count children))
                (contains? folder-ids (:id (first children))))
         (recur (:id (first children)))
-        container-id))))
+        module-id))))
 
 (defn- prune-to-smart-root
   "Remove nodes above smart-root and set smart-root's parent to nil.
@@ -252,11 +252,11 @@
                     parent-path (dir-parent dir-path)
                     parent-id (get-in acc [:index parent-path])
                     node {:id id
-                          :kind :container
+                          :kind :module
                           :label label
                           :parent parent-id
                           :children #{}
-                          :data {:kind :container}}]
+                          :data {:kind :module}}]
                 (-> acc
                     (assoc-in [:nodes id] node)
                     (assoc-in [:index dir-path] id))))
@@ -285,11 +285,11 @@
                   folder-path (file-to-folder filename)
                   parent-id (get folder-index folder-path)
                   node {:id id
-                        :kind :container
+                        :kind :module
                         :label (str name)
                         :parent parent-id
                         :children #{}
-                        :data {:kind :container
+                        :data {:kind :module
                                :doc doc}}]
               (-> acc
                   (assoc-in [:nodes id] node)
@@ -360,13 +360,13 @@
     node))
 
 (defn- attach-contracts
-  "Attach namespace contracts to container nodes that don't already have one.
+  "Attach namespace contracts to module nodes that don't already have one.
    Folder-level contracts (from contract.edn) are pre-attached by the language
    module; this function only infers contracts from child function signatures.
    Returns updated nodes map."
   [nodes]
   (reduce (fn [acc [id node]]
-            (if (and (= :container (:kind node))
+            (if (and (= :module (:kind node))
                      (not (get-in node [:data :contract])))
               (let [contract (infer-namespace-contract nodes id)]
                 (assoc acc id (attach-contract node contract)))
@@ -428,16 +428,16 @@
 (def ^:schema Contribution
   [:map {:description "A language contribution: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces a contribution; contributions are merged before calling build-model."}
    [:source-files {:description "File paths for folder hierarchy construction."} [:vector :string]]
-   [:nodes {:description "Pre-built nodes. Container nodes should have :parent nil and :filename in :data for folder parenting."} [:map-of :NodeId :Node]]
+   [:nodes {:description "Pre-built nodes. Module nodes should have :parent nil and :filename in :data for folder parenting."} [:map-of :NodeId :Node]]
    [:edges {:description "Pre-built edges between nodes."} [:vector :Edge]]])
 
 (defn- merge-node-pair
-  "Merge two nodes with the same ID. Deep-merges :data maps for containers
+  "Merge two nodes with the same ID. Deep-merges :data maps for modules
    so that spec data (surface, description) enriches impl data (doc, contract)
-   rather than overwriting it. Non-container nodes or nodes with different
+   rather than overwriting it. Non-module nodes or nodes with different
    kinds use simple last-wins merge."
   [a b]
-  (if (and (= :container (:kind a)) (= :container (:kind b)))
+  (if (and (= :module (:kind a)) (= :module (:kind b)))
     (-> (merge a b)
         (assoc :data (merge (:data a) (:data b)))
         (assoc :parent (or (:parent b) (:parent a)))
@@ -445,7 +445,7 @@
     b))
 
 (defn- merge-node-maps
-  "Merge multiple node maps with deep merge for shared container IDs."
+  "Merge multiple node maps with deep merge for shared module IDs."
   [& nmaps]
   (reduce (fn [acc nmap]
             (reduce-kv (fn [m id node]
@@ -457,7 +457,7 @@
 
 (defn merge-contributions
   "Merge multiple language contributions into one.
-   Container nodes with the same ID are deep-merged (spec enriches impl).
+   Module nodes with the same ID are deep-merged (spec enriches impl).
    Other nodes use last-wins. Edges are deduplicated."
   {:malli/schema [:=> [:cat [:* :Contribution]] :Contribution]}
   [& contributions]
@@ -470,7 +470,7 @@
 
 (defn- materialize-surface-functions
   "Materialize surface provides operations as Function child nodes.
-   For each container with surface.provides:
+   For each module with surface.provides:
    - Creates a Function child if no existing child has a matching label
    - Enriches an existing function's :doc if it matches by name
    Strips :provides from the stored surface afterward."
@@ -533,11 +533,11 @@
   (let [;; Collect function IDs from namespace-level contracts
         contract-fn-ids
         (->> (vals nodes)
-             (filter #(and (= :container (:kind %))
+             (filter #(and (= :module (:kind %))
                            (get-in % [:data :contract])))
              (mapcat (fn [node]
-                       (let [container-id (:id node)]
-                         (map (fn [cfn] (str container-id "/" (:name cfn)))
+                       (let [module-id (:id node)]
+                         (map (fn [cfn] (str module-id "/" (:name cfn)))
                               (get-in node [:data :contract :functions])))))
              (filter #(contains? nodes %))
              set)
@@ -569,14 +569,14 @@
    A contribution contains pre-built nodes and edges from language analyzers.
    This function handles the language-agnostic pipeline:
    1. Build folder hierarchy from :source-files
-   2. Parent container nodes under their folders
-   3. Remove empty containers, wire children, smart-root prune
+   2. Parent module nodes under their folders
+   3. Remove empty modules, wire children, smart-root prune
    4. Apply post-processing hooks (type nodes, signatures, contracts)
 
    Options:
    - :type-nodes-fn - optional function (fn [ns-index] -> nodes-map) to build
                       language-specific type nodes (e.g., schemas). The ns-index
-                      is a map of {ns-sym -> node-id} derived from container nodes."
+                      is a map of {ns-sym -> node-id} derived from module nodes."
   {:malli/schema [:=> [:cat :Contribution [:? :map]] :Model]}
   ([contribution] (build-model contribution {}))
   ([contribution {:keys [type-nodes-fn] :or {type-nodes-fn (constantly {})}}]
@@ -590,10 +590,10 @@
          folder-index index
          folder-ids (set (keys folder-nodes))
 
-         ;; Set parents on contribution's container nodes from :filename in data
+         ;; Set parents on contribution's module nodes from :filename in data
          parented-nodes (reduce-kv
                           (fn [acc id node]
-                            (if (and (= :container (:kind node))
+                            (if (and (= :module (:kind node))
                                      (nil? (:parent node)))
                               (let [filename (get-in node [:data :filename])
                                     folder-path (when filename (file-to-folder filename))
@@ -606,8 +606,8 @@
          ;; folder parents when enrichment nodes have :parent nil)
          merged-nodes (merge-node-maps folder-nodes parented-nodes)
 
-         ;; Remove empty containers
-         cleaned-nodes (remove-empty-containers merged-nodes)
+         ;; Remove empty modules
+         cleaned-nodes (remove-empty-modules merged-nodes)
 
          ;; Wire up parent-child relationships
          all-nodes (wire-children cleaned-nodes)
@@ -620,9 +620,9 @@
          materialized-nodes (-> (materialize-surface-functions pruned-nodes)
                                 wire-children)
 
-         ;; Derive ns-index from non-folder container nodes for hooks
+         ;; Derive ns-index from non-folder module nodes for hooks
          ns-index (->> (vals materialized-nodes)
-                       (filter #(and (= :container (:kind %))
+                       (filter #(and (= :module (:kind %))
                                      (not (contains? folder-ids (:id %)))))
                        (reduce (fn [acc node]
                                  (assoc acc (symbol (:id node)) (:id node)))
@@ -648,7 +648,7 @@
          ;; Remove var nodes that define schemas — they're represented by schema nodes
          final-nodes (remove-schema-defining-vars merged-with-types)
 
-         ;; Attach contracts to containers
+         ;; Attach contracts to modules
          contracted-nodes (attach-contracts final-nodes)
 
          ;; Mark contract functions with no external callers as root entry points

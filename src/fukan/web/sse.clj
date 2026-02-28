@@ -26,8 +26,8 @@
 ;; -----------------------------------------------------------------------------
 ;; Helpers
 
-(defn- parse-expanded-containers
-  "Parse the expanded query param into a set of container IDs.
+(defn- parse-expanded-modules
+  "Parse the expanded query param into a set of module IDs.
    Format: comma-separated list of URL-encoded IDs."
   [expanded-param]
   (if (and expanded-param (not= expanded-param ""))
@@ -37,8 +37,8 @@
 ;; -----------------------------------------------------------------------------
 ;; SSE Handlers
 
-(defn- find-container-for-node
-  "Find the container (parent) that would show this node in its view.
+(defn- find-module-for-node
+  "Find the module (parent) that would show this node in its view.
    For a var, returns its namespace. For a namespace, returns its parent folder.
    Returns nil if the node should be shown at root level."
   [model node-id]
@@ -51,7 +51,7 @@
    Parameters:
    - id: Entity to navigate to (show its children)
    - select: Node to select and highlight (also determines navigation if id not provided)
-   - expanded: Comma-separated list of container IDs with visible private children
+   - expanded: Comma-separated list of module IDs with visible private children
 
    When ?select=xxx is provided without ?id, navigates to the view containing that node.
 
@@ -70,18 +70,18 @@
                                             (when (and id (not= id "")) id))
                                 select-id (let [id (get params "select")]
                                             (when (and id (not= id "")) id))
-                                expanded-containers (parse-expanded-containers (get params "expanded"))
-                                ;; If select is provided but id is not, navigate to the container of the selected node
+                                expanded-modules (parse-expanded-modules (get params "expanded"))
+                                ;; If select is provided but id is not, navigate to the module of the selected node
                                 entity-id (or entity-id
-                                              (when select-id (find-container-for-node model select-id)))
+                                              (when select-id (find-module-for-node model select-id)))
                                 ;; Build editor state
                                 editor-state {:view-id entity-id
                                               :selected-id (or select-id entity-id)
-                                              :expanded-containers expanded-containers}
+                                              :expanded-modules expanded-modules}
                                 ;; Get projections
                                 {:keys [graph path details]}
                                 (proj/navigate model {:view-id entity-id
-                                                      :expanded expanded-containers
+                                                      :expanded expanded-modules
                                                       :selected (:selected-id editor-state)})
                                 ;; Render views
                                 graph-data (views.graph/render-graph graph editor-state)]

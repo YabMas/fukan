@@ -24,11 +24,11 @@
 (defn- root-id [model]
   (:id (proj/find-root model)))
 
-(defn- first-container-child
-  "Find the first container child of view-id in the model."
+(defn- first-module-child
+  "Find the first module child of view-id in the model."
   [model view-id]
   (->> (vals (:nodes model))
-       (filter #(and (= :container (:kind %))
+       (filter #(and (= :module (:kind %))
                      (= view-id (:parent %))))
        first))
 
@@ -78,8 +78,8 @@
   (prop/for-all [model (gen/gen-model)]
     (let [rid (root-id model)
           state (make-state)
-          ;; Find a container child to cd into
-          child (first-container-child model rid)]
+          ;; Find a module child to cd into
+          child (first-module-child model rid)]
       (if child
         (let [parsed {:command "cd" :args [(:id child)]}
               {:keys [state-update]} (commands/dispatch model state parsed)]
@@ -102,14 +102,14 @@
       (is (vector? (:path response))))))
 
 ;; ---------------------------------------------------------------------------
-;; Example-based: cd into container, then back
+;; Example-based: cd into module, then back
 
 (deftest cd-and-back
-  (testing "cd into a container pushes history, back restores it"
-    (let [model (tgen/generate (gen/gen-model {:min-containers 3}))
+  (testing "cd into a module pushes history, back restores it"
+    (let [model (tgen/generate (gen/gen-model {:min-modules 3}))
           rid (root-id model)
           state (make-state)
-          child (first-container-child model rid)]
+          child (first-module-child model rid)]
       (when child
         ;; cd into child
         (let [{:keys [response state-update]}
@@ -130,7 +130,7 @@
   (testing "cd into a function returns error"
     (let [model (tgen/generate (gen/gen-model))
           rid (root-id model)
-          leaf (first-leaf-child model (or (some-> (first-container-child model rid) :id)
+          leaf (first-leaf-child model (or (some-> (first-module-child model rid) :id)
                                            rid))]
       (when leaf
         (let [{:keys [response]}
@@ -178,7 +178,7 @@
   (testing "info for a known entity returns details"
     (let [model (tgen/generate (gen/gen-model))
           rid (root-id model)
-          child (first-container-child model rid)]
+          child (first-module-child model rid)]
       (when child
         (let [{:keys [response]}
               (commands/dispatch model (make-state)
@@ -219,10 +219,10 @@
 ;; Example-based: expand toggles on/off
 
 (deftest expand-toggles
-  (testing "expand toggles container in expanded set"
+  (testing "expand toggles module in expanded set"
     (let [model (tgen/generate (gen/gen-model))
           rid (root-id model)
-          child (first-container-child model rid)]
+          child (first-module-child model rid)]
       (when child
         ;; First expand — should add to expanded
         (is (true? (inv/expand-toggles? model (make-state) (:id child))))
@@ -239,8 +239,8 @@
   (testing "expand on a function returns error"
     (let [model (tgen/generate (gen/gen-model))
           rid (root-id model)
-          container (first-container-child model rid)
-          leaf (when container (first-leaf-child model (:id container)))]
+          module (first-module-child model rid)
+          leaf (when module (first-leaf-child model (:id module)))]
       (when leaf
         (let [{:keys [response]}
               (commands/dispatch model (make-state)
@@ -300,8 +300,8 @@
         (is (:ok response))
         (is (pos? (:count response))))
 
-      ;; cd into a container child
-      (let [child (first-container-child model rid)]
+      ;; cd into a module child
+      (let [child (first-module-child model rid)]
         (when child
           (let [{:keys [response state-update]}
                 (commands/dispatch model state {:command "cd" :args [(:id child)]})]

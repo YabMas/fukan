@@ -19,9 +19,9 @@
   (empty? (get-in model [:nodes view-id :children] #{})))
 
 ;; ---------------------------------------------------------------------------
-;; Generative: container view invariants
+;; Generative: module view invariants
 
-(defspec container-view-bounding-box 100
+(defspec module-view-bounding-box 100
   (prop/for-all [model (gen/gen-model)]
     (let [opts-gen (gen/gen-projection-opts model)]
       (tgen/generate
@@ -90,18 +90,18 @@
 ;; Integration: Fukan's own model satisfies projection invariants
 
 (deftest fukan-projection-invariants
-  (testing "Fukan's own model satisfies projection invariants for every container"
+  (testing "Fukan's own model satisfies projection invariants for every module"
     (let [contrib (clj-lang/contribution "src")
           schema-data (clj-lang/discover-schema-data)
           model (build/build-model contrib
                   {:type-nodes-fn (fn [ns-index]
                                     (clj-lang/build-schema-nodes ns-index schema-data))})
-          container-ids (->> (vals (:nodes model))
-                              (filter #(= :container (:kind %)))
+          module-ids (->> (vals (:nodes model))
+                              (filter #(= :module (:kind %)))
                               (map :id))]
-      (is (pos? (count container-ids)) "should have containers")
-      (doseq [cid container-ids]
-        (let [opts {:view-id cid :expanded-containers #{}}
+      (is (pos? (count module-ids)) "should have modules")
+      (doseq [cid module-ids]
+        (let [opts {:view-id cid :expanded-modules #{}}
               projection (graph/entity-graph model opts)]
           (is (true? (inv/strict-bounding-box? model opts projection))
               (str "bounding-box failed for " cid))

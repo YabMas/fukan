@@ -131,7 +131,7 @@
   [model node]
   (let [data (:data node)]
     (case (:kind data)
-      :container
+      :module
       (when-let [fns (seq (get-in data [:contract :functions]))]
         (let [leaf-nodes (->> (all-leaf-descendants model (:id node))
                               (map #(get-in model [:nodes %])))
@@ -166,7 +166,7 @@
 
 (defn- extract-dataflow
   "Extract dataflow (input/output schema types) for an entity.
-   For :container — aggregates across contract function schemas.
+   For :module — aggregates across contract function schemas.
    For :function — extracts from the single function's schema.
    Returns {:inputs [{:key k :doc str?}] :outputs [{:key k :doc str?}]} or nil."
   [model node]
@@ -184,7 +184,7 @@
                         {:inputs (->> inputs sort (mapv ref-fn))
                          :outputs (->> outputs sort (mapv ref-fn))})))]
     (case (:kind data)
-      :container
+      :module
       (when-let [fns (seq (get-in data [:contract :functions]))]
         (aggregate (keep #(extract-fn-io model (:schema %)) fns)))
 
@@ -204,7 +204,7 @@
   (let [data (:data node)
         ref-fn (partial schema-ref-with-doc model)]
     (case (:kind data)
-      :container
+      :module
       (let [ns-schemas (proj.schema/schemas-for-ns model (:id node))]
         (when (seq ns-schemas)
           (->> ns-schemas sort (mapv ref-fn))))
@@ -354,7 +354,7 @@
    ;; Node entity detail
    [:map {:description "Node entity: full detail with interface, schemas, dataflow, and dependencies."}
     [:label :string]
-    [:kind [:enum :container :function :schema]]
+    [:kind [:enum :module :function :schema]]
     [:parent [:maybe [:map [:id :string] [:label :string]]]]
     [:description [:maybe :string]]
     [:guarantees {:optional true} [:vector :string]]

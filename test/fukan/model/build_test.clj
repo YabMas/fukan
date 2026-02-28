@@ -31,10 +31,10 @@
     (let [model (build/build-model contrib)]
       (true? (inv/leaf-strictness? model)))))
 
-(defspec build-model-no-empty-containers 100
+(defspec build-model-no-empty-modules 100
   (prop/for-all [contrib (gen/gen-contribution)]
     (let [model (build/build-model contrib)]
-      (true? (inv/no-empty-containers? model)))))
+      (true? (inv/no-empty-modules? model)))))
 
 (defspec build-model-no-self-edges 100
   (prop/for-all [contrib (gen/gen-contribution)]
@@ -66,7 +66,7 @@
       (is (true? (inv/tree-structure? model)) (str (inv/tree-structure? model)))
       (is (true? (inv/leaf-strictness? model)) (str (inv/leaf-strictness? model)))
       (is (true? (inv/schema-replaces-function? model)) (str (inv/schema-replaces-function? model)))
-      (is (true? (inv/no-empty-containers? model)) (str (inv/no-empty-containers? model)))
+      (is (true? (inv/no-empty-modules? model)) (str (inv/no-empty-modules? model)))
       (is (true? (inv/no-self-edges? model)) (str (inv/no-self-edges? model)))
       (is (true? (inv/edge-integrity? model)) (str (inv/edge-integrity? model)))
       (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model)))

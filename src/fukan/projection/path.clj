@@ -2,7 +2,7 @@
   "Navigation projection: breadcrumb paths and root discovery.
    Computes the ancestor chain from any entity to the tree root for
    breadcrumb rendering, and locates the model's root node (the
-   topmost container after smart-root pruning)."
+   topmost module after smart-root pruning)."
   (:require [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
@@ -10,7 +10,7 @@
 
 (defn- breadcrumb-label
   "Get a short label for breadcrumb display.
-   For containers with dotted labels (namespaces), returns just the last segment."
+   For modules with dotted labels (namespaces), returns just the last segment."
   [node]
   (let [label (:label node)]
     (if (str/includes? label ".")
@@ -33,11 +33,11 @@
 
 (defn find-root-node
   "Find the root node (node with parent = nil).
-   Root should be a container, not a function or schema."
+   Root should be a module, not a function or schema."
   [model]
   (->> (vals (:nodes model))
        (filter #(nil? (:parent %)))
-       (filter #(= :container (:kind %)))
+       (filter #(= :module (:kind %)))
        first))
 
 (defn entity-path

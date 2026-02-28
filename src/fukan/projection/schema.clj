@@ -37,11 +37,11 @@
                 (get-in % [:data :schema])))))
 
 (defn schemas-for-ns
-  "Get all schema keywords defined in a container.
+  "Get all schema keywords defined in a module.
    Returns a set of keywords."
-  [model container-id]
+  [model module-id]
   (->> (schema-nodes model)
-       (filter #(= container-id (:parent %)))
+       (filter #(= module-id (:parent %)))
        (map #(get-in % [:data :schema-key]))
        set))
 
@@ -62,7 +62,7 @@
                 (:id %)))))
 
 (defn schema-owner-id
-  "Get the container node ID that owns a schema.
+  "Get the module node ID that owns a schema.
    Returns the parent node ID or nil if not found."
   [model schema-key]
   (->> (schema-nodes model)

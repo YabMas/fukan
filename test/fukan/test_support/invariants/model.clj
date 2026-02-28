@@ -101,24 +101,24 @@
         true)))
 
 ;; ---------------------------------------------------------------------------
-;; NoEmptyContainers: every :container has non-empty :children,
+;; NoEmptyModules: every :module has non-empty :children,
 ;; unless it has a surface declaration.
 
 (defn- has-spec-data?
-  "True if a container node has a surface declaration."
+  "True if a module node has a surface declaration."
   [node]
   (:surface (:data node)))
 
-(defn no-empty-containers?
-  "Verify that every container node has at least one child.
-   Exception: containers with spec data are allowed to be childless."
+(defn no-empty-modules?
+  "Verify that every module node has at least one child.
+   Exception: modules with spec data are allowed to be childless."
   [{:keys [nodes]}]
   (or (first
         (for [[id node] nodes
-              :when (= :container (:kind node))
+              :when (= :module (:kind node))
               :when (empty? (:children node))
               :when (not (has-spec-data? node))]
-          {:violation :no-empty-containers
+          {:violation :no-empty-modules
            :node-id id
            :label (:label node)}))
       true))
@@ -155,12 +155,12 @@
       true))
 
 ;; ---------------------------------------------------------------------------
-;; SmartRootPruning: root node is not a single-child container chain.
+;; SmartRootPruning: root node is not a single-child module chain.
 
 (defn smart-root-pruning?
-  "Verify that the root is not a single-child container chain.
+  "Verify that the root is not a single-child module chain.
    The root should either have multiple children, or its sole child
-   should not be a container (it should be a function/schema/namespace
+   should not be a module (it should be a function/schema/namespace
    with vars)."
   [{:keys [nodes]}]
   (let [roots (->> (vals nodes)
@@ -168,30 +168,30 @@
     (if (not= 1 (count roots))
       true
       (let [root (first roots)]
-        (if (and (= :container (:kind root))
+        (if (and (= :module (:kind root))
                  (= 1 (count (:children root))))
           (let [child-id (first (:children root))
                 child (get nodes child-id)]
-            (if (and (= :container (:kind child))
-                     (empty? (remove #(= :container (:kind (get nodes %)))
+            (if (and (= :module (:kind child))
+                     (empty? (remove #(= :module (:kind (get nodes %)))
                                      (:children child))))
               {:violation :smart-root-pruning
                :root-id (:id root)
-               :reason "root is a single-child container chain"}
+               :reason "root is a single-child module chain"}
               true))
           true)))))
 
 ;; ---------------------------------------------------------------------------
-;; NoUnconsumedProvides: no container's surface still has :provides
+;; NoUnconsumedProvides: no module's surface still has :provides
 ;; (they should be materialized as Function children during build).
 
 (defn no-unconsumed-provides?
-  "Verify that no container surface still has :provides.
+  "Verify that no module surface still has :provides.
    The build pipeline should consume provides into Function children."
   [{:keys [nodes]}]
   (or (first
         (for [[id node] nodes
-              :when (= :container (:kind node))
+              :when (= :module (:kind node))
               :let [provides (get-in node [:data :surface :provides])]
               :when (seq provides)]
           {:violation :no-unconsumed-provides
@@ -208,7 +208,7 @@
   (let [checks [tree-structure?
                 leaf-strictness?
                 schema-replaces-function?
-                no-empty-containers?
+                no-empty-modules?
                 no-self-edges?
                 edge-integrity?
                 smart-root-pruning?

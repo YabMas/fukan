@@ -117,9 +117,9 @@
 ;; gen-contribution
 
 (defn gen-contribution
-  "Generate a valid Contribution with containers, functions, and edges.
-   Container nodes have :parent nil and :filename in data (as expected by build-model).
-   Function nodes have :parent pointing to their namespace container."
+  "Generate a valid Contribution with modules, functions, and edges.
+   Module nodes have :parent nil and :filename in data (as expected by build-model).
+   Function nodes have :parent pointing to their namespace module."
   ([] (gen-contribution {}))
   ([{:keys [min-ns max-ns min-vars-per-ns max-vars-per-ns]
      :or {min-ns 2 max-ns 6 min-vars-per-ns 1 max-vars-per-ns 5}}]
@@ -150,11 +150,11 @@
              ns-nodes (into {} (map (fn [ns-sym filepath surface]
                                       (let [id (str ns-sym)]
                                         [id {:id id
-                                             :kind :container
+                                             :kind :module
                                              :label id
                                              :parent nil
                                              :children #{}
-                                             :data (cond-> {:kind :container
+                                             :data (cond-> {:kind :module
                                                             :filename filepath}
                                                      surface (assoc :surface
                                                                (dissoc surface :provides)))}]))
@@ -190,9 +190,9 @@
 ;; ---------------------------------------------------------------------------
 ;; gen-model
 
-(defn- make-container [id label parent-id]
-  {:id id :kind :container :label label :parent parent-id :children #{}
-   :data {:kind :container}})
+(defn- make-module [id label parent-id]
+  {:id id :kind :module :label label :parent parent-id :children #{}
+   :data {:kind :module}})
 
 (defn- make-function [id label parent-id private?]
   {:id id :kind :function :label label :parent parent-id :children #{}
@@ -200,16 +200,16 @@
 
 (defn gen-model
   "Generate a valid Model with tree structure, edges, and optional surfaces.
-   Builds top-down: root → child containers → leaf functions → edges.
+   Builds top-down: root → child modules → leaf functions → edges.
    When a surface has provides, corresponding function children are created."
   ([] (gen-model {}))
-  ([{:keys [min-containers max-containers min-fns-per-ns max-fns-per-ns]
-     :or {min-containers 2 max-containers 5 min-fns-per-ns 1 max-fns-per-ns 4}}]
-   (gen/let [container-count (gen/choose min-containers max-containers)
-             container-names (gen/fmap (fn [names] (vec (take container-count (distinct names))))
-                                       (gen/vector gen-simple-name (* container-count 2)))
+  ([{:keys [min-modules max-modules min-fns-per-ns max-fns-per-ns]
+     :or {min-modules 2 max-modules 5 min-fns-per-ns 1 max-fns-per-ns 4}}]
+   (gen/let [module-count (gen/choose min-modules max-modules)
+             module-names (gen/fmap (fn [names] (vec (take module-count (distinct names))))
+                                       (gen/vector gen-simple-name (* module-count 2)))
              fn-counts (gen/vector (gen/choose min-fns-per-ns max-fns-per-ns)
-                                   (count container-names))
+                                   (count module-names))
              fn-name-lists (apply gen/tuple
                                   (mapv (fn [cnt]
                                           (gen/fmap (fn [names] (vec (take cnt (distinct names))))
@@ -219,54 +219,54 @@
                                         (mapv (fn [cnt]
                                                 (gen/vector gen/boolean cnt))
                                               fn-counts))
-             ;; Sometimes attach surfaces to containers
+             ;; Sometimes attach surfaces to modules
              surface-flags (gen/vector (gen/frequency [[3 (gen/return false)]
                                                        [1 (gen/return true)]])
-                                       (count container-names))
+                                       (count module-names))
              surfaces (apply gen/tuple
                              (mapv (fn [has-surface?]
                                      (if has-surface? gen-surface (gen/return nil)))
                                    surface-flags))
 ]
      (let [root-id "root"
-           root (make-container root-id "root" nil)
+           root (make-module root-id "root" nil)
            ;; Materialize surface provides as function children, strip provides
-           containers (mapv (fn [name surface]
+           modules (mapv (fn [name surface]
                               (let [stored-surface (when surface
                                                      (dissoc surface :provides))]
-                                (cond-> (make-container (str "ns:" name) name root-id)
+                                (cond-> (make-module (str "ns:" name) name root-id)
                                   (and stored-surface
                                        (seq (vals stored-surface)))
                                   (assoc-in [:data :surface] stored-surface))))
-                            container-names surfaces)
+                            module-names surfaces)
            ;; Function children from provides operations
            surface-fn-nodes (vec (mapcat
-                                   (fn [container surface]
+                                   (fn [module surface]
                                      (when-let [provides (seq (:provides surface))]
                                        (map (fn [{:keys [name description]}]
                                               (make-function
-                                                (str (:id container) "/" name)
+                                                (str (:id module) "/" name)
                                                 name
-                                                (:id container)
+                                                (:id module)
                                                 false))
                                             provides)))
-                                   containers surfaces))
-           impl-fn-nodes (vec (mapcat (fn [container fn-names private-flags]
+                                   modules surfaces))
+           impl-fn-nodes (vec (mapcat (fn [module fn-names private-flags]
                                         (map (fn [fname priv?]
                                                (make-function
-                                                 (str (:id container) "/" fname)
+                                                 (str (:id module) "/" fname)
                                                  fname
-                                                 (:id container)
+                                                 (:id module)
                                                  priv?))
                                              fn-names private-flags))
-                                      containers fn-name-lists private-flags-lists))
+                                      modules fn-name-lists private-flags-lists))
            ;; Merge, dedup by ID (impl wins over surface)
            fn-by-id (merge (into {} (map (fn [n] [(:id n) n]) surface-fn-nodes))
                            (into {} (map (fn [n] [(:id n) n]) impl-fn-nodes)))
            all-fn-nodes (vec (vals fn-by-id))
            all-raw (into {root-id root}
                          (map (fn [n] [(:id n) n]))
-                         (concat containers all-fn-nodes))
+                         (concat modules all-fn-nodes))
            wired (reduce (fn [acc [id node]]
                            (if-let [pid (:parent node)]
                              (update-in acc [pid :children] conj id)
@@ -294,17 +294,17 @@
 (defn gen-projection-opts
   "Generate valid projection options for a given model."
   [model]
-  (let [container-ids (->> (vals (:nodes model))
-                            (filter #(= :container (:kind %)))
+  (let [module-ids (->> (vals (:nodes model))
+                            (filter #(= :module (:kind %)))
                             (map :id)
                             vec)]
-    (if (empty? container-ids)
-      (gen/return {:view-id nil :expanded-containers #{}})
-      (gen/let [view-idx (gen/choose 0 (dec (count container-ids)))
-                expanded-flags (gen/vector gen/boolean (count container-ids))]
-        {:view-id (nth container-ids view-idx)
-         :expanded-containers (into #{} (keep-indexed
-                                          (fn [i flag] (when flag (nth container-ids i)))
+    (if (empty? module-ids)
+      (gen/return {:view-id nil :expanded-modules #{}})
+      (gen/let [view-idx (gen/choose 0 (dec (count module-ids)))
+                expanded-flags (gen/vector gen/boolean (count module-ids))]
+        {:view-id (nth module-ids view-idx)
+         :expanded-modules (into #{} (keep-indexed
+                                          (fn [i flag] (when flag (nth module-ids i)))
                                           expanded-flags))}))))
 
 ;; ---------------------------------------------------------------------------
@@ -315,10 +315,10 @@
   [model opts]
   (let [all-ids (vec (keys (:nodes model)))]
     (if (empty? all-ids)
-      (gen/return {:view-id nil :selected-id nil :schema-id nil :expanded-containers #{}})
+      (gen/return {:view-id nil :selected-id nil :schema-id nil :expanded-modules #{}})
       (gen/let [use-selected? gen/boolean
                 selected-idx (gen/choose 0 (dec (count all-ids)))]
         {:view-id (:view-id opts)
          :selected-id (when use-selected? (nth all-ids selected-idx))
          :schema-id nil
-         :expanded-containers (:expanded-containers opts)}))))
+         :expanded-modules (:expanded-modules opts)}))))

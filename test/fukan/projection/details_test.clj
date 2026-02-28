@@ -8,15 +8,15 @@
 ;; Fixture model
 
 (def test-model
-  {:nodes {"root"      {:id "root" :kind :container :label "root" :parent nil
+  {:nodes {"root"      {:id "root" :kind :module :label "root" :parent nil
                          :children #{"ns:alpha" "ns:beta"}
-                         :data {:kind :container}}
-           "ns:alpha"  {:id "ns:alpha" :kind :container :label "alpha" :parent "root"
+                         :data {:kind :module}}
+           "ns:alpha"  {:id "ns:alpha" :kind :module :label "alpha" :parent "root"
                          :children #{"ns:alpha/foo" "ns:alpha/bar"}
-                         :data {:kind :container :doc "Alpha namespace."}}
-           "ns:beta"   {:id "ns:beta" :kind :container :label "beta" :parent "root"
+                         :data {:kind :module :doc "Alpha namespace."}}
+           "ns:beta"   {:id "ns:beta" :kind :module :label "beta" :parent "root"
                          :children #{"ns:beta/baz"}
-                         :data {:kind :container}}
+                         :data {:kind :module}}
            "ns:alpha/foo" {:id "ns:alpha/foo" :kind :function :label "foo" :parent "ns:alpha"
                             :children #{}
                             :data {:kind :function :private? false}}
@@ -32,12 +32,12 @@
 ;; ---------------------------------------------------------------------------
 ;; Tests
 
-(deftest container-details
-  (testing "container entity-details returns expected structure"
+(deftest module-details
+  (testing "module entity-details returns expected structure"
     (let [detail (details/entity-details test-model "ns:alpha")]
       (is (some? detail))
       (is (= "alpha" (:label detail)))
-      (is (= :container (:kind detail))))))
+      (is (= :module (:kind detail))))))
 
 (deftest function-details
   (testing "function entity-details returns expected structure"
@@ -53,23 +53,23 @@
       (is (some? detail))
       (is (= :edge (:kind detail))))))
 
-(deftest container-with-description
+(deftest module-with-description
   (testing "top-level :description on node is extracted"
     (let [model (assoc-in test-model [:nodes "ns:alpha" :description]
                           "A module for alpha things.")
           detail (details/entity-details model "ns:alpha")]
       (is (= "A module for alpha things." (:description detail))))))
 
-(deftest container-with-guarantees
-  (testing "container with surface guarantees includes them in detail"
+(deftest module-with-guarantees
+  (testing "module with surface guarantees includes them in detail"
     (let [model (assoc-in test-model [:nodes "ns:alpha" :data :surface]
                           {:guarantees ["idempotent" "snapshot_isolation"]})
           detail (details/entity-details model "ns:alpha")]
       (is (some? (:guarantees detail)))
       (is (= ["idempotent" "snapshot_isolation"] (:guarantees detail))))))
 
-(deftest container-without-guarantees
-  (testing "container without surface has no guarantees"
+(deftest module-without-guarantees
+  (testing "module without surface has no guarantees"
     (let [detail (details/entity-details test-model "ns:alpha")]
       (is (nil? (:guarantees detail))))))
 
