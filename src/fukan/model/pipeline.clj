@@ -18,6 +18,10 @@
         allium-contrib (allium/allium-contribution src-path)
         contrib        (build/merge-contributions clj-contrib allium-contrib)
         schema-data    (clj-lang/discover-schema-data)
+        ;; Enrich contribution nodes with runtime metadata before build
+        enriched       (-> contrib
+                           (update :nodes clj-lang/enrich-with-runtime-metadata schema-data)
+                           (update :nodes clj-lang/resolve-contracts))
         type-nodes-fn  (fn [ns-index]
                          (clj-lang/build-schema-nodes ns-index schema-data))]
-    (build/build-model contrib {:type-nodes-fn type-nodes-fn})))
+    (build/build-model enriched {:type-nodes-fn type-nodes-fn})))

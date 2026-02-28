@@ -4,9 +4,7 @@
    container, function, and schema nodes connected by directed dependency
    edges. Handles folder/namespace/var node construction, parent-child
    wiring, smart-root pruning, edge building, and contract attachment."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.string :as str]))
+  (:require [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
 ;; Analysis Schemas
@@ -322,50 +320,12 @@
 ;; -----------------------------------------------------------------------------
 ;; Contract construction
 
-(defn- resolve-fn-ref
-  "Resolve a qualified symbol to {:name :schema}.
-   Requires the namespace if not already loaded.
-   Throws if the var is missing or has no :malli/schema metadata."
-  [sym]
-  (let [ns-sym (symbol (namespace sym))
-        var-sym (symbol (name sym))]
-    (try
-      (require ns-sym)
-      (catch Exception _ nil))
-    (let [ns-obj (or (find-ns ns-sym)
-                     (throw (ex-info (str "Contract references unknown namespace: " ns-sym)
-                                     {:sym sym :ns ns-sym})))
-          v      (or (ns-resolve ns-obj var-sym)
-                     (throw (ex-info (str "Contract references unknown var: " sym)
-                                     {:sym sym})))
-          schema (or (:malli/schema (meta v))
-                     (throw (ex-info (str "Contract function missing :malli/schema metadata: " sym)
-                                     {:sym sym})))]
-      (cond-> {:name (name var-sym)
-               :schema schema}
-        (:doc (meta v)) (assoc :doc (:doc (meta v))))))
-)
-
-(defn- read-contract-file
-  "Read contract.edn from a directory path if present.
-   Resolves qualified symbols to {:name :schema} format."
-  [dir-path]
-  (when (and dir-path (not= dir-path ""))
-    (let [file (io/file dir-path "contract.edn")]
-      (when (.exists file)
-        (let [raw (edn/read-string (slurp file))]
-          (update raw :functions
-                  (fn [fns]
-                    (mapv resolve-fn-ref fns))))))))
-
 (defn- infer-namespace-contract
   "Infer a contract for a namespace from its child function nodes.
    Reads signatures from already-built nodes instead of going to runtime.
    Excludes schema-defining vars (they have corresponding schema nodes)."
   [nodes ns-id]
-  (let [ns-sym (symbol ns-id)
-        ns-obj (find-ns ns-sym)
-        description (when ns-obj (-> ns-obj meta :doc))
+  (let [description (get-in nodes [ns-id :data :doc])
         schema-var-ids (->> (vals nodes)
                             (filter #(and (= :schema (:kind %))
                                           (= ns-id (:parent %))))
@@ -386,30 +346,6 @@
       {:description description
        :functions functions})))
 
-(defn- attach-var-signatures
-  "Attach :signature to function nodes that have :malli/schema metadata.
-   Excludes vars that define schemas (they have a corresponding schema node)."
-  [nodes]
-  (let [schema-var-ids (->> (vals nodes)
-                            (filter #(= :schema (:kind %)))
-                            (map (fn [sn] (str (:parent sn) "/" (:label sn))))
-                            set)]
-    (reduce (fn [acc [id node]]
-              (if (and (= :function (:kind node))
-                       (not (contains? schema-var-ids id)))
-                (let [[ns-str var-str] (str/split id #"/" 2)
-                      ns-sym (symbol ns-str)
-                      var-sym (symbol var-str)
-                      schema (try (some-> (find-ns ns-sym)
-                                          (ns-resolve var-sym)
-                                          meta :malli/schema)
-                                  (catch Exception _ nil))]
-                  (if schema
-                    (assoc acc id (assoc-in node [:data :signature] schema))
-                    (assoc acc id node)))
-                (assoc acc id node)))
-            {} nodes)))
-
 (defn- attach-contract
   "Attach a contract to a node's :data map when present."
   [node contract]
@@ -418,17 +354,15 @@
     node))
 
 (defn- attach-contracts
-  "Attach module and namespace contracts to container nodes.
-   Folder contracts come from contract.edn (using node ID as path);
-   namespace contracts are inferred from child function nodes.
+  "Attach namespace contracts to container nodes that don't already have one.
+   Folder-level contracts (from contract.edn) are pre-attached by the language
+   module; this function only infers contracts from child function signatures.
    Returns updated nodes map."
   [nodes]
   (reduce (fn [acc [id node]]
-            (if (= :container (:kind node))
-              ;; Try folder contract first (contract.edn at node's path),
-              ;; then fall back to inferred namespace contract
-              (let [contract (or (read-contract-file id)
-                                 (infer-namespace-contract nodes id))]
+            (if (and (= :container (:kind node))
+                     (not (get-in node [:data :contract])))
+              (let [contract (infer-namespace-contract nodes id)]
                 (assoc acc id (attach-contract node contract)))
               (assoc acc id node)))
           {}
@@ -726,11 +660,8 @@
          ;; Remove var nodes that define schemas — they're represented by schema nodes
          final-nodes (remove-schema-defining-vars merged-with-types)
 
-         ;; Attach function signatures from runtime metadata
-         signed-nodes (attach-var-signatures final-nodes)
-
          ;; Attach contracts to containers
-         contracted-nodes (attach-contracts signed-nodes)
+         contracted-nodes (attach-contracts final-nodes)
 
          ;; Mark contract functions with no external callers as root entry points
          root-marked-nodes (mark-root-functions contracted-nodes all-edges)]

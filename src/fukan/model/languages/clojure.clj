@@ -4,7 +4,9 @@
    Malli schema definitions (^:schema vars), and produces a Contribution
    for the language-agnostic model build pipeline."
   (:require [clojure.java.shell :as shell]
+            [clojure.java.io :as io]
             [clojure.edn :as edn]
+            [clojure.string :as str]
             [fukan.model.build :as build]
             [fukan.schema.forms :as forms]))
 
@@ -127,6 +129,85 @@
                             :schema schema-form
                             :doc doc}}])))
        (into {})))
+
+;; -----------------------------------------------------------------------------
+;; Runtime enrichment
+
+(defn enrich-with-runtime-metadata
+  "Attach :malli/schema signatures to function nodes from runtime vars.
+   schema-data is used to exclude schema-defining vars (they become schema nodes).
+   Must be called after namespaces are loaded in the JVM."
+  [nodes schema-data]
+  (let [schema-var-ids (->> schema-data
+                            (map (fn [[k {:keys [owner-ns]}]]
+                                   (str owner-ns "/" (name k))))
+                            set)]
+    (reduce (fn [acc [id node]]
+              (if (and (= :function (:kind node))
+                       (not (contains? schema-var-ids id)))
+                (let [[ns-str var-str] (str/split id #"/" 2)
+                      ns-sym (symbol ns-str)
+                      var-sym (symbol var-str)
+                      schema (try (some-> (find-ns ns-sym)
+                                          (ns-resolve var-sym)
+                                          meta :malli/schema)
+                                  (catch Exception _ nil))]
+                  (if schema
+                    (assoc acc id (assoc-in node [:data :signature] schema))
+                    (assoc acc id node)))
+                (assoc acc id node)))
+            {} nodes)))
+
+;; -----------------------------------------------------------------------------
+;; Contract resolution
+
+(defn- resolve-fn-ref
+  "Resolve a qualified symbol to {:name :schema}.
+   Requires the namespace if not already loaded.
+   Throws if the var is missing or has no :malli/schema metadata."
+  [sym]
+  (let [ns-sym (symbol (namespace sym))
+        var-sym (symbol (name sym))]
+    (try
+      (require ns-sym)
+      (catch Exception _ nil))
+    (let [ns-obj (or (find-ns ns-sym)
+                     (throw (ex-info (str "Contract references unknown namespace: " ns-sym)
+                                     {:sym sym :ns ns-sym})))
+          v      (or (ns-resolve ns-obj var-sym)
+                     (throw (ex-info (str "Contract references unknown var: " sym)
+                                     {:sym sym})))
+          schema (or (:malli/schema (meta v))
+                     (throw (ex-info (str "Contract function missing :malli/schema metadata: " sym)
+                                     {:sym sym})))]
+      (cond-> {:name (name var-sym)
+               :schema schema}
+        (:doc (meta v)) (assoc :doc (:doc (meta v)))))))
+
+(defn- read-contract-file
+  "Read contract.edn from a directory path if present.
+   Resolves qualified symbols to {:name :schema} format."
+  [dir-path]
+  (when (and dir-path (not= dir-path ""))
+    (let [file (io/file dir-path "contract.edn")]
+      (when (.exists file)
+        (let [raw (edn/read-string (slurp file))]
+          (update raw :functions
+                  (fn [fns]
+                    (mapv resolve-fn-ref fns))))))))
+
+(defn resolve-contracts
+  "Pre-resolve contract.edn files for container nodes in the contribution.
+   Attaches contracts to container nodes' :data :contract.
+   Must be called after namespaces are loaded in the JVM."
+  [nodes]
+  (reduce (fn [acc [id node]]
+            (if (= :container (:kind node))
+              (if-let [contract (read-contract-file id)]
+                (assoc acc id (update node :data #(assoc (or % {}) :contract contract)))
+                (assoc acc id node))
+              (assoc acc id node)))
+          {} nodes))
 
 ;; -----------------------------------------------------------------------------
 ;; Contribution
