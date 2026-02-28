@@ -3,10 +3,10 @@
 --
 -- Scope: Model build pipeline — how a Model is constructed from
 --   source analysis
--- Includes: Contribution shape, source analyzers, build rule
+-- Includes: AnalysisResult shape, source analyzers, build rule
 -- Excludes:
 --   - The Model itself (see model/spec.allium)
---   - Language-specific analyzer internals (see model/languages specs)
+--   - Language-specific analyzer internals (see analyzers/)
 --   - Model state management (see infra/spec.allium)
 
 use "./spec.allium" as model
@@ -15,14 +15,14 @@ use "./spec.allium" as model
 -- Value Types
 ------------------------------------------------------------
 
-value Contribution {
-    -- The language-agnostic input to the build pipeline.
+value AnalysisResult {
+    -- The language-agnostic output from each source analyzer.
     -- Each language analyzer (Clojure, Allium, future languages)
-    -- independently produces a Contribution from the same source path.
-    -- Contributions are merged additively before BuildModel runs.
+    -- independently produces an AnalysisResult from the same source path.
+    -- Results are merged additively before BuildModel runs.
     --
-    -- Implementation analyzers discover code structure: namespaces,
-    -- functions, schemas, dependencies.
+    -- Implementation analyzers discover code structure: modules,
+    -- symbols, schemas, dependencies.
     -- Specification analyzers discover design structure: entities,
     -- surfaces, fields, typed relationships.
     -- Both produce the same shape; the pipeline defines the contract.
@@ -37,45 +37,63 @@ value Contribution {
 ------------------------------------------------------------
 
 -- Boundary: language-specific source analysis.
--- Produces Contributions consumed by BuildModel.
--- Currently two categories:
---   Implementation: Clojure (clj-kondo + runtime reflection)
---   Specification: Allium (instaparse parser)
--- Future: additional implementation languages, alternative spec languages.
+-- Produces AnalysisResults consumed by BuildModel.
+-- Two categories:
+--   Implementation: discovers code structure (scopes, symbols, dependencies).
+--     Shells out to external tools and does runtime reflection.
+--   Specification: discovers design structure (descriptions, boundaries,
+--     type relationships). Produces module-level nodes only; leaf nodes
+--     materialized by build pipeline.
 
-external entity SourceAnalyzer {
+external entity ImplementationAnalyzer {
     -- Contract
-    analyzes: SourcePath -> Contribution
+    analyzes: SourcePath -> AnalysisResult
         -- SourcePath is a filesystem directory path.
-        -- Each analyzer produces an independent Contribution from the
+        -- Each analyzer produces an independent AnalysisResult from the
         -- same source path. Results are merged additively before
         -- BuildModel consumes them.
         --
-        -- Analyzers may read project resources (contract.edn files)
-        -- and runtime state during analysis. The Clojure analyzer
+        -- Implementation analyzers may read project resources (contract.edn
+        -- files) and runtime state during analysis. The Clojure analyzer
         -- reads loaded JVM namespaces for schema metadata and function
         -- signatures, and resolves contract.edn declarations against
         -- runtime vars. This means analysis results depend on runtime
-        -- state at analysis time — they are idempotent within a single
-        -- JVM state snapshot but may vary across different REPL sessions.
+        -- state at analysis time.
         --
         -- Missing project resources produce no error — the system
         -- functions without them.
 
     -- Failure modes
     failures:
-        analysis_unavailable    -- analyzer binary not found or not runnable
-        analysis_error          -- analyzer ran but returned non-zero exit
-        parse_failure           -- individual file failed to parse (non-fatal)
+        tool_unavailable    -- analyzer binary not found or not runnable
+        analysis_error      -- analyzer ran but returned non-zero exit
+        parse_failure       -- individual file failed to parse (non-fatal)
 
     -- Guarantees
     guarantee: parse_failure_isolation
         -- A single file's parse failure does not prevent analysis of
         -- other files. Failed files are silently excluded.
-    guarantee: analyzer_independence
-        -- Multiple analyzers produce independent results.
-        -- They are merged additively — no analyzer's output can
-        -- invalidate another's.
+}
+
+external entity SpecificationAnalyzer {
+    -- Contract
+    analyzes: SourcePath -> AnalysisResult
+        -- Discovers design structure from specification files.
+        -- Produces module-level nodes only; leaf nodes (functions from
+        -- provides operations) are materialized by the build pipeline.
+
+    -- Failure modes
+    failures:
+        parse_failure       -- individual file failed to parse (non-fatal)
+
+    -- Guarantees
+    guarantee: parse_failure_isolation
+        -- A single file's parse failure does not prevent analysis of
+        -- other files. Failed files are silently excluded.
+    guarantee: module_level_only
+        -- Specification analyzers produce only module-level nodes.
+        -- Declaration children (entities, values, rules) are not
+        -- represented as graph nodes — they exist as data on the module.
 }
 
 ------------------------------------------------------------
@@ -83,30 +101,29 @@ external entity SourceAnalyzer {
 ------------------------------------------------------------
 
 rule BuildModel {
-    -- Pure transformation: merged Contributions -> immutable Model.
+    -- Pure transformation: merged AnalysisResults -> immutable Model.
     --
-    -- Contributions from specification and implementation analyzers
+    -- Results from specification and implementation analyzers
     -- are merged additively before this rule fires. Spec analyzers
-    -- produce nodes with descriptions and boundary declarations.
+    -- produce nodes with descriptions and surface declarations.
     -- Impl analyzers produce nodes with code structure, schemas,
     -- and dependencies.
     --
     -- Co-location correspondence: when spec and impl files share
-    -- a directory, their contributions merge into the same module
-    -- node. The spec enriches the module with boundary description
+    -- a directory, their results merge into the same module
+    -- node. The spec enriches the module with surface description
     -- and guarantees; the impl populates it with function and schema
     -- children.
     --
-    -- Boundary materialization: each spec provides operation becomes
+    -- Surface materialization: each spec provides operation becomes
     -- a Function child of the module. For spec-only modules these
     -- are the only children. For spec+impl modules they coexist
     -- with implementation-discovered functions.
     --
-    -- Boundary construction: a module's boundary is assembled from
+    -- Contract construction: a module's contract is assembled from
     -- available sources. Description comes from spec or docstring.
     -- Functions come from contract.edn declarations or are inferred
-    -- from public functions with type signatures. Guarantees come
-    -- from spec. The boundary is unified regardless of source.
+    -- from public functions with type signatures.
     --
     -- Schema ownership: schema-defining vars become Schema child
     -- nodes of their parent module. The corresponding function node
@@ -117,10 +134,10 @@ rule BuildModel {
     -- Single-child root chains are pruned. Edges with missing
     -- endpoints or self-references are excluded.
 
-    when: BuildModel(contributions: List<Contribution>)
+    when: BuildModel(results: List<AnalysisResult>)
 
     ensures: model/Model.created(
-        nodes: build_node_hierarchy(contributions),   -- black box
-        edges: derive_dependencies(contributions)     -- black box
+        nodes: build_node_hierarchy(results),   -- black box
+        edges: derive_dependencies(results)     -- black box
     )
 }

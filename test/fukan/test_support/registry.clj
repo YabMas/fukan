@@ -4,7 +4,7 @@
    Call (install-registry!) in a test fixture before using malli.generator."
   (:require [malli.core :as m]
             [malli.registry :as mr]
-            [fukan.model.languages.clojure :as clj-lang]))
+            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]))
 
 (defn install-registry!
   "Install a Malli registry containing all ^:schema vars.

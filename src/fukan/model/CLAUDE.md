@@ -11,18 +11,28 @@ Read `spec.md` in this directory for the full graph model specification.
 ## Build Pipeline
 
 ```
-AnalysisData → folder nodes → namespace nodes → var nodes → type nodes → wire children → prune → attach contracts → Model
+CodeAnalysis → folder nodes → module nodes → symbol nodes → type nodes → wire children → prune → materialize surfaces → attach contracts → Model
 ```
 
 The pipeline in `build.clj`:
 1. `build-folder-nodes` — directories from filenames
-2. `build-namespace-nodes` — one per namespace definition
-3. `build-var-nodes` — one per var/function definition
+2. `build-module-nodes` — one per module definition
+3. `build-symbol-nodes` — one per symbol/function definition
 4. `type-nodes-fn` — injected by caller for language-specific nodes (e.g., schema nodes)
 5. `remove-empty-modules` + `wire-children` — cleanup
 6. `prune-to-smart-root` — skip single-child folder chains
-7. `build-edges` + `build-ns-edges` — var-level and ns-level edges
-8. `attach-contracts` — folder contracts from `contract.edn`, namespace contracts from `:malli/schema`
+7. `materialize-surface-functions` — spec provides become Function children
+8. `attach-contracts` — contracts from `contract.edn` and inferred from `:malli/schema`
+
+## Analyzer Structure
+
+Analyzers live under `analyzers/`, split by category:
+- `analyzers/implementation/` — discovers code structure (Clojure via clj-kondo)
+- `analyzers/specification/` — discovers design structure (Allium via instaparse)
+
+Both produce `AnalysisResult` values that are merged by `pipeline.clj` before `build-model`.
+
+The Allium parser is a shared library at `libs/allium/parser.clj`.
 
 ## Schema Conventions
 
@@ -54,6 +64,6 @@ The pipeline in `build.clj`:
 During build, each node type produces an index for cross-referencing:
 - `folder-index`: `{dir-path -> node-id}`
 - `ns-index`: `{ns-sym -> node-id}`
-- `var-index`: `{[ns-sym var-name] -> node-id}`
+- `var-index`: `{[module-sym var-name] -> node-id}`
 
 These are build-time only — the final Model has no indexes.

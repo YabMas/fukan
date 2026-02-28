@@ -1,12 +1,13 @@
-(ns fukan.model.languages.clojure
+(ns fukan.model.analyzers.implementation.languages.clojure
   "Clojure-specific analysis and model construction.
-   Runs clj-kondo static analysis to produce AnalysisData, discovers
-   Malli schema definitions (^:schema vars), and produces a Contribution
+   Runs clj-kondo static analysis to produce CodeAnalysis, discovers
+   Malli schema definitions (^:schema vars), and produces an AnalysisResult
    for the language-agnostic model build pipeline."
   (:require [clojure.java.shell :as shell]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
             [clojure.string :as str]
+            [clojure.set :as set]
             [fukan.model.build :as build]
             [fukan.schema.forms :as forms]))
 
@@ -14,7 +15,7 @@
 ;; Static Analysis
 
 (defn- extract-defmethod-defs
-  "Extract defmethod forms from var-usages and convert to synthetic VarDef records.
+  "Extract defmethod forms from var-usages and convert to synthetic SymbolDef records.
    clj-kondo reports defmethod as a var-usage (with :defmethod true) rather than
    a var-definition, so namespaces that contain only defmethod forms appear empty
    and get pruned from the model. This normalizes them into var-definitions."
@@ -29,9 +30,9 @@
                 :private false}))))
 
 (defn- run-kondo
-  "Runs clj-kondo on src-path and returns the analysis map.
+  "Runs clj-kondo on src-path and returns the raw kondo analysis map.
 
-   Returns a map containing:
+   Returns a map with kondo-native field names:
    - :namespace-definitions - list of {:name :filename ...}
    - :var-definitions - list of {:ns :name :filename :private ...}
    - :var-usages - list of {:from :from-var :to :name ...}
@@ -41,7 +42,6 @@
    are normalized into var-definitions so they appear as leaf nodes in the model.
 
    Throws if clj-kondo fails to run."
-  {:malli/schema [:=> [:cat :string] :AnalysisData]}
   [src-path]
   (let [config "{:output {:format :edn} :analysis {:var-usages true :var-definitions {:shallow false} :namespace-usages true}}"
         result (shell/sh "clj-kondo"
@@ -62,6 +62,29 @@
                      (:analysis parsed)))]
     (update analysis :var-definitions
             into (extract-defmethod-defs (:var-usages analysis)))))
+
+;; -----------------------------------------------------------------------------
+;; Kondo → generic normalization
+
+(defn- normalize-kondo-output
+  "Map clj-kondo field names to generic CodeAnalysis field names.
+   Top-level keys: :namespace-definitions → :module-definitions,
+   :var-definitions → :symbol-definitions, :var-usages → :symbol-references,
+   :namespace-usages → :module-imports.
+   Per SymbolDef: :ns → :module.
+   Per SymbolRef: :from-var → :from-symbol."
+  [kondo-analysis]
+  (-> kondo-analysis
+      (set/rename-keys {:namespace-definitions :module-definitions
+                        :var-definitions       :symbol-definitions
+                        :var-usages            :symbol-references
+                        :namespace-usages      :module-imports})
+      (update :symbol-definitions
+              (fn [defs]
+                (mapv #(set/rename-keys % {:ns :module}) defs)))
+      (update :symbol-references
+              (fn [refs]
+                (mapv #(set/rename-keys % {:from-var :from-symbol}) refs)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema Discovery
@@ -193,60 +216,67 @@
     (let [file (io/file dir-path "contract.edn")]
       (when (.exists file)
         (let [raw (edn/read-string (slurp file))]
-          (-> raw
-              (update :functions (fn [fns] (mapv resolve-fn-ref fns)))
-              (assoc :source :declared))))))))
+          (update raw :functions (fn [fns] (mapv resolve-fn-ref fns))))))))
 
 (defn resolve-contracts
-  "Pre-resolve contract.edn files for module nodes in the contribution.
-   Attaches contracts to module nodes' :data :contract.
+  "Pre-resolve contract.edn files for module nodes.
+   Attaches contract data from contract.edn into module nodes' :data :contract.
+   Marks contracts with :source :declared so the linter can identify them.
    Must be called after namespaces are loaded in the JVM."
   [nodes]
   (reduce (fn [acc [id node]]
             (if (= :module (:kind node))
               (if-let [contract (read-contract-file id)]
-                (assoc acc id (update node :data #(assoc (or % {}) :contract contract)))
+                (let [contract (assoc contract :source :declared)
+                      existing (get-in node [:data :contract])]
+                  (assoc acc id (assoc-in node [:data :contract]
+                                          (if existing
+                                            (merge existing contract)
+                                            contract))))
                 (assoc acc id node))
               (assoc acc id node)))
           {} nodes))
 
 ;; -----------------------------------------------------------------------------
-;; Contribution
+;; AnalysisResult
 
-(defn- analysis->contribution
-  "Convert AnalysisData into a language contribution.
-   Builds namespace nodes, var nodes, and edges from the analysis data.
+(defn- analysis->result
+  "Convert CodeAnalysis into a language analysis result.
+   Normalizes kondo field names to generic names, then builds
+   module nodes, symbol nodes, and reference edges.
    Module nodes have :parent nil — build-model assigns folder parents."
-  {:malli/schema [:=> [:cat :AnalysisData] :Contribution]}
+  {:malli/schema [:=> [:cat :CodeAnalysis] :AnalysisResult]}
   [analysis]
-  (let [ns-defs (:namespace-definitions analysis)
-        var-defs (:var-definitions analysis)
+  (let [;; Normalize kondo → generic field names
+        analysis (normalize-kondo-output analysis)
+        module-defs (:module-definitions analysis)
+        symbol-defs (:symbol-definitions analysis)
 
-        ;; Build ns nodes with nil parent (empty folder-index)
-        {ns-nodes :nodes ns-index :index} (build/build-namespace-nodes ns-defs {})
+        ;; Build module nodes with nil parent (empty folder-index)
+        {ns-nodes :nodes ns-index :index} (build/build-module-nodes module-defs {})
 
-        ;; Add :filename to each ns module node's data for folder parenting
-        ns-filename-map (into {} (map (fn [nd] [(str (:name nd)) (:filename nd)]) ns-defs))
+        ;; Add :filename to each module node's data for folder parenting
+        ns-filename-map (into {} (map (fn [nd] [(str (:name nd)) (:filename nd)]) module-defs))
         ns-nodes (reduce-kv (fn [acc id node]
                               (if-let [fname (get ns-filename-map id)]
                                 (assoc acc id (assoc-in node [:data :filename] fname))
                                 (assoc acc id node)))
                             {} ns-nodes)
 
-        ;; Build var nodes
-        {var-nodes :nodes var-index :index} (build/build-var-nodes var-defs ns-index)
+        ;; Build symbol nodes
+        {var-nodes :nodes var-index :index} (build/build-symbol-nodes symbol-defs ns-index)
 
         ;; Build edges (var-level only — module dependencies are
         ;; derived from these by the projection layer)
-        var-edges (build/build-edges analysis var-index ns-index)]
+        var-edges (build/build-reference-edges analysis var-index ns-index)]
 
-    {:source-files (mapv :filename ns-defs)
+    {:source-files (mapv :filename module-defs)
      :nodes (merge ns-nodes var-nodes)
      :edges var-edges}))
 
 (defn contribution
-  "Produce a full Clojure language contribution from source analysis."
-  {:malli/schema [:=> [:cat :string] :Contribution]}
+  "Produce a full Clojure language analysis result from source analysis."
+  {:malli/schema [:=> [:cat :string] :AnalysisResult]}
   [src-path]
   (-> (run-kondo src-path)
-      analysis->contribution))
+      analysis->result))

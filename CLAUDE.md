@@ -6,7 +6,8 @@ Some packages contain their own `CLAUDE.md` with package-specific conventions:
 
 - `src/fukan/infra/CLAUDE.md` - infrastructure lifecycle and dependency direction
 - `src/fukan/model/CLAUDE.md` - build pipeline, schema conventions, data shapes
-- `src/fukan/model/languages/CLAUDE.md` - language analysis and schema discovery
+- `src/fukan/model/analyzers/implementation/CLAUDE.md` - implementation language analyzers
+- `src/fukan/model/analyzers/specification/CLAUDE.md` - specification language analyzers
 - `src/fukan/projection/CLAUDE.md` - projection functions, edge types, IO pattern
 - `src/fukan/web/CLAUDE.md` - naming conventions for web module
 - `src/fukan/web/spec.allium` - ViewTransport boundary contract
@@ -27,7 +28,7 @@ The system follows a **functional core, imperative shell** architecture. Allium 
 **Imperative shell** (boundaries specced, internals governed by tests + conventions):
 - `infra/` — defonce atoms, lifecycle functions, port binding
 - `web/handler.clj` + `web/sse.clj` — HTTP routing, SSE streaming
-- IO edges in `model/languages/` — subprocess invocation, runtime reflection
+- IO edges in `model/analyzers/` — subprocess invocation, runtime reflection
 
 **Design pressure:** When new logic arrives, the first question is "can I express this as an Allium rule?" If yes, it goes in the core. If not, ask *why* — often the answer is that pure logic is tangled with IO and can be factored out. The shell's job is to wire IO to the core, not to contain domain logic.
 

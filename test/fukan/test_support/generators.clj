@@ -17,12 +17,12 @@
   gen-simple-name)
 
 ;; ---------------------------------------------------------------------------
-;; gen-analysis-data
+;; gen-code-analysis
 
-(defn gen-analysis-data
-  "Generate valid AnalysisData: namespace defs, var defs, var usages,
-   and ns usages where all cross-references resolve."
-  ([] (gen-analysis-data {}))
+(defn gen-code-analysis
+  "Generate valid CodeAnalysis: module defs, symbol defs, symbol refs,
+   and module imports where all cross-references resolve."
+  ([] (gen-code-analysis {}))
   ([{:keys [min-ns max-ns min-vars-per-ns max-vars-per-ns]
      :or {min-ns 2 max-ns 6 min-vars-per-ns 1 max-vars-per-ns 5}}]
    (gen/let [ns-count (gen/choose min-ns max-ns)
@@ -40,50 +40,50 @@
                                              (gen/fmap (fn [names] (vec (take cnt (distinct names))))
                                                        (gen/vector gen-simple-name (max cnt (* cnt 2)))))
                                            var-counts))]
-       (let [ns-defs (mapv (fn [ns-sym]
-                             {:name ns-sym
-                              :filename (str "src/" (str/replace (str ns-sym) "." "/") ".clj")})
-                           ns-names)
-             var-defs (vec (mapcat (fn [ns-sym var-names]
-                                    (map (fn [vname]
-                                           {:ns ns-sym
-                                            :name (symbol vname)
-                                            :filename (str "src/" (str/replace (str ns-sym) "." "/") ".clj")
-                                            :row 1})
-                                         var-names))
-                                  ns-names var-name-lists))
-             valid-pairs (vec (map (fn [{:keys [ns name]}] [ns name]) var-defs))]
+       (let [module-defs (mapv (fn [ns-sym]
+                                 {:name ns-sym
+                                  :filename (str "src/" (str/replace (str ns-sym) "." "/") ".clj")})
+                               ns-names)
+             symbol-defs (vec (mapcat (fn [ns-sym var-names]
+                                       (map (fn [vname]
+                                              {:module ns-sym
+                                               :name (symbol vname)
+                                               :filename (str "src/" (str/replace (str ns-sym) "." "/") ".clj")
+                                               :row 1})
+                                            var-names))
+                                     ns-names var-name-lists))
+             valid-pairs (vec (map (fn [{:keys [module name]}] [module name]) symbol-defs))]
          (gen/let [usage-count (gen/choose 0 (min 20 (* (count valid-pairs) 2)))
                    usage-from-idxs (gen/vector (gen/choose 0 (dec (count valid-pairs))) usage-count)
                    usage-to-idxs (gen/vector (gen/choose 0 (dec (count valid-pairs))) usage-count)
                    ns-usage-count (gen/choose 0 (min 10 (* (count ns-names) 2)))
                    ns-from-idxs (gen/vector (gen/choose 0 (dec (count ns-names))) ns-usage-count)
                    ns-to-idxs (gen/vector (gen/choose 0 (dec (count ns-names))) ns-usage-count)]
-           (let [var-usages (->> (map (fn [fi ti]
-                                        (let [[from-ns from-var] (nth valid-pairs fi)
-                                              [to-ns to-var] (nth valid-pairs ti)]
-                                          (when (not= [from-ns from-var] [to-ns to-var])
-                                            {:from from-ns
-                                             :from-var from-var
-                                             :to to-ns
-                                             :name to-var})))
-                                      usage-from-idxs usage-to-idxs)
-                                 (remove nil?)
-                                 vec)
-                 ns-usages (->> (map (fn [fi ti]
-                                       (let [from-ns (nth ns-names fi)
-                                             to-ns (nth ns-names ti)]
-                                         (when (not= from-ns to-ns)
-                                           {:from from-ns
-                                            :to to-ns
-                                            :filename (str "src/" (str/replace (str from-ns) "." "/") ".clj")})))
-                                     ns-from-idxs ns-to-idxs)
-                                (remove nil?)
-                                vec)]
-             {:namespace-definitions ns-defs
-              :var-definitions var-defs
-              :var-usages var-usages
-              :namespace-usages ns-usages})))))))
+           (let [symbol-refs (->> (map (fn [fi ti]
+                                         (let [[from-mod from-sym] (nth valid-pairs fi)
+                                               [to-mod to-sym] (nth valid-pairs ti)]
+                                           (when (not= [from-mod from-sym] [to-mod to-sym])
+                                             {:from from-mod
+                                              :from-symbol from-sym
+                                              :to to-mod
+                                              :name to-sym})))
+                                       usage-from-idxs usage-to-idxs)
+                                  (remove nil?)
+                                  vec)
+                 module-imports (->> (map (fn [fi ti]
+                                           (let [from-ns (nth ns-names fi)
+                                                 to-ns (nth ns-names ti)]
+                                             (when (not= from-ns to-ns)
+                                               {:from from-ns
+                                                :to to-ns
+                                                :filename (str "src/" (str/replace (str from-ns) "." "/") ".clj")})))
+                                         ns-from-idxs ns-to-idxs)
+                                    (remove nil?)
+                                    vec)]
+             {:module-definitions module-defs
+              :symbol-definitions symbol-defs
+              :symbol-references symbol-refs
+              :module-imports module-imports})))))))
 
 ;; ---------------------------------------------------------------------------
 ;; gen-field, gen-surface
@@ -114,13 +114,13 @@
       (seq guarantees) (assoc :guarantees guarantees))))
 
 ;; ---------------------------------------------------------------------------
-;; gen-contribution
+;; gen-analysis-result
 
-(defn gen-contribution
-  "Generate a valid Contribution with modules, functions, and edges.
+(defn gen-analysis-result
+  "Generate a valid AnalysisResult with modules, functions, and edges.
    Module nodes have :parent nil and :filename in data (as expected by build-model).
    Function nodes have :parent pointing to their namespace module."
-  ([] (gen-contribution {}))
+  ([] (gen-analysis-result {}))
   ([{:keys [min-ns max-ns min-vars-per-ns max-vars-per-ns]
      :or {min-ns 2 max-ns 6 min-vars-per-ns 1 max-vars-per-ns 5}}]
    (gen/let [ns-count (gen/choose min-ns max-ns)

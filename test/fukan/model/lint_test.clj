@@ -3,7 +3,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.model.lint :as lint]
             [fukan.model.build :as build]
-            [fukan.model.languages.clojure :as clj-lang]))
+            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers: hand-built models for unit tests
@@ -108,7 +108,10 @@
   (testing "Lint report runs against Fukan's own source without errors"
     (let [contrib (clj-lang/contribution "src")
           schema-data (clj-lang/discover-schema-data)
-          model (build/build-model contrib
+          enriched (-> contrib
+                       (update :nodes clj-lang/enrich-with-runtime-metadata schema-data)
+                       (update :nodes clj-lang/resolve-contracts))
+          model (build/build-model enriched
                   {:type-nodes-fn (fn [ns-index]
                                     (clj-lang/build-schema-nodes ns-index schema-data))})
           report (lint/check-contracts model)]

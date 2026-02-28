@@ -1,8 +1,8 @@
-(ns fukan.model.languages.allium.analyzer
-  "Allium-specific analysis that produces a Contribution for the model
+(ns fukan.model.analyzers.specification.languages.allium
+  "Allium-specific analysis that produces an AnalysisResult for the model
    build pipeline. Discovers .allium files, parses them, and builds
    nodes and edges from declarations and type references."
-  (:require [fukan.model.languages.allium.parser :as parser]
+  (:require [fukan.libs.allium.parser :as parser]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [instaparse.core :as insta]))
@@ -132,6 +132,7 @@
                       (:fields decl)))
 
     :external-entity #{}
+    :external-value #{}
     :enum #{}
     #{}))
 
@@ -175,7 +176,7 @@
    Each file enriches its parent directory's module node with spec data
    (description, surface). No declaration children are created —
    spec entities exist as data on the module, not as graph nodes."
-  [src-path parsed-files]
+  [_src-path parsed-files]
   (reduce
     (fn [acc {:keys [filepath ast]}]
       (let [module-id (file->parent-folder-path filepath)
@@ -192,16 +193,16 @@
             surface (when (seq surfaces)
                       (extract-surface (first surfaces)))
 
-            module (cond->
-                        {:id module-id
-                         :kind :module
-                         :label module-id
-                         :parent nil
-                         :children #{}
-                         :data (cond-> {:kind :module}
-                                 surface (assoc :surface surface))}
-                        description (assoc :description description))]
-        (assoc acc module-id module)))
+            module-node (cond->
+                          {:id module-id
+                           :kind :module
+                           :label module-id
+                           :parent nil
+                           :children #{}
+                           :data (cond-> {:kind :module}
+                                   surface (assoc :surface surface))}
+                          description (assoc :description description))]
+        (assoc acc module-id module-node)))
     {}
     parsed-files))
 
@@ -220,10 +221,10 @@
 ;; Public API
 
 (defn allium-contribution
-  "Produce an Allium language contribution from source files.
+  "Produce an Allium language analysis result from source files.
    Discovers .allium files under src-path, parses them, and builds
-   a Contribution with nodes and edges."
-  {:malli/schema [:=> [:cat :string] :Contribution]}
+   an AnalysisResult with nodes and edges."
+  {:malli/schema [:=> [:cat :string] :AnalysisResult]}
   [src-path]
   (let [files (discover-allium-files src-path)
         registry (build-spec-registry files)

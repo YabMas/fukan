@@ -1,13 +1,13 @@
-(ns fukan.model.languages.allium.analyzer-test
+(ns fukan.model.analyzers.specification.languages.allium-test
   "Unit + integration tests for the Allium analyzer.
    Verifies file→ns-sym conversion, type reference extraction,
    use path resolution, and that analyzing Fukan's own .allium files
-   produces a valid model contribution."
+   produces a valid model analysis result."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [fukan.model.languages.allium.analyzer :as analyzer]
+            [fukan.model.analyzers.specification.languages.allium :as analyzer]
             [fukan.model.build :as build]
-            [fukan.model.languages.clojure :as clj-lang]
+            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]
             [fukan.test-support.invariants.model :as inv]))
 
 ;; ---------------------------------------------------------------------------
@@ -130,13 +130,13 @@
 
 (deftest allium-contribution-test
   (testing "produces module nodes enriched with spec data"
-    (let [contrib (analyzer/allium-contribution "src")]
-      (is (pos? (count (:source-files contrib)))
+    (let [result (analyzer/allium-contribution "src")]
+      (is (pos? (count (:source-files result)))
           "should discover allium files")
-      (is (pos? (count (:nodes contrib)))
+      (is (pos? (count (:nodes result)))
           "should produce nodes")
       ;; Modules use folder-path IDs, not spec-allium
-      (let [modules (->> (vals (:nodes contrib))
+      (let [modules (->> (vals (:nodes result))
                              (filter #(= :module (:kind %))))]
         (is (>= (count modules) 2)
             "should have at least 2 module nodes")
@@ -145,18 +145,18 @@
         (is (every? #(not (str/includes? (:id %) "allium")) modules)
             "no module should have allium in its ID"))
       ;; No function children — spec data lives on modules only
-      (let [functions (->> (vals (:nodes contrib))
+      (let [functions (->> (vals (:nodes result))
                             (filter #(= :function (:kind %))))]
         (is (zero? (count functions))
             "should not produce function (declaration) nodes"))
       ;; No edges — use declarations are spec-level, not code dependencies
-      (is (zero? (count (:edges contrib)))
+      (is (zero? (count (:edges result)))
           "should not produce edges (spec imports are not code deps)"))))
 
 (deftest allium-enrichment-test
   (testing "module uses folder-path ID matching build pipeline"
-    (let [contrib (analyzer/allium-contribution "src")
-          model-module (get (:nodes contrib) "src/fukan/model")]
+    (let [result (analyzer/allium-contribution "src")
+          model-module (get (:nodes result) "src/fukan/model")]
       (is (some? model-module) "model folder module should exist")
       (is (nil? (get-in model-module [:data :spec]))
           "module should not carry raw :spec data")
@@ -166,22 +166,22 @@
           "module should have kind :module"))))
 
 (deftest allium-model-integration-test
-  (testing "merged Clojure + Allium contribution builds valid model"
-    (let [clj-contrib (clj-lang/contribution "src")
-          allium-contrib (analyzer/allium-contribution "src")
-          contrib (build/merge-contributions clj-contrib allium-contrib)
+  (testing "merged Clojure + Allium result builds valid model"
+    (let [clj-result (clj-lang/contribution "src")
+          allium-result (analyzer/allium-contribution "src")
+          result (build/merge-results clj-result allium-result)
           schema-data (clj-lang/discover-schema-data)
-          model (build/build-model contrib
+          model (build/build-model result
                   {:type-nodes-fn (fn [ns-index]
                                     (clj-lang/build-schema-nodes ns-index schema-data))})]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
-      ;; Allium contribution should merge into model modules
+      ;; Allium result should merge into model modules
       (let [allium-dirs (->> (vals (:nodes (analyzer/allium-contribution "src")))
                               (map :id)
                               set)]
         (is (some #(contains? allium-dirs %) (keys (:nodes model)))
-            "model should contain modules from allium contribution"))
+            "model should contain modules from allium result"))
       ;; No spec-allium modules should exist
       (is (empty? (->> (keys (:nodes model))
                         (filter #(str/includes? % "spec-allium"))))

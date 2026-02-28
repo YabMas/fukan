@@ -1,4 +1,4 @@
-(ns fukan.model.languages.allium.parser
+(ns fukan.libs.allium.parser
   "Instaparse-based parser for .allium specification files.
    Converts Allium text into a Clojure AST suitable for model building."
   (:require [instaparse.core :as insta]
@@ -28,7 +28,7 @@
 
   declarations = (declaration _)*
   declaration = use-decl / given-block / enum-decl /
-                external-entity / surface-decl / variant-decl /
+                external-entity / external-value / surface-decl / variant-decl /
                 entity-decl / value-decl / rule-decl
 
   (* ============ Use ============ *)
@@ -53,6 +53,8 @@
 
   external-entity = <'external'> __ <'entity'> __ ident _ description-string? _ <'{'> external-body <'}'>
   external-body = #'[^}]*'
+
+  external-value = <'external'> __ <'value'> __ ident _ description-string?
 
   (* ============ Surface ============ *)
 
@@ -252,6 +254,12 @@
        (cond-> {:type :external-entity :name name}
          desc (assoc :description desc)
          body (assoc :body body))))
+
+   :external-value
+   (fn [name & args]
+     (let [[desc _] (extract-description args)]
+       (cond-> {:type :external-value :name name}
+         desc (assoc :description desc))))
 
    ;; Surface
    :surface-decl

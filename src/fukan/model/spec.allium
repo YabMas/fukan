@@ -27,8 +27,24 @@
 --   modules can be expanded to reveal their internal structure.
 
 ------------------------------------------------------------
+-- External Value Types
+------------------------------------------------------------
+
+external value TypeExpr
+    -- A type expression in the host language's type system.
+    -- May reference named schemas by keyword, creating edges
+    -- in the projection layer.
+
+------------------------------------------------------------
 -- Value Types
 ------------------------------------------------------------
+
+value FunctionSignature {
+    -- The type contract of a function: ordered input types and a return type.
+    -- Schema references within types drive schema-flow edges in the projection.
+    inputs: List<TypeExpr>
+    output: TypeExpr
+}
 
 value Boundary {
     -- A module's public contract: what it promises to the outside world.
@@ -127,7 +143,7 @@ variant Function : Node {
     -- to implementation-discovered functions. Correspondence is by name.
     doc: String?
     private: Boolean
-    signature: Any?    -- opaque language-runtime type (e.g., Malli [:=> [:cat inputs...] output])
+    signature: FunctionSignature?
 }
 
 variant Schema : Node {
@@ -139,7 +155,7 @@ variant Schema : Node {
     -- of that module's published data contract — other modules that
     -- reference these schemas take a dependency on the owning module.
     schema_key: String
-    form: Any          -- opaque language-runtime type (e.g., Malli schema syntax tree)
+    form: TypeExpr
     doc: String?
 }
 

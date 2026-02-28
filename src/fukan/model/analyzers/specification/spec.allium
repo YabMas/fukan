@@ -1,0 +1,28 @@
+-- allium: 1
+-- specification/spec.allium
+--
+-- Scope: Specification language analyzers
+-- Includes: SpecificationAnalyzer boundary reference
+-- Excludes: Analyzer internals (parsing, AST transformation)
+
+use "./pipeline.allium" as pipeline
+
+------------------------------------------------------------
+-- Boundary
+------------------------------------------------------------
+
+-- Specification analyzers discover design structure:
+-- entity descriptions, surface declarations with provides
+-- operations, typed fields, and guarantee lists.
+--
+-- The Allium analyzer is the reference implementation.
+-- It uses instaparse to parse .allium files and extract
+-- module-level nodes enriched with spec data.
+--
+-- Specification analyzers produce module-level nodes only.
+-- Leaf nodes (functions from provides operations) are
+-- materialized by the build pipeline during surface
+-- materialization.
+--
+-- See pipeline.allium SpecificationAnalyzer for the full
+-- boundary contract, failure modes, and guarantees.

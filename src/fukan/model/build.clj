@@ -13,40 +13,40 @@
 ;; should produce. Language-specific analyzers convert their native format
 ;; to these generic structures.
 
-(def ^:schema NsDef
-  [:map {:description "A namespace/module definition."}
+(def ^:schema ModuleDef
+  [:map {:description "A module (namespace/scope) definition."}
    [:name :symbol]
    [:filename :string]
    [:doc {:optional true} [:maybe :string]]])
 
-(def ^:schema VarDef
-  [:map {:description "A variable/function/symbol definition."}
-   [:ns :symbol]
+(def ^:schema SymbolDef
+  [:map {:description "A symbol (function/variable) definition."}
+   [:module :symbol]
    [:name :symbol]
    [:filename :string]
    [:row :int]
    [:doc {:optional true} [:maybe :string]]
    [:private {:optional true} :boolean]])
 
-(def ^:schema VarUsage
-  [:map {:description "A reference from one var to another."}
-   [:from {:description "Namespace containing the call site"} :symbol]
-   [:from-var {:optional true :description "Var at the call site, nil if top-level"} :symbol]
-   [:to {:description "Namespace containing the target var"} :symbol]
-   [:name {:description "Name of the referenced var"} :symbol]])
+(def ^:schema SymbolRef
+  [:map {:description "A reference from one symbol to another."}
+   [:from {:description "Module containing the call site"} :symbol]
+   [:from-symbol {:optional true :description "Symbol at the call site, nil if top-level"} :symbol]
+   [:to {:description "Module containing the target symbol"} :symbol]
+   [:name {:description "Name of the referenced symbol"} :symbol]])
 
-(def ^:schema NsUsage
-  [:map {:description "A namespace require/import relationship."}
+(def ^:schema ModuleImport
+  [:map {:description "A module require/import relationship."}
    [:from :symbol]
    [:to :symbol]
    [:filename :string]])
 
-(def ^:schema AnalysisData
+(def ^:schema CodeAnalysis
   [:map {:description "The normalized output format from any language analyzer."}
-   [:namespace-definitions [:vector :NsDef]]
-   [:var-definitions [:vector :VarDef]]
-   [:var-usages [:vector :VarUsage]]
-   [:namespace-usages {:optional true} [:vector :NsUsage]]])
+   [:module-definitions [:vector :ModuleDef]]
+   [:symbol-definitions [:vector :SymbolDef]]
+   [:symbol-references [:vector :SymbolRef]]
+   [:module-imports {:optional true} [:vector :ModuleImport]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Model Schemas
@@ -274,10 +274,10 @@
     (when (> (count parts) 1)
       (str/join "/" (butlast parts)))))
 
-(defn build-namespace-nodes
-  "Build namespace nodes from namespace definitions.
+(defn build-module-nodes
+  "Build module nodes from module definitions.
    Returns {:nodes {id -> node}, :index {ns-sym -> id}}."
-  {:malli/schema [:=> [:cat [:vector :NsDef] [:map-of :string :NodeId]]
+  {:malli/schema [:=> [:cat [:vector :ModuleDef] [:map-of :string :NodeId]]
                   [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
   [ns-defs folder-index]
   (reduce (fn [acc {:keys [name filename doc]}]
@@ -300,15 +300,15 @@
 ;; -----------------------------------------------------------------------------
 ;; Var node construction
 
-(defn build-var-nodes
-  "Build var nodes from var definitions.
-   Returns {:nodes {id -> node}, :index {[ns-sym var-name] -> id}}."
-  {:malli/schema [:=> [:cat [:vector :VarDef] [:map-of :symbol :NodeId]]
+(defn build-symbol-nodes
+  "Build symbol nodes from symbol definitions.
+   Returns {:nodes {id -> node}, :index {[module-sym var-name] -> id}}."
+  {:malli/schema [:=> [:cat [:vector :SymbolDef] [:map-of :symbol :NodeId]]
                   [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
   [var-defs ns-index]
-  (reduce (fn [acc {:keys [ns name doc private]}]
-            (let [id (str ns "/" name)
-                  parent-id (get ns-index ns)
+  (reduce (fn [acc {:keys [module name doc private]}]
+            (let [id (str module "/" name)
+                  parent-id (get ns-index module)
                   node {:id id
                         :kind :function
                         :label (str name)
@@ -319,7 +319,7 @@
                                :private? (boolean private)}}]
               (-> acc
                   (assoc-in [:nodes id] node)
-                  (assoc-in [:index [ns name]] id))))
+                  (assoc-in [:index [module name]] id))))
           {:nodes {} :index {}}
           var-defs))
 
@@ -377,25 +377,25 @@
 ;; -----------------------------------------------------------------------------
 ;; Edge construction
 
-(defn build-edges
+(defn build-reference-edges
   "Build raw edges from actual call relationships.
 
-   Creates edges for each var usage where the target var is defined in the codebase.
-   - When from-var is present: creates var-to-var edge
-   - When from-var is nil (top-level or anonymous): creates ns-to-var edge
+   Creates edges for each symbol reference where the target is defined in the codebase.
+   - When from-symbol is present: creates symbol-to-symbol edge
+   - When from-symbol is nil (top-level or anonymous): creates module-to-symbol edge
 
    Returns a vector of {:from node-id, :to node-id} edges."
-  {:malli/schema [:=> [:cat :AnalysisData :map :map] [:vector :Edge]]}
+  {:malli/schema [:=> [:cat :CodeAnalysis :map :map] [:vector :Edge]]}
   [analysis var-index ns-index]
-  (let [var-usages (:var-usages analysis)
+  (let [symbol-refs (:symbol-references analysis)
         known-ns (set (keys ns-index))]
-    (->> var-usages
-         (keep (fn [{:keys [from from-var to name]}]
+    (->> symbol-refs
+         (keep (fn [{:keys [from from-symbol to name]}]
                  (when-let [to-id (get var-index [to name])]
-                   (let [from-id (if from-var
-                                   ;; Normal case: var-to-var edge
-                                   (get var-index [from from-var])
-                                   ;; Top-level/anonymous: ns-to-var edge
+                   (let [from-id (if from-symbol
+                                   ;; Normal case: symbol-to-symbol edge
+                                   (get var-index [from from-symbol])
+                                   ;; Top-level/anonymous: module-to-symbol edge
                                    (when (contains? known-ns from)
                                      (get ns-index from)))]
                      (when (and from-id (not= from-id to-id))
@@ -423,10 +423,10 @@
             schema-var-ids)))
 
 ;; -----------------------------------------------------------------------------
-;; Contribution
+;; AnalysisResult
 
-(def ^:schema Contribution
-  [:map {:description "A language contribution: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces a contribution; contributions are merged before calling build-model."}
+(def ^:schema AnalysisResult
+  [:map {:description "A language analysis result: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces an AnalysisResult; results are merged before calling build-model."}
    [:source-files {:description "File paths for folder hierarchy construction."} [:vector :string]]
    [:nodes {:description "Pre-built nodes. Module nodes should have :parent nil and :filename in :data for folder parenting."} [:map-of :NodeId :Node]]
    [:edges {:description "Pre-built edges between nodes."} [:vector :Edge]]])
@@ -455,15 +455,15 @@
                        acc nmap))
           {} nmaps))
 
-(defn merge-contributions
-  "Merge multiple language contributions into one.
+(defn merge-results
+  "Merge multiple language analysis results into one.
    Module nodes with the same ID are deep-merged (spec enriches impl).
    Other nodes use last-wins. Edges are deduplicated."
-  {:malli/schema [:=> [:cat [:* :Contribution]] :Contribution]}
-  [& contributions]
-  {:source-files (vec (mapcat :source-files contributions))
-   :nodes (apply merge-node-maps (map :nodes contributions))
-   :edges (vec (into #{} (mapcat :edges contributions)))})
+  {:malli/schema [:=> [:cat [:* :AnalysisResult]] :AnalysisResult]}
+  [& results]
+  {:source-files (vec (mapcat :source-files results))
+   :nodes (apply merge-node-maps (map :nodes results))
+   :edges (vec (into #{} (mapcat :edges results)))})
 
 ;; -----------------------------------------------------------------------------
 ;; Surface materialization
@@ -564,9 +564,9 @@
 ;; Main build function
 
 (defn build-model
-  "Build the complete model from a language contribution.
+  "Build the complete model from a language analysis result.
 
-   A contribution contains pre-built nodes and edges from language analyzers.
+   An analysis result contains pre-built nodes and edges from language analyzers.
    This function handles the language-agnostic pipeline:
    1. Build folder hierarchy from :source-files
    2. Parent module nodes under their folders
@@ -577,12 +577,12 @@
    - :type-nodes-fn - optional function (fn [ns-index] -> nodes-map) to build
                       language-specific type nodes (e.g., schemas). The ns-index
                       is a map of {ns-sym -> node-id} derived from module nodes."
-  {:malli/schema [:=> [:cat :Contribution [:? :map]] :Model]}
-  ([contribution] (build-model contribution {}))
-  ([contribution {:keys [type-nodes-fn] :or {type-nodes-fn (constantly {})}}]
-   (let [source-files (:source-files contribution)
-         contrib-nodes (:nodes contribution)
-         contrib-edges (:edges contribution)
+  {:malli/schema [:=> [:cat :AnalysisResult [:? :map]] :Model]}
+  ([result] (build-model result {}))
+  ([result {:keys [type-nodes-fn] :or {type-nodes-fn (constantly {})}}]
+   (let [source-files (:source-files result)
+         result-nodes (:nodes result)
+         result-edges (:edges result)
 
          ;; Build folder hierarchy from source files
          {:keys [nodes index]} (build-folder-nodes-from-files source-files)
@@ -590,7 +590,7 @@
          folder-index index
          folder-ids (set (keys folder-nodes))
 
-         ;; Set parents on contribution's module nodes from :filename in data
+         ;; Set parents on result's module nodes from :filename in data
          parented-nodes (reduce-kv
                           (fn [acc id node]
                             (if (and (= :module (:kind node))
@@ -600,9 +600,9 @@
                                     parent-id (when folder-path (get folder-index folder-path))]
                                 (assoc acc id (assoc node :parent parent-id)))
                               (assoc acc id node)))
-                          {} contrib-nodes)
+                          {} result-nodes)
 
-         ;; Merge folder nodes + contribution nodes (deep merge preserves
+         ;; Merge folder nodes + result nodes (deep merge preserves
          ;; folder parents when enrichment nodes have :parent nil)
          merged-nodes (merge-node-maps folder-nodes parented-nodes)
 
@@ -630,7 +630,7 @@
 
          ;; Filter edges to surviving nodes, deduplicate
          node-ids (set (keys materialized-nodes))
-         all-edges (->> contrib-edges
+         all-edges (->> result-edges
                         (filter (fn [{:keys [from to]}]
                                   (and (contains? node-ids from)
                                        (contains? node-ids to)

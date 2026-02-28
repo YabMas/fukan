@@ -8,7 +8,7 @@
             [clojure.test.check.properties :as prop]
             [fukan.cli.commands :as commands]
             [fukan.model.build :as build]
-            [fukan.model.languages.clojure :as clj-lang]
+            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]
             [fukan.projection.api :as proj]
             [fukan.test-support.generators :as gen]
             [fukan.test-support.invariants.cli :as inv]))

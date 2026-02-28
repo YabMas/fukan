@@ -1,0 +1,2 @@
+{:description "Specification language analyzers — discover design structure and produce AnalysisResults."
+ :functions [fukan.model.analyzers.specification.languages.allium/allium-contribution]}

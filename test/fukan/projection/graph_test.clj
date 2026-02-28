@@ -7,7 +7,7 @@
             [clojure.test.check.generators :as tgen]
             [clojure.test.check.properties :as prop]
             [fukan.model.build :as build]
-            [fukan.model.languages.clojure :as clj-lang]
+            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]
             [fukan.projection.graph :as graph]
             [fukan.test-support.generators :as gen]
             [fukan.test-support.invariants.projection :as inv]))

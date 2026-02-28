@@ -1,6 +1,6 @@
-(ns fukan.model.languages.allium.parser-test
+(ns fukan.libs.allium.parser-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.model.languages.allium.parser :as parser]
+            [fukan.libs.allium.parser :as parser]
             [instaparse.core :as insta]))
 
 ;; ---------------------------------------------------------------------------
@@ -340,11 +340,10 @@
       (is (not (insta/failure? result)))
       (is (= "1" (:allium-version result)))
       (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 7 (:external-entity types)))  ;; 3 data shapes + 4 boundaries
-        (is (= 5 (:value types)))  ;; Edge, Field, Surface, Contract, ContractFunction
-        (is (= 2 (:entity types)))  ;; Node, Model
-        (is (= 3 (:variant types)))  ;; Module, Function, Schema
-        (is (= 1 (:rule types)))))))
+        (is (= 1 (:external-value types)))   ;; TypeExpr
+        (is (= 2 (:value types)))            ;; FunctionSignature, Boundary
+        (is (= 3 (:entity types)))           ;; Edge, Node, Model
+        (is (= 3 (:variant types)))))))
 
 (deftest projection-allium-integration-test
   (testing "projection.allium parses completely"
@@ -354,7 +353,7 @@
         (is (= 1 (:use types)))
         (is (= 1 (:given types)))
         (is (= 2 (:enum types)))
-        (is (= 14 (:value types)))
+        (is (= 12 (:value types)))
         (is (= 10 (:rule types)))))))
 
 (deftest views-allium-integration-test

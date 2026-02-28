@@ -24,11 +24,11 @@ given {
 enum EdgeType { code_flow | schema_flow | data_flow | schema_composition }
 -- code_flow:           aggregated from raw model edges (var/ns cross-references)
 -- schema_flow:         var ↔ schema derived from function signatures
--- data_flow:           IO boundary ↔ code derived from container contracts
+-- data_flow:           IO boundary ↔ code derived from module boundaries
 -- schema_composition:  schema → schema derived from schema form cross-references
 
 enum InterfaceType { fn_list | fn_inline | schema_def | name_list }
--- fn_list:    contract functions with optional schemas (containers)
+-- fn_list:    boundary functions with optional signatures (modules)
 -- fn_inline:  single function signature (functions)
 -- schema_def: schema form with one-level registry (schemas)
 -- name_list:  bare names without schemas (interface nodes)
@@ -41,7 +41,7 @@ value ViewNode {
     -- A node in the projected graph. Pure domain data — no UI state
     -- (selected?, highlighted?). The view layer adds those.
     id: String
-    kind: container | function | schema | io_container | io_schema
+    kind: module | function | schema | io_container | io_schema
     label: String
     parent: String?
     expandable: Boolean
@@ -49,7 +49,7 @@ value ViewNode {
     expanded: Boolean
     child_count: Integer
     private: Boolean?
-    root: Boolean?        -- true for contract entry points with no code-level callers
+    root: Boolean?        -- true for boundary entry points with no code-level callers
     io_type: input | output?
     schema_key: String?
 }
@@ -63,8 +63,8 @@ value ViewEdge {
 }
 
 value IOBoundary {
-    -- Schema keys at a container's contract boundary.
-    -- Derived from function signatures in the container's contract.
+    -- Schema keys at a module's boundary.
+    -- Derived from function signatures in the module's boundary.
     inputs: Set<String>
     outputs: Set<String>
 }
@@ -84,8 +84,6 @@ value PathSegment {
 }
 
 value DepInfo { count: Integer, label: String }
-value SchemaRef { key: String, doc: String? }
-value FnEntry { name: String, signature: model/FunctionSignature?, id: String? }
 
 value InterfaceData {
     -- Public interface of an entity, discriminated by display format.
@@ -93,16 +91,16 @@ value InterfaceData {
     type: InterfaceType
 
     variant fn_list {
-        items: List<FnEntry>
+        items: List<model/Function>
     }
 
     variant fn_inline {
-        items: List<FunctionSignature>  -- opaque Malli function schemas
+        items: List<model/FunctionSignature>
     }
 
     variant schema_def {
-        items: List<SchemaForm>         -- opaque Malli schema forms
-        registry: Map<String, { form: SchemaForm, doc: String? }>?
+        items: List<model/TypeExpr>
+        registry: Map<String, { form: model/TypeExpr, doc: String? }>?
     }
 
     variant name_list {
@@ -112,28 +110,28 @@ value InterfaceData {
 
 value DataflowData {
     -- Schema types flowing across an entity's boundary.
-    inputs: List<SchemaRef>
-    outputs: List<SchemaRef>
+    inputs: List<model/Schema>
+    outputs: List<model/Schema>
 }
 
 value EntityDetail {
     -- Normalized detail structure for any node entity.
     --
     -- InterfaceDispatch: interface extraction differs by kind:
-    --   container → fn_list from contract functions
-    --   function  → fn_inline from function signature
-    --   schema    → schema_def from schema form + one-level registry
+    --   module   → fn_list from boundary functions
+    --   function → fn_inline from function signature
+    --   schema   → schema_def from schema form + one-level registry
     --
     -- SameKindAggregation: deps and dependents are aggregated to the
-    --   same kind as the entity. A namespace's deps are other namespaces;
+    --   same kind as the entity. A module's deps are other modules;
     --   a function's deps are other functions. Self-subtree is excluded.
     label: String
-    kind: container | function | schema
+    kind: module | function | schema
     parent: { id: String, label: String }?
     description: String?
-    guarantees: List<String>?  -- surface-derived invariant promises
+    guarantees: List<String>?  -- spec-derived invariant promises
     interface: InterfaceData?
-    schemas: List<SchemaRef>?
+    schemas: List<model/Schema>?
     dataflow: DataflowData?
     deps: Map<String, DepInfo>
     dependents: Map<String, DepInfo>
@@ -144,7 +142,7 @@ value EdgeDetail {
     -- function-level calls that cross this dependency.
     kind: edge                -- discriminant for EntityDetail | EdgeDetail union
     label: String
-    called_fns: List<FnEntry>
+    called_fns: List<model/Function>
 }
 
 ------------------------------------------------------------
@@ -153,61 +151,61 @@ value EdgeDetail {
 
 rule EntityGraph {
     -- Compute the visible subgraph for an entity.
-    -- Dispatches to container or leaf view based on whether
+    -- Dispatches to module or leaf view based on whether
     -- the entity has children.
-    when: EntityGraph(view_id: String?, expanded_containers: Set<String>)
+    when: EntityGraph(view_id: String?, expanded_modules: Set<String>)
 
     let entity_id = view_id ?? model.root_nodes.first.id
 
     ensures:
         if model.nodes[entity_id].children.count > 0:
-            ContainerView(entity_id, expanded_containers)
+            ModuleView(entity_id, expanded_modules)
         else:
-            LeafView(entity_id, expanded_containers)
+            LeafView(entity_id, expanded_modules)
 }
 
-rule ContainerView {
-    -- Compute visible subgraph when viewing a container.
+rule ModuleView {
+    -- Compute visible subgraph when viewing a module.
     --
     -- Structural invariants:
     --
-    -- StrictBoundingBox: ONLY entities inside the viewed container
+    -- StrictBoundingBox: ONLY entities inside the viewed module
     --   appear. External entities are never shown. Edges that would
     --   cross the bounding box are not rendered. To see external
     --   relationships, navigate to a common ancestor.
     --
     -- SameTypeDrillDown: when a visible child has a relationship
-    --   with an entity inside a sibling container, the sibling is
+    --   with an entity inside a sibling module, the sibling is
     --   opened — but only same-kind entities are exposed
     --   (namespace→namespace, function→function). This keeps each
     --   hierarchy level focused on same-level relationships.
-    --   When the direct child of the sibling is itself a container
+    --   When the direct child of the sibling is itself a module
     --   (nested nesting), the type check looks through to the raw
-    --   target kind — container intermediaries act as passthrough.
+    --   target kind — module intermediaries act as passthrough.
     --
-    -- InternalDepExpansion: when drilling into a sibling container,
+    -- InternalDepExpansion: when drilling into a sibling module,
     --   internal dependencies of the exposed entities are also shown.
     --   This ensures the drill-down view is locally coherent — you
-    --   see not just the related entity but its within-container deps.
+    --   see not just the related entity but its within-module deps.
     --
-    -- NoAncestorDescendantEdges: edges between a container and
+    -- NoAncestorDescendantEdges: edges between a module and
     --   its own descendants are suppressed. The parent-child
     --   relationship is implicit in nesting.
     --
     -- SchemaFiltering: schema nodes are excluded from visible
     --   children. They appear only as synthetic IO schema nodes
-    --   when referenced by the container's contract.
+    --   when referenced by the module's boundary.
     --
     -- PrivateVisibility: private children are hidden unless their
-    --   parent container is in expanded_containers.
+    --   parent module is in expanded_modules.
 
-    when: ContainerView(entity_id: String, expanded_containers: Set<String>)
+    when: ModuleView(entity_id: String, expanded_modules: Set<String>)
 
     -- 1. Direct children, minus private (unless expanded) and schemas
-    let visible_children = visible_children_of(model, entity_id, expanded_containers)
+    let visible_children = visible_children_of(model, entity_id, expanded_modules)
 
     -- 2. Iterative drill-down: for each aggregated edge targeting a
-    --    container sibling, find same-type entities inside it.
+    --    sibling module, find same-type entities inside it.
     --    Expand internal deps at each step. Repeat until stable.
     let drill_down = iterate_drill_down(model, visible_children)  -- black box
 
@@ -217,7 +215,7 @@ rule ContainerView {
     let code_edges = aggregate_edges(model, all_visible)          -- black box
     let schema_flow = schema_flow_edges(model, all_visible)       -- black box
     let composition = schema_composition_edges(model, all_visible) -- black box
-    let io_layer = io_from_contract(model, entity_id, all_visible) -- black box
+    let io_layer = io_from_boundary(model, entity_id, all_visible) -- black box
 
     ensures: Projection.created(
         nodes: view_nodes_for(all_visible, drill_down.grouping),
@@ -229,16 +227,16 @@ rule ContainerView {
 rule LeafView {
     -- Compute visible subgraph when viewing a leaf entity.
     -- Shows the entity and all entities it has relationships with,
-    -- in both directions, grouped by parent container then by folder.
+    -- in both directions, grouped by parent module then by folder.
     -- Only edges involving the selected entity are shown.
     --
-    -- NoBoundingBox: unlike ContainerView, related entities from anywhere
+    -- NoBoundingBox: unlike ModuleView, related entities from anywhere
     --   in the model are shown — there is no spatial constraint.
     --
     -- NoIO: leaf views never produce IO boundary data. IO is a
-    --   container-level concept derived from contracts.
+    --   module-level concept derived from boundaries.
 
-    when: LeafView(entity_id: String, expanded_containers: Set<String>)
+    when: LeafView(entity_id: String, expanded_modules: Set<String>)
 
     let entity = model.nodes[entity_id]
     let related_ids = model.edges
@@ -257,7 +255,7 @@ rule LeafView {
 }
 
 rule AggregateEdges {
-    -- Sub-rule of ContainerView: aggregate raw model edges to the visible ancestor level.
+    -- Sub-rule of ModuleView: aggregate raw model edges to the visible ancestor level.
     --
     -- For each raw edge (from, to):
     --   1. Walk up each endpoint's parent chain to find its first
@@ -282,11 +280,11 @@ rule AggregateEdges {
 }
 
 rule IOSchemaProjection {
-    -- Sub-rule of ContainerView: compute synthetic IO nodes and data-flow edges.
+    -- Sub-rule of ModuleView: compute synthetic IO nodes and data-flow edges.
     --
-    -- ContractDriven: IO schemas are derived from the container's contract.
+    -- BoundaryDriven: IO schemas are derived from the module's boundary.
     --   Each function signature's inputs and outputs become IO schema keys.
-    --   Containers with no contract produce no IO.
+    --   Modules with no boundary produce no IO.
     --
     -- SyntheticNodes: IO containers and IO schema nodes are synthetic —
     --   they have no corresponding model node. IO containers are orphans
@@ -294,14 +292,14 @@ rule IOSchemaProjection {
     --
     -- OwnershipMarking: each IO schema node is marked owned or not-owned
     --   based on whether the schema's defining namespace is inside the
-    --   viewed container.
+    --   viewed module.
 
     when: IOSchemaProjection(entity_id: String, all_visible: Set<String>)
 
-    let contract = model.nodes[entity_id].contract
-    requires: contract != null
+    let boundary = model.nodes[entity_id].boundary
+    requires: boundary != null
 
-    let io_keys = extract_io_keys(contract)   -- black box
+    let io_keys = extract_io_keys(boundary)   -- black box
     -- io_keys: { inputs: Set<String>, outputs: Set<String> }
 
     -- Synthetic nodes: one IO container per direction, child schema nodes
@@ -372,7 +370,7 @@ rule FindSchemaNodeId {
 value SearchResult {
     -- A single search match: node identity and location.
     id: String
-    kind: container | function | schema
+    kind: module | function | schema
     label: String
     parent: String?
 }
@@ -381,7 +379,7 @@ value ModelOverview {
     -- Summary statistics for the loaded model.
     total_nodes: Integer
     total_edges: Integer
-    by_kind: Map<NodeKind, Integer>
+    by_kind: Map<NodeKind, Integer>   -- NodeKind from model/Node.kind
 }
 
 rule Search {
