@@ -23,14 +23,15 @@
 (defn- print-init
   "Print the :init response with model summary."
   [model src-path]
-  (let [root (proj/find-root model)]
+  (let [root (proj/find-root model)
+        stats (proj/overview model)]
     (print-response {:ok true
                      :command :init
                      :src src-path
                      :root-id (:id root)
                      :root-label (:label root)
-                     :total-nodes (count (:nodes model))
-                     :total-edges (count (:edges model))})))
+                     :total-nodes (:total-nodes stats)
+                     :total-edges (:total-edges stats)})))
 
 (defn start-session
   "Start the CLI explorer session.

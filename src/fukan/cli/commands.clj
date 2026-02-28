@@ -1,7 +1,8 @@
 (ns fukan.cli.commands
   "CLI command implementations.
    Each command takes [model state args] and returns
-   {:response <edn-map> :state-update <fn-or-nil>}."
+   {:response <edn-map> :state-update <fn-or-nil>}.
+   All model access goes through fukan.projection.api."
   (:require [clojure.string :as str]
             [fukan.projection.api :as proj]))
 
@@ -14,12 +15,6 @@
   (or (:view-id state)
       (:id (proj/find-root model))))
 
-(defn- entity-exists? [model id]
-  (some? (get-in model [:nodes id])))
-
-(defn- container? [model id]
-  (seq (get-in model [:nodes id :children])))
-
 (defn- node-summary
   "Summarize a projection node for ls output."
   [n]
@@ -31,34 +26,37 @@
     (:private? n) (assoc :private? true)))
 
 (defn- enrich-edge
-  "Add :from-label, :to-label, and stable :id to an edge."
-  [model edge]
-  (let [from-node (get-in model [:nodes (:from edge)])
-        to-node   (get-in model [:nodes (:to edge)])]
-    (-> (select-keys edge [:from :to :edge-type])
-        (assoc :from-label (:label from-node)
-               :to-label   (:label to-node)
-               :id         (str "edge~" (:from edge) "~" (:to edge) "~" (name (:edge-type edge)))))))
+  "Add :from-label, :to-label, and stable :id to an edge.
+   Builds label lookup from projection graph nodes."
+  [node-label-index edge]
+  (-> (select-keys edge [:from :to :edge-type])
+      (assoc :from-label (get node-label-index (:from edge))
+             :to-label   (get node-label-index (:to edge))
+             :id         (str "edge~" (:from edge) "~" (:to edge) "~" (name (:edge-type edge))))))
 
 (defn- build-view-context
-  "Compute path + children + enriched edges for a view."
+  "Compute path + children + enriched edges for a view.
+   All data comes from projection API — no direct model access."
   [model state view-id]
-  (let [view-node (get-in model [:nodes view-id])
-        {:keys [graph path]} (proj/navigate model {:view-id view-id
+  (let [{:keys [graph path]} (proj/navigate model {:view-id view-id
                                                    :expanded (:expanded state)})
-        children  (->> (:nodes graph)
-                       (filter #(= view-id (:parent %)))
-                       (sort-by :label)
-                       (mapv node-summary))
-        child-ids (into #{} (map :id children))
-        edges     (->> (:edges graph)
-                       (filter #(or (contains? child-ids (:from %))
-                                    (contains? child-ids (:to %))))
-                       (mapv #(enrich-edge model %)))]
+        ;; Build label index from projection graph nodes
+        node-label-index (into {} (map (fn [n] [(:id n) (:label n)])) (:nodes graph))
+        ;; Get view label and kind from the path (last segment) + inspect
+        view-detail (proj/inspect model view-id)
+        children    (->> (:nodes graph)
+                         (filter #(= view-id (:parent %)))
+                         (sort-by :label)
+                         (mapv node-summary))
+        child-ids   (into #{} (map :id children))
+        edges       (->> (:edges graph)
+                         (filter #(or (contains? child-ids (:from %))
+                                      (contains? child-ids (:to %))))
+                         (mapv #(enrich-edge node-label-index %)))]
     (cond-> {:path       (vec path)
              :view-id    view-id
-             :view-label (:label view-node)
-             :view-kind  (:kind view-node)
+             :view-label (:label view-detail)
+             :view-kind  (:kind view-detail)
              :children   children
              :edges      edges}
       (:io graph) (assoc :io (:io graph)))))
@@ -102,41 +100,43 @@
   [model state args]
   (let [target (first args)]
     (cond
-      ;; cd .. — go to parent
+      ;; cd .. — go to parent via inspect
       (= target "..")
       (let [view-id (current-view-id model state)
-            parent (:parent (get-in model [:nodes view-id]))]
-        (if parent
+            detail (proj/inspect model view-id)
+            parent-id (get-in detail [:parent :id])]
+        (if parent-id
           {:response (merge {:ok true :command :cd}
-                            (build-view-context model state parent)
-                            {:entity-details (build-entity-context model parent)})
+                            (build-view-context model state parent-id)
+                            {:entity-details (build-entity-context model parent-id)})
            :state-update #(-> %
-                              (assoc :view-id parent)
+                              (assoc :view-id parent-id)
                               (update :history conj view-id))}
           {:response {:ok false :command :cd
                       :error "Already at root."}}))
 
-      ;; cd <id>
+      ;; cd <id> — check existence and kind via inspect
       (some? target)
-      (cond
-        (not (entity-exists? model target))
-        {:response {:ok false :command :cd
-                    :error (str "Entity not found: " target)
-                    :entity-id target}}
+      (let [detail (proj/inspect model target)]
+        (cond
+          (nil? detail)
+          {:response {:ok false :command :cd
+                      :error (str "Entity not found: " target)
+                      :entity-id target}}
 
-        (not (container? model target))
-        {:response {:ok false :command :cd
-                    :error "Cannot navigate into leaf entity. Use 'info' instead."
-                    :entity-id target}}
+          (not= :container (:kind detail))
+          {:response {:ok false :command :cd
+                      :error "Cannot navigate into leaf entity. Use 'info' instead."
+                      :entity-id target}}
 
-        :else
-        (let [old-view (current-view-id model state)]
-          {:response (merge {:ok true :command :cd}
-                            (build-view-context model state target)
-                            {:entity-details (build-entity-context model target)})
-           :state-update #(-> %
-                              (assoc :view-id target)
-                              (update :history conj old-view))}))
+          :else
+          (let [old-view (current-view-id model state)]
+            {:response (merge {:ok true :command :cd}
+                              (build-view-context model state target)
+                              {:entity-details (build-entity-context model target)})
+             :state-update #(-> %
+                                (assoc :view-id target)
+                                (update :history conj old-view))})))
 
       :else
       {:response {:ok false :command :cd
@@ -173,38 +173,61 @@
                     :entity-id entity-id}}))))
 
 (defn- cmd-find
-  "Search nodes by label (case-insensitive, max 50)."
+  "Search nodes by label (case-insensitive, max 50).
+   Delegates to projection/search."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model _state args]
   (let [pattern (str/join " " args)]
     (if (str/blank? pattern)
       {:response {:ok false :command :find
                   :error "Usage: find <pattern>"}}
-      (let [pat (str/lower-case pattern)
-            matches (->> (vals (:nodes model))
-                         (filter #(str/includes? (str/lower-case (:label %)) pat))
-                         (take 50)
-                         (mapv (fn [n]
-                                 {:id (:id n)
-                                  :kind (:kind n)
-                                  :label (:label n)
-                                  :parent (:parent n)})))]
+      (let [matches (proj/search model pattern 50)]
         {:response {:ok true :command :find
                     :pattern pattern
                     :count (count matches)
                     :results matches}}))))
 
 (defn- cmd-overview
-  "Model summary stats."
+  "Model summary stats. Delegates to projection/overview."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
-  [model state _args]
-  (let [nodes (vals (:nodes model))
-        by-kind (frequencies (map :kind nodes))]
-    {:response {:ok true :command :overview
-                :src (:src state)
-                :total-nodes (count nodes)
-                :total-edges (count (:edges model))
-                :by-kind by-kind}}))
+  [_model state _args]
+  (let [stats (proj/overview _model)]
+    {:response (merge {:ok true :command :overview :src (:src state)}
+                      stats)}))
+
+(defn- cmd-expand
+  "Toggle private child visibility for a container.
+   Mirrors TogglePrivateVisibility from views.allium."
+  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
+  [model state args]
+  (let [container-id (first args)]
+    (if (nil? container-id)
+      {:response {:ok false :command :expand
+                  :error "Usage: expand <container-id>"}}
+      (let [detail (proj/inspect model container-id)]
+        (cond
+          (nil? detail)
+          {:response {:ok false :command :expand
+                      :error (str "Entity not found: " container-id)
+                      :entity-id container-id}}
+
+          (not= :container (:kind detail))
+          {:response {:ok false :command :expand
+                      :error "Only containers can be expanded."
+                      :entity-id container-id}}
+
+          :else
+          (let [currently-expanded? (contains? (:expanded state) container-id)
+                new-expanded (if currently-expanded?
+                               (disj (:expanded state) container-id)
+                               (conj (:expanded state) container-id))
+                ;; Build view context with the new expanded set
+                new-state (assoc state :expanded new-expanded)]
+            {:response (merge {:ok true :command :expand
+                               :expanded-id container-id
+                               :expanded? (not currently-expanded?)}
+                              (build-view-context model new-state (current-view-id model state)))
+             :state-update #(assoc % :expanded new-expanded)}))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Dispatch
@@ -215,7 +238,8 @@
    "back"     cmd-back
    "info"     cmd-info
    "find"     cmd-find
-   "overview" cmd-overview})
+   "overview" cmd-overview
+   "expand"   cmd-expand})
 
 (defn parse-input
   "Parse a line of input into {:command \"name\" :args [\"arg1\" ...]}."
@@ -233,4 +257,4 @@
   (if-let [handler (get dispatch-table command)]
     (handler model state args)
     {:response {:ok false :command (keyword (or command "nil"))
-                :error (str "Unknown command: " command ". Valid commands: overview, cd, ls, info, find, back.")}}))
+                :error (str "Unknown command: " command ". Valid commands: overview, cd, ls, info, find, back, expand.")}}))
