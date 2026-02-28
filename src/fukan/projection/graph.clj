@@ -601,8 +601,24 @@
         ;; Build final visible set
         all-visible (set/union children-set drill-down-entities)
 
-        ;; Compute final edges with fully expanded visible set
-        final-edges (aggregate-edges model all-visible)
+        ;; Compute final edges, then filter cross-level edges per SameTypeDrillDown:
+        ;; 1. Drop edges to/from drilled containers — unresolved edges that
+        ;;    should have gone to children at the same structural level.
+        ;; 2. Drop edges between different kinds (e.g. function ↔ container)
+        ;;    — structurally different levels should never be connected.
+        raw-final-edges (aggregate-edges model all-visible)
+        drilled-containers (->> all-visible
+                                (filter (fn [nid]
+                                          (let [children (get-in model [:nodes nid :children] #{})]
+                                            (some all-visible children))))
+                                set)
+        final-edges (remove (fn [{:keys [from to]}]
+                              (let [from-kind (:kind (get-in model [:nodes from]))
+                                    to-kind (:kind (get-in model [:nodes to]))]
+                                (or (contains? drilled-containers from)
+                                    (contains? drilled-containers to)
+                                    (not= from-kind to-kind))))
+                            raw-final-edges)
 
         ;; Build view nodes
         ;; Container node (the viewed entity - no parent for strict bounding box)
