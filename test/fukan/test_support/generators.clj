@@ -237,7 +237,10 @@
                                 (cond-> (make-module (str "ns:" name) name root-id)
                                   (and stored-surface
                                        (seq (vals stored-surface)))
-                                  (assoc-in [:data :surface] stored-surface))))
+                                  (assoc-in [:data :boundary]
+                                            (cond-> {}
+                                              (:guarantees stored-surface) (assoc :guarantees (:guarantees stored-surface))
+                                              (:description stored-surface) (assoc :description (:description stored-surface)))))))
                             module-names surfaces)
            ;; Function children from provides operations
            surface-fn-nodes (vec (mapcat

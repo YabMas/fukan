@@ -105,9 +105,9 @@
 ;; unless it has a surface declaration.
 
 (defn- has-spec-data?
-  "True if a module node has a surface declaration."
+  "True if a module node has a boundary declaration."
   [node]
-  (:surface (:data node)))
+  (:boundary (:data node)))
 
 (defn no-empty-modules?
   "Verify that every module node has at least one child.
@@ -186,17 +186,16 @@
 ;; (they should be materialized as Function children during build).
 
 (defn no-unconsumed-provides?
-  "Verify that no module surface still has :provides.
-   The build pipeline should consume provides into Function children."
+  "Verify that no module still has :surface in the final model.
+   The build pipeline should collapse surfaces into boundaries."
   [{:keys [nodes]}]
   (or (first
         (for [[id node] nodes
               :when (= :module (:kind node))
-              :let [provides (get-in node [:data :surface :provides])]
-              :when (seq provides)]
+              :when (get-in node [:data :surface])]
           {:violation :no-unconsumed-provides
            :node-id id
-           :provides-count (count provides)}))
+           :reason "surface should be collapsed into boundary"}))
       true))
 
 ;; ---------------------------------------------------------------------------

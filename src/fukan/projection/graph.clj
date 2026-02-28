@@ -28,7 +28,6 @@
    [:expanded? :boolean]
    [:child-count :int]
    [:private? {:optional true} :boolean]
-   [:root? {:optional true} :boolean]
    [:io-type {:optional true} [:enum :input :output]]
    [:schema-key {:optional true} :keyword]])
 
@@ -176,12 +175,12 @@
           (:functions contract)))
 
 (defn- compute-io-schemas
-  "Compute input/output schemas for a module based on its contract.
+  "Compute input/output schemas for a module based on its boundary.
    Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or empty sets
-   when no contract is present."
+   when no boundary is present."
   [model module-id]
-  (if-let [contract (get-in model [:nodes module-id :data :contract])]
-    (contract->io model contract)
+  (if-let [boundary (get-in model [:nodes module-id :data :boundary])]
+    (contract->io model boundary)
     {:inputs #{} :outputs #{}}))
 
 (defn- compute-schema-flow-edges
@@ -238,20 +237,20 @@
 ;; IO Nodes and Data-Flow Edges
 
 (defn- create-io-nodes
-  "Create IO module and schema nodes for a module view.
-   Returns a vector of nodes: IO module + child schema nodes.
+  "Create IO container and schema nodes for a module view.
+   Returns a vector of nodes: IO container + child schema nodes.
    io-type is :input or :output.
    owned-ns-ids is a set of namespace IDs inside the current module.
-   IO modules are orphans - positioned by JS relative to main module."
+   IO containers are orphans - positioned by JS relative to main module."
   [model entity-id io-type schema-keys owned-ns-ids]
   (when (seq schema-keys)
-    (let [module-id (str (name io-type) ":" entity-id)
+    (let [container-id (str (name io-type) ":" entity-id)
           label (if (= io-type :input) "Inputs" "Outputs")]
-      (into [{:id module-id
+      (into [{:id container-id
               :kind :io-container
               :io-type io-type
               :label label
-              :parent nil  ;; IO modules are orphans, positioned by JS
+              :parent nil  ;; IO containers are orphans, positioned by JS
               :expandable? false
               :has-private-children? false
               :expanded? false
@@ -264,7 +263,7 @@
                :kind :io-schema
                :io-type io-type
                :label (name schema-key)
-               :parent module-id
+               :parent container-id
                :schema-key schema-key
                :expandable? false
                :has-private-children? false
@@ -331,16 +330,15 @@
                  (= parent-override :no-parent) nil
                  (some? parent-override) parent-override
                  :else (:parent node))]
-    (cond-> {:id id
-             :kind kind
-             :label (:label node)
-             :parent parent
-             :expandable? (boolean (seq (:children node)))
-             :has-private-children? (has-private-children? model id)
-             :expanded? (contains? expanded-modules id)
-             :child-count (count (:children node))
-             :private? (node-private? node)}
-      (get-in node [:data :root?]) (assoc :root? true))))
+    {:id id
+     :kind kind
+     :label (:label node)
+     :parent parent
+     :expandable? (boolean (seq (:children node)))
+     :has-private-children? (has-private-children? model id)
+     :expanded? (contains? expanded-modules id)
+     :child-count (count (:children node))
+     :private? (node-private? node)}))
 
 ;; -----------------------------------------------------------------------------
 ;; Drill-down expansion helpers
@@ -461,15 +459,47 @@
 ;; -----------------------------------------------------------------------------
 ;; Root function injection
 
+(defn- find-boundary-roots
+  "Find boundary functions of a module that have no external callers.
+   Reads boundary function names, resolves them to node IDs, then checks
+   whether any edge from outside the module targets them."
+  [model module-id]
+  (let [boundary-fns (get-in model [:nodes module-id :data :boundary :functions])
+        ;; Resolve boundary function names/ids to actual node IDs
+        fn-ids (->> boundary-fns
+                    (keep (fn [bfn]
+                            (or (:id bfn)
+                                ;; Try to find by walking children
+                                (let [name-str (str (:name bfn))]
+                                  (some (fn [cid]
+                                          (when (= name-str (:label (get-in model [:nodes cid])))
+                                            cid))
+                                        (get-in model [:nodes module-id :children] #{}))))))
+                    (filter #(contains? (:nodes model) %))
+                    set)
+        edges (:edges model)
+        ;; Collect all descendants of this module for "external" check
+        module-descendants (all-descendants-of model module-id)
+        module-members (conj module-descendants module-id)
+        has-external-caller?
+        (fn [fn-id]
+          (some (fn [{:keys [from to]}]
+                  (when (= to fn-id)
+                    (not (contains? module-members from))))
+                edges))]
+    (into #{} (remove has-external-caller?) fn-ids)))
+
 (defn- find-root-descendants
-  "Find root function nodes that are descendants of entity-id."
+  "Find root function nodes that are descendants of entity-id.
+   Walks descendants, finds modules with boundaries, and checks each
+   boundary function for external callers."
   [model entity-id]
-  (->> (all-descendants-of model entity-id)
-       (filter (fn [nid]
-                 (let [node (get-in model [:nodes nid])]
-                   (and (= :function (:kind node))
-                        (get-in node [:data :root?])))))
-       set))
+  (let [descendants (all-descendants-of model entity-id)
+        ;; Find all modules in the descendants (plus entity-id itself if module)
+        module-ids (->> (conj descendants entity-id)
+                        (filter #(and (= :module (:kind (get-in model [:nodes %])))
+                                      (get-in model [:nodes % :data :boundary :functions]))))]
+    (into #{} (mapcat #(find-boundary-roots model %)) module-ids)))
 
 (defn- root-fn-drill-down
   "Build drill-down-map entries for root functions.
@@ -503,7 +533,7 @@
   "Iteratively expand visible set until all edge endpoints are visible.
 
    Same-type filtering: Only drills into modules when the source and target
-   are the same kind (namespace→namespace, var→var). This keeps the structural
+   are the same kind (namespace->namespace, var->var). This keeps the structural
    overview clean at each level of the hierarchy.
 
    Includes internal dep expansion at each step to ensure nested modules
@@ -519,14 +549,14 @@
     (let [edges (aggregate-edges model visible-set)
           ;; Find modules that are edge targets
           module-targets (->> edges
-                                 (map :to)
-                                 (filter #(seq (get-in model [:nodes % :children])))
-                                 set)
+                              (map :to)
+                              (filter #(seq (get-in model [:nodes % :children])))
+                              set)
           ;; Find modules that are edge sources
           module-sources (->> edges
-                                 (map :from)
-                                 (filter #(seq (get-in model [:nodes % :children])))
-                                 set)
+                              (map :from)
+                              (filter #(seq (get-in model [:nodes % :children])))
+                              set)
           ;; For each module target, find actual targets inside
           targets-by-module
             (into {}
@@ -601,7 +631,7 @@
         ;; Compute final edges, then filter cross-level edges per SameTypeDrillDown:
         ;; 1. Drop edges to/from drilled modules — unresolved edges that
         ;;    should have gone to children at the same structural level.
-        ;; 2. Drop edges between different kinds (e.g. function ↔ module)
+        ;; 2. Drop edges between different kinds (e.g. function <-> module)
         ;;    — structurally different levels should never be connected.
         raw-final-edges (aggregate-edges model all-visible)
         drilled-modules (->> all-visible
@@ -620,7 +650,7 @@
         ;; Build view nodes
         ;; Module node (the viewed entity - no parent for strict bounding box)
         module-node (make-view-node model (get-in model [:nodes entity-id])
-                                       :no-parent expanded-modules)
+                                    :no-parent expanded-modules)
 
         ;; Direct children
         child-nodes (for [cid children-ids
@@ -632,8 +662,8 @@
         drill-down-nodes (for [did drill-down-entities
                                :let [node (get-in model [:nodes did])
                                      parent-module (some (fn [[cid entity-set]]
-                                                              (when (contains? entity-set did) cid))
-                                                            drill-down-map)]
+                                                           (when (contains? entity-set did) cid))
+                                                         drill-down-map)]
                                :when (and node parent-module)]
                            (make-view-node model node parent-module expanded-modules))
 

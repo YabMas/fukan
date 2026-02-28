@@ -104,11 +104,11 @@
 
 (defn- extract-description
   "Extract description text from a node.
-   Tries top-level :description, :data :doc, :data :contract :description."
+   Tries top-level :description, :data :doc, :data :boundary :description."
   [node]
   (or (:description node)
       (get-in node [:data :doc])
-      (get-in node [:data :contract :description])))
+      (get-in node [:data :boundary :description])))
 
 (defn- build-schema-registry
   "Build a registry of resolved schema refs found in a schema form.
@@ -132,7 +132,7 @@
   (let [data (:data node)]
     (case (:kind data)
       :module
-      (when-let [fns (seq (get-in data [:contract :functions]))]
+      (when-let [fns (seq (get-in data [:boundary :functions]))]
         (let [leaf-nodes (->> (all-leaf-descendants model (:id node))
                               (map #(get-in model [:nodes %])))
               name->id (into {} (map (fn [v] [(:label v) (:id v)])) leaf-nodes)]
@@ -185,7 +185,7 @@
                          :outputs (->> outputs sort (mapv ref-fn))})))]
     (case (:kind data)
       :module
-      (when-let [fns (seq (get-in data [:contract :functions]))]
+      (when-let [fns (seq (get-in data [:boundary :functions]))]
         (aggregate (keep #(extract-fn-io model (:schema %)) fns)))
 
       :function
@@ -236,8 +236,8 @@
            :dataflow    (extract-dataflow model node)
            :deps        deps
            :dependents  dependents}
-    (seq (get-in node [:data :surface :guarantees]))
-    (assoc :guarantees (get-in node [:data :surface :guarantees]))))
+    (seq (get-in node [:data :boundary :guarantees]))
+    (assoc :guarantees (get-in node [:data :boundary :guarantees]))))
 
 ;; -----------------------------------------------------------------------------
 ;; Edge Details

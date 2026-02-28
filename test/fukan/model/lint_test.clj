@@ -18,8 +18,7 @@
    {"src/a"
     {:id "src/a" :kind :module :label "a" :parent nil :children #{"a.core"}
      :data {:kind :module
-            :contract {:source :declared
-                       :description "Module A"
+            :boundary {:description "Module A"
                        :functions [{:name "fn-a1" :id "a.core/fn-a1"}]}}}
     "a.core"
     {:id "a.core" :kind :module :label "a.core" :parent "src/a" :children #{"a.core/fn-a1"}
@@ -31,8 +30,7 @@
     "src/b"
     {:id "src/b" :kind :module :label "b" :parent nil :children #{"b.core"}
      :data {:kind :module
-            :contract {:source :declared
-                       :description "Module B"
+            :boundary {:description "Module B"
                        :functions [{:name "fn-b1" :id "b.core/fn-b1"}]}}}
     "b.core"
     {:id "b.core" :kind :module :label "b.core" :parent "src/b" :children #{"b.core/fn-b1" "b.core/fn-b2"}
@@ -114,6 +112,11 @@
           model (build/build-model enriched
                   {:type-nodes-fn (fn [ns-index]
                                     (clj-lang/build-schema-nodes ns-index schema-data))})
+          ;; Resolve contracts from contract.edn on the built model's nodes,
+          ;; where folder node IDs are directory paths that match contract.edn locations.
+          ;; (resolve-contracts on contribution nodes is a no-op since namespace IDs
+          ;; like "fukan.model.build" don't match filesystem paths.)
+          model (update model :nodes clj-lang/resolve-contracts)
           report (lint/check-contracts model)]
       (is (map? report))
       (is (vector? (:violations report)))

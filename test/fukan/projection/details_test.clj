@@ -61,15 +61,15 @@
       (is (= "A module for alpha things." (:description detail))))))
 
 (deftest module-with-guarantees
-  (testing "module with surface guarantees includes them in detail"
-    (let [model (assoc-in test-model [:nodes "ns:alpha" :data :surface]
+  (testing "module with boundary guarantees includes them in detail"
+    (let [model (assoc-in test-model [:nodes "ns:alpha" :data :boundary]
                           {:guarantees ["idempotent" "snapshot_isolation"]})
           detail (details/entity-details model "ns:alpha")]
       (is (some? (:guarantees detail)))
       (is (= ["idempotent" "snapshot_isolation"] (:guarantees detail))))))
 
 (deftest module-without-guarantees
-  (testing "module without surface has no guarantees"
+  (testing "module without boundary has no guarantees"
     (let [detail (details/entity-details test-model "ns:alpha")]
       (is (nil? (:guarantees detail))))))
 

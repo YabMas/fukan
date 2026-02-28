@@ -11,7 +11,7 @@ Read `spec.md` in this directory for the full graph model specification.
 ## Build Pipeline
 
 ```
-CodeAnalysis → folder nodes → module nodes → symbol nodes → type nodes → wire children → prune → materialize surfaces → attach contracts → Model
+CodeAnalysis → folder nodes → module nodes → symbol nodes → type nodes → wire children → prune → materialize surfaces → collapse to boundary → attach boundaries → Model
 ```
 
 The pipeline in `build.clj`:
@@ -22,7 +22,9 @@ The pipeline in `build.clj`:
 5. `remove-empty-modules` + `wire-children` — cleanup
 6. `prune-to-smart-root` — skip single-child folder chains
 7. `materialize-surface-functions` — spec provides become Function children
-8. `attach-contracts` — contracts from `contract.edn` and inferred from `:malli/schema`
+8. `collapse-surface-to-boundary` — remaining surface data (guarantees, description) merges into `:boundary`
+9. `attach-boundaries` — namespace boundaries inferred from child function signatures, merged into existing boundary
+10. Post-build: `resolve-contracts` (in `pipeline.clj`) — contract.edn files resolved on folder nodes
 
 ## Analyzer Structure
 
@@ -53,11 +55,11 @@ The Allium parser is a shared library at `libs/allium/parser.clj`.
 **Edge**: `{:from NodeId, :to NodeId}` — directed, at leaf level (var-to-var or ns-to-ns)
 
 **NodeData** (discriminated by `:kind`):
-- **module**: `{:doc?, :contract?}` — directory or namespace
+- **module**: `{:doc?, :boundary?}` — directory or namespace
 - **function**: `{:doc?, :private?, :signature?}` — var definition
 - **schema**: `{:schema-key, :schema, :doc?}` — schema definition
 
-**Contract**: `{:description?, :functions [ContractFn]}`
+**Boundary**: `{:description?, :functions [BoundaryFn]?, :schemas [keyword]?, :guarantees [string]?}`
 
 ## Index Maps
 

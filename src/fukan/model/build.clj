@@ -58,48 +58,32 @@
   [:enum {:description "Structural kind: module (directory/namespace), function (var), or schema definition."}
    :module :function :schema])
 
-(def ^:schema ContractFn
-  [:map {:description "A public function entry in a module contract."}
+(def ^:schema BoundaryFn
+  [:map {:description "A public function entry in a module boundary."}
    [:name :symbol]
-   [:id {:optional true, :description "Node ID of the contracted function."} :string]
+   [:id {:optional true, :description "Node ID of the boundary function."} :string]
    [:schema {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]
    [:doc {:optional true} :string]])
 
-(def ^:schema Contract
-  [:map {:description "A module's external boundary: the functions that callers outside the module use."}
+(def ^:schema Boundary
+  [:map {:description "A module's external boundary: the functions, schemas, and guarantees that define its public contract."}
    [:description {:optional true} :string]
-   [:source {:optional true, :description "Origin: :declared (contract.edn) or absent (inferred)."} :keyword]
-   [:functions [:vector :ContractFn]]])
-
-(def ^:schema Field
-  [:map {:description "A named, typed property from a specification entity."}
-   [:name :string]
-   [:type-ref :string]
-   [:description {:optional true} :string]])
-
-(def ^:schema Surface
-  [:map {:description "A module's public boundary contract derived from specification.
-                       Surface operations (provides) are consumed during build — they
-                       become Function child nodes and are stripped from stored surfaces."}
-   [:facing {:optional true} :string]
-   [:description {:optional true} :string]
-   [:exposes {:optional true} [:vector :Field]]
+   [:functions {:optional true} [:vector :BoundaryFn]]
+   [:schemas {:optional true} [:vector :keyword]]
    [:guarantees {:optional true} [:vector :string]]])
 
 (def ^:schema NodeData
   [:or {:description "Kind-specific properties attached to a node, discriminated by :kind."}
    ;; Module data (directory or namespace)
-   [:map {:description "Module node data: documentation, contract, and optional spec data."}
+   [:map {:description "Module node data: documentation and optional boundary."}
     [:kind [:= :module]]
     [:doc {:optional true} [:maybe :string]]
-    [:contract {:optional true} :Contract]
-    [:surface {:optional true} :Surface]]
+    [:boundary {:optional true} :Boundary]]
    ;; Function data (var definition)
    [:map {:description "Function node data: documentation, visibility, and optional type signature."}
     [:kind [:= :function]]
     [:doc {:optional true} [:maybe :string]]
     [:private? {:optional true} :boolean]
-    [:root? {:optional true, :description "True when function is a contract entry point with no code-level callers."} :boolean]
     [:signature {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]]
    ;; Schema data (schema definition)
    [:map {:description "Schema node data: the Malli schema form and its keyword key."}
@@ -149,13 +133,13 @@
           nodes))
 
 (defn- has-spec-data?
-  "True if a module node has a surface declaration."
+  "True if a module node has a boundary declaration."
   [node]
-  (:surface (:data node)))
+  (:boundary (:data node)))
 
 (defn- remove-empty-modules
   "Remove module nodes that have no children.
-   Exception: modules with a surface declaration are retained
+   Exception: modules with a boundary declaration are retained
    even without children — they represent data-shape definitions."
   [nodes]
   (let [;; First, wire children to see which modules are empty
@@ -324,19 +308,45 @@
           var-defs))
 
 ;; -----------------------------------------------------------------------------
-;; Contract construction
+;; Surface-to-boundary collapse
 
-(defn- infer-namespace-contract
-  "Infer a contract for a namespace from its child function nodes.
+(defn- collapse-surface-to-boundary
+  "Collapse remaining :surface data into :boundary for each module.
+   After materialization, :surface may still contain :guarantees and :description.
+   These are merged into :boundary, then :surface is removed."
+  [nodes]
+  (reduce-kv
+    (fn [acc id node]
+      (if-let [surface (get-in node [:data :surface])]
+        (let [boundary-parts (cond-> {}
+                               (:guarantees surface) (assoc :guarantees (:guarantees surface))
+                               (:description surface) (assoc :description (:description surface)))
+              existing-boundary (get-in node [:data :boundary])
+              merged-boundary (if existing-boundary
+                                (merge existing-boundary boundary-parts)
+                                (when (seq boundary-parts) boundary-parts))
+              updated-data (-> (:data node)
+                               (dissoc :surface)
+                               (cond-> merged-boundary (assoc :boundary merged-boundary)))]
+          (assoc acc id (assoc node :data updated-data)))
+        (assoc acc id node)))
+    {} nodes))
+
+;; -----------------------------------------------------------------------------
+;; Boundary construction
+
+(defn- infer-namespace-boundary
+  "Infer a boundary for a namespace from its child function and schema nodes.
    Reads signatures from already-built nodes instead of going to runtime.
-   Excludes schema-defining vars (they have corresponding schema nodes)."
+   Excludes schema-defining vars (they have corresponding schema nodes).
+   Collects :schema-key values from schema children into :schemas."
   [nodes ns-id]
   (let [description (get-in nodes [ns-id :data :doc])
-        schema-var-ids (->> (vals nodes)
-                            (filter #(and (= :schema (:kind %))
-                                          (= ns-id (:parent %))))
-                            (map (fn [sn] (str ns-id "/" (:label sn))))
-                            set)
+        schema-children (->> (vals nodes)
+                             (filter #(and (= :schema (:kind %))
+                                           (= ns-id (:parent %)))))
+        schema-var-ids (into #{} (map (fn [sn] (str ns-id "/" (:label sn)))) schema-children)
+        schemas (into [] (keep #(get-in % [:data :schema-key])) schema-children)
         functions (->> (vals nodes)
                        (filter #(and (= :function (:kind %))
                                      (= ns-id (:parent %))
@@ -348,28 +358,31 @@
                                         :schema (get-in node [:data :signature])}
                                  (get-in node [:data :doc])
                                  (assoc :doc (get-in node [:data :doc]))))))]
-    (when (seq functions)
-      {:description description
-       :functions functions})))
+    (when (or (seq functions) (seq schemas))
+      (cond-> {:description description}
+        (seq functions) (assoc :functions functions)
+        (seq schemas) (assoc :schemas schemas)))))
 
-(defn- attach-contract
-  "Attach a contract to a node's :data map when present."
-  [node contract]
-  (if contract
-    (update node :data #(assoc (or % {}) :contract contract))
+(defn- attach-boundary
+  "Attach or merge a boundary into a node's :data map."
+  [node boundary]
+  (if boundary
+    (let [existing (get-in node [:data :boundary])]
+      (if existing
+        (update-in node [:data :boundary] merge boundary)
+        (update node :data #(assoc (or % {}) :boundary boundary))))
     node))
 
-(defn- attach-contracts
-  "Attach namespace contracts to module nodes that don't already have one.
-   Folder-level contracts (from contract.edn) are pre-attached by the language
-   module; this function only infers contracts from child function signatures.
+(defn- attach-boundaries
+  "Attach namespace boundaries to module nodes.
+   Infers boundaries from child function signatures and merges into
+   any existing boundary (e.g. from spec guarantees or contract.edn).
    Returns updated nodes map."
   [nodes]
   (reduce (fn [acc [id node]]
-            (if (and (= :module (:kind node))
-                     (not (get-in node [:data :contract])))
-              (let [contract (infer-namespace-contract nodes id)]
-                (assoc acc id (attach-contract node contract)))
+            (if (= :module (:kind node))
+              (let [boundary (infer-namespace-boundary nodes id)]
+                (assoc acc id (attach-boundary node boundary)))
               (assoc acc id node)))
           {}
           nodes))
@@ -433,7 +446,7 @@
 
 (defn- merge-node-pair
   "Merge two nodes with the same ID. Deep-merges :data maps for modules
-   so that spec data (surface, description) enriches impl data (doc, contract)
+   so that spec data (boundary, description) enriches impl data (doc)
    rather than overwriting it. Non-module nodes or nodes with different
    kinds use simple last-wins merge."
   [a b]
@@ -522,43 +535,6 @@
         (assoc acc id node)))
     {} nodes))
 
-;; -----------------------------------------------------------------------------
-;; Root function marking
-
-(defn- mark-root-functions
-  "Mark contract functions as :root? when they have no incoming edges from
-   outside their own namespace. These are entry points called by framework
-   machinery rather than application code."
-  [nodes edges]
-  (let [;; Collect function IDs from namespace-level contracts
-        contract-fn-ids
-        (->> (vals nodes)
-             (filter #(and (= :module (:kind %))
-                           (get-in % [:data :contract])))
-             (mapcat (fn [node]
-                       (let [module-id (:id node)]
-                         (map (fn [cfn] (str module-id "/" (:name cfn)))
-                              (get-in node [:data :contract :functions])))))
-             (filter #(contains? nodes %))
-             set)
-        ;; Check if a function has any caller from outside its namespace
-        has-external-caller?
-        (fn [fn-id]
-          (let [ns-id (:parent (get nodes fn-id))]
-            (some (fn [{:keys [from to]}]
-                    (when (= to fn-id)
-                      (let [from-parent (:parent (get nodes from))]
-                        ;; External if from is not the namespace itself
-                        ;; and from's parent is not the namespace
-                        (and (not= from ns-id)
-                             (not= from-parent ns-id)))))
-                  edges)))]
-    (reduce (fn [acc fn-id]
-              (if (has-external-caller? fn-id)
-                acc
-                (assoc-in acc [fn-id :data :root?] true)))
-            nodes
-            contract-fn-ids)))
 
 ;; -----------------------------------------------------------------------------
 ;; Main build function
@@ -616,8 +592,10 @@
          smart-root (find-smart-root all-nodes folder-ids)
          pruned-nodes (prune-to-smart-root all-nodes smart-root)
 
-         ;; Materialize surface provides as Function children, re-wire
+         ;; Materialize surface provides as Function children, collapse
+         ;; remaining surface data into boundary, re-wire
          materialized-nodes (-> (materialize-surface-functions pruned-nodes)
+                                collapse-surface-to-boundary
                                 wire-children)
 
          ;; Derive ns-index from non-folder module nodes for hooks
@@ -648,11 +626,8 @@
          ;; Remove var nodes that define schemas — they're represented by schema nodes
          final-nodes (remove-schema-defining-vars merged-with-types)
 
-         ;; Attach contracts to modules
-         contracted-nodes (attach-contracts final-nodes)
+         ;; Attach boundaries to modules
+         boundary-nodes (attach-boundaries final-nodes)]
 
-         ;; Mark contract functions with no external callers as root entry points
-         root-marked-nodes (mark-root-functions contracted-nodes all-edges)]
-
-     {:nodes root-marked-nodes
+     {:nodes boundary-nodes
       :edges all-edges})))

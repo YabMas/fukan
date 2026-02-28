@@ -220,19 +220,17 @@
 
 (defn resolve-contracts
   "Pre-resolve contract.edn files for module nodes.
-   Attaches contract data from contract.edn into module nodes' :data :contract.
-   Marks contracts with :source :declared so the linter can identify them.
+   Attaches or merges boundary data from contract.edn into module nodes' :data :boundary.
    Must be called after namespaces are loaded in the JVM."
   [nodes]
   (reduce (fn [acc [id node]]
             (if (= :module (:kind node))
-              (if-let [contract (read-contract-file id)]
-                (let [contract (assoc contract :source :declared)
-                      existing (get-in node [:data :contract])]
-                  (assoc acc id (assoc-in node [:data :contract]
+              (if-let [boundary (read-contract-file id)]
+                (let [existing (get-in node [:data :boundary])]
+                  (assoc acc id (assoc-in node [:data :boundary]
                                           (if existing
-                                            (merge existing contract)
-                                            contract))))
+                                            (merge existing boundary)
+                                            boundary))))
                 (assoc acc id node))
               (assoc acc id node)))
           {} nodes))

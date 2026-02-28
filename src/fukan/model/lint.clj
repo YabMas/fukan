@@ -30,18 +30,18 @@
    Returns a lint report with violations and stats."
   {:malli/schema [:=> [:cat :Model] :map]}
   [{:keys [nodes edges]}]
-  (let [;; 1. Collect modules: modules whose contract has :source :declared
+  (let [;; 1. Collect modules: module nodes with a boundary containing functions
         modules (->> (vals nodes)
                      (filter #(and (= :module (:kind %))
-                                   (= :declared (get-in % [:data :contract :source]))))
+                                   (seq (get-in % [:data :boundary :functions]))))
                      (map :id)
                      set)
 
-        ;; 2. Build contract index: {module-id -> #{node-id ...}}
+        ;; 2. Build boundary index: {module-id -> #{node-id ...}}
         contract-index
         (into {}
               (map (fn [mod-id]
-                     (let [fns (get-in nodes [mod-id :data :contract :functions])
+                     (let [fns (get-in nodes [mod-id :data :boundary :functions])
                            ids (->> fns (keep :id) set)]
                        [mod-id ids])))
               modules)
@@ -77,7 +77,7 @@
                           :from-module from-mod
                           :to-module to-mod
                           :contract-fns (mapv :name
-                                              (get-in nodes [to-mod :data :contract :functions]))}))))
+                                              (get-in nodes [to-mod :data :boundary :functions]))}))))
              vec)
 
         cross-module-count

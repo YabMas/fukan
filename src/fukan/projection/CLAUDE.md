@@ -59,19 +59,19 @@ Views never call back into projection — data flows one way.
 
 - `:code-flow` — aggregated from raw var/ns edges in the model
 - `:schema-flow` — var-to-schema and schema-to-var based on `:malli/schema` metadata
-- `:data-flow` — IO schema nodes to/from visible nodes (contract-derived)
+- `:data-flow` — IO schema nodes to/from visible nodes (boundary-derived)
 - `:schema-composition` — schema-to-schema based on `:schema-refs` in node data
 
 ## IO Schema Pattern
 
-Module views generate synthetic IO nodes from contracts:
+Module views generate synthetic IO nodes from boundaries:
 
-1. `compute-io-schemas` reads the module's `:data :contract`
+1. `compute-io-schemas` reads the module's `:data :boundary`
 2. Extracts input/output schema keys from function signatures
 3. `create-io-nodes` builds `:io-container` and `:io-schema` projection nodes
 4. `compute-io-flow-edges` connects them to visible code nodes via `:data-flow` edges
 
-IO modules are orphans (no parent) — positioned by the JS layout engine.
+IO containers are orphans (no parent) — positioned by the JS layout engine.
 
 ## Key Helper: `compute-io-schemas`
 
@@ -80,4 +80,8 @@ IO modules are orphans (no parent) — positioned by the JS layout engine.
 ;; -> {:inputs #{:SchemaKey ...}, :outputs #{:SchemaKey ...}}
 ```
 
-Reads the module's contract, extracts function schemas via `extract-fn-schema-flow`, and collects all referenced schema keys into input/output sets.
+Reads the module's boundary, extracts function schemas via `extract-fn-schema-flow`, and collects all referenced schema keys into input/output sets.
+
+## Root Detection
+
+Root functions (boundary entry points with no external callers) are detected at projection time, not stored in the model. `find-boundary-roots` reads boundary functions and checks edges for external callers. This keeps the model pure and moves the "who calls what" logic to where edges are already available.
