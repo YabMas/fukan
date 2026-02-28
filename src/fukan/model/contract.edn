@@ -4,5 +4,4 @@
              fukan.model.lint/format-report
              fukan.model.build/build-namespace-nodes
              fukan.model.build/build-var-nodes
-             fukan.model.build/build-edges
-             fukan.model.build/build-ns-edges]}
+             fukan.model.build/build-edges]}

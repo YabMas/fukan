@@ -171,14 +171,10 @@
                                                                :private? false}}]))
                                                var-names))
                                         ns-names var-name-lists))
-             all-fn-ids (vec (keys var-nodes))
-             all-ns-ids (vec (map str ns-names))]
+             all-fn-ids (vec (keys var-nodes))]
          (gen/let [edge-count (gen/choose 0 (min 20 (* (count all-fn-ids) 2)))
                    edge-from-idxs (gen/vector (gen/choose 0 (max 0 (dec (count all-fn-ids)))) edge-count)
-                   edge-to-idxs (gen/vector (gen/choose 0 (max 0 (dec (count all-fn-ids)))) edge-count)
-                   ns-edge-count (gen/choose 0 (min 10 (* (count all-ns-ids) 2)))
-                   ns-from-idxs (gen/vector (gen/choose 0 (dec (count all-ns-ids))) ns-edge-count)
-                   ns-to-idxs (gen/vector (gen/choose 0 (dec (count all-ns-ids))) ns-edge-count)]
+                   edge-to-idxs (gen/vector (gen/choose 0 (max 0 (dec (count all-fn-ids)))) edge-count)]
            (let [var-edges (->> (map (fn [fi ti]
                                        (let [from (nth all-fn-ids fi)
                                              to (nth all-fn-ids ti)]
@@ -186,18 +182,10 @@
                                            {:from from :to to})))
                                      edge-from-idxs edge-to-idxs)
                                 (remove nil?)
-                                vec)
-                 ns-edges (->> (map (fn [fi ti]
-                                      (let [from (nth all-ns-ids fi)
-                                            to (nth all-ns-ids ti)]
-                                        (when (not= from to)
-                                          {:from from :to to})))
-                                    ns-from-idxs ns-to-idxs)
-                               (remove nil?)
-                               vec)]
+                                vec)]
              {:source-files source-files
               :nodes (merge ns-nodes var-nodes)
-              :edges (vec (into (set var-edges) ns-edges))})))))))
+              :edges var-edges})))))))
 
 ;; ---------------------------------------------------------------------------
 ;; gen-model

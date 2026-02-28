@@ -403,26 +403,6 @@
          (into #{})
          (vec))))
 
-(defn build-ns-edges
-  "Build namespace-to-namespace edges from require relationships.
-   Creates edges for each namespace require where both namespaces
-   are defined in the codebase.
-
-   Returns a vector of {:from ns-id, :to ns-id, :kind :ns-require} edges."
-  {:malli/schema [:=> [:cat :AnalysisData [:map-of :symbol :NodeId]] [:vector :Edge]]}
-  [analysis ns-index]
-  (let [ns-usages (:namespace-usages analysis)
-        known-ns (set (keys ns-index))]
-    (->> ns-usages
-         (keep (fn [{:keys [from to]}]
-                 (when (and (contains? known-ns from)
-                            (contains? known-ns to)
-                            (not= from to))
-                   {:from (get ns-index from)
-                    :to (get ns-index to)
-                    :kind :ns-require})))
-         (into #{})
-         (vec))))
 
 (defn- remove-schema-defining-vars
   "Remove function nodes whose vars define schemas.

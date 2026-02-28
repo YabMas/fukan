@@ -236,13 +236,13 @@
         ;; Build var nodes
         {var-nodes :nodes var-index :index} (build/build-var-nodes var-defs ns-index)
 
-        ;; Build edges
-        var-edges (build/build-edges analysis var-index ns-index)
-        ns-edges (build/build-ns-edges analysis ns-index)]
+        ;; Build edges (var-level only — container dependencies are
+        ;; derived from these by the projection layer)
+        var-edges (build/build-edges analysis var-index ns-index)]
 
     {:source-files (mapv :filename ns-defs)
      :nodes (merge ns-nodes var-nodes)
-     :edges (vec (into (set var-edges) ns-edges))}))
+     :edges var-edges}))
 
 (defn contribution
   "Produce a full Clojure language contribution from source analysis."
