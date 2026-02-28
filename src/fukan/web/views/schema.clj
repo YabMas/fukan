@@ -2,13 +2,13 @@
   "Render Malli schemas to HTML/hiccup.
    Supports registry-aware rendering for the detail view and
    plain rendering for function signatures."
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            [fukan.schema.forms :as forms])
   (:import [java.net URLEncoder]))
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
 
-(declare render-schema-form)
 (declare render-detail-form)
 
 (defn- url-encode [s] (URLEncoder/encode (str s) "UTF-8"))
@@ -25,19 +25,6 @@
         trail-str (when (seq trail)
                     (str "&trail=" (url-encode (str/join "," trail))))]
     (str "@get('/sse/schema?id=" (url-encode id-str) (or trail-str "") "')")))
-
-(defn- malli-props
-  "Extract the Malli property map from a schema form, if present."
-  [schema-form]
-  (when (and (vector? schema-form)
-             (>= (count schema-form) 2)
-             (map? (second schema-form)))
-    (second schema-form)))
-
-(defn- malli-args
-  "Get the args of a schema form, skipping the property map if present."
-  [raw-args]
-  (if (map? (first raw-args)) (rest raw-args) raw-args))
 
 ;; -----------------------------------------------------------------------------
 ;; Plain rendering (for function signatures, no registry)
@@ -65,8 +52,8 @@
 
     ;; Vector form like [:vector X], [:map ...], [:=> ...]
     (vector? schema-form)
-    (let [[type & raw-args] schema-form
-          args (malli-args raw-args)]
+    (let [type (forms/form-tag schema-form)
+          args (forms/form-children schema-form)]
       (case type
         :vector [:span "[" (render-schema-form (first args)) "]"]
         :set [:span "#{" (render-schema-form (first args)) "}"]
@@ -85,21 +72,6 @@
     ;; Fallback
     :else
     [:span (pr-str schema-form)]))
-
-(defn render-fn-signature
-  "Render a function signature from its schema directly to hiccup."
-  [fn-schema]
-  (when (and (vector? fn-schema) (= :=> (first fn-schema)))
-    (let [[_ input output] fn-schema
-          in-schemas (if (and (vector? input) (= :cat (first input)))
-                       (rest input)
-                       [input])]
-      [:div.signature
-       "("
-       (interpose ", " (map render-schema-form in-schemas))
-       ")"
-       [:span.arrow " \u2192 "]
-       (render-schema-form output)])))
 
 ;; -----------------------------------------------------------------------------
 ;; Detail rendering (registry-aware, with drill-down navigation)
@@ -133,8 +105,8 @@
 
     ;; Vector form
     (vector? schema-form)
-    (let [[type & raw-args] schema-form
-          args (malli-args raw-args)]
+    (let [type (forms/form-tag schema-form)
+          args (forms/form-children schema-form)]
       (case type
         :vector [:span "[" (render-detail-form (first args) registry trail) "]"]
         :set [:span "#{" (render-detail-form (first args) registry trail) "}"]
@@ -147,12 +119,9 @@
         :enum [:span.type (str/join " | " (map pr-str args))]
         :tuple [:span "[" (interpose ", " (map #(render-detail-form % registry trail) args)) "]"]
         :cat (interpose ", " (map #(render-detail-form % registry trail) args))
-        :=> (let [[input output] args
-                  ins (if (and (vector? input) (= :cat (first input)))
-                        (rest input)
-                        [input])]
+        :=> (let [{:keys [inputs output]} (forms/fn-schema-parts schema-form)]
               [:span "("
-               (interpose ", " (map #(render-detail-form % registry trail) ins))
+               (interpose ", " (map #(render-detail-form % registry trail) inputs))
                " \u2192 "
                (render-detail-form output registry trail)
                ")"])
@@ -195,9 +164,8 @@
    (for [[idx variant] (map-indexed vector variants)]
      (if (and (vector? variant) (= :map (first variant)))
        ;; Map variant - show entries in a block
-       (let [props (malli-props variant)
-             entries (filter vector? (rest variant))
-             desc (:description props)]
+       (let [desc (forms/form-description variant)
+             entries (filter vector? (rest variant))]
          [:div.schema-variant
           [:div.variant-label (str "variant " (inc idx))]
           (when desc [:div.variant-doc desc])
@@ -226,7 +194,7 @@
 
     ;; Or schema - show variants
     (and (vector? schema-form) (= :or (first schema-form)))
-    (let [args (malli-args (rest schema-form))]
+    (let [args (forms/form-children schema-form)]
       (render-or-variants args registry trail))
 
     ;; Other schema types - show inline

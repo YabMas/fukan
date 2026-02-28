@@ -5,7 +5,8 @@
    for the language-agnostic model build pipeline."
   (:require [clojure.java.shell :as shell]
             [clojure.edn :as edn]
-            [fukan.model.build :as build]))
+            [fukan.model.build :as build]
+            [fukan.schema.forms :as forms]))
 
 ;; -----------------------------------------------------------------------------
 ;; Static Analysis
@@ -77,8 +78,7 @@
   "Extract :description from a Malli schema form's property map.
    Returns nil for bare types or forms without properties."
   [form]
-  (when (and (vector? form) (>= (count form) 2) (map? (second form)))
-    (:description (second form))))
+  (forms/form-description form))
 
 (defn discover-schema-data
   "Scan loaded namespaces for vars with ^:schema metadata.

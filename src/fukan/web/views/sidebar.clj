@@ -7,6 +7,7 @@
    the :type field (fn-list, fn-inline, schema-def)."
   (:require [hiccup2.core :as h]
             [clojure.string :as str]
+            [fukan.schema.forms :as forms]
             [fukan.web.views.schema :as views.schema])
   (:import [java.net URLEncoder]))
 
@@ -22,8 +23,9 @@
   [form]
   (cond
     (keyword? form) (name form)
-    (and (vector? form) (seq form))
-    (let [[t & args] form]
+    (vector? form)
+    (let [t (forms/form-tag form)
+          args (forms/form-children form)]
       (case t
         :vector (str "[" (schema->str (first args)) "]")
         :set    (str "#{" (schema->str (first args)) "}")
@@ -39,12 +41,8 @@
 (defn- fn-signature-str
   "Format a [:=> ...] schema as 'input -> output' string."
   [schema]
-  (when (and (vector? schema) (= :=> (first schema)))
-    (let [[_ input output] schema
-          ins (if (and (vector? input) (= :cat (first input)))
-                (rest input)
-                [input])]
-      (str (str/join ", " (map schema->str ins)) " \u2192 " (schema->str output)))))
+  (when-let [{:keys [inputs output]} (forms/fn-schema-parts schema)]
+    (str (str/join ", " (map schema->str inputs)) " \u2192 " (schema->str output))))
 
 ;; -----------------------------------------------------------------------------
 ;; Shared components
