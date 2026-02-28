@@ -1,0 +1,66 @@
+-- allium: 1
+-- infra/spec.allium
+--
+-- Scope: Infrastructure lifecycle — mutable state management for the
+--   model and HTTP server
+-- Includes: Model state atom, server lifecycle
+-- Excludes:
+--   - The Model itself (see model/spec.allium)
+--   - Build pipeline (see model/pipeline.allium)
+--   - HTTP routing and handlers (see web/spec.allium)
+
+use "../model/spec.allium" as model
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+-- Boundary: model state management.
+-- The single point of mutable state for the model. The core sees
+-- an immutable Model snapshot; this boundary manages the atom
+-- behind that snapshot.
+
+external entity ModelLifecycle {
+    -- Contract
+    provides: current_model -> model/Model?
+        -- Returns the most recently built model, or null if not yet loaded.
+    provides: rebuild(source_path) -> model/Model
+        -- Triggers a full rebuild from source analysis.
+
+    -- State semantics
+    guarantee: snapshot_isolation
+        -- Consumers read an immutable Model. A rebuild produces a new
+        -- Model value; in-flight requests see the previous snapshot
+        -- until the next dereference.
+    guarantee: single_source
+        -- At most one source path is active. Rebuild replaces the
+        -- entire model atomically.
+
+    -- Failure modes
+    failures:
+        not_loaded              -- model requested before first build
+        rebuild_failed          -- source analysis failed
+}
+
+-- Boundary: HTTP server lifecycle.
+-- Manages the web server process. Decoupled from the model —
+-- the server fetches the current model per-request, so model
+-- refreshes don't require server restart.
+
+external entity ServerLifecycle {
+    -- Contract
+    provides: start(port) -> Server
+        -- Starts the HTTP server on the specified port.
+    provides: stop -> Unit
+        -- Stops the running server.
+    provides: running? -> Boolean
+        -- Whether the server is currently active.
+
+    -- Guarantees
+    guarantee: decoupled_from_model
+        -- Server and model lifecycles are independent. Model refreshes
+        -- do not require server restart. The server calls current_model
+        -- per-request.
+    guarantee: single_instance
+        -- At most one server runs at a time.
+}

@@ -1,0 +1,126 @@
+-- allium: 1
+-- pipeline.allium
+--
+-- Scope: Model build pipeline — how a Model is constructed from
+--   source analysis
+-- Includes: Contribution shape, source analyzers, build rule
+-- Excludes:
+--   - The Model itself (see model/spec.allium)
+--   - Language-specific analyzer internals (see model/languages specs)
+--   - Model state management (see infra/spec.allium)
+
+use "./spec.allium" as model
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value Contribution {
+    -- The language-agnostic input to the build pipeline.
+    -- Each language analyzer (Clojure, Allium, future languages)
+    -- independently produces a Contribution from the same source path.
+    -- Contributions are merged additively before BuildModel runs.
+    --
+    -- Implementation analyzers discover code structure: namespaces,
+    -- functions, schemas, dependencies.
+    -- Specification analyzers discover design structure: entities,
+    -- surfaces, fields, typed relationships.
+    -- Both produce the same shape; the pipeline defines the contract.
+
+    source_files: List<String>
+    nodes: Map<String, model/Node>
+    edges: List<model/Edge>
+}
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+-- Boundary: language-specific source analysis.
+-- Produces Contributions consumed by BuildModel.
+-- Currently two categories:
+--   Implementation: Clojure (clj-kondo + runtime reflection)
+--   Specification: Allium (instaparse parser)
+-- Future: additional implementation languages, alternative spec languages.
+
+external entity SourceAnalyzer {
+    -- Contract
+    analyzes: SourcePath -> Contribution
+        -- SourcePath is a filesystem directory path.
+        -- Each analyzer produces an independent Contribution from the
+        -- same source path. Results are merged additively before
+        -- BuildModel consumes them.
+        --
+        -- Analyzers may read project resources (contract.edn files)
+        -- and runtime state during analysis. The Clojure analyzer
+        -- reads loaded JVM namespaces for schema metadata and function
+        -- signatures, and resolves contract.edn declarations against
+        -- runtime vars. This means analysis results depend on runtime
+        -- state at analysis time — they are idempotent within a single
+        -- JVM state snapshot but may vary across different REPL sessions.
+        --
+        -- Missing project resources produce no error — the system
+        -- functions without them.
+
+    -- Failure modes
+    failures:
+        analysis_unavailable    -- analyzer binary not found or not runnable
+        analysis_error          -- analyzer ran but returned non-zero exit
+        parse_failure           -- individual file failed to parse (non-fatal)
+
+    -- Guarantees
+    guarantee: parse_failure_isolation
+        -- A single file's parse failure does not prevent analysis of
+        -- other files. Failed files are silently excluded.
+    guarantee: analyzer_independence
+        -- Multiple analyzers produce independent results.
+        -- They are merged additively — no analyzer's output can
+        -- invalidate another's.
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule BuildModel {
+    -- Pure transformation: merged Contributions -> immutable Model.
+    --
+    -- Contributions from specification and implementation analyzers
+    -- are merged additively before this rule fires. Spec analyzers
+    -- produce nodes with descriptions and boundary declarations.
+    -- Impl analyzers produce nodes with code structure, schemas,
+    -- and dependencies.
+    --
+    -- Co-location correspondence: when spec and impl files share
+    -- a directory, their contributions merge into the same module
+    -- node. The spec enriches the module with boundary description
+    -- and guarantees; the impl populates it with function and schema
+    -- children.
+    --
+    -- Boundary materialization: each spec provides operation becomes
+    -- a Function child of the module. For spec-only modules these
+    -- are the only children. For spec+impl modules they coexist
+    -- with implementation-discovered functions.
+    --
+    -- Boundary construction: a module's boundary is assembled from
+    -- available sources. Description comes from spec or docstring.
+    -- Functions come from contract.edn declarations or are inferred
+    -- from public functions with type signatures. Guarantees come
+    -- from spec. The boundary is unified regardless of source.
+    --
+    -- Schema ownership: schema-defining vars become Schema child
+    -- nodes of their parent module. The corresponding function node
+    -- is removed (SchemaReplacesFunction). The owning module
+    -- publishes these schemas as part of its contract.
+    --
+    -- Cleanup: empty modules are removed (with spec-data exception).
+    -- Single-child root chains are pruned. Edges with missing
+    -- endpoints or self-references are excluded.
+
+    when: BuildModel(contributions: List<Contribution>)
+
+    ensures: model/Model.created(
+        nodes: build_node_hierarchy(contributions),   -- black box
+        edges: derive_dependencies(contributions)     -- black box
+    )
+}
