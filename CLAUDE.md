@@ -25,7 +25,7 @@ The system follows a **functional core, imperative shell** architecture. Allium 
 - Pure command logic in `cli/`
 
 **Imperative shell** (boundaries specced, internals governed by tests + conventions):
-- `infra/` — Integrant lifecycle, atoms, port binding
+- `infra/` — defonce atoms, lifecycle functions, port binding
 - `web/handler.clj` + `web/sse.clj` — HTTP routing, SSE streaming
 - IO edges in `model/languages/` — subprocess invocation, runtime reflection
 
@@ -36,7 +36,7 @@ The system follows a **functional core, imperative shell** architecture. Allium 
 - **How it can fail** — named failure modes (`failures:`)
 - **What it guarantees** — observable promises (`guarantee:`)
 
-The shell's *internal mechanics* are not specced. Integrant wiring, Ring middleware, atom implementation — these are declarative config or mechanical plumbing where a spec would just duplicate already-clear code. The enriched boundaries ensure that if you "lose sight" of all unspecced code, you still know what every shell component promises, how it can fail, and what invariants hold across the crossing.
+The shell's *internal mechanics* are not specced. Ring middleware, atom implementation — these are declarative config or mechanical plumbing where a spec would just duplicate already-clear code. The enriched boundaries ensure that if you "lose sight" of all unspecced code, you still know what every shell component promises, how it can fail, and what invariants hold across the crossing.
 
 **Boundary spec locations:**
 - `model/spec.allium` — SourceAnalyzer, SchemaDiscovery, ProjectResources, ModelLifecycle

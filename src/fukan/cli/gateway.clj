@@ -2,7 +2,8 @@
   "Stateful CLI gateway for REPL-based access.
    Wraps the command dispatch layer with persistent session state,
    callable via clj-nrepl-eval for agent workflows."
-  (:require [fukan.cli.commands :as commands]))
+  (:require [fukan.cli.commands :as commands]
+            [fukan.infra.model :as infra-model]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
@@ -15,17 +16,15 @@
 ;; -----------------------------------------------------------------------------
 ;; State
 
-(defonce ^:private model-state-ref (atom nil))
-
 (defonce ^:private session (atom {:view-id nil
                                   :history []
                                   :expanded #{}
                                   :src nil}))
 
 (defn init!
-  "Set the model-state atom reference. Called by user.clj after system start."
-  [model-state]
-  (reset! model-state-ref model-state))
+  "No-op retained for call-site compatibility."
+  []
+  nil)
 
 (defn exec
   "Execute a CLI command string. Returns the response EDN map.
@@ -33,13 +32,10 @@
    Model is fetched fresh on each call."
   {:malli/schema [:=> [:cat :string] :CommandResponse]}
   [input]
-  (let [model-state @model-state-ref
-        _ (when-not model-state
-            (throw (ex-info "Gateway not initialized. Call (go) first." {})))
-        model (:model @model-state)]
+  (let [model (infra-model/get-model)]
     (when-not model
       (throw (ex-info "No model loaded. Call (go) first." {})))
-    (let [state (assoc @session :src (:src @model-state))]
+    (let [state (assoc @session :src (infra-model/get-src))]
       (if-let [parsed (commands/parse-input input)]
         (let [{:keys [response state-update]} (commands/dispatch model state parsed)]
           (when state-update

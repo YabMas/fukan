@@ -1,15 +1,9 @@
 (ns user
-  "Development helpers for REPL-driven workflow.
-   Uses Integrant for system lifecycle and clj-reload for code reloading."
+  "Development helpers for REPL-driven workflow."
   (:require [clj-reload.core :as reload]
-            [integrant.core :as ig]
-            [integrant.repl :as ig-repl]
-            [integrant.repl.state :as state]
             [fukan.infra.model :as infra-model]
-            [fukan.infra.server]
-            [fukan.web.handler]
-            [fukan.cli.gateway :as gateway]
-            [clojure.java.io :as io]))
+            [fukan.infra.server :as infra-server]
+            [fukan.cli.gateway :as gateway]))
 
 ;; Initialize clj-reload - tracks src and dev directories
 ;; The 'user namespace is excluded from reloading
@@ -17,59 +11,69 @@
   {:dirs ["src" "dev"]
    :no-reload '#{user}})
 
-(defn- read-config []
-  (ig/read-string (slurp (io/resource "fukan/system.edn"))))
-
-(ig-repl/set-prep!
-  (fn [] (-> (read-config)
-             (assoc-in [:fukan.infra/model :src] "src"))))
-
-(defn- wire-gateway! []
-  (when-let [model-state (:fukan.infra/model state/system)]
-    (gateway/init! model-state)))
+(defn- reload-code!
+  "Force-reload all loaded namespaces regardless of file timestamps.
+   Uses clj-reload's :only :loaded to avoid timestamp detection issues."
+  []
+  (reload/reload {:only :loaded}))
 
 (defn go
-  "Start the Integrant system."
-  []
-  (ig-repl/go)
-  (wire-gateway!))
+  "Start the system: load model and start the web server.
+
+   Options:
+     :src  - Path to Clojure source directory (default: \"src\")
+     :port - Server port (default: 8080)
+
+   Examples:
+     (go)
+     (go {:src \"/path/to/project/src\" :port 3000})"
+  ([] (go {}))
+  ([{:keys [src port] :or {src "src" port 8080}}]
+   (if (infra-server/running?)
+     (println "Server already running on port" (infra-server/get-port))
+     (do
+       (infra-model/load-model src)
+       (infra-server/start-server {:port port})
+       (gateway/init!)))))
 
 (defn halt
-  "Stop the Integrant system."
+  "Stop the running server."
   []
-  (ig-repl/halt))
+  (infra-server/stop-server))
 
 (defn reset
   "Halt the system, force-reload all code, and restart.
    Use after editing any source files."
   []
-  (halt)
-  (reload/reload {:only :loaded})
-  (go))
+  (if-let [src (infra-model/get-src)]
+    (let [port (or (infra-server/get-port) 8080)]
+      (halt)
+      (reload-code!)
+      (go {:src src :port port}))
+    (println "No previous configuration. Use (go) first.")))
 
 (defn refresh-model
-  "Rebuild model from source without restarting the server.
-   Use after editing the codebase being analyzed."
+  "Reload code and rebuild model without restarting server.
+   Use this after editing the codebase being analyzed."
   []
-  (if-let [model-state (:fukan.infra/model state/system)]
+  (if (infra-server/running?)
     (do
-      (infra-model/refresh! model-state)
+      (reload-code!)
+      (infra-model/refresh-model)
       (println "Refreshed. Browser will see changes on next request."))
-    (println "System not running. Use (go) first.")))
+    (println "Server not running. Use (go) first.")))
 
 (defn status
   "Print current development environment status."
   []
-  (if state/system
-    (let [model-state (:fukan.infra/model state/system)
-          {:keys [port]} (:fukan.infra/server state/system)]
-      (println "Server: running on port" port)
-      (if-let [m (:model @model-state)]
-        (println "Model:" (count (:nodes m)) "nodes,"
-                 (count (:edges m)) "edges"
-                 "(src:" (:src @model-state) ")")
-        (println "Model: not loaded")))
-    (println "System: not running")))
+  (println "Server:" (if (infra-server/running?)
+                       (str "running on port " (infra-server/get-port))
+                       "stopped"))
+  (println "Model:" (if-let [m (infra-model/get-model)]
+                      (str (count (:nodes m)) " nodes, "
+                           (count (:edges m)) " edges"
+                           " (src: " (infra-model/get-src) ")")
+                      "not loaded")))
 
 (comment
   ;; Quick start for this project

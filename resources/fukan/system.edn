@@ -1,3 +1,0 @@
-{:fukan.infra/model   {:src nil}
- :fukan.web/handler   {:model-state #ig/ref :fukan.infra/model}
- :fukan.infra/server  {:port 8080 :handler #ig/ref :fukan.web/handler}}

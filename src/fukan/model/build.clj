@@ -606,7 +606,7 @@
 (defn- mark-root-functions
   "Mark contract functions as :root? when they have no incoming edges from
    outside their own namespace. These are entry points called by framework
-   machinery (e.g., Integrant) rather than application code."
+   machinery rather than application code."
   [nodes edges]
   (let [;; Collect function IDs from namespace-level contracts
         contract-fn-ids

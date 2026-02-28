@@ -2,33 +2,32 @@
 
 ## Purpose
 
-Decoupled lifecycle management via Integrant components: model and server are independent subsystems wired through dependency injection.
+Decoupled lifecycle management: model and server are independent subsystems with separate state.
 
-## Model Component (`:fukan.infra/model`)
+## Model Lifecycle
 
-- **init**: Create model-state atom, optionally load model from configured src path
-- **load-model!(model-state, src-path)**: Run analysis on source path, build graph model, store in atom
-- **refresh!(model-state)**: Rebuild model from last stored src-path (no arguments beyond atom)
+- **load(src-path)**: Run analysis on source path, build graph model, store result. Persists src-path for later refresh.
+- **get**: Return current model (nil if not loaded)
+- **refresh**: Rebuild model from last stored src-path (no arguments needed)
 
-State: atom holding `{:model M, :src path}`. Model is nil until first load. The atom is passed to the handler via Integrant config.
+State: single atom holding `{model, src-path}`. Model is nil until first load.
 
-## Handler Component (`:fukan.web/handler`)
+## Server Lifecycle
 
-- **init**: Receives model-state atom via `#ig/ref`, creates Ring handler that derefs atom per-request
+- **start(port?)**: Create HTTP handler, bind port, store stop-fn. The handler calls `get-model` on each request.
+- **stop**: Call stored stop-fn, clear state
+- **running?**: Check if state is non-nil
 
-## Server Component (`:fukan.infra/server`)
-
-- **init**: Receives handler via `#ig/ref`, starts http-kit on configured port. Returns `{:stop-fn f, :port p}`.
-- **halt**: Calls stop-fn to unbind port
+State: single atom holding `{stop-fn, port}` or nil when stopped. Idempotent start (guards against double-bind) and stop.
 
 ## Decoupling Invariant
 
-The handler never imports `infra.model` directly. It receives the model-state atom through Integrant's dependency injection. This means:
+The server never holds a direct reference to the model. The handler calls `infra.model/get-model` per request. This means:
 
 - Model can refresh (re-analyze + rebuild) without restarting the server
 - Server can stop and restart without losing or rebuilding the model
-- The dependency graph is a clean chain: server → handler → model
+- Either lifecycle can be operated independently from the REPL
 
 ## Instance Management
 
-Integrant manages component ordering and lifecycle. System configuration lives in `resources/fukan/system.edn`.
+Both subsystems use `defonce` for their state atoms — at most one model and one server per JVM process.
