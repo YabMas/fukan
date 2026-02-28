@@ -61,12 +61,14 @@
 (def ^:schema ContractFn
   [:map {:description "A public function entry in a module contract."}
    [:name :symbol]
+   [:id {:optional true, :description "Node ID of the contracted function."} :string]
    [:schema {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]
    [:doc {:optional true} :string]])
 
 (def ^:schema Contract
   [:map {:description "A module's external boundary: the functions that callers outside the module use."}
    [:description {:optional true} :string]
+   [:source {:optional true, :description "Origin: :declared (contract.edn) or absent (inferred)."} :keyword]
    [:functions [:vector :ContractFn]]])
 
 (def ^:schema Field
@@ -275,6 +277,8 @@
 (defn build-namespace-nodes
   "Build namespace nodes from namespace definitions.
    Returns {:nodes {id -> node}, :index {ns-sym -> id}}."
+  {:malli/schema [:=> [:cat [:vector :NsDef] [:map-of :string :NodeId]]
+                  [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
   [ns-defs folder-index]
   (reduce (fn [acc {:keys [name filename doc]}]
             (let [id (str name)
@@ -299,6 +303,8 @@
 (defn build-var-nodes
   "Build var nodes from var definitions.
    Returns {:nodes {id -> node}, :index {[ns-sym var-name] -> id}}."
+  {:malli/schema [:=> [:cat [:vector :VarDef] [:map-of :symbol :NodeId]]
+                  [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
   [var-defs ns-index]
   (reduce (fn [acc {:keys [ns name doc private]}]
             (let [id (str ns "/" name)
@@ -379,6 +385,7 @@
    - When from-var is nil (top-level or anonymous): creates ns-to-var edge
 
    Returns a vector of {:from node-id, :to node-id} edges."
+  {:malli/schema [:=> [:cat :AnalysisData :map :map] [:vector :Edge]]}
   [analysis var-index ns-index]
   (let [var-usages (:var-usages analysis)
         known-ns (set (keys ns-index))]
@@ -402,6 +409,7 @@
    are defined in the codebase.
 
    Returns a vector of {:from ns-id, :to ns-id, :kind :ns-require} edges."
+  {:malli/schema [:=> [:cat :AnalysisData [:map-of :symbol :NodeId]] [:vector :Edge]]}
   [analysis ns-index]
   (let [ns-usages (:namespace-usages analysis)
         known-ns (set (keys ns-index))]

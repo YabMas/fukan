@@ -181,6 +181,7 @@
                      (throw (ex-info (str "Contract function missing :malli/schema metadata: " sym)
                                      {:sym sym})))]
       (cond-> {:name (name var-sym)
+               :id (str ns-sym "/" (name var-sym))
                :schema schema}
         (:doc (meta v)) (assoc :doc (:doc (meta v)))))))
 
@@ -192,9 +193,9 @@
     (let [file (io/file dir-path "contract.edn")]
       (when (.exists file)
         (let [raw (edn/read-string (slurp file))]
-          (update raw :functions
-                  (fn [fns]
-                    (mapv resolve-fn-ref fns))))))))
+          (-> raw
+              (update :functions (fn [fns] (mapv resolve-fn-ref fns)))
+              (assoc :source :declared))))))))
 
 (defn resolve-contracts
   "Pre-resolve contract.edn files for container nodes in the contribution.

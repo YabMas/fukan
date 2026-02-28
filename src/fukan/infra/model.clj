@@ -2,7 +2,8 @@
   "Model lifecycle management.
    Handles loading, storing, and refreshing the model independently
    from the server lifecycle."
-  (:require [fukan.model.pipeline :as pipeline]))
+  (:require [fukan.model.lint :as lint]
+            [fukan.model.pipeline :as pipeline]))
 
 (defonce ^:private state (atom {:model nil :src nil}))
 
@@ -11,9 +12,12 @@
   {:malli/schema [:=> [:cat :string] :Model]}
   [src]
   (println "Analyzing" src "...")
-  (let [m (pipeline/build-model src)]
+  (let [m (pipeline/build-model src)
+        report (lint/check-contracts m)]
     (println "Built" (count (:nodes m)) "nodes," (count (:edges m)) "edges")
-    (reset! state {:model m :src src})
+    (when (seq (:violations report))
+      (println (lint/format-report report)))
+    (reset! state {:model m :src src :lint report})
     m))
 
 (defn get-model

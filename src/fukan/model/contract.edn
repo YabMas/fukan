@@ -1,2 +1,8 @@
 {:description "Builds the graph model from source code analysis: a tree of container, function, and schema nodes connected by directed dependency edges. Language-agnostic pipeline with pluggable language analyzers."
- :functions [fukan.model.pipeline/build-model]}
+ :functions [fukan.model.pipeline/build-model
+             fukan.model.lint/check-contracts
+             fukan.model.lint/format-report
+             fukan.model.build/build-namespace-nodes
+             fukan.model.build/build-var-nodes
+             fukan.model.build/build-edges
+             fukan.model.build/build-ns-edges]}
