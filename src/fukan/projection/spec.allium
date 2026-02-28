@@ -364,3 +364,48 @@ rule FindSchemaNodeId {
     ensures: model.nodes
         .find(n => n.kind = Schema and n.schema_key = schema_key)?.id
 }
+
+------------------------------------------------------------
+-- Search and Overview
+------------------------------------------------------------
+
+value SearchResult {
+    -- A single search match: node identity and location.
+    id: String
+    kind: container | function | schema
+    label: String
+    parent: String?
+}
+
+value ModelOverview {
+    -- Summary statistics for the loaded model.
+    total_nodes: Integer
+    total_edges: Integer
+    by_kind: Map<NodeKind, Integer>
+}
+
+rule Search {
+    -- Case-insensitive substring search on node labels.
+    -- Returns up to `limit` matches ordered by appearance.
+    -- Used by the CLI find command and available to any consumer.
+
+    when: Search(pattern: String, limit: Integer)
+
+    ensures: model.nodes.values
+        .filter(n => n.label.lower_case.contains(pattern.lower_case))
+        .take(limit)
+        .map(n => SearchResult { id: n.id, kind: n.kind, label: n.label, parent: n.parent })
+}
+
+rule Overview {
+    -- Compute model summary statistics.
+    -- Returns total counts and per-kind breakdown.
+
+    when: Overview()
+
+    ensures: ModelOverview {
+        total_nodes: model.nodes.count,
+        total_edges: model.edges.count,
+        by_kind: model.nodes.values.group_by(n => n.kind).map_values(count)
+    }
+}

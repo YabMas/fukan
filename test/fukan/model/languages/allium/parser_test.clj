@@ -354,8 +354,8 @@
         (is (= 1 (:use types)))
         (is (= 1 (:given types)))
         (is (= 2 (:enum types)))
-        (is (= 12 (:value types)))
-        (is (= 8 (:rule types)))))))
+        (is (= 14 (:value types)))
+        (is (= 10 (:rule types)))))))
 
 (deftest views-allium-integration-test
   (testing "views.allium parses completely"

@@ -3,7 +3,8 @@
    Composes graph, path, details, and schema projections into compound
    operations that consumers need. Consumers require only this namespace
    instead of reaching into individual projection namespaces."
-  (:require [fukan.projection.graph :as graph]
+  (:require [clojure.string :as str]
+            [fukan.projection.graph :as graph]
             [fukan.projection.details :as details]
             [fukan.projection.path :as path]
             [fukan.projection.schema :as schema]))
@@ -55,3 +56,43 @@
   {:malli/schema [:=> [:cat :Model] [:maybe :Node]]}
   [model]
   (path/find-root-node model))
+
+;; -----------------------------------------------------------------------------
+;; Search and Overview
+
+(def ^:schema SearchResult
+  [:map {:description "A single search match: node identity and location."}
+   [:id :string]
+   [:kind :NodeKind]
+   [:label :string]
+   [:parent {:optional true} [:maybe :string]]])
+
+(def ^:schema ModelOverview
+  [:map {:description "Summary statistics for the loaded model."}
+   [:total-nodes :int]
+   [:total-edges :int]
+   [:by-kind [:map-of :NodeKind :int]]])
+
+(defn search
+  "Case-insensitive substring search on node labels.
+   Returns up to `limit` matches as [{:id :kind :label :parent}]."
+  {:malli/schema [:=> [:cat :Model :string :int] [:vector :SearchResult]]}
+  [model pattern limit]
+  (let [pat (str/lower-case pattern)]
+    (->> (vals (:nodes model))
+         (filter #(str/includes? (str/lower-case (:label %)) pat))
+         (take limit)
+         (mapv (fn [n]
+                 {:id (:id n)
+                  :kind (:kind n)
+                  :label (:label n)
+                  :parent (:parent n)})))))
+
+(defn overview
+  "Model summary: total nodes, total edges, and counts by node kind."
+  {:malli/schema [:=> [:cat :Model] :ModelOverview]}
+  [model]
+  (let [nodes (vals (:nodes model))]
+    {:total-nodes (count nodes)
+     :total-edges (count (:edges model))
+     :by-kind (frequencies (map :kind nodes))}))

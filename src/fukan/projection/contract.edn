@@ -1,5 +1,7 @@
-{:description "Pure functions from Model to visible data: graph projections for visualization, entity detail structures for the sidebar, breadcrumb paths for navigation, and schema queries for cross-cutting lookups. No side effects, no UI state."
+{:description "Pure functions from Model to visible data: graph projections for visualization, entity detail structures for the sidebar, breadcrumb paths for navigation, schema queries for cross-cutting lookups, text search, and model statistics. No side effects, no UI state."
  :functions
  [fukan.projection.api/navigate
   fukan.projection.api/inspect
-  fukan.projection.api/find-root]}
+  fukan.projection.api/find-root
+  fukan.projection.api/search
+  fukan.projection.api/overview]}
