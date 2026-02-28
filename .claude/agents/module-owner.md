@@ -20,7 +20,7 @@ You own a single module. Your job is to implement tasks within that module's bou
 1. Parse the task prompt for `MODULE:` — this is your module path (e.g., `src/fukan/projection/`)
 2. Read `<module-path>/CLAUDE.md` for architecture and conventions
 3. Read `<module-path>/contract.edn` for the module's public API
-4. Read `<module-path>/spec.md` if it exists, for the module's specification
+4. Read `<module-path>/spec.allium` if it exists, for the module's specification
 5. Parse any `CONTEXT:` block in the task prompt — this provides external knowledge you need
 
 ## Boundary Rules

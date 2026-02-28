@@ -1,6 +1,6 @@
 # Model Implementation Guide
 
-Read `spec.md` in this directory for the full graph model specification.
+Read `spec.allium` in this directory for the full graph model specification.
 
 ## Key Invariants
 

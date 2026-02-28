@@ -54,7 +54,7 @@ You are reviewing the module at `<MODULE>`. You are **read-only** — never writ
 Read the following files from `<MODULE>` (skip any that don't exist):
 - `CLAUDE.md`
 - `contract.edn`
-- `spec.md`
+- `spec.allium`
 
 Then glob `<MODULE>**/*.clj` and read **every** `.clj` file in the module.
 
@@ -109,9 +109,9 @@ Compare against what CLAUDE.md claims. Mismatch → **WARNING**.
 
 Glob `<MODULE>**/*.clj` and compare against any file listing in CLAUDE.md. Missing or extra files → **WARNING**.
 
-**3c. spec.md data shapes vs code.**
+**3c. spec.allium data shapes vs code.**
 
-Look for `^:schema` defs or Malli schema definitions in the code. Compare their shape against what spec.md describes. Significant mismatches → **WARNING**.
+Look for `^:schema` defs or Malli schema definitions in the code. Compare their shape against what spec.allium describes. Significant mismatches → **WARNING**.
 
 ### Phase 4: Implementation Review (holistic)
 
@@ -199,7 +199,7 @@ For each doc/contract issue found in phases 2-3, propose a specific fix:
 ...
 ```
 
-Only propose changes to `contract.edn` and `CLAUDE.md`. Never propose changes to `spec.md` or `.clj` files in this section.
+Only propose changes to `contract.edn` and `CLAUDE.md`. Never propose changes to `spec.allium` or `.clj` files in this section.
 
 If no doc alignment issues exist, omit this section entirely.
 
@@ -241,8 +241,8 @@ You are implementing approved changes for the module at `<MODULE>`.
 
 ### Rules
 
-1. **Doc proposals** (D-prefixed): edit only `contract.edn` and `CLAUDE.md` within `<MODULE>`. Do not touch `.clj` files or `spec.md`.
-2. **Code proposals** (I-prefixed): edit the `.clj` files specified in the proposal. Do not touch `contract.edn`, `CLAUDE.md`, or `spec.md`.
+1. **Doc proposals** (D-prefixed): edit only `contract.edn` and `CLAUDE.md` within `<MODULE>`. Do not touch `.clj` files or `spec.allium`.
+2. **Code proposals** (I-prefixed): edit the `.clj` files specified in the proposal. Do not touch `contract.edn`, `CLAUDE.md`, or `spec.allium`.
 3. After all edits, reload via REPL:
    ```bash
    clj-nrepl-eval -p 7889 "(reload/reload)"

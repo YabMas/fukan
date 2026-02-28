@@ -1,6 +1,6 @@
 # Projection Implementation Guide
 
-Read `spec.md` in this directory for the full projection specification.
+Read `spec.allium` in this directory for the full projection specification.
 
 ## Key Principles
 

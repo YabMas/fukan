@@ -1,6 +1,6 @@
 # Infra Implementation Guide
 
-Read `spec.md` in this directory for the full infrastructure lifecycle specification.
+Read `spec.allium` in this directory for the full infrastructure lifecycle specification.
 
 ## Module Purpose
 

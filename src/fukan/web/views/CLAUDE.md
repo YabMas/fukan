@@ -2,9 +2,9 @@
 
 This module implements the view and interaction layer. Read these specs for context:
 
-- `../../model/spec.md` — graph model vocabulary (entities, edges, hierarchy)
-- `../../projection/spec.md` — projection rules this module renders
-- `spec.md` — view rendering and interaction spec (this module's own spec)
+- `../../model/spec.allium` — graph model vocabulary (entities, edges, hierarchy)
+- `../../projection/spec.allium` — projection rules this module renders
+- `spec.allium` — view rendering and interaction spec (this module's own spec)
 
 ## Core Principle: Match the Spec's Abstraction Level
 
