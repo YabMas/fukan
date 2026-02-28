@@ -2,8 +2,7 @@
   "Development helpers for REPL-driven workflow."
   (:require [clj-reload.core :as reload]
             [fukan.infra.model :as infra-model]
-            [fukan.infra.server :as infra-server]
-            [fukan.cli.gateway :as gateway]))
+            [fukan.infra.server :as infra-server]))
 
 ;; Initialize clj-reload - tracks src and dev directories
 ;; The 'user namespace is excluded from reloading
@@ -33,8 +32,7 @@
      (println "Server already running on port" (infra-server/get-port))
      (do
        (infra-model/load-model src)
-       (infra-server/start-server {:port port})
-       (gateway/init!)))))
+       (infra-server/start-server {:port port})))))
 
 (defn halt
   "Stop the running server."

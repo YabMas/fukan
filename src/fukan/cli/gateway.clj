@@ -21,11 +21,6 @@
                                   :expanded #{}
                                   :src nil}))
 
-(defn init!
-  "No-op retained for call-site compatibility."
-  []
-  nil)
-
 (defn exec
   "Execute a CLI command string. Returns the response EDN map.
    Session state (view-id, history, expanded) persists between calls.
