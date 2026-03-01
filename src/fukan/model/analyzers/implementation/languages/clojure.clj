@@ -8,8 +8,7 @@
             [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.set :as set]
-            [fukan.model.build :as build]
-            [fukan.schema.forms :as forms]))
+            [fukan.model.build :as build]))
 
 ;; -----------------------------------------------------------------------------
 ;; Static Analysis
@@ -87,6 +86,157 @@
                 (mapv #(set/rename-keys % {:from-var :from-symbol}) refs)))))
 
 ;; -----------------------------------------------------------------------------
+;; Malli → TypeExpr conversion
+
+(defn- malli-props
+  "Extract property map from a Malli vector form, nil if absent."
+  [form]
+  (when (and (vector? form)
+             (>= (count form) 2)
+             (map? (second form)))
+    (second form)))
+
+(defn- malli-children
+  "Children of a Malli vector form, after tag and optional props."
+  [form]
+  (let [tail (rest form)]
+    (if (and (seq tail) (map? (first tail)))
+      (rest tail)
+      tail)))
+
+(defn- keyword->type-expr
+  "Classify a keyword as :ref or :primitive based on initial case.
+   Uppercase-initial → ref, lowercase → primitive."
+  [k]
+  (let [n (name k)]
+    (if (Character/isUpperCase (first n))
+      {:tag :ref :name k}
+      {:tag :primitive :name n})))
+
+(defn malli->type-expr
+  "Recursively convert a Malli schema form to a TypeExpr map.
+   Handles all standard Malli types; unknown forms become :unknown."
+  [form]
+  (cond
+    ;; Keyword — classify as ref or primitive
+    (keyword? form)
+    (keyword->type-expr form)
+
+    ;; Vector form — dispatch on tag
+    (vector? form)
+    (let [tag (first form)
+          props (malli-props form)
+          children (malli-children form)
+          desc (:description props)]
+      (case tag
+        :map
+        (cond-> {:tag :map
+                 :entries (vec (for [entry children
+                                     :when (vector? entry)]
+                                 (let [[k & rest-parts] entry
+                                       [opts child-schema] (if (map? (first rest-parts))
+                                                             [(first rest-parts) (second rest-parts)]
+                                                             [{} (first rest-parts)])]
+                                   (cond-> {:key (str k)
+                                            :optional (boolean (:optional opts))
+                                            :type (malli->type-expr child-schema)}
+                                     (:description opts) (assoc :description (:description opts))))))}
+          desc (assoc :description desc))
+
+        :map-of
+        (cond-> {:tag :map-of
+                 :key-type (malli->type-expr (first children))
+                 :value-type (malli->type-expr (second children))}
+          desc (assoc :description desc))
+
+        :vector
+        (cond-> {:tag :vector
+                 :element (malli->type-expr (first children))}
+          desc (assoc :description desc))
+
+        :set
+        (cond-> {:tag :set
+                 :element (malli->type-expr (first children))}
+          desc (assoc :description desc))
+
+        :maybe
+        (cond-> {:tag :maybe
+                 :inner (malli->type-expr (first children))}
+          desc (assoc :description desc))
+
+        :or
+        (cond-> {:tag :or
+                 :variants (mapv malli->type-expr children)}
+          desc (assoc :description desc))
+
+        :and
+        (cond-> {:tag :and
+                 :types (mapv malli->type-expr children)}
+          desc (assoc :description desc))
+
+        :enum
+        (cond-> {:tag :enum
+                 :values (vec children)}
+          desc (assoc :description desc))
+
+        (:= :==)
+        (cond-> {:tag :enum
+                 :values (vec children)}
+          desc (assoc :description desc))
+
+        :tuple
+        (cond-> {:tag :tuple
+                 :elements (mapv malli->type-expr children)}
+          desc (assoc :description desc))
+
+        :fn
+        (cond-> {:tag :predicate}
+          desc (assoc :description desc))
+
+        :=>
+        (let [[input output] children
+              inputs (if (and (vector? input) (= :cat (first input)))
+                       (mapv malli->type-expr (rest input))
+                       [(malli->type-expr input)])]
+          (cond-> {:tag :fn
+                   :inputs inputs
+                   :output (malli->type-expr output)}
+            desc (assoc :description desc)))
+
+        :cat
+        (cond-> {:tag :tuple
+                 :elements (mapv malli->type-expr children)}
+          desc (assoc :description desc))
+
+        :multi
+        (cond-> {:tag :or
+                 :variants (mapv (fn [child]
+                                   (if (vector? child)
+                                     (malli->type-expr (second child))
+                                     (malli->type-expr child)))
+                                 children)}
+          desc (assoc :description desc))
+
+        ;; Default — unknown tag
+        (cond-> {:tag :unknown :original (pr-str form)}
+          desc (assoc :description desc))))
+
+    ;; Anything else — unknown
+    :else
+    {:tag :unknown :original (pr-str form)}))
+
+(defn malli->fn-signature
+  "Convert a Malli function schema [:=> [:cat a b] out] to FunctionSignature
+   {:inputs [TypeExpr] :output TypeExpr}, or nil if not a function schema."
+  [form]
+  (when (and (vector? form) (= :=> (first form)))
+    (let [[_ input output] form
+          inputs (if (and (vector? input) (= :cat (first input)))
+                   (mapv malli->type-expr (rest input))
+                   [(malli->type-expr input)])]
+      {:inputs inputs :output (malli->type-expr output)})))
+
+;; -----------------------------------------------------------------------------
 ;; Schema Discovery
 
 (def ^:schema SchemaDiscoveryEntry
@@ -98,12 +248,6 @@
 (def ^:schema SchemaDiscoveryData
   [:map-of {:description "All discovered ^:schema vars keyed by schema keyword."}
    :keyword :SchemaDiscoveryEntry])
-
-(defn- malli-description
-  "Extract :description from a Malli schema form's property map.
-   Returns nil for bare types or forms without properties."
-  [form]
-  (forms/form-description form))
 
 (defn discover-schema-data
   "Scan loaded namespaces for vars with ^:schema metadata.
@@ -119,7 +263,7 @@
                        :when (:schema (meta v))]
                    [(keyword (name sym))
                     {:schema-form @v
-                     :doc (malli-description @v)
+                     :doc (:description (malli-props @v))
                      :owner-ns (str (ns-name ns))}])))
        (into {})))
 
@@ -129,6 +273,7 @@
 (defn build-schema-nodes
   "Build schema nodes from discovered schema data.
    Schema nodes are placed inside their owning namespace module.
+   Converts raw Malli schema forms to TypeExpr at build time.
 
    ns-index is a map of {ns-sym -> node-id} for looking up parent namespaces.
    schema-data is a map of {keyword -> {:schema-form form :doc str? :owner-ns ns-str}}
@@ -149,7 +294,7 @@
                      :children #{}
                      :data {:kind :schema
                             :schema-key k
-                            :schema schema-form
+                            :schema (malli->type-expr schema-form)
                             :doc doc}}])))
        (into {})))
 
@@ -158,6 +303,7 @@
 
 (defn enrich-with-runtime-metadata
   "Attach :malli/schema signatures to function nodes from runtime vars.
+   Converts Malli function schemas to FunctionSignature (TypeExpr-based).
    schema-data is used to exclude schema-defining vars (they become schema nodes).
    Must be called after namespaces are loaded in the JVM."
   [nodes schema-data]
@@ -175,7 +321,7 @@
                                           (ns-resolve var-sym)
                                           meta :malli/schema)
                                   (catch Exception _ nil))]
-                  (if-let [parts (when schema (forms/fn-schema-parts schema))]
+                  (if-let [parts (when schema (malli->fn-signature schema))]
                     (assoc acc id (assoc-in node [:data :signature] parts))
                     (assoc acc id node)))
                 (assoc acc id node)))
@@ -205,7 +351,7 @@
                                      {:sym sym})))]
       (cond-> {:name (name var-sym)
                :id (str ns-sym "/" (name var-sym))
-               :schema (forms/fn-schema-parts schema)}
+               :schema (malli->fn-signature schema)}
         (:doc (meta v)) (assoc :doc (:doc (meta v)))))))
 
 (defn- read-contract-file
