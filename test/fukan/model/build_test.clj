@@ -6,7 +6,6 @@
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.properties :as prop]
             [fukan.model.build :as build]
-            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]
             [fukan.test-support.generators :as gen]
             [fukan.test-support.invariants.model :as inv]))
 
@@ -15,7 +14,7 @@
 
 (defspec build-model-satisfies-all-invariants 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/build-model contrib)]
+    (let [model (build/run-pipeline contrib)]
       (true? (inv/valid-model? model)))))
 
 ;; ---------------------------------------------------------------------------
@@ -23,32 +22,32 @@
 
 (defspec build-model-tree-structure 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/build-model contrib)]
+    (let [model (build/run-pipeline contrib)]
       (true? (inv/tree-structure? model)))))
 
 (defspec build-model-leaf-strictness 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/build-model contrib)]
+    (let [model (build/run-pipeline contrib)]
       (true? (inv/leaf-strictness? model)))))
 
 (defspec build-model-no-empty-modules 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/build-model contrib)]
+    (let [model (build/run-pipeline contrib)]
       (true? (inv/no-empty-modules? model)))))
 
 (defspec build-model-no-self-edges 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/build-model contrib)]
+    (let [model (build/run-pipeline contrib)]
       (true? (inv/no-self-edges? model)))))
 
 (defspec build-model-edge-integrity 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/build-model contrib)]
+    (let [model (build/run-pipeline contrib)]
       (true? (inv/edge-integrity? model)))))
 
 (defspec build-model-no-unconsumed-provides 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/build-model contrib)]
+    (let [model (build/run-pipeline contrib)]
       (true? (inv/no-unconsumed-provides? model)))))
 
 ;; ---------------------------------------------------------------------------
@@ -56,8 +55,7 @@
 
 (deftest fukan-self-analysis-invariants
   (testing "Fukan's own source code satisfies all model invariants"
-    (let [result (clj-lang/analyze "src")
-          model (build/build-model result)]
+    (let [model (build/build-model "src")]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
       (is (true? (inv/tree-structure? model)) (str (inv/tree-structure? model)))

@@ -31,15 +31,15 @@ The pipeline in `build.clj`:
 ## Module Structure
 
 ```
-schema.clj    — all Malli schema definitions (pure data, no logic)
-build.clj     — language-agnostic construction helpers + build pipeline
-pipeline.clj  — pure orchestration: call analyzers, merge, build
-lint.clj      — cross-module contract compliance linting
+schema.clj  — all Malli schema definitions (pure data, no logic)
+nodes.clj   — construction helpers for language analyzers
+build.clj   — orchestration + language-agnostic build pipeline
+lint.clj    — cross-module contract compliance linting
 ```
 
 Dependency graph:
 ```
-schema  ←  build  ←  clojure.clj  ←  pipeline
+schema  ←  nodes  ←  clojure.clj  ←  build
                   ←  allium.clj   ←
 ```
 
@@ -49,7 +49,7 @@ Analyzers live under `analyzers/`, split by category:
 - `analyzers/implementation/` — discovers code structure (Clojure via clj-kondo)
 - `analyzers/specification/` — discovers design structure (Allium via instaparse)
 
-Both produce `AnalysisResult` values that are merged by `pipeline.clj` before `build-model`.
+Both produce `AnalysisResult` values that are merged by `build.clj` before `run-pipeline`.
 
 The Clojure analyzer produces a **complete** AnalysisResult including:
 - Module and symbol nodes from static analysis

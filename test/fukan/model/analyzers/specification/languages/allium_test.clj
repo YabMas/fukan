@@ -7,7 +7,6 @@
             [clojure.string :as str]
             [fukan.model.analyzers.specification.languages.allium :as analyzer]
             [fukan.model.build :as build]
-            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]
             [fukan.test-support.invariants.model :as inv]))
 
 ;; ---------------------------------------------------------------------------
@@ -167,10 +166,7 @@
 
 (deftest allium-model-integration-test
   (testing "merged Clojure + Allium result builds valid model"
-    (let [clj-result (clj-lang/analyze "src")
-          allium-result (analyzer/analyze "src")
-          result (build/merge-results clj-result allium-result)
-          model (build/build-model result)]
+    (let [model (build/build-model "src")]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
       ;; Allium result should merge into model modules

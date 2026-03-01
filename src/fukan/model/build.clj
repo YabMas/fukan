@@ -1,11 +1,10 @@
 (ns fukan.model.build
-  "Language-agnostic model construction pipeline.
-   Transforms normalized analysis data into the graph model: a tree of
-   module, function, and schema nodes connected by directed dependency
-   edges. Handles folder/namespace/var node construction, parent-child
-   wiring, smart-root pruning, edge building, and contract attachment."
+  "Model construction: orchestrates language analyzers and runs the
+   language-agnostic build pipeline to produce the graph model."
   (:require [clojure.string :as str]
-            [fukan.model.schema]))
+            [fukan.model.schema]
+            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]
+            [fukan.model.analyzers.specification.languages.allium :as allium]))
 
 ;; Require model.schema so its ^:schema vars are loaded for the registry.
 ;; No alias needed — schemas are referenced by keyword, not by var.
@@ -146,64 +145,12 @@
             ;; Sort dirs so parents are processed first
             (sort-by count all-dirs))))
 
-;; -----------------------------------------------------------------------------
-;; Namespace node construction
-
 (defn- file-to-folder
   "Get the folder path for a file."
   [filepath]
   (let [parts (str/split filepath #"/")]
     (when (> (count parts) 1)
       (str/join "/" (butlast parts)))))
-
-(defn build-module-nodes
-  "Build module nodes from module definitions.
-   Returns {:nodes {id -> node}, :index {ns-sym -> id}}."
-  {:malli/schema [:=> [:cat [:vector :ModuleDef] [:map-of :string :NodeId]]
-                  [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
-  [ns-defs folder-index]
-  (reduce (fn [acc {:keys [name filename doc]}]
-            (let [id (str name)
-                  folder-path (file-to-folder filename)
-                  parent-id (get folder-index folder-path)
-                  node {:id id
-                        :kind :module
-                        :label (str name)
-                        :parent parent-id
-                        :children #{}
-                        :data {:kind :module
-                               :doc doc}}]
-              (-> acc
-                  (assoc-in [:nodes id] node)
-                  (assoc-in [:index name] id))))
-          {:nodes {} :index {}}
-          ns-defs))
-
-;; -----------------------------------------------------------------------------
-;; Var node construction
-
-(defn build-symbol-nodes
-  "Build symbol nodes from symbol definitions.
-   Returns {:nodes {id -> node}, :index {[module-sym var-name] -> id}}."
-  {:malli/schema [:=> [:cat [:vector :SymbolDef] [:map-of :symbol :NodeId]]
-                  [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
-  [var-defs ns-index]
-  (reduce (fn [acc {:keys [module name doc private]}]
-            (let [id (str module "/" name)
-                  parent-id (get ns-index module)
-                  node {:id id
-                        :kind :function
-                        :label (str name)
-                        :parent parent-id
-                        :children #{}
-                        :data {:kind :function
-                               :doc doc
-                               :private? (boolean private)}}]
-              (-> acc
-                  (assoc-in [:nodes id] node)
-                  (assoc-in [:index [module name]] id))))
-          {:nodes {} :index {}}
-          var-defs))
 
 ;; -----------------------------------------------------------------------------
 ;; Surface-to-boundary collapse
@@ -286,33 +233,7 @@
           nodes))
 
 ;; -----------------------------------------------------------------------------
-;; Edge construction
-
-(defn build-reference-edges
-  "Build leaf-to-leaf edges from actual call relationships.
-
-   Creates edges for each symbol reference where both endpoints resolve to
-   leaf nodes. References without a from-symbol (top-level or anonymous) are
-   skipped — they would produce module-to-leaf edges violating LeafEdges.
-
-   Returns a vector of {:from node-id, :to node-id} edges."
-  {:malli/schema [:=> [:cat :CodeAnalysis :map :map] [:vector :Edge]]}
-  [analysis var-index _ns-index]
-  (let [symbol-refs (:symbol-references analysis)]
-    (->> symbol-refs
-         (keep (fn [{:keys [from from-symbol to name]}]
-                 ;; Only create edges when both endpoints resolve to leaf nodes.
-                 ;; Skip top-level references (from-symbol nil) — they produce
-                 ;; module-to-leaf edges, violating LeafEdges.
-                 (when (and from-symbol
-                            (get var-index [from from-symbol]))
-                   (let [from-id (get var-index [from from-symbol])
-                         to-id   (get var-index [to name])]
-                     (when (and to-id (not= from-id to-id))
-                       {:from from-id :to to-id})))))
-         (into #{})
-         (vec))))
-
+;; Schema-defining var removal
 
 (defn- remove-schema-defining-vars
   "Remove function nodes whose vars define schemas.
@@ -359,11 +280,10 @@
                        acc nmap))
           {} nmaps))
 
-(defn merge-results
+(defn- merge-results
   "Merge multiple language analysis results into one.
    Module nodes with the same ID are deep-merged (spec enriches impl).
    Other nodes use last-wins. Edges are deduplicated."
-  {:malli/schema [:=> [:cat [:* :AnalysisResult]] :AnalysisResult]}
   [& results]
   {:source-files (vec (mapcat :source-files results))
    :nodes (apply merge-node-maps (map :nodes results))
@@ -426,22 +346,13 @@
         (assoc acc id node)))
     {} nodes))
 
-
 ;; -----------------------------------------------------------------------------
-;; Main build function
+;; Build pipeline
 
-(defn build-model
-  "Build the complete model from a language analysis result.
-
-   An analysis result contains pre-built nodes and edges from language analyzers.
-   This function handles the language-agnostic pipeline:
-   1. Build folder hierarchy from :source-files
-   2. Parent module nodes under their folders
-   3. Merge all nodes (folders + analysis result)
-   4. Remove empty modules, wire children, smart-root prune
-   5. Materialize surface provides, collapse to boundary
-   6. Remove schema-defining vars, filter edges
-   7. Attach boundaries"
+(defn run-pipeline
+  "Run the language-agnostic build pipeline on a merged analysis result.
+   Transforms flat analysis nodes into a tree model with folder hierarchy,
+   boundaries, and pruned structure."
   {:malli/schema [:=> [:cat :AnalysisResult] :Model]}
   [result]
   (let [source-files (:source-files result)
@@ -504,3 +415,17 @@
 
     {:nodes boundary-nodes
      :edges all-edges}))
+
+;; -----------------------------------------------------------------------------
+;; Public API
+
+(defn build-model
+  "Build complete model from a source path.
+   Runs all language analyzers, merges their results, and produces
+   the final Model through the language-agnostic build pipeline."
+  {:malli/schema [:=> [:cat :string] :Model]}
+  [src-path]
+  (let [clj-result    (clj-lang/analyze src-path)
+        allium-result (allium/analyze src-path)
+        merged        (merge-results clj-result allium-result)]
+    (run-pipeline merged)))

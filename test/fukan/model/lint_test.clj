@@ -2,8 +2,7 @@
   "Tests for cross-module contract compliance linter."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.model.lint :as lint]
-            [fukan.model.build :as build]
-            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]))
+            [fukan.model.build :as build]))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers: hand-built models for unit tests
@@ -104,8 +103,7 @@
 
 (deftest fukan-self-analysis-lint
   (testing "Lint report runs against Fukan's own source without errors"
-    (let [result (clj-lang/analyze "src")
-          model (build/build-model result)
+    (let [model (build/build-model "src")
           report (lint/check-contracts model)]
       (is (map? report))
       (is (vector? (:violations report)))

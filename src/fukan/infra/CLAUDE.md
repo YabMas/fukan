@@ -25,7 +25,7 @@ Both files use **private atoms** (`defonce ^:private state`). State is never exp
 ## Dependency Direction
 
 ```
-infra/model.clj → model.pipeline (single entry point for model construction)
+infra/model.clj → model.build (single entry point for model construction)
 web/handler.clj → infra.model (to call get-model on each request)
 web/handler.clj → web.sse, web.views (to build routes)
 ```

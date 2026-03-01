@@ -8,7 +8,6 @@
             [clojure.test.check.properties :as prop]
             [fukan.cli.commands :as commands]
             [fukan.model.build :as build]
-            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]
             [fukan.projection.api :as proj]
             [fukan.test-support.generators :as gen]
             [fukan.test-support.invariants.cli :as inv]))
@@ -277,8 +276,7 @@
 
 (deftest fukan-cli-integration
   (testing "CLI commands work against Fukan's own model"
-    (let [result (clj-lang/analyze "src")
-          model (build/build-model result)
+    (let [model (build/build-model "src")
           state (make-state {:src "src"})
           rid (root-id model)]
       ;; ls at root
