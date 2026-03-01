@@ -104,19 +104,8 @@
 
 (deftest fukan-self-analysis-lint
   (testing "Lint report runs against Fukan's own source without errors"
-    (let [contrib (clj-lang/contribution "src")
-          schema-data (clj-lang/discover-schema-data)
-          enriched (-> contrib
-                       (update :nodes clj-lang/enrich-with-runtime-metadata schema-data)
-                       (update :nodes clj-lang/resolve-contracts))
-          model (build/build-model enriched
-                  {:type-nodes-fn (fn [ns-index]
-                                    (clj-lang/build-schema-nodes ns-index schema-data))})
-          ;; Resolve contracts from contract.edn on the built model's nodes,
-          ;; where folder node IDs are directory paths that match contract.edn locations.
-          ;; (resolve-contracts on contribution nodes is a no-op since namespace IDs
-          ;; like "fukan.model.build" don't match filesystem paths.)
-          model (update model :nodes clj-lang/resolve-contracts)
+    (let [result (clj-lang/analyze "src")
+          model (build/build-model result)
           report (lint/check-contracts model)]
       (is (map? report))
       (is (vector? (:violations report)))

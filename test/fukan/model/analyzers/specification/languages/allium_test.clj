@@ -128,9 +128,9 @@
 ;; ---------------------------------------------------------------------------
 ;; Integration: analyze Fukan's own .allium files
 
-(deftest allium-contribution-test
+(deftest allium-analyze-test
   (testing "produces module nodes enriched with spec data"
-    (let [result (analyzer/allium-contribution "src")]
+    (let [result (analyzer/analyze "src")]
       (is (pos? (count (:source-files result)))
           "should discover allium files")
       (is (pos? (count (:nodes result)))
@@ -155,7 +155,7 @@
 
 (deftest allium-enrichment-test
   (testing "module uses folder-path ID matching build pipeline"
-    (let [result (analyzer/allium-contribution "src")
+    (let [result (analyzer/analyze "src")
           model-module (get (:nodes result) "src/fukan/model")]
       (is (some? model-module) "model folder module should exist")
       (is (nil? (get-in model-module [:data :spec]))
@@ -167,17 +167,14 @@
 
 (deftest allium-model-integration-test
   (testing "merged Clojure + Allium result builds valid model"
-    (let [clj-result (clj-lang/contribution "src")
-          allium-result (analyzer/allium-contribution "src")
+    (let [clj-result (clj-lang/analyze "src")
+          allium-result (analyzer/analyze "src")
           result (build/merge-results clj-result allium-result)
-          schema-data (clj-lang/discover-schema-data)
-          model (build/build-model result
-                  {:type-nodes-fn (fn [ns-index]
-                                    (clj-lang/build-schema-nodes ns-index schema-data))})]
+          model (build/build-model result)]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
       ;; Allium result should merge into model modules
-      (let [allium-dirs (->> (vals (:nodes (analyzer/allium-contribution "src")))
+      (let [allium-dirs (->> (vals (:nodes (analyzer/analyze "src")))
                               (map :id)
                               set)]
         (is (some #(contains? allium-dirs %) (keys (:nodes model)))

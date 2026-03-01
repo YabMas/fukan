@@ -220,7 +220,7 @@
 ;; ---------------------------------------------------------------------------
 ;; Public API
 
-(defn allium-contribution
+(defn analyze
   "Produce an Allium language analysis result from source files.
    Discovers .allium files under src-path, parses them, and builds
    an AnalysisResult with nodes and edges."

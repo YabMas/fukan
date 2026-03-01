@@ -56,11 +56,8 @@
 
 (deftest fukan-self-analysis-invariants
   (testing "Fukan's own source code satisfies all model invariants"
-    (let [contrib (clj-lang/contribution "src")
-          schema-data (clj-lang/discover-schema-data)
-          model (build/build-model contrib
-                  {:type-nodes-fn (fn [ns-index]
-                                    (clj-lang/build-schema-nodes ns-index schema-data))})]
+    (let [result (clj-lang/analyze "src")
+          model (build/build-model result)]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
       (is (true? (inv/tree-structure? model)) (str (inv/tree-structure? model)))

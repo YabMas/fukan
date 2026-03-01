@@ -277,11 +277,8 @@
 
 (deftest fukan-cli-integration
   (testing "CLI commands work against Fukan's own model"
-    (let [contrib (clj-lang/contribution "src")
-          schema-data (clj-lang/discover-schema-data)
-          model (build/build-model contrib
-                  {:type-nodes-fn (fn [ns-index]
-                                    (clj-lang/build-schema-nodes ns-index schema-data))})
+    (let [result (clj-lang/analyze "src")
+          model (build/build-model result)
           state (make-state {:src "src"})
           rid (root-id model)]
       ;; ls at root

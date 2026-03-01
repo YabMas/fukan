@@ -11,20 +11,37 @@ Read `spec.allium` in this directory for the full graph model specification.
 ## Build Pipeline
 
 ```
-CodeAnalysis → folder nodes → module nodes → symbol nodes → type nodes → wire children → prune → materialize surfaces → collapse to boundary → attach boundaries → Model
+AnalysisResult → folder nodes → parent modules under folders → merge →
+remove empty → wire children → prune → materialize surfaces →
+collapse to boundary → remove schema-defining vars → filter edges →
+attach boundaries → Model
 ```
 
 The pipeline in `build.clj`:
 1. `build-folder-nodes` — directories from filenames
-2. `build-module-nodes` — one per module definition
-3. `build-symbol-nodes` — one per symbol/function definition
-4. `type-nodes-fn` — injected by caller for language-specific nodes (e.g., schema nodes)
-5. `remove-empty-modules` + `wire-children` — cleanup
-6. `prune-to-smart-root` — skip single-child folder chains
-7. `materialize-surface-functions` — spec provides become Function children
-8. `collapse-surface-to-boundary` — remaining surface data (guarantees, description) merges into `:boundary`
+2. Parent module nodes under folder nodes using `:filename` in `:data`
+3. `merge-node-maps` — deep merge folders + analysis result nodes
+4. `remove-empty-modules` + `wire-children` — cleanup
+5. `prune-to-smart-root` — skip single-child folder chains
+6. `materialize-surface-functions` — spec provides become Function children
+7. `collapse-surface-to-boundary` — remaining surface data (guarantees, description) merges into `:boundary`
+8. `remove-schema-defining-vars` — schema nodes replace their defining vars
 9. `attach-boundaries` — namespace boundaries inferred from child function signatures, merged into existing boundary
-10. Post-build: `resolve-contracts` (in `pipeline.clj`) — contract.edn files resolved on folder nodes
+
+## Module Structure
+
+```
+schema.clj    — all Malli schema definitions (pure data, no logic)
+build.clj     — language-agnostic construction helpers + build pipeline
+pipeline.clj  — pure orchestration: call analyzers, merge, build
+lint.clj      — cross-module contract compliance linting
+```
+
+Dependency graph:
+```
+schema  ←  build  ←  clojure.clj  ←  pipeline
+                  ←  allium.clj   ←
+```
 
 ## Analyzer Structure
 
@@ -34,11 +51,18 @@ Analyzers live under `analyzers/`, split by category:
 
 Both produce `AnalysisResult` values that are merged by `pipeline.clj` before `build-model`.
 
+The Clojure analyzer produces a **complete** AnalysisResult including:
+- Module and symbol nodes from static analysis
+- Schema nodes from runtime ^:schema var discovery
+- Runtime metadata enrichment (function signatures)
+- Contract boundary nodes from contract.edn files
+
 The Allium parser is a shared library at `libs/allium/parser.clj`.
 
 ## Schema Conventions
 
 - `^:schema` metadata marks Malli schema definitions on vars
+- All schema definitions live in `schema.clj` (model schemas) or in their respective modules (e.g., `SchemaDiscoveryEntry` in `clojure.clj`)
 - Schemas use Malli syntax: `[:map ...]`, `[:enum ...]`, `[:vector ...]`
 - Function schemas use `[:=> [:cat input...] output]` and are attached via `:malli/schema` in the var's metadata map
 - Schema keys are keywords derived from the var name (e.g., `Model`, `Node`, `Edge`)

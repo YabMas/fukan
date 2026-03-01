@@ -4,147 +4,11 @@
    module, function, and schema nodes connected by directed dependency
    edges. Handles folder/namespace/var node construction, parent-child
    wiring, smart-root pruning, edge building, and contract attachment."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [fukan.model.schema]))
 
-;; -----------------------------------------------------------------------------
-;; Analysis Schemas
-;;
-;; These schemas define the normalized format that any language analyzer
-;; should produce. Language-specific analyzers convert their native format
-;; to these generic structures.
-
-(def ^:schema ModuleDef
-  [:map {:description "A module (namespace/scope) definition."}
-   [:name :symbol]
-   [:filename :string]
-   [:doc {:optional true} [:maybe :string]]])
-
-(def ^:schema SymbolDef
-  [:map {:description "A symbol (function/variable) definition."}
-   [:module :symbol]
-   [:name :symbol]
-   [:filename :string]
-   [:row :int]
-   [:doc {:optional true} [:maybe :string]]
-   [:private {:optional true} :boolean]])
-
-(def ^:schema SymbolRef
-  [:map {:description "A reference from one symbol to another."}
-   [:from {:description "Module containing the call site"} :symbol]
-   [:from-symbol {:optional true :description "Symbol at the call site, nil if top-level"} :symbol]
-   [:to {:description "Module containing the target symbol"} :symbol]
-   [:name {:description "Name of the referenced symbol"} :symbol]])
-
-(def ^:schema ModuleImport
-  [:map {:description "A module require/import relationship."}
-   [:from :symbol]
-   [:to :symbol]
-   [:filename :string]])
-
-(def ^:schema CodeAnalysis
-  [:map {:description "The normalized output format from any language analyzer."}
-   [:module-definitions [:vector :ModuleDef]]
-   [:symbol-definitions [:vector :SymbolDef]]
-   [:symbol-references [:vector :SymbolRef]]
-   [:module-imports {:optional true} [:vector :ModuleImport]]])
-
-;; -----------------------------------------------------------------------------
-;; Type Expression IR
-
-(def ^:schema TypeExpr
-  [:multi {:dispatch :tag
-           :description "Generic, language-agnostic type expression. Produced by language analyzers at build time, consumed by projection and views. Every variant may carry optional :description."}
-   [:ref       [:map [:tag [:= :ref]]       [:name :keyword] [:description {:optional true} :string]]]
-   [:primitive [:map [:tag [:= :primitive]] [:name :string]   [:description {:optional true} :string]]]
-   [:map       [:map [:tag [:= :map]]
-                [:entries [:vector [:map
-                                    [:key :string]
-                                    [:optional :boolean]
-                                    [:type :any]
-                                    [:description {:optional true} [:maybe :string]]]]]
-                [:description {:optional true} :string]]]
-   [:map-of    [:map [:tag [:= :map-of]]    [:key-type :any] [:value-type :any] [:description {:optional true} :string]]]
-   [:vector    [:map [:tag [:= :vector]]    [:element :any]  [:description {:optional true} :string]]]
-   [:set       [:map [:tag [:= :set]]       [:element :any]  [:description {:optional true} :string]]]
-   [:maybe     [:map [:tag [:= :maybe]]     [:inner :any]    [:description {:optional true} :string]]]
-   [:or        [:map [:tag [:= :or]]        [:variants [:vector :any]] [:description {:optional true} :string]]]
-   [:and       [:map [:tag [:= :and]]       [:types [:vector :any]]    [:description {:optional true} :string]]]
-   [:enum      [:map [:tag [:= :enum]]      [:values :any]             [:description {:optional true} :string]]]
-   [:tuple     [:map [:tag [:= :tuple]]     [:elements [:vector :any]] [:description {:optional true} :string]]]
-   [:fn        [:map [:tag [:= :fn]]        [:inputs [:vector :any]] [:output :any] [:description {:optional true} :string]]]
-   [:predicate [:map [:tag [:= :predicate]] [:description {:optional true} :string]]]
-   [:unknown   [:map [:tag [:= :unknown]]   [:original :string] [:description {:optional true} :string]]]])
-
-(def ^:schema FunctionSignature
-  [:map {:description "The type contract of a function: ordered input types and a return type."}
-   [:inputs [:vector :TypeExpr]]
-   [:output :TypeExpr]])
-
-;; -----------------------------------------------------------------------------
-;; Model Schemas
-
-(def ^:schema NodeId
-  [:string {:description "Unique string identifier for a node in the model graph."}])
-
-(def ^:schema NodeKind
-  [:enum {:description "Structural kind: module (directory/namespace), function (var), or schema definition."}
-   :module :function :schema])
-
-(def ^:schema BoundaryFn
-  [:map {:description "A public function entry in a module boundary."}
-   [:name :symbol]
-   [:id {:optional true, :description "Node ID of the boundary function."} :string]
-   [:schema {:optional true, :description "Structured function signature: inputs and output types."}
-    :FunctionSignature]
-   [:doc {:optional true} :string]])
-
-(def ^:schema Boundary
-  [:map {:description "A module's external boundary: the functions, schemas, and guarantees that define its public contract."}
-   [:description {:optional true} :string]
-   [:functions {:optional true} [:vector :BoundaryFn]]
-   [:schemas {:optional true} [:vector :keyword]]
-   [:guarantees {:optional true} [:vector :string]]])
-
-(def ^:schema NodeData
-  [:or {:description "Kind-specific properties attached to a node, discriminated by :kind."}
-   ;; Module data (directory or namespace)
-   [:map {:description "Module node data: documentation and optional boundary."}
-    [:kind [:= :module]]
-    [:doc {:optional true} [:maybe :string]]
-    [:boundary {:optional true} :Boundary]]
-   ;; Function data (var definition)
-   [:map {:description "Function node data: documentation, visibility, and optional type signature."}
-    [:kind [:= :function]]
-    [:doc {:optional true} [:maybe :string]]
-    [:private? {:optional true} :boolean]
-    [:signature {:optional true, :description "Structured function signature: inputs and output types."}
-     :FunctionSignature]]
-   ;; Schema data (schema definition)
-   [:map {:description "Schema node data: the TypeExpr form and its keyword key."}
-    [:kind [:= :schema]]
-    [:schema-key :keyword]
-    [:schema {:description "TypeExpr representation of the schema."} :TypeExpr]
-    [:doc {:optional true} [:maybe :string]]]])
-
-(def ^:schema Node
-  [:map {:description "An entity in the system model: module, function, or schema definition."}
-   [:id :NodeId]
-   [:kind :NodeKind]
-   [:label :string]
-   [:description {:optional true} :string]
-   [:parent {:optional true} [:maybe :NodeId]]
-   [:children [:set :NodeId]]
-   [:data {:optional true} :NodeData]])
-
-(def ^:schema Edge
-  [:map {:description "A directed dependency between two nodes."}
-   [:from {:description "Node ID of the caller/referencer"} :NodeId]
-   [:to {:description "Node ID of the callee/referenced entity"} :NodeId]])
-
-(def ^:schema Model
-  [:map {:description "The complete graph model of a codebase: all entity nodes and their directed dependency edges."}
-   [:nodes [:map-of :NodeId :Node]]
-   [:edges [:vector :Edge]]])
+;; Require model.schema so its ^:schema vars are loaded for the registry.
+;; No alias needed — schemas are referenced by keyword, not by var.
 
 ;; -----------------------------------------------------------------------------
 ;; Tree Operations
@@ -469,13 +333,7 @@
             schema-var-ids)))
 
 ;; -----------------------------------------------------------------------------
-;; AnalysisResult
-
-(def ^:schema AnalysisResult
-  [:map {:description "A language analysis result: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces an AnalysisResult; results are merged before calling build-model."}
-   [:source-files {:description "File paths for folder hierarchy construction."} [:vector :string]]
-   [:nodes {:description "Pre-built nodes. Module nodes should have :parent nil and :filename in :data for folder parenting."} [:map-of :NodeId :Node]]
-   [:edges {:description "Pre-built edges between nodes."} [:vector :Edge]]])
+;; AnalysisResult merging
 
 (defn- merge-node-pair
   "Merge two nodes with the same ID. Deep-merges :data maps for modules
@@ -579,88 +437,70 @@
    This function handles the language-agnostic pipeline:
    1. Build folder hierarchy from :source-files
    2. Parent module nodes under their folders
-   3. Remove empty modules, wire children, smart-root prune
-   4. Apply post-processing hooks (type nodes, signatures, contracts)
+   3. Merge all nodes (folders + analysis result)
+   4. Remove empty modules, wire children, smart-root prune
+   5. Materialize surface provides, collapse to boundary
+   6. Remove schema-defining vars, filter edges
+   7. Attach boundaries"
+  {:malli/schema [:=> [:cat :AnalysisResult] :Model]}
+  [result]
+  (let [source-files (:source-files result)
+        result-nodes (:nodes result)
+        result-edges (:edges result)
 
-   Options:
-   - :type-nodes-fn - optional function (fn [ns-index] -> nodes-map) to build
-                      language-specific type nodes (e.g., schemas). The ns-index
-                      is a map of {ns-sym -> node-id} derived from module nodes."
-  {:malli/schema [:=> [:cat :AnalysisResult [:? :map]] :Model]}
-  ([result] (build-model result {}))
-  ([result {:keys [type-nodes-fn] :or {type-nodes-fn (constantly {})}}]
-   (let [source-files (:source-files result)
-         result-nodes (:nodes result)
-         result-edges (:edges result)
+        ;; Build folder hierarchy from source files
+        {:keys [nodes index]} (build-folder-nodes-from-files source-files)
+        folder-nodes nodes
+        folder-index index
+        folder-ids (set (keys folder-nodes))
 
-         ;; Build folder hierarchy from source files
-         {:keys [nodes index]} (build-folder-nodes-from-files source-files)
-         folder-nodes nodes
-         folder-index index
-         folder-ids (set (keys folder-nodes))
+        ;; Set parents on result's module nodes from :filename in data
+        parented-nodes (reduce-kv
+                         (fn [acc id node]
+                           (if (and (= :module (:kind node))
+                                    (nil? (:parent node)))
+                             (let [filename (get-in node [:data :filename])
+                                   folder-path (when filename (file-to-folder filename))
+                                   parent-id (when folder-path (get folder-index folder-path))]
+                               (assoc acc id (assoc node :parent parent-id)))
+                             (assoc acc id node)))
+                         {} result-nodes)
 
-         ;; Set parents on result's module nodes from :filename in data
-         parented-nodes (reduce-kv
-                          (fn [acc id node]
-                            (if (and (= :module (:kind node))
-                                     (nil? (:parent node)))
-                              (let [filename (get-in node [:data :filename])
-                                    folder-path (when filename (file-to-folder filename))
-                                    parent-id (when folder-path (get folder-index folder-path))]
-                                (assoc acc id (assoc node :parent parent-id)))
-                              (assoc acc id node)))
-                          {} result-nodes)
+        ;; Merge folder nodes + result nodes (deep merge preserves
+        ;; folder parents when enrichment nodes have :parent nil)
+        merged-nodes (merge-node-maps folder-nodes parented-nodes)
 
-         ;; Merge folder nodes + result nodes (deep merge preserves
-         ;; folder parents when enrichment nodes have :parent nil)
-         merged-nodes (merge-node-maps folder-nodes parented-nodes)
+        ;; Remove empty modules
+        cleaned-nodes (remove-empty-modules merged-nodes)
 
-         ;; Remove empty modules
-         cleaned-nodes (remove-empty-modules merged-nodes)
+        ;; Wire up parent-child relationships
+        all-nodes (wire-children cleaned-nodes)
 
-         ;; Wire up parent-child relationships
-         all-nodes (wire-children cleaned-nodes)
+        ;; Find smart starting point and prune ancestors
+        smart-root (find-smart-root all-nodes folder-ids)
+        pruned-nodes (prune-to-smart-root all-nodes smart-root)
 
-         ;; Find smart starting point and prune ancestors
-         smart-root (find-smart-root all-nodes folder-ids)
-         pruned-nodes (prune-to-smart-root all-nodes smart-root)
-
-         ;; Materialize surface provides as Function children, collapse
-         ;; remaining surface data into boundary, re-wire
-         materialized-nodes (-> (materialize-surface-functions pruned-nodes)
-                                collapse-surface-to-boundary
-                                wire-children)
-
-         ;; Derive ns-index from non-folder module nodes for hooks
-         ns-index (->> (vals materialized-nodes)
-                       (filter #(and (= :module (:kind %))
-                                     (not (contains? folder-ids (:id %)))))
-                       (reduce (fn [acc node]
-                                 (assoc acc (symbol (:id node)) (:id node)))
-                               {}))
-
-         ;; Filter edges to surviving nodes, deduplicate
-         node-ids (set (keys materialized-nodes))
-         all-edges (->> result-edges
-                        (filter (fn [{:keys [from to]}]
-                                  (and (contains? node-ids from)
-                                       (contains? node-ids to)
-                                       (not= from to))))
-                        (into #{})
-                        vec)
-
-         ;; Build type nodes (e.g., schema nodes) using ns-index
-         type-nodes (type-nodes-fn ns-index)
-
-         ;; Merge type nodes into final nodes map and re-wire children
-         merged-with-types (-> (merge materialized-nodes type-nodes)
+        ;; Materialize surface provides as Function children, collapse
+        ;; remaining surface data into boundary, re-wire
+        materialized-nodes (-> (materialize-surface-functions pruned-nodes)
+                               collapse-surface-to-boundary
                                wire-children)
 
-         ;; Remove var nodes that define schemas — they're represented by schema nodes
-         final-nodes (remove-schema-defining-vars merged-with-types)
+        ;; Remove var nodes that define schemas — they're represented by schema nodes
+        final-nodes (remove-schema-defining-vars materialized-nodes)
 
-         ;; Attach boundaries to modules
-         boundary-nodes (attach-boundaries final-nodes)]
+        ;; Filter edges to surviving nodes, deduplicate
+        node-ids (set (keys final-nodes))
+        all-edges (->> result-edges
+                       (filter (fn [{:keys [from to]}]
+                                 (and (contains? node-ids from)
+                                      (contains? node-ids to)
+                                      (not= from to))))
+                       (into #{})
+                       vec)
 
-     {:nodes boundary-nodes
-      :edges all-edges})))
+        ;; Attach boundaries to modules
+        boundary-nodes (attach-boundaries final-nodes)]
+
+    {:nodes boundary-nodes
+     :edges all-edges}))

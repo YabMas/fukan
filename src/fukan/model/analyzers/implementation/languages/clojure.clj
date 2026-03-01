@@ -1,8 +1,8 @@
 (ns fukan.model.analyzers.implementation.languages.clojure
   "Clojure-specific analysis and model construction.
-   Runs clj-kondo static analysis to produce CodeAnalysis, discovers
-   Malli schema definitions (^:schema vars), and produces an AnalysisResult
-   for the language-agnostic model build pipeline."
+   Runs clj-kondo static analysis, discovers Malli schema definitions,
+   enriches nodes with runtime metadata, resolves contract.edn files,
+   and produces a complete AnalysisResult for the build pipeline."
   (:require [clojure.java.shell :as shell]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
@@ -270,7 +270,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Schema Node Building
 
-(defn build-schema-nodes
+(defn- build-schema-nodes
   "Build schema nodes from discovered schema data.
    Schema nodes are placed inside their owning namespace module.
    Converts raw Malli schema forms to TypeExpr at build time.
@@ -280,7 +280,6 @@
    as returned by discover-schema-data.
 
    Returns a map of {schema-node-id -> node}."
-  {:malli/schema [:=> [:cat [:map-of :symbol :NodeId] :SchemaDiscoveryData] [:map-of :NodeId :Node]]}
   [ns-index schema-data]
   (->> schema-data
        (map (fn [[k {:keys [schema-form doc owner-ns]}]]
@@ -301,7 +300,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Runtime enrichment
 
-(defn enrich-with-runtime-metadata
+(defn- enrich-with-runtime-metadata
   "Attach :malli/schema signatures to function nodes from runtime vars.
    Converts Malli function schemas to FunctionSignature (TypeExpr-based).
    schema-data is used to exclude schema-defining vars (they become schema nodes).
@@ -364,22 +363,27 @@
         (let [raw (edn/read-string (slurp file))]
           (update raw :functions (fn [fns] (mapv resolve-fn-ref fns))))))))
 
-(defn resolve-contracts
-  "Pre-resolve contract.edn files for module nodes.
-   Attaches or merges boundary data from contract.edn into module nodes' :data :boundary.
-   Must be called after namespaces are loaded in the JVM."
-  [nodes]
-  (reduce (fn [acc [id node]]
-            (if (= :module (:kind node))
-              (if-let [boundary (read-contract-file id)]
-                (let [existing (get-in node [:data :boundary])]
-                  (assoc acc id (assoc-in node [:data :boundary]
-                                          (if existing
-                                            (merge existing boundary)
-                                            boundary))))
-                (assoc acc id node))
-              (assoc acc id node)))
-          {} nodes))
+(defn- discover-contract-nodes
+  "Discover contract.edn files under src-path and produce module nodes
+   at directory-path IDs with :boundary data. These nodes will be merged
+   with folder nodes created by the build pipeline."
+  [src-path]
+  (->> (file-seq (io/file src-path))
+       (filter #(= "contract.edn" (.getName %)))
+       (reduce (fn [acc contract-file]
+                 (let [dir-path (.getPath (.getParentFile contract-file))
+                       boundary (read-contract-file dir-path)]
+                   (if boundary
+                     (assoc acc dir-path
+                            {:id dir-path
+                             :kind :module
+                             :label dir-path
+                             :parent nil
+                             :children #{}
+                             :data {:kind :module
+                                    :boundary boundary}})
+                     acc)))
+               {})))
 
 ;; -----------------------------------------------------------------------------
 ;; AnalysisResult
@@ -416,11 +420,31 @@
 
     {:source-files (mapv :filename module-defs)
      :nodes (merge ns-nodes var-nodes)
-     :edges var-edges}))
+     :edges var-edges
+     :ns-index ns-index}))
 
-(defn contribution
-  "Produce a full Clojure language analysis result from source analysis."
+(defn analyze
+  "Produce a complete Clojure language analysis result.
+   Runs static analysis (clj-kondo), then enriches with runtime metadata:
+   - Discovers ^:schema vars and builds schema nodes
+   - Attaches :malli/schema function signatures to function nodes
+   - Discovers contract.edn files and produces boundary module nodes"
   {:malli/schema [:=> [:cat :string] :AnalysisResult]}
   [src-path]
-  (-> (run-kondo src-path)
-      analysis->result))
+  (let [{:keys [nodes edges source-files ns-index]} (-> (run-kondo src-path)
+                                                         analysis->result)
+        ;; Discover schemas from runtime
+        schema-data (discover-schema-data)
+
+        ;; Enrich function nodes with runtime metadata (signatures)
+        enriched-nodes (enrich-with-runtime-metadata nodes schema-data)
+
+        ;; Build schema nodes using ns-index from analysis
+        schema-nodes (build-schema-nodes ns-index schema-data)
+
+        ;; Discover contract.edn files and produce boundary module nodes
+        contract-nodes (discover-contract-nodes src-path)]
+
+    {:source-files source-files
+     :nodes (merge enriched-nodes schema-nodes contract-nodes)
+     :edges edges}))
