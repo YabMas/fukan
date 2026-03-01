@@ -322,6 +322,28 @@
             (= parent module-id) current
             :else (recur parent)))))))
 
+(defn- find-public-callers
+  "Given a private function within a module, find public functions in the same
+   module that transitively call it (tracing through chains of private functions).
+   Uses edges-by-target index (target-id → #{caller-ids}) for efficient lookup."
+  [model module-descendants private-fn-id edges-by-target]
+  (loop [queue [private-fn-id]
+         visited #{}
+         public-callers #{}]
+    (if (empty? queue)
+      public-callers
+      (let [[current & rest-queue] queue]
+        (if (contains? visited current)
+          (recur (vec rest-queue) visited public-callers)
+          (let [visited (conj visited current)
+                callers (->> (get edges-by-target current)
+                             (filter #(contains? module-descendants %)))
+                public (filterv #(not (node-private? (get-in model [:nodes %]))) callers)
+                private (filterv #(node-private? (get-in model [:nodes %])) callers)]
+            (recur (into (vec rest-queue) private)
+                   visited
+                   (into public-callers public))))))))
+
 (defn- find-targets-inside-module
   "Find direct children of module-id that contain actual edge targets
    from entities in external-visible-set (entities not inside the module).
@@ -360,33 +382,74 @@
    going to entities in external-visible-set (entities not inside the module).
    Uses raw edges to find actual sources, not aggregated ones.
    Only returns sources where the source and target have the same :kind.
-   Excludes private leaf nodes — they are only visible when parent is expanded."
+   When a source is private, finds its public callers within the module
+   (PrivateInheritance: public functions inherit their private callees' deps)."
   [model module-id external-visible-set]
   (let [raw-edges (:edges model)
-        module-descendants (all-descendants-of model module-id)]
+        module-descendants (all-descendants-of model module-id)
+        edges-by-target (reduce (fn [acc {:keys [from to]}]
+                                  (update acc to (fnil conj #{}) from))
+                                {} raw-edges)]
     (->> raw-edges
-         (keep (fn [{:keys [from to]}]
-                 ;; Source must be a descendant of the module
-                 (when (contains? module-descendants from)
-                   ;; Target must be reachable from external visible set
-                   (let [to-ancestor (find-visible-ancestor model to external-visible-set)]
-                     (when (and to-ancestor
-                                ;; Target must not be inside the module
-                                (not (contains? module-descendants to)))
-                       ;; Find direct child containing the source
-                       (let [source-child (find-direct-child-of model module-id from)
-                             source-kind (get-in model [:nodes from :kind])
-                             source-child-kind (get-in model [:nodes source-child :kind])
-                             target-kind (get-in model [:nodes to :kind])]
-                         ;; Type filter: use raw edge endpoint kinds (not aggregated ancestors)
-                         ;; so drill-down looks for function-kind children inside sibling modules
-                         (when (and (not (node-private? (get-in model [:nodes source-child])))
-                                    (or (= source-child-kind target-kind)
-                                        (and (= source-child-kind :module)
-                                             (= source-kind target-kind))))
-                           source-child)))))))
-         (remove nil?)
+         (mapcat (fn [{:keys [from to]}]
+                   ;; Source must be a descendant of the module
+                   (when (contains? module-descendants from)
+                     ;; Target must be reachable from external visible set
+                     (let [to-ancestor (find-visible-ancestor model to external-visible-set)]
+                       (when (and to-ancestor
+                                  ;; Target must not be inside the module
+                                  (not (contains? module-descendants to)))
+                         ;; Find direct child containing the source
+                         (let [source-child (find-direct-child-of model module-id from)
+                               source-kind (get-in model [:nodes from :kind])
+                               source-child-kind (get-in model [:nodes source-child :kind])
+                               target-kind (get-in model [:nodes to :kind])]
+                           ;; Type filter: use raw edge endpoint kinds (not aggregated ancestors)
+                           (when (or (= source-child-kind target-kind)
+                                     (and (= source-child-kind :module)
+                                          (= source-kind target-kind)))
+                             (if (node-private? (get-in model [:nodes source-child]))
+                               ;; Private source: find public callers within module
+                               (keep #(find-direct-child-of model module-id %)
+                                     (find-public-callers model module-descendants from edges-by-target))
+                               ;; Public source: return as-is
+                               [source-child]))))))))
          set)))
+
+(defn- private-inherited-edges
+  "Compute synthetic edges where public callers inherit cross-module
+   dependencies from their private callees. For each raw edge from a
+   private function to a target in a different module, finds visible
+   public callers and creates leaf-to-leaf edges to the visible target."
+  [model all-visible]
+  (let [raw-edges (:edges model)
+        edges-by-target (reduce (fn [acc {:keys [from to]}]
+                                  (update acc to (fnil conj #{}) from))
+                                {} raw-edges)
+        ;; Group private cross-module edges by parent module of the source
+        private-cross-edges
+        (->> raw-edges
+             (filter (fn [{:keys [from]}]
+                       (node-private? (get-in model [:nodes from])))))
+        by-parent (group-by #(:parent (get-in model [:nodes (:from %)])) private-cross-edges)]
+    (->> by-parent
+         (mapcat (fn [[parent-id edges-in-module]]
+                   (when parent-id
+                     (let [module-descendants (all-descendants-of model parent-id)]
+                       (mapcat (fn [{:keys [from to]}]
+                                 ;; Skip if target is in the same parent module
+                                 (when-not (contains? module-descendants to)
+                                   (let [to-visible (find-visible-ancestor model to all-visible)]
+                                     (when (and to-visible
+                                                (empty? (get-in model [:nodes to-visible :children] #{})))
+                                       (let [callers (find-public-callers model module-descendants from edges-by-target)]
+                                         (for [caller callers
+                                               :when (and (contains? all-visible caller)
+                                                          (empty? (get-in model [:nodes caller :children] #{})))]
+                                           {:from caller :to to-visible}))))))
+                               edges-in-module)))))
+         distinct
+         vec)))
 
 (defn- expand-internal-deps
   "Expand a set of nodes to include their internal dependencies.
@@ -510,8 +573,9 @@
         ;; Build final visible set
         all-visible (set/union children-set drill-down-entities)
 
-        ;; Compute final edges — leaf-only: both endpoints must be leaf nodes.
-        final-edges (leaf-only-edges model all-visible)
+        ;; Compute final edges — leaf-only from raw edges + inherited from private callees.
+        final-edges (vec (distinct (concat (leaf-only-edges model all-visible)
+                                           (private-inherited-edges model all-visible))))
 
         ;; Prune drill-down leaf nodes that don't participate in any
         ;; code-flow edge. This happens when the drill-down found raw edges

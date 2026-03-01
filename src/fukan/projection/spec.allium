@@ -214,6 +214,12 @@ rule ModuleView {
     --
     -- PrivateVisibility: private children are hidden unless their
     --   parent module is in expanded_modules.
+    --
+    -- PrivateInheritance: when a public function's cross-module
+    --   dependencies are all mediated through private callees,
+    --   the public function inherits those dependencies. The
+    --   private function itself remains hidden; only its public
+    --   callers appear as nodes with synthetic edges to the targets.
 
     when: ModuleView(entity_id: String, expanded_modules: Set<String>)
 

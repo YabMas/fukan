@@ -86,6 +86,40 @@
                    opts-gen)))))
 
 ;; ---------------------------------------------------------------------------
+;; Example-based: private inheritance
+
+(deftest private-inheritance-test
+  (testing "Public functions inherit dependencies of private callees"
+    (let [model {:nodes {"root" {:id "root" :kind :module :label "root" :parent nil
+                                 :children #{"ns-a" "ns-b"} :data {}}
+                         "ns-a" {:id "ns-a" :kind :module :label "ns-a" :parent "root"
+                                 :children #{"dispatch" "cmd-find"} :data {}}
+                         "ns-b" {:id "ns-b" :kind :module :label "ns-b" :parent "root"
+                                 :children #{"navigate"} :data {}}
+                         "dispatch" {:id "dispatch" :kind :function :label "dispatch" :parent "ns-a"
+                                     :children #{} :data {:private? false}}
+                         "cmd-find" {:id "cmd-find" :kind :function :label "cmd-find" :parent "ns-a"
+                                     :children #{} :data {:private? true}}
+                         "navigate" {:id "navigate" :kind :function :label "navigate" :parent "ns-b"
+                                     :children #{} :data {:private? false}}}
+                 :edges [{:from "dispatch" :to "cmd-find"}
+                         {:from "cmd-find" :to "navigate"}]}
+          opts {:view-id "root" :expanded-modules #{}}
+          projection (graph/entity-graph model opts)
+          node-ids (set (map :id (:nodes projection)))
+          code-edges (set (map (juxt :from :to)
+                               (filter #(= :code-flow (:edge-type %))
+                                       (:edges projection))))]
+      ;; dispatch should appear (surfaced via private inheritance)
+      (is (contains? node-ids "dispatch"))
+      ;; cmd-find should NOT appear (private, not expanded)
+      (is (not (contains? node-ids "cmd-find")))
+      ;; navigate should appear
+      (is (contains? node-ids "navigate"))
+      ;; Inherited edge from dispatch to navigate
+      (is (contains? code-edges ["dispatch" "navigate"])))))
+
+;; ---------------------------------------------------------------------------
 ;; Integration: Fukan's own model satisfies projection invariants
 
 (deftest fukan-projection-invariants
