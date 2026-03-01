@@ -393,27 +393,26 @@
 ;; Edge construction
 
 (defn build-reference-edges
-  "Build raw edges from actual call relationships.
+  "Build leaf-to-leaf edges from actual call relationships.
 
-   Creates edges for each symbol reference where the target is defined in the codebase.
-   - When from-symbol is present: creates symbol-to-symbol edge
-   - When from-symbol is nil (top-level or anonymous): creates module-to-symbol edge
+   Creates edges for each symbol reference where both endpoints resolve to
+   leaf nodes. References without a from-symbol (top-level or anonymous) are
+   skipped — they would produce module-to-leaf edges violating LeafEdges.
 
    Returns a vector of {:from node-id, :to node-id} edges."
   {:malli/schema [:=> [:cat :CodeAnalysis :map :map] [:vector :Edge]]}
-  [analysis var-index ns-index]
-  (let [symbol-refs (:symbol-references analysis)
-        known-ns (set (keys ns-index))]
+  [analysis var-index _ns-index]
+  (let [symbol-refs (:symbol-references analysis)]
     (->> symbol-refs
          (keep (fn [{:keys [from from-symbol to name]}]
-                 (when-let [to-id (get var-index [to name])]
-                   (let [from-id (if from-symbol
-                                   ;; Normal case: symbol-to-symbol edge
-                                   (get var-index [from from-symbol])
-                                   ;; Top-level/anonymous: module-to-symbol edge
-                                   (when (contains? known-ns from)
-                                     (get ns-index from)))]
-                     (when (and from-id (not= from-id to-id))
+                 ;; Only create edges when both endpoints resolve to leaf nodes.
+                 ;; Skip top-level references (from-symbol nil) — they produce
+                 ;; module-to-leaf edges, violating LeafEdges.
+                 (when (and from-symbol
+                            (get var-index [from from-symbol]))
+                   (let [from-id (get var-index [from from-symbol])
+                         to-id   (get var-index [to name])]
+                     (when (and to-id (not= from-id to-id))
                        {:from from-id :to to-id})))))
          (into #{})
          (vec))))

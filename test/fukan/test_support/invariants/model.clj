@@ -199,6 +199,34 @@
       true))
 
 ;; ---------------------------------------------------------------------------
+;; LeafEdges: every edge endpoint is a leaf node (no children).
+
+(defn leaf-edges?
+  "Verify that both endpoints of every edge are leaf nodes (function or schema,
+   not module). Module-level edges are derived on demand by projection."
+  [{:keys [nodes edges]}]
+  (or (first
+        (for [{:keys [from to]} edges
+              :let [from-node (get nodes from)
+                    to-node (get nodes to)]
+              :when (or (seq (:children from-node))
+                        (seq (:children to-node)))]
+          {:violation :leaf-edges
+           :from from
+           :to to
+           :from-kind (:kind from-node)
+           :to-kind (:kind to-node)
+           :reason (cond
+                     (and (seq (:children from-node))
+                          (seq (:children to-node)))
+                     "both endpoints are non-leaf"
+                     (seq (:children from-node))
+                     "from endpoint is non-leaf"
+                     :else
+                     "to endpoint is non-leaf")}))
+      true))
+
+;; ---------------------------------------------------------------------------
 ;; Composite
 
 (defn valid-model?
@@ -210,6 +238,7 @@
                 no-empty-modules?
                 no-self-edges?
                 edge-integrity?
+                leaf-edges?
                 smart-root-pruning?
                 no-unconsumed-provides?]]
     (reduce (fn [_ check]

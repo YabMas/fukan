@@ -368,7 +368,8 @@
   "Find direct children of module-id that contain actual edge targets
    from entities in external-visible-set (entities not inside the module).
    Uses raw edges to find actual targets, not aggregated ones.
-   Only returns targets where the source and target have the same :kind."
+   Only returns targets where the source and target have the same :kind.
+   Excludes private leaf nodes — they are only visible when parent is expanded."
   [model module-id external-visible-set]
   (let [raw-edges (:edges model)
         module-descendants (all-descendants-of model module-id)]
@@ -383,15 +384,15 @@
                                 (not (contains? module-descendants from)))
                        ;; Find direct child containing the target
                        (let [target-child (find-direct-child-of model module-id to)
-                             source-kind (get-in model [:nodes from-ancestor :kind])
+                             source-kind (get-in model [:nodes from :kind])
                              target-child-kind (get-in model [:nodes target-child :kind])
                              target-kind (get-in model [:nodes to :kind])]
-                         ;; Type filter: compare visible source with target-child kind
-                         ;; Special case: if target-child is a module (nested modules),
-                         ;; compare with raw target kind to handle module→module nesting
-                         (when (or (= source-kind target-child-kind)
-                                   (and (= target-child-kind :module)
-                                        (= source-kind target-kind)))
+                         ;; Type filter: use raw edge endpoint kinds (not aggregated ancestors)
+                         ;; so drill-down looks for function-kind children inside sibling modules
+                         (when (and (not (node-private? (get-in model [:nodes target-child])))
+                                    (or (= source-kind target-child-kind)
+                                        (and (= target-child-kind :module)
+                                             (= source-kind target-kind))))
                            target-child)))))))
          (remove nil?)
          set)))
@@ -400,7 +401,8 @@
   "Find direct children of module-id that contain actual edge sources
    going to entities in external-visible-set (entities not inside the module).
    Uses raw edges to find actual sources, not aggregated ones.
-   Only returns sources where the source and target have the same :kind."
+   Only returns sources where the source and target have the same :kind.
+   Excludes private leaf nodes — they are only visible when parent is expanded."
   [model module-id external-visible-set]
   (let [raw-edges (:edges model)
         module-descendants (all-descendants-of model module-id)]
@@ -417,13 +419,13 @@
                        (let [source-child (find-direct-child-of model module-id from)
                              source-kind (get-in model [:nodes from :kind])
                              source-child-kind (get-in model [:nodes source-child :kind])
-                             target-kind (get-in model [:nodes to-ancestor :kind])]
-                         ;; Type filter: compare source-child kind with visible target
-                         ;; Special case: if source-child is a module (nested modules),
-                         ;; compare raw source kind to handle module→module nesting
-                         (when (or (= source-child-kind target-kind)
-                                   (and (= source-child-kind :module)
-                                        (= source-kind target-kind)))
+                             target-kind (get-in model [:nodes to :kind])]
+                         ;; Type filter: use raw edge endpoint kinds (not aggregated ancestors)
+                         ;; so drill-down looks for function-kind children inside sibling modules
+                         (when (and (not (node-private? (get-in model [:nodes source-child])))
+                                    (or (= source-child-kind target-kind)
+                                        (and (= source-child-kind :module)
+                                             (= source-kind target-kind))))
                            source-child)))))))
          (remove nil?)
          set)))
@@ -627,24 +629,9 @@
         ;; Build final visible set
         all-visible (set/union children-set drill-down-entities)
 
-        ;; Compute final edges, then filter cross-level edges per SameTypeDrillDown:
-        ;; 1. Drop edges to/from drilled modules — unresolved edges that
-        ;;    should have gone to children at the same structural level.
-        ;; 2. Drop edges between different kinds (e.g. function <-> module)
-        ;;    — structurally different levels should never be connected.
-        raw-final-edges (aggregate-edges model all-visible)
-        drilled-modules (->> all-visible
-                                (filter (fn [nid]
-                                          (let [children (get-in model [:nodes nid :children] #{})]
-                                            (some all-visible children))))
-                                set)
-        final-edges (remove (fn [{:keys [from to]}]
-                              (let [from-kind (:kind (get-in model [:nodes from]))
-                                    to-kind (:kind (get-in model [:nodes to]))]
-                                (or (contains? drilled-modules from)
-                                    (contains? drilled-modules to)
-                                    (not= from-kind to-kind))))
-                            raw-final-edges)
+        ;; Compute final edges — with leaf-to-leaf model edges and the fixed
+        ;; drill-down kind check, aggregation produces correct edges directly.
+        final-edges (aggregate-edges model all-visible)
 
         ;; Build view nodes
         ;; Module node (the viewed entity - no parent for strict bounding box)
