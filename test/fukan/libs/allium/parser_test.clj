@@ -340,10 +340,9 @@
       (is (not (insta/failure? result)))
       (is (= "1" (:allium-version result)))
       (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 1 (:external-value types)))   ;; TypeExpr
-        (is (= 2 (:value types)))            ;; FunctionSignature, Boundary
-        (is (= 3 (:entity types)))           ;; Edge, Node, Model
-        (is (= 3 (:variant types)))))))
+        (is (= 3 (:value types)))            ;; FunctionSignature, Boundary, MapEntry
+        (is (= 4 (:entity types)))           ;; Edge, Node, Model, TypeExpr
+        (is (= 17 (:variant types)))))))
 
 (deftest projection-allium-integration-test
   (testing "projection.allium parses completely"
@@ -352,8 +351,10 @@
       (let [types (frequencies (map :type (:declarations result)))]
         (is (= 1 (:use types)))
         (is (= 1 (:given types)))
-        (is (= 2 (:enum types)))
-        (is (= 12 (:value types)))
+        (is (= 1 (:enum types)))
+        (is (= 13 (:value types)))
+        (is (= 1 (:entity types)))
+        (is (= 4 (:variant types)))
         (is (= 10 (:rule types)))))))
 
 (deftest views-allium-integration-test
