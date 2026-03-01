@@ -58,7 +58,7 @@ value CytoscapeEdge {
     id: String
     source: String
     target: String
-    edge_type: String      -- "code-flow", "schema-flow", "data-flow", "schema-composition"
+    edge_type: String      -- "code-flow" or "data-flow"
     schema_key: String?
 }
 

@@ -73,16 +73,16 @@
                    opts-gen)))))
 
 ;; ---------------------------------------------------------------------------
-;; Generative: root contract functions visible
+;; Generative: leaf-to-leaf code-flow edges
 
-(defspec contract-roots-always-visible 100
+(defspec leaf-to-leaf-code-flow-edges 100
   (prop/for-all [model (gen/gen-model)]
     (let [opts-gen (gen/gen-projection-opts model)]
       (tgen/generate
         (tgen/fmap (fn [opts]
                      (if (and (:view-id opts) (not (is-leaf? model (:view-id opts))))
                        (let [projection (graph/entity-graph model opts)]
-                         (true? (inv/contract-roots-visible? model opts projection)))
+                         (true? (inv/leaf-to-leaf-edges? model opts projection)))
                        true))
                    opts-gen)))))
 
@@ -111,5 +111,5 @@
               (str "schema-filtering failed for " cid))
           (is (true? (inv/no-duplicate-edges? model opts projection))
               (str "duplicate-edges failed for " cid))
-          (is (true? (inv/contract-roots-visible? model opts projection))
-              (str "contract-roots-visible failed for " cid)))))))
+          (is (true? (inv/leaf-to-leaf-edges? model opts projection))
+              (str "leaf-to-leaf-edges failed for " cid)))))))

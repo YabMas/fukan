@@ -21,11 +21,9 @@ given {
 -- Enumerations
 ------------------------------------------------------------
 
-enum EdgeType { code_flow | schema_flow | data_flow | schema_composition }
--- code_flow:           aggregated from raw model edges (var/ns cross-references)
--- schema_flow:         var ↔ schema derived from function signatures
--- data_flow:           IO boundary ↔ code derived from module boundaries
--- schema_composition:  schema → schema derived from schema form cross-references
+enum EdgeType { code_flow | data_flow }
+-- code_flow:   aggregated from raw model edges (var/ns cross-references)
+-- data_flow:   IO boundary ↔ code derived from module boundaries
 
 ------------------------------------------------------------
 -- Value Types
@@ -43,7 +41,6 @@ value ViewNode {
     expanded: Boolean
     child_count: Integer
     private: Boolean?
-    root: Boolean?        -- true for boundary entry points with no code-level callers
     io_type: input | output?
     schema_key: String?
 }
@@ -230,15 +227,13 @@ rule ModuleView {
 
     let all_visible = visible_children + drill_down.entities
 
-    -- 3. Edge computation across four types
+    -- 3. Edge computation: code-flow (aggregated) + data-flow (IO boundary)
     let code_edges = aggregate_edges(model, all_visible)          -- black box
-    let schema_flow = schema_flow_edges(model, all_visible)       -- black box
-    let composition = schema_composition_edges(model, all_visible) -- black box
     let io_layer = io_from_boundary(model, entity_id, all_visible) -- black box
 
     ensures: Projection.created(
         nodes: view_nodes_for(all_visible, drill_down.grouping),
-        edges: code_edges + schema_flow + composition + io_layer.edges,
+        edges: code_edges + io_layer.edges,
         io: io_layer.boundary
     )
 }
@@ -277,10 +272,11 @@ rule LeafView {
 rule AggregateEdges {
     -- Sub-rule of ModuleView: aggregate raw model edges to the visible ancestor level.
     --
-    -- DerivedFromLeafEdges: every code_flow edge in the projection
-    --   traces back to one or more leaf-to-leaf model edges. No edge
-    --   is synthesised — module-level edges arise only as aggregation
-    --   of underlying leaf-to-leaf relationships.
+    -- LeafToLeafEdges: every code_flow edge connects two leaf nodes
+    --   (function or schema). No edge has a module endpoint.
+    --   If a raw edge's source or target is not directly visible
+    --   (e.g. it's private), the edge is dropped — not aggregated
+    --   to the parent module.
     --
     -- For each raw edge (from, to):
     --   1. Walk up each endpoint's parent chain to find its first

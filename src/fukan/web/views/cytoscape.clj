@@ -24,7 +24,7 @@
    [:id :string]
    [:source :string]
    [:target :string]
-   [:edgeType {:description "Edge type as a string: code-flow, schema-flow, data-flow, schema-composition."} :string]])
+   [:edgeType {:description "Edge type as a string: code-flow or data-flow."} :string]])
 
 (def ^:schema CytoscapeGraph
   [:map {:description "Complete graph payload sent to Cytoscape.js: nodes, edges, and UI selection state."}
@@ -59,7 +59,7 @@
 (defn- edge->cytoscape
   "Transform an internal view edge to Cytoscape format.
    Converts :from/:to to source/target, keyword edge-type to string.
-   Includes schemaKey for schema-flow edges.
+   Includes schemaKey for data-flow edges.
    Edge highlighting is driven by the top-level highlightedEdges array."
   [{:keys [id from to edge-type schema-key]}]
   (cond-> {:id id

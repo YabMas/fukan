@@ -31,8 +31,8 @@
    [:schema-key {:optional true} :keyword]])
 
 (def ^:schema ProjectionEdgeType
-  [:enum {:description "Edge semantic types: code-flow (call graphs), schema-flow (var-to-schema), data-flow (contract IO), schema-composition (schema-to-schema references)."}
-   :code-flow :schema-flow :data-flow :schema-composition])
+  [:enum {:description "Edge semantic types: code-flow (call graphs), data-flow (contract IO)."}
+   :code-flow :data-flow])
 
 (def ^:schema ProjectionEdge
   [:map {:description "A directed, typed edge in the projected graph."}
@@ -116,25 +116,10 @@
 ;; -----------------------------------------------------------------------------
 ;; On-demand edge aggregation
 
-(defn- cross-level?
-  "True when one endpoint is a compound node (has visible children) and
-   the other is not. This means the raw edge source/target aggregated up
-   to a module because it's hidden (private), so the edge shouldn't appear."
-  [model visible-set from-vis to-vis]
-  (let [has-vis-children? (fn [nid]
-                            (some visible-set (get-in model [:nodes nid :children] #{})))]
-    (not= (boolean (has-vis-children? from-vis))
-           (boolean (has-vis-children? to-vis)))))
-
 (defn- aggregate-edges
   "Aggregate var-level edges to the visible node level.
    For each raw edge, find which visible nodes it connects.
    Returns deduplicated edges between visible nodes.
-
-   Drops cross-level edges where one endpoint aggregated to a compound
-   module (has drilled children) and the other is a leaf. This means the
-   raw source/target is hidden (private), so its connections shouldn't
-   be visible either.
 
    Excludes edges where one endpoint is an ancestor of the other -
    parent-child relationships are implicit in compound node structure."
@@ -146,14 +131,20 @@
                        to-visible (find-visible-ancestor model to visible-set)]
                    (when (and from-visible to-visible
                               (not= from-visible to-visible)
-                              ;; No edges between ancestor and descendant
                               (not (descendant-of? model to-visible from-visible))
-                              (not (descendant-of? model from-visible to-visible))
-                              ;; No cross-level edges
-                              (not (cross-level? model visible-set from-visible to-visible)))
+                              (not (descendant-of? model from-visible to-visible)))
                      {:from from-visible :to to-visible}))))
          distinct
          vec)))
+
+(defn- leaf-only-edges
+  "Filter aggregated edges to only those connecting two leaf nodes.
+   A leaf node has no children. Module endpoints are dropped."
+  [model visible-set]
+  (->> (aggregate-edges model visible-set)
+       (filterv (fn [{:keys [from to]}]
+                  (and (empty? (get-in model [:nodes from :children] #{}))
+                       (empty? (get-in model [:nodes to :children] #{})))))))
 
 ;; -----------------------------------------------------------------------------
 ;; IO Schema computation
@@ -198,56 +189,6 @@
   (if-let [boundary (get-in model [:nodes module-id :data :boundary])]
     (contract->io model boundary)
     {:inputs #{} :outputs #{}}))
-
-(defn- compute-schema-flow-edges
-  "Compute schema-flow edges for visible var nodes.
-   Returns a vector of edges from vars to their output schemas,
-   and from input schemas to vars.
-
-   Only creates edges where both the var and schema node are visible."
-  [model visible-var-ids visible-node-ids]
-  (->> visible-var-ids
-       (mapcat (fn [var-id]
-                 (let [var-node (get-in model [:nodes var-id])
-                       schema-info (compute-var-schema-info model var-node)]
-                   (when schema-info
-                     (concat
-                      ;; Edges from var to output schemas
-                      (->> (:outputs schema-info)
-                           (keep (fn [schema-key]
-                                   (let [schema-id (schema/find-schema-node-id model schema-key)]
-                                     (when (and schema-id (contains? visible-node-ids schema-id))
-                                       {:from var-id :to schema-id :schema-key schema-key})))))
-                      ;; Edges from input schemas to var
-                      (->> (:inputs schema-info)
-                           (keep (fn [schema-key]
-                                   (let [schema-id (schema/find-schema-node-id model schema-key)]
-                                     (when (and schema-id (contains? visible-node-ids schema-id))
-                                       {:from schema-id :to var-id :schema-key schema-key}))))))))))
-       vec))
-
-(defn- compute-schema-composition-edges
-  "Compute edges between schema nodes based on composition.
-   Returns edges from a schema to schemas it references.
-   Derives refs on-demand from the schema form.
-   Only creates edges where both schema nodes are visible."
-  [model visible-schema-ids]
-  (->> visible-schema-ids
-       (mapcat (fn [schema-id]
-                 (let [schema-node (get-in model [:nodes schema-id])
-                       schema-form (get-in schema-node [:data :schema])
-                       refs (when schema-form
-                              (schema/extract-schema-refs model schema-form))]
-                   (for [ref-key refs
-                         :let [ref-id (schema/find-schema-node-id model ref-key)]
-                         :when (and ref-id
-                                    (not= ref-id schema-id)
-                                    (contains? visible-schema-ids ref-id))]
-                     {:from schema-id
-                      :to ref-id
-                      :edge-type :schema-composition}))))
-       distinct
-       vec))
 
 ;; -----------------------------------------------------------------------------
 ;; IO Nodes and Data-Flow Edges
@@ -308,7 +249,7 @@
              (mapcat (fn [var-id]
                        (let [var-node (get-in model [:nodes var-id])
                              var-schema-info (compute-var-schema-info model var-node)
-                             visible-target (find-visible-ancestor model var-id visible-set)]
+                             visible-target (when (contains? visible-set var-id) var-id)]
                          (when (and var-schema-info visible-target)
                            (concat
                             (for [schema-key (:inputs var-schema-info)
@@ -475,76 +416,6 @@
           (recur (set/union expanded new-deps)))))))
 
 ;; -----------------------------------------------------------------------------
-;; Root function injection
-
-(defn- find-boundary-roots
-  "Find boundary functions of a module that have no external callers.
-   Reads boundary function names, resolves them to node IDs, then checks
-   whether any edge from outside the module targets them."
-  [model module-id]
-  (let [boundary-fns (get-in model [:nodes module-id :data :boundary :functions])
-        ;; Resolve boundary function names/ids to actual node IDs
-        fn-ids (->> boundary-fns
-                    (keep (fn [bfn]
-                            (or (:id bfn)
-                                ;; Try to find by walking children
-                                (let [name-str (str (:name bfn))]
-                                  (some (fn [cid]
-                                          (when (= name-str (:label (get-in model [:nodes cid])))
-                                            cid))
-                                        (get-in model [:nodes module-id :children] #{}))))))
-                    (filter #(contains? (:nodes model) %))
-                    set)
-        edges (:edges model)
-        ;; Collect all descendants of this module for "external" check
-        module-descendants (all-descendants-of model module-id)
-        module-members (conj module-descendants module-id)
-        has-external-caller?
-        (fn [fn-id]
-          (some (fn [{:keys [from to]}]
-                  (when (= to fn-id)
-                    (not (contains? module-members from))))
-                edges))]
-    (into #{} (remove has-external-caller?) fn-ids)))
-
-(defn- find-root-descendants
-  "Find root function nodes that are descendants of entity-id.
-   Walks descendants, finds modules with boundaries, and checks each
-   boundary function for external callers."
-  [model entity-id]
-  (let [descendants (all-descendants-of model entity-id)
-        ;; Find all modules in the descendants (plus entity-id itself if module)
-        module-ids (->> (conj descendants entity-id)
-                        (filter #(and (= :module (:kind (get-in model [:nodes %])))
-                                      (get-in model [:nodes % :data :boundary :functions]))))]
-    (into #{} (mapcat #(find-boundary-roots model %)) module-ids)))
-
-(defn- root-fn-drill-down
-  "Build drill-down-map entries for root functions.
-   For each root function, traces its ancestry back to entity-id,
-   creating drill-down entries at each intermediate level."
-  [model entity-id root-fn-ids]
-  (let [direct-children (get-in model [:nodes entity-id :children])]
-    (reduce
-      (fn [acc fn-id]
-        (loop [current fn-id
-               entries acc]
-          (let [parent (:parent (get-in model [:nodes current]))]
-            (cond
-              ;; No parent — shouldn't happen for valid descendants
-              (nil? parent) entries
-              ;; Parent is entity-id — current is a direct child, already visible
-              (= parent entity-id) entries
-              ;; Parent is a direct child of entity-id — add current under parent, done
-              (contains? direct-children parent)
-              (update entries parent (fnil conj #{}) current)
-              ;; Intermediate module — add current under parent, continue up
-              :else
-              (recur parent (update entries parent (fnil conj #{}) current))))))
-      {}
-      root-fn-ids)))
-
-;; -----------------------------------------------------------------------------
 ;; Module view computation
 
 (defn- iterate-drill-down
@@ -557,10 +428,9 @@
    Includes internal dep expansion at each step to ensure nested modules
    are discovered and processed.
 
-   Returns {:visible-set :drill-down-map :edges} where:
+   Returns {:visible-set :drill-down-map} where:
    - visible-set: all entities that should be visible
-   - drill-down-map: {module-id -> #{children}} for grouping (includes internal deps)
-   - edges: final aggregated edges"
+   - drill-down-map: {module-id -> #{children}} for grouping (includes internal deps)"
   [model initial-children-set]
   (loop [visible-set initial-children-set
          drill-down-map {}]
@@ -607,8 +477,7 @@
           new-entities (set/difference (into #{} (mapcat val expanded-entities-by-module)) visible-set)]
       (if (empty? new-entities)
         {:visible-set visible-set
-         :drill-down-map drill-down-map
-         :edges edges}
+         :drill-down-map drill-down-map}
         (recur (set/union visible-set new-entities)
                updated-drill-down-map)))))
 
@@ -636,19 +505,30 @@
         ;; Iteratively expand visible set until all edge targets are visible
         ;; (includes internal dep expansion at each step)
         {:keys [drill-down-map]} (iterate-drill-down model children-set)
-
-        ;; Inject root function descendants (contract entry points with no code-level callers)
-        root-fns (find-root-descendants model entity-id)
-        root-drill (root-fn-drill-down model entity-id root-fns)
-        drill-down-map (merge-with set/union drill-down-map root-drill)
         drill-down-entities (into #{} (mapcat val drill-down-map))
 
         ;; Build final visible set
         all-visible (set/union children-set drill-down-entities)
 
-        ;; Compute final edges — with leaf-to-leaf model edges and the fixed
-        ;; drill-down kind check, aggregation produces correct edges directly.
-        final-edges (aggregate-edges model all-visible)
+        ;; Compute final edges — leaf-only: both endpoints must be leaf nodes.
+        final-edges (leaf-only-edges model all-visible)
+
+        ;; Prune drill-down leaf nodes that don't participate in any
+        ;; code-flow edge. This happens when the drill-down found raw edges
+        ;; from a private source — the aggregated edge targets a module
+        ;; (not a leaf) and gets dropped by leaf-only filtering.
+        code-flow-endpoints (into #{} (mapcat (juxt :from :to)) final-edges)
+        drill-down-map (into {}
+                         (keep (fn [[mod-id entities]]
+                                 (let [kept (into #{}
+                                              (filter (fn [eid]
+                                                        (or (seq (get-in model [:nodes eid :children]))
+                                                            (contains? code-flow-endpoints eid))))
+                                              entities)]
+                                   (when (seq kept)
+                                     [mod-id kept]))))
+                         drill-down-map)
+        drill-down-entities (into #{} (mapcat val drill-down-map))
 
         ;; Build view nodes
         ;; Module node (the viewed entity - no parent for strict bounding box)
@@ -670,20 +550,10 @@
                                :when (and node parent-module)]
                            (make-view-node model node parent-module expanded-modules))
 
-        ;; Collect all view node IDs for schema-flow edge filtering
+        ;; Collect all view node IDs for IO layer edge filtering
         all-node-ids (set (concat [entity-id]
                                   children-ids
                                   drill-down-entities))
-
-        ;; Collect visible function IDs for schema-flow edges
-        visible-var-ids (->> all-node-ids
-                             (filter #(= :function (:kind (get-in model [:nodes %]))))
-                             set)
-
-        ;; Collect visible schema IDs for schema-composition edges
-        visible-schema-ids (->> all-node-ids
-                                (filter #(= :schema (:kind (get-in model [:nodes %]))))
-                                set)
 
         ;; Build code-flow edges
         code-flow-edges (map-indexed
@@ -694,33 +564,12 @@
                             :edge-type :code-flow})
                          final-edges)
 
-        ;; Build schema-flow edges
-        schema-flow-raw (compute-schema-flow-edges model visible-var-ids all-node-ids)
-        schema-flow-edges (map-indexed
-                           (fn [idx {:keys [from to schema-key]}]
-                             {:id (str "se" idx)
-                              :from from
-                              :to to
-                              :edge-type :schema-flow
-                              :schema-key schema-key})
-                           schema-flow-raw)
-
-        ;; Build schema-composition edges
-        schema-composition-raw (compute-schema-composition-edges model visible-schema-ids)
-        schema-composition-edges (map-indexed
-                                   (fn [idx {:keys [from to]}]
-                                     {:id (str "sce" idx)
-                                      :from from
-                                      :to to
-                                      :edge-type :schema-composition})
-                                   schema-composition-raw)
-
         ;; Compute IO layer (synthetic IO nodes + data-flow edges)
         io-layer (compute-io-layer model entity-id all-node-ids)]
 
     {:nodes (vec (concat [module-node] child-nodes drill-down-nodes
                          (:nodes io-layer)))
-     :edges (vec (concat code-flow-edges schema-flow-edges schema-composition-edges
+     :edges (vec (concat code-flow-edges
                          (:edges io-layer)))
      :io (:io io-layer)}))
 

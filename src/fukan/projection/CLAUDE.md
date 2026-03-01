@@ -58,9 +58,7 @@ Views never call back into projection — data flows one way.
 ## Edge Types
 
 - `:code-flow` — aggregated from raw var/ns edges in the model
-- `:schema-flow` — var-to-schema and schema-to-var based on `:malli/schema` metadata
 - `:data-flow` — IO schema nodes to/from visible nodes (boundary-derived)
-- `:schema-composition` — schema-to-schema based on `:schema-refs` in node data
 
 ## IO Schema Pattern
 
@@ -81,7 +79,3 @@ IO containers are orphans (no parent) — positioned by the JS layout engine.
 ```
 
 Reads the module's boundary, extracts function schemas via `extract-fn-schema-flow`, and collects all referenced schema keys into input/output sets.
-
-## Root Detection
-
-Root functions (boundary entry points with no external callers) are detected at projection time, not stored in the model. `find-boundary-roots` reads boundary functions and checks edges for external callers. This keeps the model pure and moves the "who calls what" logic to where edges are already available.

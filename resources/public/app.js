@@ -285,52 +285,6 @@ const cy = cytoscape({
         'background-color': '#ffebee'
       }
     },
-    // Schema flow edges - dashed green lines for data flow
-    {
-      selector: 'edge[edgeType="schema-flow"]',
-      style: {
-        'line-style': 'dashed',
-        'line-color': '#27ae60',
-        'target-arrow-color': '#27ae60',
-        'line-dash-pattern': [6, 3],
-        'width': 2,
-        'curve-style': 'bezier',
-        'arrow-scale': 0.8
-      }
-    },
-    // Highlighted schema flow edges - red like other highlighted edges
-    {
-      selector: 'edge[edgeType="schema-flow"].highlighted',
-      style: {
-        'line-color': '#e74c3c',
-        'target-arrow-color': '#e74c3c',
-        'width': 3,
-        'z-index': 1000
-      }
-    },
-    // Schema composition edges - purple solid lines for composition relationships
-    {
-      selector: 'edge[edgeType="schema-composition"]',
-      style: {
-        'line-style': 'solid',
-        'line-color': '#9b59b6',
-        'target-arrow-color': '#9b59b6',
-        'target-arrow-shape': 'triangle',
-        'width': 1.5,
-        'curve-style': 'bezier',
-        'arrow-scale': 0.8
-      }
-    },
-    // Highlighted schema composition edges
-    {
-      selector: 'edge[edgeType="schema-composition"].highlighted',
-      style: {
-        'line-color': '#e74c3c',
-        'target-arrow-color': '#e74c3c',
-        'width': 3,
-        'z-index': 1000
-      }
-    },
     // IO container (Inputs/Outputs) - warm yellow, dashed border
     {
       selector: 'node[kind="io-container"]',
@@ -599,23 +553,11 @@ cy.on('tap', 'node', function(evt) {
   cy.edges().removeClass('highlighted');
   node.select();
 
-  if (nodeKind === 'schema') {
-    // For schema nodes, highlight all schema-flow edges with the same schemaKey
-    const schemaKey = node.data('schemaKey');
-    cy.edges().forEach(edge => {
-      if (edge.data('schemaKey') === schemaKey) {
-        edge.addClass('highlighted');
-      }
-    });
-  } else {
-    // For other nodes, highlight only code-flow edges (not schema-flow)
-    cy.edges().forEach(edge => {
-      const isSchemaFlow = edge.data('edgeType') === 'schema-flow';
-      if (!isSchemaFlow && (edge.source().id() === nodeId || edge.target().id() === nodeId)) {
-        edge.addClass('highlighted');
-      }
-    });
-  }
+  cy.edges().forEach(edge => {
+    if (edge.source().id() === nodeId || edge.target().id() === nodeId) {
+      edge.addClass('highlighted');
+    }
+  });
 
   // For io-schema nodes, dispatch schema event instead of select
   if (nodeKind === 'io-schema') {

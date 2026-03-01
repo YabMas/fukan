@@ -165,65 +165,22 @@
       true)))
 
 ;; ---------------------------------------------------------------------------
-;; ContractRootsVisible: root function descendants appear in module views.
+;; LeafToLeafEdges: every code-flow edge connects two leaf nodes.
 
-(defn- all-descendants-of
-  "Get all descendant node IDs of a given node."
-  [model node-id]
-  (let [children (get-in model [:nodes node-id :children] #{})]
-    (into children
-          (mapcat #(all-descendants-of model %) children))))
-
-(defn- find-boundary-roots
-  "Find boundary functions of a module that have no external callers."
-  [model module-id]
-  (let [boundary-fns (get-in model [:nodes module-id :data :boundary :functions])
-        fn-ids (->> boundary-fns
-                    (keep (fn [bfn]
-                            (or (:id bfn)
-                                (let [name-str (str (:name bfn))]
-                                  (some (fn [cid]
-                                          (when (= name-str (:label (get-in model [:nodes cid])))
-                                            cid))
-                                        (get-in model [:nodes module-id :children] #{}))))))
-                    (filter #(contains? (:nodes model) %))
-                    set)
-        edges (:edges model)
-        module-descendants (all-descendants-of model module-id)
-        module-members (conj module-descendants module-id)
-        has-external-caller?
-        (fn [fn-id]
-          (some (fn [{:keys [from to]}]
-                  (when (= to fn-id)
-                    (not (contains? module-members from))))
-                edges))]
-    (into #{} (remove has-external-caller?) fn-ids)))
-
-(defn- find-root-descendants
-  "Find root function nodes that are descendants of entity-id."
-  [model entity-id]
-  (let [descendants (all-descendants-of model entity-id)
-        module-ids (->> (conj descendants entity-id)
-                        (filter #(and (= :module (:kind (get-in model [:nodes %])))
-                                      (get-in model [:nodes % :data :boundary :functions]))))]
-    (into #{} (mapcat #(find-boundary-roots model %)) module-ids)))
-
-(defn contract-roots-visible?
-  "Verify that all root boundary function descendants of the viewed module
-   appear in the projection."
-  [model opts projection]
-  (let [view-id (:view-id opts)]
-    (if (is-leaf-view? model view-id)
-      true
-      (let [visible-ids (projection-node-ids projection)
-            root-fn-ids (find-root-descendants model view-id)]
-        (or (first
-              (for [fn-id root-fn-ids
-                    :when (not (contains? visible-ids fn-id))]
-                {:violation :contract-roots-visible
-                 :missing-fn fn-id
-                 :view-id view-id}))
-            true)))))
+(defn leaf-to-leaf-edges?
+  "Verify that all code-flow edges connect leaf nodes (no children)."
+  [model _opts projection]
+  (or (first
+        (for [{:keys [from to edge-type]} (:edges projection)
+              :when (= :code-flow edge-type)
+              :let [from-node (get-in model [:nodes from])
+                    to-node (get-in model [:nodes to])]
+              :when (or (nil? from-node) (seq (:children from-node))
+                        (nil? to-node) (seq (:children to-node)))]
+          {:violation :leaf-to-leaf-edges
+           :from from :to to
+           :from-kind (:kind from-node) :to-kind (:kind to-node)}))
+      true))
 
 ;; ---------------------------------------------------------------------------
 ;; Composites
@@ -233,10 +190,10 @@
   [model opts projection]
   (let [checks [strict-bounding-box?
                 no-ancestor-descendant-edges?
+                leaf-to-leaf-edges?
                 schema-filtering?
                 private-visibility?
-                no-duplicate-edges?
-                contract-roots-visible?]]
+                no-duplicate-edges?]]
     (reduce (fn [_ check]
               (let [result (check model opts projection)]
                 (if (true? result)
