@@ -7,7 +7,6 @@
    the :type field (fn-list, fn-inline, schema-def)."
   (:require [hiccup2.core :as h]
             [clojure.string :as str]
-            [fukan.schema.forms :as forms]
             [fukan.web.views.schema :as views.schema])
   (:import [java.net URLEncoder]))
 
@@ -16,33 +15,36 @@
 (defn- url-encode [s] (URLEncoder/encode (str s) "UTF-8"))
 
 ;; -----------------------------------------------------------------------------
-;; Plain-text schema helpers
+;; Plain-text TypeExpr helpers
 
-(defn- schema->str
-  "Convert a malli schema form to a short plain-text string."
-  [form]
-  (cond
-    (keyword? form) (name form)
-    (vector? form)
-    (let [t (forms/form-tag form)
-          args (forms/form-children form)]
-      (case t
-        :vector (str "[" (schema->str (first args)) "]")
-        :set    (str "#{" (schema->str (first args)) "}")
-        :map-of (str "{" (schema->str (first args)) " " (schema->str (second args)) "}")
-        :maybe  (str (schema->str (first args)) "?")
-        :cat    (str/join ", " (map schema->str args))
-        :or     (str/join " | " (map schema->str args))
-        :enum   (str/join " | " (map pr-str args))
-        :tuple  (str "[" (str/join ", " (map schema->str args)) "]")
-        (name t)))
-    :else (pr-str form)))
+(defn- type-expr->str
+  "Convert a TypeExpr to a short plain-text string."
+  [type-expr]
+  (if-not (map? type-expr)
+    (pr-str type-expr)
+    (case (:tag type-expr)
+      :ref (name (:name type-expr))
+      :primitive (:name type-expr)
+      :vector (str "[" (type-expr->str (:element type-expr)) "]")
+      :set    (str "#{" (type-expr->str (:element type-expr)) "}")
+      :map-of (str "{" (type-expr->str (:key-type type-expr)) " " (type-expr->str (:value-type type-expr)) "}")
+      :maybe  (str (type-expr->str (:inner type-expr)) "?")
+      :or     (str/join " | " (map type-expr->str (:variants type-expr)))
+      :and    (str/join " & " (map type-expr->str (:types type-expr)))
+      :enum   (str/join " | " (map pr-str (:values type-expr)))
+      :tuple  (str "[" (str/join ", " (map type-expr->str (:elements type-expr))) "]")
+      :fn     (str (str/join ", " (map type-expr->str (:inputs type-expr)))
+                   " \u2192 " (type-expr->str (:output type-expr)))
+      :map    "map"
+      :predicate "fn"
+      :unknown (or (:original type-expr) "?")
+      (pr-str type-expr))))
 
 (defn- fn-signature-str
   "Format a structured function signature as 'input -> output' string."
   [sig]
   (when-let [{:keys [inputs output]} sig]
-    (str (str/join ", " (map schema->str inputs)) " \u2192 " (schema->str output))))
+    (str (str/join ", " (map type-expr->str inputs)) " \u2192 " (type-expr->str output))))
 
 ;; -----------------------------------------------------------------------------
 ;; Shared components
