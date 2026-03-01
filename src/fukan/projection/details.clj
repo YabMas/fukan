@@ -313,9 +313,10 @@
    :string :EntityDepInfo])
 
 (def ^:schema FnEntry
-  [:map {:description "A function in a public API listing: name, optional schema, and optional navigable ID."}
+  [:map {:description "A function in a public API listing: name, optional signature, and optional navigable ID."}
    [:name :string]
-   [:schema {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]
+   [:schema {:optional true, :description "Structured function signature: inputs and output TypeExprs."}
+    :FunctionSignature]
    [:id {:optional true} :string]])
 
 (def ^:schema InterfaceData
@@ -326,14 +327,14 @@
      [:items [:vector :FnEntry]]]]
    [:fn-inline [:map
      [:type [:= :fn-inline]]
-     [:items {:description "Malli function schema forms — legitimate :any."} [:vector :any]]]]
+     [:items {:description "FunctionSignature values."} [:vector :FunctionSignature]]]]
    [:schema-def [:map
      [:type [:= :schema-def]]
-     [:items {:description "Malli schema form — legitimate :any."} [:vector :any]]
+     [:items {:description "TypeExpr values."} [:vector :TypeExpr]]
      [:registry {:optional true
-                 :description "One-level resolved schema refs: keyword to form and optional doc."}
+                 :description "One-level resolved schema refs: keyword to TypeExpr and optional doc."}
       [:map-of :keyword [:map
-        [:form :any]
+        [:form :TypeExpr]
         [:doc {:optional true} [:maybe :string]]]]]]]
    [:name-list [:map
      [:type [:= :name-list]]
