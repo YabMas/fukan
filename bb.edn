@@ -24,4 +24,15 @@
 
   agent:session:list {:doc "List active agent sessions"
                       :requires ([tasks.agent-session :as agent-session])
-                      :task (agent-session/list-sessions)}}}
+                      :task (agent-session/list-sessions)}
+
+  vsdd:run {:doc "Run VSDD phases 2-5 for a task file.
+
+  Spawns tester, builder, and adversary agents with boundary-enforcing
+  hooks. A lightweight judge (haiku) routes between phases.
+
+  Requires nREPL on port 7889.
+
+  Usage: bb vsdd:run tasks.edn"
+            :requires ([tasks.vsdd :as vsdd])
+            :task (vsdd/run (first *command-line-args*))}}}

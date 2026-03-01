@@ -1,3 +1,4 @@
 .lsp/.cache
 .cpcache
 .clj-kondo
+.vsdd
