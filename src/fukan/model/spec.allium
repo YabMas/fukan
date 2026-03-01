@@ -27,13 +27,103 @@
 --   modules can be expanded to reveal their internal structure.
 
 ------------------------------------------------------------
--- External Value Types
+-- Type Expression IR
 ------------------------------------------------------------
 
-external entity TypeExpr {
-    -- A type expression in the host language's type system.
-    -- May reference named schemas by keyword, creating edges
-    -- in the projection layer.
+value MapEntry {
+    -- A single field in a map type expression.
+    key: String
+    optional: Boolean
+    type: TypeExpr
+    description: String?
+}
+
+entity TypeExpr {
+    -- A generic, language-agnostic type expression.
+    -- Produced by language analyzers at build time. Consumed by
+    -- projection (reference extraction) and views (rendering).
+    -- Replaces raw Malli forms — only the Clojure analyzer knows Malli.
+    --
+    -- Keyword classification for refs vs primitives:
+    --   uppercase-initial (:Model, :NodeId) → ref tag
+    --   lowercase (:string, :int, :any)     → primitive tag
+    -- The projection layer filters refs against the schema registry,
+    -- so false positives are harmless.
+
+    tag: ref | primitive | map | map_of | vector | set
+       | maybe | or | and | enum | tuple | fn | predicate | unknown
+    description: String?
+}
+
+variant RefExpr : TypeExpr {
+    -- Named reference to another type (e.g. :Model, :NodeId).
+    name: String
+}
+
+variant PrimitiveExpr : TypeExpr {
+    -- Built-in primitive type (e.g. "string", "int", "any").
+    name: String
+}
+
+variant MapExpr : TypeExpr {
+    -- Structured map with named, typed entries.
+    entries: List<MapEntry>
+}
+
+variant MapOfExpr : TypeExpr {
+    -- Homogeneous map from key type to value type.
+    key_type: TypeExpr
+    value_type: TypeExpr
+}
+
+variant VectorExpr : TypeExpr {
+    -- Homogeneous ordered collection.
+    element: TypeExpr
+}
+
+variant SetExpr : TypeExpr {
+    -- Homogeneous unordered collection.
+    element: TypeExpr
+}
+
+variant MaybeExpr : TypeExpr {
+    -- Optional/nullable wrapper.
+    inner: TypeExpr
+}
+
+variant OrExpr : TypeExpr {
+    -- Union of type alternatives.
+    variants: List<TypeExpr>
+}
+
+variant AndExpr : TypeExpr {
+    -- Intersection of type constraints.
+    types: List<TypeExpr>
+}
+
+variant EnumExpr : TypeExpr {
+    -- Fixed set of literal values.
+    values: List<String>
+}
+
+variant TupleExpr : TypeExpr {
+    -- Fixed-length heterogeneous sequence.
+    elements: List<TypeExpr>
+}
+
+variant FnExpr : TypeExpr {
+    -- Function type (in type position, not FunctionSignature).
+    inputs: List<TypeExpr>
+    output: TypeExpr
+}
+
+variant PredicateExpr : TypeExpr {
+    -- Opaque predicate constraint (e.g. Malli :fn).
+}
+
+variant UnknownExpr : TypeExpr {
+    -- Unconvertible form, preserved as string for debugging.
+    original: String
 }
 
 ------------------------------------------------------------
