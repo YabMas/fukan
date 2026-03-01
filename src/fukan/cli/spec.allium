@@ -212,36 +212,24 @@ rule ExpandContainer {
 -- Invariants
 ------------------------------------------------------------
 
-invariant CommandPurity {
-    -- Commands are pure functions of (model, state, args).
-    -- Same inputs always produce the same response and state-update.
-    -- No side effects, no IO within command dispatch.
-}
+-- CommandPurity: Commands are pure functions of (model, state, args).
+-- Same inputs always produce the same response and state-update.
+-- No side effects, no IO within command dispatch.
 
-invariant ProjectionDelegation {
-    -- All model access goes through projection API (navigate, inspect,
-    -- find-root, search, overview). The command layer never reads
-    -- model[:nodes] or model[:edges] directly.
-}
+-- ProjectionDelegation: All model access goes through projection API
+-- (navigate, inspect, find-root, search, overview). The command layer
+-- never reads model[:nodes] or model[:edges] directly.
 
-invariant ResponseShape {
-    -- Every response map contains :ok (boolean) and :command (keyword).
-    -- This holds for both success and error responses.
-}
+-- ResponseShape: Every response map contains :ok (boolean) and
+-- :command (keyword). This holds for both success and error responses.
 
-invariant StateConsistency {
-    -- view_id is always nil (root) or a valid container in the model.
-    -- history entries are all valid container IDs.
-}
+-- StateConsistency: view_id is always nil (root) or a valid container
+-- in the model. History entries are all valid container IDs.
 
-invariant HistoryIntegrity {
-    -- cd pushes the old view_id onto history before updating.
-    -- back pops the most recent entry and restores it as view_id.
-    -- Other commands do not modify history.
-}
+-- HistoryIntegrity: cd pushes the old view_id onto history before
+-- updating. back pops the most recent entry and restores it as
+-- view_id. Other commands do not modify history.
 
-invariant ExpandToggle {
-    -- expand flips membership in the expanded set.
-    -- If container was expanded, it becomes collapsed, and vice versa.
-    -- Other commands do not modify the expanded set.
-}
+-- ExpandToggle: expand flips membership in the expanded set.
+-- If container was expanded, it becomes collapsed, and vice versa.
+-- Other commands do not modify the expanded set.

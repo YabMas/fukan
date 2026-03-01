@@ -116,10 +116,25 @@
 ;; -----------------------------------------------------------------------------
 ;; On-demand edge aggregation
 
+(defn- cross-level?
+  "True when one endpoint is a compound node (has visible children) and
+   the other is not. This means the raw edge source/target aggregated up
+   to a module because it's hidden (private), so the edge shouldn't appear."
+  [model visible-set from-vis to-vis]
+  (let [has-vis-children? (fn [nid]
+                            (some visible-set (get-in model [:nodes nid :children] #{})))]
+    (not= (boolean (has-vis-children? from-vis))
+           (boolean (has-vis-children? to-vis)))))
+
 (defn- aggregate-edges
   "Aggregate var-level edges to the visible node level.
    For each raw edge, find which visible nodes it connects.
    Returns deduplicated edges between visible nodes.
+
+   Drops cross-level edges where one endpoint aggregated to a compound
+   module (has drilled children) and the other is a leaf. This means the
+   raw source/target is hidden (private), so its connections shouldn't
+   be visible either.
 
    Excludes edges where one endpoint is an ancestor of the other -
    parent-child relationships are implicit in compound node structure."
@@ -133,7 +148,9 @@
                               (not= from-visible to-visible)
                               ;; No edges between ancestor and descendant
                               (not (descendant-of? model to-visible from-visible))
-                              (not (descendant-of? model from-visible to-visible)))
+                              (not (descendant-of? model from-visible to-visible))
+                              ;; No cross-level edges
+                              (not (cross-level? model visible-set from-visible to-visible)))
                      {:from from-visible :to to-visible}))))
          distinct
          vec)))

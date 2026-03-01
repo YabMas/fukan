@@ -30,10 +30,11 @@
 -- External Value Types
 ------------------------------------------------------------
 
-external value TypeExpr
+external entity TypeExpr {
     -- A type expression in the host language's type system.
     -- May reference named schemas by keyword, creating edges
     -- in the projection layer.
+}
 
 ------------------------------------------------------------
 -- Value Types
@@ -73,10 +74,10 @@ value Boundary {
 ------------------------------------------------------------
 
 entity Edge {
-    -- Directed dependency between two nodes.
-    -- Leaf-level edges are the source of truth (var-to-var, ns-to-var,
-    -- entity-to-entity type references).
-    -- Module-level edges are derived on demand by the projection layer.
+    -- Directed dependency between two leaf nodes.
+    -- Edges are strictly leaf-to-leaf: both endpoints are Function
+    -- or Schema nodes. Module-level relationships are derived by
+    -- the projection layer through ancestor aggregation.
     from: Node
     to: Node
 }
@@ -174,9 +175,13 @@ entity Model {
     -- NoSelfEdges: every edge has from != to.
     --
     -- EdgeIntegrity: both endpoints of every edge exist in nodes.
-    --   Edges are drawn from multiple sources: var-level references,
-    --   namespace requires, and specification type references. All
+    --   Edges are drawn from multiple sources: cross-references
+    --   between functions, and specification type references. All
     --   are needed. Deduplication happens at the projection layer.
+    --
+    -- LeafEdges: both endpoints of every edge are leaf nodes
+    --   (Function or Schema). Module-level edges do not exist in
+    --   the model — they are derived on demand by projection.
     --
     -- SmartRootPruning: single-child module chains at the root are
     --   collapsed. The tree starts at the first module with multiple

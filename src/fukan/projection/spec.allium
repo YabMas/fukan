@@ -27,12 +27,6 @@ enum EdgeType { code_flow | schema_flow | data_flow | schema_composition }
 -- data_flow:           IO boundary ↔ code derived from module boundaries
 -- schema_composition:  schema → schema derived from schema form cross-references
 
-enum InterfaceType { fn_list | fn_inline | schema_def | name_list }
--- fn_list:    boundary functions with optional signatures (modules)
--- fn_inline:  single function signature (functions)
--- schema_def: schema form with one-level registry (schemas)
--- name_list:  bare names without schemas (interface nodes)
-
 ------------------------------------------------------------
 -- Value Types
 ------------------------------------------------------------
@@ -83,29 +77,16 @@ value PathSegment {
     label: String   -- last dotted segment for namespaces
 }
 
-value DepInfo { count: Integer, label: String }
+value DepInfo {
+    -- Dependency count and display label for a related entity.
+    count: Integer
+    label: String
+}
 
-value InterfaceData {
-    -- Public interface of an entity, discriminated by display format.
-    -- Each variant carries typed items appropriate to its format.
-    type: InterfaceType
-
-    variant fn_list {
-        items: List<model/Function>
-    }
-
-    variant fn_inline {
-        items: List<model/FunctionSignature>
-    }
-
-    variant schema_def {
-        items: List<model/TypeExpr>
-        registry: Map<String, { form: model/TypeExpr, doc: String? }>?
-    }
-
-    variant name_list {
-        items: List<String>
-    }
+value SchemaRegistryEntry {
+    -- A named schema from the one-level registry.
+    form: model/TypeExpr
+    doc: String?
 }
 
 value DataflowData {
@@ -118,16 +99,16 @@ value EntityDetail {
     -- Normalized detail structure for any node entity.
     --
     -- InterfaceDispatch: interface extraction differs by kind:
-    --   module   → fn_list from boundary functions
-    --   function → fn_inline from function signature
-    --   schema   → schema_def from schema form + one-level registry
+    --   module   → FnListInterface from boundary functions
+    --   function → FnInlineInterface from function signature
+    --   schema   → SchemaDefInterface from schema form + one-level registry
     --
     -- SameKindAggregation: deps and dependents are aggregated to the
     --   same kind as the entity. A module's deps are other modules;
     --   a function's deps are other functions. Self-subtree is excluded.
     label: String
     kind: module | function | schema
-    parent: { id: String, label: String }?
+    parent: ParentRef?
     description: String?
     guarantees: List<String>?  -- spec-derived invariant promises
     interface: InterfaceData?
@@ -137,12 +118,49 @@ value EntityDetail {
     dependents: Map<String, DepInfo>
 }
 
+value ParentRef {
+    -- Reference to a parent entity for navigation and display.
+    id: String
+    label: String
+}
+
 value EdgeDetail {
     -- Detail structure for an aggregated edge: the underlying
     -- function-level calls that cross this dependency.
     kind: edge                -- discriminant for EntityDetail | EdgeDetail union
     label: String
     called_fns: List<model/Function>
+}
+
+------------------------------------------------------------
+-- Entities (Sum Types)
+------------------------------------------------------------
+
+entity InterfaceData {
+    -- Public interface of an entity, discriminated by display format.
+    -- Each variant carries typed items appropriate to its format.
+    type: FnListInterface | FnInlineInterface | SchemaDefInterface | NameListInterface
+}
+
+variant FnListInterface : InterfaceData {
+    -- Boundary functions with optional signatures (modules).
+    items: List<model/Function>
+}
+
+variant FnInlineInterface : InterfaceData {
+    -- Single function signature (functions).
+    items: List<model/FunctionSignature>
+}
+
+variant SchemaDefInterface : InterfaceData {
+    -- Schema form with one-level registry (schemas).
+    items: List<model/TypeExpr>
+    registry: Map<String, SchemaRegistryEntry>?
+}
+
+variant NameListInterface : InterfaceData {
+    -- Bare names without schemas (interface nodes).
+    items: List<String>
 }
 
 ------------------------------------------------------------
@@ -156,9 +174,10 @@ rule EntityGraph {
     when: EntityGraph(view_id: String?, expanded_modules: Set<String>)
 
     let entity_id = view_id ?? model.root_nodes.first.id
+    let entity = node_by_id(model, entity_id)      -- black box: map lookup
 
     ensures:
-        if model.nodes[entity_id].children.count > 0:
+        if entity.children.count > 0:
             ModuleView(entity_id, expanded_modules)
         else:
             LeafView(entity_id, expanded_modules)
@@ -238,24 +257,30 @@ rule LeafView {
 
     when: LeafView(entity_id: String, expanded_modules: Set<String>)
 
-    let entity = model.nodes[entity_id]
-    let related_ids = model.edges
-        .filter(e => e.from = entity_id or e.to = entity_id)
-        .map(e => if e.from = entity_id: e.to else: e.from)
+    let entity = node_by_id(model, entity_id)              -- black box: map lookup
+    let related_ids = related_entity_ids(model, entity_id)  -- black box: ids connected by edges
 
     -- Group related entities by parent namespace, then folder
-    let parent_ns_ids = related_ids.map(id => model.nodes[id].parent)
-    let parent_folder_ids = parent_ns_ids.map(id => model.nodes[id].parent)
+    let parent_ns_ids = parent_ids(model, related_ids)       -- black box: parent of each
+    let parent_folder_ids = parent_ids(model, parent_ns_ids) -- black box: grandparent of each
+
+    let visible_nodes = build_leaf_view_nodes(model, entity_id, related_ids, parent_ns_ids, parent_folder_ids)  -- black box
+    let visible_edges = edges_involving(model, entity_id)    -- black box: edges where from or to = entity_id
 
     ensures: Projection.created(
-        nodes: folder_nodes + ns_nodes + entity_nodes,
-        edges: model.edges.filter(e => e.from = entity_id or e.to = entity_id),
+        nodes: visible_nodes,
+        edges: visible_edges,
         io: null
     )
 }
 
 rule AggregateEdges {
     -- Sub-rule of ModuleView: aggregate raw model edges to the visible ancestor level.
+    --
+    -- DerivedFromLeafEdges: every code_flow edge in the projection
+    --   traces back to one or more leaf-to-leaf model edges. No edge
+    --   is synthesised — module-level edges arise only as aggregation
+    --   of underlying leaf-to-leaf relationships.
     --
     -- For each raw edge (from, to):
     --   1. Walk up each endpoint's parent chain to find its first
@@ -268,15 +293,11 @@ rule AggregateEdges {
 
     when: AggregateEdges(visible_set: Set<String>)
 
-    ensures: model.edges
-        .map(e => (find_visible_ancestor(e.from, visible_set),
-                   find_visible_ancestor(e.to, visible_set)))
-        .filter((from, to) =>
-            from != null and to != null
-            and from != to
-            and not descendant_of(to, from)
-            and not descendant_of(from, to))
-        .distinct
+    ensures: aggregate_to_visible_ancestors(model.edges, visible_set)  -- black box
+    -- Maps each edge endpoint to its first visible ancestor via
+    -- find_visible_ancestor, filters to pairs that are both present,
+    -- distinct, and not in an ancestor-descendant relationship,
+    -- then deduplicates.
 }
 
 rule IOSchemaProjection {
@@ -296,7 +317,8 @@ rule IOSchemaProjection {
 
     when: IOSchemaProjection(entity_id: String, all_visible: Set<String>)
 
-    let boundary = model.nodes[entity_id].boundary
+    let entity = node_by_id(model, entity_id)       -- black box: map lookup
+    let boundary = entity.boundary
     requires: boundary != null
 
     let io_keys = extract_io_keys(boundary)   -- black box
@@ -326,10 +348,10 @@ rule EntityDetails {
     when: EntityDetails(entity_id: String)
 
     ensures:
-        if entity_id.starts_with("edge~"):
-            compute_edge_detail(model, entity_id)     -- black box
+        if is_edge_id(entity_id):                            -- black box: checks "edge~" prefix
+            compute_edge_detail(model, entity_id)            -- black box
         else:
-            compute_node_detail(model, entity_id)     -- black box
+            compute_node_detail(model, entity_id)            -- black box
 }
 
 rule EntityPath {
@@ -343,13 +365,11 @@ rule EntityPath {
 
     ensures:
         if entity_id = null or entity_id = root.id:
-            [{id: null, label: short_label(root)}]
+            path_to_root(model, root)                        -- black box
         else:
-            [{id: null, label: short_label(root)}]
-            + walk_parents(entity_id).reverse.map(n => {
-                id: n.id,
-                label: short_label(n)
-            })
+            path_to_entity(model, root, entity_id)           -- black box
+            -- Walks parent chain from entity_id to root, reverses,
+            -- and maps each node to a PathSegment with short label.
 }
 
 rule FindSchemaNodeId {
@@ -359,8 +379,9 @@ rule FindSchemaNodeId {
 
     when: FindSchemaNodeId(schema_key: String)
 
-    ensures: model.nodes
-        .find(n => n.kind = Schema and n.schema_key = schema_key)?.id
+    ensures: find_node_by_schema_key(model, schema_key)      -- black box
+    -- Finds the node with kind = Schema and matching schema_key,
+    -- returns its id or null if not found.
 }
 
 ------------------------------------------------------------
@@ -379,7 +400,7 @@ value ModelOverview {
     -- Summary statistics for the loaded model.
     total_nodes: Integer
     total_edges: Integer
-    by_kind: Map<NodeKind, Integer>   -- NodeKind from model/Node.kind
+    by_kind: Map<String, Integer>   -- node kind label → count
 }
 
 rule Search {
@@ -389,10 +410,10 @@ rule Search {
 
     when: Search(pattern: String, limit: Integer)
 
-    ensures: model.nodes.values
-        .filter(n => n.label.lower_case.contains(pattern.lower_case))
-        .take(limit)
-        .map(n => SearchResult { id: n.id, kind: n.kind, label: n.label, parent: n.parent })
+    ensures: search_nodes(model, pattern, limit)             -- black box
+    -- Filters model.nodes to those whose label contains pattern
+    -- (case-insensitive), takes up to limit results, and maps
+    -- each to a SearchResult.
 }
 
 rule Overview {
@@ -401,9 +422,7 @@ rule Overview {
 
     when: Overview()
 
-    ensures: ModelOverview {
-        total_nodes: model.nodes.count,
-        total_edges: model.edges.count,
-        by_kind: model.nodes.values.group_by(n => n.kind).map_values(count)
-    }
+    ensures: compute_overview(model)                         -- black box
+    -- Returns ModelOverview with total_nodes, total_edges,
+    -- and per-kind counts from model.nodes.
 }

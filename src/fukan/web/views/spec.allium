@@ -18,14 +18,14 @@ value EditorState {
     -- Client-side UI state. Split into two concerns:
     --
     -- Projection inputs (determine what's visible):
-    --   view_id + expanded_containers
+    --   view_id + expanded_modules
     --
     -- Rendering inputs (determine how it looks):
     --   selected_id + schema_id
-    view_id: String?                  -- container being viewed (null = root)
+    view_id: String?                  -- module being viewed (null = root)
     selected_id: String?              -- currently highlighted node
     schema_id: String?                -- schema being inspected in sidebar
-    expanded_containers: Set<String>  -- containers whose private children are visible
+    expanded_modules: Set<String>     -- modules whose private children are visible
 }
 
 value CytoscapeGraph {
@@ -40,7 +40,7 @@ value CytoscapeGraph {
 
 value CytoscapeNode {
     id: String
-    kind: String           -- "container", "function", "schema", "io-container", "io-schema"
+    kind: String           -- "module", "function", "schema", "io-container", "io-schema"
     label: String
     parent: String?
     selected: Boolean
@@ -79,13 +79,14 @@ given {
 -- ============================================================
 --
 -- The UI distinguishes selection (highlighting within current view)
--- from navigation (changing the focused container).
+-- from navigation (changing the viewed module).
 
 rule SelectNode {
-    -- Single click: select a node without changing the focused container.
+    -- Single click: select a node without changing the viewed module.
     --
     -- SelectionDefault: when no explicit selection exists, the effective
-    --   selected node defaults to view_id, then to the root node.
+    --   selected node defaults to view_id, then to the first root node
+    --   in the projection.
     --
     -- SchemaKeyHighlighting: when the selected node is a schema node
     --   (IO or model schema), edges are highlighted by matching schema-key
@@ -97,7 +98,9 @@ rule SelectNode {
 
     when: SelectNode(node_id: String)
 
-    let effective_selected = node_id ?? editor.view_id ?? root_id
+    let effective_selected = node_id
+        ?? editor.view_id
+        ?? projection.nodes.find(n => n.parent = null).id
 
     ensures:
         editor.selected_id = effective_selected
@@ -106,17 +109,17 @@ rule SelectNode {
 }
 
 rule NavigateToNode {
-    -- Double click: navigate into a container to view its children.
+    -- Double click: navigate into a module to view its children.
     --
-    -- OnlyContainers: navigation only occurs if the node has children.
+    -- OnlyExpandable: navigation only occurs if the node has children.
     --   Double-clicking a leaf is treated as a single click (selection only).
     --
     -- ClearsSelection: after navigation, no node is selected until the
-    --   user clicks one. The new container becomes the focused entity.
+    --   user clicks one. The new module becomes the viewed entity.
 
     when: NavigateToNode(node_id: String)
 
-    -- The frontend guards dispatch: only containers are navigable.
+    -- The frontend guards dispatch: only expandable nodes are navigable.
     -- Expandable is a property of the projection's ViewNode.
     requires: projection_node(node_id).expandable = true
 
@@ -126,24 +129,24 @@ rule NavigateToNode {
 }
 
 rule TogglePrivateVisibility {
-    -- Right click on a container: toggle whether its private children
+    -- Right click on a module: toggle whether its private children
     --   are visible.
     --
-    -- AddOrRemove: if the container is in expanded_containers, remove it
+    -- AddOrRemove: if the module is in expanded_modules, remove it
     --   (hide privates). If not, add it (show privates).
 
-    when: TogglePrivateVisibility(container_id: String)
+    when: TogglePrivateVisibility(module_id: String)
 
     ensures:
-        if container_id in editor.expanded_containers:
-            editor.expanded_containers = editor.expanded_containers - {container_id}
+        if module_id in editor.expanded_modules:
+            editor.expanded_modules = editor.expanded_modules - {module_id}
         else:
-            editor.expanded_containers = editor.expanded_containers + {container_id}
+            editor.expanded_modules = editor.expanded_modules + {module_id}
 }
 
 rule NavigateToAncestor {
-    -- Breadcrumb click: navigate to an ancestor container.
-    -- The breadcrumb shows the path from smart-root to the focused container.
+    -- Breadcrumb click: navigate to an ancestor module.
+    -- The breadcrumb shows the path from smart-root to the viewed module.
     -- Clicking any non-current item navigates there.
 
     when: NavigateToAncestor(ancestor_id: String?)
@@ -194,7 +197,7 @@ rule RenderGraph {
 
     let effective_selected = editor_state.selected_id
         ?? editor_state.view_id
-        ?? graph_projection.root_id
+        ?? graph_projection.nodes.find(n => n.parent = null).id
 
     ensures: CytoscapeGraph.created(
         nodes: graph_projection.nodes with { selected: id = effective_selected },
@@ -219,7 +222,7 @@ rule RenderSidebar {
     --   2. Description — from doc, contract, or spec description
     --   3. Guarantees — invariant promises from surface (when present)
     --   4. Interface — dispatched by type, with IO sections:
-    --      - fn_list (containers): Inputs, Outputs, Public API
+    --      - fn_list (modules): Inputs, Outputs, Public API
     --      - fn_inline (functions): Inputs, Outputs
     --      - schema_def (schemas): schema detail view with registry
     --      - name_list (interfaces): plain function name list
@@ -243,7 +246,7 @@ rule RenderSidebar {
 }
 
 rule RenderBreadcrumb {
-    -- Render the navigation breadcrumb from root to focused container.
+    -- Render the navigation breadcrumb from root to viewed module.
     --
     -- ShortLabels: namespace names show only the last dotted segment.
     -- CurrentItem: the last item is non-clickable and styled as current.
@@ -260,11 +263,11 @@ rule RenderBreadcrumb {
 -- Visual Indicators
 -- ============================================================
 --
--- DoubleBorder: a container has private children that are currently
---   hidden (container not in expanded_containers).
+-- DoubleBorder: a module has private children that are currently
+--   hidden (module not in expanded_modules).
 --
 -- DashedBorderGrayBackground: a private leaf node that is currently
 --   visible (its parent is expanded).
 --
--- SolidBorder: the container is expanded (all children visible)
+-- SolidBorder: the module is expanded (all children visible)
 --   or has no private children at all.
