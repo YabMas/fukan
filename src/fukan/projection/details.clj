@@ -6,8 +6,7 @@
    aggregated dependency counts. The normalized shape lets the sidebar
    render all entity kinds with one generic renderer."
   (:require [clojure.string :as str]
-            [fukan.projection.schema :as proj.schema]
-            [fukan.schema.forms :as forms]))
+            [fukan.projection.schema :as proj.schema]))
 
 ;; -----------------------------------------------------------------------------
 ;; Private helpers
@@ -156,11 +155,11 @@
       nil)))
 
 (defn- extract-fn-io
-  "Extract input and output schema references from a function schema.
-   Expects schema in form [:=> [:cat input1 input2 ...] output].
+  "Extract input and output schema references from a structured function signature.
+   Expects {:inputs [type-exprs...] :output type-expr}.
    Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil."
-  [model fn-schema]
-  (when-let [{:keys [inputs output]} (forms/fn-schema-parts fn-schema)]
+  [model fn-sig]
+  (when-let [{:keys [inputs output]} fn-sig]
     {:inputs (into #{} (mapcat #(proj.schema/extract-schema-refs model %) inputs))
      :outputs (proj.schema/extract-schema-refs model output)}))
 
@@ -210,8 +209,9 @@
           (->> ns-schemas sort (mapv ref-fn))))
 
       :function
-      (when-let [sig (:signature data)]
-        (let [refs (proj.schema/extract-schema-refs model sig)]
+      (when-let [{:keys [inputs output]} (:signature data)]
+        (let [refs (into (into #{} (mapcat #(proj.schema/extract-schema-refs model %) inputs))
+                         (proj.schema/extract-schema-refs model output))]
           (when (seq refs)
             (->> refs sort (mapv ref-fn)))))
 

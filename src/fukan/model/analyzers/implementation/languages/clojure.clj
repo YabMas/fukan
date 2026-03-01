@@ -175,8 +175,8 @@
                                           (ns-resolve var-sym)
                                           meta :malli/schema)
                                   (catch Exception _ nil))]
-                  (if schema
-                    (assoc acc id (assoc-in node [:data :signature] schema))
+                  (if-let [parts (when schema (forms/fn-schema-parts schema))]
+                    (assoc acc id (assoc-in node [:data :signature] parts))
                     (assoc acc id node)))
                 (assoc acc id node)))
             {} nodes)))
@@ -205,7 +205,7 @@
                                      {:sym sym})))]
       (cond-> {:name (name var-sym)
                :id (str ns-sym "/" (name var-sym))
-               :schema schema}
+               :schema (forms/fn-schema-parts schema)}
         (:doc (meta v)) (assoc :doc (:doc (meta v)))))))
 
 (defn- read-contract-file

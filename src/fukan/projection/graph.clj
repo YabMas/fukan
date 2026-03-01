@@ -7,7 +7,6 @@
    with no UI state."
   (:require [fukan.projection.schema :as schema]
             [fukan.projection.path :as path]
-            [fukan.schema.forms :as forms]
             [clojure.set :as set]))
 
 ;; -----------------------------------------------------------------------------
@@ -143,13 +142,13 @@
 ;; IO Schema computation
 
 (defn- extract-fn-schema-flow
-  "Extract input and output schema references from a function schema.
-   Expects schema in form [:=> [:cat input1 input2 ...] output].
+  "Extract input and output schema references from a structured function signature.
+   Expects {:inputs [type-exprs...] :output type-expr}.
    Returns {:inputs #{schema-keys...} :outputs #{schema-keys...}}
-   or nil if not a function schema.
+   or nil if not a function signature.
    Takes the model to determine which keywords are registered schemas."
-  [model fn-schema]
-  (when-let [{:keys [inputs output]} (forms/fn-schema-parts fn-schema)]
+  [model fn-sig]
+  (when-let [{:keys [inputs output]} fn-sig]
     {:inputs (into #{} (mapcat #(schema/extract-schema-refs model %) inputs))
      :outputs (schema/extract-schema-refs model output)}))
 

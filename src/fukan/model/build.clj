@@ -62,7 +62,8 @@
   [:map {:description "A public function entry in a module boundary."}
    [:name :symbol]
    [:id {:optional true, :description "Node ID of the boundary function."} :string]
-   [:schema {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]
+   [:schema {:optional true, :description "Structured function signature: inputs and output types."}
+    [:map [:inputs [:vector :any]] [:output :any]]]
    [:doc {:optional true} :string]])
 
 (def ^:schema Boundary
@@ -84,7 +85,8 @@
     [:kind [:= :function]]
     [:doc {:optional true} [:maybe :string]]
     [:private? {:optional true} :boolean]
-    [:signature {:optional true, :description "Malli function schema [:=> [:cat inputs...] output]."} :any]]
+    [:signature {:optional true, :description "Structured function signature: inputs and output types."}
+     [:map [:inputs [:vector :any]] [:output :any]]]]
    ;; Schema data (schema definition)
    [:map {:description "Schema node data: the Malli schema form and its keyword key."}
     [:kind [:= :schema]]

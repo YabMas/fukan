@@ -39,9 +39,9 @@
     :else (pr-str form)))
 
 (defn- fn-signature-str
-  "Format a [:=> ...] schema as 'input -> output' string."
-  [schema]
-  (when-let [{:keys [inputs output]} (forms/fn-schema-parts schema)]
+  "Format a structured function signature as 'input -> output' string."
+  [sig]
+  (when-let [{:keys [inputs output]} sig]
     (str (str/join ", " (map schema->str inputs)) " \u2192 " (schema->str output))))
 
 ;; -----------------------------------------------------------------------------
