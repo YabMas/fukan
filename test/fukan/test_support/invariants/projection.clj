@@ -165,22 +165,22 @@
       true)))
 
 ;; ---------------------------------------------------------------------------
-;; LeafToLeafEdges: every code-flow edge connects two leaf nodes.
+;; VisibleNodeEdges: every code-flow edge endpoint is a visible node.
 
-(defn leaf-to-leaf-edges?
-  "Verify that all code-flow edges connect leaf nodes (no children)."
-  [model _opts projection]
-  (or (first
-        (for [{:keys [from to edge-type]} (:edges projection)
-              :when (= :code-flow edge-type)
-              :let [from-node (get-in model [:nodes from])
-                    to-node (get-in model [:nodes to])]
-              :when (or (nil? from-node) (seq (:children from-node))
-                        (nil? to-node) (seq (:children to-node)))]
-          {:violation :leaf-to-leaf-edges
-           :from from :to to
-           :from-kind (:kind from-node) :to-kind (:kind to-node)}))
-      true))
+(defn visible-node-edges?
+  "Verify that all code-flow edge endpoints are visible nodes in the projection."
+  [_model _opts projection]
+  (let [visible-ids (projection-node-ids projection)]
+    (or (first
+          (for [{:keys [from to edge-type]} (:edges projection)
+                :when (= :code-flow edge-type)
+                :when (or (not (contains? visible-ids from))
+                          (not (contains? visible-ids to)))]
+            {:violation :visible-node-edges
+             :from from :to to
+             :from-visible? (contains? visible-ids from)
+             :to-visible? (contains? visible-ids to)}))
+        true)))
 
 ;; ---------------------------------------------------------------------------
 ;; Composites
@@ -190,7 +190,7 @@
   [model opts projection]
   (let [checks [strict-bounding-box?
                 no-ancestor-descendant-edges?
-                leaf-to-leaf-edges?
+                visible-node-edges?
                 schema-filtering?
                 private-visibility?
                 no-duplicate-edges?]]

@@ -1,10 +1,10 @@
 (ns fukan.projection.graph
   "Graph projection: Model → visible subgraph for visualization.
-   Given a view entity and a set of show-private modules, computes which
-   nodes and edges are visible, aggregates raw edges to the visible level,
-   drills down into modules to reveal connected children, and generates
-   synthetic IO nodes from contract boundaries. Returns pure domain data
-   with no UI state."
+   Given a view entity, a set of explicitly expanded modules, and a set
+   of show-private modules, computes which nodes and edges are visible,
+   aggregates raw edges to the visible level, and generates synthetic
+   IO nodes from contract boundaries. Returns pure domain data with no
+   UI state."
   (:require [fukan.projection.schema :as schema]
             [fukan.projection.path :as path]
             [clojure.set :as set]))
@@ -54,8 +54,9 @@
    [:io [:maybe :ProjectionIO]]])
 
 (def ^:schema ProjectionOpts
-  [:map {:description "Options for graph projection: which entity to view and which modules are expanded."}
+  [:map {:description "Options for graph projection: which entity to view, which modules are expanded, and which show private children."}
    [:view-id {:optional true} [:maybe :string]]
+   [:expanded {:optional true} [:set :NodeId]]
    [:show-private {:optional true} [:set :NodeId]]])
 
 ;; -----------------------------------------------------------------------------
@@ -79,17 +80,37 @@
   (let [children-ids (get-children model entity-id)]
     (some #(node-private? (get-in model [:nodes %])) children-ids)))
 
-(defn- get-visible-children
-  "Get the visible children of an entity, filtered by show-private.
-   Filters out schema nodes (they appear only as IO schemas)."
-  [model entity-id show-private]
-  (let [children-ids (get-children model entity-id)
-        ;; Filter out schema nodes - they appear only as IO schemas
-        children-ids (into #{} (remove #(= :schema (:kind (get-in model [:nodes %])))) children-ids)]
-    (if (or (nil? show-private)
-            (contains? show-private entity-id))
-      children-ids
-      (into #{} (remove #(node-private? (get-in model [:nodes %]))) children-ids))))
+(defn- compute-visible-set
+  "Compute the set of visible nodes by recursive descent through expanded modules.
+   For each child of entity-id:
+   - Skip schema nodes (they appear only as IO schemas)
+   - Skip private nodes unless parent is in show-private
+   - Include the child
+   - If the child is a module AND in effective-expanded: recurse into its children"
+  [model entity-id effective-expanded show-private]
+  (let [children (get-children model entity-id)]
+    (reduce
+      (fn [visible child-id]
+        (let [child-node (get-in model [:nodes child-id])]
+          (cond
+            ;; Skip schema nodes
+            (= :schema (:kind child-node))
+            visible
+
+            ;; Skip private nodes unless parent is in show-private
+            (and (node-private? child-node)
+                 (not (contains? show-private entity-id)))
+            visible
+
+            :else
+            (let [visible (conj visible child-id)]
+              ;; If this is an expanded module, recurse into its children
+              (if (and (= :module (:kind child-node))
+                       (contains? effective-expanded child-id))
+                (into visible (compute-visible-set model child-id effective-expanded show-private))
+                visible)))))
+      #{}
+      children)))
 
 ;; -----------------------------------------------------------------------------
 ;; Ancestry helpers
@@ -136,15 +157,6 @@
                      {:from from-visible :to to-visible}))))
          distinct
          vec)))
-
-(defn- leaf-only-edges
-  "Filter aggregated edges to only those connecting two leaf nodes.
-   A leaf node has no children. Module endpoints are dropped."
-  [model visible-set]
-  (->> (aggregate-edges model visible-set)
-       (filterv (fn [{:keys [from to]}]
-                  (and (empty? (get-in model [:nodes from :children] #{}))
-                       (empty? (get-in model [:nodes to :children] #{})))))))
 
 ;; -----------------------------------------------------------------------------
 ;; IO Schema computation
@@ -280,7 +292,7 @@
    - nil: use the node's actual parent
    - :no-parent: explicitly set parent to nil (for bounding box root)
    - any other value: use that as the parent"
-  [model node parent-override show-private]
+  [model node parent-override expanded show-private]
   (let [id (:id node)
         kind (:kind node)
         parent (cond
@@ -293,12 +305,12 @@
      :parent parent
      :expandable? (boolean (seq (:children node)))
      :has-private-children? (has-private-children? model id)
-     :expanded? (contains? show-private id)
+     :expanded? (contains? expanded id)
      :child-count (count (:children node))
      :private? (node-private? node)}))
 
 ;; -----------------------------------------------------------------------------
-;; Drill-down expansion helpers
+;; Private inheritance helpers
 
 (defn- all-descendants-of
   "Get all descendant node ids of a given node (not including the node itself)."
@@ -306,21 +318,6 @@
   (let [children (get-children model node-id)]
     (into children
           (mapcat #(all-descendants-of model %) children))))
-
-(defn- find-direct-child-of
-  "Given a descendant node-id of module-id, find the ancestor
-   that is a direct child of module-id. Returns nil if node-id
-   is not a descendant, or node-id itself if already a direct child."
-  [model module-id node-id]
-  (let [direct-children (get-in model [:nodes module-id :children])]
-    (if (contains? direct-children node-id)
-      node-id
-      (loop [current node-id]
-        (let [parent (:parent (get-in model [:nodes current]))]
-          (cond
-            (nil? parent) nil
-            (= parent module-id) current
-            :else (recur parent)))))))
 
 (defn- find-public-callers
   "Given a private function within a module, find public functions in the same
@@ -344,83 +341,12 @@
                    visited
                    (into public-callers public))))))))
 
-(defn- find-targets-inside-module
-  "Find direct children of module-id that contain actual edge targets
-   from entities in external-visible-set (entities not inside the module).
-   Uses raw edges to find actual targets, not aggregated ones.
-   Only returns targets where the source and target have the same :kind.
-   Excludes private leaf nodes — they are only visible when parent is expanded."
-  [model module-id external-visible-set]
-  (let [raw-edges (:edges model)
-        module-descendants (all-descendants-of model module-id)]
-    (->> raw-edges
-         (keep (fn [{:keys [from to]}]
-                 ;; Target must be a descendant of the module
-                 (when (contains? module-descendants to)
-                   ;; Source must be reachable from external visible set
-                   (let [from-ancestor (find-visible-ancestor model from external-visible-set)]
-                     (when (and from-ancestor
-                                ;; Source must not be inside the module
-                                (not (contains? module-descendants from)))
-                       ;; Find direct child containing the target
-                       (let [target-child (find-direct-child-of model module-id to)
-                             source-kind (get-in model [:nodes from :kind])
-                             target-child-kind (get-in model [:nodes target-child :kind])
-                             target-kind (get-in model [:nodes to :kind])]
-                         ;; Type filter: use raw edge endpoint kinds (not aggregated ancestors)
-                         ;; so drill-down looks for function-kind children inside sibling modules
-                         (when (and (not (node-private? (get-in model [:nodes target-child])))
-                                    (or (= source-kind target-child-kind)
-                                        (and (= target-child-kind :module)
-                                             (= source-kind target-kind))))
-                           target-child)))))))
-         (remove nil?)
-         set)))
-
-(defn- find-sources-inside-module
-  "Find direct children of module-id that contain actual edge sources
-   going to entities in external-visible-set (entities not inside the module).
-   Uses raw edges to find actual sources, not aggregated ones.
-   Only returns sources where the source and target have the same :kind.
-   When a source is private, finds its public callers within the module
-   (PrivateInheritance: public functions inherit their private callees' deps)."
-  [model module-id external-visible-set]
-  (let [raw-edges (:edges model)
-        module-descendants (all-descendants-of model module-id)
-        edges-by-target (reduce (fn [acc {:keys [from to]}]
-                                  (update acc to (fnil conj #{}) from))
-                                {} raw-edges)]
-    (->> raw-edges
-         (mapcat (fn [{:keys [from to]}]
-                   ;; Source must be a descendant of the module
-                   (when (contains? module-descendants from)
-                     ;; Target must be reachable from external visible set
-                     (let [to-ancestor (find-visible-ancestor model to external-visible-set)]
-                       (when (and to-ancestor
-                                  ;; Target must not be inside the module
-                                  (not (contains? module-descendants to)))
-                         ;; Find direct child containing the source
-                         (let [source-child (find-direct-child-of model module-id from)
-                               source-kind (get-in model [:nodes from :kind])
-                               source-child-kind (get-in model [:nodes source-child :kind])
-                               target-kind (get-in model [:nodes to :kind])]
-                           ;; Type filter: use raw edge endpoint kinds (not aggregated ancestors)
-                           (when (or (= source-child-kind target-kind)
-                                     (and (= source-child-kind :module)
-                                          (= source-kind target-kind)))
-                             (if (node-private? (get-in model [:nodes source-child]))
-                               ;; Private source: find public callers within module
-                               (keep #(find-direct-child-of model module-id %)
-                                     (find-public-callers model module-descendants from edges-by-target))
-                               ;; Public source: return as-is
-                               [source-child]))))))))
-         set)))
-
 (defn- private-inherited-edges
   "Compute synthetic edges where public callers inherit cross-module
    dependencies from their private callees. For each raw edge from a
    private function to a target in a different module, finds visible
-   public callers and creates leaf-to-leaf edges to the visible target."
+   public callers and creates edges to the visible target.
+   Endpoints may be modules (collapsed) or leaf nodes."
   [model all-visible]
   (let [raw-edges (:edges model)
         edges-by-target (reduce (fn [acc {:keys [from to]}]
@@ -440,109 +366,17 @@
                                  ;; Skip if target is in the same parent module
                                  (when-not (contains? module-descendants to)
                                    (let [to-visible (find-visible-ancestor model to all-visible)]
-                                     (when (and to-visible
-                                                (empty? (get-in model [:nodes to-visible :children] #{})))
+                                     (when to-visible
                                        (let [callers (find-public-callers model module-descendants from edges-by-target)]
                                          (for [caller callers
-                                               :when (and (contains? all-visible caller)
-                                                          (empty? (get-in model [:nodes caller :children] #{})))]
+                                               :when (contains? all-visible caller)]
                                            {:from caller :to to-visible}))))))
                                edges-in-module)))))
          distinct
          vec)))
 
-(defn- expand-internal-deps
-  "Expand a set of nodes to include their internal dependencies.
-   Given an initial set of node ids inside a module, transitively add
-   any nodes inside the same module that they depend on.
-   This ensures drill-down captures complete dependency chains.
-
-   Returns only direct children of module-id, not grandchildren."
-  [model module-id initial-set]
-  (let [module-descendants (all-descendants-of model module-id)]
-    (loop [expanded initial-set]
-      (let [new-deps (->> (:edges model)
-                          (keep (fn [{:keys [from to]}]
-                                  (let [from-parent (:parent (get-in model [:nodes from]))
-                                        to-parent (:parent (get-in model [:nodes to]))]
-                                    (when (and (or (contains? expanded from-parent)
-                                                   (some #(descendant-of? model from-parent %) expanded))
-                                               (contains? module-descendants to-parent))
-                                      ;; Return direct child of module, not grandchild
-                                      (find-direct-child-of model module-id to-parent)))))
-                          (remove nil?)
-                          ;; Filter out already-expanded to avoid infinite loop
-                          (remove #(contains? expanded %))
-                          set)]
-        (if (empty? new-deps)
-          expanded
-          (recur (set/union expanded new-deps)))))))
-
 ;; -----------------------------------------------------------------------------
 ;; Module view computation
-
-(defn- iterate-drill-down
-  "Iteratively expand visible set until all edge endpoints are visible.
-
-   Same-type filtering: Only drills into modules when the source and target
-   are the same kind (namespace->namespace, var->var). This keeps the structural
-   overview clean at each level of the hierarchy.
-
-   Includes internal dep expansion at each step to ensure nested modules
-   are discovered and processed.
-
-   Returns {:visible-set :drill-down-map} where:
-   - visible-set: all entities that should be visible
-   - drill-down-map: {module-id -> #{children}} for grouping (includes internal deps)"
-  [model initial-children-set]
-  (loop [visible-set initial-children-set
-         drill-down-map {}]
-    (let [edges (aggregate-edges model visible-set)
-          ;; Find modules that are edge targets
-          module-targets (->> edges
-                              (map :to)
-                              (filter #(seq (get-in model [:nodes % :children])))
-                              set)
-          ;; Find modules that are edge sources
-          module-sources (->> edges
-                              (map :from)
-                              (filter #(seq (get-in model [:nodes % :children])))
-                              set)
-          ;; For each module target, find actual targets inside
-          targets-by-module
-            (into {}
-              (for [cid module-targets
-                    :let [;; External sources are visible entities not inside this module
-                          external (into #{} (remove #(descendant-of? model % cid) visible-set))
-                          targets (find-targets-inside-module model cid external)]
-                    :when (seq targets)]
-                [cid targets]))
-          ;; For each module source, find actual sources inside
-          sources-by-module
-            (into {}
-              (for [cid module-sources
-                    :let [;; External targets are visible entities not inside this module
-                          external (into #{} (remove #(descendant-of? model % cid) visible-set))
-                          sources (find-sources-inside-module model cid external)]
-                    :when (seq sources)]
-                [cid sources]))
-          ;; Merge targets and sources
-          new-entities-by-module (merge-with set/union targets-by-module sources-by-module)
-          ;; Expand internal deps for each module - this may add sibling modules
-          ;; that need drilling down in the next iteration
-          expanded-entities-by-module
-            (into {}
-              (for [[cid entities] new-entities-by-module]
-                [cid (expand-internal-deps model cid entities)]))
-          ;; Combine with existing drill-down-map
-          updated-drill-down-map (merge-with set/union drill-down-map expanded-entities-by-module)
-          ;; Only consider entities that aren't already visible
-          new-entities (set/difference (into #{} (mapcat val expanded-entities-by-module)) visible-set)]
-      (if (empty? new-entities)
-        {:visible-set visible-set
-         :drill-down-map drill-down-map}
-        (recur (set/union visible-set new-entities)
-               updated-drill-down-map)))))
 
 (defn- compute-io-layer
   "Compute IO nodes and data-flow edges for a module view.
@@ -559,65 +393,35 @@
      :edges data-flow-edges
      :io io-data}))
 
-(defn- compute-module-view-impl
-  "Generic module view computation. Works for any module type.
+(defn- compute-module-view
+  "Compute view when the entity is a module (has children).
+   expanded controls which modules show their children.
+   show-private controls whether private children are visible.
    Returns pure domain data - no selected? or highlighted? fields."
-  [model entity-id show-private children-ids]
-  (let [children-set (set children-ids)
+  [model entity-id expanded show-private]
+  (let [;; The viewed entity is always expanded (its children are shown)
+        effective-expanded (conj (or expanded #{}) entity-id)
+        visible (compute-visible-set model entity-id effective-expanded show-private)
 
-        ;; Iteratively expand visible set until all edge targets are visible
-        ;; (includes internal dep expansion at each step)
-        {:keys [drill-down-map]} (iterate-drill-down model children-set)
-        drill-down-entities (into #{} (mapcat val drill-down-map))
-
-        ;; Build final visible set
-        all-visible (set/union children-set drill-down-entities)
-
-        ;; Compute final edges — leaf-only from raw edges + inherited from private callees.
-        final-edges (vec (distinct (concat (leaf-only-edges model all-visible)
-                                           (private-inherited-edges model all-visible))))
-
-        ;; Prune drill-down leaf nodes that don't participate in any
-        ;; code-flow edge. This happens when the drill-down found raw edges
-        ;; from a private source — the aggregated edge targets a module
-        ;; (not a leaf) and gets dropped by leaf-only filtering.
-        code-flow-endpoints (into #{} (mapcat (juxt :from :to)) final-edges)
-        drill-down-map (into {}
-                         (keep (fn [[mod-id entities]]
-                                 (let [kept (into #{}
-                                              (filter (fn [eid]
-                                                        (or (seq (get-in model [:nodes eid :children]))
-                                                            (contains? code-flow-endpoints eid))))
-                                              entities)]
-                                   (when (seq kept)
-                                     [mod-id kept]))))
-                         drill-down-map)
-        drill-down-entities (into #{} (mapcat val drill-down-map))
+        ;; Aggregate edges to visible node level + inherited from private callees
+        code-edges (aggregate-edges model visible)
+        inherited (private-inherited-edges model visible)
+        final-edges (vec (distinct (concat code-edges inherited)))
 
         ;; Build view nodes
         ;; Module node (the viewed entity - no parent for strict bounding box)
         module-node (make-view-node model (get-in model [:nodes entity-id])
-                                    :no-parent show-private)
+                                    :no-parent effective-expanded show-private)
 
-        ;; Direct children
-        child-nodes (for [cid children-ids
-                          :let [node (get-in model [:nodes cid])]
-                          :when node]
-                      (make-view-node model node entity-id show-private))
+        ;; Descendant nodes — each visible node uses its actual parent
+        ;; (guaranteed visible by construction of compute-visible-set)
+        descendant-nodes (for [nid visible
+                               :let [node (get-in model [:nodes nid])]
+                               :when node]
+                           (make-view-node model node nil effective-expanded show-private))
 
-        ;; Drill-down entities (inside module children)
-        drill-down-nodes (for [did drill-down-entities
-                               :let [node (get-in model [:nodes did])
-                                     parent-module (some (fn [[cid entity-set]]
-                                                           (when (contains? entity-set did) cid))
-                                                         drill-down-map)]
-                               :when (and node parent-module)]
-                           (make-view-node model node parent-module show-private))
-
-        ;; Collect all view node IDs for IO layer edge filtering
-        all-node-ids (set (concat [entity-id]
-                                  children-ids
-                                  drill-down-entities))
+        ;; All node IDs for IO layer
+        all-node-ids (conj visible entity-id)
 
         ;; Build code-flow edges
         code-flow-edges (map-indexed
@@ -631,18 +435,11 @@
         ;; Compute IO layer (synthetic IO nodes + data-flow edges)
         io-layer (compute-io-layer model entity-id all-node-ids)]
 
-    {:nodes (vec (concat [module-node] child-nodes drill-down-nodes
+    {:nodes (vec (concat [module-node] descendant-nodes
                          (:nodes io-layer)))
      :edges (vec (concat code-flow-edges
                          (:edges io-layer)))
      :io (:io io-layer)}))
-
-(defn- compute-module-view
-  "Compute view when the entity is a module (has children).
-   Returns pure domain data."
-  [model entity-id show-private]
-  (let [children-ids (get-visible-children model entity-id show-private)]
-    (compute-module-view-impl model entity-id show-private children-ids)))
 
 ;; -----------------------------------------------------------------------------
 ;; Leaf view computation
@@ -682,19 +479,19 @@
                             (filter (fn [{:keys [from to]}]
                                       (or (= from entity-id) (= to entity-id)))))
 
-        ;; Build namespace nodes for grouping
+        ;; Build namespace nodes for grouping (no expand in leaf view)
         ns-nodes (for [nid all-ns-ids
                        :let [node (get-in model [:nodes nid])]
                        :when node]
-                   (make-view-node model node (:parent node) show-private))
+                   (make-view-node model node (:parent node) #{} show-private))
 
         ;; Build var nodes (selected + related)
         entity-node (make-view-node model (get-in model [:nodes entity-id])
-                                    entity-ns show-private)
+                                    entity-ns #{} show-private)
         related-var-nodes (for [vid related-var-ids
                                 :let [node (get-in model [:nodes vid])]
                                 :when node]
-                            (make-view-node model node (:parent node) show-private))
+                            (make-view-node model node (:parent node) #{} show-private))
 
         ;; Get parent folders for grouping namespace nodes
         folder-ids (->> all-ns-ids
@@ -704,7 +501,7 @@
         folder-nodes (for [fid folder-ids
                            :let [node (get-in model [:nodes fid])]
                            :when node]
-                       (make-view-node model node nil show-private))
+                       (make-view-node model node nil #{} show-private))
 
         ;; Build view edges (internal format, no highlighting)
         view-edges (map-indexed
@@ -726,9 +523,9 @@
   "Compute graph projection for any entity. Returns pure domain data.
 
    For modules (entities with children):
-   - Shows visible children (filtered by show-private)
-   - Shows edges between visible children
-   - Shows drill-down to entities in sibling modules when related
+   - Shows visible children (filtered by expanded and show-private)
+   - Aggregates edges to visible node level
+   - Expanded modules show their children; collapsed modules are edge endpoints
 
    For leaves (entities without children):
    - Shows the entity and all related entities
@@ -739,13 +536,14 @@
    - edges: vector of edges (no :highlighted? field)
    - io: {:inputs :outputs} schema sets for module views"
   {:malli/schema [:=> [:cat :Model :ProjectionOpts] :Projection]}
-  [model {:keys [view-id show-private]}]
+  [model {:keys [view-id expanded show-private]}]
   (let [;; Default to root if no view-id
         entity-id (or view-id (:id (path/find-root-node model)))
+        expanded (or expanded #{})
         show-private (or show-private #{})
 
         children-ids (get-children model entity-id)]
 
     (if (seq children-ids)
-      (compute-module-view model entity-id show-private)
+      (compute-module-view model entity-id expanded show-private)
       (compute-leaf-view model entity-id show-private))))

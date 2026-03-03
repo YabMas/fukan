@@ -17,7 +17,7 @@
 
 (defn- make-state
   "Create a minimal session state."
-  ([] {:view-id nil :history [] :show-private #{} :src "test"})
+  ([] {:view-id nil :history [] :expanded #{} :show-private #{} :src "test"})
   ([overrides] (merge (make-state) overrides)))
 
 (defn- root-id [model]
@@ -228,7 +228,7 @@
         ;; Second expand with already-expanded state — should remove
         (is (true? (inv/expand-toggles?
                      model
-                     (make-state {:show-private #{(:id child)}})
+                     (make-state {:expanded #{(:id child)}})
                      (:id child))))))))
 
 ;; ---------------------------------------------------------------------------

@@ -51,7 +51,8 @@
    Parameters:
    - id: Entity to navigate to (show its children)
    - select: Node to select and highlight (also determines navigation if id not provided)
-   - expanded: Comma-separated list of module IDs with visible private children
+   - expanded: Comma-separated list of explicitly expanded module IDs
+   - show_private: Comma-separated list of module IDs with visible private children
 
    When ?select=xxx is provided without ?id, navigates to the view containing that node.
 
@@ -70,17 +71,20 @@
                                             (when (and id (not= id "")) id))
                                 select-id (let [id (get params "select")]
                                             (when (and id (not= id "")) id))
-                                show-private (parse-id-set (get params "expanded"))
+                                expanded (parse-id-set (get params "expanded"))
+                                show-private (parse-id-set (get params "show_private"))
                                 ;; If select is provided but id is not, navigate to the module of the selected node
                                 entity-id (or entity-id
                                               (when select-id (find-module-for-node model select-id)))
                                 ;; Build editor state
                                 editor-state {:view-id entity-id
                                               :selected-id (or select-id entity-id)
+                                              :expanded expanded
                                               :show-private show-private}
                                 ;; Get projections
                                 {:keys [graph path details]}
                                 (proj/navigate model {:view-id entity-id
+                                                      :expanded expanded
                                                       :show-private show-private
                                                       :selected (:selected-id editor-state)})
                                 ;; Render views

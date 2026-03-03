@@ -39,6 +39,7 @@
    All data comes from projection API — no direct model access."
   [model state view-id]
   (let [{:keys [graph path]} (proj/navigate model {:view-id view-id
+                                                   :expanded (:expanded state)
                                                    :show-private (:show-private state)})
         ;; Build label index from projection graph nodes
         node-label-index (into {} (map (fn [n] [(:id n) (:label n)])) (:nodes graph))
@@ -196,8 +197,8 @@
                       stats)}))
 
 (defn- cmd-expand
-  "Toggle private child visibility for a module.
-   Mirrors TogglePrivateVisibility from views.allium."
+  "Toggle expand/collapse for a module.
+   Expanded modules show their children; collapsed modules appear as nodes."
   {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
   [model state args]
   (let [module-id (first args)]
@@ -217,17 +218,16 @@
                       :entity-id module-id}}
 
           :else
-          (let [currently-expanded? (contains? (:show-private state) module-id)
-                new-show-private (if currently-expanded?
-                                   (disj (:show-private state) module-id)
-                                   (conj (:show-private state) module-id))
-                ;; Build view context with the new show-private set
-                new-state (assoc state :show-private new-show-private)]
+          (let [currently-expanded? (contains? (:expanded state) module-id)
+                new-expanded (if currently-expanded?
+                               (disj (:expanded state) module-id)
+                               (conj (:expanded state) module-id))
+                new-state (assoc state :expanded new-expanded)]
             {:response (merge {:ok true :command :expand
                                :expanded-id module-id
                                :expanded? (not currently-expanded?)}
                               (build-view-context model new-state (current-view-id model state)))
-             :state-update #(assoc % :show-private new-show-private)}))))))
+             :state-update #(assoc % :expanded new-expanded)}))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Dispatch

@@ -83,6 +83,7 @@
    [:view-id {:optional true, :description "Module being viewed (its children are shown)."} [:maybe :string]]
    [:selected-id {:optional true, :description "Currently selected/highlighted node."} [:maybe :string]]
    [:schema-id {:optional true, :description "Schema being inspected in the sidebar."} [:maybe :string]]
+   [:expanded {:optional true, :description "Set of explicitly expanded module IDs."} :set]
    [:show-private {:optional true, :description "Set of module IDs whose private children are visible."} :set]])
 
 (def ^:schema GraphData :CytoscapeGraph)
