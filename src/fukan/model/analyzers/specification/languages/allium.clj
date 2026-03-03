@@ -17,7 +17,7 @@
 ;; ---------------------------------------------------------------------------
 ;; File / namespace utilities
 
-(defn file->ns-sym
+(defn- file->ns-sym
   "Convert an allium file path to a namespace symbol.
    'src/fukan/model/spec.allium' with src-path 'src' → 'fukan.model.spec-allium'"
   [filepath src-path]

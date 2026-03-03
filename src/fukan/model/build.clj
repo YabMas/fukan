@@ -196,11 +196,11 @@
                        (filter #(and (= :function (:kind %))
                                      (= ns-id (:parent %))
                                      (not (get-in % [:data :private?]))
-                                     (not (contains? schema-var-ids (:id %)))
-                                     (get-in % [:data :signature])))
+                                     (not (contains? schema-var-ids (:id %)))))
                        (mapv (fn [node]
-                               (cond-> {:name (:label node)
-                                        :schema (get-in node [:data :signature])}
+                               (cond-> {:name (:label node)}
+                                 (get-in node [:data :signature])
+                                 (assoc :schema (get-in node [:data :signature]))
                                  (get-in node [:data :doc])
                                  (assoc :doc (get-in node [:data :doc]))))))]
     (when (or (seq functions) (seq schemas))

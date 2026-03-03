@@ -15,13 +15,13 @@
 (deftest file->ns-sym-test
   (testing "standard allium file path"
     (is (= 'fukan.model.spec-allium
-           (analyzer/file->ns-sym "src/fukan/model/spec.allium" "src"))))
+           (#'analyzer/file->ns-sym "src/fukan/model/spec.allium" "src"))))
   (testing "nested path"
     (is (= 'fukan.web.views.spec-allium
-           (analyzer/file->ns-sym "src/fukan/web/views/spec.allium" "src"))))
+           (#'analyzer/file->ns-sym "src/fukan/web/views/spec.allium" "src"))))
   (testing "src-path with trailing slash"
     (is (= 'fukan.model.spec-allium
-           (analyzer/file->ns-sym "src/fukan/model/spec.allium" "src/")))))
+           (#'analyzer/file->ns-sym "src/fukan/model/spec.allium" "src/")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Unit: type reference extraction
