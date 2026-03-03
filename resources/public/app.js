@@ -623,35 +623,46 @@ cy.on('dbltap', 'node', function(evt) {
   }
 });
 
-// Right click (context tap) - three-state expand cycle for modules
-// collapsed → expanded → showing-private → collapsed
+// Right click - toggle expand/collapse for modules
 cy.on('cxttap', 'node', function(evt) {
+  if (evt.originalEvent.shiftKey) return;
   const node = evt.target;
-  const nodeKind = node.data('kind');
-  if (nodeKind !== 'module') return;
-
-  const expandable = node.data('expandable');
-  if (!expandable) return;
+  if (node.data('kind') !== 'module' || !node.data('expandable')) return;
 
   evt.preventDefault();
   const moduleId = node.id();
-  const isExpanded = expandedModules.has(moduleId);
-  const isShowingPrivate = showPrivate.has(moduleId);
-  const hasPrivateChildren = node.data('hasPrivateChildren');
 
-  if (!isExpanded) {
-    // collapsed → expanded
-    expandedModules.add(moduleId);
-  } else if (isExpanded && hasPrivateChildren && !isShowingPrivate) {
-    // expanded → showing-private
-    showPrivate.add(moduleId);
-  } else {
-    // showing-private → collapsed (or expanded with no private → collapsed)
+  if (expandedModules.has(moduleId)) {
     expandedModules.delete(moduleId);
     showPrivate.delete(moduleId);
+  } else {
+    expandedModules.add(moduleId);
   }
 
-  // Dispatch event to refresh the view
+  graphPanel.dispatchEvent(new CustomEvent('cy-toggle-private', {
+    bubbles: true,
+    detail: { id: moduleId }
+  }));
+});
+
+// Shift+right click - toggle private visibility on expanded modules
+cy.on('cxttap', 'node', function(evt) {
+  if (!evt.originalEvent.shiftKey) return;
+
+  const node = evt.target;
+  if (node.data('kind') !== 'module') return;
+  if (!expandedModules.has(node.id())) return;
+  if (!node.data('hasPrivateChildren')) return;
+
+  evt.preventDefault();
+  const moduleId = node.id();
+
+  if (showPrivate.has(moduleId)) {
+    showPrivate.delete(moduleId);
+  } else {
+    showPrivate.add(moduleId);
+  }
+
   graphPanel.dispatchEvent(new CustomEvent('cy-toggle-private', {
     bubbles: true,
     detail: { id: moduleId }

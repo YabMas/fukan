@@ -189,34 +189,38 @@ rule TogglePrivateVisibility {
 }
 
 rule RightClickModule {
-    -- Right-click: cycle through expand states.
+    -- Right-click: toggle expand/collapse.
     --
-    -- Three-state cycle for modules with private children:
-    --   collapsed → expanded → expanded+showing_private → collapsed
-    --
-    -- Two-state cycle for modules without private children:
-    --   collapsed → expanded → collapsed
-    --
-    -- Maps a single gesture to the appropriate state transition
-    -- based on current expand state.
+    -- Simple toggle: collapsed → expanded, expanded → collapsed.
+    -- Collapsing also clears show_private for that module.
 
     when: RightClickModule(module_id: String)
 
     let is_expanded = module_id in editor.expanded
-    let is_showing_private = module_id in editor.show_private
-    let node = projection_node(module_id)
-    let has_hidden_private = is_expanded
-        and node.has_private_children
-        and not is_showing_private
 
     ensures:
         if not is_expanded:
             ExpandModule(module_id)
-        else if has_hidden_private:
-            TogglePrivateVisibility(module_id)
         else:
             CollapseModule(module_id)
             editor.show_private = editor.show_private - {module_id}
+}
+
+rule ShiftRightClickModule {
+    -- Shift+right-click: toggle private visibility on an expanded module.
+    --
+    -- Only applies to expandable modules that are already expanded
+    -- and have private children. No-op otherwise.
+
+    when: ShiftRightClickModule(module_id: String)
+
+    let node = projection_node(module_id)
+    requires:
+        module_id in editor.expanded
+        node.has_private_children
+
+    ensures:
+        TogglePrivateVisibility(module_id)
 }
 
 rule NavigateToAncestor {
