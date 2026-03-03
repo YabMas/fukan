@@ -215,12 +215,6 @@ rule ModuleView {
     --   children are hidden unless the module is also in
     --   show_private.
     --
-    -- PrivateInheritance: when a public function's cross-module
-    --   dependencies are all mediated through private callees,
-    --   the public function inherits those dependencies. The
-    --   private function itself remains hidden; only its public
-    --   callers appear as nodes with synthetic edges to the targets.
-    --
     -- ModuleEndpoints: aggregated edges may terminate at collapsed
     --   modules. A collapsed module acts as a summary node for all
     --   its hidden descendants. Expanding it "breaks apart" edges
@@ -293,7 +287,7 @@ rule LeafView {
 }
 
 rule AggregateEdges {
-    -- Sub-rule of ModuleView: aggregate raw model edges to the visible ancestor level.
+    -- Sub-rule of ModuleView: compute code-flow edges between visible nodes.
     --
     -- ClosestVisibleAncestor: for a node N, walk up the parent
     --   chain (including N itself) until a node in the visible set
@@ -301,26 +295,37 @@ rule AggregateEdges {
     --   a collapsed module M, its CVA is M (assuming M is visible).
     --   If N is outside the view entirely, it has no CVA.
     --
+    -- PrivateInheritance: when a public function's cross-module
+    --   dependencies are mediated through private callees, the
+    --   public function inherits those dependencies as synthetic
+    --   edges. The private function itself remains hidden.
+    --
     -- ModuleEndpoints: aggregated edges may terminate at collapsed
     --   modules. A collapsed module acts as a summary node for all
-    --   its hidden descendants. This replaces the previous
-    --   leaf-to-leaf constraint — module endpoints are now valid.
+    --   its hidden descendants. Expanding it "breaks apart" edges
+    --   that terminated at it; collapsing merges them back.
     --
-    -- For each raw edge (from, to):
-    --   1. Find closest visible ancestor of each endpoint
-    --   2. Include iff both exist, are distinct, and
-    --      neither is an ancestor of the other
+    -- Subsumption: a module-level edge is redundant when a visible
+    --   descendant already represents the same connection. Edge A→T
+    --   is subsumed (dropped) if there exists edge D→T where D is a
+    --   strict visible descendant of A. The more specific edge is
+    --   the representative; the less specific one is noise.
+    --
+    -- Procedure:
+    --   1. For each raw edge, map endpoints to CVA; keep if both
+    --      exist, are distinct, not ancestor-descendant
+    --   2. Add inherited edges from PrivateInheritance
     --   3. Deduplicate
+    --   4. Drop subsumed edges
     --
     -- All edges produced by this rule have edge_type = code_flow.
 
     when: AggregateEdges(visible_set: Set<String>)
 
     ensures: aggregate_to_visible_ancestors(model.edges, visible_set)  -- black box
-    -- Maps each edge endpoint to its closest visible ancestor via
-    -- find_visible_ancestor, filters to pairs that are both present,
-    -- distinct, and not in an ancestor-descendant relationship,
-    -- then deduplicates.
+    -- Combines CVA-aggregated edges with private-inherited edges,
+    -- deduplicates, then drops subsumed edges where a more specific
+    -- visible descendant already represents the connection.
 }
 
 rule IOSchemaProjection {

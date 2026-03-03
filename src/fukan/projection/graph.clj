@@ -285,6 +285,28 @@
     (vec edge-nodes)))
 
 ;; -----------------------------------------------------------------------------
+;; Edge subsumption
+
+(defn- subsume-edges
+  "Remove edges subsumed by more specific edges.
+   Edge A→T is subsumed if there exists D→T where D is a strict visible
+   descendant of A. The more specific edge is the representative."
+  [model edges]
+  (let [by-target (group-by :to edges)
+        subsumed (into #{}
+                   (for [[target edges-to-target] by-target
+                         :let [sources (set (map :from edges-to-target))]
+                         source sources
+                         :when (some #(and (not= % source)
+                                          (descendant-of? model % source))
+                                     sources)]
+                     [source target]))]
+    (if (empty? subsumed)
+      edges
+      (filterv #(not (contains? subsumed [(:from %) (:to %)]))
+               edges))))
+
+;; -----------------------------------------------------------------------------
 ;; View node construction
 
 (defn- make-view-node
@@ -410,9 +432,11 @@
         visible (compute-visible-set model entity-id effective-expanded show-private)
 
         ;; Aggregate edges to visible node level + inherited from private callees
+        ;; then drop subsumed edges (where a child already represents the connection)
         code-edges (aggregate-edges model visible)
         inherited (private-inherited-edges model visible)
-        final-edges (vec (distinct (concat code-edges inherited)))
+        all-edges (vec (distinct (concat code-edges inherited)))
+        final-edges (subsume-edges model all-edges)
 
         ;; Build view nodes
         ;; Module node (the viewed entity - no parent for strict bounding box)

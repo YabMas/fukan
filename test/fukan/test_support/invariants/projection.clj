@@ -201,6 +201,32 @@
       true))
 
 ;; ---------------------------------------------------------------------------
+;; NoSubsumedEdges: no module-level edge when a child already represents it.
+
+(defn no-subsumed-edges?
+  "Verify that no edge A→T exists when a visible descendant D of A has D→T.
+   The more specific edge subsumes the less specific one."
+  [model _opts projection]
+  (let [edges (:edges projection)
+        code-edges (filter #(= :code-flow (:edge-type %)) edges)
+        by-target (group-by :to code-edges)]
+    (or (first
+          (for [[target edges-to-target] by-target
+                :let [sources (set (map :from edges-to-target))]
+                source sources
+                :when (some #(and (not= % source)
+                                  (descendant-of? model % source))
+                            sources)]
+            {:violation :no-subsumed-edges
+             :subsumed-from source
+             :subsumed-by (first (filter #(and (not= % source)
+                                               (descendant-of? model % source))
+                                         sources))
+             :to target
+             :reason "module-level edge subsumed by more specific descendant edge"}))
+        true)))
+
+;; ---------------------------------------------------------------------------
 ;; Composites
 
 (defn valid-module-projection?
@@ -208,6 +234,7 @@
   [model opts projection]
   (let [checks [strict-bounding-box?
                 no-ancestor-descendant-edges?
+                no-subsumed-edges?
                 visible-node-edges?
                 schema-filtering?
                 private-visibility?
