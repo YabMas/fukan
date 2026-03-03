@@ -39,6 +39,7 @@ value ViewNode {
     expandable: Boolean
     has_private_children: Boolean
     expanded: Boolean
+    showing_private: Boolean
     child_count: Integer
     private: Boolean?
     io_type: input | output?

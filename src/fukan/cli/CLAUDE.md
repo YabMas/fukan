@@ -30,10 +30,11 @@ explorer.clj  — stdin/stdout session loop for subprocess use
 ## Session State
 
 ```clojure
-{:view-id    String?       ;; current container (nil = root)
- :history    [String]      ;; stack of previous view-ids for back navigation
- :expanded   #{String}     ;; containers whose private children are visible
- :src        String?}      ;; source path of the analyzed project
+{:view-id      String?       ;; current container (nil = root)
+ :history      [String]      ;; stack of previous view-ids for back navigation
+ :expanded     #{String}     ;; containers whose children are visible (user-controlled)
+ :show-private #{String}     ;; expanded containers that also show private children
+ :src          String?}      ;; source path of the analyzed project
 ```
 
 ## Response Shape

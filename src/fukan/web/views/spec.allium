@@ -48,6 +48,7 @@ value CytoscapeNode {
     expandable: Boolean
     has_private_children: Boolean
     is_expanded: Boolean
+    showing_private: Boolean
     child_count: Integer
     private: Boolean?
     io_type: String?       -- "input" or "output"
@@ -187,6 +188,37 @@ rule TogglePrivateVisibility {
             editor.show_private = editor.show_private + {module_id}
 }
 
+rule RightClickModule {
+    -- Right-click: cycle through expand states.
+    --
+    -- Three-state cycle for modules with private children:
+    --   collapsed → expanded → expanded+showing_private → collapsed
+    --
+    -- Two-state cycle for modules without private children:
+    --   collapsed → expanded → collapsed
+    --
+    -- Maps a single gesture to the appropriate state transition
+    -- based on current expand state.
+
+    when: RightClickModule(module_id: String)
+
+    let is_expanded = module_id in editor.expanded
+    let is_showing_private = module_id in editor.show_private
+    let node = projection_node(module_id)
+    let has_hidden_private = is_expanded
+        and node.has_private_children
+        and not is_showing_private
+
+    ensures:
+        if not is_expanded:
+            ExpandModule(module_id)
+        else if has_hidden_private:
+            TogglePrivateVisibility(module_id)
+        else:
+            CollapseModule(module_id)
+            editor.show_private = editor.show_private - {module_id}
+}
+
 rule NavigateToAncestor {
     -- Breadcrumb click: navigate to an ancestor module.
     -- The breadcrumb shows the path from smart-root to the viewed module.
@@ -306,8 +338,16 @@ rule RenderBreadcrumb {
 -- Visual Indicators
 -- ============================================================
 --
--- CollapsedModule: a module that is not expanded — appears as
---   an opaque node with no visible children.
+-- ExpandIndicator: small icon in the top-right corner of expandable
+--   module nodes. Signals current expand state:
+--
+--   Collapsed:                        ▶  (right-pointing)
+--   Expanded (private hidden):        ▼  (down-pointing)
+--   Expanded (no hidden private):     ▼  (down-pointing)
+--
+--   The icon is the only visual differentiator between expand states.
+--   Module shape, color, and size remain constant across states.
+--   Only shown on expandable module nodes (child_count > 0).
 --
 -- ExpandedWithHiddenPrivates: an expanded module that has private
 --   children currently hidden (in expanded but not in show_private).

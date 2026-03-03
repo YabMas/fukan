@@ -183,6 +183,24 @@
         true)))
 
 ;; ---------------------------------------------------------------------------
+;; ShowingPrivateConsistent: showing-private? implies expanded? and has-private-children?.
+
+(defn showing-private-consistent?
+  "Verify that if a node has showing-private? true, it also has expanded? and has-private-children? true."
+  [_model _opts projection]
+  (or (first
+        (for [node (:nodes projection)
+              :when (:showing-private? node)
+              :when (or (not (:expanded? node))
+                        (not (:has-private-children? node)))]
+          {:violation :showing-private-consistent
+           :node-id (:id node)
+           :expanded? (:expanded? node)
+           :has-private-children? (:has-private-children? node)
+           :reason "showing-private? requires expanded? and has-private-children?"}))
+      true))
+
+;; ---------------------------------------------------------------------------
 ;; Composites
 
 (defn valid-module-projection?
@@ -193,6 +211,7 @@
                 visible-node-edges?
                 schema-filtering?
                 private-visibility?
+                showing-private-consistent?
                 no-duplicate-edges?]]
     (reduce (fn [_ check]
               (let [result (check model opts projection)]

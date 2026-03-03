@@ -67,3 +67,21 @@
           result (views/render-graph projection editor-state)
           effective-selected "ns:a"]
       (is (true? (inv/regular-highlighting? result effective-selected))))))
+
+;; ---------------------------------------------------------------------------
+;; Generative: showing-private consistency at view layer
+
+(defspec showing-private-view-consistency 100
+  (prop/for-all [model (gen/gen-model)]
+    (let [opts-gen (gen/gen-projection-opts model)]
+      (tgen/generate
+        (tgen/fmap (fn [opts]
+                     (let [projection (graph/entity-graph model opts)
+                           editor-state {:view-id (:view-id opts)
+                                         :selected-id nil
+                                         :schema-id nil
+                                         :expanded (:expanded opts)
+                                         :show-private (:show-private opts)}
+                           result (views/render-graph projection editor-state)]
+                       (true? (inv/showing-private-consistent? result))))
+                   opts-gen)))))

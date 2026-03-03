@@ -16,6 +16,7 @@
    [:expandable :boolean]
    [:hasPrivateChildren :boolean]
    [:isExpanded :boolean]
+   [:showingPrivate :boolean]
    [:childCount :int]
    [:private {:optional true} :boolean]])
 
@@ -40,7 +41,7 @@
   "Transform an internal view node to Cytoscape format.
    Converts Clojure idioms (kebab-case, ? predicates) to camelCase."
   [{:keys [id kind label parent selected? expandable?
-           has-private-children? expanded? child-count private?
+           has-private-children? expanded? showing-private? child-count private?
            io-type schema-key owned?]}]
   (cond-> {:id id
            :kind (name kind)
@@ -49,6 +50,7 @@
            :expandable expandable?
            :hasPrivateChildren has-private-children?
            :isExpanded expanded?
+           :showingPrivate showing-private?
            :childCount child-count}
     parent (assoc :parent parent)
     private? (assoc :private private?)

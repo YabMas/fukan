@@ -87,6 +87,24 @@
            :actual highlighted-ids})))))
 
 ;; ---------------------------------------------------------------------------
+;; ShowingPrivateConsistent: showingPrivate → isExpanded ∧ hasPrivateChildren.
+
+(defn showing-private-consistent?
+  "Verify that if a CytoscapeNode has showingPrivate true, it also has isExpanded and hasPrivateChildren true."
+  [cytoscape-graph]
+  (or (first
+        (for [node (:nodes cytoscape-graph)
+              :when (:showingPrivate node)
+              :when (or (not (:isExpanded node))
+                        (not (:hasPrivateChildren node)))]
+          {:violation :showing-private-consistent
+           :node-id (:id node)
+           :isExpanded (:isExpanded node)
+           :hasPrivateChildren (:hasPrivateChildren node)
+           :reason "showingPrivate requires isExpanded and hasPrivateChildren"}))
+      true))
+
+;; ---------------------------------------------------------------------------
 ;; RenderPure: same input → same output.
 
 (defn render-pure?

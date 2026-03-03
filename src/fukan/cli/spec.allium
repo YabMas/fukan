@@ -25,10 +25,11 @@ given {
 
 value SessionState {
     -- Persistent state across CLI commands within a session.
-    -- Tracks navigation position, history stack, and expanded containers.
+    -- Tracks navigation position, history stack, and visibility controls.
     view_id: String?              -- current container (null = root)
     history: List<String>         -- stack of previous view_ids for back navigation
-    expanded: Set<String>         -- containers whose private children are visible
+    expanded: Set<String>         -- containers whose children are visible (user-controlled)
+    show_private: Set<String>     -- expanded containers that also show private children
     src: String?                  -- source path of the analyzed project
 }
 
@@ -185,11 +186,12 @@ rule ModelOverview {
 }
 
 rule ExpandContainer {
-    -- expand <id>: toggle private child visibility for a container.
-    -- Mirrors TogglePrivateVisibility from views.allium.
+    -- expand <id>: toggle child visibility for a container.
+    -- Mirrors ExpandModule / CollapseModule from views.allium.
     --
-    -- ExpandToggle: if container_id is in expanded set, remove it.
-    --   If not, add it. Then return refreshed view context.
+    -- ExpandToggle: if container_id is in expanded set, remove it
+    --   (collapse). If not, add it (expand children).
+    --   Then return refreshed view context.
 
     when: ExpandContainer(container_id: String)
 
@@ -230,6 +232,6 @@ rule ExpandContainer {
 -- updating. back pops the most recent entry and restores it as
 -- view_id. Other commands do not modify history.
 
--- ExpandToggle: expand flips membership in the expanded set.
--- If container was expanded, it becomes collapsed, and vice versa.
--- Other commands do not modify the expanded set.
+-- ExpandToggle: expand flips membership in the expanded set
+-- (child visibility). If container was expanded, it becomes collapsed,
+-- and vice versa. Other commands do not modify the expanded set.

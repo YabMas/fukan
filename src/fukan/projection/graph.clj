@@ -25,6 +25,7 @@
    [:expandable? :boolean]
    [:has-private-children? :boolean]
    [:expanded? :boolean]
+   [:showing-private? :boolean]
    [:child-count :int]
    [:private? {:optional true} :boolean]
    [:io-type {:optional true} [:enum :input :output]]
@@ -223,6 +224,7 @@
               :expandable? false
               :has-private-children? false
               :expanded? false
+              :showing-private? false
               :child-count (count schema-keys)
               :private? false}]
             (for [schema-key schema-keys
@@ -237,6 +239,7 @@
                :expandable? false
                :has-private-children? false
                :expanded? false
+               :showing-private? false
                :child-count 0
                :private? false
                :owned? owned?})))))
@@ -306,6 +309,9 @@
      :expandable? (boolean (seq (:children node)))
      :has-private-children? (has-private-children? model id)
      :expanded? (contains? expanded id)
+     :showing-private? (and (contains? show-private id)
+                            (contains? expanded id)
+                            (boolean (has-private-children? model id)))
      :child-count (count (:children node))
      :private? (node-private? node)}))
 

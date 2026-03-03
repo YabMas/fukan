@@ -86,6 +86,18 @@
                    opts-gen)))))
 
 ;; ---------------------------------------------------------------------------
+;; Generative: showing-private consistency
+
+(defspec showing-private-consistency 100
+  (prop/for-all [model (gen/gen-model)]
+    (let [opts-gen (gen/gen-projection-opts model)]
+      (tgen/generate
+        (tgen/fmap (fn [opts]
+                     (let [projection (graph/entity-graph model opts)]
+                       (true? (inv/showing-private-consistent? model opts projection))))
+                   opts-gen)))))
+
+;; ---------------------------------------------------------------------------
 ;; Example-based: private inheritance
 
 (deftest private-inheritance-test

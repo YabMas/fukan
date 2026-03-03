@@ -5,20 +5,16 @@
 // Expanded Modules State (for private visibility toggle)
 
 let expandedModules = new Set();
+let showPrivate = new Set();
 
 // Get expanded modules as a comma-separated string for URL params
 window.getExpandedParam = function() {
   return Array.from(expandedModules).join(',');
 };
 
-// Toggle a module's expanded state and return the new state
-window.toggleExpanded = function(moduleId) {
-  if (expandedModules.has(moduleId)) {
-    expandedModules.delete(moduleId);
-  } else {
-    expandedModules.add(moduleId);
-  }
-  return window.getExpandedParam();
+// Get show-private modules as a comma-separated string for URL params
+window.getShowPrivateParam = function() {
+  return Array.from(showPrivate).join(',');
 };
 
 // -----------------------------------------------------------------------------
@@ -394,12 +390,22 @@ const cy = cytoscape({
 window.renderGraph = function(data) {
   if (!data || !data.nodes) return;
 
-  // Sync expandedModules state from the node data
-  // (nodes with hasPrivateChildren=true and isExpanded=true are expanded)
+  // Sync expandedModules and showPrivate state from incoming node data
   expandedModules.clear();
+  showPrivate.clear();
   data.nodes.forEach(n => {
-    if (n.hasPrivateChildren && n.isExpanded) {
+    if (n.kind === 'module' && n.isExpanded) {
       expandedModules.add(n.id);
+    }
+    if (n.showingPrivate) {
+      showPrivate.add(n.id);
+    }
+  });
+
+  // Append expand indicator glyphs to module labels
+  data.nodes.forEach(n => {
+    if (n.kind === 'module' && n.expandable) {
+      n.label = n.isExpanded ? n.label + ' \u25BC' : n.label + ' \u25B6';
     }
   });
 
@@ -607,6 +613,9 @@ cy.on('dbltap', 'node', function(evt) {
 
   // Only navigate if it's a module with children
   if ((childCount && childCount > 0) || node.isParent()) {
+    // NavigateToNode resets both expanded and showPrivate to empty
+    expandedModules.clear();
+    showPrivate.clear();
     graphPanel.dispatchEvent(new CustomEvent('cy-navigate', {
       bubbles: true,
       detail: { id: node.id() }
@@ -614,23 +623,39 @@ cy.on('dbltap', 'node', function(evt) {
   }
 });
 
-// Right click (context tap) - toggle private visibility for modules
+// Right click (context tap) - three-state expand cycle for modules
+// collapsed → expanded → showing-private → collapsed
 cy.on('cxttap', 'node', function(evt) {
   const node = evt.target;
+  const nodeKind = node.data('kind');
+  if (nodeKind !== 'module') return;
+
+  const expandable = node.data('expandable');
+  if (!expandable) return;
+
+  evt.preventDefault();
+  const moduleId = node.id();
+  const isExpanded = expandedModules.has(moduleId);
+  const isShowingPrivate = showPrivate.has(moduleId);
   const hasPrivateChildren = node.data('hasPrivateChildren');
 
-  // Only toggle if this module has private children
-  if (hasPrivateChildren) {
-    evt.preventDefault();
-    const moduleId = node.id();
-    window.toggleExpanded(moduleId);
-
-    // Dispatch event to refresh the view with new expanded state
-    graphPanel.dispatchEvent(new CustomEvent('cy-toggle-private', {
-      bubbles: true,
-      detail: { id: moduleId }
-    }));
+  if (!isExpanded) {
+    // collapsed → expanded
+    expandedModules.add(moduleId);
+  } else if (isExpanded && hasPrivateChildren && !isShowingPrivate) {
+    // expanded → showing-private
+    showPrivate.add(moduleId);
+  } else {
+    // showing-private → collapsed (or expanded with no private → collapsed)
+    expandedModules.delete(moduleId);
+    showPrivate.delete(moduleId);
   }
+
+  // Dispatch event to refresh the view
+  graphPanel.dispatchEvent(new CustomEvent('cy-toggle-private', {
+    bubbles: true,
+    detail: { id: moduleId }
+  }));
 });
 
 // Click background - deselect

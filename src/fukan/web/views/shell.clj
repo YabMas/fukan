@@ -442,8 +442,8 @@
         ;; Graph panel with Cytoscape event listeners and loading indicator
        [:div#graph-panel
         {"data-on:cy-select" "@get('/sse/sidebar?id=' + encodeURIComponent(evt.detail.id))"
-         "data-on:cy-navigate" "@get('/sse/view?id=' + encodeURIComponent(evt.detail.id) + '&select=' + encodeURIComponent(evt.detail.select || '') + '&expanded=' + window.getExpandedParam())"
-         "data-on:cy-toggle-private" "@get('/sse/view?id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '') + '&expanded=' + window.getExpandedParam())"
+         "data-on:cy-navigate" "@get('/sse/view?id=' + encodeURIComponent(evt.detail.id) + '&select=' + encodeURIComponent(evt.detail.select || '') + '&expanded=' + window.getExpandedParam() + '&show_private=' + window.getShowPrivateParam())"
+         "data-on:cy-toggle-private" "@get('/sse/view?id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '') + '&expanded=' + window.getExpandedParam() + '&show_private=' + window.getShowPrivateParam())"
          "data-on:cy-schema" "@get('/sse/schema?id=' + encodeURIComponent(evt.detail.id))"
          "data-indicator" "#loading"}
         [:div#breadcrumb]
