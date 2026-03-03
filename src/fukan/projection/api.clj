@@ -15,7 +15,7 @@
 (def ^:schema NavigateOpts
   [:map {:description "Options for navigation: view target, expanded modules, and optional selection."}
    [:view-id {:optional true} [:maybe :string]]
-   [:expanded {:optional true} [:set :NodeId]]
+   [:show-private {:optional true} [:set :NodeId]]
    [:selected {:optional true} [:maybe :string]]])
 
 (def ^:schema NavigateResult
@@ -32,9 +32,9 @@
    Returns {:graph Projection, :path [PathSegment], :details EntityDetail?}.
    :details is only included when :selected is provided."
   {:malli/schema [:=> [:cat :Model :NavigateOpts] :NavigateResult]}
-  [model {:keys [view-id expanded selected]}]
+  [model {:keys [view-id show-private selected]}]
   (let [graph-projection (graph/entity-graph model {:view-id view-id
-                                                    :expanded-modules expanded})
+                                                    :show-private show-private})
         path-items (path/entity-path model view-id)]
     (cond-> {:graph graph-projection
              :path path-items}

@@ -23,7 +23,7 @@
                            editor-state {:view-id (:view-id opts)
                                          :selected-id nil
                                          :schema-id nil
-                                         :expanded-modules (:expanded-modules opts)}]
+                                         :show-private (:show-private opts)}]
                        (true? (inv/render-pure? views/render-graph projection editor-state))))
                    opts-gen)))))
 
@@ -44,15 +44,15 @@
 
 (deftest selection-defaults-to-view-id
   (testing "when selected-id is nil, selection defaults to view-id"
-    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-modules #{}})
-          editor-state {:view-id "root" :selected-id nil :schema-id nil :expanded-modules #{}}
+    (let [projection (graph/entity-graph test-model {:view-id "root" :show-private #{}})
+          editor-state {:view-id "root" :selected-id nil :schema-id nil :show-private #{}}
           result (views/render-graph projection editor-state)]
       (is (true? (inv/selection-default? result editor-state))))))
 
 (deftest explicit-selection-honored
   (testing "when selected-id is set, that node is selected"
-    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-modules #{}})
-          editor-state {:view-id "root" :selected-id "ns:a" :schema-id nil :expanded-modules #{}}
+    (let [projection (graph/entity-graph test-model {:view-id "root" :show-private #{}})
+          editor-state {:view-id "root" :selected-id "ns:a" :schema-id nil :show-private #{}}
           result (views/render-graph projection editor-state)]
       (is (true? (inv/selection-default? result editor-state))))))
 
@@ -61,8 +61,8 @@
 
 (deftest regular-node-highlighting
   (testing "non-schema node highlights connected edges"
-    (let [projection (graph/entity-graph test-model {:view-id "root" :expanded-modules #{}})
-          editor-state {:view-id "root" :selected-id "ns:a" :schema-id nil :expanded-modules #{}}
+    (let [projection (graph/entity-graph test-model {:view-id "root" :show-private #{}})
+          editor-state {:view-id "root" :selected-id "ns:a" :schema-id nil :show-private #{}}
           result (views/render-graph projection editor-state)
           effective-selected "ns:a"]
       (is (true? (inv/regular-highlighting? result effective-selected))))))

@@ -139,13 +139,13 @@
 (defn expand-toggles?
   "Verify that expand flips the module's membership in the expanded set."
   [model state module-id]
-  (let [was-expanded? (contains? (:expanded state) module-id)
+  (let [was-expanded? (contains? (:show-private state) module-id)
         parsed {:command "expand" :args [module-id]}
         {:keys [response state-update]} (commands/dispatch model state parsed)]
     (if-not (:ok response)
       true ;; error responses don't modify expanded — not a violation
       (let [new-state (state-update state)
-            is-expanded? (contains? (:expanded new-state) module-id)]
+            is-expanded? (contains? (:show-private new-state) module-id)]
         (if (= was-expanded? (not is-expanded?))
           true
           {:violation :expand-toggles

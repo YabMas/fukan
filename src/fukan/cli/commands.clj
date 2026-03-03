@@ -39,7 +39,7 @@
    All data comes from projection API — no direct model access."
   [model state view-id]
   (let [{:keys [graph path]} (proj/navigate model {:view-id view-id
-                                                   :expanded (:expanded state)})
+                                                   :show-private (:show-private state)})
         ;; Build label index from projection graph nodes
         node-label-index (into {} (map (fn [n] [(:id n) (:label n)])) (:nodes graph))
         ;; Get view label and kind from the path (last segment) + inspect
@@ -217,17 +217,17 @@
                       :entity-id module-id}}
 
           :else
-          (let [currently-expanded? (contains? (:expanded state) module-id)
-                new-expanded (if currently-expanded?
-                               (disj (:expanded state) module-id)
-                               (conj (:expanded state) module-id))
-                ;; Build view context with the new expanded set
-                new-state (assoc state :expanded new-expanded)]
+          (let [currently-expanded? (contains? (:show-private state) module-id)
+                new-show-private (if currently-expanded?
+                                   (disj (:show-private state) module-id)
+                                   (conj (:show-private state) module-id))
+                ;; Build view context with the new show-private set
+                new-state (assoc state :show-private new-show-private)]
             {:response (merge {:ok true :command :expand
                                :expanded-id module-id
                                :expanded? (not currently-expanded?)}
                               (build-view-context model new-state (current-view-id model state)))
-             :state-update #(assoc % :expanded new-expanded)}))))))
+             :state-update #(assoc % :show-private new-show-private)}))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Dispatch

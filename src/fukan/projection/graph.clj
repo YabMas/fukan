@@ -1,6 +1,6 @@
 (ns fukan.projection.graph
   "Graph projection: Model → visible subgraph for visualization.
-   Given a view entity and a set of expanded modules, computes which
+   Given a view entity and a set of show-private modules, computes which
    nodes and edges are visible, aggregates raw edges to the visible level,
    drills down into modules to reveal connected children, and generates
    synthetic IO nodes from contract boundaries. Returns pure domain data
@@ -56,7 +56,7 @@
 (def ^:schema ProjectionOpts
   [:map {:description "Options for graph projection: which entity to view and which modules are expanded."}
    [:view-id {:optional true} [:maybe :string]]
-   [:expanded-modules {:optional true} [:set :NodeId]]])
+   [:show-private {:optional true} [:set :NodeId]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Node accessor helpers (access via :data map)
@@ -80,14 +80,14 @@
     (some #(node-private? (get-in model [:nodes %])) children-ids)))
 
 (defn- get-visible-children
-  "Get the visible children of an entity, filtered by expanded-modules.
+  "Get the visible children of an entity, filtered by show-private.
    Filters out schema nodes (they appear only as IO schemas)."
-  [model entity-id expanded-modules]
+  [model entity-id show-private]
   (let [children-ids (get-children model entity-id)
         ;; Filter out schema nodes - they appear only as IO schemas
         children-ids (into #{} (remove #(= :schema (:kind (get-in model [:nodes %])))) children-ids)]
-    (if (or (nil? expanded-modules)
-            (contains? expanded-modules entity-id))
+    (if (or (nil? show-private)
+            (contains? show-private entity-id))
       children-ids
       (into #{} (remove #(node-private? (get-in model [:nodes %]))) children-ids))))
 
@@ -280,7 +280,7 @@
    - nil: use the node's actual parent
    - :no-parent: explicitly set parent to nil (for bounding box root)
    - any other value: use that as the parent"
-  [model node parent-override expanded-modules]
+  [model node parent-override show-private]
   (let [id (:id node)
         kind (:kind node)
         parent (cond
@@ -293,7 +293,7 @@
      :parent parent
      :expandable? (boolean (seq (:children node)))
      :has-private-children? (has-private-children? model id)
-     :expanded? (contains? expanded-modules id)
+     :expanded? (contains? show-private id)
      :child-count (count (:children node))
      :private? (node-private? node)}))
 
@@ -562,7 +562,7 @@
 (defn- compute-module-view-impl
   "Generic module view computation. Works for any module type.
    Returns pure domain data - no selected? or highlighted? fields."
-  [model entity-id expanded-modules children-ids]
+  [model entity-id show-private children-ids]
   (let [children-set (set children-ids)
 
         ;; Iteratively expand visible set until all edge targets are visible
@@ -597,13 +597,13 @@
         ;; Build view nodes
         ;; Module node (the viewed entity - no parent for strict bounding box)
         module-node (make-view-node model (get-in model [:nodes entity-id])
-                                    :no-parent expanded-modules)
+                                    :no-parent show-private)
 
         ;; Direct children
         child-nodes (for [cid children-ids
                           :let [node (get-in model [:nodes cid])]
                           :when node]
-                      (make-view-node model node entity-id expanded-modules))
+                      (make-view-node model node entity-id show-private))
 
         ;; Drill-down entities (inside module children)
         drill-down-nodes (for [did drill-down-entities
@@ -612,7 +612,7 @@
                                                            (when (contains? entity-set did) cid))
                                                          drill-down-map)]
                                :when (and node parent-module)]
-                           (make-view-node model node parent-module expanded-modules))
+                           (make-view-node model node parent-module show-private))
 
         ;; Collect all view node IDs for IO layer edge filtering
         all-node-ids (set (concat [entity-id]
@@ -640,9 +640,9 @@
 (defn- compute-module-view
   "Compute view when the entity is a module (has children).
    Returns pure domain data."
-  [model entity-id expanded-modules]
-  (let [children-ids (get-visible-children model entity-id expanded-modules)]
-    (compute-module-view-impl model entity-id expanded-modules children-ids)))
+  [model entity-id show-private]
+  (let [children-ids (get-visible-children model entity-id show-private)]
+    (compute-module-view-impl model entity-id show-private children-ids)))
 
 ;; -----------------------------------------------------------------------------
 ;; Leaf view computation
@@ -653,7 +653,7 @@
 
    For vars: shows related vars grouped by their parent namespace,
    with var-level edges."
-  [model entity-id expanded-modules]
+  [model entity-id show-private]
   (let [raw-edges (:edges model)
 
         ;; Find all related vars via edges
@@ -686,15 +686,15 @@
         ns-nodes (for [nid all-ns-ids
                        :let [node (get-in model [:nodes nid])]
                        :when node]
-                   (make-view-node model node (:parent node) expanded-modules))
+                   (make-view-node model node (:parent node) show-private))
 
         ;; Build var nodes (selected + related)
         entity-node (make-view-node model (get-in model [:nodes entity-id])
-                                    entity-ns expanded-modules)
+                                    entity-ns show-private)
         related-var-nodes (for [vid related-var-ids
                                 :let [node (get-in model [:nodes vid])]
                                 :when node]
-                            (make-view-node model node (:parent node) expanded-modules))
+                            (make-view-node model node (:parent node) show-private))
 
         ;; Get parent folders for grouping namespace nodes
         folder-ids (->> all-ns-ids
@@ -704,7 +704,7 @@
         folder-nodes (for [fid folder-ids
                            :let [node (get-in model [:nodes fid])]
                            :when node]
-                       (make-view-node model node nil expanded-modules))
+                       (make-view-node model node nil show-private))
 
         ;; Build view edges (internal format, no highlighting)
         view-edges (map-indexed
@@ -726,7 +726,7 @@
   "Compute graph projection for any entity. Returns pure domain data.
 
    For modules (entities with children):
-   - Shows visible children (filtered by expanded-modules)
+   - Shows visible children (filtered by show-private)
    - Shows edges between visible children
    - Shows drill-down to entities in sibling modules when related
 
@@ -739,13 +739,13 @@
    - edges: vector of edges (no :highlighted? field)
    - io: {:inputs :outputs} schema sets for module views"
   {:malli/schema [:=> [:cat :Model :ProjectionOpts] :Projection]}
-  [model {:keys [view-id expanded-modules]}]
+  [model {:keys [view-id show-private]}]
   (let [;; Default to root if no view-id
         entity-id (or view-id (:id (path/find-root-node model)))
-        expanded-modules (or expanded-modules #{})
+        show-private (or show-private #{})
 
         children-ids (get-children model entity-id)]
 
     (if (seq children-ids)
-      (compute-module-view model entity-id expanded-modules)
-      (compute-leaf-view model entity-id expanded-modules))))
+      (compute-module-view model entity-id show-private)
+      (compute-leaf-view model entity-id show-private))))

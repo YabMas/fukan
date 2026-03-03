@@ -11,7 +11,7 @@
   {:model model
    :view-id nil
    :history []
-   :expanded #{}
+   :show-private #{}
    :src src-path})
 
 (defn- print-response

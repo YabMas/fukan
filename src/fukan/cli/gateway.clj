@@ -18,7 +18,7 @@
 
 (defonce ^:private session (atom {:view-id nil
                                   :history []
-                                  :expanded #{}
+                                  :show-private #{}
                                   :src nil}))
 
 (defn exec
@@ -44,6 +44,6 @@
   []
   (reset! session {:view-id nil
                    :history []
-                   :expanded #{}
+                   :show-private #{}
                    :src nil})
   :ok)

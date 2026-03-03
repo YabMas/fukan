@@ -104,7 +104,7 @@
                                      :children #{} :data {:private? false}}}
                  :edges [{:from "dispatch" :to "cmd-find"}
                          {:from "cmd-find" :to "navigate"}]}
-          opts {:view-id "root" :expanded-modules #{}}
+          opts {:view-id "root" :show-private #{}}
           projection (graph/entity-graph model opts)
           node-ids (set (map :id (:nodes projection)))
           code-edges (set (map (juxt :from :to)
@@ -130,7 +130,7 @@
                               (map :id))]
       (is (pos? (count module-ids)) "should have modules")
       (doseq [cid module-ids]
-        (let [opts {:view-id cid :expanded-modules #{}}
+        (let [opts {:view-id cid :show-private #{}}
               projection (graph/entity-graph model opts)]
           (is (true? (inv/strict-bounding-box? model opts projection))
               (str "bounding-box failed for " cid))

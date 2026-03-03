@@ -88,7 +88,7 @@
 (defn private-visibility?
   "Verify that private nodes are hidden when their parent is not expanded."
   [model opts projection]
-  (let [expanded (:expanded-modules opts #{})
+  (let [expanded (:show-private opts #{})
         visible-ids (projection-node-ids projection)]
     (or (first
           (for [nid visible-ids

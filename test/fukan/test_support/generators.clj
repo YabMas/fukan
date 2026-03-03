@@ -302,11 +302,11 @@
                             (map :id)
                             vec)]
     (if (empty? module-ids)
-      (gen/return {:view-id nil :expanded-modules #{}})
+      (gen/return {:view-id nil :show-private #{}})
       (gen/let [view-idx (gen/choose 0 (dec (count module-ids)))
                 expanded-flags (gen/vector gen/boolean (count module-ids))]
         {:view-id (nth module-ids view-idx)
-         :expanded-modules (into #{} (keep-indexed
+         :show-private (into #{} (keep-indexed
                                           (fn [i flag] (when flag (nth module-ids i)))
                                           expanded-flags))}))))
 
@@ -318,10 +318,10 @@
   [model opts]
   (let [all-ids (vec (keys (:nodes model)))]
     (if (empty? all-ids)
-      (gen/return {:view-id nil :selected-id nil :schema-id nil :expanded-modules #{}})
+      (gen/return {:view-id nil :selected-id nil :schema-id nil :show-private #{}})
       (gen/let [use-selected? gen/boolean
                 selected-idx (gen/choose 0 (dec (count all-ids)))]
         {:view-id (:view-id opts)
          :selected-id (when use-selected? (nth all-ids selected-idx))
          :schema-id nil
-         :expanded-modules (:expanded-modules opts)}))))
+         :show-private (:show-private opts)}))))

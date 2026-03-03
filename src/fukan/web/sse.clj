@@ -26,12 +26,12 @@
 ;; -----------------------------------------------------------------------------
 ;; Helpers
 
-(defn- parse-expanded-modules
-  "Parse the expanded query param into a set of module IDs.
+(defn- parse-id-set
+  "Parse a comma-separated query param into a set of IDs.
    Format: comma-separated list of URL-encoded IDs."
-  [expanded-param]
-  (if (and expanded-param (not= expanded-param ""))
-    (into #{} (str/split expanded-param #","))
+  [param]
+  (if (and param (not= param ""))
+    (into #{} (str/split param #","))
     #{}))
 
 ;; -----------------------------------------------------------------------------
@@ -70,18 +70,18 @@
                                             (when (and id (not= id "")) id))
                                 select-id (let [id (get params "select")]
                                             (when (and id (not= id "")) id))
-                                expanded-modules (parse-expanded-modules (get params "expanded"))
+                                show-private (parse-id-set (get params "expanded"))
                                 ;; If select is provided but id is not, navigate to the module of the selected node
                                 entity-id (or entity-id
                                               (when select-id (find-module-for-node model select-id)))
                                 ;; Build editor state
                                 editor-state {:view-id entity-id
                                               :selected-id (or select-id entity-id)
-                                              :expanded-modules expanded-modules}
+                                              :show-private show-private}
                                 ;; Get projections
                                 {:keys [graph path details]}
                                 (proj/navigate model {:view-id entity-id
-                                                      :expanded expanded-modules
+                                                      :show-private show-private
                                                       :selected (:selected-id editor-state)})
                                 ;; Render views
                                 graph-data (views.graph/render-graph graph editor-state)]
