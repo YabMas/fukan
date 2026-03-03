@@ -2,7 +2,4 @@
  :functions [fukan.model.build/build-model
              fukan.model.build/run-pipeline
              fukan.model.lint/check-contracts
-             fukan.model.lint/format-report
-             fukan.model.nodes/build-module-nodes
-             fukan.model.nodes/build-symbol-nodes
-             fukan.model.nodes/build-reference-edges]}
+             fukan.model.lint/format-report]}

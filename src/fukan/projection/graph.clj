@@ -247,7 +247,9 @@
 (defn- compute-io-flow-edges
   "Compute data-flow edges between IO schema nodes and visible nodes.
    For inputs: edge from input-schema to each visible node that consumes it.
-   For outputs: edge from each visible node that produces it to output-schema."
+   For outputs: edge from each visible node that produces it to output-schema.
+   Function nodes inside collapsed modules aggregate up to their closest
+   visible ancestor, mirroring how code-flow edges are aggregated."
   [model entity-id io-data visible-set]
   (let [inside? (fn [node-id]
                   (or (= node-id entity-id)
@@ -264,7 +266,7 @@
              (mapcat (fn [var-id]
                        (let [var-node (get-in model [:nodes var-id])
                              var-schema-info (compute-var-schema-info model var-node)
-                             visible-target (when (contains? visible-set var-id) var-id)]
+                             visible-target (find-visible-ancestor model var-id visible-set)]
                          (when (and var-schema-info visible-target)
                            (concat
                             (for [schema-key (:inputs var-schema-info)
