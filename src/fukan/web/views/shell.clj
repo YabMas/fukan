@@ -15,43 +15,81 @@
 ;; CSS
 
 (def ^:private css
-  "body {
+  ":root {
+    --font-sans: system-ui, -apple-system, sans-serif;
+    --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    --color-primary: #2980b9;
+    --color-green: #27ae60;
+    --color-purple: #8e44ad;
+    --color-text: #2c3e50;
+    --color-text-heading: #1a1a2e;
+    --color-text-section: #5a6c7d;
+    --color-text-muted: #7f8c8d;
+    --color-text-faint: #95a0ab;
+    --color-text-doc: #3d4f5f;
+    --color-border: #e0e0e0;
+    --color-border-light: #eef0f2;
+    --color-separator: #bdc3c7;
+    --color-surface: #fff;
+    --color-surface-alt: #f8f9fa;
+    --color-doc-bg: #f7f8fa;
+    --color-doc-accent: #c4d0dc;
+    --color-primary-bg: #e8f4f8;
+    --color-green-bg: #f0f7ee;
+    --color-green-bg-hover: #e0f0dc;
+    --color-hover-bg: #f0f5fa;
+    --sidebar-width: 340px;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  /* Base */
+  body {
     margin: 0;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
     background: #f5f5f5;
   }
+
+  /* Layout — CSS Grid, two columns */
   #container {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
     height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
   }
   #graph-panel {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    background: #fff;
+    min-width: 0;
+    position: relative;
+    background: var(--color-surface);
   }
+
+  /* Breadcrumb */
   #breadcrumb {
     padding: 0.75rem 1rem;
-    background: #fff;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
     font-size: 0.9rem;
-    color: #7f8c8d;
+    color: var(--color-text-muted);
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
   #breadcrumb .crumb {
-    color: #2980b9;
+    color: var(--color-primary);
     cursor: pointer;
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     transition: background 0.15s;
   }
   #breadcrumb .crumb:hover {
-    background: #e8f4f8;
+    background: var(--color-primary-bg);
   }
   #breadcrumb .crumb.current {
-    color: #2c3e50;
+    color: var(--color-text);
     font-weight: 600;
     cursor: default;
   }
@@ -59,19 +97,24 @@
     background: transparent;
   }
   #breadcrumb .separator {
-    color: #bdc3c7;
+    color: var(--color-separator);
     font-size: 0.8rem;
   }
+
+  /* Graph container */
   #cy {
     flex: 1;
-    background: #fff;
+    min-height: 0;
+    background: var(--color-surface);
   }
+
+  /* Sidebar */
   #sidebar {
-    width: 340px;
-    border-left: 1px solid #e0e0e0;
+    border-left: 1px solid var(--color-border);
     padding: 1.25rem;
     overflow-y: auto;
-    background: #fff;
+    min-width: 0;
+    background: var(--color-surface);
   }
   #node-info {
     display: flex;
@@ -80,7 +123,7 @@
   }
   #node-info h4 {
     margin: 0;
-    color: #1a1a2e;
+    color: var(--color-text-heading);
     font-size: 1.05rem;
     font-weight: 600;
     line-height: 1.35;
@@ -90,7 +133,7 @@
     display: inline-block;
     font-size: 0.7rem;
     font-weight: 500;
-    color: #5a6c7d;
+    color: var(--color-text-section);
     background: #f0f1f3;
     padding: 0.1rem 0.45rem;
     border-radius: 3px;
@@ -102,8 +145,8 @@
   #node-info h5 {
     margin: 0;
     padding-top: 1rem;
-    border-top: 1px solid #eef0f2;
-    color: #5a6c7d;
+    border-top: 1px solid var(--color-border-light);
+    color: var(--color-text-section);
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -111,7 +154,7 @@
   }
   #node-info h6 {
     margin: 0.5rem 0 0.15rem 0;
-    color: #5a6c7d;
+    color: var(--color-text-section);
     font-size: 0.82rem;
   }
   #node-info ul {
@@ -122,13 +165,13 @@
   #node-info li {
     cursor: pointer;
     padding: 0.3rem 0.5rem;
-    color: #2980b9;
+    color: var(--color-primary);
     border-radius: 4px;
     font-size: 0.9rem;
     transition: background 0.1s;
   }
   #node-info li:hover {
-    background: #f0f5fa;
+    background: var(--color-hover-bg);
   }
   .empty-state {
     color: #b0b8c1;
@@ -136,28 +179,32 @@
     font-size: 0.85rem;
   }
   .dep-count {
-    color: #95a0ab;
+    color: var(--color-text-faint);
     font-weight: 400;
     font-size: 0.85rem;
   }
+
+  /* Documentation blocks */
   .doc {
     margin: 0.5rem 0 0 0;
     padding: 0.6rem 0.75rem;
-    background: #f7f8fa;
-    border-left: 3px solid #c4d0dc;
+    background: var(--color-doc-bg);
+    border-left: 3px solid var(--color-doc-accent);
     font-size: 0.84rem;
     line-height: 1.55;
-    color: #3d4f5f;
+    color: var(--color-text-doc);
     white-space: pre-wrap;
     border-radius: 0 4px 4px 0;
   }
   .doc-label {
     font-size: 0.75rem;
-    color: #7f8c8d;
+    color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 0.25rem;
   }
+
+  /* Loading indicator */
   .loading-indicator {
     position: absolute;
     top: 50%;
@@ -170,7 +217,7 @@
     display: none;
     z-index: 1000;
     font-size: 0.9rem;
-    color: #7f8c8d;
+    color: var(--color-text-muted);
   }
   .loading-indicator.htmx-request {
     display: block;
@@ -182,30 +229,32 @@
     display: inline-block;
     width: 16px;
     height: 16px;
-    border: 2px solid #e0e0e0;
-    border-top-color: #2980b9;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-right: 0.5rem;
     vertical-align: middle;
   }
+
+  /* Function signatures */
   .sig {
     padding-left: 0.5rem;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-family: var(--font-mono);
     font-size: 0.78rem;
-    color: #95a0ab;
+    color: var(--color-text-faint);
   }
   .signature {
     margin: 0.75rem 0;
     padding: 0.75rem;
-    background: #f0f7ee;
-    border-left: 3px solid #27ae60;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    background: var(--color-green-bg);
+    border-left: 3px solid var(--color-green);
+    font-family: var(--font-mono);
     font-size: 0.85rem;
     line-height: 1.5;
   }
   .signature .schema-ref {
-    color: #27ae60;
+    color: var(--color-green);
     cursor: pointer;
     text-decoration: underline;
     text-decoration-style: dotted;
@@ -214,9 +263,11 @@
     text-decoration-style: solid;
   }
   .signature .arrow {
-    color: #7f8c8d;
+    color: var(--color-text-muted);
     margin: 0 0.25rem;
   }
+
+  /* Schema display */
   .schema-list {
     list-style: none;
     padding-left: 0;
@@ -225,57 +276,57 @@
   .schema-list li {
     padding: 0.3rem 0.5rem;
     margin: 0.15rem 0;
-    background: #f0f7ee;
+    background: var(--color-green-bg);
     border-radius: 4px;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-family: var(--font-mono);
     font-size: 0.85rem;
   }
   .schema-list li:hover {
-    background: #e0f0dc;
+    background: var(--color-green-bg-hover);
   }
   .schema-detail {
     margin: 0.75rem 0;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-family: var(--font-mono);
     font-size: 0.82rem;
     line-height: 1.6;
   }
   .schema-doc {
     margin: 0 0 0.75rem 0;
     padding: 0.5rem 0.65rem;
-    background: #f7f8fa;
-    border-left: 3px solid #c4d0dc;
-    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--color-doc-bg);
+    border-left: 3px solid var(--color-doc-accent);
+    font-family: var(--font-sans);
     font-size: 0.82rem;
     line-height: 1.5;
-    color: #3d4f5f;
+    color: var(--color-text-doc);
   }
   .schema-entries {
     padding: 0.5rem 0.65rem;
-    background: #f8f9fa;
-    border: 1px solid #eef0f2;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border-light);
     border-radius: 4px;
   }
   .schema-detail .entry {
     padding: 0.2rem 0;
   }
   .schema-detail .key {
-    color: #8e44ad;
+    color: var(--color-purple);
   }
   .schema-detail .optional {
-    color: #95a5a6;
+    color: var(--color-text-faint);
     font-size: 0.9em;
   }
   .entry-sep {
-    color: #95a5a6;
+    color: var(--color-text-faint);
   }
   .entry-type {
-    color: #2c3e50;
+    color: var(--color-text);
   }
   .entry-doc {
     padding-left: 1rem;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
     font-size: 0.78rem;
-    color: #7f8c8d;
+    color: var(--color-text-muted);
     font-style: italic;
     margin: 0.1rem 0 0.3rem 0;
   }
@@ -283,7 +334,7 @@
     display: inline;
   }
   .schema-sep {
-    color: #95a5a6;
+    color: var(--color-text-faint);
   }
   .schema-variants {
     display: flex;
@@ -292,30 +343,30 @@
   }
   .schema-variant {
     padding: 0.5rem 0.65rem;
-    background: #f8f9fa;
-    border: 1px solid #eef0f2;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border-light);
     border-radius: 4px;
   }
   .variant-label {
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #95a0ab;
+    color: var(--color-text-faint);
     margin-bottom: 0.25rem;
   }
   .variant-doc {
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
     font-size: 0.78rem;
-    color: #7f8c8d;
+    color: var(--color-text-muted);
     font-style: italic;
     margin-bottom: 0.35rem;
   }
   .schema-inline {
     padding: 0.5rem 0.65rem;
-    background: #f8f9fa;
-    border: 1px solid #eef0f2;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border-light);
     border-radius: 4px;
   }
   .schema-drilldown {
@@ -326,6 +377,8 @@
   .schema-drilldown:hover {
     text-decoration-style: solid;
   }
+
+  /* Schema trail navigation */
   .schema-trail {
     display: flex;
     align-items: center;
@@ -335,49 +388,51 @@
     font-size: 0.78rem;
   }
   .trail-item {
-    color: #2980b9;
+    color: var(--color-primary);
     cursor: pointer;
     padding: 0.15rem 0.35rem;
     border-radius: 3px;
     transition: background 0.1s;
   }
   .trail-item:hover {
-    background: #e8f4f8;
+    background: var(--color-primary-bg);
   }
   .trail-sep {
-    color: #bdc3c7;
+    color: var(--color-separator);
     font-size: 0.8rem;
   }
   .back-link {
     display: inline-block;
     margin-bottom: 0.5rem;
-    color: #95a0ab;
+    color: var(--color-text-faint);
     cursor: pointer;
     font-size: 0.8rem;
     transition: color 0.1s;
   }
   .back-link:hover {
-    color: #2980b9;
+    color: var(--color-primary);
   }
+
+  /* Edge details */
   .edge-header {
     font-size: 1.1rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
-    color: #2c3e50;
+    color: var(--color-text);
   }
   .edge-endpoint {
-    color: #2980b9;
+    color: var(--color-primary);
     cursor: pointer;
   }
   .edge-endpoint:hover {
     text-decoration: underline;
   }
   .edge-arrow {
-    color: #7f8c8d;
+    color: var(--color-text-muted);
     margin: 0 0.25rem;
   }
   .edge-type {
-    color: #7f8c8d;
+    color: var(--color-text-muted);
     font-size: 0.85rem;
     margin-bottom: 1rem;
     text-transform: capitalize;
@@ -390,13 +445,13 @@
   .edge-call {
     margin-bottom: 1rem;
     padding: 0.75rem;
-    background: #f8f9fa;
+    background: var(--color-surface-alt);
     border-radius: 4px;
-    border-left: 3px solid #2980b9;
+    border-left: 3px solid var(--color-primary);
   }
   .edge-call .caller,
   .edge-call .callee {
-    color: #2980b9;
+    color: var(--color-primary);
     cursor: pointer;
     font-weight: 500;
   }
@@ -405,7 +460,7 @@
     text-decoration: underline;
   }
   .edge-call .call-arrow {
-    color: #95a5a6;
+    color: var(--color-text-faint);
     font-size: 0.75rem;
     text-align: center;
     margin: 0.25rem 0;
