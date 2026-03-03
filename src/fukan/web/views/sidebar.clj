@@ -116,15 +116,29 @@
 
 (defn- render-schema-trail
   "Render navigation breadcrumb for schema drill-down.
-   trail is a vector of schema ID strings that were navigated through."
-  [trail]
-  (when (seq trail)
-    [:div.schema-trail
-     (for [schema-id trail]
-       [:span.trail-item
-        {"data-on:click" (str "@get('/sse/schema?id=" (url-encode schema-id) "')")}
-        schema-id])
-     [:span.trail-sep "\u203a"]]))
+   trail is a vector of parent schema ID strings; current is the active schema.
+   Each parent is clickable (preserving its own ancestors), current is not."
+  [trail current]
+  (let [all-items (cond-> (vec trail)
+                    current (conj current))
+        n (count all-items)]
+    (when (> n 1)
+      [:div.schema-trail
+       (for [[idx schema-id] (map-indexed vector all-items)
+             :let [is-last (= idx (dec n))
+                   ;; Trail for clicking this item = all items before it
+                   click-trail (subvec all-items 0 idx)
+                   trail-param (when (seq click-trail)
+                                 (str "&trail=" (url-encode (str/join "," click-trail))))]]
+         (list
+          (when (pos? idx)
+            [:span.trail-sep "\u203a"])
+          (if is-last
+            [:span.trail-current schema-id]
+            [:span.trail-item
+             {"data-on:click" (str "@get('/sse/schema?id=" (url-encode schema-id)
+                                   (or trail-param "") "')")}
+             schema-id])))])))
 
 ;; -----------------------------------------------------------------------------
 ;; Interface rendering
@@ -190,25 +204,20 @@
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
    Iterates through sections in order: label, description, guarantees, interface, deps, dependents."
-  [{:keys [label kind parent description guarantees interface dataflow nav]}]
-  (let [schema-view? (:current nav)]
-    (str
-     (h/html
-      [:div#node-info
-       ;; Schema navigation trail (when drilling down through schemas)
-       (render-schema-trail (:trail nav))
+  [{:keys [label kind description guarantees interface dataflow nav]}]
+  (str
+   (h/html
+    [:div#node-info
+     ;; Schema navigation trail (when drilling down through schemas)
+     (render-schema-trail (:trail nav) (:current nav))
 
-       ;; Back-link to parent entity (hidden during schema drill-down)
-       (when (and parent (not schema-view?))
-         [:span.back-link {"data-on:click" (str "@get('/sse/view?select=" (url-encode (:id parent)) "')")}
-          (str "\u2190 " (:label parent))])
-       [:h4 label " " [:span.kind-badge (name kind)]]
+     [:h4 label " " [:span.kind-badge (name kind)]]
 
-       (render-description description)
-       (render-guarantees guarantees)
+     (render-description description)
+     (render-guarantees guarantees)
 
-       (when interface
-         (render-interface interface dataflow nav))]))))
+     (when interface
+       (render-interface interface dataflow nav))])))
 
 (defn- render-edge-detail
   "Dedicated renderer for edge entities."

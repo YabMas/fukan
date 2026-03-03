@@ -401,16 +401,9 @@
     color: var(--color-separator);
     font-size: 0.8rem;
   }
-  .back-link {
-    display: inline-block;
-    margin-bottom: 0.5rem;
-    color: var(--color-text-faint);
-    cursor: pointer;
-    font-size: 0.8rem;
-    transition: color 0.1s;
-  }
-  .back-link:hover {
-    color: var(--color-primary);
+  .trail-current {
+    color: var(--color-text);
+    padding: 0.15rem 0.35rem;
   }
 
   /* Edge details */
