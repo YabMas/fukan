@@ -254,6 +254,67 @@
             schema-var-ids)))
 
 ;; -----------------------------------------------------------------------------
+;; Schema-reference edge construction
+
+(defn- collect-type-expr-refs
+  "Recursively collect :ref keyword names from a TypeExpr tree.
+   Returns a seq of keywords. Handles both tagged TypeExpr nodes
+   and bare function signatures (which have :inputs/:output but no :tag)."
+  [type-expr]
+  (when (map? type-expr)
+    (if-let [tag (:tag type-expr)]
+      (case tag
+        :ref [(:name type-expr)]
+        :primitive []
+        :map (mapcat (fn [entry] (collect-type-expr-refs (:type entry)))
+                     (:entries type-expr))
+        :map-of (concat (collect-type-expr-refs (:key-type type-expr))
+                        (collect-type-expr-refs (:value-type type-expr)))
+        :vector (collect-type-expr-refs (:element type-expr))
+        :set (collect-type-expr-refs (:element type-expr))
+        :maybe (collect-type-expr-refs (:inner type-expr))
+        :or (mapcat collect-type-expr-refs (:variants type-expr))
+        :and (mapcat collect-type-expr-refs (:types type-expr))
+        :tuple (mapcat collect-type-expr-refs (:elements type-expr))
+        :fn (concat (mapcat collect-type-expr-refs (:inputs type-expr))
+                    (collect-type-expr-refs (:output type-expr)))
+        :enum []
+        :predicate []
+        :unknown []
+        [])
+      ;; Bare function signature: {:inputs [...] :output {...}}
+      (when (and (:inputs type-expr) (:output type-expr))
+        (concat (mapcat collect-type-expr-refs (:inputs type-expr))
+                (collect-type-expr-refs (:output type-expr)))))))
+
+(defn- build-schema-ref-edges
+  "Create edges from schema-to-schema TypeExpr keyword references.
+   Walks each schema node's :schema TypeExpr and creates edges to
+   any referenced schema nodes that exist in the model.
+   Function→Schema edges are omitted — type annotations are not
+   meaningful dependencies and create false hub nodes."
+  [nodes]
+  (let [;; Build index: schema-key keyword -> node-id
+        schema-key->id (->> (vals nodes)
+                            (filter #(= :schema (:kind %)))
+                            (reduce (fn [acc node]
+                                      (if-let [sk (get-in node [:data :schema-key])]
+                                        (assoc acc sk (:id node))
+                                        acc))
+                                    {}))
+        ;; Schema -> Schema edges (from :schema TypeExpr)
+        schema-edges (->> (vals nodes)
+                          (filter #(= :schema (:kind %)))
+                          (mapcat (fn [node]
+                                    (when-let [schema (get-in node [:data :schema])]
+                                      (let [refs (collect-type-expr-refs schema)]
+                                        (->> refs
+                                             (keep schema-key->id)
+                                             (remove #(= % (:id node)))
+                                             (map (fn [to] {:from (:id node) :to to}))))))))]
+    (vec (into #{} schema-edges))))
+
+;; -----------------------------------------------------------------------------
 ;; AnalysisResult merging
 
 (defn- merge-node-pair
@@ -400,9 +461,12 @@
         ;; Remove var nodes that define schemas — they're represented by schema nodes
         final-nodes (remove-schema-defining-vars materialized-nodes)
 
+        ;; Build schema-reference edges from TypeExpr keyword refs
+        schema-ref-edges (build-schema-ref-edges final-nodes)
+
         ;; Filter edges to surviving nodes, deduplicate
         node-ids (set (keys final-nodes))
-        all-edges (->> result-edges
+        all-edges (->> (concat result-edges schema-ref-edges)
                        (filter (fn [{:keys [from to]}]
                                  (and (contains? node-ids from)
                                       (contains? node-ids to)
