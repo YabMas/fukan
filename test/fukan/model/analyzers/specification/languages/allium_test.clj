@@ -6,7 +6,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
             [fukan.model.analyzers.specification.languages.allium :as analyzer]
-            [fukan.model.build :as build]
+            [fukan.test-support.fixtures :as fix]
             [fukan.test-support.invariants.model :as inv]))
 
 ;; ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@
 
 (deftest allium-model-integration-test
   (testing "merged Clojure + Allium result builds valid model"
-    (let [model (build/build-model "src")]
+    (let [model (fix/build-self-model)]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
       ;; Allium result should merge into model modules

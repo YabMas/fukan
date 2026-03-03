@@ -39,7 +39,7 @@
 
 (defn- find-module-for-node
   "Find the module (parent) that would show this node in its view.
-   For a var, returns its namespace. For a namespace, returns its parent folder.
+   For a function, returns its parent module. For a module, returns its parent folder.
    Returns nil if the node should be shown at root level."
   [model node-id]
   (when-let [node (get-in model [:nodes node-id])]

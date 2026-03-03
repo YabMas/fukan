@@ -1,10 +1,8 @@
 (ns fukan.model.build
-  "Model construction: orchestrates language analyzers and runs the
-   language-agnostic build pipeline to produce the graph model."
+  "Model construction: runs the language-agnostic build pipeline to
+   produce the graph model from analyzer results."
   (:require [clojure.string :as str]
-            [fukan.model.schema]
-            [fukan.model.analyzers.implementation.languages.clojure :as clj-lang]
-            [fukan.model.analyzers.specification.languages.allium :as allium]))
+            [fukan.model.schema]))
 
 ;; Require model.schema so its ^:schema vars are loaded for the registry.
 ;; No alias needed — schemas are referenced by keyword, not by var.
@@ -129,7 +127,7 @@
   (let [all-dirs (extract-all-dirs filepaths)]
     (reduce (fn [acc dir-path]
               (let [id dir-path
-                    label (str/join "." (rest (str/split dir-path #"/")))
+                    label (last (str/split dir-path #"/"))
                     parent-path (dir-parent dir-path)
                     parent-id (get-in acc [:index parent-path])
                     node {:id id
@@ -180,23 +178,26 @@
 ;; -----------------------------------------------------------------------------
 ;; Boundary construction
 
-(defn- infer-namespace-boundary
-  "Infer a boundary for a namespace from its child function and schema nodes.
+(defn- infer-module-boundary
+  "Infer a boundary for a module from its child function and schema nodes.
    Reads signatures from already-built nodes instead of going to runtime.
-   Excludes schema-defining vars (they have corresponding schema nodes).
-   Collects :schema-key values from schema children into :schemas."
-  [nodes ns-id]
-  (let [description (get-in nodes [ns-id :data :doc])
+   Excludes schema-defining symbols (they have corresponding schema nodes).
+   Collects :schema-key values from schema children into :schemas.
+
+   Relies on the node ID convention: function node IDs are 'parent-id/label',
+   matching the ID that schema-defining symbols would have."
+  [nodes parent-id]
+  (let [description (get-in nodes [parent-id :data :doc])
         schema-children (->> (vals nodes)
                              (filter #(and (= :schema (:kind %))
-                                           (= ns-id (:parent %)))))
-        schema-var-ids (into #{} (map (fn [sn] (str ns-id "/" (:label sn)))) schema-children)
+                                           (= parent-id (:parent %)))))
+        schema-symbol-ids (into #{} (map (fn [sn] (str parent-id "/" (:label sn)))) schema-children)
         schemas (into [] (keep #(get-in % [:data :schema-key])) schema-children)
         functions (->> (vals nodes)
                        (filter #(and (= :function (:kind %))
-                                     (= ns-id (:parent %))
+                                     (= parent-id (:parent %))
                                      (not (get-in % [:data :private?]))
-                                     (not (contains? schema-var-ids (:id %)))))
+                                     (not (contains? schema-symbol-ids (:id %)))))
                        (mapv (fn [node]
                                (cond-> {:name (:label node)}
                                  (get-in node [:data :signature])
@@ -219,39 +220,42 @@
     node))
 
 (defn- attach-boundaries
-  "Attach namespace boundaries to module nodes.
+  "Attach boundaries to module nodes.
    Infers boundaries from child function signatures and merges into
-   any existing boundary (e.g. from spec guarantees or contract.edn).
+   any existing boundary (e.g. from spec guarantees or contract declarations).
    Returns updated nodes map."
   [nodes]
   (reduce (fn [acc [id node]]
             (if (= :module (:kind node))
-              (let [boundary (infer-namespace-boundary nodes id)]
+              (let [boundary (infer-module-boundary nodes id)]
                 (assoc acc id (attach-boundary node boundary)))
               (assoc acc id node)))
           {}
           nodes))
 
 ;; -----------------------------------------------------------------------------
-;; Schema-defining var removal
+;; Schema-defining symbol removal
 
-(defn- remove-schema-defining-vars
-  "Remove function nodes whose vars define schemas.
-   These are redundant — the schema node represents them."
+(defn- remove-schema-defining-symbols
+  "Remove function nodes whose symbols define schemas.
+   These are redundant — the schema node represents them.
+
+   Relies on the node ID convention: function node IDs are 'parent-id/label',
+   matching the ID that schema-defining symbols would have."
   [nodes]
-  (let [schema-var-ids (->> (vals nodes)
-                            (filter #(= :schema (:kind %)))
-                            (map (fn [sn] (str (:parent sn) "/" (:label sn))))
-                            set)
-        cleaned (apply dissoc nodes schema-var-ids)]
+  (let [schema-symbol-ids (->> (vals nodes)
+                               (filter #(= :schema (:kind %)))
+                               (map (fn [sn] (str (:parent sn) "/" (:label sn))))
+                               set)
+        cleaned (apply dissoc nodes schema-symbol-ids)]
     ;; Also remove from parent children sets
-    (reduce (fn [acc var-id]
-              (let [parent-id (:parent (get nodes var-id))]
+    (reduce (fn [acc symbol-id]
+              (let [parent-id (:parent (get nodes symbol-id))]
                 (if (and parent-id (contains? acc parent-id))
-                  (update-in acc [parent-id :children] disj var-id)
+                  (update-in acc [parent-id :children] disj symbol-id)
                   acc)))
             cleaned
-            schema-var-ids)))
+            schema-symbol-ids)))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema-reference edge construction
@@ -458,8 +462,8 @@
                                collapse-surface-to-boundary
                                wire-children)
 
-        ;; Remove var nodes that define schemas — they're represented by schema nodes
-        final-nodes (remove-schema-defining-vars materialized-nodes)
+        ;; Remove symbol nodes that define schemas — they're represented by schema nodes
+        final-nodes (remove-schema-defining-symbols materialized-nodes)
 
         ;; Build schema-reference edges from TypeExpr keyword refs
         schema-ref-edges (build-schema-ref-edges final-nodes)
@@ -484,12 +488,12 @@
 ;; Public API
 
 (defn build-model
-  "Build complete model from a source path.
-   Runs all language analyzers, merges their results, and produces
+  "Build complete model from a source path and a seq of analyzers.
+   Each analyzer is (fn [src-path] -> AnalysisResult).
+   Runs all analyzers, merges their results, and produces
    the final Model through the language-agnostic build pipeline."
-  {:malli/schema [:=> [:cat :string] :Model]}
-  [src-path]
-  (let [clj-result    (clj-lang/analyze src-path)
-        allium-result (allium/analyze src-path)
-        merged        (merge-results clj-result allium-result)]
+  {:malli/schema [:=> [:cat :string [:sequential :any]] :Model]}
+  [src-path analyzers]
+  (let [results (map #(% src-path) analyzers)
+        merged  (apply merge-results results)]
     (run-pipeline merged)))

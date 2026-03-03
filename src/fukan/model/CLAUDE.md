@@ -46,16 +46,10 @@ schema  ←  nodes  ←  clojure.clj  ←  build
 ## Analyzer Structure
 
 Analyzers live under `analyzers/`, split by category:
-- `analyzers/implementation/` — discovers code structure (Clojure via clj-kondo)
-- `analyzers/specification/` — discovers design structure (Allium via instaparse)
+- `analyzers/implementation/` — discovers code structure (currently: Clojure via clj-kondo)
+- `analyzers/specification/` — discovers design structure (currently: Allium via instaparse)
 
-Both produce `AnalysisResult` values that are merged by `build.clj` before `run-pipeline`.
-
-The Clojure analyzer produces a **complete** AnalysisResult including:
-- Module and symbol nodes from static analysis
-- Schema nodes from runtime ^:schema var discovery
-- Runtime metadata enrichment (function signatures)
-- Contract boundary nodes from contract.edn files
+Both produce `AnalysisResult` values. `build-model` accepts a seq of analyzers and merges all results before running `run-pipeline`. See each analyzer's `CLAUDE.md` for language-specific details.
 
 The Allium parser is a shared library at `libs/allium/parser.clj`.
 

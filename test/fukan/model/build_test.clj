@@ -6,6 +6,7 @@
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.properties :as prop]
             [fukan.model.build :as build]
+            [fukan.test-support.fixtures :as fix]
             [fukan.test-support.generators :as gen]
             [fukan.test-support.invariants.model :as inv]))
 
@@ -55,7 +56,7 @@
 
 (deftest fukan-self-analysis-invariants
   (testing "Fukan's own source code satisfies all model invariants"
-    (let [model (build/build-model "src")]
+    (let [model (fix/build-self-model)]
       (is (pos? (count (:nodes model))) "model should have nodes")
       (is (pos? (count (:edges model))) "model should have edges")
       (is (true? (inv/tree-structure? model)) (str (inv/tree-structure? model)))

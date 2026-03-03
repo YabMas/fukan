@@ -57,7 +57,7 @@ Views never call back into projection — data flows one way.
 
 ## Edge Types
 
-- `:code-flow` — aggregated from raw var/ns edges in the model
+- `:code-flow` — aggregated from raw leaf-level edges in the model
 - `:data-flow` — IO schema nodes to/from visible nodes (boundary-derived)
 
 ## IO Schema Pattern

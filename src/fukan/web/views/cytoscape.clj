@@ -39,7 +39,7 @@
 
 (defn- node->cytoscape
   "Transform an internal view node to Cytoscape format.
-   Converts Clojure idioms (kebab-case, ? predicates) to camelCase."
+   Converts internal format (kebab-case, ? predicates) to camelCase."
   [{:keys [id kind label parent selected? expandable?
            has-private-children? expanded? showing-private? child-count private?
            io-type schema-key owned?]}]

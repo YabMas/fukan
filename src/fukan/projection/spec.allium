@@ -72,7 +72,7 @@ value Projection {
 value PathSegment {
     -- One step in a breadcrumb path from root to entity.
     id: String?     -- null for root
-    label: String   -- last dotted segment for namespaces
+    label: String   -- short display label from the node
 }
 
 value DepInfo {

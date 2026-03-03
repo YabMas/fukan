@@ -204,9 +204,9 @@
         ref-fn (partial schema-ref-with-doc model)]
     (case (:kind data)
       :module
-      (let [ns-schemas (proj.schema/schemas-for-ns model (:id node))]
-        (when (seq ns-schemas)
-          (->> ns-schemas sort (mapv ref-fn))))
+      (let [module-schemas (proj.schema/schemas-for-module model (:id node))]
+        (when (seq module-schemas)
+          (->> module-schemas sort (mapv ref-fn))))
 
       :function
       (when-let [{:keys [inputs output]} (:signature data)]
@@ -257,7 +257,7 @@
 
 (defn- compute-underlying-edges
   "Find all function-level edges that aggregate to this visible edge.
-   Returns a vector of {:from-var {:id :label :signature} :to-var {...}}
+   Returns a vector of {:from-fn {:id :label :signature} :to-fn {...}}
    Only includes edges where both endpoints are functions (excludes require relationships)."
   [model from-id to-id]
   (let [from-subtree (subtree model from-id)
@@ -273,13 +273,13 @@
          (map (fn [{:keys [from to]}]
                 (let [from-node (get-in model [:nodes from])
                       to-node (get-in model [:nodes to])]
-                  {:from-var {:id from
-                              :label (:label from-node)
-                              :signature (get-in from-node [:data :signature])}
-                   :to-var {:id to
-                            :label (:label to-node)
-                            :signature (get-in to-node [:data :signature])}})))
-         (sort-by (fn [e] [(get-in e [:from-var :label]) (get-in e [:to-var :label])]))
+                  {:from-fn {:id from
+                             :label (:label from-node)
+                             :signature (get-in from-node [:data :signature])}
+                   :to-fn {:id to
+                           :label (:label to-node)
+                           :signature (get-in to-node [:data :signature])}})))
+         (sort-by (fn [e] [(get-in e [:from-fn :label]) (get-in e [:to-fn :label])]))
          vec)))
 
 (defn- compute-edge-details
@@ -291,7 +291,7 @@
           to-node (get-in model [:nodes to-id])
           underlying-edges (compute-underlying-edges model from-id to-id)
           called-fns (->> underlying-edges
-                          (map :to-var)
+                          (map :to-fn)
                           (distinct)
                           (sort-by :label)
                           (mapv (fn [{:keys [id label signature]}]

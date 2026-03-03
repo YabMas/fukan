@@ -7,8 +7,8 @@
             [clojure.test.check.generators :as tgen]
             [clojure.test.check.properties :as prop]
             [fukan.cli.commands :as commands]
-            [fukan.model.build :as build]
             [fukan.projection.api :as proj]
+            [fukan.test-support.fixtures :as fix]
             [fukan.test-support.generators :as gen]
             [fukan.test-support.invariants.cli :as inv]))
 
@@ -276,7 +276,7 @@
 
 (deftest fukan-cli-integration
   (testing "CLI commands work against Fukan's own model"
-    (let [model (build/build-model "src")
+    (let [model (fix/build-self-model)
           state (make-state {:src "src"})
           rid (root-id model)]
       ;; ls at root

@@ -6,8 +6,8 @@
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as tgen]
             [clojure.test.check.properties :as prop]
-            [fukan.model.build :as build]
             [fukan.projection.graph :as graph]
+            [fukan.test-support.fixtures :as fix]
             [fukan.test-support.generators :as gen]
             [fukan.test-support.invariants.projection :as inv]))
 
@@ -151,7 +151,7 @@
 
 (deftest fukan-projection-invariants
   (testing "Fukan's own model satisfies projection invariants for every module"
-    (let [model (build/build-model "src")
+    (let [model (fix/build-self-model)
           module-ids (->> (vals (:nodes model))
                               (filter #(= :module (:kind %)))
                               (map :id))]

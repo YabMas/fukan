@@ -19,17 +19,23 @@
 
 (defn build-module-nodes
   "Build module nodes from module definitions.
-   Returns {:nodes {id -> node}, :index {ns-sym -> id}}."
+   Labels are the short form (last segment of the module name).
+   Returns {:nodes {id -> node}, :index {module-sym -> id}}."
   {:malli/schema [:=> [:cat [:vector :ModuleDef] [:map-of :string :NodeId]]
                   [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
-  [ns-defs folder-index]
+  [module-defs folder-index]
   (reduce (fn [acc {:keys [name filename doc]}]
             (let [id (str name)
+                  full-name (str name)
+                  short-label (let [dot-idx (str/last-index-of full-name ".")]
+                                (if dot-idx
+                                  (subs full-name (inc dot-idx))
+                                  full-name))
                   folder-path (file-to-folder filename)
                   parent-id (get folder-index folder-path)
                   node {:id id
                         :kind :module
-                        :label (str name)
+                        :label short-label
                         :parent parent-id
                         :children #{}
                         :data {:kind :module
@@ -38,17 +44,17 @@
                   (assoc-in [:nodes id] node)
                   (assoc-in [:index name] id))))
           {:nodes {} :index {}}
-          ns-defs))
+          module-defs))
 
 (defn build-symbol-nodes
   "Build symbol nodes from symbol definitions.
-   Returns {:nodes {id -> node}, :index {[module-sym var-name] -> id}}."
+   Returns {:nodes {id -> node}, :index {[module-sym symbol-name] -> id}}."
   {:malli/schema [:=> [:cat [:vector :SymbolDef] [:map-of :symbol :NodeId]]
                   [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
-  [var-defs ns-index]
+  [symbol-defs module-index]
   (reduce (fn [acc {:keys [module name doc private]}]
             (let [id (str module "/" name)
-                  parent-id (get ns-index module)
+                  parent-id (get module-index module)
                   node {:id id
                         :kind :function
                         :label (str name)
@@ -61,7 +67,7 @@
                   (assoc-in [:nodes id] node)
                   (assoc-in [:index [module name]] id))))
           {:nodes {} :index {}}
-          var-defs))
+          symbol-defs))
 
 (defn build-reference-edges
   "Build leaf-to-leaf edges from actual call relationships.
@@ -72,14 +78,14 @@
 
    Returns a vector of {:from node-id, :to node-id} edges."
   {:malli/schema [:=> [:cat :CodeAnalysis :map :map] [:vector :Edge]]}
-  [analysis var-index _ns-index]
+  [analysis symbol-index _module-index]
   (let [symbol-refs (:symbol-references analysis)]
     (->> symbol-refs
          (keep (fn [{:keys [from from-symbol to name]}]
                  (when (and from-symbol
-                            (get var-index [from from-symbol]))
-                   (let [from-id (get var-index [from from-symbol])
-                         to-id   (get var-index [to name])]
+                            (get symbol-index [from from-symbol]))
+                   (let [from-id (get symbol-index [from from-symbol])
+                         to-id   (get symbol-index [to name])]
                      (when (and to-id (not= from-id to-id))
                        {:from from-id :to to-id})))))
          (into #{})

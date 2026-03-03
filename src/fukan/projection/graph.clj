@@ -139,7 +139,7 @@
 ;; On-demand edge aggregation
 
 (defn- aggregate-edges
-  "Aggregate var-level edges to the visible node level.
+  "Aggregate leaf-level edges to the visible node level.
    For each raw edge, find which visible nodes it connects.
    Returns deduplicated edges between visible nodes.
 
@@ -173,8 +173,8 @@
     {:inputs (into #{} (mapcat #(schema/extract-schema-refs model %) inputs))
      :outputs (schema/extract-schema-refs model output)}))
 
-(defn- compute-var-schema-info
-  "Get schema info for a function node from its :signature data.
+(defn- compute-fn-schema-info
+  "Get schema flow info for a function node from its :signature data.
    Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil.
    Takes the model to determine which keywords are registered schemas."
   [model node]
@@ -210,9 +210,9 @@
   "Create IO container and schema nodes for a module view.
    Returns a vector of nodes: IO container + child schema nodes.
    io-type is :input or :output.
-   owned-ns-ids is a set of namespace IDs inside the current module.
+   owned-module-ids is a set of module IDs inside the current view.
    IO containers are orphans - positioned by JS relative to main module."
-  [model entity-id io-type schema-keys owned-ns-ids]
+  [model entity-id io-type schema-keys owned-module-ids]
   (when (seq schema-keys)
     (let [container-id (str (name io-type) ":" entity-id)
           label (if (= io-type :input) "Inputs" "Outputs")]
@@ -229,7 +229,7 @@
               :private? false}]
             (for [schema-key schema-keys
                   :let [owner-id (schema/schema-owner-id model schema-key)
-                        owned? (contains? owned-ns-ids owner-id)]]
+                        owned? (contains? owned-module-ids owner-id)]]
               {:id (str (name io-type) "-schema:" (name schema-key))
                :kind :io-schema
                :io-type io-type
@@ -254,29 +254,29 @@
   (let [inside? (fn [node-id]
                   (or (= node-id entity-id)
                       (descendant-of? model node-id entity-id)))
-        var-ids (->> (:nodes model)
-                     vals
-                     (filter #(and (= :function (:kind %))
-                                   (inside? (:id %))))
-                     (map :id))
+        fn-ids (->> (:nodes model)
+                    vals
+                    (filter #(and (= :function (:kind %))
+                                  (inside? (:id %))))
+                    (map :id))
         input-keys (:inputs io-data)
         output-keys (:outputs io-data)
         edge-nodes
-        (->> var-ids
-             (mapcat (fn [var-id]
-                       (let [var-node (get-in model [:nodes var-id])
-                             var-schema-info (compute-var-schema-info model var-node)
-                             visible-target (find-visible-ancestor model var-id visible-set)]
-                         (when (and var-schema-info visible-target)
+        (->> fn-ids
+             (mapcat (fn [fn-id]
+                       (let [fn-node (get-in model [:nodes fn-id])
+                             fn-schema-info (compute-fn-schema-info model fn-node)
+                             visible-target (find-visible-ancestor model fn-id visible-set)]
+                         (when (and fn-schema-info visible-target)
                            (concat
-                            (for [schema-key (:inputs var-schema-info)
+                            (for [schema-key (:inputs fn-schema-info)
                                   :when (contains? input-keys schema-key)]
                               {:id (str "io-e:in:" (name schema-key) ":" visible-target)
                                :from (str "input-schema:" (name schema-key))
                                :to visible-target
                                :edge-type :data-flow
                                :schema-key schema-key})
-                            (for [schema-key (:outputs var-schema-info)
+                            (for [schema-key (:outputs fn-schema-info)
                                   :when (contains? output-keys schema-key)]
                               {:id (str "io-e:out:" visible-target ":" (name schema-key))
                                :from visible-target
@@ -413,11 +413,11 @@
    Returns {:nodes [...] :edges [...] :io {:inputs #{} :outputs #{}}}."
   [model entity-id all-node-ids]
   (let [io-data (compute-io-schemas model entity-id)
-        owned-ns-ids (->> all-node-ids
+        owned-module-ids (->> all-node-ids
                           (filter #(= :module (:kind (get-in model [:nodes %]))))
                           set)
-        input-nodes (create-io-nodes model entity-id :input (:inputs io-data) owned-ns-ids)
-        output-nodes (create-io-nodes model entity-id :output (:outputs io-data) owned-ns-ids)
+        input-nodes (create-io-nodes model entity-id :input (:inputs io-data) owned-module-ids)
+        output-nodes (create-io-nodes model entity-id :output (:outputs io-data) owned-module-ids)
         data-flow-edges (compute-io-flow-edges model entity-id io-data all-node-ids)]
     {:nodes (concat input-nodes output-nodes)
      :edges data-flow-edges
@@ -480,53 +480,53 @@
   "Compute view when the entity is a leaf (no children).
    Returns pure domain data - no selected? or highlighted? fields.
 
-   For vars: shows related vars grouped by their parent namespace,
-   with var-level edges."
+   Shows related functions grouped by their parent module,
+   with leaf-level edges."
   [model entity-id show-private]
   (let [raw-edges (:edges model)
 
-        ;; Find all related vars via edges
-        outgoing-var-ids (->> raw-edges
-                              (filter #(= entity-id (:from %)))
-                              (map :to)
-                              set)
-        incoming-var-ids (->> raw-edges
-                              (filter #(= entity-id (:to %)))
-                              (map :from)
-                              set)
-        related-var-ids (set/union outgoing-var-ids incoming-var-ids)
+        ;; Find all related functions via edges
+        outgoing-fn-ids (->> raw-edges
+                             (filter #(= entity-id (:from %)))
+                             (map :to)
+                             set)
+        incoming-fn-ids (->> raw-edges
+                             (filter #(= entity-id (:to %)))
+                             (map :from)
+                             set)
+        related-fn-ids (set/union outgoing-fn-ids incoming-fn-ids)
 
-        ;; Get the parent namespaces for grouping
-        entity-ns (:parent (get-in model [:nodes entity-id]))
-        related-ns-ids (->> related-var-ids
-                            (map #(:parent (get-in model [:nodes %])))
-                            (remove nil?)
-                            set)
-        all-ns-ids (if entity-ns
-                     (conj related-ns-ids entity-ns)
-                     related-ns-ids)
+        ;; Get the parent modules for grouping
+        entity-module (:parent (get-in model [:nodes entity-id]))
+        related-module-ids (->> related-fn-ids
+                                (map #(:parent (get-in model [:nodes %])))
+                                (remove nil?)
+                                set)
+        all-module-ids (if entity-module
+                         (conj related-module-ids entity-module)
+                         related-module-ids)
 
-        ;; Get edges at var level involving the selected entity
+        ;; Get edges at leaf level involving the selected entity
         relevant-edges (->> raw-edges
                             (filter (fn [{:keys [from to]}]
                                       (or (= from entity-id) (= to entity-id)))))
 
-        ;; Build namespace nodes for grouping (no expand in leaf view)
-        ns-nodes (for [nid all-ns-ids
-                       :let [node (get-in model [:nodes nid])]
-                       :when node]
-                   (make-view-node model node (:parent node) #{} show-private))
+        ;; Build module nodes for grouping (no expand in leaf view)
+        module-nodes (for [mid all-module-ids
+                           :let [node (get-in model [:nodes mid])]
+                           :when node]
+                       (make-view-node model node (:parent node) #{} show-private))
 
-        ;; Build var nodes (selected + related)
+        ;; Build function nodes (selected + related)
         entity-node (make-view-node model (get-in model [:nodes entity-id])
-                                    entity-ns #{} show-private)
-        related-var-nodes (for [vid related-var-ids
-                                :let [node (get-in model [:nodes vid])]
-                                :when node]
-                            (make-view-node model node (:parent node) #{} show-private))
+                                    entity-module #{} show-private)
+        related-fn-nodes (for [fid related-fn-ids
+                               :let [node (get-in model [:nodes fid])]
+                               :when node]
+                           (make-view-node model node (:parent node) #{} show-private))
 
-        ;; Get parent folders for grouping namespace nodes
-        folder-ids (->> all-ns-ids
+        ;; Get parent folders for grouping module nodes
+        folder-ids (->> all-module-ids
                         (map #(:parent (get-in model [:nodes %])))
                         (remove nil?)
                         set)
@@ -544,7 +544,7 @@
                        :edge-type :code-flow})
                     relevant-edges)]
 
-    {:nodes (vec (concat folder-nodes ns-nodes related-var-nodes [entity-node]))
+    {:nodes (vec (concat folder-nodes module-nodes related-fn-nodes [entity-node]))
      :edges (vec view-edges)
      :io nil}))
 

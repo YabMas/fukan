@@ -5,14 +5,25 @@ Implementation analyzers discover **code structure** from source files and produ
 ## What they discover
 
 - **Modules** (namespaces/scopes) — from static analysis
-- **Symbols** (functions/vars) — from static analysis
+- **Symbols** (functions/definitions) — from static analysis
 - **References** (call relationships) — from static analysis
-- **Type metadata** (schemas, signatures) — from runtime reflection
-- **Contract boundaries** — from contract.edn files
+- **Type metadata** (schemas, signatures) — from runtime or static discovery
+- **Contract boundaries** — from contract/manifest files
 
 ## Key pattern: complete AnalysisResult
 
 Each analyzer's `analyze` function produces a **complete** `AnalysisResult` containing all nodes and edges it discovers. The build pipeline (`model.build`) assembles results into the graph model.
+
+## Node ID conventions
+
+The build pipeline relies on these ID conventions. All analyzers must follow them:
+
+- **Module node IDs**: String form of the module identifier (e.g., `"fukan.model.build"` for Clojure namespaces). Must be unique across the entire model.
+- **Function node IDs**: `"parent-id/label"` — the parent module's ID, a `/`, then the symbol name (e.g., `"fukan.model.build/run-pipeline"`). This convention is required because the pipeline uses it to match schema-defining symbols to their function nodes.
+- **Schema node IDs**: `"schema:Name"` — prefixed with `schema:`.
+- **Folder node IDs**: The raw directory path (e.g., `"src/fukan/model"`). Built automatically by the pipeline from `:source-files`.
+
+Module nodes must include `:filename` in their `:data` map so the pipeline can assign folder parents. Module `:parent` should be `nil` — the pipeline assigns parents from the folder hierarchy.
 
 ## Clojure analyzer (`languages/clojure.clj`)
 
@@ -30,9 +41,7 @@ All seven steps happen within `analyze`, producing a single complete AnalysisRes
 
 ## Adding a new implementation language
 
-Provide an `analyze` function that takes a `src-path` and returns an `AnalysisResult` containing:
-1. Module nodes, symbol nodes, and reference edges from static analysis
-2. Optionally, type nodes (e.g., schema nodes) from runtime or static discovery
-3. Optionally, boundary module nodes from contract/manifest files
-
-Register the new analyzer in `pipeline.clj`.
+1. Create a new namespace under `languages/` (e.g., `languages/typescript.clj`)
+2. Implement an `analyze` function: `(fn [src-path] -> AnalysisResult)`
+3. Follow the node ID conventions above
+4. Add the analyzer to the analyzer list in `infra/model.clj`

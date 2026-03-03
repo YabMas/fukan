@@ -196,7 +196,7 @@
             module-node (cond->
                           {:id module-id
                            :kind :module
-                           :label module-id
+                           :label (last (str/split module-id #"/"))
                            :parent nil
                            :children #{}
                            :data (cond-> {:kind :module}

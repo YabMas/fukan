@@ -59,7 +59,7 @@
        (some #(when (= schema-key (get-in % [:data :schema-key]))
                 (get-in % [:data :schema])))))
 
-(defn schemas-for-ns
+(defn schemas-for-module
   "Get all schema keywords defined in a module.
    Returns a set of keywords."
   [model module-id]

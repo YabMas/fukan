@@ -377,7 +377,7 @@
                      (assoc acc dir-path
                             {:id dir-path
                              :kind :module
-                             :label dir-path
+                             :label (last (str/split dir-path #"/"))
                              :parent nil
                              :children #{}
                              :data {:kind :module

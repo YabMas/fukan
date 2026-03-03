@@ -148,10 +148,11 @@
                                   (str "src/" (str/replace (str ns-sym) "." "/") ".clj"))
                                 ns-names)
              ns-nodes (into {} (map (fn [ns-sym filepath surface]
-                                      (let [id (str ns-sym)]
+                                      (let [id (str ns-sym)
+                                            short-label (last (str/split id #"\."))]
                                         [id {:id id
                                              :kind :module
-                                             :label id
+                                             :label short-label
                                              :parent nil
                                              :children #{}
                                              :data (cond-> {:kind :module
