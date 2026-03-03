@@ -18,14 +18,15 @@ value EditorState {
     -- Client-side UI state. Split into two concerns:
     --
     -- Projection inputs (determine what's visible):
-    --   view_id + expanded_modules
+    --   view_id + expanded + show_private
     --
     -- Rendering inputs (determine how it looks):
     --   selected_id + schema_id
     view_id: String?                  -- module being viewed (null = root)
     selected_id: String?              -- currently highlighted node
     schema_id: String?                -- schema being inspected in sidebar
-    expanded_modules: Set<String>     -- modules whose private children are visible
+    expanded: Set<String>             -- modules whose children are visible (user-controlled)
+    show_private: Set<String>         -- expanded modules that also show private children
 }
 
 value CytoscapeGraph {
@@ -116,6 +117,10 @@ rule NavigateToNode {
     --
     -- ClearsSelection: after navigation, no node is selected until the
     --   user clicks one. The new module becomes the viewed entity.
+    --
+    -- ResetsExpansion: navigation resets the expanded and show_private
+    --   sets to empty. Each view starts fresh with all child modules
+    --   collapsed. The user opens what they need.
 
     when: NavigateToNode(node_id: String)
 
@@ -126,22 +131,60 @@ rule NavigateToNode {
     ensures:
         editor.view_id = node_id
         editor.selected_id = null
+        editor.expanded = {}
+        editor.show_private = {}
+}
+
+rule ExpandModule {
+    -- Expand a module to reveal its children.
+    --
+    -- The module's direct children become visible. Child modules
+    -- appear collapsed. Child functions and schemas appear as leaves.
+    -- Edges that previously terminated at this module break apart
+    -- into finer-grained edges to/from its now-visible children.
+
+    when: ExpandModule(module_id: String)
+
+    requires:
+        module_id not in editor.expanded
+
+    ensures:
+        editor.expanded = editor.expanded + {module_id}
+}
+
+rule CollapseModule {
+    -- Collapse a module to hide its children.
+    --
+    -- All descendants become invisible. Edges re-aggregate to the
+    -- module. The module appears as an opaque node.
+
+    when: CollapseModule(module_id: String)
+
+    requires:
+        module_id in editor.expanded
+
+    ensures:
+        editor.expanded = editor.expanded - {module_id}
 }
 
 rule TogglePrivateVisibility {
-    -- Right click on a module: toggle whether its private children
+    -- Toggle whether an expanded module's private children
     --   are visible.
     --
-    -- AddOrRemove: if the module is in expanded_modules, remove it
+    -- PrivateSubordinate: only has effect on modules that are
+    --   already expanded. A collapsed module in show_private
+    --   shows nothing extra.
+    --
+    -- AddOrRemove: if the module is in show_private, remove it
     --   (hide privates). If not, add it (show privates).
 
     when: TogglePrivateVisibility(module_id: String)
 
     ensures:
-        if module_id in editor.expanded_modules:
-            editor.expanded_modules = editor.expanded_modules - {module_id}
+        if module_id in editor.show_private:
+            editor.show_private = editor.show_private - {module_id}
         else:
-            editor.expanded_modules = editor.expanded_modules + {module_id}
+            editor.show_private = editor.show_private + {module_id}
 }
 
 rule NavigateToAncestor {
@@ -263,11 +306,16 @@ rule RenderBreadcrumb {
 -- Visual Indicators
 -- ============================================================
 --
--- DoubleBorder: a module has private children that are currently
---   hidden (module not in expanded_modules).
+-- CollapsedModule: a module that is not expanded — appears as
+--   an opaque node with no visible children.
+--
+-- ExpandedWithHiddenPrivates: an expanded module that has private
+--   children currently hidden (in expanded but not in show_private).
+--   DoubleBorder indicator.
+--
+-- FullyExpanded: an expanded module where all children are visible
+--   (in both expanded and show_private, or has no private children).
+--   SolidBorder indicator.
 --
 -- DashedBorderGrayBackground: a private leaf node that is currently
---   visible (its parent is expanded).
---
--- SolidBorder: the module is expanded (all children visible)
---   or has no private children at all.
+--   visible (its parent is in show_private).

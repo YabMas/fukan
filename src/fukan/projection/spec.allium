@@ -168,16 +168,16 @@ rule EntityGraph {
     -- Compute the visible subgraph for an entity.
     -- Dispatches to module or leaf view based on whether
     -- the entity has children.
-    when: EntityGraph(view_id: String?, expanded_modules: Set<String>)
+    when: EntityGraph(view_id: String?, expanded: Set<String>, show_private: Set<String>)
 
     let entity_id = view_id ?? model.root_nodes.first.id
     let entity = node_by_id(model, entity_id)      -- black box: map lookup
 
     ensures:
         if entity.children.count > 0:
-            ModuleView(entity_id, expanded_modules)
+            ModuleView(entity_id, expanded, show_private)
         else:
-            LeafView(entity_id, expanded_modules)
+            LeafView(entity_id, expanded, show_private)
 }
 
 rule ModuleView {
@@ -190,19 +190,17 @@ rule ModuleView {
     --   cross the bounding box are not rendered. To see external
     --   relationships, navigate to a common ancestor.
     --
-    -- SameTypeDrillDown: when a visible child has a relationship
-    --   with an entity inside a sibling module, the sibling is
-    --   opened — but only same-kind entities are exposed
-    --   (namespace→namespace, function→function). This keeps each
-    --   hierarchy level focused on same-level relationships.
-    --   When the direct child of the sibling is itself a module
-    --   (nested nesting), the type check looks through to the raw
-    --   target kind — module intermediaries act as passthrough.
+    -- DefaultCollapsed: child modules appear as opaque nodes by
+    --   default. Their children are not visible until the user
+    --   explicitly expands them. There is no automatic drill-down.
     --
-    -- InternalDepExpansion: when drilling into a sibling module,
-    --   internal dependencies of the exposed entities are also shown.
-    --   This ensures the drill-down view is locally coherent — you
-    --   see not just the related entity but its within-module deps.
+    -- RecursiveExpansion: expanding a module reveals its direct
+    --   children. Among those, child modules are themselves collapsed
+    --   unless independently expanded. Any nesting depth is supported.
+    --
+    -- ViewAsRoot: the viewed module is implicitly expanded — its
+    --   children are always visible. This is what "viewing a module"
+    --   means.
     --
     -- NoAncestorDescendantEdges: edges between a module and
     --   its own descendants are suppressed. The parent-child
@@ -212,33 +210,51 @@ rule ModuleView {
     --   children. They appear only as synthetic IO schema nodes
     --   when referenced by the module's boundary.
     --
-    -- PrivateVisibility: private children are hidden unless their
-    --   parent module is in expanded_modules.
+    -- PrivateVisibility: within an expanded module, private
+    --   children are hidden unless the module is also in
+    --   show_private.
     --
     -- PrivateInheritance: when a public function's cross-module
     --   dependencies are all mediated through private callees,
     --   the public function inherits those dependencies. The
     --   private function itself remains hidden; only its public
     --   callers appear as nodes with synthetic edges to the targets.
+    --
+    -- ModuleEndpoints: aggregated edges may terminate at collapsed
+    --   modules. A collapsed module acts as a summary node for all
+    --   its hidden descendants. Expanding it "breaks apart" edges
+    --   that terminated at it; collapsing merges them back.
+    --
+    -- ConsistentAggregation: expanding then immediately collapsing
+    --   a module produces the same projection as before. The
+    --   mechanism is reversible.
 
-    when: ModuleView(entity_id: String, expanded_modules: Set<String>)
+    when: ModuleView(entity_id: String, expanded: Set<String>, show_private: Set<String>)
 
-    -- 1. Direct children, minus private (unless expanded) and schemas
-    let visible_children = visible_children_of(model, entity_id, expanded_modules)
+    let effective_expanded = expanded + {entity_id}
 
-    -- 2. Iterative drill-down: for each aggregated edge targeting a
-    --    sibling module, find same-type entities inside it.
-    --    Expand internal deps at each step. Repeat until stable.
-    let drill_down = iterate_drill_down(model, visible_children)  -- black box
+    -- 1. Visible set: descendants of entity_id reachable through
+    --    expanded modules, excluding schemas and hidden privates.
+    --
+    --    A node N is visible iff:
+    --      a. Every module ancestor between entity_id (exclusive)
+    --         and N (exclusive) is in effective_expanded
+    --      b. N's immediate parent is in effective_expanded
+    --      c. If N is private, N's parent is in show_private
+    --
+    --    Equivalently: walk from entity_id toward N. If you hit
+    --    a collapsed module before reaching N, N is not visible.
+    let visible = compute_visible_set(model, entity_id, effective_expanded, show_private)
+    -- black box: recursive descent through expanded modules,
+    -- filtering schemas and privates
 
-    let all_visible = visible_children + drill_down.entities
-
-    -- 3. Edge computation: code-flow (aggregated) + data-flow (IO boundary)
-    let code_edges = aggregate_edges(model, all_visible)          -- black box
-    let io_layer = io_from_boundary(model, entity_id, all_visible) -- black box
+    -- 2. Edge computation: code-flow (aggregated to closest visible
+    --    ancestor) + data-flow (IO boundary)
+    let code_edges = aggregate_edges(model, visible)              -- black box
+    let io_layer = io_from_boundary(model, entity_id, visible)    -- black box
 
     ensures: Projection.created(
-        nodes: view_nodes_for(all_visible, drill_down.grouping),
+        nodes: view_nodes_for(visible, effective_expanded),
         edges: code_edges + io_layer.edges,
         io: io_layer.boundary
     )
@@ -256,7 +272,7 @@ rule LeafView {
     -- NoIO: leaf views never produce IO boundary data. IO is a
     --   module-level concept derived from boundaries.
 
-    when: LeafView(entity_id: String, expanded_modules: Set<String>)
+    when: LeafView(entity_id: String, expanded: Set<String>, show_private: Set<String>)
 
     let entity = node_by_id(model, entity_id)              -- black box: map lookup
     let related_ids = related_entity_ids(model, entity_id)  -- black box: ids connected by edges
@@ -278,16 +294,20 @@ rule LeafView {
 rule AggregateEdges {
     -- Sub-rule of ModuleView: aggregate raw model edges to the visible ancestor level.
     --
-    -- LeafToLeafEdges: every code_flow edge connects two leaf nodes
-    --   (function or schema). No edge has a module endpoint.
-    --   If a raw edge's source or target is not directly visible
-    --   (e.g. it's private), the edge is dropped — not aggregated
-    --   to the parent module.
+    -- ClosestVisibleAncestor: for a node N, walk up the parent
+    --   chain (including N itself) until a node in the visible set
+    --   is found. If N is visible, its CVA is itself. If N is inside
+    --   a collapsed module M, its CVA is M (assuming M is visible).
+    --   If N is outside the view entirely, it has no CVA.
+    --
+    -- ModuleEndpoints: aggregated edges may terminate at collapsed
+    --   modules. A collapsed module acts as a summary node for all
+    --   its hidden descendants. This replaces the previous
+    --   leaf-to-leaf constraint — module endpoints are now valid.
     --
     -- For each raw edge (from, to):
-    --   1. Walk up each endpoint's parent chain to find its first
-    --      visible ancestor
-    --   2. Include iff both ancestors exist, are distinct, and
+    --   1. Find closest visible ancestor of each endpoint
+    --   2. Include iff both exist, are distinct, and
     --      neither is an ancestor of the other
     --   3. Deduplicate
     --
@@ -296,7 +316,7 @@ rule AggregateEdges {
     when: AggregateEdges(visible_set: Set<String>)
 
     ensures: aggregate_to_visible_ancestors(model.edges, visible_set)  -- black box
-    -- Maps each edge endpoint to its first visible ancestor via
+    -- Maps each edge endpoint to its closest visible ancestor via
     -- find_visible_ancestor, filters to pairs that are both present,
     -- distinct, and not in an ancestor-descendant relationship,
     -- then deduplicates.
