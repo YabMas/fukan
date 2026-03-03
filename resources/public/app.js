@@ -6,6 +6,8 @@
 
 let expandedModules = new Set();
 let showPrivate = new Set();
+let pendingAction = 'navigate'; // 'navigate' | 'expand-toggle'
+let toggleTargetId = null;       // node ID being expanded/collapsed
 
 // Get expanded modules as a comma-separated string for URL params
 window.getExpandedParam = function() {
@@ -387,10 +389,25 @@ const cy = cytoscape({
 // -----------------------------------------------------------------------------
 // Graph Rendering (called by backend via script tag)
 
-window.renderGraph = function(data) {
-  if (!data || !data.nodes) return;
+// Shared dagre layout options
+function dagreOptions(extraOpts) {
+  return Object.assign({
+    name: 'dagre',
+    rankDir: 'TB',
+    ranker: 'network-simplex',
+    nodeSep: 80,
+    rankSep: 100,
+    edgeSep: 30,
+    animate: false,
+    fit: false,
+    padding: 50,
+    nodeDimensionsIncludeLabels: true,
+    spacingFactor: 1.2
+  }, extraOpts);
+}
 
-  // Sync expandedModules and showPrivate state from incoming node data
+// Prepare incoming data: sync expand state, append indicator glyphs
+function prepareGraphData(data) {
   expandedModules.clear();
   showPrivate.clear();
   data.nodes.forEach(n => {
@@ -401,32 +418,79 @@ window.renderGraph = function(data) {
       showPrivate.add(n.id);
     }
   });
-
-  // Append expand indicator glyphs to module labels
   data.nodes.forEach(n => {
     if (n.kind === 'module' && n.expandable) {
       n.label = n.isExpanded ? n.label + ' \u25BC' : n.label + ' \u25B6';
     }
   });
+}
 
-  // Clear existing elements
-  cy.elements().remove();
-  
-  // Identify parent nodes (compound modules)
-  const parentIds = new Set(data.nodes.map(n => n.parent).filter(Boolean));
-  
-  // Add parent nodes first
-  const parents = data.nodes.filter(n => parentIds.has(n.id));
-  cy.add(parents.map(n => ({ group: 'nodes', data: n })));
-  
-  // Add child nodes
-  const children = data.nodes.filter(n => !parentIds.has(n.id));
-  cy.add(children.map(n => ({ group: 'nodes', data: n })));
-  
-  // Add edges
-  cy.add(data.edges.map(e => ({ group: 'edges', data: e })));
-  
-  // Apply highlights from backend
+// Position IO containers above/below the root orphan module
+function repositionIoContainers() {
+  const orphanNode = cy.nodes().filter(n =>
+    !n.data('parent') &&
+    n.data('kind') === 'module'
+  );
+  if (!orphanNode.length) return;
+
+  const rootId = orphanNode.first().id();
+  const inputContainer = cy.getElementById('input:' + rootId);
+  const outputContainer = cy.getElementById('output:' + rootId);
+
+  const rootBB = orphanNode.first().boundingBox();
+  const rootCenterX = (rootBB.x1 + rootBB.x2) / 2;
+  const containerWidth = rootBB.x2 - rootBB.x1;
+  const gap = 40;
+  const ioPaddingX = 40;
+
+  const ensureIoSpacers = (ioContainer, centerX, width) => {
+    const ioId = ioContainer.id();
+    const spacerOffset = Math.max(0, width / 2 - ioPaddingX);
+    const y = ioContainer.position('y');
+
+    const placeSpacer = (spacerId, x) => {
+      let spacer = cy.getElementById(spacerId);
+      if (!spacer.length) {
+        spacer = cy.add({
+          group: 'nodes',
+          data: {
+            id: spacerId,
+            kind: 'io-spacer',
+            parent: ioId
+          }
+        });
+      }
+      spacer.position({ x, y });
+      spacer.lock();
+    };
+
+    placeSpacer(`io-spacer:left:${ioId}`, centerX - spacerOffset);
+    placeSpacer(`io-spacer:right:${ioId}`, centerX + spacerOffset);
+  };
+
+  if (inputContainer.length) {
+    const inputBB = inputContainer.boundingBox();
+    const inputHeight = inputBB.y2 - inputBB.y1;
+    inputContainer.position({
+      x: rootCenterX,
+      y: rootBB.y1 - gap - inputHeight / 2
+    });
+    ensureIoSpacers(inputContainer, rootCenterX, containerWidth);
+  }
+
+  if (outputContainer.length) {
+    const outputBB = outputContainer.boundingBox();
+    const outputHeight = outputBB.y2 - outputBB.y1;
+    outputContainer.position({
+      x: rootCenterX,
+      y: rootBB.y2 + gap + outputHeight / 2
+    });
+    ensureIoSpacers(outputContainer, rootCenterX, containerWidth);
+  }
+}
+
+// Apply highlights and selection from backend data
+function applyHighlightsAndSelection(data) {
   cy.edges().removeClass('highlighted');
   if (data.highlightedEdges) {
     data.highlightedEdges.forEach(id => {
@@ -434,101 +498,30 @@ window.renderGraph = function(data) {
       if (edge.length) edge.addClass('highlighted');
     });
   }
-  
-  // Select node if specified by backend
   cy.nodes().unselect();
   if (data.selectedId) {
     const node = cy.getElementById(data.selectedId);
-    if (node.length) {
-      node.select();
-    }
+    if (node.length) node.select();
   }
-  
-  // Run layout
-  const layout = cy.layout({
-    name: 'dagre',
-    rankDir: 'TB',
-    nodeSep: 80,
-    rankSep: 100,
-    edgeSep: 30,
-    animate: false,  // Disable animation for initial layout
-    fit: false,      // Don't fit yet - we'll reposition IO modules first
-    padding: 50,
-    nodeDimensionsIncludeLabels: true,
-    spacingFactor: 1.2
-  });
+}
 
-  layout.run();
+// Full teardown + rebuild (navigation, initial load, back/forward)
+function renderNavigate(data) {
+  cy.elements().remove();
 
-  // Position IO containers above/below the root (orphan) module
-  // Find the main module - it's the orphan that's a module node
-  const orphanNode = cy.nodes().filter(n =>
-    !n.data('parent') &&
-    n.data('kind') === 'module'
-  );
-  if (orphanNode.length) {
-    const rootId = orphanNode.first().id();
-    const inputContainer = cy.getElementById('input:' + rootId);
-    const outputContainer = cy.getElementById('output:' + rootId);
+  const parentIds = new Set(data.nodes.map(n => n.parent).filter(Boolean));
+  const parents = data.nodes.filter(n => parentIds.has(n.id));
+  cy.add(parents.map(n => ({ group: 'nodes', data: n })));
+  const children = data.nodes.filter(n => !parentIds.has(n.id));
+  cy.add(children.map(n => ({ group: 'nodes', data: n })));
+  cy.add(data.edges.map(e => ({ group: 'edges', data: e })));
 
-    const rootBB = orphanNode.first().boundingBox();
-    const rootCenterX = (rootBB.x1 + rootBB.x2) / 2;
-    const containerWidth = rootBB.x2 - rootBB.x1;
-    const gap = 40;  // Gap between containers
-    const ioPaddingX = 40;
+  applyHighlightsAndSelection(data);
 
-    const ensureIoSpacers = (ioContainer, centerX, width) => {
-      const ioId = ioContainer.id();
-      const spacerOffset = Math.max(0, width / 2 - ioPaddingX);
-      const y = ioContainer.position('y');
-
-      const placeSpacer = (spacerId, x) => {
-        let spacer = cy.getElementById(spacerId);
-        if (!spacer.length) {
-          spacer = cy.add({
-            group: 'nodes',
-            data: {
-              id: spacerId,
-              kind: 'io-spacer',
-              parent: ioId
-            }
-          });
-        }
-        spacer.position({ x, y });
-        spacer.lock();
-      };
-
-      placeSpacer(`io-spacer:left:${ioId}`, centerX - spacerOffset);
-      placeSpacer(`io-spacer:right:${ioId}`, centerX + spacerOffset);
-    };
-
-    // Position input container above, spanning full width
-    if (inputContainer.length) {
-      const inputBB = inputContainer.boundingBox();
-      const inputHeight = inputBB.y2 - inputBB.y1;
-      inputContainer.position({
-        x: rootCenterX,
-        y: rootBB.y1 - gap - inputHeight / 2
-      });
-      ensureIoSpacers(inputContainer, rootCenterX, containerWidth);
-    }
-
-    // Position output container below, spanning full width
-    if (outputContainer.length) {
-      const outputBB = outputContainer.boundingBox();
-      const outputHeight = outputBB.y2 - outputBB.y1;
-      outputContainer.position({
-        x: rootCenterX,
-        y: rootBB.y2 + gap + outputHeight / 2
-      });
-      ensureIoSpacers(outputContainer, rootCenterX, containerWidth);
-    }
-  }
-
-  // Now fit and animate
+  cy.layout(dagreOptions()).run();
+  repositionIoContainers();
   cy.fit(50);
 
-  // Center on selected node after layout completes
   if (data.selectedId) {
     setTimeout(() => {
       const node = cy.getElementById(data.selectedId);
@@ -540,6 +533,150 @@ window.renderGraph = function(data) {
         });
       }
     }, 100);
+  }
+}
+
+// Incremental diff + animated transition (expand/collapse)
+function renderExpandToggle(data) {
+  const targetId = toggleTargetId;
+
+  // 1. Snapshot old positions for all existing nodes
+  const oldPositions = {};
+  cy.nodes().forEach(n => {
+    oldPositions[n.id()] = { x: n.position('x'), y: n.position('y') };
+  });
+
+  // 2. Compute diff
+  const newNodeIds = new Set(data.nodes.map(n => n.id));
+  const oldNodeIds = new Set(cy.nodes().map(n => n.id()));
+
+  // Data fields to sync on retained nodes
+  const syncFields = [
+    'label', 'isExpanded', 'showingPrivate', 'hasPrivateChildren',
+    'selected', 'expandable', 'childCount'
+  ];
+
+  const newNodeMap = {};
+  data.nodes.forEach(n => { newNodeMap[n.id] = n; });
+
+  // 3. Remove departed nodes (and their edges go with them)
+  cy.nodes().forEach(n => {
+    if (!newNodeIds.has(n.id())) {
+      n.remove();
+    }
+  });
+
+  // 4. Update data on retained nodes
+  cy.nodes().forEach(n => {
+    const incoming = newNodeMap[n.id()];
+    if (incoming) {
+      syncFields.forEach(field => {
+        if (incoming[field] !== undefined) {
+          n.data(field, incoming[field]);
+        } else {
+          n.removeData(field);
+        }
+      });
+    }
+  });
+
+  // 5. Add new nodes, positioned at their parent's center
+  const parentPos = targetId && oldPositions[targetId]
+    ? oldPositions[targetId]
+    : { x: 0, y: 0 };
+
+  // Add parents first, then children (compound node ordering)
+  const parentIds = new Set(data.nodes.map(n => n.parent).filter(Boolean));
+  const toAddParents = data.nodes.filter(n => !oldNodeIds.has(n.id) && parentIds.has(n.id));
+  const toAddChildren = data.nodes.filter(n => !oldNodeIds.has(n.id) && !parentIds.has(n.id));
+
+  toAddParents.forEach(n => {
+    cy.add({ group: 'nodes', data: n });
+    const added = cy.getElementById(n.id);
+    added.position(parentPos);
+    oldPositions[n.id] = { ...parentPos };
+  });
+  toAddChildren.forEach(n => {
+    cy.add({ group: 'nodes', data: n });
+    const added = cy.getElementById(n.id);
+    added.position(parentPos);
+    oldPositions[n.id] = { ...parentPos };
+  });
+
+  // 6. Replace all edges (cheap, avoids complex diff with aggregation changes)
+  cy.edges().remove();
+  cy.add(data.edges.map(e => ({ group: 'edges', data: e })));
+
+  // 7. Apply highlights and selection
+  applyHighlightsAndSelection(data);
+
+  // 8. Run dagre silently to compute final positions
+  cy.layout(dagreOptions()).run();
+  repositionIoContainers();
+
+  // 9. Capture new (final) positions and compute viewport target
+  const newPositions = {};
+  cy.nodes().forEach(n => {
+    newPositions[n.id()] = { x: n.position('x'), y: n.position('y') };
+  });
+
+  // Compute final center of the root (orphan) module for stable viewport
+  const orphanNode = cy.nodes().filter(n =>
+    !n.data('parent') && n.data('kind') === 'module'
+  );
+  let targetPan = null;
+  if (orphanNode.length) {
+    const bb = orphanNode.first().boundingBox();
+    const cx = (bb.x1 + bb.x2) / 2;
+    const cy_ = (bb.y1 + bb.y2) / 2;
+    const zoom = cy.zoom();
+    const w = cy.width();
+    const h = cy.height();
+    targetPan = { x: w / 2 - cx * zoom, y: h / 2 - cy_ * zoom };
+  }
+
+  // 10. Reset all nodes to their old positions
+  cy.nodes().forEach(n => {
+    const old = oldPositions[n.id()];
+    if (old) {
+      n.position(old);
+    }
+  });
+
+  // 11. Animate nodes and viewport in sync
+  const duration = 400;
+  cy.nodes().forEach(n => {
+    const target = newPositions[n.id()];
+    if (target) {
+      n.animate({
+        position: target,
+        duration: duration,
+        easing: 'ease-in-out-quad'
+      });
+    }
+  });
+
+  if (targetPan) {
+    cy.animate({
+      pan: targetPan,
+      zoom: cy.zoom(),
+      duration: duration,
+      easing: 'ease-in-out-quad'
+    });
+  }
+}
+
+window.renderGraph = function(data) {
+  if (!data || !data.nodes) return;
+  prepareGraphData(data);
+
+  const action = pendingAction;
+  pendingAction = 'navigate'; // Reset for next call
+
+  if (action === 'expand-toggle' && cy.nodes().length > 0) {
+    renderExpandToggle(data);
+  } else {
+    renderNavigate(data);
   }
 };
 
@@ -639,6 +776,8 @@ cy.on('cxttap', 'node', function(evt) {
     expandedModules.add(moduleId);
   }
 
+  pendingAction = 'expand-toggle';
+  toggleTargetId = moduleId;
   graphPanel.dispatchEvent(new CustomEvent('cy-toggle-private', {
     bubbles: true,
     detail: { id: moduleId }
@@ -663,6 +802,8 @@ cy.on('cxttap', 'node', function(evt) {
     showPrivate.add(moduleId);
   }
 
+  pendingAction = 'expand-toggle';
+  toggleTargetId = moduleId;
   graphPanel.dispatchEvent(new CustomEvent('cy-toggle-private', {
     bubbles: true,
     detail: { id: moduleId }
