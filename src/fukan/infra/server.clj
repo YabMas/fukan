@@ -5,6 +5,14 @@
   (:require [fukan.web.handler :as handler]
             [org.httpkit.server :as http]))
 
+(def ^:schema ServerOpts
+  [:map {:description "HTTP server configuration."}
+   [:port {:optional true, :description "TCP port to bind (default: 8080)."} [:int {:min 1 :max 65535}]]])
+
+(def ^:schema ServerInfo
+  [:map {:description "Running server information."}
+   [:port [:int {:min 1 :max 65535}]]])
+
 (defonce ^:private state (atom nil))
 
 (defn start-server
@@ -12,7 +20,7 @@
 
    Options:
      :port - Server port (default: 8080)"
-  {:malli/schema [:=> [:cat :map] [:maybe :map]]}
+  {:malli/schema [:=> [:cat :ServerOpts] [:maybe :ServerInfo]]}
   [{:keys [port] :or {port 8080}}]
   (if @state
     (println "Server already running on port" (:port @state))

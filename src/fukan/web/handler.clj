@@ -16,7 +16,8 @@
 ;; Schemas
 
 (def ^:schema Handler
-  [:fn {:description "Ring handler function: takes a request map, returns a response map."}])
+  [:=> {:description "Ring handler: takes an HTTP request and returns a response map or an async channel for streaming."}
+   [:cat :RingRequest] [:or :RingResponse :AsyncChannel]])
 
 (defn- get-content-type
   "Determine content type based on file extension."

@@ -16,12 +16,21 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:schema Request
-  [:map {:description "Ring request map with parsed query parameters."}
-   [:query-params {:optional true} [:map-of :string :string]]])
+(def ^:schema AsyncChannel
+  [:fn {:description "HTTP-kit AsyncChannel: opaque streaming handle used as a Ring-compatible response. Created by http-kit's `as-channel`. Docs: https://http-kit.github.io/http-kit/org.httpkit.server.html#var-as-channel"}
+   #(instance? org.httpkit.server.AsyncChannel %)])
 
-(def ^:schema SSEResponse
-  [:any {:description "HTTP-kit async SSE response (opaque channel handle)."}])
+(def ^:schema RingRequest
+  [:map {:description "Ring HTTP request map with parsed query parameters."}
+   [:query-params {:optional true} [:map-of :string :string]]
+   [:request-method {:optional true} :keyword]
+   [:uri {:optional true} :string]])
+
+(def ^:schema RingResponse
+  [:map {:description "Ring HTTP response map."}
+   [:status :int]
+   [:headers {:optional true} [:map-of :string :string]]
+   [:body {:optional true} :any]])
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
@@ -60,7 +69,7 @@
    - Breadcrumb HTML
    - Sidebar HTML (node info for selected node)
    - Graph data via script tag"
-  {:malli/schema [:=> [:cat :Model :Request] :SSEResponse]}
+  {:malli/schema [:=> [:cat :Model :RingRequest] :AsyncChannel]}
   [model request]
   (hk/->sse-response request
                      {hk/on-open
@@ -113,7 +122,7 @@
 (defn sidebar-handler
   "SSE endpoint that streams just the sidebar content.
    Used when selecting a node without navigating."
-  {:malli/schema [:=> [:cat :Model :Request] :SSEResponse]}
+  {:malli/schema [:=> [:cat :Model :RingRequest] :AsyncChannel]}
   [model request]
   (hk/->sse-response request
                      {hk/on-open
@@ -144,7 +153,7 @@
   "SSE endpoint that streams the schema detail view.
    Used when clicking on a schema name to view its definition.
    Supports trail parameter for drill-down navigation breadcrumb."
-  {:malli/schema [:=> [:cat :Model :Request] :SSEResponse]}
+  {:malli/schema [:=> [:cat :Model :RingRequest] :AsyncChannel]}
   [model request]
   (hk/->sse-response request
                      {hk/on-open

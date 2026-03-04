@@ -5,6 +5,22 @@
   (:require [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
+;; Schemas
+
+(def ^:schema LintReport
+  [:map {:description "Contract compliance report: violations and aggregate statistics."}
+   [:violations [:vector [:map
+     [:from :NodeId]
+     [:to :NodeId]
+     [:from-module :NodeId]
+     [:to-module :NodeId]
+     [:contract-fns [:vector :symbol]]]]]
+   [:stats [:map
+     [:total-edges :int]
+     [:cross-module-edges :int]
+     [:violations :int]]]])
+
+;; -----------------------------------------------------------------------------
 ;; Helpers
 
 (defn- descendant-ids
@@ -28,7 +44,7 @@
    Only checks edges targeting :function nodes — contracts declare
    functions, so only function-level edges can be violations.
    Returns a lint report with violations and stats."
-  {:malli/schema [:=> [:cat :Model] :map]}
+  {:malli/schema [:=> [:cat :Model] :LintReport]}
   [{:keys [nodes edges]}]
   (let [;; 1. Collect modules: module nodes with a boundary containing functions
         modules (->> (vals nodes)
@@ -98,7 +114,7 @@
 
 (defn format-report
   "Render a lint report as a human-readable string."
-  {:malli/schema [:=> [:cat :map] :string]}
+  {:malli/schema [:=> [:cat :LintReport] :string]}
   [{:keys [violations stats]}]
   (let [header (str "Contract lint: "
                     (:violations stats) " violation(s) found"

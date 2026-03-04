@@ -22,7 +22,7 @@
    Labels are the short form (last segment of the module name).
    Returns {:nodes {id -> node}, :index {module-sym -> id}}."
   {:malli/schema [:=> [:cat [:vector :ModuleDef] [:map-of :string :NodeId]]
-                  [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
+                  [:map [:nodes [:map-of :NodeId :Node]] [:index [:map-of :symbol :NodeId]]]]}
   [module-defs folder-index]
   (reduce (fn [acc {:keys [name filename doc]}]
             (let [id (str name)
@@ -50,7 +50,7 @@
   "Build symbol nodes from symbol definitions.
    Returns {:nodes {id -> node}, :index {[module-sym symbol-name] -> id}}."
   {:malli/schema [:=> [:cat [:vector :SymbolDef] [:map-of :symbol :NodeId]]
-                  [:map [:nodes [:map-of :NodeId :Node]] [:index :map]]]}
+                  [:map [:nodes [:map-of :NodeId :Node]] [:index [:map-of [:tuple :symbol :symbol] :NodeId]]]]}
   [symbol-defs module-index]
   (reduce (fn [acc {:keys [module name doc private]}]
             (let [id (str module "/" name)
@@ -77,7 +77,7 @@
    skipped — they would produce module-to-leaf edges violating LeafEdges.
 
    Returns a vector of {:from node-id, :to node-id} edges."
-  {:malli/schema [:=> [:cat :CodeAnalysis :map :map] [:vector :Edge]]}
+  {:malli/schema [:=> [:cat :CodeAnalysis [:map-of [:tuple :symbol :symbol] :NodeId] [:map-of :symbol :NodeId]] [:vector :Edge]]}
   [analysis symbol-index _module-index]
   (let [symbol-refs (:symbol-references analysis)]
     (->> symbol-refs

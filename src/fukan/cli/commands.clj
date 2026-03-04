@@ -7,6 +7,30 @@
             [fukan.projection.api :as proj]))
 
 ;; -----------------------------------------------------------------------------
+;; Schemas
+
+(def ^:schema SessionState
+  [:map {:description "CLI session state: navigation position, history, and display options."}
+   [:view-id {:optional true, :description "Current container being viewed."} [:maybe :NodeId]]
+   [:history {:description "Stack of previous view-ids for back navigation."} [:vector :NodeId]]
+   [:expanded {:description "Module IDs whose children are visible."} [:set :NodeId]]
+   [:show-private {:description "Expanded modules that also show private children."} [:set :NodeId]]
+   [:src {:optional true, :description "Source path of the analyzed project."} [:maybe :FilePath]]])
+
+(def ^:schema CommandArgs
+  [:vector {:description "Positional arguments passed to a CLI command."} :string])
+
+(def ^:schema CommandResult
+  [:map {:description "Result of executing a CLI command: response data and optional state mutation."}
+   [:response :CommandResponse]
+   [:state-update {:optional true, :description "Function to apply to session state."} [:maybe [:=> [:cat :SessionState] :SessionState]]]])
+
+(def ^:schema ParsedCommand
+  [:map {:description "A parsed CLI input line: command name and positional arguments."}
+   [:command :string]
+   [:args :CommandArgs]])
+
+;; -----------------------------------------------------------------------------
 ;; Helpers
 
 (defn- current-view-id
@@ -89,7 +113,7 @@
 
 (defn- cmd-ls
   "List children and edges at current view."
-  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
+  {:malli/schema [:=> [:cat :Model :SessionState :CommandArgs] :CommandResult]}
   [model state _args]
   (let [view-id (current-view-id model state)]
     {:response (merge {:ok true :command :ls}
@@ -97,7 +121,7 @@
 
 (defn- cmd-cd
   "Navigate into a module or up to parent."
-  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
+  {:malli/schema [:=> [:cat :Model :SessionState :CommandArgs] :CommandResult]}
   [model state args]
   (let [target (first args)]
     (cond
@@ -145,7 +169,7 @@
 
 (defn- cmd-back
   "Pop history stack and navigate to previous view."
-  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
+  {:malli/schema [:=> [:cat :Model :SessionState :CommandArgs] :CommandResult]}
   [model state _args]
   (let [history (:history state)]
     (if (seq history)
@@ -161,7 +185,7 @@
 
 (defn- cmd-info
   "Entity details (sidebar equivalent)."
-  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
+  {:malli/schema [:=> [:cat :Model :SessionState :CommandArgs] :CommandResult]}
   [model _state args]
   (let [entity-id (first args)]
     (if (nil? entity-id)
@@ -176,7 +200,7 @@
 (defn- cmd-find
   "Search nodes by label (case-insensitive, max 50).
    Delegates to projection/search."
-  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
+  {:malli/schema [:=> [:cat :Model :SessionState :CommandArgs] :CommandResult]}
   [model _state args]
   (let [pattern (str/join " " args)]
     (if (str/blank? pattern)
@@ -190,7 +214,7 @@
 
 (defn- cmd-overview
   "Model summary stats. Delegates to projection/overview."
-  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
+  {:malli/schema [:=> [:cat :Model :SessionState :CommandArgs] :CommandResult]}
   [_model state _args]
   (let [stats (proj/overview _model)]
     {:response (merge {:ok true :command :overview :src (:src state)}
@@ -199,7 +223,7 @@
 (defn- cmd-expand
   "Toggle expand/collapse for a module.
    Expanded modules show their children; collapsed modules appear as nodes."
-  {:malli/schema [:=> [:cat :Model :map [:vector :string]] :map]}
+  {:malli/schema [:=> [:cat :Model :SessionState :CommandArgs] :CommandResult]}
   [model state args]
   (let [module-id (first args)]
     (if (nil? module-id)
@@ -243,7 +267,7 @@
 
 (defn parse-input
   "Parse a line of input into {:command \"name\" :args [\"arg1\" ...]}."
-  {:malli/schema [:=> [:cat [:maybe :string]] [:maybe :map]]}
+  {:malli/schema [:=> [:cat [:maybe :string]] [:maybe :ParsedCommand]]}
   [line]
   (when-not (str/blank? line)
     (let [parts (str/split (str/trim line) #"\s+")]
@@ -252,7 +276,7 @@
 
 (defn dispatch
   "Dispatch a parsed command. Returns {:response :state-update}."
-  {:malli/schema [:=> [:cat :Model :map :map] :map]}
+  {:malli/schema [:=> [:cat :Model :SessionState :ParsedCommand] :CommandResult]}
   [model state {:keys [command args]}]
   (if-let [handler (get dispatch-table command)]
     (handler model state args)

@@ -78,6 +78,19 @@
    [:output :TypeExpr]])
 
 ;; -----------------------------------------------------------------------------
+;; Shared Domain Types
+
+(def ^:schema FilePath
+  [:and {:description "Filesystem path: forward-slash separated, non-empty. May be absolute (/...) or project-relative (src/...)."}
+   [:string {:min 1}]
+   [:re {:error/message "must be a valid file path (forward-slash separated, no backslashes, no leading/trailing whitespace)"}
+    #"^[^\s\\].*[^\s]$"]])
+
+(def ^:schema SourceAnalyzer
+  [:=> {:description "A language analyzer: given a source directory path, produces an AnalysisResult."}
+   [:cat :FilePath] :AnalysisResult])
+
+;; -----------------------------------------------------------------------------
 ;; Model Schemas
 
 (def ^:schema NodeId

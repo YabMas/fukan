@@ -493,7 +493,7 @@
    Each analyzer is (fn [src-path] -> AnalysisResult).
    Runs all analyzers, merges their results, and produces
    the final Model through the language-agnostic build pipeline."
-  {:malli/schema [:=> [:cat :string [:sequential :any]] :Model]}
+  {:malli/schema [:=> [:cat :FilePath [:sequential :SourceAnalyzer]] :Model]}
   [src-path analyzers]
   (let [results (map #(% src-path) analyzers)
         merged  (apply merge-results results)]

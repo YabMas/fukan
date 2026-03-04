@@ -14,7 +14,7 @@
 
 (defn load-model
   "Build model from src path and store it. Returns the model."
-  {:malli/schema [:=> [:cat :string] :Model]}
+  {:malli/schema [:=> [:cat :FilePath] :Model]}
   [src]
   (println "Analyzing" src "...")
   (let [m (build/build-model src analyzers)
@@ -44,6 +44,6 @@
 
 (defn get-src
   "Get the current src path. Returns nil if not loaded."
-  {:malli/schema [:=> [:cat] [:maybe :string]]}
+  {:malli/schema [:=> [:cat] [:maybe :FilePath]]}
   []
   (:src @state))
