@@ -18,7 +18,7 @@ value EditorState {
     -- Client-side UI state. Split into two concerns:
     --
     -- Projection inputs (determine what's visible):
-    --   view_id + expanded + show_private
+    --   view_id + expanded + show_private + visible_edge_types
     --
     -- Rendering inputs (determine how it looks):
     --   selected_id + schema_id
@@ -27,6 +27,7 @@ value EditorState {
     schema_id: String?                -- schema being inspected in sidebar
     expanded: Set<String>             -- modules whose children are visible (user-controlled)
     show_private: Set<String>         -- expanded modules that also show private children
+    visible_edge_types: Set<String>   -- edge types to include in projection (defaults to all)
 }
 
 value CytoscapeGraph {
@@ -41,7 +42,7 @@ value CytoscapeGraph {
 
 value CytoscapeNode {
     id: String
-    kind: String           -- "module", "function", "schema", "io-container", "io-schema"
+    kind: String           -- "module", "function", "schema"
     label: String
     parent: String?
     selected: Boolean
@@ -51,17 +52,14 @@ value CytoscapeNode {
     showing_private: Boolean
     child_count: Integer
     private: Boolean?
-    io_type: String?       -- "input" or "output"
-    schema_key: String?
-    is_owned: Boolean?     -- IO schema ownership
+    schema_key: String?    -- present for schema nodes
 }
 
 value CytoscapeEdge {
     id: String
     source: String
     target: String
-    edge_type: String      -- "code-flow" or "data-flow"
-    schema_key: String?
+    edge_type: String      -- "code-flow" or "schema-reference"
 }
 
 ------------------------------------------------------------
@@ -90,10 +88,10 @@ rule SelectNode {
     --   selected node defaults to view_id, then to the first root node
     --   in the projection.
     --
-    -- SchemaKeyHighlighting: when the selected node is a schema node
-    --   (IO or model schema), edges are highlighted by matching schema-key
-    --   rather than by from/to endpoint. This connects all edges that
-    --   flow through that schema type.
+    -- SchemaKeyHighlighting: when the selected node is a schema node,
+    --   edges are highlighted by matching schema-key rather than by
+    --   from/to endpoint. This connects all edges that reference
+    --   that schema type.
     --
     -- RegularHighlighting: for non-schema nodes, all edges where the
     --   node is either source or target are highlighted.
@@ -235,6 +233,27 @@ rule NavigateToAncestor {
         editor.selected_id = null
 }
 
+rule ToggleEdgeType {
+    -- Toggle visibility of an edge type.
+    --
+    -- Adds or removes the type from visible_edge_types.
+    -- Triggers re-projection so layout accounts for the change.
+    --
+    -- AtLeastOne: at least one edge type must remain visible.
+    --   Toggling the last visible type is a no-op.
+
+    when: ToggleEdgeType(edge_type: String)
+
+    requires:
+        not (editor.visible_edge_types = {edge_type})  -- can't remove the last one
+
+    ensures:
+        if edge_type in editor.visible_edge_types:
+            editor.visible_edge_types = editor.visible_edge_types - {edge_type}
+        else:
+            editor.visible_edge_types = editor.visible_edge_types + {edge_type}
+}
+
 rule DrillDownSchema {
     -- Schema link click: navigate into a schema type's definition.
     --
@@ -300,16 +319,17 @@ rule RenderSidebar {
     --   1. Label — entity name + kind badge
     --   2. Description — from doc, contract, or spec description
     --   3. Guarantees — invariant promises from surface (when present)
-    --   4. Interface — dispatched by type, with IO sections:
-    --      - fn_list (modules): Inputs, Outputs, Public API
+    --   4. Interface — dispatched by type:
+    --      - fn_list (modules): Public API functions
     --      - fn_inline (functions): Inputs, Outputs
     --      - schema_def (schemas): schema detail view with registry
     --      - name_list (interfaces): plain function name list
     --   5. Dependencies — entities this one depends on ("None" if empty)
     --   6. Dependents — entities that depend on this one ("None" if empty)
     --
-    -- EdgeRenderer: label + "Functions Called" list using shared fn-list
-    --   component.
+    -- EdgeRenderer: dispatched by edge_type.
+    --   code_flow: label + "Functions Called" list.
+    --   schema_reference: label + "Schema References" list.
     --
     -- EmptyState: when no entity is selected, show placeholder text.
 

@@ -94,12 +94,41 @@
 ;; -----------------------------------------------------------------------------
 ;; Normalization helpers
 
+(defn- type-expr->label
+  "Convert a TypeExpr to a short display label."
+  [type-expr]
+  (when (map? type-expr)
+    (case (:tag type-expr)
+      :ref       (name (:name type-expr))
+      :primitive (:name type-expr)
+      :vector    (str "[" (type-expr->label (:element type-expr)) "]")
+      :set       (str "#{" (type-expr->label (:element type-expr)) "}")
+      :map-of    (str "{" (type-expr->label (:key-type type-expr))
+                      " \u2192 " (type-expr->label (:value-type type-expr)) "}")
+      :maybe     (str (type-expr->label (:inner type-expr)) "?")
+      :or        (str/join " | " (map type-expr->label (:variants type-expr)))
+      :map       "map"
+      :unknown   (or (:original type-expr) "?")
+      "?")))
+
 (defn- schema-ref-with-doc
   "Build a schema reference map, including description from the schema node."
   [model k]
   (let [doc (when-let [sid (proj.schema/find-schema-node-id model k)]
               (get-in model [:nodes sid :data :doc]))]
-    (cond-> {:key k} doc (assoc :doc doc))))
+    (cond-> {:label (name k) :key k} doc (assoc :doc doc))))
+
+(defn- type-expr->io-item
+  "Convert a TypeExpr to a dataflow item.
+   Schema refs include :key for click navigation."
+  [model type-expr]
+  (let [base {:label (or (type-expr->label type-expr) "?")}]
+    (if (and (map? type-expr) (= :ref (:tag type-expr)))
+      (let [k (:name type-expr)
+            doc (when-let [sid (proj.schema/find-schema-node-id model k)]
+                  (get-in model [:nodes sid :data :doc]))]
+        (cond-> (assoc base :key k) doc (assoc :doc doc)))
+      base)))
 
 (defn- extract-description
   "Extract description text from a node.
@@ -188,11 +217,9 @@
         (aggregate (keep #(extract-fn-io model (:schema %)) fns)))
 
       :function
-      (when-let [sig (:signature data)]
-        (when-let [{:keys [inputs outputs]} (extract-fn-io model sig)]
-          (when (or (seq inputs) (seq outputs))
-            {:inputs (->> inputs sort (mapv ref-fn))
-             :outputs (->> outputs sort (mapv ref-fn))})))
+      (when-let [{:keys [inputs output]} (:signature data)]
+        {:inputs (mapv #(type-expr->io-item model %) inputs)
+         :outputs [(type-expr->io-item model output)]})
 
       nil)))
 
@@ -341,8 +368,9 @@
      [:items [:vector :string]]]]])
 
 (def ^:schema SchemaRef
-  [:map {:description "A reference to a schema type with optional description."}
-   [:key :keyword]
+  [:map {:description "A type in a dataflow section. Schema refs include :key for click navigation."}
+   [:label :string]
+   [:key {:optional true} :keyword]
    [:doc {:optional true} [:maybe :string]]])
 
 (def ^:schema DataflowData

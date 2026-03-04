@@ -21,9 +21,14 @@ given {
 -- Enumerations
 ------------------------------------------------------------
 
-enum EdgeType { code_flow | data_flow }
--- code_flow:   aggregated from raw model edges (var/ns cross-references)
--- data_flow:   IO boundary ↔ code derived from module boundaries
+enum EdgeType { code_flow | schema_reference }
+-- code_flow:          aggregated from model function_call edges
+-- schema_reference:   aggregated from model schema_reference edges
+--
+-- Higher-level perspectives (e.g. "data flow between modules") are
+-- derived at projection time from these two edge kinds combined with
+-- function signatures and schema ownership — not stored as a third
+-- edge kind.
 
 ------------------------------------------------------------
 -- Value Types
@@ -33,7 +38,7 @@ value ViewNode {
     -- A node in the projected graph. Pure domain data — no UI state
     -- (selected?, highlighted?). The view layer adds those.
     id: String
-    kind: module | function | schema | io_container | io_schema
+    kind: module | function | schema
     label: String
     parent: String?
     expandable: Boolean
@@ -42,8 +47,7 @@ value ViewNode {
     showing_private: Boolean
     child_count: Integer
     private: Boolean?
-    io_type: input | output?
-    schema_key: String?
+    schema_key: String?    -- present for schema nodes
 }
 
 value ViewEdge {
@@ -51,14 +55,6 @@ value ViewEdge {
     from: String
     to: String
     edge_type: EdgeType
-    schema_key: String?
-}
-
-value IOBoundary {
-    -- Schema keys at a module's boundary.
-    -- Derived from function signatures in the module's boundary.
-    inputs: Set<String>
-    outputs: Set<String>
 }
 
 value Projection {
@@ -66,7 +62,6 @@ value Projection {
     -- This is the primary output of the projection layer.
     nodes: List<ViewNode>
     edges: List<ViewEdge>
-    io: IOBoundary?
 }
 
 value PathSegment {
@@ -89,6 +84,12 @@ value SchemaRegistryEntry {
 
 value DataflowData {
     -- Schema types flowing across an entity's boundary.
+    -- Derived from function signatures:
+    --   function → schema refs in input params are inputs,
+    --              schema refs in return type are outputs
+    --   module   → accumulated IO of its boundary functions
+    -- Each schema key carries ownership (parent module), so
+    -- "input type X owned by module Y" = data flows from Y.
     inputs: List<model/Schema>
     outputs: List<model/Schema>
 }
@@ -124,10 +125,14 @@ value ParentRef {
 
 value EdgeDetail {
     -- Detail structure for an aggregated edge: the underlying
-    -- function-level calls that cross this dependency.
+    -- leaf-level relationships that cross this dependency.
+    -- For code_flow edges: the function calls.
+    -- For schema_reference edges: the type references.
     kind: edge                -- discriminant for EntityDetail | EdgeDetail union
+    edge_type: EdgeType
     label: String
-    called_fns: List<model/Function>
+    called_fns: List<model/Function>?      -- code_flow edges
+    schema_refs: List<model/Schema>?       -- schema_reference edges
 }
 
 ------------------------------------------------------------
@@ -169,16 +174,22 @@ rule EntityGraph {
     -- Compute the visible subgraph for an entity.
     -- Dispatches to module or leaf view based on whether
     -- the entity has children.
-    when: EntityGraph(view_id: String?, expanded: Set<String>, show_private: Set<String>)
+    --
+    -- EdgeTypeFiltering: visible_edge_types controls which edge kinds
+    --   appear in the projection. When null, all types are shown.
+    --   Filtering happens before aggregation so layout accounts for
+    --   the visible edge set.
+    when: EntityGraph(view_id: String?, expanded: Set<String>, show_private: Set<String>, visible_edge_types: Set<EdgeType>?)
 
     let entity_id = view_id ?? model.root_nodes.first.id
     let entity = node_by_id(model, entity_id)      -- black box: map lookup
+    let effective_edge_types = visible_edge_types ?? { code_flow, schema_reference }
 
     ensures:
         if entity.children.count > 0:
-            ModuleView(entity_id, expanded, show_private)
+            ModuleView(entity_id, expanded, show_private, effective_edge_types)
         else:
-            LeafView(entity_id, expanded, show_private)
+            LeafView(entity_id, expanded, show_private, effective_edge_types)
 }
 
 rule ModuleView {
@@ -207,10 +218,6 @@ rule ModuleView {
     --   its own descendants are suppressed. The parent-child
     --   relationship is implicit in nesting.
     --
-    -- SchemaFiltering: schema nodes are excluded from visible
-    --   children. They appear only as synthetic IO schema nodes
-    --   when referenced by the module's boundary.
-    --
     -- PrivateVisibility: within an expanded module, private
     --   children are hidden unless the module is also in
     --   show_private.
@@ -224,12 +231,13 @@ rule ModuleView {
     --   a module produces the same projection as before. The
     --   mechanism is reversible.
 
-    when: ModuleView(entity_id: String, expanded: Set<String>, show_private: Set<String>)
+    when: ModuleView(entity_id: String, expanded: Set<String>, show_private: Set<String>, visible_edge_types: Set<EdgeType>)
 
     let effective_expanded = expanded + {entity_id}
 
     -- 1. Visible set: descendants of entity_id reachable through
-    --    expanded modules, excluding schemas and hidden privates.
+    --    expanded modules, filtered by private visibility.
+    --    All leaf kinds (Function, Schema) are included.
     --
     --    A node N is visible iff:
     --      a. Every module ancestor between entity_id (exclusive)
@@ -241,17 +249,16 @@ rule ModuleView {
     --    a collapsed module before reaching N, N is not visible.
     let visible = compute_visible_set(model, entity_id, effective_expanded, show_private)
     -- black box: recursive descent through expanded modules,
-    -- filtering schemas and privates
+    -- filtering by private visibility
 
-    -- 2. Edge computation: code-flow (aggregated to closest visible
-    --    ancestor) + data-flow (IO boundary)
-    let code_edges = aggregate_edges(model, visible)              -- black box
-    let io_layer = io_from_boundary(model, entity_id, visible)    -- black box
+    -- 2. Edge computation: each edge kind aggregated independently
+    --    to closest visible ancestor, filtered by visible_edge_types.
+    let edges = for edge_type in visible_edge_types:
+        aggregate_edges(model, visible, edge_type)                 -- black box
 
     ensures: Projection.created(
         nodes: view_nodes_for(visible, effective_expanded),
-        edges: code_edges + io_layer.edges,
-        io: io_layer.boundary
+        edges: edges
     )
 }
 
@@ -263,31 +270,35 @@ rule LeafView {
     --
     -- NoBoundingBox: unlike ModuleView, related entities from anywhere
     --   in the model are shown — there is no spatial constraint.
-    --
-    -- NoIO: leaf views never produce IO boundary data. IO is a
-    --   module-level concept derived from boundaries.
 
-    when: LeafView(entity_id: String, expanded: Set<String>, show_private: Set<String>)
+    when: LeafView(entity_id: String, expanded: Set<String>, show_private: Set<String>, visible_edge_types: Set<EdgeType>)
 
     let entity = node_by_id(model, entity_id)              -- black box: map lookup
-    let related_ids = related_entity_ids(model, entity_id)  -- black box: ids connected by edges
+    let related_ids = related_entity_ids(model, entity_id, visible_edge_types)  -- black box: ids connected by visible edge kinds
+    -- Only edges whose type is in visible_edge_types contribute to related set.
+    -- function_call model edges → code_flow, schema_reference model edges → schema_reference.
 
     -- Group related entities by parent namespace, then folder
     let parent_ns_ids = parent_ids(model, related_ids)       -- black box: parent of each
     let parent_folder_ids = parent_ids(model, parent_ns_ids) -- black box: grandparent of each
 
     let visible_nodes = build_leaf_view_nodes(model, entity_id, related_ids, parent_ns_ids, parent_folder_ids)  -- black box
-    let visible_edges = edges_involving(model, entity_id)    -- black box: edges where from or to = entity_id
+    let visible_edges = edges_involving(model, entity_id, visible_edge_types)    -- black box: filtered by visible edge types
 
     ensures: Projection.created(
         nodes: visible_nodes,
-        edges: visible_edges,
-        io: null
+        edges: visible_edges
     )
 }
 
 rule AggregateEdges {
-    -- Sub-rule of ModuleView: compute code-flow edges between visible nodes.
+    -- Sub-rule of ModuleView: compute edges between visible nodes
+    -- for a single model edge kind.
+    --
+    -- KindAware: aggregation runs independently per edge kind.
+    --   function_call edges produce code_flow projection edges.
+    --   schema_reference edges produce schema_reference projection edges.
+    --   Each kind is aggregated, deduplicated, and subsumed separately.
     --
     -- ClosestVisibleAncestor: for a node N, walk up the parent
     --   chain (including N itself) until a node in the visible set
@@ -295,10 +306,11 @@ rule AggregateEdges {
     --   a collapsed module M, its CVA is M (assuming M is visible).
     --   If N is outside the view entirely, it has no CVA.
     --
-    -- PrivateInheritance: when a public function's cross-module
-    --   dependencies are mediated through private callees, the
-    --   public function inherits those dependencies as synthetic
-    --   edges. The private function itself remains hidden.
+    -- PrivateInheritance: when a public node's cross-module
+    --   dependencies are mediated through private nodes, the
+    --   public node inherits those dependencies as synthetic
+    --   edges. The private node itself remains hidden.
+    --   Applies to all edge kinds.
     --
     -- ModuleEndpoints: aggregated edges may terminate at collapsed
     --   modules. A collapsed module acts as a summary node for all
@@ -312,54 +324,18 @@ rule AggregateEdges {
     --   the representative; the less specific one is noise.
     --
     -- Procedure:
-    --   1. For each raw edge, map endpoints to CVA; keep if both
+    --   1. Filter model edges to the requested kind
+    --   2. For each edge, map endpoints to CVA; keep if both
     --      exist, are distinct, not ancestor-descendant
-    --   2. Add inherited edges from PrivateInheritance
-    --   3. Deduplicate
-    --   4. Drop subsumed edges
-    --
-    -- All edges produced by this rule have edge_type = code_flow.
+    --   3. Add inherited edges from PrivateInheritance
+    --   4. Deduplicate
+    --   5. Drop subsumed edges
 
-    when: AggregateEdges(visible_set: Set<String>)
+    when: AggregateEdges(visible_set: Set<String>, edge_kind: model/EdgeKind)
 
-    ensures: aggregate_to_visible_ancestors(model.edges, visible_set)  -- black box
-    -- Combines CVA-aggregated edges with private-inherited edges,
-    -- deduplicates, then drops subsumed edges where a more specific
-    -- visible descendant already represents the connection.
-}
-
-rule IOSchemaProjection {
-    -- Sub-rule of ModuleView: compute synthetic IO nodes and data-flow edges.
-    --
-    -- BoundaryDriven: IO schemas are derived from the module's boundary.
-    --   Each function signature's inputs and outputs become IO schema keys.
-    --   Modules with no boundary produce no IO.
-    --
-    -- SyntheticNodes: IO containers and IO schema nodes are synthetic —
-    --   they have no corresponding model node. IO containers are orphans
-    --   (no parent) and are positioned by the view layer.
-    --
-    -- OwnershipMarking: each IO schema node is marked owned or not-owned
-    --   based on whether the schema's defining namespace is inside the
-    --   viewed module.
-
-    when: IOSchemaProjection(entity_id: String, all_visible: Set<String>)
-
-    let entity = node_by_id(model, entity_id)       -- black box: map lookup
-    let boundary = entity.boundary
-    requires: boundary != null
-
-    let io_keys = extract_io_keys(boundary)   -- black box
-    -- io_keys: { inputs: Set<String>, outputs: Set<String> }
-
-    -- Synthetic nodes: one IO container per direction, child schema nodes
-    -- Data-flow edges: input-schema → consuming code, producing code → output-schema
-
-    ensures: io_layer.created(
-        nodes: io_container_nodes + io_schema_nodes,
-        edges: data_flow_edges(model, entity_id, io_keys, all_visible),
-        boundary: io_keys
-    )
+    ensures: aggregate_to_visible_ancestors(model.edges, visible_set, edge_kind)  -- black box
+    -- Filters to requested kind, combines CVA-aggregated edges with
+    -- private-inherited edges, deduplicates, then drops subsumed edges.
 }
 
 rule EntityDetails {
@@ -368,8 +344,10 @@ rule EntityDetails {
     -- For nodes: produce EntityDetail with interface, schemas, dataflow,
     -- and dependency info. Interface type is determined by node kind.
     --
-    -- For edges: produce EdgeDetail listing the underlying function-level
-    -- calls that aggregate to this visible edge.
+    -- For edges: produce EdgeDetail listing the underlying leaf-level
+    -- relationships that aggregate to this visible edge. For code_flow
+    -- edges these are function calls; for schema_reference edges these
+    -- are type references.
     --
     -- Edge IDs encode their endpoints: edge~{from}~{to}~{type}
 

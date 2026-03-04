@@ -93,23 +93,23 @@
 (defn- render-io-sections
   "Render input and output schema type lists.
    Always renders both headings with counts; shows 'None' when empty.
-   Schema docs are available by clicking into the specific schema."
+   Items with :key are clickable schema refs; others are plain labels."
   [{:keys [inputs outputs]}]
-  (list
-   [:h5 "Inputs " [:span.dep-count (str "(" (count inputs) ")")]]
-   (if (seq inputs)
-     [:ul
-      (for [{:keys [key]} inputs]
-        [:li {"data-on:click" (schema-click-url key)}
-         (name key)])]
-     [:p.empty-state "None"])
-   [:h5 "Outputs " [:span.dep-count (str "(" (count outputs) ")")]]
-   (if (seq outputs)
-     [:ul
-      (for [{:keys [key]} outputs]
-        [:li {"data-on:click" (schema-click-url key)}
-         (name key)])]
-     [:p.empty-state "None"])))
+  (letfn [(render-items [items]
+            [:ul
+             (for [{:keys [label key]} items]
+               (if key
+                 [:li {"data-on:click" (schema-click-url key)} label]
+                 [:li label]))])]
+    (list
+     [:h5 "Inputs " [:span.dep-count (str "(" (count inputs) ")")]]
+     (if (seq inputs)
+       (render-items inputs)
+       [:p.empty-state "None"])
+     [:h5 "Outputs " [:span.dep-count (str "(" (count outputs) ")")]]
+     (if (seq outputs)
+       (render-items outputs)
+       [:p.empty-state "None"]))))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema navigation
