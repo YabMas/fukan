@@ -8,10 +8,10 @@
 
 (def ^:schema CytoscapeNode
   [:map {:description "A graph node in Cytoscape.js camelCase format with display and interaction state."}
-   [:id :string]
+   [:id :NodeId]
    [:kind {:description "Node kind as a string: module, function, or schema."} :string]
    [:label :string]
-   [:parent {:optional true} [:maybe :string]]
+   [:parent {:optional true} [:maybe :NodeId]]
    [:selected :boolean]
    [:expandable :boolean]
    [:hasPrivateChildren :boolean]
@@ -23,16 +23,16 @@
 
 (def ^:schema CytoscapeEdge
   [:map {:description "A directed edge in Cytoscape.js format with source/target node IDs and semantic type."}
-   [:id :string]
-   [:source :string]
-   [:target :string]
+   [:id {:description "Synthetic sequential ID (e.g. e0, e1)."} :string]
+   [:source :NodeId]
+   [:target :NodeId]
    [:edgeType {:description "Edge type as a string: code-flow or schema-reference."} :string]])
 
 (def ^:schema CytoscapeGraph
   [:map {:description "Complete graph payload sent to Cytoscape.js: nodes, edges, and UI selection state."}
    [:nodes [:vector :CytoscapeNode]]
    [:edges [:vector :CytoscapeEdge]]
-   [:selectedId {:optional true, :description "Currently selected node ID for highlight."} [:maybe :string]]
+   [:selectedId {:optional true, :description "Currently selected node ID for highlight."} [:maybe :NodeId]]
    [:highlightedEdges {:optional true, :description "Edge IDs to visually emphasize (connected to selection)."} [:vector :string]]])
 
 ;; -----------------------------------------------------------------------------
@@ -70,7 +70,7 @@
 (defn graph->cytoscape
   "Transform internal graph-view format to Cytoscape-compatible output.
    This is the main entry point called at the web boundary."
-  {:malli/schema [:=> [:cat :Projection :string [:vector :string]] :CytoscapeGraph]}
+  {:malli/schema [:=> [:cat :Projection :NodeId [:vector :string]] :CytoscapeGraph]}
   [{:keys [nodes edges]} selected-id highlighted-edges]
   {:nodes (mapv node->cytoscape nodes)
    :edges (mapv edge->cytoscape edges)

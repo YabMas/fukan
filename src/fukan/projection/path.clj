@@ -9,7 +9,7 @@
 
 (def ^:schema PathSegment
   [:map {:description "One step in a breadcrumb path from root to the current entity."}
-   [:id {:description "Node ID to navigate to, nil for the root."} [:maybe :string]]
+   [:id {:description "Node ID to navigate to, nil for the root."} [:maybe :NodeId]]
    [:label {:description "Short display label from the node."} :string]])
 
 (def ^:schema EntityPath
@@ -31,7 +31,7 @@
   "Compute breadcrumb path from root to entity.
    Returns a list of {:id :label} maps.
    Uses node labels directly — labels are pre-shortened by analyzers."
-  {:malli/schema [:=> [:cat :Model [:maybe :string]] :EntityPath]}
+  {:malli/schema [:=> [:cat :Model [:maybe :NodeId]] :EntityPath]}
   [model entity-id]
   (let [root-node (find-root-node model)
         root-id (:id root-node)]

@@ -57,14 +57,12 @@
 
 (def ^:schema EditorState
   [:map {:description "Client-side UI state for the graph editor: current view, selection, expanded modules, and visible edge types."}
-   [:view-id {:optional true, :description "Module being viewed (its children are shown)."} [:maybe :string]]
-   [:selected-id {:optional true, :description "Currently selected/highlighted node."} [:maybe :string]]
-   [:schema-id {:optional true, :description "Schema being inspected in the sidebar."} [:maybe :string]]
-   [:expanded {:optional true, :description "Set of explicitly expanded module IDs."} :set]
-   [:show-private {:optional true, :description "Set of module IDs whose private children are visible."} :set]
-   [:visible-edge-types {:optional true, :description "Edge types to include in projection."} :set]])
-
-(def ^:schema GraphData :CytoscapeGraph)
+   [:view-id {:optional true, :description "Module being viewed (its children are shown)."} [:maybe :NodeId]]
+   [:selected-id {:optional true, :description "Currently selected/highlighted node."} [:maybe :NodeId]]
+   [:schema-id {:optional true, :description "Schema being inspected in the sidebar."} [:maybe :NodeId]]
+   [:expanded {:optional true, :description "Set of explicitly expanded module IDs."} [:set :NodeId]]
+   [:show-private {:optional true, :description "Set of module IDs whose private children are visible."} [:set :NodeId]]
+   [:visible-edge-types {:optional true, :description "Edge types to include in projection."} [:set :ProjectionEdgeType]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Render function
@@ -75,7 +73,7 @@
    Returns Cytoscape-compatible {:nodes :edges :selectedId :highlightedEdges}.
 
    Adds UI state and transforms to Cytoscape format at the boundary."
-  {:malli/schema [:=> [:cat :Projection :EditorState] :GraphData]}
+  {:malli/schema [:=> [:cat :Projection :EditorState] :CytoscapeGraph]}
   [graph-projection {:keys [view-id selected-id] :as editor-state}]
   (let [nodes (:nodes graph-projection)
         ;; Add UI state (selected?)

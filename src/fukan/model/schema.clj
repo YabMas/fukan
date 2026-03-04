@@ -103,7 +103,7 @@
 (def ^:schema BoundaryFn
   [:map {:description "A public function entry in a module boundary."}
    [:name :symbol]
-   [:id {:optional true, :description "Node ID of the boundary function."} :string]
+   [:id {:optional true, :description "Node ID of the boundary function."} :NodeId]
    [:schema {:optional true, :description "Structured function signature: inputs and output types."}
     :FunctionSignature]
    [:doc {:optional true} :string]])
@@ -166,6 +166,6 @@
 
 (def ^:schema AnalysisResult
   [:map {:description "A language analysis result: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces an AnalysisResult; results are merged before calling build-model."}
-   [:source-files {:description "File paths for folder hierarchy construction."} [:vector :string]]
+   [:source-files {:description "File paths for folder hierarchy construction."} [:vector :FilePath]]
    [:nodes {:description "Pre-built nodes. Module nodes should have :parent nil and :filename in :data for folder parenting."} [:map-of :NodeId :Node]]
    [:edges {:description "Pre-built edges between nodes."} [:vector :Edge]]])

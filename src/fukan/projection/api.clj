@@ -14,10 +14,10 @@
 
 (def ^:schema NavigateOpts
   [:map {:description "Options for navigation: view target, expanded modules, optional selection, and visible edge types."}
-   [:view-id {:optional true} [:maybe :string]]
+   [:view-id {:optional true} [:maybe :NodeId]]
    [:expanded {:optional true} [:set :NodeId]]
    [:show-private {:optional true} [:set :NodeId]]
-   [:selected {:optional true} [:maybe :string]]
+   [:selected {:optional true} [:maybe :NodeId]]
    [:visible-edge-types {:optional true} [:set :ProjectionEdgeType]]])
 
 (def ^:schema NavigateResult
@@ -66,10 +66,10 @@
 
 (def ^:schema SearchResult
   [:map {:description "A single search match: node identity and location."}
-   [:id :string]
+   [:id :NodeId]
    [:kind :NodeKind]
    [:label :string]
-   [:parent {:optional true} [:maybe :string]]])
+   [:parent {:optional true} [:maybe :NodeId]]])
 
 (def ^:schema ModelOverview
   [:map {:description "Summary statistics for the loaded model."}

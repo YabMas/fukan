@@ -16,10 +16,10 @@
 
 (def ^:schema ProjectionNode
   [:map {:description "A node in the projected graph with display properties for visualization."}
-   [:id :string]
+   [:id :NodeId]
    [:kind :ProjectionNodeKind]
    [:label :string]
-   [:parent {:optional true} [:maybe :string]]
+   [:parent {:optional true} [:maybe :NodeId]]
    [:expandable? :boolean]
    [:has-private-children? :boolean]
    [:expanded? :boolean]
@@ -34,9 +34,9 @@
 
 (def ^:schema ProjectionEdge
   [:map {:description "A directed, typed edge in the projected graph."}
-   [:id :string]
-   [:from :string]
-   [:to :string]
+   [:id {:description "Synthetic sequential ID (e.g. e0, e1)."} :string]
+   [:from :NodeId]
+   [:to :NodeId]
    [:edge-type :ProjectionEdgeType]])
 
 (def ^:schema Projection
@@ -46,7 +46,7 @@
 
 (def ^:schema ProjectionOpts
   [:map {:description "Options for graph projection: which entity to view, which modules are expanded, which show private children, and which edge types are visible."}
-   [:view-id {:optional true} [:maybe :string]]
+   [:view-id {:optional true} [:maybe :NodeId]]
    [:expanded {:optional true} [:set :NodeId]]
    [:show-private {:optional true} [:set :NodeId]]
    [:visible-edge-types {:optional true} [:set :ProjectionEdgeType]]])
