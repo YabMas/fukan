@@ -136,6 +136,43 @@ Standard fields (`:name`, `:id`, `:label`) are self-explanatory. Fields with dom
 
 Reference other schemas by keyword (`:NodeId`), not by Clojure var (`NodeId`). Var refs get expanded at def-time, so the named reference is lost in the rendered output.
 
+### Maximize type specificity for documentation
+
+#### Eliminate `:any` — it is a documentation failure
+
+`:any` tells the reader nothing. Before using it, exhaust these alternatives in order:
+
+1. **Use a named domain type** if one exists (`:NodeId`, `:FilePath`, `:Model`).
+2. **Define a new named type** if the data has known structure — even partial structure is better than none.
+3. **Use a runtime-validated wrapper** with `[:fn ...]` when the type is an opaque external object (e.g., http-kit `AsyncChannel`). The wrapper gives the reader a name, the predicate catches type errors in dev, and the description + external docs link tells them where to learn more.
+4. **Use `:any` as absolute last resort** — only for genuinely recursive/polymorphic data where no structural claim is possible (e.g., arbitrary Malli schema forms that can be any valid Malli expression). Even then, the `:description` must explain what the value actually is and link to external docs where the reader can learn more.
+
+#### Use the most specific type available
+
+- **Never use `:string` when a domain type exists.** If a string is a `NodeId`, use `:NodeId`. If it's a file path, use `:FilePath`. Generic `:string` hides domain semantics.
+- **Never use `:map` when structure is known.** Function options, session state, server config — if you know the keys, spell them out. `:map` as a type says "I didn't bother."
+- **Never use `:fn` without a function schema.** `[:fn]` says nothing. Use `[:=> [:cat ...] ...]` to describe the signature.
+- **Constrain numeric ranges.** Use `[:int {:min 1 :max 65535}]` for ports, not bare `:int`.
+
+#### Reuse domain types across layers
+
+If `ProjectionOpts` uses `NodeId` for `:view-id`, and `EditorState` has the same concept, both should use `:NodeId`, not bare `:string`.
+
+#### Wrap opaque library types — but only when it adds meaning
+
+Create named wrapper schemas for opaque types **when the wrapper communicates something the underlying type doesn't**:
+
+```clojure
+;; Good wrapper: AsyncChannel tells you what :any actually is, plus has runtime validation
+(def ^:schema AsyncChannel
+  [:fn {:description "HTTP-kit AsyncChannel..."} #(instance? org.httpkit.server.AsyncChannel %)])
+
+;; Bad wrapper: GraphData = CytoscapeGraph adds no meaning, just indirection
+(def ^:schema GraphData :CytoscapeGraph) ;; remove this, use :CytoscapeGraph directly
+```
+
+The test: if removing the wrapper and using the inner type directly loses no information for the reader, the wrapper is noise. If the wrapper gives the reader a domain concept they wouldn't have from the inner type alone, keep it.
+
 ---
 
 ## Testing (MUST FOLLOW)
