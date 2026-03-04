@@ -227,6 +227,65 @@
       true))
 
 ;; ---------------------------------------------------------------------------
+;; EdgeHasKind: every edge has a :kind field.
+
+(defn edge-has-kind?
+  "Verify that every edge has a :kind field."
+  [{:keys [edges]}]
+  (or (first
+        (for [{:keys [from to kind]} edges
+              :when (nil? kind)]
+          {:violation :edge-has-kind
+           :from from
+           :to to
+           :reason "edge missing :kind field"}))
+      true))
+
+;; ---------------------------------------------------------------------------
+;; EdgeKindEndpoints: function-call edges connect functions;
+;; schema-reference edges connect schemas.
+
+(defn edge-kind-endpoints?
+  "Verify that edge kind matches endpoint node kinds.
+   function-call: both endpoints are :function nodes.
+   schema-reference: both endpoints are :schema nodes."
+  [{:keys [nodes edges]}]
+  (or (first
+        (for [{:keys [from to kind]} edges
+              :let [from-node (get nodes from)
+                    to-node (get nodes to)]
+              :when (case kind
+                      :function-call
+                      (or (not= :function (:kind from-node))
+                          (not= :function (:kind to-node)))
+                      :schema-reference
+                      (or (not= :schema (:kind from-node))
+                          (not= :schema (:kind to-node)))
+                      false)]
+          {:violation :edge-kind-endpoints
+           :from from :from-kind (:kind from-node)
+           :to to :to-kind (:kind to-node)
+           :edge-kind kind
+           :reason "edge kind does not match endpoint node kinds"}))
+      true))
+
+;; ---------------------------------------------------------------------------
+;; ModuleHasBoundary: every module node has a boundary in :data.
+
+(defn module-has-boundary?
+  "Verify that every module node has a :boundary in its :data map."
+  [{:keys [nodes]}]
+  (or (first
+        (for [[id node] nodes
+              :when (= :module (:kind node))
+              :when (not (get-in node [:data :boundary]))]
+          {:violation :module-has-boundary
+           :node-id id
+           :label (:label node)
+           :reason "module missing :boundary in :data"}))
+      true))
+
+;; ---------------------------------------------------------------------------
 ;; Composite
 
 (defn valid-model?
@@ -240,7 +299,10 @@
                 edge-integrity?
                 leaf-edges?
                 smart-root-pruning?
-                no-unconsumed-provides?]]
+                no-unconsumed-provides?
+                edge-has-kind?
+                edge-kind-endpoints?
+                module-has-boundary?]]
     (reduce (fn [_ check]
               (let [result (check model)]
                 (if (true? result)

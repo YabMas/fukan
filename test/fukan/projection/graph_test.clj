@@ -40,17 +40,6 @@
                        (true? (inv/no-ancestor-descendant-edges? model opts projection))))
                    opts-gen)))))
 
-(defspec schema-nodes-filtered 100
-  (prop/for-all [model (gen/gen-model)]
-    (let [opts-gen (gen/gen-projection-opts model)]
-      (tgen/generate
-        (tgen/fmap (fn [opts]
-                     (if (and (:view-id opts) (not (is-leaf? model (:view-id opts))))
-                       (let [projection (graph/entity-graph model opts)]
-                         (true? (inv/schema-filtering? model opts projection)))
-                       true))
-                   opts-gen)))))
-
 (defspec private-nodes-hidden-unless-expanded 100
   (prop/for-all [model (gen/gen-model)]
     (let [opts-gen (gen/gen-projection-opts model)]
@@ -72,9 +61,9 @@
                    opts-gen)))))
 
 ;; ---------------------------------------------------------------------------
-;; Generative: visible-node code-flow edges
+;; Generative: visible-node edges (all edge types)
 
-(defspec visible-node-code-flow-edges 100
+(defspec visible-node-edges 100
   (prop/for-all [model (gen/gen-model)]
     (let [opts-gen (gen/gen-projection-opts model)]
       (tgen/generate
@@ -98,23 +87,37 @@
                    opts-gen)))))
 
 ;; ---------------------------------------------------------------------------
+;; Generative: no subsumed edges (all edge types)
+
+(defspec no-subsumed-edges-in-projection 100
+  (prop/for-all [model (gen/gen-model)]
+    (let [opts-gen (gen/gen-projection-opts model)]
+      (tgen/generate
+        (tgen/fmap (fn [opts]
+                     (if (and (:view-id opts) (not (is-leaf? model (:view-id opts))))
+                       (let [projection (graph/entity-graph model opts)]
+                         (true? (inv/no-subsumed-edges? model opts projection)))
+                       true))
+                   opts-gen)))))
+
+;; ---------------------------------------------------------------------------
 ;; Example-based: private inheritance
 
 (deftest private-inheritance-test
   (let [model {:nodes {"root" {:id "root" :kind :module :label "root" :parent nil
-                                :children #{"ns-a" "ns-b"} :data {}}
+                                :children #{"ns-a" "ns-b"} :data {:boundary {:description nil}}}
                         "ns-a" {:id "ns-a" :kind :module :label "ns-a" :parent "root"
-                                :children #{"dispatch" "cmd-find"} :data {}}
+                                :children #{"dispatch" "cmd-find"} :data {:boundary {:description nil}}}
                         "ns-b" {:id "ns-b" :kind :module :label "ns-b" :parent "root"
-                                :children #{"navigate"} :data {}}
+                                :children #{"navigate"} :data {:boundary {:description nil}}}
                         "dispatch" {:id "dispatch" :kind :function :label "dispatch" :parent "ns-a"
                                     :children #{} :data {:private? false}}
                         "cmd-find" {:id "cmd-find" :kind :function :label "cmd-find" :parent "ns-a"
                                     :children #{} :data {:private? true}}
                         "navigate" {:id "navigate" :kind :function :label "navigate" :parent "ns-b"
                                     :children #{} :data {:private? false}}}
-                :edges [{:from "dispatch" :to "cmd-find"}
-                        {:from "cmd-find" :to "navigate"}]}]
+                :edges [{:from "dispatch" :to "cmd-find" :kind :function-call}
+                        {:from "cmd-find" :to "navigate" :kind :function-call}]}]
 
     (testing "With collapsed modules, edges aggregate to module nodes"
       (let [opts {:view-id "root" :expanded #{} :show-private #{}}
@@ -163,9 +166,9 @@
               (str "bounding-box failed for " cid))
           (is (true? (inv/no-ancestor-descendant-edges? model opts projection))
               (str "ancestor-descendant-edges failed for " cid))
-          (is (true? (inv/schema-filtering? model opts projection))
-              (str "schema-filtering failed for " cid))
           (is (true? (inv/no-duplicate-edges? model opts projection))
               (str "duplicate-edges failed for " cid))
           (is (true? (inv/visible-node-edges? model opts projection))
-              (str "visible-node-edges failed for " cid)))))))
+              (str "visible-node-edges failed for " cid))
+          (is (true? (inv/no-subsumed-edges? model opts projection))
+              (str "no-subsumed-edges failed for " cid)))))))

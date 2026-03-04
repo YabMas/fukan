@@ -29,15 +29,12 @@
 ;; StrictBoundingBox: only entities inside the viewed module appear.
 
 (defn strict-bounding-box?
-  "Verify that only entities inside the viewed module appear.
-   Synthetic IO nodes (io-container, io-schema) are excluded from check."
+  "Verify that only entities inside the viewed module appear."
   [model opts projection]
   (let [view-id (:view-id opts)
-        real-node-ids (into #{} (comp (remove #(#{:io-container :io-schema} (:kind %)))
-                                      (map :id))
-                            (:nodes projection))]
+        node-ids (projection-node-ids projection)]
     (or (first
-          (for [nid real-node-ids
+          (for [nid node-ids
                 :when (and (not= nid view-id)
                            (not (descendant-of? model nid view-id)))]
             {:violation :strict-bounding-box
@@ -54,33 +51,13 @@
   [model _opts projection]
   (or (first
         (for [{:keys [from to edge-type]} (:edges projection)
-              :when (= :code-flow edge-type)
               :when (or (descendant-of? model to from)
                         (descendant-of? model from to))]
           {:violation :no-ancestor-descendant-edges
            :from from
-           :to to}))
+           :to to
+           :edge-type edge-type}))
       true))
-
-;; ---------------------------------------------------------------------------
-;; SchemaFiltering: schema nodes are excluded from visible children.
-
-(defn schema-filtering?
-  "Verify that model :schema nodes are not directly visible as children.
-   Schema nodes should only appear as synthetic IO schema nodes."
-  [model opts projection]
-  (let [view-id (:view-id opts)
-        visible-ids (projection-node-ids projection)]
-    (or (first
-          (for [nid visible-ids
-                :let [model-node (get-in model [:nodes nid])]
-                :when (and model-node
-                           (= :schema (:kind model-node))
-                           (descendant-of? model nid view-id))]
-            {:violation :schema-filtering
-             :node-id nid
-             :reason "model schema node should not appear in module view"}))
-        true)))
 
 ;; ---------------------------------------------------------------------------
 ;; PrivateVisibility: private children hidden unless parent expanded.
@@ -106,32 +83,22 @@
         true)))
 
 ;; ---------------------------------------------------------------------------
-;; NoIO: leaf views never produce IO boundary data.
-
-(defn no-io-for-leaf?
-  "Verify that leaf views produce no IO boundary."
-  [model opts projection]
-  (let [view-id (:view-id opts)]
-    (if (and (is-leaf-view? model view-id)
-             (or (seq (:inputs (:io projection)))
-                 (seq (:outputs (:io projection)))))
-      {:violation :no-io-for-leaf
-       :view-id view-id
-       :io (:io projection)}
-      true)))
-
-;; ---------------------------------------------------------------------------
 ;; NoBoundingBox: leaf views show related entities from anywhere.
 
 (defn leaf-shows-all-related?
   "Verify that for a leaf view, all directly related entities appear.
-   Checks that for each raw edge involving the view entity, the other
-   endpoint appears somewhere in the projection."
+   Checks that for each visible raw edge involving the view entity, the other
+   endpoint appears somewhere in the projection. Respects visible-edge-types."
   [model opts projection]
-  (let [view-id (:view-id opts)]
+  (let [view-id (:view-id opts)
+        visible-edge-types (or (:visible-edge-types opts) #{:code-flow :schema-reference})
+        visible-model-kinds (set (keep {:code-flow :function-call
+                                        :schema-reference :schema-reference}
+                                       visible-edge-types))]
     (if (is-leaf-view? model view-id)
       (let [visible-ids (projection-node-ids projection)
-            raw-edges (:edges model)
+            raw-edges (->> (:edges model)
+                           (filter #(contains? visible-model-kinds (:kind %))))
             related-ids (->> raw-edges
                              (keep (fn [{:keys [from to]}]
                                      (cond
@@ -168,16 +135,15 @@
 ;; VisibleNodeEdges: every code-flow edge endpoint is a visible node.
 
 (defn visible-node-edges?
-  "Verify that all code-flow edge endpoints are visible nodes in the projection."
+  "Verify that all edge endpoints are visible nodes in the projection."
   [_model _opts projection]
   (let [visible-ids (projection-node-ids projection)]
     (or (first
           (for [{:keys [from to edge-type]} (:edges projection)
-                :when (= :code-flow edge-type)
                 :when (or (not (contains? visible-ids from))
                           (not (contains? visible-ids to)))]
             {:violation :visible-node-edges
-             :from from :to to
+             :from from :to to :edge-type edge-type
              :from-visible? (contains? visible-ids from)
              :to-visible? (contains? visible-ids to)}))
         true)))
@@ -205,19 +171,22 @@
 
 (defn no-subsumed-edges?
   "Verify that no edge A→T exists when a visible descendant D of A has D→T.
-   The more specific edge subsumes the less specific one."
+   The more specific edge subsumes the less specific one.
+   Checked independently per edge type."
   [model _opts projection]
-  (let [edges (:edges projection)
-        code-edges (filter #(= :code-flow (:edge-type %)) edges)
-        by-target (group-by :to code-edges)]
+  (let [edges (:edges projection)]
     (or (first
-          (for [[target edges-to-target] by-target
+          (for [edge-type (distinct (map :edge-type edges))
+                :let [typed-edges (filter #(= edge-type (:edge-type %)) edges)
+                      by-target (group-by :to typed-edges)]
+                [target edges-to-target] by-target
                 :let [sources (set (map :from edges-to-target))]
                 source sources
                 :when (some #(and (not= % source)
                                   (descendant-of? model % source))
                             sources)]
             {:violation :no-subsumed-edges
+             :edge-type edge-type
              :subsumed-from source
              :subsumed-by (first (filter #(and (not= % source)
                                                (descendant-of? model % source))
@@ -236,7 +205,6 @@
                 no-ancestor-descendant-edges?
                 no-subsumed-edges?
                 visible-node-edges?
-                schema-filtering?
                 private-visibility?
                 showing-private-consistent?
                 no-duplicate-edges?]]
@@ -251,8 +219,7 @@
 (defn valid-leaf-projection?
   "Run all leaf-view invariants."
   [model opts projection]
-  (let [checks [no-io-for-leaf?
-                leaf-shows-all-related?
+  (let [checks [leaf-shows-all-related?
                 no-ancestor-descendant-edges?
                 no-duplicate-edges?]]
     (reduce (fn [_ check]

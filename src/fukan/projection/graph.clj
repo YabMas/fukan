@@ -1,20 +1,18 @@
 (ns fukan.projection.graph
   "Graph projection: Model → visible subgraph for visualization.
-   Given a view entity, a set of explicitly expanded modules, and a set
-   of show-private modules, computes which nodes and edges are visible,
-   aggregates raw edges to the visible level, and generates synthetic
-   IO nodes from contract boundaries. Returns pure domain data with no
-   UI state."
-  (:require [fukan.projection.schema :as schema]
-            [fukan.projection.path :as path]
+   Given a view entity, a set of explicitly expanded modules, a set
+   of show-private modules, and a set of visible edge types, computes
+   which nodes and edges are visible and aggregates raw edges to the
+   visible level. Returns pure domain data with no UI state."
+  (:require [fukan.projection.path :as path]
             [clojure.set :as set]))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
 (def ^:schema ProjectionNodeKind
-  [:enum {:description "Node kinds in projections, extending model kinds with synthetic IO nodes."}
-   :module :function :schema :io-container :io-schema])
+  [:enum {:description "Node kinds in projections: module, function, or schema."}
+   :module :function :schema])
 
 (def ^:schema ProjectionNode
   [:map {:description "A node in the projected graph with display properties for visualization."}
@@ -28,37 +26,30 @@
    [:showing-private? :boolean]
    [:child-count :int]
    [:private? {:optional true} :boolean]
-   [:io-type {:optional true} [:enum :input :output]]
    [:schema-key {:optional true} :keyword]])
 
 (def ^:schema ProjectionEdgeType
-  [:enum {:description "Edge semantic types: code-flow (call graphs), data-flow (contract IO)."}
-   :code-flow :data-flow])
+  [:enum {:description "Edge semantic types: code-flow (call graphs) and schema-reference (type refs)."}
+   :code-flow :schema-reference])
 
 (def ^:schema ProjectionEdge
   [:map {:description "A directed, typed edge in the projected graph."}
    [:id :string]
    [:from :string]
    [:to :string]
-   [:edge-type :ProjectionEdgeType]
-   [:schema-key {:optional true} :keyword]])
-
-(def ^:schema ProjectionIO
-  [:map {:description "Input and output schema key sets for a module's contract boundary."}
-   [:inputs [:set :keyword]]
-   [:outputs [:set :keyword]]])
+   [:edge-type :ProjectionEdgeType]])
 
 (def ^:schema Projection
-  [:map {:description "Complete graph projection result: visible nodes, edges, and IO boundary."}
+  [:map {:description "Complete graph projection result: visible nodes and edges."}
    [:nodes [:vector :ProjectionNode]]
-   [:edges [:vector :ProjectionEdge]]
-   [:io [:maybe :ProjectionIO]]])
+   [:edges [:vector :ProjectionEdge]]])
 
 (def ^:schema ProjectionOpts
-  [:map {:description "Options for graph projection: which entity to view, which modules are expanded, and which show private children."}
+  [:map {:description "Options for graph projection: which entity to view, which modules are expanded, which show private children, and which edge types are visible."}
    [:view-id {:optional true} [:maybe :string]]
    [:expanded {:optional true} [:set :NodeId]]
-   [:show-private {:optional true} [:set :NodeId]]])
+   [:show-private {:optional true} [:set :NodeId]]
+   [:visible-edge-types {:optional true} [:set :ProjectionEdgeType]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Node accessor helpers (access via :data map)
@@ -84,7 +75,6 @@
 (defn- compute-visible-set
   "Compute the set of visible nodes by recursive descent through expanded modules.
    For each child of entity-id:
-   - Skip schema nodes (they appear only as IO schemas)
    - Skip private nodes unless parent is in show-private
    - Include the child
    - If the child is a module AND in effective-expanded: recurse into its children"
@@ -94,10 +84,6 @@
       (fn [visible child-id]
         (let [child-node (get-in model [:nodes child-id])]
           (cond
-            ;; Skip schema nodes
-            (= :schema (:kind child-node))
-            visible
-
             ;; Skip private nodes unless parent is in show-private
             (and (node-private? child-node)
                  (not (contains? show-private entity-id)))
@@ -139,14 +125,15 @@
 ;; On-demand edge aggregation
 
 (defn- aggregate-edges
-  "Aggregate leaf-level edges to the visible node level.
-   For each raw edge, find which visible nodes it connects.
+  "Aggregate leaf-level edges to the visible node level, filtering by edge kind.
+   For each raw edge of the given kind, find which visible nodes it connects.
    Returns deduplicated edges between visible nodes.
 
    Excludes edges where one endpoint is an ancestor of the other -
    parent-child relationships are implicit in compound node structure."
-  [model visible-set]
-  (let [raw-edges (:edges model)]
+  [model visible-set edge-kind]
+  (let [raw-edges (->> (:edges model)
+                       (filter #(= edge-kind (:kind %))))]
     (->> raw-edges
          (keep (fn [{:keys [from to]}]
                  (let [from-visible (find-visible-ancestor model from visible-set)
@@ -158,133 +145,6 @@
                      {:from from-visible :to to-visible}))))
          distinct
          vec)))
-
-;; -----------------------------------------------------------------------------
-;; IO Schema computation
-
-(defn- extract-fn-schema-flow
-  "Extract input and output schema references from a structured function signature.
-   Expects {:inputs [type-exprs...] :output type-expr}.
-   Returns {:inputs #{schema-keys...} :outputs #{schema-keys...}}
-   or nil if not a function signature.
-   Takes the model to determine which keywords are registered schemas."
-  [model fn-sig]
-  (when-let [{:keys [inputs output]} fn-sig]
-    {:inputs (into #{} (mapcat #(schema/extract-schema-refs model %) inputs))
-     :outputs (schema/extract-schema-refs model output)}))
-
-(defn- compute-fn-schema-info
-  "Get schema flow info for a function node from its :signature data.
-   Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or nil.
-   Takes the model to determine which keywords are registered schemas."
-  [model node]
-  (when (= :function (:kind node))
-    (when-let [fn-schema (get-in node [:data :signature])]
-      (extract-fn-schema-flow model fn-schema))))
-
-(defn- contract->io
-  "Derive input/output schema keys from a contract's function schemas."
-  [model contract]
-  (reduce (fn [acc {:keys [schema]}]
-            (if-let [{:keys [inputs outputs]} (extract-fn-schema-flow model schema)]
-              (-> acc
-                  (update :inputs into inputs)
-                  (update :outputs into outputs))
-              acc))
-          {:inputs #{} :outputs #{}}
-          (:functions contract)))
-
-(defn- compute-io-schemas
-  "Compute input/output schemas for a module based on its boundary.
-   Returns {:inputs #{schema-keys} :outputs #{schema-keys}} or empty sets
-   when no boundary is present."
-  [model module-id]
-  (if-let [boundary (get-in model [:nodes module-id :data :boundary])]
-    (contract->io model boundary)
-    {:inputs #{} :outputs #{}}))
-
-;; -----------------------------------------------------------------------------
-;; IO Nodes and Data-Flow Edges
-
-(defn- create-io-nodes
-  "Create IO container and schema nodes for a module view.
-   Returns a vector of nodes: IO container + child schema nodes.
-   io-type is :input or :output.
-   owned-module-ids is a set of module IDs inside the current view.
-   IO containers are orphans - positioned by JS relative to main module."
-  [model entity-id io-type schema-keys owned-module-ids]
-  (when (seq schema-keys)
-    (let [container-id (str (name io-type) ":" entity-id)
-          label (if (= io-type :input) "Inputs" "Outputs")]
-      (into [{:id container-id
-              :kind :io-container
-              :io-type io-type
-              :label label
-              :parent nil  ;; IO containers are orphans, positioned by JS
-              :expandable? false
-              :has-private-children? false
-              :expanded? false
-              :showing-private? false
-              :child-count (count schema-keys)
-              :private? false}]
-            (for [schema-key schema-keys
-                  :let [owner-id (schema/schema-owner-id model schema-key)
-                        owned? (contains? owned-module-ids owner-id)]]
-              {:id (str (name io-type) "-schema:" (name schema-key))
-               :kind :io-schema
-               :io-type io-type
-               :label (name schema-key)
-               :parent container-id
-               :schema-key schema-key
-               :expandable? false
-               :has-private-children? false
-               :expanded? false
-               :showing-private? false
-               :child-count 0
-               :private? false
-               :owned? owned?})))))
-
-(defn- compute-io-flow-edges
-  "Compute data-flow edges between IO schema nodes and visible nodes.
-   For inputs: edge from input-schema to each visible node that consumes it.
-   For outputs: edge from each visible node that produces it to output-schema.
-   Function nodes inside collapsed modules aggregate up to their closest
-   visible ancestor, mirroring how code-flow edges are aggregated."
-  [model entity-id io-data visible-set]
-  (let [inside? (fn [node-id]
-                  (or (= node-id entity-id)
-                      (descendant-of? model node-id entity-id)))
-        fn-ids (->> (:nodes model)
-                    vals
-                    (filter #(and (= :function (:kind %))
-                                  (inside? (:id %))))
-                    (map :id))
-        input-keys (:inputs io-data)
-        output-keys (:outputs io-data)
-        edge-nodes
-        (->> fn-ids
-             (mapcat (fn [fn-id]
-                       (let [fn-node (get-in model [:nodes fn-id])
-                             fn-schema-info (compute-fn-schema-info model fn-node)
-                             visible-target (find-visible-ancestor model fn-id visible-set)]
-                         (when (and fn-schema-info visible-target)
-                           (concat
-                            (for [schema-key (:inputs fn-schema-info)
-                                  :when (contains? input-keys schema-key)]
-                              {:id (str "io-e:in:" (name schema-key) ":" visible-target)
-                               :from (str "input-schema:" (name schema-key))
-                               :to visible-target
-                               :edge-type :data-flow
-                               :schema-key schema-key})
-                            (for [schema-key (:outputs fn-schema-info)
-                                  :when (contains? output-keys schema-key)]
-                              {:id (str "io-e:out:" visible-target ":" (name schema-key))
-                               :from visible-target
-                               :to (str "output-schema:" (name schema-key))
-                               :edge-type :data-flow
-                               :schema-key schema-key}))))))
-             distinct)]
-    (vec edge-nodes)))
 
 ;; -----------------------------------------------------------------------------
 ;; Edge subsumption
@@ -326,18 +186,20 @@
                  (= parent-override :no-parent) nil
                  (some? parent-override) parent-override
                  :else (:parent node))]
-    {:id id
-     :kind kind
-     :label (:label node)
-     :parent parent
-     :expandable? (boolean (seq (:children node)))
-     :has-private-children? (has-private-children? model id)
-     :expanded? (contains? expanded id)
-     :showing-private? (and (contains? show-private id)
-                            (contains? expanded id)
-                            (boolean (has-private-children? model id)))
-     :child-count (count (:children node))
-     :private? (node-private? node)}))
+    (cond-> {:id id
+             :kind kind
+             :label (:label node)
+             :parent parent
+             :expandable? (boolean (seq (:children node)))
+             :has-private-children? (has-private-children? model id)
+             :expanded? (contains? expanded id)
+             :showing-private? (and (contains? show-private id)
+                                    (contains? expanded id)
+                                    (boolean (has-private-children? model id)))
+             :child-count (count (:children node))
+             :private? (node-private? node)}
+      (= :schema kind)
+      (assoc :schema-key (get-in node [:data :schema-key])))))
 
 ;; -----------------------------------------------------------------------------
 ;; Private inheritance helpers
@@ -376,9 +238,11 @@
    dependencies from their private callees. For each raw edge from a
    private function to a target in a different module, finds visible
    public callers and creates edges to the visible target.
-   Endpoints may be modules (collapsed) or leaf nodes."
-  [model all-visible]
-  (let [raw-edges (:edges model)
+   Endpoints may be modules (collapsed) or leaf nodes.
+   Filters by edge-kind to only consider edges of the given model-level kind."
+  [model all-visible edge-kind]
+  (let [raw-edges (->> (:edges model)
+                       (filter #(= edge-kind (:kind %))))
         edges-by-target (reduce (fn [acc {:keys [from to]}]
                                   (update acc to (fnil conj #{}) from))
                                 {} raw-edges)
@@ -408,37 +272,32 @@
 ;; -----------------------------------------------------------------------------
 ;; Module view computation
 
-(defn- compute-io-layer
-  "Compute IO nodes and data-flow edges for a module view.
-   Returns {:nodes [...] :edges [...] :io {:inputs #{} :outputs #{}}}."
-  [model entity-id all-node-ids]
-  (let [io-data (compute-io-schemas model entity-id)
-        owned-module-ids (->> all-node-ids
-                          (filter #(= :module (:kind (get-in model [:nodes %]))))
-                          set)
-        input-nodes (create-io-nodes model entity-id :input (:inputs io-data) owned-module-ids)
-        output-nodes (create-io-nodes model entity-id :output (:outputs io-data) owned-module-ids)
-        data-flow-edges (compute-io-flow-edges model entity-id io-data all-node-ids)]
-    {:nodes (concat input-nodes output-nodes)
-     :edges data-flow-edges
-     :io io-data}))
-
 (defn- compute-module-view
   "Compute view when the entity is a module (has children).
    expanded controls which modules show their children.
    show-private controls whether private children are visible.
+   visible-edge-types controls which edge types to include.
    Returns pure domain data - no selected? or highlighted? fields."
-  [model entity-id expanded show-private]
+  [model entity-id expanded show-private visible-edge-types]
   (let [;; The viewed entity is always expanded (its children are shown)
         effective-expanded (conj (or expanded #{}) entity-id)
         visible (compute-visible-set model entity-id effective-expanded show-private)
 
-        ;; Aggregate edges to visible node level + inherited from private callees
-        ;; then drop subsumed edges (where a child already represents the connection)
-        code-edges (aggregate-edges model visible)
-        inherited (private-inherited-edges model visible)
-        all-edges (vec (distinct (concat code-edges inherited)))
-        final-edges (subsume-edges model all-edges)
+        ;; Aggregate per edge kind, independently
+        edges (vec (mapcat
+                    (fn [edge-type]
+                      (let [model-kind (case edge-type
+                                         :code-flow :function-call
+                                         :schema-reference :schema-reference)
+                            agg (aggregate-edges model visible model-kind)
+                            inherited (private-inherited-edges model visible model-kind)
+                            all (vec (distinct (concat agg inherited)))
+                            final (subsume-edges model all)]
+                        (map (fn [e] (assoc e :edge-type edge-type)) final)))
+                    visible-edge-types))
+
+        ;; Assign sequential IDs
+        numbered-edges (map-indexed (fn [i e] (assoc e :id (str "e" i))) edges)
 
         ;; Build view nodes
         ;; Module node (the viewed entity - no parent for strict bounding box)
@@ -450,28 +309,10 @@
         descendant-nodes (for [nid visible
                                :let [node (get-in model [:nodes nid])]
                                :when node]
-                           (make-view-node model node nil effective-expanded show-private))
+                           (make-view-node model node nil effective-expanded show-private))]
 
-        ;; All node IDs for IO layer
-        all-node-ids (conj visible entity-id)
-
-        ;; Build code-flow edges
-        code-flow-edges (map-indexed
-                         (fn [idx {:keys [from to]}]
-                           {:id (str "e" idx)
-                            :from from
-                            :to to
-                            :edge-type :code-flow})
-                         final-edges)
-
-        ;; Compute IO layer (synthetic IO nodes + data-flow edges)
-        io-layer (compute-io-layer model entity-id all-node-ids)]
-
-    {:nodes (vec (concat [module-node] descendant-nodes
-                         (:nodes io-layer)))
-     :edges (vec (concat code-flow-edges
-                         (:edges io-layer)))
-     :io (:io io-layer)}))
+    {:nodes (vec (concat [module-node] descendant-nodes))
+     :edges (vec numbered-edges)}))
 
 ;; -----------------------------------------------------------------------------
 ;; Leaf view computation
@@ -481,9 +322,17 @@
    Returns pure domain data - no selected? or highlighted? fields.
 
    Shows related functions grouped by their parent module,
-   with leaf-level edges."
-  [model entity-id show-private]
-  (let [raw-edges (:edges model)
+   with leaf-level edges. Filters edges by visible-edge-types
+   and maps model edge kinds to projection edge types."
+  [model entity-id show-private visible-edge-types]
+  (let [;; Map visible edge types to model-level kinds
+        visible-model-kinds (set (map (fn [et]
+                                        (case et
+                                          :code-flow :function-call
+                                          :schema-reference :schema-reference))
+                                      visible-edge-types))
+        raw-edges (->> (:edges model)
+                       (filter #(contains? visible-model-kinds (:kind %))))
 
         ;; Find all related functions via edges
         outgoing-fn-ids (->> raw-edges
@@ -511,6 +360,10 @@
                             (filter (fn [{:keys [from to]}]
                                       (or (= from entity-id) (= to entity-id)))))
 
+        ;; Map model kind to projection edge-type
+        kind->edge-type {:function-call :code-flow
+                         :schema-reference :schema-reference}
+
         ;; Build module nodes for grouping (no expand in leaf view)
         module-nodes (for [mid all-module-ids
                            :let [node (get-in model [:nodes mid])]
@@ -537,16 +390,15 @@
 
         ;; Build view edges (internal format, no highlighting)
         view-edges (map-indexed
-                    (fn [idx {:keys [from to]}]
+                    (fn [idx {:keys [from to kind]}]
                       {:id (str "e" idx)
                        :from from
                        :to to
-                       :edge-type :code-flow})
+                       :edge-type (get kind->edge-type kind :code-flow)})
                     relevant-edges)]
 
     {:nodes (vec (concat folder-nodes module-nodes related-fn-nodes [entity-node]))
-     :edges (vec view-edges)
-     :io nil}))
+     :edges (vec view-edges)}))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API
@@ -556,26 +408,26 @@
 
    For modules (entities with children):
    - Shows visible children (filtered by expanded and show-private)
-   - Aggregates edges to visible node level
+   - Aggregates edges to visible node level per edge kind
    - Expanded modules show their children; collapsed modules are edge endpoints
 
    For leaves (entities without children):
    - Shows the entity and all related entities
    - Groups related entities by their parent module
 
-   Returns {:nodes :edges :io} where:
+   Returns {:nodes :edges} where:
    - nodes: vector of projection nodes (no :selected? field)
-   - edges: vector of edges (no :highlighted? field)
-   - io: {:inputs :outputs} schema sets for module views"
+   - edges: vector of edges (no :highlighted? field)"
   {:malli/schema [:=> [:cat :Model :ProjectionOpts] :Projection]}
-  [model {:keys [view-id expanded show-private]}]
+  [model {:keys [view-id expanded show-private visible-edge-types]}]
   (let [;; Default to root if no view-id
         entity-id (or view-id (:id (path/find-root-node model)))
         expanded (or expanded #{})
         show-private (or show-private #{})
+        visible-edge-types (or visible-edge-types #{:code-flow :schema-reference})
 
         children-ids (get-children model entity-id)]
 
     (if (seq children-ids)
-      (compute-module-view model entity-id expanded show-private)
-      (compute-leaf-view model entity-id show-private))))
+      (compute-module-view model entity-id expanded show-private visible-edge-types)
+      (compute-leaf-view model entity-id show-private visible-edge-types))))

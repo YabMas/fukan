@@ -87,6 +87,6 @@
                    (let [from-id (get symbol-index [from from-symbol])
                          to-id   (get symbol-index [to name])]
                      (when (and to-id (not= from-id to-id))
-                       {:from from-id :to to-id})))))
+                       {:from from-id :to to-id :kind :function-call})))))
          (into #{})
          (vec))))

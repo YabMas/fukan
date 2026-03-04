@@ -73,6 +73,8 @@
                                             (when (and id (not= id "")) id))
                                 expanded (parse-id-set (get params "expanded"))
                                 show-private (parse-id-set (get params "show_private"))
+                                visible-edge-types (let [raw (parse-id-set (get params "visible_edge_types"))]
+                                                     (when (seq raw) (set (map keyword raw))))
                                 ;; If select is provided but id is not, navigate to the module of the selected node
                                 entity-id (or entity-id
                                               (when select-id (find-module-for-node model select-id)))
@@ -80,13 +82,15 @@
                                 editor-state {:view-id entity-id
                                               :selected-id (or select-id entity-id)
                                               :expanded expanded
-                                              :show-private show-private}
+                                              :show-private show-private
+                                              :visible-edge-types visible-edge-types}
                                 ;; Get projections
                                 {:keys [graph path details]}
                                 (proj/navigate model {:view-id entity-id
                                                       :expanded expanded
                                                       :show-private show-private
-                                                      :selected (:selected-id editor-state)})
+                                                      :selected (:selected-id editor-state)
+                                                      :visible-edge-types visible-edge-types})
                                 ;; Render views
                                 graph-data (views.graph/render-graph graph editor-state)]
 

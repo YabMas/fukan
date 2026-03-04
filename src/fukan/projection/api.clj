@@ -13,11 +13,12 @@
 ;; Schemas
 
 (def ^:schema NavigateOpts
-  [:map {:description "Options for navigation: view target, expanded modules, and optional selection."}
+  [:map {:description "Options for navigation: view target, expanded modules, optional selection, and visible edge types."}
    [:view-id {:optional true} [:maybe :string]]
    [:expanded {:optional true} [:set :NodeId]]
    [:show-private {:optional true} [:set :NodeId]]
-   [:selected {:optional true} [:maybe :string]]])
+   [:selected {:optional true} [:maybe :string]]
+   [:visible-edge-types {:optional true} [:set :ProjectionEdgeType]]])
 
 (def ^:schema NavigateResult
   [:map {:description "Complete navigation context: graph projection, breadcrumb path, and optional entity details."}
@@ -33,10 +34,11 @@
    Returns {:graph Projection, :path [PathSegment], :details EntityDetail?}.
    :details is only included when :selected is provided."
   {:malli/schema [:=> [:cat :Model :NavigateOpts] :NavigateResult]}
-  [model {:keys [view-id expanded show-private selected]}]
+  [model {:keys [view-id expanded show-private selected visible-edge-types]}]
   (let [graph-projection (graph/entity-graph model {:view-id view-id
                                                     :expanded expanded
-                                                    :show-private show-private})
+                                                    :show-private show-private
+                                                    :visible-edge-types visible-edge-types})
         path-items (path/entity-path model view-id)]
     (cond-> {:graph graph-projection
              :path path-items}

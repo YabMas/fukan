@@ -51,6 +51,16 @@
     (let [model (build/run-pipeline contrib)]
       (true? (inv/no-unconsumed-provides? model)))))
 
+(defspec build-model-edge-has-kind 100
+  (prop/for-all [contrib (gen/gen-analysis-result)]
+    (let [model (build/run-pipeline contrib)]
+      (true? (inv/edge-has-kind? model)))))
+
+(defspec build-model-module-has-boundary 100
+  (prop/for-all [contrib (gen/gen-analysis-result)]
+    (let [model (build/run-pipeline contrib)]
+      (true? (inv/module-has-boundary? model)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Integration: Fukan self-analysis satisfies all model invariants
 
@@ -66,4 +76,7 @@
       (is (true? (inv/no-self-edges? model)) (str (inv/no-self-edges? model)))
       (is (true? (inv/edge-integrity? model)) (str (inv/edge-integrity? model)))
       (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model)))
-      (is (true? (inv/no-unconsumed-provides? model)) (str (inv/no-unconsumed-provides? model))))))
+      (is (true? (inv/no-unconsumed-provides? model)) (str (inv/no-unconsumed-provides? model)))
+      (is (true? (inv/edge-has-kind? model)) (str (inv/edge-has-kind? model)))
+      (is (true? (inv/edge-kind-endpoints? model)) (str (inv/edge-kind-endpoints? model)))
+      (is (true? (inv/module-has-boundary? model)) (str (inv/module-has-boundary? model))))))

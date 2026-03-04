@@ -9,7 +9,7 @@
 (def ^:schema CytoscapeNode
   [:map {:description "A graph node in Cytoscape.js camelCase format with display and interaction state."}
    [:id :string]
-   [:kind {:description "Node kind as a string: module, function, schema, io-container, io-schema."} :string]
+   [:kind {:description "Node kind as a string: module, function, or schema."} :string]
    [:label :string]
    [:parent {:optional true} [:maybe :string]]
    [:selected :boolean]
@@ -18,14 +18,15 @@
    [:isExpanded :boolean]
    [:showingPrivate :boolean]
    [:childCount :int]
-   [:private {:optional true} :boolean]])
+   [:private {:optional true} :boolean]
+   [:schemaKey {:optional true} :string]])
 
 (def ^:schema CytoscapeEdge
   [:map {:description "A directed edge in Cytoscape.js format with source/target node IDs and semantic type."}
    [:id :string]
    [:source :string]
    [:target :string]
-   [:edgeType {:description "Edge type as a string: code-flow or data-flow."} :string]])
+   [:edgeType {:description "Edge type as a string: code-flow or schema-reference."} :string]])
 
 (def ^:schema CytoscapeGraph
   [:map {:description "Complete graph payload sent to Cytoscape.js: nodes, edges, and UI selection state."}
@@ -42,7 +43,7 @@
    Converts internal format (kebab-case, ? predicates) to camelCase."
   [{:keys [id kind label parent selected? expandable?
            has-private-children? expanded? showing-private? child-count private?
-           io-type schema-key owned?]}]
+           schema-key]}]
   (cond-> {:id id
            :kind (name kind)
            :label label
@@ -54,21 +55,17 @@
            :childCount child-count}
     parent (assoc :parent parent)
     private? (assoc :private private?)
-    io-type (assoc :ioType (name io-type))
-    schema-key (assoc :schemaKey (name schema-key))
-    (some? owned?) (assoc :isOwned owned?)))
+    schema-key (assoc :schemaKey (name schema-key))))
 
 (defn- edge->cytoscape
   "Transform an internal view edge to Cytoscape format.
    Converts :from/:to to source/target, keyword edge-type to string.
-   Includes schemaKey for data-flow edges.
    Edge highlighting is driven by the top-level highlightedEdges array."
-  [{:keys [id from to edge-type schema-key]}]
-  (cond-> {:id id
-           :source from
-           :target to
-           :edgeType (name edge-type)}
-    schema-key (assoc :schemaKey (name schema-key))))
+  [{:keys [id from to edge-type]}]
+  {:id id
+   :source from
+   :target to
+   :edgeType (name edge-type)})
 
 (defn graph->cytoscape
   "Transform internal graph-view format to Cytoscape-compatible output.

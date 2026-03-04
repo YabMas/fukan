@@ -309,23 +309,65 @@
          (sort-by (fn [e] [(get-in e [:from-fn :label]) (get-in e [:to-fn :label])]))
          vec)))
 
+(defn- compute-underlying-schema-refs
+  "Find all schema-level edges that aggregate to this visible schema-reference edge.
+   Returns a vector of {:from-schema {:id :label :schema-key} :to-schema {...}}"
+  [model from-id to-id]
+  (let [from-subtree (subtree model from-id)
+        to-subtree (subtree model to-id)
+        raw-edges (:edges model)
+        matching-edges (->> raw-edges
+                            (filter (fn [{:keys [from to kind]}]
+                                      (and (= :schema-reference kind)
+                                           (contains? from-subtree from)
+                                           (contains? to-subtree to)))))]
+    (->> matching-edges
+         (map (fn [{:keys [from to]}]
+                (let [from-node (get-in model [:nodes from])
+                      to-node (get-in model [:nodes to])]
+                  {:from-schema {:id from
+                                 :label (:label from-node)
+                                 :schema-key (get-in from-node [:data :schema-key])}
+                   :to-schema {:id to
+                               :label (:label to-node)
+                               :schema-key (get-in to-node [:data :schema-key])}})))
+         (sort-by (fn [e] [(get-in e [:from-schema :label]) (get-in e [:to-schema :label])]))
+         vec)))
+
 (defn- compute-edge-details
   "Compute normalized details for an edge entity.
-   Returns {:label :kind :edge :called-fns [...]}"
+   Dispatches by edge-type:
+   - :code-flow → {:label :kind :edge-type :called-fns [...]}
+   - :schema-reference → {:label :kind :edge-type :schema-refs [...]}"
   [model edge-id]
-  (when-let [{:keys [from-id to-id]} (parse-edge-id edge-id)]
+  (when-let [{:keys [from-id to-id edge-type]} (parse-edge-id edge-id)]
     (let [from-node (get-in model [:nodes from-id])
-          to-node (get-in model [:nodes to-id])
-          underlying-edges (compute-underlying-edges model from-id to-id)
-          called-fns (->> underlying-edges
-                          (map :to-fn)
-                          (distinct)
-                          (sort-by :label)
-                          (mapv (fn [{:keys [id label signature]}]
-                                  {:name label :schema signature :id id})))]
-      {:label      (str (:label from-node) " → " (:label to-node))
-       :kind       :edge
-       :called-fns called-fns})))
+          to-node (get-in model [:nodes to-id])]
+      (case edge-type
+        :code-flow
+        (let [underlying-edges (compute-underlying-edges model from-id to-id)
+              called-fns (->> underlying-edges
+                              (map :to-fn)
+                              (distinct)
+                              (sort-by :label)
+                              (mapv (fn [{:keys [id label signature]}]
+                                      {:name label :schema signature :id id})))]
+          {:label      (str (:label from-node) " → " (:label to-node))
+           :kind       :edge
+           :edge-type  :code-flow
+           :called-fns called-fns})
+
+        :schema-reference
+        (let [schema-refs (compute-underlying-schema-refs model from-id to-id)]
+          {:label       (str (:label from-node) " → " (:label to-node))
+           :kind        :edge
+           :edge-type   :schema-reference
+           :schema-refs schema-refs})
+
+        ;; Fallback for unknown edge types
+        {:label (str (:label from-node) " → " (:label to-node))
+         :kind  :edge
+         :edge-type edge-type}))))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
@@ -378,6 +420,11 @@
    [:inputs [:vector :SchemaRef]]
    [:outputs [:vector :SchemaRef]]])
 
+(def ^:schema SchemaRefEntry
+  [:map {:description "A schema reference in a schema-reference edge detail."}
+   [:from-schema [:map [:id :string] [:label :string] [:schema-key {:optional true} [:maybe :keyword]]]]
+   [:to-schema [:map [:id :string] [:label :string] [:schema-key {:optional true} [:maybe :keyword]]]]])
+
 (def ^:schema EntityDetails
   [:or {:description "Normalized detail structure for any entity (node or edge)."}
    ;; Node entity detail
@@ -392,11 +439,18 @@
     [:dataflow [:maybe :DataflowData]]
     [:deps :EntityDeps]
     [:dependents :EntityDeps]]
-   ;; Edge entity detail
-   [:map {:description "Edge entity: function calls crossing this dependency."}
+   ;; Code-flow edge detail
+   [:map {:description "Code-flow edge: function calls crossing this dependency."}
     [:label :string]
     [:kind [:= :edge]]
-    [:called-fns [:vector :FnEntry]]]])
+    [:edge-type [:= :code-flow]]
+    [:called-fns [:vector :FnEntry]]]
+   ;; Schema-reference edge detail
+   [:map {:description "Schema-reference edge: type references crossing this dependency."}
+    [:label :string]
+    [:kind [:= :edge]]
+    [:edge-type [:= :schema-reference]]
+    [:schema-refs [:vector :SchemaRefEntry]]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Public API

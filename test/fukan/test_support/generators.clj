@@ -180,7 +180,7 @@
                                        (let [from (nth all-fn-ids fi)
                                              to (nth all-fn-ids ti)]
                                          (when (not= from to)
-                                           {:from from :to to})))
+                                           {:from from :to to :kind :function-call})))
                                      edge-from-idxs edge-to-idxs)
                                 (remove nil?)
                                 vec)]
@@ -285,7 +285,7 @@
                                  (let [from-id (nth leaf-ids fi)
                                        to-id (nth leaf-ids ti)]
                                    (when (not= from-id to-id)
-                                     {:from from-id :to to-id})))
+                                     {:from from-id :to to-id :kind :function-call})))
                                edge-from-idxs edge-to-idxs)
                           (remove nil?)
                           distinct
@@ -303,17 +303,23 @@
                             (map :id)
                             vec)]
     (if (empty? module-ids)
-      (gen/return {:view-id nil :expanded #{} :show-private #{}})
+      (gen/return {:view-id nil :expanded #{} :show-private #{}
+                   :visible-edge-types #{:code-flow :schema-reference}})
       (gen/let [view-idx (gen/choose 0 (dec (count module-ids)))
                 expanded-flags (gen/vector gen/boolean (count module-ids))
-                show-private-flags (gen/vector gen/boolean (count module-ids))]
+                show-private-flags (gen/vector gen/boolean (count module-ids))
+                edge-type-choice (gen/elements [:both :code-flow-only :schema-reference-only])]
         {:view-id (nth module-ids view-idx)
          :expanded (into #{} (keep-indexed
                                (fn [i flag] (when flag (nth module-ids i)))
                                expanded-flags))
          :show-private (into #{} (keep-indexed
                                    (fn [i flag] (when flag (nth module-ids i)))
-                                   show-private-flags))}))))
+                                   show-private-flags))
+         :visible-edge-types (case edge-type-choice
+                               :both #{:code-flow :schema-reference}
+                               :code-flow-only #{:code-flow}
+                               :schema-reference-only #{:schema-reference})}))))
 
 ;; ---------------------------------------------------------------------------
 ;; gen-editor-state

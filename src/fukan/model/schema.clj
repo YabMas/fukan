@@ -108,7 +108,7 @@
    [:map {:description "Module node data: documentation and optional boundary."}
     [:kind [:= :module]]
     [:doc {:optional true} [:maybe :string]]
-    [:boundary {:optional true} :Boundary]]
+    [:boundary :Boundary]]
    ;; Function data (var definition)
    [:map {:description "Function node data: documentation, visibility, and optional type signature."}
     [:kind [:= :function]]
@@ -133,10 +133,15 @@
    [:children [:set :NodeId]]
    [:data {:optional true} :NodeData]])
 
+(def ^:schema EdgeKind
+  [:enum {:description "Discriminates edge semantics: function calls vs schema type references."}
+   :function-call :schema-reference])
+
 (def ^:schema Edge
   [:map {:description "A directed dependency between two nodes."}
    [:from {:description "Node ID of the caller/referencer"} :NodeId]
-   [:to {:description "Node ID of the callee/referenced entity"} :NodeId]])
+   [:to {:description "Node ID of the callee/referenced entity"} :NodeId]
+   [:kind {:description "Edge kind: function-call or schema-reference."} :EdgeKind]])
 
 (def ^:schema Model
   [:map {:description "The complete graph model of a codebase: all entity nodes and their directed dependency edges."}

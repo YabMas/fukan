@@ -219,17 +219,42 @@
      (when interface
        (render-interface interface dataflow nav))])))
 
+(defn- render-schema-ref-list
+  "Render a list of schema reference pairs."
+  [schema-refs]
+  [:ul
+   (for [{:keys [from-schema to-schema]} schema-refs]
+     [:li
+      [:span (:label from-schema)]
+      " \u2192 "
+      [:span (:label to-schema)]])])
+
 (defn- render-edge-detail
-  "Dedicated renderer for edge entities."
-  [{:keys [label called-fns]}]
+  "Dedicated renderer for edge entities.
+   Dispatches by edge-type: code-flow shows called functions,
+   schema-reference shows schema references."
+  [{:keys [label edge-type called-fns schema-refs]}]
   (str
    (h/html
     [:div#node-info
      [:h4 label]
-     [:h5 "Functions Called " [:span.dep-count (str "(" (count called-fns) ")")]]
-     (if (seq called-fns)
-       (render-fn-list called-fns)
-       [:p.empty-state "No direct function calls"])])))
+     (case edge-type
+       :code-flow
+       (list
+        [:h5 "Functions Called " [:span.dep-count (str "(" (count called-fns) ")")]]
+        (if (seq called-fns)
+          (render-fn-list called-fns)
+          [:p.empty-state "No direct function calls"]))
+
+       :schema-reference
+       (list
+        [:h5 "Schema References " [:span.dep-count (str "(" (count schema-refs) ")")]]
+        (if (seq schema-refs)
+          (render-schema-ref-list schema-refs)
+          [:p.empty-state "No direct schema references"]))
+
+       ;; Fallback
+       [:p.empty-state "Unknown edge type"])])))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API

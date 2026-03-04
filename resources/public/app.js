@@ -6,6 +6,7 @@
 
 let expandedModules = new Set();
 let showPrivate = new Set();
+let visibleEdgeTypes = new Set(['code-flow', 'schema-reference']);
 let pendingAction = 'navigate'; // 'navigate' | 'expand-toggle'
 let toggleTargetId = null;       // node ID being expanded/collapsed
 
@@ -17,6 +18,11 @@ window.getExpandedParam = function() {
 // Get show-private modules as a comma-separated string for URL params
 window.getShowPrivateParam = function() {
   return Array.from(showPrivate).join(',');
+};
+
+// Get visible edge types as a comma-separated string for URL params
+window.getVisibleEdgeTypesParam = function() {
+  return Array.from(visibleEdgeTypes).join(',');
 };
 
 // -----------------------------------------------------------------------------
@@ -111,7 +117,7 @@ window.addEventListener('popstate', (event) => {
 const cy = cytoscape({
   container: document.getElementById('cy'),
   elements: [],
-  
+
   style: [
     // Module node (folders and namespaces)
     {
@@ -177,7 +183,7 @@ const cy = cytoscape({
         'display': 'none'
       }
     },
-    // Edges - blue to match namespace modules
+    // Edges - code-flow: blue to match namespace modules
     {
       selector: 'edge',
       style: {
@@ -192,6 +198,20 @@ const cy = cytoscape({
         'text-background-color': '#fff',
         'text-background-opacity': 1,
         'text-background-padding': '2px'
+      }
+    },
+    // Schema-reference edges - dashed green lines
+    {
+      selector: 'edge[edgeType="schema-reference"]',
+      style: {
+        'line-style': 'dashed',
+        'line-color': '#27ae60',
+        'target-arrow-color': '#27ae60',
+        'target-arrow-shape': 'triangle',
+        'line-dash-pattern': [6, 3],
+        'width': 2,
+        'curve-style': 'bezier',
+        'arrow-scale': 0.8
       }
     },
     // Selected node
@@ -255,7 +275,7 @@ const cy = cytoscape({
         'background-color': '#f5f5f5'
       }
     },
-    // Schema node - diamond shape, green theme for data flow
+    // Schema node - diamond shape, green theme
     {
       selector: 'node[kind="schema"]',
       style: {
@@ -282,109 +302,72 @@ const cy = cytoscape({
         'border-width': 3,
         'background-color': '#ffebee'
       }
-    },
-    // IO container (Inputs/Outputs) - warm yellow, dashed border
-    {
-      selector: 'node[kind="io-container"]',
-      style: {
-        'shape': 'roundrectangle',
-        'background-color': '#fef9e7',
-        'border-color': '#d4ac0d',
-        'border-width': 2,
-        'border-style': 'dashed',
-        'label': 'data(label)',
-        'text-valign': 'top',
-        'text-halign': 'center',
-        'text-margin-y': '18px',
-        'padding': '40px',
-        'padding-top': '55px',
-        'font-size': '10px',
-        'font-weight': 'bold',
-        'color': '#9a7b0a'
-      }
-    },
-    // IO schema nodes inside IO containers
-    {
-      selector: 'node[kind="io-schema"]',
-      style: {
-        'shape': 'roundrectangle',
-        'background-color': '#fcf3cf',
-        'border-color': '#d4ac0d',
-        'border-width': 1,
-        'border-style': 'solid',
-        'label': 'data(label)',
-        'text-valign': 'center',
-        'text-halign': 'center',
-        'width': 'label',
-        'height': '24px',
-        'padding': '8px',
-        'font-size': '11px',
-        'color': '#7d6608'
-      }
-    },
-    // Owned IO schema nodes - thicker border to show ownership
-    {
-      selector: 'node[kind="io-schema"][?isOwned]',
-      style: {
-        'border-width': 3,
-        'border-color': '#9a7b0a'
-      }
-    },
-    // Invisible spacer nodes to force IO container width
-    {
-      selector: 'node[kind="io-spacer"]',
-      style: {
-        'width': 1,
-        'height': 1,
-        'opacity': 0,
-        'background-opacity': 0,
-        'border-width': 0,
-        'label': ''
-      }
-    },
-    // Data-flow edges (IO schemas <-> vars) - gold dashed lines
-    {
-      selector: 'edge[edgeType="data-flow"]',
-      style: {
-        'line-style': 'dashed',
-        'line-color': '#d4ac0d',
-        'target-arrow-color': '#d4ac0d',
-        'target-arrow-shape': 'triangle',
-        'line-dash-pattern': [6, 3],
-        'width': 2,
-        'curve-style': 'bezier',
-        'arrow-scale': 0.8
-      }
-    },
-    // Highlighted data-flow edges
-    {
-      selector: 'edge[edgeType="data-flow"].highlighted',
-      style: {
-        'line-color': '#e74c3c',
-        'target-arrow-color': '#e74c3c',
-        'width': 3,
-        'z-index': 1000
-      }
-    },
-    // Positioning edges (subtle - used for layout positioning)
-    {
-      selector: 'edge[edgeType="positioning"]',
-      style: {
-        'width': 1,
-        'line-color': '#ddd',
-        'line-style': 'dotted',
-        'target-arrow-shape': 'triangle',
-        'target-arrow-color': '#ddd',
-        'opacity': 0.4
-      }
     }
   ],
-  
+
   layout: { name: 'preset' },
   userZoomingEnabled: true,
   userPanningEnabled: true,
   boxSelectionEnabled: false
 });
+
+// -----------------------------------------------------------------------------
+// Edge Type Toggle UI
+
+function createEdgeTypeToggle() {
+  const toolbar = document.createElement('div');
+  toolbar.id = 'edge-type-toggle';
+  toolbar.style.cssText = 'position:absolute;top:8px;right:8px;z-index:10;display:flex;gap:4px;';
+
+  function makeBtn(label, type) {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.dataset.edgeType = type;
+    btn.style.cssText = 'padding:4px 10px;font-size:11px;border:1px solid #bdc3c7;border-radius:4px;cursor:pointer;background:#fff;';
+    if (visibleEdgeTypes.has(type)) {
+      btn.style.background = type === 'code-flow' ? '#dbeaf5' : '#d5f5e3';
+      btn.style.borderColor = type === 'code-flow' ? '#2980b9' : '#27ae60';
+    }
+    btn.addEventListener('click', () => {
+      if (visibleEdgeTypes.has(type)) {
+        // Don't allow removing the last type
+        if (visibleEdgeTypes.size > 1) {
+          visibleEdgeTypes.delete(type);
+        }
+      } else {
+        visibleEdgeTypes.add(type);
+      }
+      // Update button appearance
+      toolbar.querySelectorAll('button').forEach(b => {
+        const t = b.dataset.edgeType;
+        if (visibleEdgeTypes.has(t)) {
+          b.style.background = t === 'code-flow' ? '#dbeaf5' : '#d5f5e3';
+          b.style.borderColor = t === 'code-flow' ? '#2980b9' : '#27ae60';
+        } else {
+          b.style.background = '#fff';
+          b.style.borderColor = '#bdc3c7';
+        }
+      });
+      // Re-fetch with updated edge types
+      pendingAction = 'navigate';
+      const graphPanel = document.getElementById('graph-panel');
+      graphPanel.dispatchEvent(new CustomEvent('cy-navigate', {
+        bubbles: true,
+        detail: { id: currentViewId, select: currentSelectId }
+      }));
+    });
+    return btn;
+  }
+
+  toolbar.appendChild(makeBtn('Code Flow', 'code-flow'));
+  toolbar.appendChild(makeBtn('Schema Refs', 'schema-reference'));
+
+  const container = document.getElementById('cy').parentElement;
+  container.style.position = 'relative';
+  container.appendChild(toolbar);
+}
+
+createEdgeTypeToggle();
 
 // -----------------------------------------------------------------------------
 // Graph Rendering (called by backend via script tag)
@@ -425,70 +408,6 @@ function prepareGraphData(data) {
   });
 }
 
-// Position IO containers above/below the root orphan module
-function repositionIoContainers() {
-  const orphanNode = cy.nodes().filter(n =>
-    !n.data('parent') &&
-    n.data('kind') === 'module'
-  );
-  if (!orphanNode.length) return;
-
-  const rootId = orphanNode.first().id();
-  const inputContainer = cy.getElementById('input:' + rootId);
-  const outputContainer = cy.getElementById('output:' + rootId);
-
-  const rootBB = orphanNode.first().boundingBox();
-  const rootCenterX = (rootBB.x1 + rootBB.x2) / 2;
-  const containerWidth = rootBB.x2 - rootBB.x1;
-  const gap = 40;
-  const ioPaddingX = 40;
-
-  const ensureIoSpacers = (ioContainer, centerX, width) => {
-    const ioId = ioContainer.id();
-    const spacerOffset = Math.max(0, width / 2 - ioPaddingX);
-    const y = ioContainer.position('y');
-
-    const placeSpacer = (spacerId, x) => {
-      let spacer = cy.getElementById(spacerId);
-      if (!spacer.length) {
-        spacer = cy.add({
-          group: 'nodes',
-          data: {
-            id: spacerId,
-            kind: 'io-spacer',
-            parent: ioId
-          }
-        });
-      }
-      spacer.position({ x, y });
-      spacer.lock();
-    };
-
-    placeSpacer(`io-spacer:left:${ioId}`, centerX - spacerOffset);
-    placeSpacer(`io-spacer:right:${ioId}`, centerX + spacerOffset);
-  };
-
-  if (inputContainer.length) {
-    const inputBB = inputContainer.boundingBox();
-    const inputHeight = inputBB.y2 - inputBB.y1;
-    inputContainer.position({
-      x: rootCenterX,
-      y: rootBB.y1 - gap - inputHeight / 2
-    });
-    ensureIoSpacers(inputContainer, rootCenterX, containerWidth);
-  }
-
-  if (outputContainer.length) {
-    const outputBB = outputContainer.boundingBox();
-    const outputHeight = outputBB.y2 - outputBB.y1;
-    outputContainer.position({
-      x: rootCenterX,
-      y: rootBB.y2 + gap + outputHeight / 2
-    });
-    ensureIoSpacers(outputContainer, rootCenterX, containerWidth);
-  }
-}
-
 // Apply highlights and selection from backend data
 function applyHighlightsAndSelection(data) {
   cy.edges().removeClass('highlighted');
@@ -519,7 +438,6 @@ function renderNavigate(data) {
   applyHighlightsAndSelection(data);
 
   cy.layout(dagreOptions()).run();
-  repositionIoContainers();
   cy.fit(50);
 
   if (data.selectedId) {
@@ -612,7 +530,6 @@ function renderExpandToggle(data) {
 
   // 8. Run dagre silently to compute final positions
   cy.layout(dagreOptions()).run();
-  repositionIoContainers();
 
   // 9. Capture new (final) positions and compute viewport target
   const newPositions = {};
@@ -702,8 +619,8 @@ cy.on('tap', 'node', function(evt) {
     }
   });
 
-  // For io-schema nodes, dispatch schema event instead of select
-  if (nodeKind === 'io-schema') {
+  // For schema nodes, dispatch schema event to view schema details
+  if (nodeKind === 'schema') {
     const schemaKey = node.data('schemaKey');
     if (schemaKey) {
       graphPanel.dispatchEvent(new CustomEvent('cy-schema', {
@@ -729,7 +646,6 @@ cy.on('tap', 'edge', function(evt) {
   const edgeType = edge.data('edgeType') || 'code-flow';
   // Use ~ as delimiter since it's URL-safe and won't appear in UUIDs
   const edgeId = `edge~${source}~${target}~${edgeType}`;
-  console.log('Edge clicked, dispatching cy-select with id:', edgeId);
 
   // Visual feedback: highlight edge, deselect nodes
   cy.nodes().unselect();

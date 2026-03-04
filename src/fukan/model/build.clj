@@ -204,20 +204,21 @@
                                  (assoc :schema (get-in node [:data :signature]))
                                  (get-in node [:data :doc])
                                  (assoc :doc (get-in node [:data :doc]))))))]
-    (when (or (seq functions) (seq schemas))
-      (cond-> {:description description}
-        (seq functions) (assoc :functions functions)
-        (seq schemas) (assoc :schemas schemas)))))
+    (cond-> {:description description}
+      (seq functions) (assoc :functions functions)
+      (seq schemas) (assoc :schemas schemas))))
 
 (defn- attach-boundary
-  "Attach or merge a boundary into a node's :data map."
+  "Attach or merge a boundary into a node's :data map.
+   Always ensures a boundary exists (may be empty)."
   [node boundary]
-  (if boundary
-    (let [existing (get-in node [:data :boundary])]
-      (if existing
-        (update-in node [:data :boundary] merge boundary)
-        (update node :data #(assoc (or % {}) :boundary boundary))))
-    node))
+  (let [existing (get-in node [:data :boundary])
+        merged (cond
+                 (and existing boundary) (merge existing boundary)
+                 existing existing
+                 boundary boundary
+                 :else {:description nil})]
+    (update node :data #(assoc (or % {}) :boundary merged))))
 
 (defn- attach-boundaries
   "Attach boundaries to module nodes.
@@ -315,7 +316,7 @@
                                         (->> refs
                                              (keep schema-key->id)
                                              (remove #(= % (:id node)))
-                                             (map (fn [to] {:from (:id node) :to to}))))))))]
+                                             (map (fn [to] {:from (:id node) :to to :kind :schema-reference}))))))))]
     (vec (into #{} schema-edges))))
 
 ;; -----------------------------------------------------------------------------

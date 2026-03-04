@@ -34,14 +34,14 @@
 (def test-model
   {:nodes {"root"     {:id "root" :kind :module :label "root" :parent nil
                         :children #{"ns:a"}
-                        :data {:kind :module}}
+                        :data {:kind :module :boundary {:description nil}}}
            "ns:a"     {:id "ns:a" :kind :module :label "a" :parent "root"
                         :children #{"ns:a/f"}
-                        :data {:kind :module}}
+                        :data {:kind :module :boundary {:description nil}}}
            "ns:a/f"   {:id "ns:a/f" :kind :function :label "f" :parent "ns:a"
                         :children #{}
                         :data {:kind :function :private? false}}}
-   :edges [{:from "ns:a/f" :to "ns:a/f"}]})
+   :edges [{:from "ns:a/f" :to "ns:a/f" :kind :function-call}]})
 
 (deftest selection-defaults-to-view-id
   (testing "when selected-id is nil, selection defaults to view-id"
