@@ -9,6 +9,30 @@
 ;; for the registry. No alias needed — schemas are referenced by keyword.
 
 ;; -----------------------------------------------------------------------------
+;; Pipeline Schemas
+
+(def ^:schema FilePath
+  [:and {:description "Filesystem path: forward-slash separated, non-empty. May be absolute (/...) or project-relative (src/...)."}
+   [:string {:min 1}]
+   [:re {:error/message "must be a valid file path (forward-slash separated, no backslashes, no leading/trailing whitespace)"}
+    #"^[^\s\\].*[^\s]$"]])
+
+(def ^:schema SourceAnalyzer
+  [:=> {:description "A language analyzer: given a source directory path, produces an AnalysisResult."}
+   [:cat :FilePath] :AnalysisResult])
+
+(def ^:schema Model
+  [:map {:description "The complete graph model of a codebase: all entity nodes and their directed dependency edges."}
+   [:nodes [:map-of :NodeId :Node]]
+   [:edges [:vector :Edge]]])
+
+(def ^:schema AnalysisResult
+  [:map {:description "A language analysis result: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces an AnalysisResult; results are merged before calling build-model."}
+   [:source-files {:description "File paths for folder hierarchy construction."} [:vector :FilePath]]
+   [:nodes {:description "Pre-built nodes. Module nodes should have :parent nil and :filename in :data for folder parenting."} [:map-of :NodeId :Node]]
+   [:edges {:description "Pre-built edges between nodes."} [:vector :Edge]]])
+
+;; -----------------------------------------------------------------------------
 ;; Tree Operations
 
 (defn- add-child-to-parent
