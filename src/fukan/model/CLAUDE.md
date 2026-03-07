@@ -31,16 +31,17 @@ The pipeline in `build.clj`:
 ## Module Structure
 
 ```
-schema.clj  — all Malli schema definitions (pure data, no logic)
-nodes.clj   — construction helpers for language analyzers
-build.clj   — orchestration + language-agnostic build pipeline
-lint.clj    — cross-module contract compliance linting
+types.clj   — TypeExpr, FunctionSignature (cross-cutting type IR)
+nodes.clj   — graph primitives (Node, Edge, NodeId) + analysis input shapes (CodeAnalysis) + construction helpers
+build.clj   — pipeline I/O schemas (Model, AnalysisResult, FilePath, SourceAnalyzer) + build pipeline
+lint.clj    — cross-module contract compliance linting (LintViolation, LintReport)
 ```
 
 Dependency graph:
 ```
-schema  ←  nodes  ←  clojure.clj  ←  build
-                  ←  allium.clj   ←
+types  ←  nodes  ←  clojure.clj
+                 ←  allium.clj
+                 ←  build
 ```
 
 ## Analyzer Structure
@@ -56,7 +57,7 @@ The Allium parser is a shared library at `libs/allium/parser.clj`.
 ## Schema Conventions
 
 - `^:schema` metadata marks Malli schema definitions on vars
-- All schema definitions live in `schema.clj` (model schemas) or in their respective modules (e.g., `SchemaDiscoveryEntry` in `clojure.clj`)
+- Schemas live in the submodule that owns the concept: `types.clj` for type IR, `nodes.clj` for graph primitives, `build.clj` for pipeline I/O, `lint.clj` for lint shapes, `clojure.clj` for schema discovery
 - Schemas use Malli syntax: `[:map ...]`, `[:enum ...]`, `[:vector ...]`
 - Function schemas use `[:=> [:cat input...] output]` and are attached via `:malli/schema` in the var's metadata map
 - Schema keys are keywords derived from the var name (e.g., `Model`, `Node`, `Edge`)
