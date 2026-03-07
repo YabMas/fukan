@@ -23,7 +23,6 @@ The system follows a **functional core, imperative shell** architecture. Allium 
 - `model/` — build pipeline, structural invariants
 - `projection/` — pure computation over the model
 - `web/views/` — rendering contracts and interaction rules
-- Pure command logic in `cli/`
 
 **Imperative shell** (boundaries specced, internals governed by tests + conventions):
 - `infra/` — defonce atoms, lifecycle functions, port binding

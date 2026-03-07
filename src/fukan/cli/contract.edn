@@ -1,5 +1,0 @@
-{:description "CLI interfaces for agent-driven codebase exploration. Two modes: a stdin/stdout session loop for subprocess use (explorer), and a stateful REPL gateway callable via clj-nrepl-eval for interactive agent workflows."
- :functions
- [fukan.cli.explorer/start-session
-  fukan.cli.gateway/exec
-  fukan.cli.gateway/reset-session]}
