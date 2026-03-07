@@ -213,10 +213,14 @@
    Always ensures a boundary exists (may be empty)."
   [node boundary]
   (let [existing (get-in node [:data :boundary])
+        ;; Remove nil values from inferred boundary so it doesn't
+        ;; overwrite explicit values (e.g. contract.edn :description)
+        boundary (when boundary
+                   (into {} (remove (comp nil? val)) boundary))
         merged (cond
-                 (and existing boundary) (merge existing boundary)
-                 existing existing
-                 boundary boundary
+                 (and (seq existing) (seq boundary)) (merge existing boundary)
+                 (seq existing) existing
+                 (seq boundary) boundary
                  :else {:description nil})]
     (update node :data #(assoc (or % {}) :boundary merged))))
 
