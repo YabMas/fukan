@@ -1,7 +1,7 @@
-(ns fukan.model.schema
-  "All Malli schema definitions for the model module.
-   Pure data — no logic, no dependencies on other model namespaces.
-   Schemas use keyword refs (not var refs) per project conventions.")
+(ns fukan.model.types
+  "Language-agnostic type expression IR shared across analyzers,
+   projection, and views. Cross-cutting type schemas that don't
+   belong to any single submodule.")
 
 ;; -----------------------------------------------------------------------------
 ;; Analysis Schemas
