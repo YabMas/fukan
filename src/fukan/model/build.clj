@@ -2,10 +2,11 @@
   "Model construction: runs the language-agnostic build pipeline to
    produce the graph model from analyzer results."
   (:require [clojure.string :as str]
+            [fukan.model.nodes]
             [fukan.model.types]))
 
-;; Require model.types so its ^:schema vars are loaded for the registry.
-;; No alias needed — schemas are referenced by keyword, not by var.
+;; Require model.nodes and model.types so their ^:schema vars are loaded
+;; for the registry. No alias needed — schemas are referenced by keyword.
 
 ;; -----------------------------------------------------------------------------
 ;; Tree Operations
