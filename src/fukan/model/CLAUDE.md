@@ -33,14 +33,14 @@ The pipeline in `build.clj`:
 ```
 types.clj   — TypeExpr, FunctionSignature (cross-cutting type IR)
 nodes.clj   — graph primitives (Node, Edge, NodeId) + analysis input shapes (CodeAnalysis) + construction helpers
-build.clj   — pipeline I/O schemas (Model, AnalysisResult, FilePath, SourceAnalyzer) + build pipeline
+build.clj   — pipeline I/O schemas (Model, AnalysisResult, FilePath, AnalyzerKey) + multimethod dispatch (analyze, default-analyzers) + build pipeline
 lint.clj    — cross-module contract compliance linting (LintViolation, LintReport)
 ```
 
 Dependency graph:
 ```
-types  ←  nodes  ←  clojure.clj
-                 ←  allium.clj
+types  ←  nodes  ←  clojure.clj  →  build
+                 ←  allium.clj   →  build
                  ←  build
 ```
 
@@ -50,7 +50,7 @@ Analyzers live under `analyzers/`, split by category:
 - `analyzers/implementation/` — discovers code structure (currently: Clojure via clj-kondo)
 - `analyzers/specification/` — discovers design structure (currently: Allium via instaparse)
 
-Both produce `AnalysisResult` values. `build-model` accepts a seq of analyzers and merges all results before running `run-pipeline`. See each analyzer's `CLAUDE.md` for language-specific details.
+Both produce `AnalysisResult` values. Each registers a `defmethod` on `analyzers/analyze` with a keyword dispatch key (e.g., `:clojure`, `:allium`). `build-model` accepts a set of analyzer keys and dispatches via the multimethod, merging all results before running `run-pipeline`. See each analyzer's `CLAUDE.md` for language-specific details.
 
 The Allium parser is a shared library at `libs/allium/parser.clj`.
 

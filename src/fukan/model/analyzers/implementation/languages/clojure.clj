@@ -8,6 +8,7 @@
             [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.set :as set]
+            [fukan.model.build :as build]
             [fukan.model.nodes :as nodes]))
 
 ;; -----------------------------------------------------------------------------
@@ -458,3 +459,6 @@
     {:source-files source-files
      :nodes (merge enriched-nodes schema-nodes contract-nodes)
      :edges edges}))
+
+(defmethod build/analyze :clojure [_ src-path]
+  (analyze src-path))

@@ -43,5 +43,7 @@ All seven steps happen within `analyze`, producing a single complete AnalysisRes
 
 1. Create a new namespace under `languages/` (e.g., `languages/typescript.clj`)
 2. Implement an `analyze` function: `(fn [src-path] -> AnalysisResult)`
-3. Follow the node ID conventions above
-4. Add the analyzer to the analyzer list in `infra/model.clj`
+3. Register via `(defmethod analyzers/analyze :your-key [_ src-path] (analyze src-path))`
+4. Follow the node ID conventions above
+5. Add the key to `default-analyzers` in `build.clj` if it should run by default
+6. Add a bare require in callers (`infra/model.clj`, `test_support/fixtures.clj`) for registration side effects

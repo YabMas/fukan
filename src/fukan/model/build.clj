@@ -9,6 +9,18 @@
 ;; for the registry. No alias needed — schemas are referenced by keyword.
 
 ;; -----------------------------------------------------------------------------
+;; Analyzer dispatch
+
+(defmulti analyze
+  "Dispatch a source analyzer by keyword. Each language registers via defmethod.
+   Signature: (analyze analyzer-key src-path) -> AnalysisResult"
+  (fn [analyzer-key _src-path] analyzer-key))
+
+(def default-analyzers
+  "The standard set of analyzer keys."
+  #{:clojure :allium})
+
+;; -----------------------------------------------------------------------------
 ;; Pipeline Schemas
 
 (def ^:schema FilePath
@@ -17,9 +29,8 @@
    [:re {:error/message "must be a valid file path (forward-slash separated, no backslashes, no leading/trailing whitespace)"}
     #"^[^\s\\].*[^\s]$"]])
 
-(def ^:schema SourceAnalyzer
-  [:=> {:description "A language analyzer: given a source directory path, produces an AnalysisResult."}
-   [:cat :FilePath] :AnalysisResult])
+(def ^:schema AnalyzerKey
+  [:keyword {:description "Dispatch key for a registered source analyzer (e.g. :clojure, :allium)."}])
 
 (def ^:schema Model
   [:map {:description "The complete graph model of a codebase: all entity nodes and their directed dependency edges."}
@@ -518,12 +529,12 @@
 ;; Public API
 
 (defn build-model
-  "Build complete model from a source path and a seq of analyzers.
-   Each analyzer is (fn [src-path] -> AnalysisResult).
+  "Build complete model from a source path and a set of analyzer keys.
+   Each key dispatches to a registered analyzer via the analyze multimethod.
    Runs all analyzers, merges their results, and produces
    the final Model through the language-agnostic build pipeline."
-  {:malli/schema [:=> [:cat :FilePath [:sequential :SourceAnalyzer]] :Model]}
-  [src-path analyzers]
-  (let [results (map #(% src-path) analyzers)
+  {:malli/schema [:=> [:cat :FilePath [:set :AnalyzerKey]] :Model]}
+  [src-path analyzer-keys]
+  (let [results (map #(analyze % src-path) analyzer-keys)
         merged  (apply merge-results results)]
     (run-pipeline merged)))
