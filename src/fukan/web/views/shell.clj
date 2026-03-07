@@ -38,7 +38,8 @@
     --color-green-bg: #f0f7ee;
     --color-green-bg-hover: #e0f0dc;
     --color-hover-bg: #f0f5fa;
-    --sidebar-width: 340px;
+    --sidebar-width: 24vw;
+    --header-height: 4vh;
   }
   *, *::before, *::after {
     box-sizing: border-box;
@@ -51,7 +52,7 @@
     background: #f5f5f5;
   }
 
-  /* Layout — CSS Grid, two columns */
+  /* Layout — CSS Grid, viewport-unit columns so zoom doesn't shift proportions */
   #container {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
@@ -67,9 +68,11 @@
     background: var(--color-surface);
   }
 
-  /* Breadcrumb */
+  /* Breadcrumb — fixed viewport height so zoom doesn't shift the header */
   #breadcrumb {
-    padding: 0.75rem 1rem;
+    height: var(--header-height);
+    min-height: var(--header-height);
+    padding: 0 0.7vw;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
     font-size: 0.9rem;
@@ -77,6 +80,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    overflow: hidden;
   }
   #breadcrumb .crumb {
     color: var(--color-primary);
@@ -108,10 +112,10 @@
     background: var(--color-surface);
   }
 
-  /* Sidebar */
+  /* Sidebar — viewport-unit padding keeps sidebar stable across zoom */
   #sidebar {
     border-left: 1px solid var(--color-border);
-    padding: 1.25rem;
+    padding: 1vh 0.9vw;
     overflow-y: auto;
     min-width: 0;
     background: var(--color-surface);
