@@ -170,9 +170,16 @@
           desc (assoc :description desc))
 
         :and
-        (cond-> {:tag :and
-                 :types (mapv malli->type-expr children)}
-          desc (assoc :description desc))
+        (let [converted (mapv malli->type-expr children)
+              structural (remove #(#{:predicate :unknown} (:tag %)) converted)]
+          (if (= 1 (count structural))
+            ;; Validation-only intersection: base type + predicates/regex → collapse
+            (cond-> (first structural)
+              desc (assoc :description desc))
+            ;; Genuine intersection of multiple structural types
+            (cond-> {:tag :and
+                     :types converted}
+              desc (assoc :description desc))))
 
         :enum
         (cond-> {:tag :enum
@@ -189,7 +196,7 @@
                  :elements (mapv malli->type-expr children)}
           desc (assoc :description desc))
 
-        :fn
+        (:fn :re)
         (cond-> {:tag :predicate}
           desc (assoc :description desc))
 
@@ -217,9 +224,12 @@
                                  children)}
           desc (assoc :description desc))
 
-        ;; Default — unknown tag
-        (cond-> {:tag :unknown :original (pr-str form)}
-          desc (assoc :description desc))))
+        ;; Primitive/ref with props (e.g. [:string {:min 1}]) — treat as the base type
+        (if (keyword? tag)
+          (cond-> (keyword->type-expr tag)
+            desc (assoc :description desc))
+          (cond-> {:tag :unknown :original (pr-str form)}
+            desc (assoc :description desc)))))
 
     ;; Anything else — unknown
     :else
