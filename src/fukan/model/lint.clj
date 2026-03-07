@@ -7,18 +7,22 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
+(def ^:schema LintViolation
+  [:map {:description "A single contract violation: a cross-module call to a function not declared in the target's contract."}
+   [:from {:description "Node ID of the calling function."} :NodeId]
+   [:to {:description "Node ID of the called function (not in contract)."} :NodeId]
+   [:from-module {:description "Module containing the caller."} :NodeId]
+   [:to-module {:description "Module containing the callee."} :NodeId]
+   [:contract-fns {:description "Functions the target module does export."} [:vector :symbol]]])
+
 (def ^:schema LintReport
   [:map {:description "Contract compliance report: violations and aggregate statistics."}
-   [:violations [:vector [:map
-     [:from :NodeId]
-     [:to :NodeId]
-     [:from-module :NodeId]
-     [:to-module :NodeId]
-     [:contract-fns [:vector :symbol]]]]]
-   [:stats [:map
-     [:total-edges :int]
-     [:cross-module-edges :int]
-     [:violations :int]]]])
+   [:violations {:description "Cross-module calls that target unexported functions."} [:vector :LintViolation]]
+   [:stats {:description "Edge counts for the checked model."}
+    [:map
+     [:total-edges {:description "Total edges in the model."} :int]
+     [:cross-module-edges {:description "Edges crossing module boundaries."} :int]
+     [:violations {:description "Cross-module edges targeting unexported functions."} :int]]]])
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
