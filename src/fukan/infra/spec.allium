@@ -1,4 +1,4 @@
--- allium: 1
+-- allium: 2
 -- infra/spec.allium
 --
 -- Scope: Infrastructure lifecycle — mutable state management for the

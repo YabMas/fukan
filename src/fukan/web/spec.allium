@@ -1,4 +1,4 @@
--- allium: 1
+-- allium: 2
 -- web.allium
 --
 -- Scope: HTTP/SSE transport boundary — orchestration between shell and core
@@ -47,4 +47,5 @@ external entity ViewTransport {
     failures:
         entity_not_found        -- requested node/edge ID not in model
         client_disconnected     -- SSE stream closed by client
+
 }

@@ -1,4 +1,4 @@
--- allium: 1
+-- allium: 2
 -- views.allium
 --
 -- Scope: View and interaction layer — rendering and user interaction semantics
@@ -285,11 +285,6 @@ rule DrillDownSchema {
 
 rule RenderGraph {
     -- Transform projection data into Cytoscape output.
-    --
-    -- Pipeline:
-    --   1. Add :selected? to projection nodes (from effective selection)
-    --   2. Compute highlighted edges (from selection + schema-key matching)
-    --   3. Transform to Cytoscape format (kebab→camel, from/to→source/target)
 
     when: RenderGraph(graph_projection: projection/Projection, editor_state: EditorState)
 
@@ -303,17 +298,11 @@ rule RenderGraph {
         selected_id: effective_selected,
         highlighted_edges: compute_highlighted(graph_projection.edges, effective_selected)
     )
+
 }
 
 rule RenderSidebar {
     -- Render entity details for the sidebar panel.
-    --
-    -- Dispatch: edge entities → edge-specific renderer showing called
-    --   functions. All other entities → generic renderer.
-    --
-    -- GenericRenderer: one renderer for all node kinds. The projection
-    --   layer normalizes entities into a uniform shape; the view just
-    --   iterates sections in order.
     --
     -- SectionOrder (non-edge entities):
     --   1. Label — entity name + kind badge
@@ -342,6 +331,7 @@ rule RenderSidebar {
             render_edge_detail(detail)       -- projection/EdgeDetail
         else:
             render_entity_detail(detail)     -- projection/EntityDetail
+
 }
 
 rule RenderBreadcrumb {

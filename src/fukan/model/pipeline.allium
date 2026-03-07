@@ -1,4 +1,4 @@
--- allium: 1
+-- allium: 2
 -- pipeline.allium
 --
 -- Scope: Model build pipeline — how a Model is constructed from
@@ -108,31 +108,6 @@ rule BuildModel {
     -- produce nodes with descriptions and surface declarations.
     -- Impl analyzers produce nodes with code structure, schemas,
     -- and dependencies.
-    --
-    -- Co-location correspondence: when spec and impl files share
-    -- a directory, their results merge into the same module
-    -- node. The spec enriches the module with surface description
-    -- and guarantees; the impl populates it with function and schema
-    -- children.
-    --
-    -- Surface materialization: each spec provides operation becomes
-    -- a Function child of the module. For spec-only modules these
-    -- are the only children. For spec+impl modules they coexist
-    -- with implementation-discovered functions.
-    --
-    -- Contract construction: a module's contract is assembled from
-    -- available sources. Description comes from spec or docstring.
-    -- Functions come from contract.edn declarations or are inferred
-    -- from public functions with type signatures.
-    --
-    -- Schema ownership: schema-defining vars become Schema child
-    -- nodes of their parent module. The corresponding function node
-    -- is removed (SchemaReplacesFunction). The owning module
-    -- publishes these schemas as part of its contract.
-    --
-    -- Cleanup: empty modules are removed (with spec-data exception).
-    -- Single-child root chains are pruned. Edges with missing
-    -- endpoints or self-references are excluded.
 
     when: BuildModel(results: List<AnalysisResult>)
 
@@ -140,4 +115,5 @@ rule BuildModel {
         nodes: build_node_hierarchy(results),   -- black box
         edges: derive_dependencies(results)     -- black box
     )
+
 }

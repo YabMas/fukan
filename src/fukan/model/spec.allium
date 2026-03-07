@@ -1,4 +1,4 @@
--- allium: 1
+-- allium: 2
 -- model.allium
 --
 -- Scope: System model — the structured representation of a system combining
@@ -183,6 +183,10 @@ entity Edge {
     from: Node
     to: Node
     kind: EdgeKind
+
+    invariant NoSelfEdge {
+        from != to
+    }
 }
 
 entity Node {
@@ -215,6 +219,10 @@ entity Node {
     -- Derived
     is_leaf: children.count = 0
     is_root: parent = null
+
+    invariant LeafStrictness {
+        kind in {Function, Schema} implies children.count = 0
+    }
 }
 
 variant Module : Node {
@@ -302,4 +310,37 @@ entity Model {
     -- Projections
     modules: nodes where kind = Module
     root_nodes: nodes where is_root
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant EdgeIntegrity {
+    for e in Model.edges:
+        e.from in Model.nodes and e.to in Model.nodes
+}
+
+invariant LeafEdges {
+    for e in Model.edges:
+        e.from.kind in {Function, Schema}
+        and e.to.kind in {Function, Schema}
+}
+
+invariant EdgeKindEndpoints {
+    for e in Model.edges:
+        e.kind = schema_reference implies
+            (e.from.kind = Schema and e.to.kind = Schema)
+}
+
+invariant TreeStructure {
+    for n in Model.nodes:
+        n.parent != null implies n.parent in Model.nodes
+}
+
+invariant NoEmptyImplModules {
+    -- Modules without children are removed during build.
+    -- Exception: spec-only modules with boundary declarations are retained.
+    for n in Model.modules:
+        n.children.count = 0 implies n.boundary.description != null
 }

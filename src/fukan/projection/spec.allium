@@ -1,4 +1,4 @@
--- allium: 1
+-- allium: 2
 -- projection.allium
 --
 -- Scope: Projection — pure computation from (Model, options) to visible subgraph
@@ -323,19 +323,18 @@ rule AggregateEdges {
     --   strict visible descendant of A. The more specific edge is
     --   the representative; the less specific one is noise.
     --
-    -- Procedure:
-    --   1. Filter model edges to the requested kind
-    --   2. For each edge, map endpoints to CVA; keep if both
-    --      exist, are distinct, not ancestor-descendant
-    --   3. Add inherited edges from PrivateInheritance
-    --   4. Deduplicate
-    --   5. Drop subsumed edges
-
     when: AggregateEdges(visible_set: Set<String>, edge_kind: model/EdgeKind)
 
     ensures: aggregate_to_visible_ancestors(model.edges, visible_set, edge_kind)  -- black box
-    -- Filters to requested kind, combines CVA-aggregated edges with
-    -- private-inherited edges, deduplicates, then drops subsumed edges.
+
+    @guidance
+        -- Procedure:
+        --   1. Filter model edges to the requested kind
+        --   2. For each edge, map endpoints to closest visible ancestor;
+        --      keep if both exist, are distinct, not ancestor-descendant
+        --   3. Add inherited edges from PrivateInheritance
+        --   4. Deduplicate
+        --   5. Drop subsumed edges
 }
 
 rule EntityDetails {
