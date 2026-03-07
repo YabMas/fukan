@@ -1,5 +1,5 @@
 (ns tasks.vsdd
-  "VSDD orchestration: runs phases 2-5 (Tester -> Builder -> Adversary -> Judge)
+  "VSDD orchestration: runs module-owner -> critic -> judge loop
    for each module task in a task file.
 
    Usage: bb vsdd:run tasks.edn"
@@ -32,9 +32,9 @@
 (defn- ensure-dir [path]
   (.mkdirs (io/file path)))
 
-(defn- print-phase [phase-num phase-name module]
+(defn- print-phase [phase-name module]
   (println)
-  (println (str "=== Phase " phase-num ": " phase-name " (" module ") ==="))
+  (println (str "=== " phase-name " (" module ") ==="))
   (println))
 
 
@@ -147,8 +147,8 @@
 ;; ---------------------------------------------------------------------------
 ;; Prompt builders
 
-(defn- build-tester-prompt
-  ([task] (build-tester-prompt task nil))
+(defn- build-module-owner-prompt
+  ([task] (build-module-owner-prompt task nil))
   ([{:keys [module context spec-refs description]} feedback]
    (str "MODULE: " module "\n"
         "\n"
@@ -160,35 +160,15 @@
           (str "SPEC_REFS:\n"
                (str/join "\n" (map #(str "- " %) spec-refs))
                "\n\n"))
-        "DESCRIPTION: " description
+        "TASK: " description
         (when feedback
           (str "\n\n"
-               "FEEDBACK FROM PREVIOUS ITERATION (fix these issues):\n"
+               "FEEDBACK FROM CRITIC (fix these issues):\n"
                "---\n"
                feedback "\n"
                "---")))))
 
-(defn- build-builder-prompt
-  ([task] (build-builder-prompt task nil))
-  ([{:keys [module context description]} feedback]
-   (str "MODULE: " module "\n"
-        "\n"
-        (when (seq context)
-          (str "CONTEXT:\n"
-               (str/join "\n" (map #(str "- " %) context))
-               "\n\n"))
-        "DESCRIPTION: " description "\n"
-        "\n"
-        "Find all stub functions (those throwing UnsupportedOperationException) "
-        "and implement them until all tests pass."
-        (when feedback
-          (str "\n\n"
-               "FEEDBACK FROM PREVIOUS ITERATION (fix these issues):\n"
-               "---\n"
-               feedback "\n"
-               "---")))))
-
-(defn- build-adversary-prompt [{:keys [module description spec-refs]} run-dir iteration]
+(defn- build-critic-prompt [{:keys [module description spec-refs]} run-dir iteration]
   (str "MODULE: " module "\n"
        "RUN_DIR: " run-dir "\n"
        "\n"
@@ -202,12 +182,12 @@
        "IMPORTANT: Only check alignment for the spec rules listed above. "
        "Do NOT review unrelated rules or functions in the same module. "
        "Check all three alignments (spec<->test, test<->impl, spec<->impl). "
-       "Write your structured report to <RUN_DIR>/" (module-slug module) "/adversary-report-" iteration ".edn"))
+       "Write your structured report to <RUN_DIR>/" (module-slug module) "/critic-report-" iteration ".edn"))
 
 (defn- build-judge-prompt [report-edn {:keys [module description spec-refs]} iteration]
   (str "DO NOT use any tools. Just read this prompt and respond with a verdict.\n"
        "\n"
-       "You are the VSDD judge. You review an adversary report and decide the next action.\n"
+       "You are the VSDD judge. You review a critic report and decide the next action.\n"
        "\n"
        "Module: " module "\n"
        "Description: " description "\n"
@@ -219,7 +199,7 @@
        "Ignore any findings about unrelated rules or functions in the same module. "
        "If all IN-SCOPE findings are resolved, verdict is CONVERGED even if out-of-scope issues remain.\n"
        "\n"
-       "Adversary report:\n"
+       "Critic report:\n"
        "---\n"
        report-edn "\n"
        "---\n"
@@ -227,7 +207,6 @@
        "Respond with EXACTLY one of these verdicts on the FIRST LINE (no other text on line 1):\n"
        "CONVERGED\n"
        "ROUTE_TO_SPEC\n"
-       "ROUTE_TO_TEST\n"
        "ROUTE_TO_IMPL\n"
        "\n"
        "Then explain your reasoning briefly on subsequent lines."))
@@ -242,22 +221,21 @@
   (let [first-line (first (str/split-lines output))]
     (cond
       (str/includes? first-line "CONVERGED")      :converged
-      (str/includes? first-line "ROUTE_TO_SPEC")  :route-to-spec
-      (str/includes? first-line "ROUTE_TO_TEST")  :route-to-test
-      (str/includes? first-line "ROUTE_TO_IMPL")  :route-to-impl
-      :else                                       :unknown)))
+      (str/includes? first-line "ROUTE_TO_SPEC")   :route-to-spec
+      (str/includes? first-line "ROUTE_TO_IMPL")   :route-to-impl
+      :else                                        :unknown)))
 
 ;; ---------------------------------------------------------------------------
 ;; Module cycle
 
-(defn- read-adversary-report [run-dir module-path iteration]
+(defn- read-critic-report [run-dir module-path iteration]
   (let [slug (module-slug module-path)
-        report-file (io/file run-dir slug (str "adversary-report-" iteration ".edn"))]
+        report-file (io/file run-dir slug (str "critic-report-" iteration ".edn"))]
     (when (.exists report-file)
       (slurp report-file))))
 
 (defn- run-module-cycle
-  "Run the tester->builder->adversary->judge loop for a single module task."
+  "Run the module-owner->critic->judge loop for a single module task."
   [task run-dir]
   (let [module (:module task)]
     (loop [iteration 1
@@ -266,79 +244,66 @@
         (println)
         (println (str "CIRCUIT BREAKER: Module " module " did not converge after "
                       max-iterations " iterations."))
-        (println "  Human review required. Check the adversary reports in:" run-dir)
+        (println "  Human review required. Check the critic reports in:" run-dir)
         (throw (ex-info "Circuit breaker: max iterations reached"
                         {:module module :iterations max-iterations})))
 
       (println)
       (println (str "---- Iteration " iteration "/" max-iterations " for " module " ----"))
 
-      ;; Phase 2: Tester
-      (print-phase 2 "Tester" module)
-      (let [tester-result (invoke-agent "tester" module run-dir
-                                        (build-tester-prompt task feedback))]
-        (when-not (zero? (:exit tester-result))
-          (throw (ex-info "Tester agent failed" {:module module :exit (:exit tester-result)})))
+      ;; Phase 1: Module Owner (TDD: writes tests + implements)
+      (print-phase "Module Owner" module)
+      (let [owner-result (invoke-agent "module-owner" module run-dir
+                                       (build-module-owner-prompt task feedback))]
+        (when-not (zero? (:exit owner-result))
+          (throw (ex-info "Module-owner agent failed" {:module module :exit (:exit owner-result)})))
 
-        ;; Phase 3: Builder
-        (print-phase 3 "Builder" module)
-        (let [builder-result (invoke-agent "builder" module run-dir
-                                           (build-builder-prompt task feedback))]
-          (when-not (zero? (:exit builder-result))
-            (throw (ex-info "Builder agent failed" {:module module :exit (:exit builder-result)})))
+        ;; Phase 2: Critic (fresh-context review)
+        (print-phase "Critic" module)
+        (let [slug-dir (str run-dir "/" (module-slug module))]
+          (ensure-dir slug-dir)
+          (let [critic-result (invoke-agent "critic" module run-dir
+                                            (build-critic-prompt task run-dir iteration))]
+            (when-not (zero? (:exit critic-result))
+              (throw (ex-info "Critic agent failed" {:module module :exit (:exit critic-result)})))
 
-          ;; Phase 4: Adversary
-          (print-phase 4 "Adversary" module)
-          (let [slug-dir (str run-dir "/" (module-slug module))]
-            (ensure-dir slug-dir)
-            (let [adversary-result (invoke-agent "adversary" module run-dir
-                                                 (build-adversary-prompt task run-dir iteration))]
-              (when-not (zero? (:exit adversary-result))
-                (throw (ex-info "Adversary agent failed" {:module module :exit (:exit adversary-result)})))
+            ;; Phase 3: Judge (lightweight verdict)
+            (print-phase "Judge" module)
+            (let [report-edn (or (read-critic-report run-dir module iteration)
+                                 "{:findings [] :verdict :converged}")
+                  judge-output (invoke-judge (build-judge-prompt report-edn task iteration))
+                  judge-verdict (parse-verdict judge-output)]
+              (println (str "  Judge verdict: " (name judge-verdict)))
+              (println judge-output)
+              (println)
 
-              ;; Phase 5: Judge
-              (print-phase 5 "Judge" module)
-              (let [report-edn (or (read-adversary-report run-dir module iteration)
-                                   "{:findings [] :verdict :converged}")
-                    judge-output (invoke-judge (build-judge-prompt report-edn task iteration))
-                    judge-verdict (parse-verdict judge-output)]
-                (println (str "  Judge verdict: " (name judge-verdict)))
-                (println judge-output)
-                (println)
+              (case judge-verdict
+                :converged
+                (do
+                  (println (str "Module " module " converged on iteration " iteration))
+                  :converged)
 
-                (case judge-verdict
-                  :converged
-                  (do
-                    (println (str "Module " module " converged on iteration " iteration))
-                    :converged)
+                :route-to-spec
+                (do
+                  (println (str "Module " module " needs spec clarification -- pausing for human review"))
+                  (println "  Check critic report:" (str run-dir "/" (module-slug module) "/critic-report-" iteration ".edn"))
+                  :route-to-spec)
 
-                  :route-to-spec
-                  (do
-                    (println (str "Module " module " needs spec clarification -- pausing for human review"))
-                    (println "  Check adversary report:" (str run-dir "/" (module-slug module) "/adversary-report.edn"))
-                    :route-to-spec)
+                :route-to-impl
+                (do
+                  (println "  Routing back to module-owner with critic feedback")
+                  (recur (inc iteration) judge-output))
 
-                  :route-to-test
-                  (do
-                    (println "  Routing to test -- re-running from tester phase")
-                    (recur (inc iteration) judge-output))
-
-                  :route-to-impl
-                  (do
-                    (println "  Routing to impl -- re-running builder+adversary+judge")
-                    ;; TODO: optimize to skip tester on route-to-impl
-                    (recur (inc iteration) judge-output))
-
-                  ;; Unknown verdict
-                  (do
-                    (println (str "Unknown judge verdict: " judge-verdict " -- treating as needs-review"))
-                    :unknown))))))))))
+                ;; Unknown verdict
+                (do
+                  (println (str "Unknown judge verdict: " judge-verdict " -- treating as needs-review"))
+                  :unknown)))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Main entry point
 
 (defn run
-  "Run VSDD phases 2-5 for all tasks in a task file."
+  "Run VSDD loop for all tasks in a task file."
   [tasks-file]
   (when (str/blank? tasks-file)
     (throw (ex-info "Usage: bb vsdd:run <tasks.edn>" {})))

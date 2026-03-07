@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# PreToolUse hook: enforce adversary boundary for VSDD adversary agent.
+# PreToolUse hook: enforce critic boundary for VSDD critic agent.
 #
-# The adversary can:
+# The critic can:
 #   Read/Glob/Grep: MODULE_PATH, its test path, test_support/, .vsdd/
 #   Edit/Write: .vsdd/ only (report output)
 #   Edit/Write DENIED: everything else
 #
-# Required env: MODULE_PATH, AGENT_ROLE=adversary, VSDD_RUN_DIR
+# Required env: MODULE_PATH, AGENT_ROLE=critic, VSDD_RUN_DIR
 
 set -euo pipefail
 
@@ -18,8 +18,8 @@ if [[ -z "$TOOL_NAME" ]]; then
   exit 0
 fi
 
-# Only enforce for adversary role
-if [[ "${AGENT_ROLE:-}" != "adversary" ]]; then
+# Only enforce for critic role
+if [[ "${AGENT_ROLE:-}" != "critic" ]]; then
   exit 0
 fi
 
@@ -57,7 +57,7 @@ EOF
 }
 
 if [[ -z "${MODULE_PATH:-}" ]]; then
-  deny "MODULE_PATH not set — adversary boundary cannot be enforced"
+  deny "MODULE_PATH not set — critic boundary cannot be enforced"
 fi
 
 # Build absolute paths
@@ -81,7 +81,7 @@ case "$TOOL_NAME" in
        [[ "$TARGET_PATH" == "$ABS_VSDD"* ]]; then
       exit 0
     fi
-    deny "Adversary $TOOL_NAME blocked: $TARGET_PATH is outside readable boundary"
+    deny "Critic $TOOL_NAME blocked: $TARGET_PATH is outside readable boundary"
     ;;
 esac
 
@@ -91,6 +91,6 @@ case "$TOOL_NAME" in
     if [[ "$TARGET_PATH" == "$ABS_VSDD"* ]]; then
       exit 0
     fi
-    deny "Adversary can only write to .vsdd/ (blocked: $TARGET_PATH)"
+    deny "Critic can only write to .vsdd/ (blocked: $TARGET_PATH)"
     ;;
 esac

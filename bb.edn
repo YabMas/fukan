@@ -26,10 +26,10 @@
                       :requires ([tasks.agent-session :as agent-session])
                       :task (agent-session/list-sessions)}
 
-  vsdd:run {:doc "Run VSDD phases 2-5 for a task file.
+  vsdd:run {:doc "Run VSDD loop for a task file.
 
-  Spawns tester, builder, and adversary agents with boundary-enforcing
-  hooks. A lightweight judge (haiku) routes between phases.
+  Spawns module-owner and critic agents with boundary-enforcing hooks.
+  A lightweight judge (haiku) routes between phases.
 
   Requires nREPL on port 7889.
 
