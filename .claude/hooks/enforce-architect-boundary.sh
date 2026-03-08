@@ -22,9 +22,19 @@ EOF
 }
 
 case "$TOOL_NAME" in
-  Bash|Edit|Write)
-    deny "Architect agent cannot use $TOOL_NAME. Use Read, Glob, or Grep on spec files instead."
+  Bash)
+    # Allow jj commands only
+    COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+    case "$COMMAND" in
+      jj\ *|jj)
+        exit 0
+        ;;
+      *)
+        deny "Architect agent can only run jj commands via Bash. Denied: $COMMAND"
+        ;;
+    esac
     ;;
+  Edit|Write)
   Glob|Grep)
     # Allowed — architect can search freely
     exit 0
