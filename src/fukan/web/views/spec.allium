@@ -18,7 +18,7 @@ value EditorState {
     -- Client-side UI state. Split into two concerns:
     --
     -- Projection inputs (determine what's visible):
-    --   view_id + expanded + show_private + visible_edge_types
+    --   view_id + expanded + show_private + visible_edge_types + perspective
     --
     -- Rendering inputs (determine how it looks):
     --   selected_id + schema_id
@@ -28,6 +28,7 @@ value EditorState {
     expanded: Set<String>             -- modules whose children are visible (user-controlled)
     show_private: Set<String>         -- expanded modules that also show private children
     visible_edge_types: Set<String>   -- edge types to include in projection (defaults to all)
+    perspective: String               -- "call-graph" or "dependency-graph" (defaults to "call-graph")
 }
 
 value CytoscapeGraph {
@@ -59,7 +60,8 @@ value CytoscapeEdge {
     id: String
     source: String
     target: String
-    edge_type: String      -- "code-flow" or "schema-reference"
+    edge_type: String      -- "code-flow" or "type-reference"
+    kind: String           -- "function-call", "dispatches", or "schema-reference"
 }
 
 ------------------------------------------------------------
@@ -316,9 +318,10 @@ rule RenderSidebar {
     --   5. Dependencies — entities this one depends on ("None" if empty)
     --   6. Dependents — entities that depend on this one ("None" if empty)
     --
-    -- EdgeRenderer: dispatched by edge_type.
-    --   code_flow: label + "Functions Called" list.
-    --   schema_reference: label + "Schema References" list.
+    -- EdgeRenderer: dispatched by edge_type and kind.
+    --   code_flow/function_call: label + "Functions Called" list.
+    --   code_flow/dispatches: label + "Dispatched Functions" list.
+    --   type_reference: label + "Schema References" list.
     --
     -- EmptyState: when no entity is selected, show placeholder text.
 

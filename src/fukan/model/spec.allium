@@ -57,7 +57,9 @@ entity TypeExpr {
 
 variant RefExpr : TypeExpr {
     -- Named reference to another type (e.g. :Model, :NodeId).
-    name: String
+    -- The name is an identifier (registry key), not an arbitrary string.
+    -- In Clojure, this maps to a keyword.
+    name: Identifier
 }
 
 variant PrimitiveExpr : TypeExpr {
@@ -103,7 +105,9 @@ variant AndExpr : TypeExpr {
 
 variant EnumExpr : TypeExpr {
     -- Fixed set of literal values.
-    values: List<String>
+    -- Values may be strings, keywords, numbers, or other literals
+    -- depending on the source language.
+    values: List<Value>
 }
 
 variant TupleExpr : TypeExpr {
@@ -138,25 +142,36 @@ value FunctionSignature {
     output: TypeExpr
 }
 
+value BoundaryFn {
+    -- Summary of a public function in a module boundary.
+    -- Not the full Function entity — just the contract-relevant fields.
+    -- Appears in Boundary.functions to describe what a module provides.
+    name: String
+    id: Identifier?          -- NodeId of corresponding Function child, if any
+    signature: FunctionSignature?
+    doc: String?
+}
+
 value Boundary {
     -- A module's public contract: what it promises to the outside world.
     --
     -- The boundary is a manifest — it declares the module's public API
-    -- and the data shapes it owns. References point to the actual
-    -- Function and Schema child entities of the module.
+    -- and the data shapes it owns. Summaries, not entity references:
+    -- BoundaryFn captures the contract-relevant slice of each function,
+    -- and schema keys identify owned schemas by registry key.
     --
     -- Assembled from specification and implementation:
     --   - description: from spec entity description, namespace docstring,
     --     or contract.edn description (first available, in that priority)
     --   - functions: public API operations (from contract.edn, spec
     --     provides, or inferred from signatures)
-    --   - schemas: data shapes this module owns and publishes (consumers
-    --     of these schemas depend on this module's contract)
+    --   - schemas: registry keys of data shapes this module owns and
+    --     publishes (consumers of these schemas depend on this module)
     --   - guarantees: from specification
 
     description: String?
-    functions: List<Function>
-    schemas: List<Schema>
+    functions: List<BoundaryFn>
+    schemas: List<Identifier>
     guarantees: List<String>?
 }
 
@@ -164,22 +179,45 @@ value Boundary {
 -- Entities
 ------------------------------------------------------------
 
-enum EdgeKind { function_call | schema_reference }
--- function_call:      function references another function
---                     (var/namespace cross-references from code analysis)
--- schema_reference:   schema type references another schema type
---                     (keyword refs within TypeExpr forms)
+enum EdgeKind { function_call | dispatches | schema_reference }
+-- function_call:     A directly invokes B. A's source names B's var with
+--                    invocation intent. The common case for function dependencies.
+--
+-- dispatches:        A polymorphically routes to B at runtime.
+--                    A is a dispatch point, B is a handler. Stored once in the
+--                    canonical direction (dispatch point → handler). The
+--                    reverse reading — "B implements A" — is a projection
+--                    concern, not a separate edge.
+--
+-- schema_reference:  A's type structure names B. Schema-to-schema keyword
+--                    references within TypeExpr forms.
+--
+-- Projection perspectives:
+--   Call graph (who invokes whom):
+--     function_call edges: from → to (direct invocation)
+--     dispatches edges: from → to (dispatch point routes to handler)
+--   Dependency graph (who depends on whom):
+--     function_call edges: from → to (caller depends on callee) — same direction
+--     dispatches edges: to → from (handler depends on dispatch point) — flipped
+--   Both perspectives use the same stored edges; projection controls direction.
 
 entity Edge {
-    -- Directed dependency between two leaf nodes.
+    -- Directed relationship between two leaf nodes.
     -- Edges are strictly leaf-to-leaf: both endpoints are Function
     -- or Schema nodes. Module-level relationships are derived by
     -- the projection layer through ancestor aggregation.
     --
-    -- EdgeKindEndpoints: the kind constrains valid endpoint combinations.
+    -- The canonical direction is always stored. For code edges (calls,
+    -- dispatches) this is the invocation direction: caller → callee,
+    -- dispatch point → handler. Projection may flip direction when
+    -- rendering dependency perspectives.
+    --
+    -- EdgeKindEndpoints: the kind constrains valid endpoint types.
     --   function_call: from is Function, to is Function or Schema
-    --     (a function may reference a var that was replaced by a schema node)
-    --   schema_reference: both endpoints are Schema nodes
+    --     (a function may reference a var replaced by a schema node)
+    --   dispatches: both endpoints are Function
+    --     (dispatch point and handler are both functions)
+    --   schema_reference: both endpoints are Schema
     from: Node
     to: Node
     kind: EdgeKind
@@ -210,7 +248,6 @@ entity Node {
 
     kind: Module | Function | Schema
     label: String
-    description: String?     -- purpose statement from spec or docstring
 
     -- Hierarchy
     parent: Node?
@@ -293,7 +330,7 @@ entity Model {
     --   the model — they are derived on demand by projection.
     --
     -- EdgeKindEndpoints: endpoint node kinds are constrained by
-    --   edge kind (see Edge entity).
+    --   edge kind (see EdgeKind enum and Edge entity).
     --
     -- SmartRootPruning: single-child module chains at the root are
     --   collapsed. The tree starts at the first module with multiple
@@ -329,6 +366,8 @@ invariant LeafEdges {
 
 invariant EdgeKindEndpoints {
     for e in Model.edges:
+        e.kind = dispatches implies
+            (e.from.kind = Function and e.to.kind = Function)
         e.kind = schema_reference implies
             (e.from.kind = Schema and e.to.kind = Schema)
 }

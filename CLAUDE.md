@@ -16,3 +16,7 @@ Fukan is a self-analyzing codebase visualizer. It analyzes its own source code â
 | `src/fukan/web/views/spec.allium` | View rendering and interaction semantics |
 
 Specs are the authoritative description of system behavior. Implementation follows specs. Tests encode spec invariants. When spec and code disagree, the spec is right.
+
+## Spec Authoring Rules
+
+- **Language-agnostic model specs.** The model, projection, and view specs describe domain concepts using standard PL terminology. Never use language-specific examples (e.g. `defmulti`, `defmethod`, `protocol`) in these specs â€” use generic terms like "dispatch point", "handler", "polymorphic dispatch". Language-specific details belong only in analyzer boundary specs where they describe a concrete implementation.
