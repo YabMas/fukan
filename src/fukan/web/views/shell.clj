@@ -177,6 +177,17 @@
   #node-info li:hover {
     background: var(--color-hover-bg);
   }
+  #node-info li.fn-card {
+    padding: 0.5rem 0.65rem;
+    margin-bottom: 0.35rem;
+    background: var(--color-surface-alt);
+    border-left: 3px solid var(--color-border);
+    border-radius: 0 4px 4px 0;
+  }
+  #node-info li.fn-card:hover {
+    border-left-color: var(--color-primary);
+    background: var(--color-hover-bg);
+  }
   .empty-state {
     color: #b0b8c1;
     font-style: italic;
@@ -244,8 +255,22 @@
   /* Function signatures */
   .sig {
     padding-left: 0.5rem;
+    margin-top: 0.2rem;
     font-family: var(--font-mono);
     font-size: 0.78rem;
+    color: var(--color-text-faint);
+  }
+  .sig .schema-ref {
+    color: var(--color-primary);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+  }
+  .sig .schema-ref:hover {
+    text-decoration-style: solid;
+  }
+  .sig .arrow {
     color: var(--color-text-faint);
   }
   .signature {

@@ -46,6 +46,51 @@
   (when-let [{:keys [inputs output]} sig]
     (str (str/join ", " (map type-expr->str inputs)) " \u2192 " (type-expr->str output))))
 
+(defn- schema-click-url
+  "Build the SSE schema click URL for a schema keyword.
+   Handles both qualified (:ns/Name) and unqualified (:Name) keywords."
+  [key]
+  (str "@get('/sse/schema?id=" (url-encode (subs (str key) 1)) "')"))
+
+;; -----------------------------------------------------------------------------
+;; Rich TypeExpr rendering (clickable schema refs)
+
+(defn- type-expr->hiccup
+  "Convert a TypeExpr to Hiccup with clickable schema refs."
+  [type-expr]
+  (if-not (map? type-expr)
+    [:span (pr-str type-expr)]
+    (case (:tag type-expr)
+      :ref       [:span.schema-ref
+                  {"data-on:click.stop" (schema-click-url (:name type-expr))}
+                  (name (:name type-expr))]
+      :primitive [:span (:name type-expr)]
+      :vector    (list "[" (type-expr->hiccup (:element type-expr)) "]")
+      :set       (list "#{" (type-expr->hiccup (:element type-expr)) "}")
+      :map-of    (list "{" (type-expr->hiccup (:key-type type-expr))
+                       " " (type-expr->hiccup (:value-type type-expr)) "}")
+      :maybe     (list (type-expr->hiccup (:inner type-expr)) "?")
+      :or        (interpose " | " (map type-expr->hiccup (:variants type-expr)))
+      :and       (interpose " & " (map type-expr->hiccup (:types type-expr)))
+      :enum      [:span (str/join " | " (map pr-str (:values type-expr)))]
+      :tuple     (list "[" (interpose ", " (map type-expr->hiccup (:elements type-expr))) "]")
+      :fn        (list (interpose ", " (map type-expr->hiccup (:inputs type-expr)))
+                       [:span.arrow " \u2192 "]
+                       (type-expr->hiccup (:output type-expr)))
+      :map       [:span "map"]
+      :predicate [:span "fn"]
+      :unknown   [:span (or (:original type-expr) "?")]
+      [:span (pr-str type-expr)])))
+
+(defn- fn-signature-hiccup
+  "Format a function signature as Hiccup with clickable schema refs."
+  [sig]
+  (when-let [{:keys [inputs output]} sig]
+    [:div.sig
+     (interpose ", " (map type-expr->hiccup inputs))
+     [:span.arrow " \u2192 "]
+     (type-expr->hiccup output)]))
+
 ;; -----------------------------------------------------------------------------
 ;; Shared components
 
@@ -53,16 +98,16 @@
   "Render a list of functions with optional signatures.
    Each entry is {:name :schema :id (optional)}.
    When :id is present, the item is clickable.
-   Docs are available by clicking into the specific function."
+   Schema refs in signatures are individually clickable (drill-down)."
   [fns]
   [:ul
    (for [{:keys [name schema id]} fns]
      (let [attrs (when id
                    {"data-on:click" (str "@get('/sse/view?select=" (url-encode id) "')")})]
-       [:li attrs
+       [:li.fn-card attrs
         name
-        (when-let [sig (fn-signature-str schema)]
-          [:div.sig sig])]))])
+        (when schema
+          (fn-signature-hiccup schema))]))])
 
 (defn- render-dep-list
   "Render a dependency or dependents section with heading and clickable items."
@@ -83,12 +128,6 @@
   [text]
   (when text
     [:div.doc text]))
-
-(defn- schema-click-url
-  "Build the SSE schema click URL for a schema keyword.
-   Handles both qualified (:ns/Name) and unqualified (:Name) keywords."
-  [key]
-  (str "@get('/sse/schema?id=" (url-encode (subs (str key) 1)) "')"))
 
 (defn- render-io-sections
   "Render input and output schema type lists.
@@ -146,14 +185,13 @@
 (defn- render-interface
   "Render the interface section based on its type.
    Dispatches to the appropriate sub-renderer.
-   Modules (:fn-list) show Inputs, Outputs, and Public API.
+   Modules (:fn-list) show Public API with clickable schema refs per function.
    Leaves (:fn-inline) show Inputs and Outputs only.
    Schema defs and name-lists render their own content without IO sections."
   [{:keys [type items registry]} dataflow nav]
   (case type
     :fn-list
     (list
-     (render-io-sections dataflow)
      [:h5 "Public API " [:span.dep-count (str "(" (count items) ")")]]
      (render-fn-list items))
 
