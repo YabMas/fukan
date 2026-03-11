@@ -2,31 +2,22 @@
   "Model construction: runs the language-agnostic build pipeline to
    produce the graph model from analyzer results."
   (:require [clojure.string :as str]
-            [fukan.model.schema]))
+            [fukan.model.schema]
+            [fukan.utils.files]))
 
-;; Require model.schema so all ^:schema vars are loaded for the registry.
-;; No alias needed — schemas are referenced by keyword.
+;; Require model.schema and utils.files so all ^:schema vars are loaded
+;; for the registry. No alias needed — schemas are referenced by keyword.
 
 ;; -----------------------------------------------------------------------------
 ;; Analyzer dispatch
 
 (defmulti analyze
-  "Dispatch a source analyzer by keyword. Each language registers via defmethod.
-   Signature: (analyze analyzer-key src-path) -> AnalysisResult"
+  "Dispatch a source analyzer by keyword. Each language registers via defmethod."
+  {:malli/schema [:=> [:cat :AnalyzerKey :FilePath] :AnalysisResult]}
   (fn [analyzer-key _src-path] analyzer-key))
-
-(def default-analyzers
-  "The standard set of analyzer keys."
-  #{:clojure :allium})
 
 ;; -----------------------------------------------------------------------------
 ;; Pipeline Schemas
-
-(def ^:schema FilePath
-  [:and {:description "Filesystem path: forward-slash separated, non-empty. May be absolute (/...) or project-relative (src/...)."}
-   [:string {:min 1}]
-   [:re {:error/message "must be a valid file path (forward-slash separated, no backslashes, no leading/trailing whitespace)"}
-    #"^[^\s\\].*[^\s]$"]])
 
 (def ^:schema AnalyzerKey
   [:keyword {:description "Dispatch key for a registered source analyzer (e.g. :clojure, :allium)."}])
