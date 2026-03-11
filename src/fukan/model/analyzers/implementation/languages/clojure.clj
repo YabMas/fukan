@@ -9,7 +9,7 @@
             [clojure.string :as str]
             [clojure.set :as set]
             [fukan.model.build :as build]
-            [fukan.model.nodes :as nodes]))
+            [fukan.model.analyzers.implementation.builders :as builders]))
 
 ;; -----------------------------------------------------------------------------
 ;; Static Analysis
@@ -436,7 +436,7 @@
         symbol-defs (:symbol-definitions analysis)
 
         ;; Build module nodes with nil parent (empty folder-index)
-        {ns-nodes :nodes ns-index :index} (nodes/build-module-nodes module-defs {})
+        {ns-nodes :nodes ns-index :index} (builders/build-module-nodes module-defs {})
 
         ;; Add :filename to each module node's data for folder parenting
         ns-filename-map (into {} (map (fn [nd] [(str (:name nd)) (:filename nd)]) module-defs))
@@ -447,11 +447,11 @@
                             {} ns-nodes)
 
         ;; Build symbol nodes
-        {var-nodes :nodes var-index :index} (nodes/build-symbol-nodes symbol-defs ns-index)
+        {var-nodes :nodes var-index :index} (builders/build-symbol-nodes symbol-defs ns-index)
 
         ;; Build edges (var-level only — module dependencies are
         ;; derived from these by the projection layer)
-        var-edges (nodes/build-reference-edges analysis var-index ns-index)
+        var-edges (builders/build-reference-edges analysis var-index ns-index)
 
         ;; Build dispatch edges (defmulti → defmethod)
         dispatch-edges (build-dispatch-edges raw-var-usages var-index)]

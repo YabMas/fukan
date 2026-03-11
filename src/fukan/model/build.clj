@@ -2,11 +2,10 @@
   "Model construction: runs the language-agnostic build pipeline to
    produce the graph model from analyzer results."
   (:require [clojure.string :as str]
-            [fukan.model.nodes]
-            [fukan.model.types]))
+            [fukan.model.schema]))
 
-;; Require model.nodes and model.types so their ^:schema vars are loaded
-;; for the registry. No alias needed — schemas are referenced by keyword.
+;; Require model.schema so all ^:schema vars are loaded for the registry.
+;; No alias needed — schemas are referenced by keyword.
 
 ;; -----------------------------------------------------------------------------
 ;; Analyzer dispatch
@@ -31,11 +30,6 @@
 
 (def ^:schema AnalyzerKey
   [:keyword {:description "Dispatch key for a registered source analyzer (e.g. :clojure, :allium)."}])
-
-(def ^:schema Model
-  [:map {:description "The complete graph model of a codebase: all entity nodes and their directed dependency edges."}
-   [:nodes [:map-of :NodeId :Node]]
-   [:edges [:vector :Edge]]])
 
 (def ^:schema AnalysisResult
   [:map {:description "A language analysis result: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces an AnalysisResult; results are merged before calling build-model."}
