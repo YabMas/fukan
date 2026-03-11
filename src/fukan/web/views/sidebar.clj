@@ -185,14 +185,14 @@
 (defn- render-interface
   "Render the interface section based on its type.
    Dispatches to the appropriate sub-renderer.
-   Modules (:fn-list) show Public API with clickable schema refs per function.
+   Modules (:fn-list) show Operations with clickable schema refs per function.
    Leaves (:fn-inline) show Inputs and Outputs only.
    Schema defs and name-lists render their own content without IO sections."
   [{:keys [type items registry]} dataflow nav]
   (case type
     :fn-list
     (list
-     [:h5 "Public API " [:span.dep-count (str "(" (count items) ")")]]
+     [:h5 "Operations " [:span.dep-count (str "(" (count items) ")")]]
      (render-fn-list items))
 
     :fn-inline
@@ -239,10 +239,23 @@
       (for [g guarantees]
         [:li g])])))
 
+(defn- render-defined-types
+  "Render a Defined Types section listing schemas owned by a module.
+   Each item is clickable and drills down into the schema detail view."
+  [schemas]
+  (when (seq schemas)
+    (list
+     [:h5 "Defined Types " [:span.dep-count (str "(" (count schemas) ")")]]
+     [:ul
+      (for [{:keys [label key]} schemas]
+        [:li (when key {"data-on:click" (schema-click-url key)})
+         label])])))
+
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
-   Iterates through sections in order: label, description, guarantees, interface, deps, dependents."
-  [{:keys [label kind description guarantees interface dataflow nav]}]
+   Iterates through sections in order: label, description, guarantees,
+   defined types, interface, deps, dependents."
+  [{:keys [label kind description guarantees schemas interface dataflow nav]}]
   (str
    (h/html
     [:div#node-info
@@ -253,6 +266,7 @@
 
      (render-description description)
      (render-guarantees guarantees)
+     (render-defined-types schemas)
 
      (when interface
        (render-interface interface dataflow nav))])))

@@ -5,7 +5,8 @@
    schema form), dataflow (input/output schema references), and
    aggregated dependency counts. The normalized shape lets the sidebar
    render all entity kinds with one generic renderer."
-  (:require [clojure.string :as str]
+  (:require [clojure.set :as set]
+            [clojure.string :as str]
             [fukan.projection.schema :as proj.schema]))
 
 ;; -----------------------------------------------------------------------------
@@ -223,17 +224,44 @@
 
       nil)))
 
+(defn- all-descendant-schemas
+  "Get all schema keywords defined anywhere within a module's subtree.
+   Traverses children recursively, collecting schema keys at any depth."
+  [model node-id]
+  (let [children (get-in model [:nodes node-id :children] #{})]
+    (->> children
+         (mapcat (fn [cid]
+                   (let [child (get-in model [:nodes cid])]
+                     (if (= :schema (:kind child))
+                       [(get-in child [:data :schema-key])]
+                       (all-descendant-schemas model cid)))))
+         set)))
+
+(defn- operation-schema-refs
+  "Collect all schema keywords referenced in a module's boundary function signatures."
+  [model data]
+  (when-let [fns (seq (get-in data [:boundary :functions]))]
+    (->> fns
+         (keep #(extract-fn-io model (:schema %)))
+         (mapcat (fn [{:keys [inputs outputs]}] (concat inputs outputs)))
+         set)))
+
 (defn- extract-schemas
   "Extract schema references relevant to this entity.
+   For modules: schemas that are both defined within the module's subtree
+   AND referenced in the module's operation signatures (defined types).
+   For functions: schemas referenced in the function's signature.
    Returns a vector of {:key schema-keyword :doc str?} or nil."
   [model node]
   (let [data (:data node)
         ref-fn (partial schema-ref-with-doc model)]
     (case (:kind data)
       :module
-      (let [module-schemas (proj.schema/schemas-for-module model (:id node))]
-        (when (seq module-schemas)
-          (->> module-schemas sort (mapv ref-fn))))
+      (let [owned (all-descendant-schemas model (:id node))
+            referenced (operation-schema-refs model data)
+            defined-types (set/intersection owned (or referenced #{}))]
+        (when (seq defined-types)
+          (->> defined-types sort (mapv ref-fn))))
 
       :function
       (when-let [{:keys [inputs output]} (:signature data)]
