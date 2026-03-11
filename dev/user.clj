@@ -20,19 +20,20 @@
   "Start the system: load model and start the web server.
 
    Options:
-     :src  - Path to Clojure source directory (default: \"src\")
-     :port - Server port (default: 8080)
+     :src       - Path to source directory (default: \"src\")
+     :port      - Server port (default: 8080)
+     :analyzers - Set of analyzer keys (required, e.g. #{:clojure :allium})
 
    Examples:
-     (go)
-     (go {:src \"/path/to/project/src\" :port 3000})"
-  ([] (go {}))
-  ([{:keys [src port] :or {src "src" port 8080}}]
-   (if (infra-server/running?)
-     (println "Server already running on port" (infra-server/get-port))
-     (do
-       (infra-model/load-model src)
-       (infra-server/start-server {:port port})))))
+     (go {:analyzers #{:clojure :allium}})
+     (go {:src \"/path/to/project/src\" :port 3000 :analyzers #{:clojure}})"
+  [{:keys [src port analyzers] :or {src "src" port 8080}}]
+  (assert analyzers ":analyzers is required (e.g. #{:clojure :allium})")
+  (if (infra-server/running?)
+    (println "Server already running on port" (infra-server/get-port))
+    (do
+      (infra-model/load-model src analyzers)
+      (infra-server/start-server {:port port}))))
 
 (defn halt
   "Stop the running server."
@@ -44,10 +45,11 @@
    Use after editing any source files."
   []
   (if-let [src (infra-model/get-src)]
-    (let [port (or (infra-server/get-port) 8080)]
+    (let [port (or (infra-server/get-port) 8080)
+          analyzers (infra-model/get-analyzers)]
       (halt)
       (reload-code!)
-      (go {:src src :port port}))
+      (go {:src src :port port :analyzers analyzers}))
     (println "No previous configuration. Use (go) first.")))
 
 (defn refresh-model
@@ -75,7 +77,7 @@
 
 (comment
   ;; Quick start for this project
-  (go)
+  (go {:analyzers #{:clojure :allium}})
   (halt)
   (reset)
 

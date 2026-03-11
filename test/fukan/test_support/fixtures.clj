@@ -7,6 +7,6 @@
             fukan.model.analyzers.specification.languages.allium))
 
 (defn build-self-model
-  "Build a model from Fukan's own source using default analyzers."
+  "Build a model from Fukan's own source using both analyzers."
   []
-  (build/build-model "src" build/default-analyzers))
+  (build/build-model "src" #{:clojure :allium}))
