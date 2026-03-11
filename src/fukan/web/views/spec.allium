@@ -2,7 +2,8 @@
 -- views.allium
 --
 -- Scope: View and interaction layer — rendering and user interaction semantics
--- Includes: Interaction model, rendering pipeline, sidebar structure, visual indicators
+-- Includes: Interaction model, rendering pipeline, sidebar structure,
+--           graph viewer component boundary, visual indicators
 -- Excludes:
 --   - Projection computation (see projection.allium)
 --   - Model construction (see model.allium)
@@ -14,21 +15,25 @@ use "./projection.allium" as projection
 -- Value Types
 ------------------------------------------------------------
 
-value EditorState {
-    -- Client-side UI state. Split into two concerns:
+value ViewState {
+    -- Client-owned graph state. Lives inside the GraphViewer
+    -- component and is included in every outbound event so the
+    -- server can use it for projection computation.
     --
-    -- Projection inputs (determine what's visible):
-    --   view_id + expanded + show_private + visible_edge_types + perspective
-    --
-    -- Rendering inputs (determine how it looks):
-    --   selected_id + schema_id
+    -- The server never writes these values back — the component
+    -- is the sole owner. The server reads them from request
+    -- parameters, uses them for projection, and returns the
+    -- projected graph data.
+    expanded: Set<String>             -- modules whose children are visible
+    show_private: Set<String>         -- expanded modules that also show private children
+    visible_edge_types: Set<String>   -- edge types to include (defaults to all)
+}
+
+value NavigationState {
+    -- Server-owned navigation state. Determines what entity is
+    -- being viewed and what is selected. Updated by SSE responses.
     view_id: String?                  -- module being viewed (null = root)
     selected_id: String?              -- currently highlighted node
-    schema_id: String?                -- schema being inspected in sidebar
-    expanded: Set<String>             -- modules whose children are visible (user-controlled)
-    show_private: Set<String>         -- expanded modules that also show private children
-    visible_edge_types: Set<String>   -- edge types to include in projection (defaults to all)
-    perspective: String               -- "call-graph" or "dependency-graph" (defaults to "call-graph")
 }
 
 value CytoscapeGraph {
@@ -65,11 +70,113 @@ value CytoscapeEdge {
 }
 
 ------------------------------------------------------------
+-- GraphViewer Component
+------------------------------------------------------------
+--
+-- The GraphViewer is a web component that wraps the Cytoscape.js
+-- graph library. It formalizes the boundary between server-driven
+-- state (graph data, selection) and imperative graph rendering.
+--
+-- Architecture: "data in, events out" (Datastar pattern).
+--
+-- CurrentProblem: without this boundary, graph updates are
+--   delivered via execute-script (injecting JSON into a <script>
+--   tag). This is brittle: malformed JSON fails silently,
+--   string interpolation breaks on special characters, and the
+--   graph library lives outside the framework's reactive model.
+--
+-- With the component boundary:
+--   - Graph data flows in as a signal → observed attribute
+--   - User interactions flow out as CustomEvents
+--   - View state is encapsulated, not scattered across globals
+--   - Failures are explicit (JSON.parse errors are catchable)
+
+surface GraphViewer {
+    facing viewer: User
+
+    context graph_data: CytoscapeGraph
+
+    -- Data in: the component renders whatever CytoscapeGraph it
+    -- receives. The server pushes graph data via a Datastar signal;
+    -- the component reacts to attribute changes.
+    exposes:
+        graph_data.nodes
+        graph_data.edges
+        graph_data.selected_id
+        graph_data.highlighted_edges
+
+    -- Events out: each user interaction is emitted as a structured
+    -- CustomEvent. Every event includes the current ViewState so
+    -- the orchestration layer can forward it to the server.
+    provides:
+        SelectNode(node_id: String)
+            -- Single click on a node. Updates selection locally
+            -- and emits event for sidebar update.
+
+        NavigateToNode(node_id: String)
+            when graph_data.nodes.find(n => n.id = node_id).expandable
+            -- Double click on an expandable module.
+            -- Resets expanded and show_private to empty.
+
+        ExpandToggle(module_id: String)
+            when graph_data.nodes.find(n => n.id = module_id).kind = "module"
+            -- Right click on a module. Toggles expanded state.
+            -- Component updates its own ViewState before emitting.
+
+        TogglePrivateVisibility(module_id: String)
+            when module_id in view_state.expanded
+            -- Shift+right click on an expanded module.
+            -- Toggles show_private for that module.
+
+        ToggleEdgeType(edge_type: String)
+            -- Edge type filter button click.
+            -- Updates visible_edge_types in ViewState.
+
+        SelectEdge(source: String, target: String, edge_type: String)
+            -- Single click on an edge. Computes edge ID from
+            -- source, target, and type for sidebar lookup.
+
+        Deselect()
+            -- Click on background. Clears selection.
+
+    @guarantee DataInEventsOut
+        -- The component never initiates network requests.
+        -- All data arrives through the graph-data attribute.
+        -- All interactions are emitted as CustomEvents.
+        -- The parent context (Datastar data-on handlers) translates
+        -- events into SSE requests and SSE responses into signal
+        -- updates. This separation means the component works
+        -- identically regardless of transport mechanism.
+
+    @guarantee ViewStateOwnership
+        -- The component owns expanded, show_private, and
+        -- visible_edge_types. It reads initial values from
+        -- the graph data (nodes carry isExpanded, showingPrivate
+        -- flags) and maintains them across interactions.
+        -- Every outbound event includes the current ViewState
+        -- via evt.detail.viewState so the server can compute
+        -- the correct projection.
+        -- The server never echoes view state back as a separate
+        -- concern — it's embedded in the graph data structurally.
+
+    @guarantee RenderModeDetection
+        -- The component determines render mode internally by
+        -- comparing incoming graph data to current state:
+        --   structural change (different node set) → full rebuild
+        --   same structure (selection/highlight only) → incremental
+        -- For structural changes, the component further distinguishes:
+        --   root node changed → navigate (layout from scratch)
+        --   root unchanged → expand/collapse (animated transition)
+        -- Callers do not control render mode.
+}
+
+------------------------------------------------------------
 -- Given
 ------------------------------------------------------------
 
 given {
-    editor: EditorState
+    nav: NavigationState
+    viewer: GraphViewer
 }
 
 ------------------------------------------------------------
@@ -82,36 +189,50 @@ given {
 --
 -- The UI distinguishes selection (highlighting within current view)
 -- from navigation (changing the viewed module).
+--
+-- UnifiedNavigation: every clickable element in the app — sidebar
+--   links, breadcrumb items, schema refs, defined-in links — uses
+--   the same navigation path: an SSE request that returns graph
+--   data + breadcrumb + sidebar. The GraphViewer component receives
+--   the graph data via signal; breadcrumb and sidebar are patched
+--   as HTML. This eliminates the class of bugs where one piece
+--   updates but another doesn't.
 
 rule SelectNode {
-    -- Single click: select a node without changing the viewed module.
+    -- Single click on graph node or sidebar link: select a node.
     --
-    -- SelectionDefault: when no explicit selection exists, the effective
-    --   selected node defaults to view_id, then to the first root node
-    --   in the projection.
+    -- GraphClick: graph component emits SelectNode event, which
+    --   triggers a sidebar-only SSE request (no graph rebuild).
     --
-    -- SchemaKeyHighlighting: when the selected node is a schema node,
-    --   edges are highlighted by matching schema-key rather than by
-    --   from/to endpoint. This connects all edges that reference
-    --   that schema type.
+    -- SidebarClick: sidebar links trigger a full navigation SSE
+    --   request with select parameter, updating graph + breadcrumb
+    --   + sidebar atomically.
     --
-    -- RegularHighlighting: for non-schema nodes, all edges where the
-    --   node is either source or target are highlighted.
+    -- SelectionDefault: when no explicit selection exists, the
+    --   effective selected node defaults to view_id, then to the
+    --   first root node in the projection.
+    --
+    -- SchemaKeyHighlighting: when the selected node is a schema
+    --   node, edges are highlighted by matching schema-key rather
+    --   than by from/to endpoint.
+    --
+    -- RegularHighlighting: for non-schema nodes, all edges where
+    --   the node is either source or target are highlighted.
 
-    when: SelectNode(node_id: String)
+    when: viewer.SelectNode(node_id)
 
     let effective_selected = node_id
-        ?? editor.view_id
+        ?? nav.view_id
         ?? projection.nodes.find(n => n.parent = null).id
 
     ensures:
-        editor.selected_id = effective_selected
+        nav.selected_id = effective_selected
         -- Sidebar shows details for the selected entity
         -- Edges involving the selection are highlighted
 }
 
 rule NavigateToNode {
-    -- Double click: navigate into a module to view its children.
+    -- Double click on graph or breadcrumb click: navigate into a module.
     --
     -- OnlyExpandable: navigation only occurs if the node has children.
     --   Double-clicking a leaf is treated as a single click (selection only).
@@ -119,91 +240,34 @@ rule NavigateToNode {
     -- ClearsSelection: after navigation, no node is selected until the
     --   user clicks one. The new module becomes the viewed entity.
     --
-    -- ResetsExpansion: navigation resets the expanded and show_private
-    --   sets to empty. Each view starts fresh with all child modules
-    --   collapsed. The user opens what they need.
+    -- ResetsViewState: navigation resets the component's expanded and
+    --   show_private sets to empty. Each view starts fresh.
 
-    when: NavigateToNode(node_id: String)
-
-    -- The frontend guards dispatch: only expandable nodes are navigable.
-    -- Expandable is a property of the projection's ViewNode.
-    requires: projection_node(node_id).expandable = true
+    when: viewer.NavigateToNode(node_id)
 
     ensures:
-        editor.view_id = node_id
-        editor.selected_id = null
-        editor.expanded = {}
-        editor.show_private = {}
+        nav.view_id = node_id
+        nav.selected_id = null
+        -- GraphViewer internally resets expanded and show_private
 }
 
-rule ExpandModule {
-    -- Expand a module to reveal its children.
+rule ExpandToggle {
+    -- Right-click on module: toggle expand/collapse.
     --
-    -- The module's direct children become visible. Child modules
-    -- appear collapsed. Child functions and schemas appear as leaves.
-    -- Edges that previously terminated at this module break apart
-    -- into finer-grained edges to/from its now-visible children.
+    -- The GraphViewer updates its own ViewState (expanded set)
+    -- before emitting the event. The event includes the updated
+    -- ViewState so the server computes the new projection with
+    -- the correct expanded set.
+    --
+    -- AnimatedTransition: the component uses incremental diff
+    --   rendering (old positions → dagre → animate to new positions)
+    --   for expand/collapse, giving spatial continuity.
 
-    when: ExpandModule(module_id: String)
-
-    requires:
-        module_id not in editor.expanded
+    when: viewer.ExpandToggle(module_id)
 
     ensures:
-        editor.expanded = editor.expanded + {module_id}
-}
-
-rule CollapseModule {
-    -- Collapse a module to hide its children.
-    --
-    -- All descendants become invisible. Edges re-aggregate to the
-    -- module. The module appears as an opaque node.
-
-    when: CollapseModule(module_id: String)
-
-    requires:
-        module_id in editor.expanded
-
-    ensures:
-        editor.expanded = editor.expanded - {module_id}
-}
-
-rule TogglePrivateVisibility {
-    -- Toggle whether an expanded module's private children
-    --   are visible.
-    --
-    -- PrivateSubordinate: only has effect on modules that are
-    --   already expanded. A collapsed module in show_private
-    --   shows nothing extra.
-    --
-    -- AddOrRemove: if the module is in show_private, remove it
-    --   (hide privates). If not, add it (show privates).
-
-    when: TogglePrivateVisibility(module_id: String)
-
-    ensures:
-        if module_id in editor.show_private:
-            editor.show_private = editor.show_private - {module_id}
-        else:
-            editor.show_private = editor.show_private + {module_id}
-}
-
-rule RightClickModule {
-    -- Right-click: toggle expand/collapse.
-    --
-    -- Simple toggle: collapsed → expanded, expanded → collapsed.
-    -- Collapsing also clears show_private for that module.
-
-    when: RightClickModule(module_id: String)
-
-    let is_expanded = module_id in editor.expanded
-
-    ensures:
-        if not is_expanded:
-            ExpandModule(module_id)
-        else:
-            CollapseModule(module_id)
-            editor.show_private = editor.show_private - {module_id}
+        -- Server re-projects with updated expanded set from event
+        -- Graph data signal updates, component renders incrementally
 }
 
 rule ShiftRightClickModule {
@@ -212,15 +276,11 @@ rule ShiftRightClickModule {
     -- Only applies to expandable modules that are already expanded
     -- and have private children. No-op otherwise.
 
-    when: ShiftRightClickModule(module_id: String)
-
-    let node = projection_node(module_id)
-    requires:
-        module_id in editor.expanded
-        node.has_private_children
+    when: viewer.TogglePrivateVisibility(module_id)
 
     ensures:
-        TogglePrivateVisibility(module_id)
+        -- Server re-projects with updated show_private from event
+        -- Graph data signal updates, component renders incrementally
 }
 
 rule NavigateToAncestor {
@@ -231,47 +291,23 @@ rule NavigateToAncestor {
     when: NavigateToAncestor(ancestor_id: String?)
 
     ensures:
-        editor.view_id = ancestor_id
-        editor.selected_id = null
+        nav.view_id = ancestor_id
+        nav.selected_id = null
 }
 
 rule ToggleEdgeType {
     -- Toggle visibility of an edge type.
     --
-    -- Adds or removes the type from visible_edge_types.
-    -- Triggers re-projection so layout accounts for the change.
+    -- The GraphViewer updates its own ViewState before emitting.
     --
     -- AtLeastOne: at least one edge type must remain visible.
-    --   Toggling the last visible type is a no-op.
+    --   Toggling the last visible type is a no-op (component guards this).
 
-    when: ToggleEdgeType(edge_type: String)
-
-    requires:
-        not (editor.visible_edge_types = {edge_type})  -- can't remove the last one
+    when: viewer.ToggleEdgeType(edge_type)
 
     ensures:
-        if edge_type in editor.visible_edge_types:
-            editor.visible_edge_types = editor.visible_edge_types - {edge_type}
-        else:
-            editor.visible_edge_types = editor.visible_edge_types + {edge_type}
-}
-
-rule DrillDownSchema {
-    -- Schema link click: navigate into a schema type's definition.
-    --
-    -- TrailTracking: each drill-down appends to a trail of schema IDs,
-    --   allowing breadcrumb-like back-navigation through schema types.
-    --   The trail is passed as a URL parameter, not stored in editor state.
-    --
-    -- RegistryResolution: schema detail view resolves named refs
-    --   one level deep from the registry, showing their shape inline
-    --   or as clickable drill-down links.
-
-    when: DrillDownSchema(schema_id: String, trail: List<String>?)
-
-    ensures:
-        -- Sidebar shows the schema definition detail view
-        -- Schema refs in the definition are clickable for further drill-down
+        -- Server re-projects with updated visible_edge_types from event
+        -- Graph data signal updates
 }
 
 -- ============================================================
@@ -282,16 +318,23 @@ rule DrillDownSchema {
 --   projection data and editor state, produce HTML/JSON output, and
 --   never fetch data or compute projections.
 --
--- DataFlow: handler → projection.api (fetch) → views.api (render)
---   Views never call back into projection.
+-- SignalDelivery: graph data is delivered to the component via a
+--   Datastar signal (patch-signals), not via script injection
+--   (execute-script). The component observes the signal through
+--   a data-attr binding and reacts to changes.
+--
+-- AtomicUpdate: each SSE response delivers breadcrumb HTML,
+--   sidebar HTML, and graph data signal as a single stream.
+--   All three update together — no partial states.
 
 rule RenderGraph {
     -- Transform projection data into Cytoscape output.
+    -- The result is delivered as a signal, not executed as a script.
 
-    when: RenderGraph(graph_projection: projection/Projection, editor_state: EditorState)
+    when: RenderGraph(graph_projection: projection/Projection, selected_id: String?)
 
-    let effective_selected = editor_state.selected_id
-        ?? editor_state.view_id
+    let effective_selected = selected_id
+        ?? nav.view_id
         ?? graph_projection.nodes.find(n => n.parent = null).id
 
     ensures: CytoscapeGraph.created(
@@ -308,15 +351,21 @@ rule RenderSidebar {
     --
     -- SectionOrder (non-edge entities):
     --   1. Label — entity name + kind badge
-    --   2. Description — from doc, contract, or spec description
-    --   3. Guarantees — invariant promises from surface (when present)
-    --   4. Interface — dispatched by type:
-    --      - fn_list (modules): Public API functions
+    --   2. Defined-in — clickable parent module link (schemas only)
+    --   3. Description — from doc, contract, or spec description
+    --   4. Guarantees — invariant promises from surface (when present)
+    --   5. Defined Types — schemas owned by this module that appear
+    --      in its operation signatures (modules only)
+    --   6. Interface — dispatched by type:
+    --      - fn_list (modules): Operations with clickable schema refs
     --      - fn_inline (functions): Inputs, Outputs
     --      - schema_def (schemas): schema detail view with registry
     --      - name_list (interfaces): plain function name list
-    --   5. Dependencies — entities this one depends on ("None" if empty)
-    --   6. Dependents — entities that depend on this one ("None" if empty)
+    --
+    -- ClickableSchemaRefs: schema type references in function
+    --   signatures and schema definitions are clickable. Clicking
+    --   navigates to the schema's node via full app navigation
+    --   (graph + breadcrumb + sidebar update).
     --
     -- EdgeRenderer: dispatched by edge_type and kind.
     --   code_flow/function_call: label + "Functions Called" list.
@@ -342,7 +391,7 @@ rule RenderBreadcrumb {
     --
     -- ShortLabels: namespace names show only the last dotted segment.
     -- CurrentItem: the last item is non-clickable and styled as current.
-    -- ClickableItems: all non-last items dispatch cy-navigate events.
+    -- ClickableItems: all non-last items dispatch navigation events.
 
     when: RenderBreadcrumb(path: List<projection/PathSegment>)
 

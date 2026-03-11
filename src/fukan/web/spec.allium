@@ -21,25 +21,47 @@ use "../projection/spec.allium" as projection
 -- results to connected browser clients.
 
 external entity ViewTransport {
-    -- Contract: three endpoint types, each composing projection → view.
+    -- Contract: two endpoint types composing projection → view.
+    -- Both deliver results through the same SSE mechanism:
+    --   patch-elements for HTML (breadcrumb, sidebar)
+    --   patch-signals for data (graph)
+    --
+    -- SignalDelivery: graph data is sent via patch-signals, not
+    --   execute-script. This pushes data into a Datastar signal
+    --   that the GraphViewer component observes reactively.
+    --   Eliminates the failure mode where string-interpolated
+    --   JSON in a <script> tag breaks silently.
     handles:
-        main_view(model, request) -> stream
-            -- Computes graph projection, path, details.
-            -- Renders graph JSON, breadcrumb HTML, sidebar HTML.
-            -- Streams all three as SSE patches.
-        sidebar_update(model, request) -> stream
-            -- Recomputes sidebar only for a new selection.
-        schema_detail(model, request) -> stream
-            -- Navigates into a schema definition with trail tracking.
+        full_navigation(model, request) -> stream
+            -- Primary endpoint. Computes graph projection, path, details.
+            -- Renders breadcrumb HTML, sidebar HTML, graph CytoscapeGraph.
+            -- Streams: patch-elements(breadcrumb), patch-elements(sidebar),
+            --          patch-signals(graph_data).
+            --
+            -- Parameters (from request query string):
+            --   select: node to select (determines sidebar and graph highlight)
+            --   id: module to view (optional; inferred from select if absent)
+            --   expanded: comma-separated expanded module IDs (from ViewState)
+            --   show_private: comma-separated private-visible module IDs
+            --   visible_edge_types: comma-separated edge type filters
+            --
+            -- Used by: sidebar clicks, breadcrumb clicks, schema ref clicks,
+            --   graph navigation events, initial page load, back/forward.
 
-    -- Composition guarantee
-    guarantee: pure_delegation
+        sidebar_update(model, request) -> stream
+            -- Lightweight endpoint for graph-click selection.
+            -- Recomputes sidebar only for a new selection.
+            -- Does not update graph or breadcrumb.
+            -- Streams: patch-elements(sidebar).
+            --
+            -- Used by: GraphViewer SelectNode events (single click on graph node).
+
+    @guarantee PureDelegation
         -- Transport never modifies projection or view output.
         -- It parses request params, calls core functions, and
         -- streams the results. No domain logic in the transport.
 
-    -- Delivery semantics
-    guarantee: per_request_model
+    @guarantee PerRequestModel
         -- Each request dereferences the model atom once. All
         -- projections within a single request see the same snapshot.
 

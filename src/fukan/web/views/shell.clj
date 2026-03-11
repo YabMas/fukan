@@ -105,10 +105,16 @@
     font-size: 0.8rem;
   }
 
-  /* Graph container */
-  #cy {
+  /* Graph viewer component */
+  graph-viewer {
     flex: 1;
     min-height: 0;
+    position: relative;
+    display: block;
+  }
+  #cy {
+    width: 100%;
+    height: 100%;
     background: var(--color-surface);
   }
 
@@ -197,6 +203,26 @@
     color: var(--color-text-faint);
     font-weight: 400;
     font-size: 0.85rem;
+  }
+
+  /* Defined-in link for schemas */
+  .defined-in {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    background: var(--color-surface-alt);
+    border-left: 3px solid var(--color-border);
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    transition: border-left-color 0.1s, background 0.1s;
+  }
+  .defined-in:hover {
+    border-left-color: var(--color-primary);
+    background: var(--color-hover-bg);
+  }
+  .parent-link {
+    color: var(--color-primary);
   }
 
   /* Documentation blocks */
@@ -516,21 +542,22 @@
       [:style css]]
      [:body
       [:div#container
-        ;; Graph panel with Cytoscape event listeners and loading indicator
+        ;; Graph panel: web component with Datastar signal binding + event handlers
        [:div#graph-panel
-        {"data-on:cy-select" "@get('/sse/sidebar?id=' + encodeURIComponent(evt.detail.id))"
-         "data-on:cy-navigate" "@get('/sse/view?id=' + encodeURIComponent(evt.detail.id) + '&select=' + encodeURIComponent(evt.detail.select || '') + '&expanded=' + window.getExpandedParam() + '&show_private=' + window.getShowPrivateParam() + '&visible_edge_types=' + window.getVisibleEdgeTypesParam())"
-         "data-on:cy-toggle-private" "@get('/sse/view?id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '') + '&expanded=' + window.getExpandedParam() + '&show_private=' + window.getShowPrivateParam() + '&visible_edge_types=' + window.getVisibleEdgeTypesParam())"
-         "data-on:cy-schema" "@get('/sse/schema?id=' + encodeURIComponent(evt.detail.id))"
+        {"data-signals" "{_graphData: null}"
+         ;; Graph component events → SSE requests
+         ;; View state (expanded, show_private, visible_edge_types) comes from the component via evt.detail
+         "data-on:graph-select" "@get('/sse/sidebar?id=' + encodeURIComponent(evt.detail.id))"
+         "data-on:graph-navigate" "@get('/sse/view?id=' + encodeURIComponent(evt.detail.id) + '&select=' + encodeURIComponent(evt.detail.select || '') + '&expanded=' + evt.detail.expanded + '&show_private=' + evt.detail.showPrivate + '&visible_edge_types=' + evt.detail.visibleEdgeTypes)"
+         "data-on:graph-expand" "@get('/sse/view?id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '') + '&expanded=' + evt.detail.expanded + '&show_private=' + evt.detail.showPrivate + '&visible_edge_types=' + evt.detail.visibleEdgeTypes)"
          "data-indicator" "#loading"}
         [:div#breadcrumb]
-        [:div#cy]
+        ;; GraphViewer web component: data in via graph-data attribute, events out via CustomEvent
+        [:graph-viewer {"data-attr:graph-data" "JSON.stringify($_graphData)"}]
         [:div#loading.loading-indicator
          [:span.spinner]
          "Loading..."]]
        [:div#sidebar
         [:div#node-info
          [:p.empty-state "Click a node to see details"]]]]
-      ;; Initial load trigger - handled by app.js initPage()
-      [:div#init-trigger]
       [:script {:src "/public/app.js"}]]])))

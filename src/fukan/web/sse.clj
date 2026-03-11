@@ -3,7 +3,12 @@
    Each handler orchestrates a request: calls projection functions to
    compute data from the model, then passes the result to view renderers
    that produce HTML fragments or JSON. Streams responses as SSE events
-   for incremental UI updates. This is where projection meets rendering."
+   for incremental UI updates. This is where projection meets rendering.
+
+   Graph data is delivered via patch-signals (reactive signal), not
+   execute-script (script injection). The GraphViewer web component
+   observes the signal through a data-attr binding and renders
+   the graph when the signal changes."
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.http-kit :as hk]
             [fukan.web.views.graph :as views.graph]
@@ -43,9 +48,6 @@
     (into #{} (str/split param #","))
     #{}))
 
-;; -----------------------------------------------------------------------------
-;; SSE Handlers
-
 (defn- find-module-for-node
   "Find the module (parent) that would show this node in its view.
    For a function, returns its parent module. For a module, returns its parent folder.
@@ -53,6 +55,23 @@
   [model node-id]
   (when-let [node (get-in model [:nodes node-id])]
     (:parent node)))
+
+(defn- send-full-view!
+  "Send a complete view update: signal + sidebar + breadcrumb.
+   Order matters: Datastar aborts the SSE stream when the element that
+   triggered @get() is removed by a morph. Send the graph signal first
+   (it never removes elements), then sidebar, then breadcrumb last
+   (breadcrumb clicks originate here, so its morph must come last)."
+  [sse path details graph-data]
+  ;; 1. Graph data signal first — never removes the triggering element
+  (d*/patch-signals! sse (json/generate-string {"_graphData" graph-data}))
+  ;; 2. Sidebar HTML — safe for breadcrumb-triggered requests
+  (d*/patch-elements! sse (views.sidebar/render-sidebar-html details))
+  ;; 3. Breadcrumb HTML last — its morph may remove the triggering element
+  (d*/patch-elements! sse (views.breadcrumb/render-breadcrumb path)))
+
+;; -----------------------------------------------------------------------------
+;; SSE Handlers
 
 (defn main-view-handler
   "SSE endpoint that streams the full main view update.
@@ -62,13 +81,14 @@
    - select: Node to select and highlight (also determines navigation if id not provided)
    - expanded: Comma-separated list of explicitly expanded module IDs
    - show_private: Comma-separated list of module IDs with visible private children
+   - visible_edge_types: Comma-separated list of edge types to show
 
    When ?select=xxx is provided without ?id, navigates to the view containing that node.
 
-   Patches:
-   - Breadcrumb HTML
-   - Sidebar HTML (node info for selected node)
-   - Graph data via script tag"
+   Sends:
+   - Breadcrumb HTML (patch-elements)
+   - Sidebar HTML (patch-elements)
+   - Graph data signal (patch-signals)"
   {:malli/schema [:=> [:cat :Model :RingRequest] :AsyncChannel]}
   [model request]
   (hk/->sse-response request
@@ -100,28 +120,17 @@
                                                       :show-private show-private
                                                       :selected (:selected-id editor-state)
                                                       :visible-edge-types visible-edge-types})
-                                ;; Render views
-                                graph-data (views.graph/render-graph graph editor-state)]
-
-                            ;; 1. Patch breadcrumb HTML
-                            (d*/patch-elements! sse (views.breadcrumb/render-breadcrumb path))
-
-                            ;; 2. Patch sidebar HTML
-                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html details))
-
-                            ;; 3. Execute script to update graph and URL
-                            (d*/execute-script! sse
-                                                (str "if(window.renderGraph)renderGraph("
-                                                     (json/generate-string graph-data)
-                                                     ");"
-                                                     "if(window.updateViewUrl)updateViewUrl(" (json/generate-string (or entity-id "")) ");")))
+                                ;; Render graph data with viewId for URL sync
+                                graph-data (assoc (views.graph/render-graph graph editor-state)
+                                                  :viewId (or entity-id ""))]
+                            (send-full-view! sse path details graph-data))
                           (catch Exception e
                             (println "SSE error:" (.getMessage e))))
                         (d*/close-sse! sse))}))
 
 (defn sidebar-handler
   "SSE endpoint that streams just the sidebar content.
-   Used when selecting a node without navigating."
+   Used when selecting a node without navigating (graph click)."
   {:malli/schema [:=> [:cat :Model :RingRequest] :AsyncChannel]}
   [model request]
   (hk/->sse-response request
@@ -132,62 +141,7 @@
                                 node-id (let [id (get params "id")]
                                           (when (and id (not= id "")) id))
                                 sidebar-data (proj/inspect model node-id)]
-                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data))
-                            ;; Update URL with selection
-                            (d*/execute-script! sse
-                                                (str "if(window.updateSelectUrl)updateSelectUrl("
-                                                     (json/generate-string (or node-id ""))
-                                                     ");")))
-                          (catch Exception e
-                            (println "SSE error:" (.getMessage e))))
-                        (d*/close-sse! sse))}))
-
-(defn- parse-trail
-  "Parse the trail query param into a vector of schema ID strings.
-   Trail is comma-separated list of schema IDs for drill-down navigation."
-  [trail-param]
-  (when (and trail-param (not= trail-param ""))
-    (str/split trail-param #",")))
-
-(defn schema-handler
-  "SSE endpoint that navigates to a schema node.
-   Resolves the schema keyword to its node ID and performs a full view
-   navigation (graph + breadcrumb + sidebar), keeping the whole app in sync."
-  {:malli/schema [:=> [:cat :Model :RingRequest] :AsyncChannel]}
-  [model request]
-  (hk/->sse-response request
-                     {hk/on-open
-                      (fn [sse]
-                        (try
-                          (let [params (:query-params request)
-                                schema-id (get params "id")
-                                schema-key (keyword schema-id)
-                                node-id (proj/schema-node-id model schema-key)
-                                ;; Navigate to the module containing this schema
-                                entity-id (when node-id (find-module-for-node model node-id))
-                                expanded (parse-id-set (get params "expanded"))
-                                show-private (parse-id-set (get params "show_private"))
-                                visible-edge-types (let [raw (parse-id-set (get params "visible_edge_types"))]
-                                                     (when (seq raw) (set (map keyword raw))))
-                                {:keys [graph path details]}
-                                (proj/navigate model {:view-id entity-id
-                                                      :expanded expanded
-                                                      :show-private show-private
-                                                      :selected node-id
-                                                      :visible-edge-types visible-edge-types})
-                                editor-state {:view-id entity-id
-                                              :selected-id node-id
-                                              :expanded expanded
-                                              :show-private show-private
-                                              :visible-edge-types visible-edge-types}
-                                graph-data (views.graph/render-graph graph editor-state)]
-                            (d*/patch-elements! sse (views.breadcrumb/render-breadcrumb path))
-                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html details))
-                            (d*/execute-script! sse
-                                                (str "if(window.renderGraph)renderGraph("
-                                                     (json/generate-string graph-data)
-                                                     ");"
-                                                     "if(window.updateViewUrl)updateViewUrl(" (json/generate-string (or entity-id "")) ");")))
+                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data)))
                           (catch Exception e
                             (println "SSE error:" (.getMessage e))))
                         (d*/close-sse! sse))}))

@@ -60,9 +60,6 @@
      ["/sse/sidebar" {:get (fn [req]
                              (sse/sidebar-handler (model/get-model) req))}]
 
-     ["/sse/schema" {:get (fn [req]
-                            (sse/schema-handler (model/get-model) req))}]
-
      ["/public/*path" {:get (fn [{{:keys [path]} :path-params}]
                               (serve-static path))}]]
 

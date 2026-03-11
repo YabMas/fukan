@@ -54,6 +54,13 @@
       (details/entity-details model node-id))
     (details/entity-details model entity-id)))
 
+(defn schema-node-id
+  "Look up a schema node's ID by its schema keyword.
+   Returns the node ID string or nil if not found."
+  {:malli/schema [:=> [:cat :Model :keyword] [:maybe :NodeId]]}
+  [model schema-key]
+  (schema/find-schema-node-id model schema-key))
+
 (defn find-root
   "Find the root node of the model.
    Delegates to path/find-root-node."

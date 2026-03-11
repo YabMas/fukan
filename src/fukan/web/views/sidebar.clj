@@ -46,37 +46,45 @@
   (when-let [{:keys [inputs output]} sig]
     (str (str/join ", " (map type-expr->str inputs)) " \u2192 " (type-expr->str output))))
 
-(defn- schema-click-url
-  "Build the SSE schema click URL for a schema keyword.
-   Handles both qualified (:ns/Name) and unqualified (:Name) keywords."
-  [key]
-  (str "@get('/sse/schema?id=" (url-encode (subs (str key) 1)) "')"))
+(defn- view-url
+  "Build a /sse/view?select= URL for full app navigation.
+   Includes current view state (expanded, show_private, visible_edge_types)
+   so the graph preserves its layout."
+  [node-id]
+  (str "@get('/sse/view?select=" (url-encode node-id)
+       "&expanded=' + window.getExpandedParam() + '"
+       "&show_private=' + window.getShowPrivateParam() + '"
+       "&visible_edge_types=' + window.getVisibleEdgeTypesParam())"))
 
 ;; -----------------------------------------------------------------------------
 ;; Rich TypeExpr rendering (clickable schema refs)
 
 (defn- type-expr->hiccup
-  "Convert a TypeExpr to Hiccup with clickable schema refs."
-  [type-expr]
+  "Convert a TypeExpr to Hiccup with clickable schema refs.
+   schema-ids is a keyword→node-id map for resolving refs to view URLs."
+  [schema-ids type-expr]
   (if-not (map? type-expr)
     [:span (pr-str type-expr)]
     (case (:tag type-expr)
-      :ref       [:span.schema-ref
-                  {"data-on:click.stop" (schema-click-url (:name type-expr))}
-                  (name (:name type-expr))]
+      :ref       (let [node-id (get schema-ids (:name type-expr))]
+                   (if node-id
+                     [:span.schema-ref
+                      {"data-on:click.stop" (view-url node-id)}
+                      (name (:name type-expr))]
+                     [:span (name (:name type-expr))]))
       :primitive [:span (:name type-expr)]
-      :vector    (list "[" (type-expr->hiccup (:element type-expr)) "]")
-      :set       (list "#{" (type-expr->hiccup (:element type-expr)) "}")
-      :map-of    (list "{" (type-expr->hiccup (:key-type type-expr))
-                       " " (type-expr->hiccup (:value-type type-expr)) "}")
-      :maybe     (list (type-expr->hiccup (:inner type-expr)) "?")
-      :or        (interpose " | " (map type-expr->hiccup (:variants type-expr)))
-      :and       (interpose " & " (map type-expr->hiccup (:types type-expr)))
+      :vector    (list "[" (type-expr->hiccup schema-ids (:element type-expr)) "]")
+      :set       (list "#{" (type-expr->hiccup schema-ids (:element type-expr)) "}")
+      :map-of    (list "{" (type-expr->hiccup schema-ids (:key-type type-expr))
+                       " " (type-expr->hiccup schema-ids (:value-type type-expr)) "}")
+      :maybe     (list (type-expr->hiccup schema-ids (:inner type-expr)) "?")
+      :or        (interpose " | " (map (partial type-expr->hiccup schema-ids) (:variants type-expr)))
+      :and       (interpose " & " (map (partial type-expr->hiccup schema-ids) (:types type-expr)))
       :enum      [:span (str/join " | " (map pr-str (:values type-expr)))]
-      :tuple     (list "[" (interpose ", " (map type-expr->hiccup (:elements type-expr))) "]")
-      :fn        (list (interpose ", " (map type-expr->hiccup (:inputs type-expr)))
+      :tuple     (list "[" (interpose ", " (map (partial type-expr->hiccup schema-ids) (:elements type-expr))) "]")
+      :fn        (list (interpose ", " (map (partial type-expr->hiccup schema-ids) (:inputs type-expr)))
                        [:span.arrow " \u2192 "]
-                       (type-expr->hiccup (:output type-expr)))
+                       (type-expr->hiccup schema-ids (:output type-expr)))
       :map       [:span "map"]
       :predicate [:span "fn"]
       :unknown   [:span (or (:original type-expr) "?")]
@@ -84,12 +92,12 @@
 
 (defn- fn-signature-hiccup
   "Format a function signature as Hiccup with clickable schema refs."
-  [sig]
+  [schema-ids sig]
   (when-let [{:keys [inputs output]} sig]
     [:div.sig
-     (interpose ", " (map type-expr->hiccup inputs))
+     (interpose ", " (map (partial type-expr->hiccup schema-ids) inputs))
      [:span.arrow " \u2192 "]
-     (type-expr->hiccup output)]))
+     (type-expr->hiccup schema-ids output)]))
 
 ;; -----------------------------------------------------------------------------
 ;; Shared components
@@ -98,16 +106,16 @@
   "Render a list of functions with optional signatures.
    Each entry is {:name :schema :id (optional)}.
    When :id is present, the item is clickable.
-   Schema refs in signatures are individually clickable (drill-down)."
-  [fns]
+   Schema refs in signatures are individually clickable (navigates to schema node)."
+  [schema-ids fns]
   [:ul
    (for [{:keys [name schema id]} fns]
      (let [attrs (when id
-                   {"data-on:click" (str "@get('/sse/view?select=" (url-encode id) "')")})]
+                   {"data-on:click" (view-url id)})]
        [:li.fn-card attrs
         name
         (when schema
-          (fn-signature-hiccup schema))]))])
+          (fn-signature-hiccup schema-ids schema))]))])
 
 (defn- render-dep-list
   "Render a dependency or dependents section with heading and clickable items."
@@ -132,13 +140,13 @@
 (defn- render-io-sections
   "Render input and output schema type lists.
    Always renders both headings with counts; shows 'None' when empty.
-   Items with :key are clickable schema refs; others are plain labels."
+   Items with :id are clickable; others are plain labels."
   [{:keys [inputs outputs]}]
   (letfn [(render-items [items]
             [:ul
-             (for [{:keys [label key]} items]
-               (if key
-                 [:li {"data-on:click" (schema-click-url key)} label]
+             (for [{:keys [label id]} items]
+               (if id
+                 [:li {"data-on:click" (view-url id)} label]
                  [:li label]))])]
     (list
      [:h5 "Inputs " [:span.dep-count (str "(" (count inputs) ")")]]
@@ -150,34 +158,6 @@
        (render-items outputs)
        [:p.empty-state "None"]))))
 
-;; -----------------------------------------------------------------------------
-;; Schema navigation
-
-(defn- render-schema-trail
-  "Render navigation breadcrumb for schema drill-down.
-   trail is a vector of parent schema ID strings; current is the active schema.
-   Each parent is clickable (preserving its own ancestors), current is not."
-  [trail current]
-  (let [all-items (cond-> (vec trail)
-                    current (conj current))
-        n (count all-items)]
-    (when (> n 1)
-      [:div.schema-trail
-       (for [[idx schema-id] (map-indexed vector all-items)
-             :let [is-last (= idx (dec n))
-                   ;; Trail for clicking this item = all items before it
-                   click-trail (subvec all-items 0 idx)
-                   trail-param (when (seq click-trail)
-                                 (str "&trail=" (url-encode (str/join "," click-trail))))]]
-         (list
-          (when (pos? idx)
-            [:span.trail-sep "\u203a"])
-          (if is-last
-            [:span.trail-current schema-id]
-            [:span.trail-item
-             {"data-on:click" (str "@get('/sse/schema?id=" (url-encode schema-id)
-                                   (or trail-param "") "')")}
-             schema-id])))])))
 
 ;; -----------------------------------------------------------------------------
 ;; Interface rendering
@@ -188,22 +168,19 @@
    Modules (:fn-list) show Operations with clickable schema refs per function.
    Leaves (:fn-inline) show Inputs and Outputs only.
    Schema defs and name-lists render their own content without IO sections."
-  [{:keys [type items registry]} dataflow nav]
+  [{:keys [type items registry]} dataflow schema-ids]
   (case type
     :fn-list
     (list
      [:h5 "Operations " [:span.dep-count (str "(" (count items) ")")]]
-     (render-fn-list items))
+     (render-fn-list schema-ids items))
 
     :fn-inline
     (render-io-sections dataflow)
 
     :schema-def
-    (let [trail (or (:trail nav) [])
-          current (:current nav)
-          link-trail (if current (conj trail current) trail)]
-      [:div.schema-detail
-       (views.schema/render-schema-detail-view (first items) (or registry {}) link-trail)])
+    [:div.schema-detail
+     (views.schema/render-schema-detail-view (or schema-ids {}) (first items) (or registry {}))]
 
     :name-list
     (list
@@ -247,21 +224,18 @@
     (list
      [:h5 "Defined Types " [:span.dep-count (str "(" (count schemas) ")")]]
      [:ul
-      (for [{:keys [label key]} schemas]
-        [:li (when key {"data-on:click" (schema-click-url key)})
+      (for [{:keys [label id]} schemas]
+        [:li (when id {"data-on:click" (view-url id)})
          label])])))
 
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
    Iterates through sections in order: label, description, guarantees,
    defined types, interface, deps, dependents."
-  [{:keys [label kind description guarantees schemas interface dataflow nav]}]
+  [{:keys [label kind description guarantees schemas schema-ids interface dataflow]}]
   (str
    (h/html
     [:div#node-info
-     ;; Schema navigation trail (when drilling down through schemas)
-     (render-schema-trail (:trail nav) (:current nav))
-
      [:h4 label " " [:span.kind-badge (name kind)]]
 
      (render-description description)
@@ -269,7 +243,7 @@
      (render-defined-types schemas)
 
      (when interface
-       (render-interface interface dataflow nav))])))
+       (render-interface interface dataflow schema-ids))])))
 
 (defn- render-schema-ref-list
   "Render a list of schema reference pairs."
@@ -285,7 +259,7 @@
   "Dedicated renderer for edge entities.
    Dispatches by edge-type: code-flow shows called functions,
    schema-reference shows schema references."
-  [{:keys [label edge-type called-fns schema-refs]}]
+  [{:keys [label edge-type called-fns schema-refs schema-ids]}]
   (str
    (h/html
     [:div#node-info
@@ -295,7 +269,7 @@
        (list
         [:h5 "Functions Called " [:span.dep-count (str "(" (count called-fns) ")")]]
         (if (seq called-fns)
-          (render-fn-list called-fns)
+          (render-fn-list (or schema-ids {}) called-fns)
           [:p.empty-state "No direct function calls"]))
 
        :schema-reference

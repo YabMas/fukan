@@ -84,6 +84,13 @@
        (some #(when (= schema-key (get-in % [:data :schema-key]))
                 (:id %)))))
 
+(defn schema-key->node-id
+  "Build a map from schema keyword to node ID for all schemas in the model."
+  [model]
+  (->> (schema-nodes model)
+       (map (fn [n] [(get-in n [:data :schema-key]) (:id n)]))
+       (into {})))
+
 (defn schema-owner-id
   "Get the module node ID that owns a schema.
    Returns the parent node ID or nil if not found."

@@ -113,22 +113,26 @@
       "?")))
 
 (defn- schema-ref-with-doc
-  "Build a schema reference map, including description from the schema node."
+  "Build a schema reference map, including node ID and description from the schema node."
   [model k]
-  (let [doc (when-let [sid (proj.schema/find-schema-node-id model k)]
-              (get-in model [:nodes sid :data :doc]))]
-    (cond-> {:label (name k) :key k} doc (assoc :doc doc))))
+  (let [sid (proj.schema/find-schema-node-id model k)
+        doc (when sid (get-in model [:nodes sid :data :doc]))]
+    (cond-> {:label (name k) :key k}
+      sid (assoc :id sid)
+      doc (assoc :doc doc))))
 
 (defn- type-expr->io-item
   "Convert a TypeExpr to a dataflow item.
-   Schema refs include :key for click navigation."
+   Schema refs include :key and :id for click navigation."
   [model type-expr]
   (let [base {:label (or (type-expr->label type-expr) "?")}]
     (if (and (map? type-expr) (= :ref (:tag type-expr)))
       (let [k (:name type-expr)
-            doc (when-let [sid (proj.schema/find-schema-node-id model k)]
-                  (get-in model [:nodes sid :data :doc]))]
-        (cond-> (assoc base :key k) doc (assoc :doc doc)))
+            sid (proj.schema/find-schema-node-id model k)
+            doc (when sid (get-in model [:nodes sid :data :doc]))]
+        (cond-> (assoc base :key k)
+          sid (assoc :id sid)
+          doc (assoc :doc doc)))
       base)))
 
 (defn- extract-description
@@ -282,15 +286,16 @@
 (defn- normalize-entity
   "Assemble the normalized entity detail map."
   [model node deps dependents]
-  (cond-> {:label       (:label node)
-           :kind        (:kind node)
-           :parent      (extract-parent model node)
-           :description (extract-description node)
-           :interface   (extract-interface model node)
-           :schemas     (extract-schemas model node)
-           :dataflow    (extract-dataflow model node)
-           :deps        deps
-           :dependents  dependents}
+  (cond-> {:label        (:label node)
+           :kind         (:kind node)
+           :parent       (extract-parent model node)
+           :description  (extract-description node)
+           :interface    (extract-interface model node)
+           :schemas      (extract-schemas model node)
+           :dataflow     (extract-dataflow model node)
+           :schema-ids   (proj.schema/schema-key->node-id model)
+           :deps         deps
+           :dependents   dependents}
     (seq (get-in node [:data :boundary :guarantees]))
     (assoc :guarantees (get-in node [:data :boundary :guarantees]))))
 
@@ -383,7 +388,8 @@
           {:label      (str (:label from-node) " → " (:label to-node))
            :kind       :edge
            :edge-type  :code-flow
-           :called-fns called-fns})
+           :called-fns called-fns
+           :schema-ids (proj.schema/schema-key->node-id model)})
 
         :schema-reference
         (let [schema-refs (compute-underlying-schema-refs model from-id to-id)]
