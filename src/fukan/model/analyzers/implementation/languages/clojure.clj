@@ -399,6 +399,27 @@
 ;; -----------------------------------------------------------------------------
 ;; AnalysisResult
 
+(defn- build-dispatch-edges
+  "Build :dispatches edges from defmethod var-usages.
+   Each defmethod creates an edge from the dispatch point (defmulti)
+   to the handler (defmethod). Direction: dispatch-point → handler,
+   per spec: 'A polymorphically routes to B at runtime.'
+
+   Uses raw kondo var-usages (before normalization) because defmethod
+   entries have :to pointing to the defmulti's namespace."
+  [raw-var-usages symbol-index]
+  (->> raw-var-usages
+       (filter :defmethod)
+       (keep (fn [{:keys [name from to dispatch-val-str]}]
+               (let [dispatch-point-id (get symbol-index [to name])
+                     handler-name (symbol (str name " " dispatch-val-str))
+                     handler-id (get symbol-index [from handler-name])]
+                 (when (and dispatch-point-id handler-id
+                            (not= dispatch-point-id handler-id))
+                   {:from dispatch-point-id :to handler-id :kind :dispatches}))))
+       (into #{})
+       vec))
+
 (defn- analysis->result
   "Convert CodeAnalysis into a language analysis result.
    Normalizes kondo field names to generic names, then builds
@@ -406,7 +427,10 @@
    Module nodes have :parent nil — build-model assigns folder parents."
   {:malli/schema [:=> [:cat :CodeAnalysis] :AnalysisResult]}
   [analysis]
-  (let [;; Normalize kondo → generic field names
+  (let [;; Capture raw var-usages before normalization for dispatch edges
+        raw-var-usages (:var-usages analysis)
+
+        ;; Normalize kondo → generic field names
         analysis (normalize-kondo-output analysis)
         module-defs (:module-definitions analysis)
         symbol-defs (:symbol-definitions analysis)
@@ -427,11 +451,14 @@
 
         ;; Build edges (var-level only — module dependencies are
         ;; derived from these by the projection layer)
-        var-edges (nodes/build-reference-edges analysis var-index ns-index)]
+        var-edges (nodes/build-reference-edges analysis var-index ns-index)
+
+        ;; Build dispatch edges (defmulti → defmethod)
+        dispatch-edges (build-dispatch-edges raw-var-usages var-index)]
 
     {:source-files (mapv :filename module-defs)
      :nodes (merge ns-nodes var-nodes)
-     :edges var-edges
+     :edges (into var-edges dispatch-edges)
      :ns-index ns-index}))
 
 (defn analyze

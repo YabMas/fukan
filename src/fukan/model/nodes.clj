@@ -107,8 +107,8 @@
    [:data {:optional true} :NodeData]])
 
 (def ^:schema EdgeKind
-  [:enum {:description "Discriminates edge semantics: function calls vs schema type references."}
-   :function-call :schema-reference])
+  [:enum {:description "Discriminates edge semantics: function calls, polymorphic dispatch, or schema type references."}
+   :function-call :dispatches :schema-reference])
 
 (def ^:schema Edge
   [:map {:description "A directed dependency between two nodes."}

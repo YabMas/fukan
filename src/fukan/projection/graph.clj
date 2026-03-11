@@ -284,13 +284,14 @@
         visible (compute-visible-set model entity-id effective-expanded show-private)
 
         ;; Aggregate per edge kind, independently
+        ;; code-flow aggregates both function-call and dispatches model edges
+        edge-type->model-kinds {:code-flow [:function-call :dispatches]
+                                :schema-reference [:schema-reference]}
         edges (vec (mapcat
                     (fn [edge-type]
-                      (let [model-kind (case edge-type
-                                         :code-flow :function-call
-                                         :schema-reference :schema-reference)
-                            agg (aggregate-edges model visible model-kind)
-                            inherited (private-inherited-edges model visible model-kind)
+                      (let [model-kinds (get edge-type->model-kinds edge-type [edge-type])
+                            agg (mapcat #(aggregate-edges model visible %) model-kinds)
+                            inherited (mapcat #(private-inherited-edges model visible %) model-kinds)
                             all (vec (distinct (concat agg inherited)))
                             final (subsume-edges model all)]
                         (map (fn [e] (assoc e :edge-type edge-type)) final)))
@@ -326,11 +327,11 @@
    and maps model edge kinds to projection edge types."
   [model entity-id show-private visible-edge-types]
   (let [;; Map visible edge types to model-level kinds
-        visible-model-kinds (set (map (fn [et]
-                                        (case et
-                                          :code-flow :function-call
-                                          :schema-reference :schema-reference))
-                                      visible-edge-types))
+        edge-type->model-kinds {:code-flow #{:function-call :dispatches}
+                                :schema-reference #{:schema-reference}}
+        visible-model-kinds (reduce (fn [acc et]
+                                      (into acc (get edge-type->model-kinds et)))
+                                    #{} visible-edge-types)
         raw-edges (->> (:edges model)
                        (filter #(contains? visible-model-kinds (:kind %))))
 
@@ -362,6 +363,7 @@
 
         ;; Map model kind to projection edge-type
         kind->edge-type {:function-call :code-flow
+                         :dispatches :code-flow
                          :schema-reference :schema-reference}
 
         ;; Build module nodes for grouping (no expand in leaf view)
