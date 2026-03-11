@@ -4,17 +4,26 @@
             [fukan.infra.model :as infra-model]
             [fukan.infra.server :as infra-server]))
 
-;; Initialize clj-reload - tracks src and dev directories
-;; The 'user namespace is excluded from reloading
-(reload/init
-  {:dirs ["src" "dev"]
-   :no-reload '#{user}})
+;; Initialize clj-reload once — defonce prevents re-init when the
+;; user reloads this buffer, which would reset the change baseline
+;; and cause reload/reload to miss file changes.
+(defonce ^:private _reload-init
+  (reload/init
+    {:dirs ["src" "dev"]
+     :no-reload '#{user}}))
 
 (defn- reload-code!
-  "Force-reload all loaded namespaces regardless of file timestamps.
-   Uses clj-reload's :only :loaded to avoid timestamp detection issues."
+  "Reload all loaded namespaces that have changed on disk.
+   Prints what was reloaded so failures are visible."
   []
-  (reload/reload {:only :loaded}))
+  (let [result (reload/reload {:only :loaded})]
+    (when (seq (:loaded result))
+      (println "Reloaded:" (count (:loaded result)) "namespaces")
+      (doseq [ns-sym (:loaded result)]
+        (println " " ns-sym)))
+    (when (seq (:unloaded result))
+      (println "Unloaded:" (:unloaded result)))
+    result))
 
 (defn go
   "Start the system: load model and start the web server.
@@ -52,9 +61,10 @@
       (go {:src src :port port :analyzers analyzers}))
     (println "No previous configuration. Use (go) first.")))
 
-(defn refresh-model
+(defn refresh
   "Reload code and rebuild model without restarting server.
-   Use this after editing the codebase being analyzed."
+   Use this after editing source files.
+   Note: route/handler changes require (reset) instead."
   []
   (if (infra-server/running?)
     (do
@@ -82,7 +92,7 @@
   (reset)
 
   ;; Rebuild model without restarting server
-  (refresh-model)
+  (refresh)
 
   ;; Check what's running
   (status))

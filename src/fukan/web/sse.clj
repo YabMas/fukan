@@ -150,9 +150,9 @@
     (str/split trail-param #",")))
 
 (defn schema-handler
-  "SSE endpoint that streams the schema detail view.
-   Used when clicking on a schema name to view its definition.
-   Supports trail parameter for drill-down navigation breadcrumb."
+  "SSE endpoint that navigates to a schema node.
+   Resolves the schema keyword to its node ID and performs a full view
+   navigation (graph + breadcrumb + sidebar), keeping the whole app in sync."
   {:malli/schema [:=> [:cat :Model :RingRequest] :AsyncChannel]}
   [model request]
   (hk/->sse-response request
@@ -161,18 +161,33 @@
                         (try
                           (let [params (:query-params request)
                                 schema-id (get params "id")
-                                trail (parse-trail (get params "trail"))
                                 schema-key (keyword schema-id)
-                                details (proj/inspect model schema-key)
-                                sidebar-data (-> details
-                                                 (assoc :nav {:trail (vec (or trail []))
-                                                              :current schema-id}))]
-                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html sidebar-data))
-                            ;; Update URL with schema
+                                node-id (proj/schema-node-id model schema-key)
+                                ;; Navigate to the module containing this schema
+                                entity-id (when node-id (find-module-for-node model node-id))
+                                expanded (parse-id-set (get params "expanded"))
+                                show-private (parse-id-set (get params "show_private"))
+                                visible-edge-types (let [raw (parse-id-set (get params "visible_edge_types"))]
+                                                     (when (seq raw) (set (map keyword raw))))
+                                {:keys [graph path details]}
+                                (proj/navigate model {:view-id entity-id
+                                                      :expanded expanded
+                                                      :show-private show-private
+                                                      :selected node-id
+                                                      :visible-edge-types visible-edge-types})
+                                editor-state {:view-id entity-id
+                                              :selected-id node-id
+                                              :expanded expanded
+                                              :show-private show-private
+                                              :visible-edge-types visible-edge-types}
+                                graph-data (views.graph/render-graph graph editor-state)]
+                            (d*/patch-elements! sse (views.breadcrumb/render-breadcrumb path))
+                            (d*/patch-elements! sse (views.sidebar/render-sidebar-html details))
                             (d*/execute-script! sse
-                                                (str "if(window.updateSchemaUrl)updateSchemaUrl("
-                                                     (json/generate-string (or schema-id ""))
-                                                     ");")))
+                                                (str "if(window.renderGraph)renderGraph("
+                                                     (json/generate-string graph-data)
+                                                     ");"
+                                                     "if(window.updateViewUrl)updateViewUrl(" (json/generate-string (or entity-id "")) ");")))
                           (catch Exception e
                             (println "SSE error:" (.getMessage e))))
                         (d*/close-sse! sse))}))
