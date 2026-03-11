@@ -12,7 +12,7 @@
    Idempotent — safe to call multiple times."
   []
   (let [schemas (into {} (map (fn [[k {:keys [schema-form]}]] [k schema-form]))
-                       (clj-lang/discover-schema-data))]
+                       (#'clj-lang/discover-schema-data))]
     (mr/set-default-registry!
       (mr/composite-registry
         (m/default-schemas)

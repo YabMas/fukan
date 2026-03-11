@@ -1,3 +1,2 @@
 {:description "Implementation language analyzers — discover code structure and produce AnalysisResults."
- :functions [fukan.model.analyzers.implementation.languages.clojure/analyze
-             fukan.model.analyzers.implementation.languages.clojure/discover-schema-data]}
+ :functions [fukan.model.analyzers.implementation.languages.clojure/analyze]}

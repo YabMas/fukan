@@ -260,7 +260,7 @@
   [:map-of {:description "All discovered ^:schema vars keyed by schema keyword."}
    :keyword :SchemaDiscoveryEntry])
 
-(defn discover-schema-data
+(defn- discover-schema-data
   "Scan loaded namespaces for vars with ^:schema metadata.
    Returns a map of {keyword -> {:schema-form form :doc str? :owner-ns ns-str}}.
 
