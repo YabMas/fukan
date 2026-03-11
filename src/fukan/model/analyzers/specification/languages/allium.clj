@@ -3,7 +3,7 @@
    build pipeline. Discovers .allium files, parses them, and builds
    nodes and edges from declarations and type references."
   (:require [fukan.libs.allium.parser :as parser]
-            [fukan.model.build :as build]
+            [fukan.model.analyzers :as analyzers]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [instaparse.core :as insta]))
@@ -243,5 +243,5 @@
        :nodes (build-allium-nodes src-path parsed)
        :edges (build-allium-edges src-path parsed registry)})))
 
-(defmethod build/analyze :allium [_ src-path]
+(defmethod analyzers/analyze :allium [_ src-path]
   (analyze src-path))

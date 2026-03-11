@@ -15,7 +15,7 @@
 
 (defspec build-model-satisfies-all-invariants 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/valid-model? model)))))
 
 ;; ---------------------------------------------------------------------------
@@ -23,42 +23,42 @@
 
 (defspec build-model-tree-structure 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/tree-structure? model)))))
 
 (defspec build-model-leaf-strictness 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/leaf-strictness? model)))))
 
 (defspec build-model-no-empty-modules 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/no-empty-modules? model)))))
 
 (defspec build-model-no-self-edges 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/no-self-edges? model)))))
 
 (defspec build-model-edge-integrity 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/edge-integrity? model)))))
 
 (defspec build-model-no-unconsumed-provides 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/no-unconsumed-provides? model)))))
 
 (defspec build-model-edge-has-kind 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/edge-has-kind? model)))))
 
 (defspec build-model-module-has-boundary 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
-    (let [model (build/run-pipeline contrib)]
+    (let [model (#'build/run-pipeline contrib)]
       (true? (inv/module-has-boundary? model)))))
 
 ;; ---------------------------------------------------------------------------

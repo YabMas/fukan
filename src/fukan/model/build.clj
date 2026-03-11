@@ -2,6 +2,7 @@
   "Model construction: runs the language-agnostic build pipeline to
    produce the graph model from analyzer results."
   (:require [clojure.string :as str]
+            [fukan.model.analyzers :as analyzers]
             [fukan.model.schema]
             [fukan.utils.files]))
 
@@ -9,18 +10,7 @@
 ;; for the registry. No alias needed — schemas are referenced by keyword.
 
 ;; -----------------------------------------------------------------------------
-;; Analyzer dispatch
-
-(defmulti analyze
-  "Dispatch a source analyzer by keyword. Each language registers via defmethod."
-  {:malli/schema [:=> [:cat :AnalyzerKey :FilePath] :AnalysisResult]}
-  (fn [analyzer-key _src-path] analyzer-key))
-
-;; -----------------------------------------------------------------------------
 ;; Pipeline Schemas
-
-(def ^:schema AnalyzerKey
-  [:keyword {:description "Dispatch key for a registered source analyzer (e.g. :clojure, :allium)."}])
 
 (def ^:schema AnalysisResult
   [:map {:description "A language analysis result: pre-built nodes and edges ready for the build pipeline. Each language analyzer produces an AnalysisResult; results are merged before calling build-model."}
@@ -170,6 +160,52 @@
   (let [parts (str/split filepath #"/")]
     (when (> (count parts) 1)
       (str/join "/" (butlast parts)))))
+
+;; -----------------------------------------------------------------------------
+;; Companion file collapse
+
+(defn- strip-extension
+  "Remove the file extension from a path."
+  [filepath]
+  (let [idx (str/last-index-of filepath ".")]
+    (if idx (subs filepath 0 idx) filepath)))
+
+(defn- collapse-companion-files
+  "Collapse companion file pairs: when a module's source file (e.g. foo.clj)
+   has a matching directory (foo/), the module node absorbs the folder node.
+   Children of the folder are re-parented to the module, and the folder is removed.
+   This handles the Clojure convention of foo.clj alongside foo/ for the same namespace."
+  [nodes folder-ids]
+  (let [;; Build map: folder-path -> module-id for companion pairs
+        companions (->> (vals nodes)
+                        (filter #(and (= :module (:kind %))
+                                      (not (contains? folder-ids (:id %)))
+                                      (get-in % [:data :filename])))
+                        (reduce (fn [acc node]
+                                  (let [folder-path (strip-extension (get-in node [:data :filename]))]
+                                    (if (contains? folder-ids folder-path)
+                                      (assoc acc folder-path (:id node))
+                                      acc)))
+                                {}))]
+    (if (empty? companions)
+      nodes
+      (reduce-kv
+        (fn [acc folder-path module-id]
+          (let [folder-node (get acc folder-path)]
+            (-> acc
+                ;; Set module's parent to folder's parent
+                (assoc-in [module-id :parent] (:parent folder-node))
+                ;; Re-parent folder's children to module
+                (as-> m
+                  (reduce (fn [m [id node]]
+                            (if (= (:parent node) folder-path)
+                              (assoc-in m [id :parent] module-id)
+                              m))
+                          m m))
+                ;; Remove the folder node
+                (dissoc folder-path))))
+        nodes
+        companions))))
 
 ;; -----------------------------------------------------------------------------
 ;; Surface-to-boundary collapse
@@ -440,7 +476,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Build pipeline
 
-(defn run-pipeline
+(defn- run-pipeline
   "Run the language-agnostic build pipeline on a merged analysis result.
    Transforms flat analysis nodes into a tree model with folder hierarchy,
    boundaries, and pruned structure."
@@ -472,8 +508,11 @@
         ;; folder parents when enrichment nodes have :parent nil)
         merged-nodes (merge-node-maps folder-nodes parented-nodes)
 
+        ;; Collapse companion file pairs (foo.clj + foo/ -> single module)
+        collapsed-nodes (collapse-companion-files merged-nodes folder-ids)
+
         ;; Remove empty modules
-        cleaned-nodes (remove-empty-modules merged-nodes)
+        cleaned-nodes (remove-empty-modules collapsed-nodes)
 
         ;; Wire up parent-child relationships
         all-nodes (wire-children cleaned-nodes)
@@ -520,6 +559,6 @@
    the final Model through the language-agnostic build pipeline."
   {:malli/schema [:=> [:cat :FilePath [:set :AnalyzerKey]] :Model]}
   [src-path analyzer-keys]
-  (let [results (map #(analyze % src-path) analyzer-keys)
+  (let [results (map #(analyzers/analyze % src-path) analyzer-keys)
         merged  (apply merge-results results)]
     (run-pipeline merged)))

@@ -8,7 +8,7 @@
             [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.set :as set]
-            [fukan.model.build :as build]
+            [fukan.model.analyzers :as analyzers]
             [fukan.model.analyzers.implementation.builders :as builders]))
 
 ;; -----------------------------------------------------------------------------
@@ -487,5 +487,5 @@
      :nodes (merge enriched-nodes schema-nodes contract-nodes)
      :edges edges}))
 
-(defmethod build/analyze :clojure [_ src-path]
+(defmethod analyzers/analyze :clojure [_ src-path]
   (analyze src-path))
