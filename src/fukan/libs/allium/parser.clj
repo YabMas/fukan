@@ -29,7 +29,7 @@
   declarations = (declaration _)*
   declaration = use-decl / given-block / enum-decl /
                 external-entity / external-value / surface-decl / variant-decl /
-                entity-decl / value-decl / rule-decl
+                entity-decl / value-decl / rule-decl / invariant-decl
 
   (* ============ Use ============ *)
 
@@ -69,6 +69,15 @@
 
   variant-decl = <'variant'> __ ident _ description-string? _ <':'> _ type-ref _ <'{'> _ field-list _ <'}'>
 
+  (* ============ Invariant ============ *)
+
+  invariant-decl = <'invariant'> __ ident _ description-string? _ <'{'> _ invariant-body _ <'}'>
+  invariant-body = invariant-chunk+
+  <invariant-chunk> = inv-brace-group / inv-paren-group / inv-text-chunk
+  inv-brace-group = '{' invariant-chunk* '}'
+  inv-paren-group = '(' invariant-chunk* ')'
+  inv-text-chunk = #'[^{}()\\n]+' / eol
+
   (* ============ Description String ============ *)
 
   description-string = <'\"'> description-content <'\"'>
@@ -77,7 +86,7 @@
   (* ============ Fields ============ *)
 
   field-list = (field-item _ (<','> _)?)*
-  <field-item> = nested-variant / field-entry
+  <field-item> = nested-variant / invariant-decl / field-entry
   field-entry = ident _ <':'> _ field-value
 
   nested-variant = <'variant'> __ ident _ <'{'> _ field-list _ <'}'>
@@ -225,6 +234,28 @@
    :given-binding
    (fn [name type-ref]
      {:name name :type-ref type-ref})
+
+   ;; Invariant
+   :invariant-decl
+   (fn [name & args]
+     (let [[desc rest-args] (extract-description args)
+           body (first rest-args)]
+       (cond-> {:type :invariant :field-kind :invariant :name name :body body}
+         desc (assoc :description desc))))
+
+   :invariant-body
+   (fn [& parts]
+     (str/trim (apply str (flatten parts))))
+
+   :inv-brace-group
+   (fn [& parts]
+     (str "{" (apply str (flatten parts)) "}"))
+
+   :inv-paren-group
+   (fn [& parts]
+     (str "(" (apply str (flatten parts)) ")"))
+
+   :inv-text-chunk str
 
    ;; Description string — tagged to distinguish from other string args
    :description-string (fn [s] {:description s})

@@ -338,11 +338,12 @@
   (testing "model.allium parses completely"
     (let [result (parser/parse-file "src/fukan/model/spec.allium")]
       (is (not (insta/failure? result)))
-      (is (= "1" (:allium-version result)))
+      (is (= "2" (:allium-version result)))
       (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 3 (:value types)))            ;; FunctionSignature, Boundary, MapEntry
+        (is (= 4 (:value types)))            ;; FunctionSignature, BoundaryFn, Boundary, MapEntry
         (is (= 4 (:entity types)))           ;; Edge, Node, Model, TypeExpr
-        (is (= 17 (:variant types)))))))
+        (is (= 17 (:variant types)))
+        (is (= 5 (:invariant types)))))))    ;; NoSelfEdge, LeafStrictness + 3 top-level
 
 (deftest projection-allium-integration-test
   (testing "projection.allium parses completely"
@@ -351,7 +352,7 @@
       (let [types (frequencies (map :type (:declarations result)))]
         (is (= 1 (:use types)))
         (is (= 1 (:given types)))
-        (is (= 1 (:enum types)))
+        (is (= 2 (:enum types)))              ;; Perspective, EdgeType
         (is (= 12 (:value types)))
         (is (= 1 (:entity types)))
         (is (= 4 (:variant types)))
