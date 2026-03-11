@@ -225,7 +225,7 @@
   "Produce an Allium language analysis result from source files.
    Discovers .allium files under src-path, parses them, and builds
    an AnalysisResult with nodes and edges."
-  {:malli/schema [:=> [:cat :string] :AnalysisResult]}
+  {:malli/schema [:=> [:cat :FilePath] :AnalysisResult]}
   [src-path]
   (let [files (discover-allium-files src-path)
         registry (build-spec-registry files)

@@ -467,7 +467,7 @@
    - Discovers ^:schema vars and builds schema nodes
    - Attaches :malli/schema function signatures to function nodes
    - Discovers contract.edn files and produces boundary module nodes"
-  {:malli/schema [:=> [:cat :string] :AnalysisResult]}
+  {:malli/schema [:=> [:cat :FilePath] :AnalysisResult]}
   [src-path]
   (let [{:keys [nodes edges source-files ns-index]} (-> (run-kondo src-path)
                                                          analysis->result)
