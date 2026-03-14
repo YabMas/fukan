@@ -245,15 +245,22 @@
      (when interface
        (render-interface interface dataflow schema-ids))])))
 
+(defn- render-schema-ref-link
+  "Render a schema as a clickable link if its node ID is known."
+  [schema-ids {:keys [label schema-key]}]
+  (if-let [url (views.schema/view-url schema-ids schema-key)]
+    [:span.schema-ref {"data-on:click" url} label]
+    [:span label]))
+
 (defn- render-schema-ref-list
-  "Render a list of schema reference pairs."
-  [schema-refs]
+  "Render a list of schema reference pairs with clickable links."
+  [schema-ids schema-refs]
   [:ul
    (for [{:keys [from-schema to-schema]} schema-refs]
-     [:li
-      [:span (:label from-schema)]
-      " \u2192 "
-      [:span (:label to-schema)]])])
+     [:li.schema-ref-entry
+      (render-schema-ref-link schema-ids from-schema)
+      [:span.arrow " \u2192 "]
+      (render-schema-ref-link schema-ids to-schema)])])
 
 (defn- render-edge-detail
   "Dedicated renderer for edge entities.
@@ -263,10 +270,10 @@
   (str
    (h/html
     [:div#node-info
-     [:h4 label]
      (case edge-type
        :code-flow
        (list
+        [:h4 label]
         [:h5 "Functions Called " [:span.dep-count (str "(" (count called-fns) ")")]]
         (if (seq called-fns)
           (render-fn-list (or schema-ids {}) called-fns)
@@ -276,7 +283,7 @@
        (list
         [:h5 "Schema References " [:span.dep-count (str "(" (count schema-refs) ")")]]
         (if (seq schema-refs)
-          (render-schema-ref-list schema-refs)
+          (render-schema-ref-list (or schema-ids {}) schema-refs)
           [:p.empty-state "No direct schema references"]))
 
        ;; Fallback

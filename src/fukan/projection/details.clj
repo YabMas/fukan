@@ -387,7 +387,8 @@
           {:label       (str (:label from-node) " → " (:label to-node))
            :kind        :edge
            :edge-type   :schema-reference
-           :schema-refs schema-refs})
+           :schema-refs schema-refs
+           :schema-ids  (proj.schema/schema-key->node-id model)})
 
         ;; Fallback for unknown edge types
         {:label (str (:label from-node) " → " (:label to-node))

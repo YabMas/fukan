@@ -12,7 +12,7 @@
 
 (defn- url-encode [s] (URLEncoder/encode (str s) "UTF-8"))
 
-(defn- view-url
+(defn view-url
   "Build a /sse/view?select= URL for full app navigation.
    Resolves schema keyword to node ID via the lookup map.
    Includes current view state so the graph preserves its layout."

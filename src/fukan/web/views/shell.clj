@@ -183,6 +183,23 @@
   #node-info li:hover {
     background: var(--color-hover-bg);
   }
+  #node-info li.schema-ref-entry {
+    cursor: default;
+    color: var(--color-text);
+  }
+  #node-info li.schema-ref-entry:hover {
+    background: none;
+  }
+  #node-info li.schema-ref-entry .schema-ref {
+    color: var(--color-primary);
+    cursor: pointer;
+  }
+  #node-info li.schema-ref-entry .schema-ref:hover {
+    text-decoration: underline;
+  }
+  #node-info li.schema-ref-entry .arrow {
+    color: var(--color-text-faint);
+  }
   #node-info li.fn-card {
     padding: 0.5rem 0.65rem;
     margin-bottom: 0.35rem;
