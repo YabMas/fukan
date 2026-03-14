@@ -251,10 +251,8 @@
          set)))
 
 (defn- extract-schemas
-  "Extract schema references relevant to this entity.
-   For modules: schemas that are both defined within the module's subtree
-   AND referenced in the module's operation signatures (defined types).
-   For functions: schemas referenced in the function's signature.
+  "Extract defined types for modules: schemas that are both defined within
+   the module's subtree AND referenced in the module's operation signatures.
    Returns a vector of {:key schema-keyword :doc str?} or nil."
   [model node]
   (let [data (:data node)
@@ -266,13 +264,6 @@
             defined-types (set/intersection owned (or referenced #{}))]
         (when (seq defined-types)
           (->> defined-types sort (mapv ref-fn))))
-
-      :function
-      (when-let [{:keys [inputs output]} (:signature data)]
-        (let [refs (into (into #{} (mapcat #(proj.schema/extract-schema-refs model %) inputs))
-                         (proj.schema/extract-schema-refs model output))]
-          (when (seq refs)
-            (->> refs sort (mapv ref-fn)))))
 
       nil)))
 
