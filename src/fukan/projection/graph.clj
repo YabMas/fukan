@@ -281,7 +281,19 @@
   [model entity-id expanded show-private visible-edge-types]
   (let [;; The viewed entity is always expanded (its children are shown)
         effective-expanded (conj (or expanded #{}) entity-id)
-        visible (compute-visible-set model entity-id effective-expanded show-private)
+        visible-all (compute-visible-set model entity-id effective-expanded show-private)
+
+        ;; Filter leaf nodes by active edge type:
+        ;; code-flow only → hide schema nodes
+        ;; schema-reference only → hide function nodes
+        visible (cond
+                  (not (contains? visible-edge-types :schema-reference))
+                  (into #{} (remove #(= :schema (:kind (get-in model [:nodes %])))) visible-all)
+
+                  (not (contains? visible-edge-types :code-flow))
+                  (into #{} (remove #(= :function (:kind (get-in model [:nodes %])))) visible-all)
+
+                  :else visible-all)
 
         ;; Aggregate per edge kind, independently
         ;; code-flow aggregates both function-call and dispatches model edges
@@ -426,7 +438,7 @@
         entity-id (or view-id (:id (path/find-root-node model)))
         expanded (or expanded #{})
         show-private (or show-private #{})
-        visible-edge-types (or visible-edge-types #{:code-flow :schema-reference})
+        visible-edge-types (or visible-edge-types #{:code-flow})
 
         children-ids (get-children model entity-id)]
 

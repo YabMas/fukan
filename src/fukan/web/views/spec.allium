@@ -26,7 +26,7 @@ value ViewState {
     -- projected graph data.
     expanded: Set<String>             -- modules whose children are visible
     show_private: Set<String>         -- expanded modules that also show private children
-    visible_edge_types: Set<String>   -- edge types to include (defaults to all)
+    visible_edge_types: Set<String>   -- active edge mode (single-select, defaults to {code_flow})
 }
 
 value NavigationState {
@@ -128,9 +128,11 @@ surface GraphViewer {
             -- Shift+right click on an expanded module.
             -- Toggles show_private for that module.
 
-        ToggleEdgeType(edge_type: String)
-            -- Edge type filter button click.
-            -- Updates visible_edge_types in ViewState.
+        SelectEdgeMode(edge_type: String)
+            -- Edge mode selector click. Single-select: switches to the
+            -- clicked mode, replacing the previous one.
+            -- Updates visible_edge_types in ViewState to contain only
+            -- the selected type.
 
         SelectEdge(source: String, target: String, edge_type: String)
             -- Single click on an edge. Computes edge ID from
@@ -295,19 +297,25 @@ rule NavigateToAncestor {
         nav.selected_id = null
 }
 
-rule ToggleEdgeType {
-    -- Toggle visibility of an edge type.
+rule SelectEdgeMode {
+    -- Switch the active edge mode (single-select).
     --
     -- The GraphViewer updates its own ViewState before emitting.
+    -- Clicking the already-active mode is a no-op.
     --
-    -- AtLeastOne: at least one edge type must remain visible.
-    --   Toggling the last visible type is a no-op (component guards this).
+    -- NodeVisibility: the active mode also controls which leaf node
+    --   kinds are visible in the graph:
+    --     code_flow:       functions visible, schemas hidden
+    --     type_reference:  schemas visible, functions hidden
+    --   Module nodes are always visible regardless of mode.
+    --   The sidebar is unaffected — it shows full details for any
+    --   selected entity regardless of the active mode.
 
-    when: viewer.ToggleEdgeType(edge_type)
+    when: viewer.SelectEdgeMode(edge_type)
 
     ensures:
-        -- Server re-projects with updated visible_edge_types from event
-        -- Graph data signal updates
+        -- Server re-projects with visible_edge_types = {edge_type}
+        -- Graph data signal updates with filtered node set
 }
 
 -- ============================================================

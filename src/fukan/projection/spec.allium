@@ -189,9 +189,18 @@ rule EntityGraph {
     --   flips dispatches edges to show dependency flow. Default: call_graph.
     --
     -- EdgeTypeFiltering: visible_edge_types controls which edge kinds
-    --   appear in the projection. When null, all types are shown.
+    --   appear in the projection. When null, defaults to {code_flow}.
     --   Filtering happens before aggregation so layout accounts for
     --   the visible edge set.
+    --
+    -- LeafNodeFiltering: the active edge type also determines which
+    --   leaf node kinds are visible in the graph:
+    --     code_flow only:       function nodes visible, schema nodes hidden
+    --     type_reference only:  schema nodes visible, function nodes hidden
+    --     both:                 all leaf nodes visible
+    --   Module nodes are always visible regardless of edge type selection.
+    --   This filtering applies after visible-set computation but before
+    --   edge aggregation, so edges aggregate correctly to the filtered set.
     when: EntityGraph(view_id: String?, expanded: Set<String>, show_private: Set<String>, visible_edge_types: Set<EdgeType>?, perspective: Perspective?)
 
     let entity_id = view_id ?? model.root_nodes.first.id
@@ -250,20 +259,22 @@ rule ModuleView {
     let effective_expanded = expanded + {entity_id}
 
     -- 1. Visible set: descendants of entity_id reachable through
-    --    expanded modules, filtered by private visibility.
-    --    All leaf kinds (Function, Schema) are included.
+    --    expanded modules, filtered by private visibility and
+    --    active edge types (LeafNodeFiltering).
     --
     --    A node N is visible iff:
     --      a. Every module ancestor between entity_id (exclusive)
     --         and N (exclusive) is in effective_expanded
     --      b. N's immediate parent is in effective_expanded
     --      c. If N is private, N's parent is in show_private
+    --      d. If N is a leaf: N's kind matches the active edge type
+    --         (functions for code_flow, schemas for type_reference)
     --
     --    Equivalently: walk from entity_id toward N. If you hit
     --    a collapsed module before reaching N, N is not visible.
-    let visible = compute_visible_set(model, entity_id, effective_expanded, show_private)
+    let visible = compute_visible_set(model, entity_id, effective_expanded, show_private, effective_edge_types)
     -- black box: recursive descent through expanded modules,
-    -- filtering by private visibility
+    -- filtering by private visibility and leaf node kind
 
     -- 2. Edge computation: each edge type aggregated independently
     --    to closest visible ancestor, filtered by visible_edge_types.

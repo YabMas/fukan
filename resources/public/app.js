@@ -13,7 +13,7 @@ class GraphViewer extends HTMLElement {
 
   expandedModules = new Set();
   showPrivate = new Set();
-  visibleEdgeTypes = new Set(['code-flow', 'schema-reference']);
+  visibleEdgeTypes = new Set(['code-flow']);
   pendingAction = 'navigate'; // 'navigate' | 'expand-toggle'
   toggleTargetId = null;
 
@@ -525,13 +525,10 @@ class GraphViewer extends HTMLElement {
         btn.style.borderColor = type === 'code-flow' ? '#2980b9' : '#27ae60';
       }
       btn.addEventListener('click', () => {
-        if (this.visibleEdgeTypes.has(type)) {
-          if (this.visibleEdgeTypes.size > 1) {
-            this.visibleEdgeTypes.delete(type);
-          }
-        } else {
-          this.visibleEdgeTypes.add(type);
-        }
+        // Single-select: switch to the clicked type
+        if (this.visibleEdgeTypes.has(type)) return; // already active
+        this.visibleEdgeTypes.clear();
+        this.visibleEdgeTypes.add(type);
         toolbar.querySelectorAll('button').forEach(b => {
           const t = b.dataset.edgeType;
           if (this.visibleEdgeTypes.has(t)) {
