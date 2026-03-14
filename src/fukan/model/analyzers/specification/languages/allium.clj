@@ -129,8 +129,17 @@
                         params)))
 
     :surface
-    (into #{} (mapcat (fn [field] (extract-type-refs (:type-ref field)))
-                      (:fields decl)))
+    (let [regular-refs (into #{} (mapcat (fn [field] (extract-type-refs (:type-ref field)))
+                                         (remove #(= :provides-block (:field-kind %)) (:fields decl))))
+          provides-refs (->> (:fields decl)
+                             (filter #(= :provides-block (:field-kind %)))
+                             (mapcat :entries)
+                             (mapcat (fn [entry]
+                                       (concat
+                                         (mapcat (fn [p] (extract-type-refs (:type p))) (:params entry))
+                                         (extract-type-refs (:return entry)))))
+                             set)]
+      (into regular-refs provides-refs))
 
     :external-entity #{}
     :external-value #{}
@@ -143,10 +152,13 @@
 (defn- extract-surface
   "Extract a Surface map from a surface declaration.
    Fields with specific names map to Surface properties:
-     facing, exposes, provides, guarantees."
+     facing, exposes, provides, guarantees.
+   Provides entries come from provides-block field items, which carry
+   structured data: name, params (with types), return type, description."
   [decl]
   (let [fields (:fields decl)
         by-name (group-by :name fields)
+        by-kind (group-by :field-kind fields)
         facing (some-> (get by-name "facing") first :type-ref :name)
         extract-entries (fn [field-name]
                           (when-let [entries (get by-name field-name)]
@@ -156,12 +168,15 @@
                                                   :type-ref (if (:type-ref f)
                                                               (pr-str (:type-ref f))
                                                               (or (:expr f) ""))}
-                                           (:comment f) (assoc :description (:comment f))))))))]
+                                           (:comment f) (assoc :description (:comment f))))))))
+        provides-entries (->> (get by-kind :provides-block)
+                              (mapcat :entries)
+                              vec)]
     (cond-> {}
       facing (assoc :facing facing)
       (:description decl) (assoc :description (:description decl))
       (seq (get by-name "exposes")) (assoc :exposes (extract-entries "exposes"))
-      (seq (get by-name "provides")) (assoc :provides (extract-entries "provides"))
+      (seq provides-entries) (assoc :provides provides-entries)
       (seq (get by-name "guarantees")) (assoc :guarantees
                                               (mapv (fn [f]
                                                       (or (-> f :type-ref :name)

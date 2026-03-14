@@ -2,7 +2,7 @@
 #
 # PreToolUse hook: restrict architect agent to reading spec files only.
 #
-# Allowed: Read (*.allium, */contract.edn, */CLAUDE.md), Glob, Grep
+# Allowed: Read (*.allium, */CLAUDE.md), Glob, Grep
 # Denied: Edit, Write, Bash, and Read of non-spec files
 
 set -euo pipefail
@@ -40,17 +40,17 @@ case "$TOOL_NAME" in
     exit 0
     ;;
   Read)
-    # Only allow spec files: *.allium, */contract.edn, */CLAUDE.md
+    # Only allow spec files: *.allium, */CLAUDE.md
     FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
     if [[ -z "$FILE_PATH" ]]; then
       exit 0
     fi
     case "$FILE_PATH" in
-      *.allium|*/contract.edn|*/CLAUDE.md)
+      *.allium|*/CLAUDE.md)
         exit 0
         ;;
       *)
-        deny "Architect agent can only Read *.allium, contract.edn, and CLAUDE.md files. Cannot read: $FILE_PATH"
+        deny "Architect agent can only Read *.allium and CLAUDE.md files. Cannot read: $FILE_PATH"
         ;;
     esac
     ;;

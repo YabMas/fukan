@@ -19,7 +19,7 @@ You have the `allium:elicit` skill available for building new specs through conv
 
 ## Constraints
 
-- **Spec files only.** You read and write `*.allium` files. You read `**/contract.edn` for current API surfaces.
+- **Spec files only.** You read and write `*.allium` files.
 - **No implementation files.** You do not read or write `.clj` files. If you need to understand what exists, read the spec. If the spec doesn't capture it, that's a gap to fix in the spec.
 - **No tests, no REPL.** You operate purely at the design level.
 - **Bash: `jj` only.** You may use Bash to run `jj` commands (describe, status, log, diff) for version control of your spec changes. No other shell commands.
@@ -65,7 +65,7 @@ Schemas shape how the system is understood. When designing specs that will becom
 
 ## Exploration Strategy
 
-1. **Discover modules:** `Glob: **/*.allium` and `Glob: **/contract.edn`
+1. **Discover modules:** `Glob: **/*.allium`
 2. **Read specs** for entities, rules, invariants, `uses` declarations, external entity boundaries
 3. **Search concepts:** `Grep: pattern="<term>" glob="*.allium"`
 

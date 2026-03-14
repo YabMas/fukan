@@ -53,14 +53,13 @@ You are reviewing the module at `<MODULE>`. You are **read-only** — never writ
 
 Read the following files from `<MODULE>` (skip any that don't exist):
 - `CLAUDE.md`
-- `contract.edn`
 - `spec.allium`
 
 Then glob `<MODULE>**/*.clj` and read **every** `.clj` file in the module.
 
 Also read the root `CLAUDE.md` for project-wide conventions.
 
-### Phase 2: Contract Verification (REPL-assisted)
+### Phase 2: Boundary Verification (REPL-assisted)
 
 Discover the nREPL port:
 ```bash
@@ -69,31 +68,31 @@ clj-nrepl-eval --discover-ports
 
 Use port 7889 (or whatever is discovered). For all REPL evaluations, use `clj-nrepl-eval -p <port>`.
 
-**2a. Verify every contract function exists.**
+**2a. Verify every surface provides function exists.**
 
-Read `contract.edn`. For each symbol in `:functions`:
+Read `spec.allium`. For each function listed in a `surface ... { provides: ... }` block, convert underscore names to kebab-case and verify:
 ```bash
 clj-nrepl-eval -p 7889 "(do (require '<ns> :reload) (boolean (resolve '<fully-qualified-sym>)))"
 ```
-If result is `false` → record as **ERROR**: "Contract lists nonexistent var `<sym>`"
+If result is `false` → record as **ERROR**: "Surface provides nonexistent var `<sym>`"
 
 **2b. Discover unlisted public vars.**
 
-For each namespace that appears in `contract.edn` `:functions`:
+For each namespace that appears in the surface provides:
 ```bash
 clj-nrepl-eval -p 7889 "(do (require '<ns> :reload) (vec (keys (ns-publics '<ns>))))"
 ```
-Compare against contract. Any public var NOT in contract → record as **WARNING**: "Public var `<ns>/<name>` not in contract"
+Compare against surface provides. Any public var NOT in provides → record as **WARNING**: "Public var `<ns>/<name>` not in surface provides"
 
 Ignore vars that are clearly internal utilities re-exported by accident (use judgment), but still report them.
 
-**2c. Check schema annotations on contract functions.**
+**2c. Check schema annotations on surface functions.**
 
-For each contract function:
+For each surface provides function:
 ```bash
 clj-nrepl-eval -p 7889 "(some? (:malli/schema (meta #'<ns>/<name>)))"
 ```
-If `false` → record as **WARNING**: "Contract function `<sym>` lacks `:malli/schema` annotation"
+If `false` → record as **WARNING**: "Surface function `<sym>` lacks `:malli/schema` annotation"
 
 ### Phase 3: Documentation Alignment
 
@@ -138,7 +137,7 @@ Read all the code you collected in Phase 1. Step back and evaluate the module as
 - Could a different approach eliminate accidental complexity?
 
 **Public interface evaluation**
-- Is the contract the right set of entry points?
+- Is the surface provides the right set of entry points?
 - Are the function signatures ergonomic for callers?
 - Could the API be simpler while serving the same purpose?
 
@@ -167,9 +166,9 @@ Format your report exactly as:
 ### Suggestions
 - [ ] description (file:line)
 
-### Contract Diff
-;; Add: <symbols that are public but not in contract>
-;; Remove: <symbols in contract but not in code>
+### Boundary Diff
+;; Add: <symbols that are public but not in surface provides>
+;; Remove: <symbols in surface provides but not in code>
 ;; Make private: <symbols that probably shouldn't be public>
 
 ### Implementation Assessment
@@ -192,14 +191,14 @@ For each doc/contract issue found in phases 2-3, propose a specific fix:
 ### Proposed Doc Alignment
 
 **D1. <Title>**
-**What:** <specific change to contract.edn or CLAUDE.md>
+**What:** <specific change to CLAUDE.md>
 **File:** <file path>
 
 **D2. <Title>**
 ...
 ```
 
-Only propose changes to `contract.edn` and `CLAUDE.md`. Never propose changes to `spec.allium` or `.clj` files in this section.
+Only propose changes to `CLAUDE.md`. Never propose changes to `spec.allium` or `.clj` files in this section.
 
 If no doc alignment issues exist, omit this section entirely.
 
@@ -241,8 +240,8 @@ You are implementing approved changes for the module at `<MODULE>`.
 
 ### Rules
 
-1. **Doc proposals** (D-prefixed): edit only `contract.edn` and `CLAUDE.md` within `<MODULE>`. Do not touch `.clj` files or `spec.allium`.
-2. **Code proposals** (I-prefixed): edit the `.clj` files specified in the proposal. Do not touch `contract.edn`, `CLAUDE.md`, or `spec.allium`.
+1. **Doc proposals** (D-prefixed): edit only `CLAUDE.md` within `<MODULE>`. Do not touch `.clj` files or `spec.allium`.
+2. **Code proposals** (I-prefixed): edit the `.clj` files specified in the proposal. Do not touch `CLAUDE.md` or `spec.allium`.
 3. After all edits, reload via REPL:
    ```bash
    clj-nrepl-eval -p 7889 "(reload/reload)"

@@ -8,6 +8,15 @@
 use "./pipeline.allium" as pipeline
 
 ------------------------------------------------------------
+-- Surface
+------------------------------------------------------------
+
+surface ImplementationAnalysis "Discover code structure from implementation source files." {
+    provides:
+        analyze(src: FilePath) -> AnalysisResult -- Produce an analysis result from implementation source files.
+}
+
+------------------------------------------------------------
 -- Boundary
 ------------------------------------------------------------
 
@@ -17,8 +26,7 @@ use "./pipeline.allium" as pipeline
 --
 -- The Clojure analyzer is the reference implementation.
 -- It uses clj-kondo for static analysis, JVM runtime for
--- schema metadata and function signatures, and contract.edn
--- files for declared module boundaries.
+-- schema metadata and function signatures.
 --
 -- See pipeline.allium ImplementationAnalyzer for the full
 -- boundary contract, failure modes, and guarantees.

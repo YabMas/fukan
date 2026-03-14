@@ -8,6 +8,15 @@
 use "./pipeline.allium" as pipeline
 
 ------------------------------------------------------------
+-- Surface
+------------------------------------------------------------
+
+surface SpecificationAnalysis "Discover design structure from specification files." {
+    provides:
+        analyze(src: FilePath) -> AnalysisResult -- Produce an analysis result from specification files.
+}
+
+------------------------------------------------------------
 -- Boundary
 ------------------------------------------------------------
 

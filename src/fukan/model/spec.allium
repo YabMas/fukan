@@ -161,10 +161,10 @@ value Boundary {
     -- and schema keys identify owned schemas by registry key.
     --
     -- Assembled from specification and implementation:
-    --   - description: from spec entity description, namespace docstring,
-    --     or contract.edn description (first available, in that priority)
-    --   - functions: public API operations (from contract.edn, spec
-    --     provides, or inferred from signatures)
+    --   - description: from spec surface description, namespace docstring,
+    --     or entity description (first available, in that priority)
+    --   - functions: public API operations (from spec surface provides,
+    --     or inferred from implementation signatures)
     --   - schemas: registry keys of data shapes this module owns and
     --     publishes (consumers of these schemas depend on this module)
     --   - guarantees: from specification

@@ -1,10 +1,9 @@
 (ns fukan.model.analyzers.implementation.languages.clojure
   "Clojure-specific analysis and model construction.
    Runs clj-kondo static analysis, discovers Malli schema definitions,
-   enriches nodes with runtime metadata, resolves contract.edn files,
-   and produces a complete AnalysisResult for the build pipeline."
+   enriches nodes with runtime metadata, and produces a complete
+   AnalysisResult for the build pipeline."
   (:require [clojure.java.shell :as shell]
-            [clojure.java.io :as io]
             [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.set :as set]
@@ -117,6 +116,7 @@
 (defn malli->type-expr
   "Recursively convert a Malli schema form to a TypeExpr map.
    Handles all standard Malli types; unknown forms become :unknown."
+  {:malli/schema [:=> [:cat :any] :TypeExpr]}
   [form]
   (cond
     ;; Keyword — classify as ref or primitive
@@ -239,6 +239,7 @@
 (defn malli->fn-signature
   "Convert a Malli function schema [:=> [:cat a b] out] to FunctionSignature
    {:inputs [TypeExpr] :output TypeExpr}, or nil if not a function schema."
+  {:malli/schema [:=> [:cat :any] [:maybe :FunctionSignature]]}
   [form]
   (when (and (vector? form) (= :=> (first form)))
     (let [[_ input output] form
@@ -338,65 +339,6 @@
             {} nodes)))
 
 ;; -----------------------------------------------------------------------------
-;; Contract resolution
-
-(defn- resolve-fn-ref
-  "Resolve a qualified symbol to {:name :schema}.
-   Requires the namespace if not already loaded.
-   Throws if the var is missing or has no :malli/schema metadata."
-  [sym]
-  (let [ns-sym (symbol (namespace sym))
-        var-sym (symbol (name sym))]
-    (try
-      (require ns-sym)
-      (catch Exception _ nil))
-    (let [ns-obj (or (find-ns ns-sym)
-                     (throw (ex-info (str "Contract references unknown namespace: " ns-sym)
-                                     {:sym sym :ns ns-sym})))
-          v      (or (ns-resolve ns-obj var-sym)
-                     (throw (ex-info (str "Contract references unknown var: " sym)
-                                     {:sym sym})))
-          schema (or (:malli/schema (meta v))
-                     (throw (ex-info (str "Contract function missing :malli/schema metadata: " sym)
-                                     {:sym sym})))]
-      (cond-> {:name (name var-sym)
-               :id (str ns-sym "/" (name var-sym))
-               :schema (malli->fn-signature schema)}
-        (:doc (meta v)) (assoc :doc (:doc (meta v)))))))
-
-(defn- read-contract-file
-  "Read contract.edn from a directory path if present.
-   Resolves qualified symbols to {:name :schema} format."
-  [dir-path]
-  (when (and dir-path (not= dir-path ""))
-    (let [file (io/file dir-path "contract.edn")]
-      (when (.exists file)
-        (let [raw (edn/read-string (slurp file))]
-          (update raw :functions (fn [fns] (mapv resolve-fn-ref fns))))))))
-
-(defn- discover-contract-nodes
-  "Discover contract.edn files under src-path and produce module nodes
-   at directory-path IDs with :boundary data. These nodes will be merged
-   with folder nodes created by the build pipeline."
-  [src-path]
-  (->> (file-seq (io/file src-path))
-       (filter #(= "contract.edn" (.getName %)))
-       (reduce (fn [acc contract-file]
-                 (let [dir-path (.getPath (.getParentFile contract-file))
-                       boundary (read-contract-file dir-path)]
-                   (if boundary
-                     (assoc acc dir-path
-                            {:id dir-path
-                             :kind :module
-                             :label (last (str/split dir-path #"/"))
-                             :parent nil
-                             :children #{}
-                             :data {:kind :module
-                                    :boundary boundary}})
-                     acc)))
-               {})))
-
-;; -----------------------------------------------------------------------------
 ;; AnalysisResult
 
 (defn- build-dispatch-edges
@@ -465,8 +407,7 @@
   "Produce a complete Clojure language analysis result.
    Runs static analysis (clj-kondo), then enriches with runtime metadata:
    - Discovers ^:schema vars and builds schema nodes
-   - Attaches :malli/schema function signatures to function nodes
-   - Discovers contract.edn files and produces boundary module nodes"
+   - Attaches :malli/schema function signatures to function nodes"
   {:malli/schema [:=> [:cat :FilePath] :AnalysisResult]}
   [src-path]
   (let [{:keys [nodes edges source-files ns-index]} (-> (run-kondo src-path)
@@ -478,13 +419,10 @@
         enriched-nodes (enrich-with-runtime-metadata nodes schema-data)
 
         ;; Build schema nodes using ns-index from analysis
-        schema-nodes (build-schema-nodes ns-index schema-data)
-
-        ;; Discover contract.edn files and produce boundary module nodes
-        contract-nodes (discover-contract-nodes src-path)]
+        schema-nodes (build-schema-nodes ns-index schema-data)]
 
     {:source-files source-files
-     :nodes (merge enriched-nodes schema-nodes contract-nodes)
+     :nodes (merge enriched-nodes schema-nodes)
      :edges edges}))
 
 (defmethod analyzers/analyze :clojure [_ src-path]

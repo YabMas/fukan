@@ -54,6 +54,7 @@
 (defn get-schema
   "Get schema TypeExpr by keyword from model.
    Returns the TypeExpr, or nil if not found."
+  {:malli/schema [:=> [:cat :Model :keyword] [:maybe :TypeExpr]]}
   [model schema-key]
   (->> (schema-nodes model)
        (some #(when (= schema-key (get-in % [:data :schema-key]))
@@ -62,6 +63,7 @@
 (defn schemas-for-module
   "Get all schema keywords defined in a module.
    Returns a set of keywords."
+  {:malli/schema [:=> [:cat :Model :NodeId] [:set :keyword]]}
   [model module-id]
   (->> (schema-nodes model)
        (filter #(= module-id (:parent %)))
@@ -72,6 +74,7 @@
   "Extract all keyword schema references from a TypeExpr.
    Returns a set of keywords (e.g., #{:Node :Edge :Model}).
    Only returns refs that are registered in the model's schema nodes."
+  {:malli/schema [:=> [:cat :Model :TypeExpr] [:set :keyword]]}
   [model type-expr]
   (let [registered-schemas (all-schema-keys model)]
     (into #{} (filter registered-schemas) (collect-refs type-expr))))
@@ -79,6 +82,7 @@
 (defn find-schema-node-id
   "Find a schema node's ID by its schema key.
    Returns the node ID or nil if not found."
+  {:malli/schema [:=> [:cat :Model :keyword] [:maybe :NodeId]]}
   [model schema-key]
   (->> (schema-nodes model)
        (some #(when (= schema-key (get-in % [:data :schema-key]))
@@ -86,6 +90,7 @@
 
 (defn schema-key->node-id
   "Build a map from schema keyword to node ID for all schemas in the model."
+  {:malli/schema [:=> [:cat :Model] [:map-of :keyword :NodeId]]}
   [model]
   (->> (schema-nodes model)
        (map (fn [n] [(get-in n [:data :schema-key]) (:id n)]))
@@ -94,6 +99,7 @@
 (defn schema-owner-id
   "Get the module node ID that owns a schema.
    Returns the parent node ID or nil if not found."
+  {:malli/schema [:=> [:cat :Model :keyword] [:maybe :NodeId]]}
   [model schema-key]
   (->> (schema-nodes model)
        (some #(when (= schema-key (get-in % [:data :schema-key]))

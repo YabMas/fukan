@@ -4,7 +4,7 @@
 #
 # The module-owner can:
 #   Read/Glob/Grep: MODULE_PATH, its test path, test_support/
-#   Edit/Write: .clj files under MODULE_PATH, contract.edn under MODULE_PATH,
+#   Edit/Write: .clj files under MODULE_PATH,
 #               test path, test_support/invariants/, test_support/generators.clj,
 #               test_support/registry.clj
 #   Edit/Write DENIED: *.allium, *.md, anything outside boundary
@@ -98,12 +98,12 @@ case "$TOOL_NAME" in
       deny "Module-owner cannot modify .md files"
     fi
 
-    # Allow .clj and contract.edn under module src path
+    # Allow .clj files under module src path
     if [[ "$TARGET_PATH" == "$ABS_MODULE"* ]]; then
-      if [[ "$TARGET_PATH" == *.clj ]] || [[ "$(basename "$TARGET_PATH")" == "contract.edn" ]]; then
+      if [[ "$TARGET_PATH" == *.clj ]]; then
         exit 0
       fi
-      deny "Module-owner can only write .clj and contract.edn under module path"
+      deny "Module-owner can only write .clj files under module path"
     fi
 
     # Allow test path (test files)

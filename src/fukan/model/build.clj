@@ -210,17 +210,115 @@
 ;; -----------------------------------------------------------------------------
 ;; Surface-to-boundary collapse
 
+(def ^:private allium-primitive-types
+  "Allium type names that map to primitive schema tags."
+  {"String" "string" "Integer" "int" "Boolean" "boolean"})
+
+(defn- allium-type-ref->schema
+  "Convert an Allium type-ref AST node to the internal schema format
+   used by boundary function signatures. This allows spec-declared
+   types to produce the same schema representation as malli-derived
+   types from the implementation."
+  [type-ref]
+  (when type-ref
+    (case (:kind type-ref)
+      :simple
+      (if-let [prim (allium-primitive-types (:name type-ref))]
+        {:tag :primitive :name prim}
+        {:tag :ref :name (keyword (:name type-ref))})
+
+      :optional
+      {:tag :maybe :inner (allium-type-ref->schema (:inner type-ref))}
+
+      :generic
+      (let [n (:name type-ref)
+            params (mapv allium-type-ref->schema (:params type-ref))]
+        (case n
+          "List"  {:tag :vector :element (first params)}
+          "Set"   {:tag :set :element (first params)}
+          "Map"   {:tag :map-of :key-type (first params) :value-type (second params)}
+          ;; Unknown generic — use ref with params
+          {:tag :ref :name (keyword n)}))
+
+      :union
+      {:tag :or :variants (mapv allium-type-ref->schema (:members type-ref))}
+
+      :qualified
+      {:tag :ref :name (keyword (:ns type-ref) (:name type-ref))}
+
+      nil)))
+
+(defn- allium-provides->schema
+  "Convert Allium provides entry params and return type to a function
+   signature schema {:inputs [...] :output ...}."
+  [{:keys [params return]}]
+  (when (or (seq params) return)
+    (cond-> {}
+      (seq params) (assoc :inputs (mapv #(allium-type-ref->schema (:type %)) params))
+      return       (assoc :output (allium-type-ref->schema return)))))
+
+(defn- descendant-fns-by-label
+  "Collect all Function descendants (any depth) of a module, indexed by label.
+   On label collision, prefers nodes with signatures over placeholders."
+  [nodes module-id]
+  (->> (vals nodes)
+       (filter #(= :function (:kind %)))
+       (filter (fn [node]
+                 (loop [pid (:parent node)]
+                   (cond
+                     (nil? pid) false
+                     (= pid module-id) true
+                     :else (recur (:parent (get nodes pid)))))))
+       (reduce (fn [acc node]
+                 (let [existing (get acc (:label node))]
+                   (if (and existing (get-in existing [:data :signature])
+                            (not (get-in node [:data :signature])))
+                     acc
+                     (assoc acc (:label node) node))))
+               {})))
+
+(defn- surface-provides->boundary-fns
+  "Convert surface :provides entries into boundary function declarations.
+   Matches provides names against Function descendant nodes (not just
+   direct children) to pull in signatures and docs from the implementation.
+   Descendants are searched because the surface may be on a directory-level
+   module while functions live in namespace-level child modules.
+   Provides names use underscores; implementation labels use hyphens —
+   both conventions are tried for matching."
+  [nodes module-id provides]
+  (when (seq provides)
+    (let [desc-fns (descendant-fns-by-label nodes module-id)]
+      (->> provides
+           (mapv (fn [entry]
+                   (let [{:keys [name description]} entry
+                         ;; Try both underscore→hyphen and exact match
+                         hyphen-name (str/replace name "_" "-")
+                         match (or (get desc-fns hyphen-name)
+                                   (get desc-fns name))
+                         ;; Prefer implementation schema, fall back to spec-declared types
+                         impl-schema (get-in match [:data :signature])
+                         spec-schema (allium-provides->schema entry)
+                         schema (or impl-schema spec-schema)]
+                     (cond-> {:name (or (:label match) hyphen-name)}
+                       (:id match) (assoc :id (:id match))
+                       schema (assoc :schema schema)
+                       (or description (get-in match [:data :doc])) (assoc :doc (or description (get-in match [:data :doc])))))))))))
+
 (defn- collapse-surface-to-boundary
   "Collapse remaining :surface data into :boundary for each module.
-   After materialization, :surface may still contain :guarantees and :description.
+   After materialization, :surface may still contain :guarantees,
+   :description, and :provides. Provides entries are reconciled against
+   existing Function children to build boundary function declarations.
    These are merged into :boundary, then :surface is removed."
   [nodes]
   (reduce-kv
     (fn [acc id node]
       (if-let [surface (get-in node [:data :surface])]
-        (let [boundary-parts (cond-> {}
+        (let [provides-fns (surface-provides->boundary-fns nodes id (:provides surface))
+              boundary-parts (cond-> {}
                                (:guarantees surface) (assoc :guarantees (:guarantees surface))
-                               (:description surface) (assoc :description (:description surface)))
+                               (:description surface) (assoc :description (:description surface))
+                               (seq provides-fns) (assoc :functions provides-fns))
               existing-boundary (get-in node [:data :boundary])
               merged-boundary (if existing-boundary
                                 (merge existing-boundary boundary-parts)
@@ -267,13 +365,21 @@
 
 (defn- attach-boundary
   "Attach or merge a boundary into a node's :data map.
-   Always ensures a boundary exists (may be empty)."
+   Always ensures a boundary exists (may be empty).
+   When both existing (from surface) and inferred boundaries have :functions,
+   the existing functions take priority — they are the explicit contract.
+   Inferred functions are only used when no surface declares them."
   [node boundary]
   (let [existing (get-in node [:data :boundary])
         ;; Remove nil values from inferred boundary so it doesn't
-        ;; overwrite explicit values (e.g. contract.edn :description)
+        ;; overwrite explicit values (e.g. surface :description)
         boundary (when boundary
                    (into {} (remove (comp nil? val)) boundary))
+        ;; If existing already has :functions (from surface provides),
+        ;; don't let inferred :functions overwrite them
+        boundary (if (and (seq (:functions existing)) (:functions boundary))
+                   (dissoc boundary :functions)
+                   boundary)
         merged (cond
                  (and (seq existing) (seq boundary)) (merge existing boundary)
                  (seq existing) existing
@@ -284,7 +390,7 @@
 (defn- attach-boundaries
   "Attach boundaries to module nodes.
    Infers boundaries from child function signatures and merges into
-   any existing boundary (e.g. from spec guarantees or contract declarations).
+   any existing boundary (e.g. from spec surface provides or guarantees).
    Returns updated nodes map."
   [nodes]
   (reduce (fn [acc [id node]]
@@ -422,42 +528,43 @@
 (defn- materialize-surface-functions
   "Materialize surface provides operations as Function child nodes.
    For each module with surface.provides:
-   - Creates a Function child if no existing child has a matching label
-   - Enriches an existing function's :doc if it matches by name
-   Strips :provides from the stored surface afterward."
+   - Searches descendants (any depth) for matching functions
+   - If a descendant match exists, enriches its :doc but does NOT create duplicates
+   - Creates a new Function child only if no descendant match is found
+   Provides names use underscores; implementation labels use hyphens.
+   Both conventions are tried when matching."
   [nodes]
   (reduce-kv
     (fn [acc id node]
       (if-let [provides (seq (get-in node [:data :surface :provides]))]
-        (let [;; Collect existing child labels for matching
-              child-labels (->> (:children node)
-                                (keep #(get nodes %))
-                                (filter #(= :function (:kind %)))
-                                (map :label)
-                                set)
+        (let [;; Search all descendants, not just direct children
+              desc-fns (descendant-fns-by-label nodes id)
               ;; Create or enrich for each provides entry
               {new-nodes :nodes enrichments :enrichments}
               (reduce
                 (fn [acc {:keys [name description]}]
-                  (if (contains? child-labels name)
-                    ;; Match: enrich existing function's doc
-                    (let [match-id (str id "/" name)]
-                      (update acc :enrichments conj [match-id description]))
-                    ;; No match: create new Function child
-                    (let [fn-id (str id "/" name)
-                          fn-node {:id fn-id
-                                   :kind :function
-                                   :label name
-                                   :parent id
-                                   :children #{}
-                                   :data {:kind :function
-                                          :private? false
-                                          :doc description}}]
-                      (update acc :nodes assoc fn-id fn-node))))
+                  (let [hyphen-name (str/replace name "_" "-")
+                        match (or (get desc-fns hyphen-name)
+                                  (get desc-fns name))]
+                    (if match
+                      ;; Match: enrich existing function's doc
+                      (update acc :enrichments conj [(:id match) description])
+                      ;; No match: create new Function child with hyphenated label
+                      (let [fn-id (str id "/" hyphen-name)
+                            fn-node {:id fn-id
+                                     :kind :function
+                                     :label hyphen-name
+                                     :parent id
+                                     :children #{}
+                                     :data {:kind :function
+                                            :private? false
+                                            :doc description}}]
+                        (update acc :nodes assoc fn-id fn-node)))))
                 {:nodes {} :enrichments []}
                 provides)
-              ;; Strip :provides from stored surface
-              updated-node (update-in node [:data :surface] dissoc :provides)]
+              ;; Keep :provides in surface — collapse-surface-to-boundary
+              ;; will use them for boundary function declarations
+              updated-node node]
           (-> acc
               (assoc id updated-node)
               ;; Add new function nodes

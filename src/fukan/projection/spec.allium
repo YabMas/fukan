@@ -10,6 +10,19 @@
 use "./model.allium" as model
 
 ------------------------------------------------------------
+-- Surface
+------------------------------------------------------------
+
+surface ProjectionAPI "Pure computation from Model to visible subgraph, breadcrumb paths, and entity details." {
+    provides:
+        navigate(model: Model, opts: NavigateOpts) -> NavigateResult -- Compute visible subgraph, breadcrumb path, and entity details.
+        inspect(model: Model, entity_id: String) -> EntityDetails? -- Compute entity or edge details for the sidebar.
+        find_root(model: Model) -> Node? -- Find the root node of the model.
+        search(model: Model, pattern: String, limit: Integer) -> List<SearchResult> -- Case-insensitive substring search on node labels.
+        overview(model: Model) -> ModelOverview -- Compute model summary statistics.
+}
+
+------------------------------------------------------------
 -- Given
 ------------------------------------------------------------
 

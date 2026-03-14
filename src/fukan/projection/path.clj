@@ -21,6 +21,7 @@
 (defn find-root-node
   "Find the root node (node with parent = nil).
    Root should be a module, not a function or schema."
+  {:malli/schema [:=> [:cat :Model] [:maybe :Node]]}
   [model]
   (->> (vals (:nodes model))
        (filter #(nil? (:parent %)))

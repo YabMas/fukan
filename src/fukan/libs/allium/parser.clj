@@ -86,8 +86,23 @@
   (* ============ Fields ============ *)
 
   field-list = (field-item _ (<','> _)?)*
-  <field-item> = nested-variant / invariant-decl / field-entry
+  <field-item> = provides-block / nested-variant / invariant-decl / field-entry
   field-entry = ident _ <':'> _ field-value
+
+  (* Provides block: single 'provides:' with typed operation entries.
+     Uses newline-based separation between entries so that inline
+     comments are captured by provides-entry-comment, not swallowed
+     by the line-comment rule in _ *)
+  provides-block = <'provides'> _ <':'> _ provides-entries
+  provides-entries = (provides-entry provides-entry-sep)*
+  <provides-entry-sep> = <#'[ \\t]*\\n'> _
+  provides-entry = provides-entry-name provides-params? provides-return? provides-entry-comment?
+  provides-entry-name = #'[A-Za-z_][A-Za-z0-9_]*+(?![ \\t]*:)'
+  provides-params = <'('> _ provides-param-list? _ <')'>
+  provides-param-list = provides-param (_ <','> _ provides-param)*
+  provides-param = ident _ <':'> _ type-ref
+  provides-return = <#'[ \\t]+'> <'->'> <#'[ \\t]+'> type-ref
+  provides-entry-comment = <#'[ \\t]+--[ \\t]*'> inline-comment
 
   nested-variant = <'variant'> __ ident _ <'{'> _ field-list _ <'}'>
 
@@ -342,6 +357,52 @@
    (fn [name field-val]
      (assoc field-val :name name))
 
+   ;; Provides block
+   :provides-block
+   (fn [entries]
+     {:field-kind :provides-block :entries entries})
+
+   :provides-entries
+   (fn [& entries]
+     (vec (remove nil? entries)))
+
+   :provides-entry
+   (fn [name & args]
+     (let [by-tag (group-by (fn [x] (cond
+                                       (and (map? x) (contains? x :provides-params)) :params
+                                       (and (map? x) (contains? x :provides-return)) :return
+                                       (and (map? x) (contains? x :provides-comment)) :comment
+                                       :else :unknown))
+                             args)]
+       (cond-> {:name name}
+         (seq (:params by-tag)) (assoc :params (:provides-params (first (:params by-tag))))
+         (seq (:return by-tag)) (assoc :return (:provides-return (first (:return by-tag))))
+         (seq (:comment by-tag)) (assoc :description (:provides-comment (first (:comment by-tag)))))))
+
+   :provides-entry-name str
+
+   :provides-params
+   (fn [& param-groups]
+     {:provides-params (vec (apply concat
+                              (map (fn [x] (if (sequential? x) x [x]))
+                                   param-groups)))})
+
+   :provides-param-list
+   (fn [& params]
+     (vec params))
+
+   :provides-param
+   (fn [name type-ref]
+     {:name name :type type-ref})
+
+   :provides-return
+   (fn [type-ref]
+     {:provides-return type-ref})
+
+   :provides-entry-comment
+   (fn [text]
+     {:provides-comment (str/trim text)})
+
    :field-value identity
 
    :relationship
@@ -480,6 +541,7 @@
   "Parse an Allium specification string into an AST map.
    Returns a map with :allium-version and :declarations on success,
    or an instaparse failure object on parse error."
+  {:malli/schema [:=> [:cat :string] :map]}
   [text]
   (let [tree (allium-parser text)]
     (if (insta/failure? tree)
@@ -489,5 +551,6 @@
 (defn parse-file
   "Parse an Allium specification file into an AST map.
    Reads the file at the given path and parses its contents."
+  {:malli/schema [:=> [:cat :FilePath] :map]}
   [path]
   (parse-allium (slurp path)))

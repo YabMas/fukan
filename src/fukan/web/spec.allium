@@ -20,6 +20,11 @@ use "../projection/spec.allium" as projection
 -- Orchestrates core functions (projection + view) and streams
 -- results to connected browser clients.
 
+surface WebHandler "HTTP/SSE transport layer for browser clients." {
+    provides:
+        create_handler() -> Handler -- Create the Ring handler that serves the Fukan application.
+}
+
 external entity ViewTransport {
     -- Contract: two endpoint types composing projection → view.
     -- Both deliver results through the same SSE mechanism:

@@ -107,18 +107,9 @@ Before reporting completion, do a quick sanity check:
 1. All tests pass
 2. Every spec rule referenced in the task has a corresponding test
 3. No obvious dead code or leftover stubs
-4. contract.edn reflects any added/removed public functions
-
 The real review comes from the **critic agent** — a separate agent with fresh context that audits spec-test-impl alignment. Its findings feed back as input for your next iteration. Don't try to be your own critic; focus on making the implementation clean and testable.
 
 ## Implementation Conventions
-
-### contract.edn
-
-Defines a module's **external boundary** — functions called by other modules:
-- **In contract:** Functions called from outside the module
-- **Not in contract:** Functions public only for cross-namespace use within the module
-- **Should be `defn-`:** Functions only called within their own namespace
 
 ### Schema Implementation (Malli)
 

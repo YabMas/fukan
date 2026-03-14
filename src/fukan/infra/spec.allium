@@ -12,6 +12,21 @@
 use "../model/spec.allium" as model
 
 ------------------------------------------------------------
+-- Surface
+------------------------------------------------------------
+
+surface InfraLifecycle "Mutable state management for the model and HTTP server." {
+    provides:
+        load_model(src: FilePath, analyzers: Set<AnalyzerKey>) -> Model -- Load and build the model from source.
+        get_model() -> Model? -- Return the current model snapshot.
+        refresh_model() -> Model? -- Rebuild the model from source.
+        get_src() -> FilePath? -- Return the configured source path.
+        start_server(opts: ServerOpts) -> ServerInfo? -- Start the HTTP server on a given port.
+        stop_server -- Stop the running HTTP server.
+        get_port() -> Integer? -- Return the port the server is listening on.
+}
+
+------------------------------------------------------------
 -- External Entities
 ------------------------------------------------------------
 

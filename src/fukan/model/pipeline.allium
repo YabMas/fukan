@@ -53,15 +53,10 @@ external entity ImplementationAnalyzer {
         -- same source path. Results are merged additively before
         -- BuildModel consumes them.
         --
-        -- Implementation analyzers may read project resources (contract.edn
-        -- files) and runtime state during analysis. The Clojure analyzer
-        -- reads loaded JVM namespaces for schema metadata and function
-        -- signatures, and resolves contract.edn declarations against
-        -- runtime vars. This means analysis results depend on runtime
-        -- state at analysis time.
-        --
-        -- Missing project resources produce no error — the system
-        -- functions without them.
+        -- Implementation analyzers may read runtime state during analysis.
+        -- The Clojure analyzer reads loaded JVM namespaces for schema
+        -- metadata and function signatures. This means analysis results
+        -- depend on runtime state at analysis time.
 
     -- Failure modes
     failures:
@@ -94,6 +89,17 @@ external entity SpecificationAnalyzer {
         -- Specification analyzers produce only module-level nodes.
         -- Declaration children (entities, values, rules) are not
         -- represented as graph nodes — they exist as data on the module.
+}
+
+------------------------------------------------------------
+-- Surface
+------------------------------------------------------------
+
+surface ModelBuild "Model construction and boundary contract compliance." {
+    provides:
+        build_model(src: FilePath, analyzers: Set<AnalyzerKey>) -> Model -- Build complete model from a source path and analyzer keys.
+        check_contracts(model: Model) -> LintReport -- Check all cross-module edges against declared boundaries.
+        format_report(report: LintReport) -> String -- Render a lint report as a human-readable string.
 }
 
 ------------------------------------------------------------

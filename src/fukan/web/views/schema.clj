@@ -16,6 +16,7 @@
   "Build a /sse/view?select= URL for full app navigation.
    Resolves schema keyword to node ID via the lookup map.
    Includes current view state so the graph preserves its layout."
+  {:malli/schema [:=> [:cat [:map-of :keyword :NodeId] :keyword] [:maybe :string]]}
   [schema-ids schema-key]
   (let [k (if (keyword? schema-key) schema-key (keyword schema-key))
         node-id (get schema-ids k)]
@@ -157,6 +158,7 @@
    Description is handled by the entity detail renderer, not duplicated here.
    schema-ids: keyword→node-id map for click navigation.
    registry: {keyword -> {:form :doc}} for resolving named refs."
+  {:malli/schema [:=> [:cat [:map-of :keyword :NodeId] :TypeExpr [:maybe :map]] :Html]}
   [schema-ids type-expr registry]
   (cond
     ;; Map TypeExpr - show entries

@@ -12,6 +12,18 @@
 use "./projection.allium" as projection
 
 ------------------------------------------------------------
+-- Surface
+------------------------------------------------------------
+
+surface ViewRendering "Pure view rendering — transforms projection data into HTML and Cytoscape JSON." {
+    provides:
+        render_app_shell() -> Html -- Render the initial HTML shell for the application.
+        render_graph(projection: Projection, editor_state: EditorState) -> CytoscapeGraph -- Transform projection data into CytoscapeGraph output.
+        render_breadcrumb(path: EntityPath) -> Html -- Render the navigation breadcrumb trail.
+        render_sidebar_html(detail: EntityDetails) -> Html -- Render entity or edge details as sidebar HTML.
+}
+
+------------------------------------------------------------
 -- Value Types
 ------------------------------------------------------------
 

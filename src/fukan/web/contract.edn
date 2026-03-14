@@ -1,3 +1,0 @@
-{:description "Web UI: serves the Fukan application over HTTP. An initial HTML shell is loaded once; all subsequent updates stream as SSE events carrying HTML fragments and Cytoscape graph JSON. The handler orchestrates projection → view rendering per request."
- :functions
- [fukan.web.handler/create-handler]}
