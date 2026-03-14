@@ -102,6 +102,8 @@ class GraphViewer extends HTMLElement {
     if (this.currentViewId) params.set('id', this.currentViewId);
     if (this.currentSelectId) params.set('select', this.currentSelectId);
     if (this.currentSchemaId) params.set('schema', this.currentSchemaId);
+    if (this.expandedModules.size) params.set('expanded', this.expandedParam);
+    if (this.showPrivate.size) params.set('show_private', this.showPrivateParam);
     const query = params.toString();
     return query ? '/?' + query : '/';
   }
@@ -132,6 +134,13 @@ class GraphViewer extends HTMLElement {
     this.currentViewId = viewId;
     this.currentSelectId = selectId;
     this.currentSchemaId = '';
+
+    this.expandedModules.clear();
+    this.showPrivate.clear();
+    const expanded = params.get('expanded');
+    if (expanded) expanded.split(',').forEach(id => this.expandedModules.add(id));
+    const showPrivate = params.get('show_private');
+    if (showPrivate) showPrivate.split(',').forEach(id => this.showPrivate.add(id));
 
     this.skipNextUrlUpdate = true;
     this._emitNavigate(viewId, selectId);
