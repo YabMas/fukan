@@ -6,7 +6,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Cytoscape Output Schemas
 
-(def ^:schema CytoscapeNode
+(def ^:private ^:schema CytoscapeNode
   [:map {:description "A graph node in Cytoscape.js camelCase format with display and interaction state."}
    [:id :NodeId]
    [:kind {:description "Node kind as a string: module, function, or schema."} :string]
@@ -21,7 +21,7 @@
    [:private {:optional true} :boolean]
    [:schemaKey {:optional true} :string]])
 
-(def ^:schema CytoscapeEdge
+(def ^:private ^:schema CytoscapeEdge
   [:map {:description "A directed edge in Cytoscape.js format with source/target node IDs and semantic type."}
    [:id {:description "Synthetic sequential ID (e.g. e0, e1)."} :string]
    [:source :NodeId]

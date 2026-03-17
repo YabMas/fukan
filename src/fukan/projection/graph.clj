@@ -10,7 +10,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:schema ProjectionNodeKind
+(def ^:private ^:schema ProjectionNodeKind
   [:enum {:description "Node kinds in projections: module, function, or schema."}
    :module :function :schema])
 
@@ -44,7 +44,7 @@
    [:nodes [:vector :ProjectionNode]]
    [:edges [:vector :ProjectionEdge]]])
 
-(def ^:schema ProjectionOpts
+(def ^:private ^:schema ProjectionOpts
   [:map {:description "Options for graph projection: which entity to view, which modules are expanded, which show private children, and which edge types are visible."}
    [:view-id {:optional true} [:maybe :NodeId]]
    [:expanded {:optional true} [:set :NodeId]]

@@ -7,7 +7,7 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:schema PathSegment
+(def ^:private ^:schema PathSegment
   [:map {:description "One step in a breadcrumb path from root to the current entity."}
    [:id {:description "Node ID to navigate to, nil for the root."} [:maybe :NodeId]]
    [:label {:description "Short display label from the node."} :string]])

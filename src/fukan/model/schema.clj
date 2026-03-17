@@ -79,7 +79,8 @@
     [:kind [:= :schema]]
     [:schema-key :keyword]
     [:schema {:description "TypeExpr representation of the schema."} :TypeExpr]
-    [:doc {:optional true} [:maybe :string]]]])
+    [:doc {:optional true} [:maybe :string]]
+    [:private? {:optional true} :boolean]]])
 
 (def ^:schema Node
   [:map {:description "An entity in the system model: module, function, or schema definition."}

@@ -251,19 +251,20 @@
 ;; -----------------------------------------------------------------------------
 ;; Schema Discovery
 
-(def ^:schema SchemaDiscoveryEntry
+(def ^:private ^:schema SchemaDiscoveryEntry
   [:map {:description "Discovered metadata for a single ^:schema var."}
    [:schema-form {:description "The Malli schema form (arbitrary syntax tree)."} :any]
    [:doc [:maybe :string]]
    [:owner-ns :string]])
 
-(def ^:schema SchemaDiscoveryData
+(def ^:private ^:schema SchemaDiscoveryData
   [:map-of {:description "All discovered ^:schema vars keyed by schema keyword."}
    :keyword :SchemaDiscoveryEntry])
 
 (defn- discover-schema-data
   "Scan loaded namespaces for vars with ^:schema metadata.
-   Returns a map of {keyword -> {:schema-form form :doc str? :owner-ns ns-str}}.
+   Returns a map of {keyword -> {:schema-form form :doc str? :owner-ns ns-str :private? bool}}.
+   Includes both public and private schema vars.
 
    This is a pure function that reads metadata from the runtime - it does
    not mutate any global state."
@@ -271,12 +272,13 @@
   []
   (->> (all-ns)
        (mapcat (fn [ns]
-                 (for [[sym v] (ns-publics ns)
+                 (for [[sym v] (ns-interns ns)
                        :when (:schema (meta v))]
                    [(keyword (name sym))
                     {:schema-form @v
                      :doc (:description (malli-props @v))
-                     :owner-ns (str (ns-name ns))}])))
+                     :owner-ns (str (ns-name ns))
+                     :private? (boolean (:private (meta v)))}])))
        (into {})))
 
 ;; -----------------------------------------------------------------------------
@@ -288,13 +290,13 @@
    Converts raw Malli schema forms to TypeExpr at build time.
 
    ns-index is a map of {ns-sym -> node-id} for looking up parent namespaces.
-   schema-data is a map of {keyword -> {:schema-form form :doc str? :owner-ns ns-str}}
+   schema-data is a map of {keyword -> {:schema-form form :doc str? :owner-ns ns-str :private? bool}}
    as returned by discover-schema-data.
 
    Returns a map of {schema-node-id -> node}."
   [ns-index schema-data]
   (->> schema-data
-       (map (fn [[k {:keys [schema-form doc owner-ns]}]]
+       (map (fn [[k {:keys [schema-form doc owner-ns private?]}]]
               (let [id (str "schema:" (clojure.core/name k))
                     owner-ns-sym (when owner-ns (symbol owner-ns))
                     parent-ns-id (get ns-index owner-ns-sym)]
@@ -306,7 +308,8 @@
                      :data {:kind :schema
                             :schema-key k
                             :schema (malli->type-expr schema-form)
-                            :doc doc}}])))
+                            :doc doc
+                            :private? (boolean private?)}}])))
        (into {})))
 
 ;; -----------------------------------------------------------------------------

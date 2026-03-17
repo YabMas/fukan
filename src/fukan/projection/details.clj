@@ -5,8 +5,7 @@
    schema form), dataflow (input/output schema references), and
    aggregated dependency counts. The normalized shape lets the sidebar
    render all entity kinds with one generic renderer."
-  (:require [clojure.set :as set]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [fukan.projection.schema :as proj.schema]))
 
 ;; -----------------------------------------------------------------------------
@@ -228,42 +227,33 @@
 
       nil)))
 
-(defn- all-descendant-schemas
-  "Get all schema keywords defined anywhere within a module's subtree.
-   Traverses children recursively, collecting schema keys at any depth."
+(defn- all-descendant-public-schemas
+  "Get all public schema keywords defined anywhere within a module's subtree.
+   Traverses children recursively, collecting schema keys at any depth.
+   Private schemas are excluded — they are internal implementation details."
   [model node-id]
   (let [children (get-in model [:nodes node-id :children] #{})]
     (->> children
          (mapcat (fn [cid]
                    (let [child (get-in model [:nodes cid])]
                      (if (= :schema (:kind child))
-                       [(get-in child [:data :schema-key])]
-                       (all-descendant-schemas model cid)))))
-         set)))
-
-(defn- operation-schema-refs
-  "Collect all schema keywords referenced in a module's boundary function signatures."
-  [model data]
-  (when-let [fns (seq (get-in data [:boundary :functions]))]
-    (->> fns
-         (keep #(extract-fn-io model (:schema %)))
-         (mapcat (fn [{:keys [inputs outputs]}] (concat inputs outputs)))
+                       (when-not (get-in child [:data :private?])
+                         [(get-in child [:data :schema-key])])
+                       (all-descendant-public-schemas model cid)))))
          set)))
 
 (defn- extract-schemas
-  "Extract defined types for modules: schemas that are both defined within
-   the module's subtree AND referenced in the module's operation signatures.
+  "Extract defined types for modules: public schemas owned by the module.
+   Private schemas are internal implementation details and excluded.
    Returns a vector of {:key schema-keyword :doc str?} or nil."
   [model node]
   (let [data (:data node)
         ref-fn (partial schema-ref-with-doc model)]
     (case (:kind data)
       :module
-      (let [owned (all-descendant-schemas model (:id node))
-            referenced (operation-schema-refs model data)
-            defined-types (set/intersection owned (or referenced #{}))]
-        (when (seq defined-types)
-          (->> defined-types sort (mapv ref-fn))))
+      (let [public-schemas (all-descendant-public-schemas model (:id node))]
+        (when (seq public-schemas)
+          (->> public-schemas sort (mapv ref-fn))))
 
       nil)))
 
@@ -398,23 +388,23 @@
 ;; -----------------------------------------------------------------------------
 ;; Schemas
 
-(def ^:schema EntityDepInfo
+(def ^:private ^:schema EntityDepInfo
   [:map {:description "Aggregated dependency count and display label for one target."}
    [:count :int]
    [:label :string]])
 
-(def ^:schema EntityDeps
+(def ^:private ^:schema EntityDeps
   [:map-of {:description "Map from entity ID to aggregated dependency info."}
    :string :EntityDepInfo])
 
-(def ^:schema FnEntry
+(def ^:private ^:schema FnEntry
   [:map {:description "A function in a public API listing: name, optional signature, and optional navigable ID."}
    [:name :string]
    [:schema {:optional true, :description "Structured function signature: inputs and output TypeExprs."}
     :FunctionSignature]
    [:id {:optional true} :string]])
 
-(def ^:schema InterfaceData
+(def ^:private ^:schema InterfaceData
   [:multi {:dispatch :type
            :description "Public interface of an entity, discriminated by display format."}
    [:fn-list [:map
@@ -435,18 +425,18 @@
      [:type [:= :name-list]]
      [:items [:vector :string]]]]])
 
-(def ^:schema SchemaRef
+(def ^:private ^:schema SchemaRef
   [:map {:description "A type in a dataflow section. Schema refs include :key for click navigation."}
    [:label :string]
    [:key {:optional true} :keyword]
    [:doc {:optional true} [:maybe :string]]])
 
-(def ^:schema DataflowData
+(def ^:private ^:schema DataflowData
   [:map {:description "Schema references flowing in and out of an entity's boundary."}
    [:inputs [:vector :SchemaRef]]
    [:outputs [:vector :SchemaRef]]])
 
-(def ^:schema SchemaRefEntry
+(def ^:private ^:schema SchemaRefEntry
   [:map {:description "A schema reference in a schema-reference edge detail."}
    [:from-schema [:map [:id :string] [:label :string] [:schema-key {:optional true} [:maybe :keyword]]]]
    [:to-schema [:map [:id :string] [:label :string] [:schema-key {:optional true} [:maybe :keyword]]]]])

@@ -304,9 +304,12 @@ variant Schema : Node {
     -- Schema nodes are owned by their parent module. They form part
     -- of that module's published data contract — other modules that
     -- reference these schemas take a dependency on the owning module.
+    -- Private schemas are internal implementation details; public
+    -- schemas appear in the module's boundary.
     schema_key: String
     form: TypeExpr
     doc: String?
+    private: Boolean
 }
 
 entity Model {

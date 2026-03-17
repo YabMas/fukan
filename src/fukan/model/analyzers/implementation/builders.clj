@@ -13,13 +13,13 @@
 ;; should produce. Language-specific analyzers convert their native format
 ;; to these generic structures.
 
-(def ^:schema ModuleDef
+(def ^:private ^:schema ModuleDef
   [:map {:description "A module (namespace/scope) definition."}
    [:name :symbol]
    [:filename :string]
    [:doc {:optional true} [:maybe :string]]])
 
-(def ^:schema SymbolDef
+(def ^:private ^:schema SymbolDef
   [:map {:description "A symbol (function/variable) definition."}
    [:module :symbol]
    [:name :symbol]
@@ -28,14 +28,14 @@
    [:doc {:optional true} [:maybe :string]]
    [:private {:optional true} :boolean]])
 
-(def ^:schema SymbolRef
+(def ^:private ^:schema SymbolRef
   [:map {:description "A reference from one symbol to another."}
    [:from {:description "Module containing the call site"} :symbol]
    [:from-symbol {:optional true :description "Symbol at the call site, nil if top-level"} :symbol]
    [:to {:description "Module containing the target symbol"} :symbol]
    [:name {:description "Name of the referenced symbol"} :symbol]])
 
-(def ^:schema ModuleImport
+(def ^:private ^:schema ModuleImport
   [:map {:description "A module require/import relationship."}
    [:from :symbol]
    [:to :symbol]
