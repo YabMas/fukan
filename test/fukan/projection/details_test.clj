@@ -126,3 +126,91 @@
       (is (some? (:dispatched-fns detail)) "should have dispatched-fns from dispatches edges")
       (is (= 1 (count (:called-fns detail))))
       (is (= 1 (count (:dispatched-fns detail)))))))
+
+;; ---------------------------------------------------------------------------
+;; Edge details perspective-awareness: dispatches edges under dependency-graph
+
+(deftest edge-detail-dispatches-under-dependency-graph
+  (testing "edge detail finds dispatches contributions when edge ID has flipped endpoints"
+    ;; Under dependency-graph perspective, dispatches edges are flipped:
+    ;; canonical: dispatch-pt → handler, flipped: handler → dispatch-pt
+    ;; So the aggregated edge ID is edge~ns:beta~ns:alpha~code-flow
+    ;; (from handler's module to dispatch-pt's module)
+    ;; But raw model edge is dispatch-pt→handler (ns:alpha→ns:beta direction)
+    (let [model {:nodes {"root"       {:id "root" :kind :module :label "root" :parent nil
+                                        :children #{"ns:alpha" "ns:beta"} :data {:kind :module}}
+                          "ns:alpha"  {:id "ns:alpha" :kind :module :label "alpha" :parent "root"
+                                        :children #{"ns:alpha/dispatch-pt"}
+                                        :data {:kind :module}}
+                          "ns:beta"   {:id "ns:beta" :kind :module :label "beta" :parent "root"
+                                        :children #{"ns:beta/handler"}
+                                        :data {:kind :module}}
+                          "ns:alpha/dispatch-pt" {:id "ns:alpha/dispatch-pt" :kind :function :label "dispatch-pt"
+                                                   :parent "ns:alpha" :children #{}
+                                                   :data {:kind :function :private? false}}
+                          "ns:beta/handler"      {:id "ns:beta/handler" :kind :function :label "handler"
+                                                   :parent "ns:beta" :children #{}
+                                                   :data {:kind :function :private? false}}}
+                  ;; Raw dispatches edge: dispatch-pt → handler (canonical direction)
+                  :edges [{:from "ns:alpha/dispatch-pt" :to "ns:beta/handler" :kind :dispatches}]}
+          ;; Under dependency-graph, this edge was flipped to handler→dispatch-pt,
+          ;; so the aggregated edge ID has from=ns:beta, to=ns:alpha
+          edge-id "edge~ns:beta~ns:alpha~code-flow"
+          detail (details/entity-details model edge-id)]
+      (is (some? detail) "edge detail should not be nil")
+      (is (= :code-flow (:edge-type detail)))
+      (is (some? (:dispatched-fns detail))
+          "should find dispatches contributions even with flipped endpoints")
+      (is (= 1 (count (:dispatched-fns detail))))))
+
+  (testing "edge detail finds function-call contributions regardless of perspective"
+    ;; function-call edges are NOT flipped by perspective, so this should always work
+    (let [model {:nodes {"root"       {:id "root" :kind :module :label "root" :parent nil
+                                        :children #{"ns:alpha" "ns:beta"} :data {:kind :module}}
+                          "ns:alpha"  {:id "ns:alpha" :kind :module :label "alpha" :parent "root"
+                                        :children #{"ns:alpha/caller"}
+                                        :data {:kind :module}}
+                          "ns:beta"   {:id "ns:beta" :kind :module :label "beta" :parent "root"
+                                        :children #{"ns:beta/callee"}
+                                        :data {:kind :module}}
+                          "ns:alpha/caller" {:id "ns:alpha/caller" :kind :function :label "caller"
+                                              :parent "ns:alpha" :children #{}
+                                              :data {:kind :function :private? false}}
+                          "ns:beta/callee"  {:id "ns:beta/callee" :kind :function :label "callee"
+                                              :parent "ns:beta" :children #{}
+                                              :data {:kind :function :private? false}}}
+                  :edges [{:from "ns:alpha/caller" :to "ns:beta/callee" :kind :function-call}]}
+          edge-id "edge~ns:alpha~ns:beta~code-flow"
+          detail (details/entity-details model edge-id)]
+      (is (some? (:called-fns detail)))
+      (is (= 1 (count (:called-fns detail))))))
+
+  (testing "mixed edge: function-call forward + dispatches reversed both found"
+    (let [model {:nodes {"root"       {:id "root" :kind :module :label "root" :parent nil
+                                        :children #{"ns:alpha" "ns:beta"} :data {:kind :module}}
+                          "ns:alpha"  {:id "ns:alpha" :kind :module :label "alpha" :parent "root"
+                                        :children #{"ns:alpha/dispatch-pt"}
+                                        :data {:kind :module}}
+                          "ns:beta"   {:id "ns:beta" :kind :module :label "beta" :parent "root"
+                                        :children #{"ns:beta/handler" "ns:beta/caller"}
+                                        :data {:kind :module}}
+                          "ns:alpha/dispatch-pt" {:id "ns:alpha/dispatch-pt" :kind :function :label "dispatch-pt"
+                                                   :parent "ns:alpha" :children #{}
+                                                   :data {:kind :function :private? false}}
+                          "ns:beta/handler"      {:id "ns:beta/handler" :kind :function :label "handler"
+                                                   :parent "ns:beta" :children #{}
+                                                   :data {:kind :function :private? false}}
+                          "ns:beta/caller"       {:id "ns:beta/caller" :kind :function :label "caller"
+                                                   :parent "ns:beta" :children #{}
+                                                   :data {:kind :function :private? false}}}
+                  ;; Under dependency-graph:
+                  ;; - function-call ns:beta/caller→ns:alpha/dispatch-pt stays as-is
+                  ;; - dispatches ns:alpha/dispatch-pt→ns:beta/handler flips to handler→dispatch-pt
+                  ;; Both aggregate to edge~ns:beta~ns:alpha~code-flow
+                  :edges [{:from "ns:beta/caller" :to "ns:alpha/dispatch-pt" :kind :function-call}
+                          {:from "ns:alpha/dispatch-pt" :to "ns:beta/handler" :kind :dispatches}]}
+          edge-id "edge~ns:beta~ns:alpha~code-flow"
+          detail (details/entity-details model edge-id)]
+      (is (some? detail))
+      (is (some? (:called-fns detail)) "should find function-call contributions")
+      (is (some? (:dispatched-fns detail)) "should find dispatches contributions from reverse direction"))))

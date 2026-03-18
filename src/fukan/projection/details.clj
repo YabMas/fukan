@@ -369,12 +369,18 @@
           to-node (get-in model [:nodes to-id])]
       (case edge-type
         :code-flow
-        (let [underlying-edges (compute-underlying-edges model from-id to-id)
-              ;; Split by model edge kind
+        (let [underlying-fwd (compute-underlying-edges model from-id to-id)
+              underlying-rev (compute-underlying-edges model to-id from-id)
+              ;; Function-call edges: always in from→to direction (unaffected by perspective)
               fn-call-edges (filter #(= :function-call (:kind %)) (matching-raw-edges model from-id to-id))
-              dispatches-edges (filter #(= :dispatches (:kind %)) (matching-raw-edges model from-id to-id))
+              ;; Dispatches edges: search both directions since perspective may have flipped them.
+              ;; Under dependency-graph, the edge ID encodes flipped endpoints, but raw model
+              ;; dispatches edges remain in canonical direction.
+              dispatches-fwd (filter #(= :dispatches (:kind %)) (matching-raw-edges model from-id to-id))
+              dispatches-rev (filter #(= :dispatches (:kind %)) (matching-raw-edges model to-id from-id))
+              dispatches-edges (concat dispatches-fwd dispatches-rev)
               called-fns (when (seq fn-call-edges)
-                           (->> underlying-edges
+                           (->> underlying-fwd
                                 (filter (fn [ue]
                                           (some #(and (= (:from %) (get-in ue [:from-fn :id]))
                                                       (= (:to %) (get-in ue [:to-fn :id])))
@@ -385,16 +391,17 @@
                                 (mapv (fn [{:keys [id label signature]}]
                                         {:name label :schema signature :id id}))))
               dispatched-fns (when (seq dispatches-edges)
-                               (->> underlying-edges
-                                    (filter (fn [ue]
-                                              (some #(and (= (:from %) (get-in ue [:from-fn :id]))
-                                                          (= (:to %) (get-in ue [:to-fn :id])))
-                                                    dispatches-edges)))
-                                    (map :to-fn)
-                                    (distinct)
-                                    (sort-by :label)
-                                    (mapv (fn [{:keys [id label signature]}]
-                                            {:name label :schema signature :id id}))))]
+                               (let [all-underlying (concat underlying-fwd underlying-rev)]
+                                 (->> all-underlying
+                                      (filter (fn [ue]
+                                                (some #(and (= (:from %) (get-in ue [:from-fn :id]))
+                                                            (= (:to %) (get-in ue [:to-fn :id])))
+                                                      dispatches-edges)))
+                                      (map :to-fn)
+                                      (distinct)
+                                      (sort-by :label)
+                                      (mapv (fn [{:keys [id label signature]}]
+                                              {:name label :schema signature :id id})))))]
           (cond-> {:label       (str (:label from-node) " → " (:label to-node))
                    :kind        :edge
                    :detail-kind :edge
