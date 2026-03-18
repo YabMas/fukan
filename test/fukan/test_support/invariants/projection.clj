@@ -223,7 +223,8 @@
   [model opts projection]
   (let [checks [leaf-shows-all-related?
                 no-ancestor-descendant-edges?
-                no-duplicate-edges?]]
+                no-duplicate-edges?
+                visible-node-edges?]]
     (reduce (fn [_ check]
               (let [result (check model opts projection)]
                 (if (true? result)

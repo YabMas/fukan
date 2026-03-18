@@ -102,6 +102,36 @@
                    opts-gen)))))
 
 ;; ---------------------------------------------------------------------------
+;; Generative: leaf view invariants
+
+(defspec leaf-view-invariants 100
+  (prop/for-all [model (gen/gen-model)]
+    (let [;; Pick a leaf node (function or schema) as view-id
+          leaf-ids (->> (vals (:nodes model))
+                        (filter #(empty? (:children % #{})))
+                        (map :id)
+                        vec)]
+      (if (empty? leaf-ids)
+        true
+        (tgen/generate
+          (tgen/fmap (fn [[leaf-idx edge-type-choice perspective]]
+                       (let [leaf-id (nth leaf-ids leaf-idx)
+                             visible-edge-types (case edge-type-choice
+                                                  0 #{:code-flow :schema-reference}
+                                                  1 #{:code-flow}
+                                                  2 #{:schema-reference})
+                             opts {:view-id leaf-id
+                                   :expanded #{}
+                                   :show-private #{}
+                                   :visible-edge-types visible-edge-types
+                                   :perspective (if (zero? perspective) :call-graph :dependency-graph)}
+                             projection (graph/entity-graph model opts)]
+                         (true? (inv/valid-leaf-projection? model opts projection))))
+                     (tgen/tuple (tgen/choose 0 (dec (count leaf-ids)))
+                                 (tgen/choose 0 2)
+                                 (tgen/choose 0 1))))))))
+
+;; ---------------------------------------------------------------------------
 ;; Example-based: private inheritance
 
 (deftest private-inheritance-test
