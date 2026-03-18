@@ -2,8 +2,9 @@
 -- pipeline.allium
 --
 -- Scope: Model build pipeline — how a Model is constructed from
---   source analysis
--- Includes: AnalysisResult shape, source analyzers, build rule
+--   source analysis, and how it is checked for contract compliance
+-- Includes: AnalysisResult shape, source analyzers, build rule,
+--   contract linting
 -- Excludes:
 --   - The Model itself (see model/spec.allium)
 --   - Language-specific analyzer internals (see analyzers/)
@@ -30,6 +31,29 @@ value AnalysisResult {
     source_files: List<String>
     nodes: Map<String, model/Node>
     edges: List<model/Edge>
+}
+
+value LintViolation {
+    -- A single contract violation: a cross-module call to a function
+    -- not declared in the target module's boundary.
+    from: String               -- NodeId of the calling function
+    to: String                 -- NodeId of the called function (not in boundary)
+    from_module: String        -- Module containing the caller (direct parent)
+    to_module: String          -- Module containing the callee (direct parent)
+    contract_fns: List<String> -- Function names the target module does export
+}
+
+value LintReport {
+    -- Contract compliance report: violations and aggregate statistics.
+    violations: List<LintViolation>
+    stats: LintStats
+}
+
+value LintStats {
+    -- Aggregate edge counts for a lint check.
+    total_edges: Integer
+    cross_module_edges: Integer
+    violations: Integer
 }
 
 ------------------------------------------------------------
@@ -105,6 +129,39 @@ surface ModelBuild "Model construction and boundary contract compliance." {
 ------------------------------------------------------------
 -- Rules
 ------------------------------------------------------------
+
+rule CheckContracts {
+    -- Pure query: Model -> LintReport.
+    -- Checks that every cross-module function call targets a function
+    -- declared in the target module's boundary.
+    --
+    -- Module ownership: each function's module is its direct parent node.
+    -- A call is cross-module when the caller's parent differs from the
+    -- callee's parent. Only the callee's direct parent boundary is
+    -- checked — ancestor boundaries are not consulted.
+    --
+    -- Boundary matching uses BoundaryFn.id to match against the called
+    -- function's NodeId. Modules without boundary functions are not
+    -- subject to contract checking.
+
+    when: CheckContracts(model: model/Model)
+
+    let fn_edges = model.edges where kind = function_call
+        and to.kind = Function
+    let cross_module = fn_edges where from.parent != to.parent
+    let violations = cross_module where
+        to.parent.boundary.functions.count > 0
+        and to not in to.parent.boundary.functions.id
+
+    ensures: LintReport.created(
+        violations: violations,
+        stats: LintStats.created(
+            total_edges: model.edges.count,
+            cross_module_edges: cross_module.count,
+            violations: violations.count
+        )
+    )
+}
 
 rule BuildModel {
     -- Pure transformation: merged AnalysisResults -> immutable Model.

@@ -354,7 +354,8 @@
                                      (not (get-in % [:data :private?]))
                                      (not (contains? schema-symbol-ids (:id %)))))
                        (mapv (fn [node]
-                               (cond-> {:name (:label node)}
+                               (cond-> {:name (:label node)
+                                        :id (:id node)}
                                  (get-in node [:data :signature])
                                  (assoc :schema (get-in node [:data :signature]))
                                  (get-in node [:data :doc])

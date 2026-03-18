@@ -13,7 +13,7 @@
    [:to {:description "Node ID of the called function (not in contract)."} :NodeId]
    [:from-module {:description "Module containing the caller."} :NodeId]
    [:to-module {:description "Module containing the callee."} :NodeId]
-   [:contract-fns {:description "Functions the target module does export."} [:vector :symbol]]])
+   [:contract-fns {:description "Functions the target module does export."} [:vector :string]]])
 
 (def ^:schema LintReport
   [:map {:description "Contract compliance report: violations and aggregate statistics."}
@@ -25,72 +25,44 @@
      [:violations {:description "Cross-module edges targeting unexported functions."} :int]]]])
 
 ;; -----------------------------------------------------------------------------
-;; Helpers
-
-(defn- descendant-ids
-  "Collect all descendant node IDs of a module by walking :children recursively."
-  [nodes module-id]
-  (loop [queue (vec (:children (get nodes module-id)))
-         acc #{}]
-    (if (empty? queue)
-      acc
-      (let [id (first queue)
-            node (get nodes id)
-            children (vec (:children node))]
-        (recur (into (subvec queue 1) children)
-               (conj acc id))))))
-
-;; -----------------------------------------------------------------------------
 ;; Core linter
 
 (defn check-contracts
   "Check all cross-module edges against declared contracts.
-   Only checks edges targeting :function nodes — contracts declare
-   functions, so only function-level edges can be violations.
+   Uses each function's direct parent module for ownership. A call is
+   cross-module when the caller's parent differs from the callee's parent.
+   The callee's parent boundary is checked — if it has no boundary
+   functions, the call is not subject to contract checking.
    Returns a lint report with violations and stats."
   {:malli/schema [:=> [:cat :Model] :LintReport]}
   [{:keys [nodes edges]}]
-  (let [;; 1. Collect modules: module nodes with a boundary containing functions
-        modules (->> (vals nodes)
-                     (filter #(and (= :module (:kind %))
-                                   (seq (get-in % [:data :boundary :functions]))))
-                     (map :id)
-                     set)
-
-        ;; 2. Build boundary index: {module-id -> #{node-id ...}}
+  (let [;; 1. Build contract index: {module-id -> #{node-id ...}}
+        ;;    from boundary functions that have :id populated
         contract-index
-        (into {}
-              (map (fn [mod-id]
-                     (let [fns (get-in nodes [mod-id :data :boundary :functions])
-                           ids (->> fns (keep :id) set)]
-                       [mod-id ids])))
-              modules)
+        (->> (vals nodes)
+             (filter #(= :module (:kind %)))
+             (reduce (fn [acc mod]
+                       (let [fns (get-in mod [:data :boundary :functions])
+                             ids (->> fns (keep :id) set)]
+                         (if (seq ids)
+                           (assoc acc (:id mod) ids)
+                           acc)))
+                     {}))
 
-        ;; 3. Build membership index: {module-id -> #{descendant-id ...}}
-        membership-index
-        (into {}
-              (map (fn [mod-id]
-                     [mod-id (descendant-ids nodes mod-id)]))
-              modules)
+        ;; 2. Each leaf node's module is its direct :parent
+        node->module (fn [nid] (:parent (get nodes nid)))
 
-        ;; Reverse: {node-id -> module-id} for quick lookup
-        node->module
-        (reduce (fn [acc [mod-id members]]
-                  (reduce (fn [a nid] (assoc a nid mod-id))
-                          acc members))
-                (into {} (map (fn [m] [m m]) modules))
-                membership-index)
-
-        ;; 4. Filter to function-targeting cross-module edges, check contracts
+        ;; 3. Filter to function-targeting cross-module edges, check contracts
         fn-edges (filter #(= :function (:kind (get nodes (:to %)))) edges)
 
         violations
         (->> fn-edges
              (keep (fn [{:keys [from to]}]
-                     (let [from-mod (get node->module from)
-                           to-mod (get node->module to)]
+                     (let [from-mod (node->module from)
+                           to-mod (node->module to)]
                        (when (and from-mod to-mod
                                   (not= from-mod to-mod)
+                                  (contains? contract-index to-mod)
                                   (not (contains? (get contract-index to-mod) to)))
                          {:from from
                           :to to
@@ -103,8 +75,8 @@
         cross-module-count
         (->> fn-edges
              (filter (fn [{:keys [from to]}]
-                       (let [fm (get node->module from)
-                             tm (get node->module to)]
+                       (let [fm (node->module from)
+                             tm (node->module to)]
                          (and fm tm (not= fm tm)))))
              count)]
 
