@@ -43,11 +43,11 @@ enum Perspective { call_graph | dependency_graph }
 -- The perspective determines how model edges are projected. Both use
 -- the same stored edges; only dispatches edges change direction.
 
-enum EdgeType { code_flow | type_reference }
--- code_flow:        aggregated from model function_call + dispatches edges.
---                   Direction depends on active perspective.
--- type_reference:   aggregated from model schema_reference edges.
---                   Direction is invariant across perspectives.
+enum EdgeType { code_flow | schema_reference }
+-- code_flow:           aggregated from model function_call + dispatches edges.
+--                      Direction depends on active perspective.
+-- schema_reference:    aggregated from model schema_reference edges.
+--                      Direction is invariant across perspectives.
 
 ------------------------------------------------------------
 -- Value Types
@@ -147,14 +147,18 @@ value EdgeDetail {
     -- Detail structure for an aggregated edge: the underlying
     -- leaf-level relationships that cross this dependency.
     -- For code_flow edges: function calls and/or dispatch relationships.
-    -- For type_reference edges: schema_reference relationships.
+    -- For schema_reference edges: schema_reference relationships.
+    --
+    -- A single aggregated edge may combine multiple model edge kinds
+    -- (e.g. code_flow aggregates both function_call and dispatches).
+    -- The called_fns/dispatched_fns/schema_refs split captures which
+    -- model edge kinds contribute, rather than a single kind field.
     detail_kind: edge         -- discriminant for EntityDetail | EdgeDetail union
     edge_type: EdgeType
-    model_edge_kind: model/EdgeKind  -- which model edge kind produced this edge
     label: String
     called_fns: List<model/Function>?      -- code_flow edges (function_call kind)
     dispatched_fns: List<model/Function>?  -- code_flow edges (dispatches kind)
-    schema_refs: List<model/Schema>?       -- type_reference edges
+    schema_refs: List<model/Schema>?       -- schema_reference edges
 }
 
 ------------------------------------------------------------
@@ -202,15 +206,15 @@ rule EntityGraph {
     --   flips dispatches edges to show dependency flow. Default: call_graph.
     --
     -- EdgeTypeFiltering: visible_edge_types controls which edge kinds
-    --   appear in the projection. When null, defaults to {code_flow}.
-    --   Filtering happens before aggregation so layout accounts for
-    --   the visible edge set.
+    --   appear in the projection. When null, defaults to
+    --   {code_flow, schema_reference}. Filtering happens before
+    --   aggregation so layout accounts for the visible edge set.
     --
     -- LeafNodeFiltering: the active edge type also determines which
     --   leaf node kinds are visible in the graph:
-    --     code_flow only:       function nodes visible, schema nodes hidden
-    --     type_reference only:  schema nodes visible, function nodes hidden
-    --     both:                 all leaf nodes visible
+    --     code_flow only:           function nodes visible, schema nodes hidden
+    --     schema_reference only:  schema nodes visible, function nodes hidden
+    --     both:                    all leaf nodes visible
     --   Module nodes are always visible regardless of edge type selection.
     --   This filtering applies after visible-set computation but before
     --   edge aggregation, so edges aggregate correctly to the filtered set.
@@ -218,7 +222,7 @@ rule EntityGraph {
 
     let entity_id = view_id ?? model.root_nodes.first.id
     let entity = node_by_id(model, entity_id)      -- black box: map lookup
-    let effective_edge_types = visible_edge_types ?? { code_flow, type_reference }
+    let effective_edge_types = visible_edge_types ?? { code_flow, schema_reference }
     let effective_perspective = perspective ?? call_graph
 
     ensures:
@@ -281,7 +285,7 @@ rule ModuleView {
     --      b. N's immediate parent is in effective_expanded
     --      c. If N is private, N's parent is in show_private
     --      d. If N is a leaf: N's kind matches the active edge type
-    --         (functions for code_flow, schemas for type_reference)
+    --         (functions for code_flow, schemas for schema_reference)
     --
     --    Equivalently: walk from entity_id toward N. If you hit
     --    a collapsed module before reaching N, N is not visible.
@@ -318,7 +322,7 @@ rule LeafView {
     let entity = node_by_id(model, entity_id)              -- black box: map lookup
     let related_ids = related_entity_ids(model, entity_id, visible_edge_types, perspective)  -- black box: ids connected by visible edge kinds
     -- Only edges whose type is in visible_edge_types contribute to related set.
-    -- function_call + dispatches model edges → code_flow, schema_reference model edges → type_reference.
+    -- function_call + dispatches model edges → code_flow, schema_reference model edges → schema_reference.
     -- Perspective controls direction for dispatches edges.
 
     -- Group related entities by parent namespace, then folder
@@ -341,7 +345,7 @@ rule AggregateEdges {
     -- SemanticGrouping: aggregation groups model semantics into
     --   projection edge types:
     --     function_call + dispatches → code_flow
-    --     schema_reference            → type_reference
+    --     schema_reference            → schema_reference
     --   Each projection type is aggregated, deduplicated, and
     --   subsumed independently.
     --
@@ -381,7 +385,7 @@ rule AggregateEdges {
     @guidance
         -- Procedure:
         --   1. Filter model edges to semantics matching the requested edge_type
-        --      (code_flow ← function_call + dispatches; type_reference ← schema_reference)
+        --      (code_flow ← function_call + dispatches; schema_reference ← schema_reference)
         --   2. For dispatches edges under dependency_graph perspective, swap from/to
         --   3. For each edge, map endpoints to closest visible ancestor;
         --      keep if both exist, are distinct, not ancestor-descendant
@@ -399,7 +403,7 @@ rule EntityDetails {
     -- For edges: produce EdgeDetail listing the underlying leaf-level
     -- relationships that aggregate to this visible edge. For code_flow
     -- edges these are function calls and/or dispatch relationships;
-    -- for type_reference edges these are schema_reference relationships.
+    -- for schema_reference edges these are schema_reference relationships.
     --
     -- Edge IDs encode their endpoints: edge~{from}~{to}~{type}
 

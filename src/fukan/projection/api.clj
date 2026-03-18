@@ -18,7 +18,8 @@
    [:expanded {:optional true} [:set :NodeId]]
    [:show-private {:optional true} [:set :NodeId]]
    [:selected {:optional true} [:maybe :NodeId]]
-   [:visible-edge-types {:optional true} [:set :ProjectionEdgeType]]])
+   [:visible-edge-types {:optional true} [:set :ProjectionEdgeType]]
+   [:perspective {:optional true} :ProjectionPerspective]])
 
 (def ^:schema NavigateResult
   [:map {:description "Complete navigation context: graph projection, breadcrumb path, and optional entity details."}
@@ -34,11 +35,12 @@
    Returns {:graph Projection, :path [PathSegment], :details EntityDetail?}.
    :details is only included when :selected is provided."
   {:malli/schema [:=> [:cat :Model :NavigateOpts] :NavigateResult]}
-  [model {:keys [view-id expanded show-private selected visible-edge-types]}]
+  [model {:keys [view-id expanded show-private selected visible-edge-types perspective]}]
   (let [graph-projection (graph/entity-graph model {:view-id view-id
                                                     :expanded expanded
                                                     :show-private show-private
-                                                    :visible-edge-types visible-edge-types})
+                                                    :visible-edge-types visible-edge-types
+                                                    :perspective perspective})
         path-items (path/entity-path model view-id)]
     (cond-> {:graph graph-projection
              :path path-items}

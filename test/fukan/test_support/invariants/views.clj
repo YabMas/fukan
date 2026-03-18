@@ -55,6 +55,34 @@
        :actual highlighted-ids})))
 
 ;; ---------------------------------------------------------------------------
+;; SchemaKeyHighlighting: schema node → edges highlighted by schema-key match.
+
+(defn schema-key-highlighting?
+  "Verify that when a schema node is selected, highlighted edges are those
+   where either endpoint's schemaKey matches the selected node's schemaKey."
+  [cytoscape-graph selected-id]
+  (let [nodes-by-id (into {} (map (fn [n] [(:id n) n])) (:nodes cytoscape-graph))
+        selected-node (get nodes-by-id selected-id)
+        highlighted-ids (set (:highlightedEdges cytoscape-graph))]
+    (if (and selected-node (= "schema" (:kind selected-node)))
+      (let [sk (:schemaKey selected-node)
+            matching-edge-ids (->> (:edges cytoscape-graph)
+                                   (keep (fn [e]
+                                           (when (or (= sk (:schemaKey (get nodes-by-id (:source e))))
+                                                     (= sk (:schemaKey (get nodes-by-id (:target e)))))
+                                             (:id e))))
+                                   set)]
+        (if (= highlighted-ids matching-edge-ids)
+          true
+          {:violation :schema-key-highlighting
+           :selected-id selected-id
+           :schema-key sk
+           :expected matching-edge-ids
+           :actual highlighted-ids}))
+      ;; Not a schema node — this invariant doesn't apply
+      true)))
+
+;; ---------------------------------------------------------------------------
 ;; ShowingPrivateConsistent: showingPrivate → isExpanded ∧ hasPrivateChildren.
 
 (defn showing-private-consistent?

@@ -301,7 +301,7 @@
                          schema (or impl-schema spec-schema)]
                      (cond-> {:name (or (:label match) hyphen-name)}
                        (:id match) (assoc :id (:id match))
-                       schema (assoc :schema schema)
+                       schema (assoc :signature schema)
                        (or description (get-in match [:data :doc])) (assoc :doc (or description (get-in match [:data :doc])))))))))))
 
 (defn- collapse-surface-to-boundary
@@ -357,12 +357,12 @@
                                (cond-> {:name (:label node)
                                         :id (:id node)}
                                  (get-in node [:data :signature])
-                                 (assoc :schema (get-in node [:data :signature]))
+                                 (assoc :signature (get-in node [:data :signature]))
                                  (get-in node [:data :doc])
                                  (assoc :doc (get-in node [:data :doc]))))))]
-    (cond-> {:description description}
-      (seq functions) (assoc :functions functions)
-      (seq schemas) (assoc :schemas schemas))))
+    {:description description
+     :functions (or (not-empty functions) [])
+     :schemas (or (not-empty schemas) [])}))
 
 (defn- attach-boundary
   "Attach or merge a boundary into a node's :data map.
@@ -381,11 +381,12 @@
         boundary (if (and (seq (:functions existing)) (:functions boundary))
                    (dissoc boundary :functions)
                    boundary)
+        defaults {:functions [] :schemas []}
         merged (cond
-                 (and (seq existing) (seq boundary)) (merge existing boundary)
-                 (seq existing) existing
-                 (seq boundary) boundary
-                 :else {:description nil})]
+                 (and (seq existing) (seq boundary)) (merge defaults existing boundary)
+                 (seq existing) (merge defaults existing)
+                 (seq boundary) (merge defaults boundary)
+                 :else (assoc defaults :description nil))]
     (update node :data #(assoc (or % {}) :boundary merged))))
 
 (defn- attach-boundaries

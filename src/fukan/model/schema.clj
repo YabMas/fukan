@@ -47,17 +47,17 @@
 
 (def ^:schema BoundaryFn
   [:map {:description "A public function entry in a module boundary."}
-   [:name :symbol]
+   [:name :string]
    [:id {:optional true, :description "Node ID of the boundary function."} :NodeId]
-   [:schema {:optional true, :description "Structured function signature: inputs and output types."}
+   [:signature {:optional true, :description "Structured function signature: inputs and output types."}
     :FunctionSignature]
    [:doc {:optional true} :string]])
 
 (def ^:schema Boundary
   [:map {:description "A module's external boundary: the functions, schemas, and guarantees that define its public contract."}
    [:description {:optional true} :string]
-   [:functions {:optional true} [:vector :BoundaryFn]]
-   [:schemas {:optional true} [:vector :keyword]]
+   [:functions [:vector :BoundaryFn]]
+   [:schemas [:vector :keyword]]
    [:guarantees {:optional true} [:vector :string]]])
 
 (def ^:schema NodeData

@@ -51,6 +51,11 @@
     (let [model (#'build/run-pipeline contrib)]
       (true? (inv/no-unconsumed-provides? model)))))
 
+(defspec build-model-leaf-edges 100
+  (prop/for-all [contrib (gen/gen-analysis-result)]
+    (let [model (#'build/run-pipeline contrib)]
+      (true? (inv/leaf-edges? model)))))
+
 (defspec build-model-edge-has-kind 100
   (prop/for-all [contrib (gen/gen-analysis-result)]
     (let [model (#'build/run-pipeline contrib)]
@@ -75,6 +80,7 @@
       (is (true? (inv/no-empty-modules? model)) (str (inv/no-empty-modules? model)))
       (is (true? (inv/no-self-edges? model)) (str (inv/no-self-edges? model)))
       (is (true? (inv/edge-integrity? model)) (str (inv/edge-integrity? model)))
+      (is (true? (inv/leaf-edges? model)) (str (inv/leaf-edges? model)))
       (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model)))
       (is (true? (inv/no-unconsumed-provides? model)) (str (inv/no-unconsumed-provides? model)))
       (is (true? (inv/edge-has-kind? model)) (str (inv/edge-has-kind? model)))

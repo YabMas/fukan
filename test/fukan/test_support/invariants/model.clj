@@ -105,9 +105,14 @@
 ;; unless it has a surface declaration.
 
 (defn- has-spec-data?
-  "True if a module node has a boundary declaration."
+  "True if a module node has a meaningful boundary declaration.
+   An empty boundary {:description nil} with no functions does not count —
+   spec-only modules must have non-nil description or declared functions."
   [node]
-  (:boundary (:data node)))
+  (let [boundary (:boundary (:data node))]
+    (and boundary
+         (or (:description boundary)
+             (seq (:functions boundary))))))
 
 (defn no-empty-modules?
   "Verify that every module node has at least one child.
@@ -247,7 +252,8 @@
 
 (defn edge-kind-endpoints?
   "Verify that edge kind matches endpoint node kinds.
-   function-call: both endpoints are :function nodes.
+   function-call: from is :function, to is :function or :schema.
+   dispatches: both endpoints are :function nodes.
    schema-reference: both endpoints are :schema nodes."
   [{:keys [nodes edges]}]
   (or (first
@@ -256,6 +262,9 @@
                     to-node (get nodes to)]
               :when (case kind
                       :function-call
+                      (or (not= :function (:kind from-node))
+                          (not (#{:function :schema} (:kind to-node))))
+                      :dispatches
                       (or (not= :function (:kind from-node))
                           (not= :function (:kind to-node)))
                       :schema-reference

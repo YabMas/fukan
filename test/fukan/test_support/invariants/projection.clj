@@ -92,9 +92,9 @@
   [model opts projection]
   (let [view-id (:view-id opts)
         visible-edge-types (or (:visible-edge-types opts) #{:code-flow :schema-reference})
-        visible-model-kinds (set (keep {:code-flow :function-call
-                                        :schema-reference :schema-reference}
-                                       visible-edge-types))]
+        visible-model-kinds (into #{} (mapcat {:code-flow [:function-call :dispatches]
+                                               :schema-reference [:schema-reference]})
+                                     visible-edge-types)]
     (if (is-leaf-view? model view-id)
       (let [visible-ids (projection-node-ids projection)
             raw-edges (->> (:edges model)
@@ -120,10 +120,12 @@
 ;; NoDuplicateEdges: no two edges share the same from+to+edge-type triple.
 
 (defn no-duplicate-edges?
-  "Verify that no two edges share the same (from, to, edge-type) triple."
+  "Verify that no two edges share the same (from, to, edge-type, kind) tuple.
+   ViewEdge has a kind field, so two edges between the same nodes with different
+   model kinds (e.g. function-call vs dispatches) are legitimate."
   [_model _opts projection]
-  (let [edge-keys (map (fn [{:keys [from to edge-type]}]
-                          [from to edge-type])
+  (let [edge-keys (map (fn [{:keys [from to edge-type kind]}]
+                          [from to edge-type kind])
                         (:edges projection))
         dupes (filter (fn [[_ cnt]] (> cnt 1)) (frequencies edge-keys))]
     (if (seq dupes)

@@ -47,4 +47,4 @@
                        acc
                        (recur (:parent node)
                               (cons {:id current-id :label (:label node)} acc)))))]
-        (cons {:id nil :label (or (:label root-node) "root")} path)))))
+        (vec (cons {:id nil :label (or (:label root-node) "root")} path))))))

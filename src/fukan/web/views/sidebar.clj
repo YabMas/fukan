@@ -104,18 +104,18 @@
 
 (defn- render-fn-list
   "Render a list of functions with optional signatures.
-   Each entry is {:name :schema :id (optional)}.
+   Each entry is {:name :signature :id (optional)}.
    When :id is present, the item is clickable.
    Schema refs in signatures are individually clickable (navigates to schema node)."
   [schema-ids fns]
   [:ul
-   (for [{:keys [name schema id]} fns]
+   (for [{:keys [name signature id]} fns]
      (let [attrs (when id
                    {"data-on:click" (view-url id)})]
        [:li.fn-card attrs
         name
-        (when schema
-          (fn-signature-hiccup schema-ids schema))]))])
+        (when signature
+          (fn-signature-hiccup schema-ids signature))]))])
 
 (defn- render-dep-list
   "Render a dependency or dependents section with heading and clickable items."
@@ -228,16 +228,26 @@
         [:li (when id {"data-on:click" (view-url id)})
          label])])))
 
+(defn- render-defined-in
+  "Render a clickable parent module link for schema entities.
+   Returns nil when parent is absent or kind is not :schema."
+  [kind parent]
+  (when (and (= :schema kind) parent)
+    [:div.defined-in "Defined in "
+     [:span.schema-ref {"data-on:click.stop" (view-url (:id parent))}
+      (:label parent)]]))
+
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
-   Iterates through sections in order: label, description, guarantees,
-   defined types, interface, deps, dependents."
-  [{:keys [label kind description guarantees schemas schema-ids interface dataflow]}]
+   Iterates through sections in order: label, defined-in, description,
+   guarantees, defined types, interface."
+  [{:keys [label kind parent description guarantees schemas schema-ids interface dataflow]}]
   (str
    (h/html
     [:div#node-info
      [:h4 label " " [:span.kind-badge (name kind)]]
 
+     (render-defined-in kind parent)
      (render-description description)
      (render-guarantees guarantees)
      (render-defined-types schemas)
@@ -264,9 +274,12 @@
 
 (defn- render-edge-detail
   "Dedicated renderer for edge entities.
-   Dispatches by edge-type: code-flow shows called functions,
-   schema-reference shows schema references."
-  [{:keys [label edge-type called-fns schema-refs schema-ids]}]
+   Dispatches by edge-type, then renders sections based on presence:
+   - code-flow: 'Functions Called' when called-fns present,
+                'Dispatched Functions' when dispatched-fns present,
+                both for mixed edges.
+   - schema-reference: 'Schema References' list."
+  [{:keys [label edge-type called-fns dispatched-fns schema-refs schema-ids]}]
   (str
    (h/html
     [:div#node-info
@@ -274,9 +287,15 @@
        :code-flow
        (list
         [:h4 label]
-        [:h5 "Functions Called " [:span.dep-count (str "(" (count called-fns) ")")]]
-        (if (seq called-fns)
-          (render-fn-list (or schema-ids {}) called-fns)
+        (when (seq called-fns)
+          (list
+           [:h5 "Functions Called " [:span.dep-count (str "(" (count called-fns) ")")]]
+           (render-fn-list (or schema-ids {}) called-fns)))
+        (when (seq dispatched-fns)
+          (list
+           [:h5 "Dispatched Functions " [:span.dep-count (str "(" (count dispatched-fns) ")")]]
+           (render-fn-list (or schema-ids {}) dispatched-fns)))
+        (when (and (empty? called-fns) (empty? dispatched-fns))
           [:p.empty-state "No direct function calls"]))
 
        :schema-reference

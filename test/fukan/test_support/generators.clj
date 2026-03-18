@@ -97,6 +97,30 @@
     (cond-> {:name name :type-ref type-ref}
       has-desc? (assoc :description desc))))
 
+(def gen-allium-type-ref
+  "Generate a valid Allium type-ref for exercising allium-type-ref->schema."
+  (gen/one-of
+    [(gen/fmap (fn [n] {:kind :simple :name n})
+               (gen/elements ["String" "Integer" "Boolean" "Model" "NodeId"]))
+     (gen/fmap (fn [n] {:kind :generic :name "List"
+                        :params [{:kind :simple :name n}]})
+               (gen/elements ["String" "Node" "Edge"]))]))
+
+(def gen-allium-provides
+  "Generate a provides entry with :params and :return for exercising
+   the full allium-provides->schema type conversion pipeline."
+  (gen/let [name gen-simple-name
+            param-count (gen/choose 0 3)
+            param-names (gen/vector gen-simple-name param-count)
+            param-types (gen/vector gen-allium-type-ref param-count)
+            return-type gen-allium-type-ref
+            has-desc? gen/boolean
+            desc gen-simple-name]
+    (cond-> {:name name
+             :params (mapv (fn [n t] {:name n :type t}) param-names param-types)
+             :return return-type}
+      has-desc? (assoc :description desc))))
+
 (def gen-surface
   "Generate a valid Surface with provides operations."
   (gen/let [has-facing? gen/boolean
@@ -104,7 +128,7 @@
             has-desc? gen/boolean
             desc gen-simple-name
             provide-count (gen/choose 0 3)
-            provides (gen/vector gen-field provide-count)
+            provides (gen/vector (gen/one-of [gen-field gen-allium-provides]) provide-count)
             guarantee-count (gen/choose 0 2)
             guarantees (gen/vector gen-simple-name guarantee-count)]
     (cond-> {}
@@ -157,8 +181,7 @@
                                              :children #{}
                                              :data (cond-> {:kind :module
                                                             :filename filepath}
-                                                     surface (assoc :surface
-                                                               (dissoc surface :provides)))}]))
+                                                     surface (assoc :surface surface))}]))
                                     ns-names source-files surfaces))
              var-nodes (into {} (mapcat (fn [ns-sym var-names]
                                           (map (fn [vname]
@@ -198,6 +221,10 @@
 (defn- make-function [id label parent-id private?]
   {:id id :kind :function :label label :parent parent-id :children #{}
    :data {:kind :function :private? private?}})
+
+(defn- make-schema [id label parent-id schema-key]
+  {:id id :kind :schema :label label :parent parent-id :children #{}
+   :data {:kind :schema :schema-key schema-key :private? false}})
 
 (defn gen-model
   "Generate a valid Model with tree structure, edges, and optional surfaces.
@@ -239,7 +266,7 @@
                                   (and stored-surface
                                        (seq (vals stored-surface)))
                                   (assoc-in [:data :boundary]
-                                            (cond-> {}
+                                            (cond-> {:functions [] :schemas []}
                                               (:guarantees stored-surface) (assoc :guarantees (:guarantees stored-surface))
                                               (:description stored-surface) (assoc :description (:description stored-surface)))))))
                             module-names surfaces)
@@ -267,30 +294,61 @@
            ;; Merge, dedup by ID (impl wins over surface)
            fn-by-id (merge (into {} (map (fn [n] [(:id n) n]) surface-fn-nodes))
                            (into {} (map (fn [n] [(:id n) n]) impl-fn-nodes)))
-           all-fn-nodes (vec (vals fn-by-id))
-           all-raw (into {root-id root}
-                         (map (fn [n] [(:id n) n]))
-                         (concat modules all-fn-nodes))
-           wired (reduce (fn [acc [id node]]
-                           (if-let [pid (:parent node)]
-                             (update-in acc [pid :children] conj id)
-                             acc))
-                         all-raw
-                         all-raw)
-           leaf-ids (vec (map :id all-fn-nodes))]
-       (gen/let [edge-count (gen/choose 0 (min 15 (* (count leaf-ids) 2)))
-                 edge-from-idxs (gen/vector (gen/choose 0 (max 0 (dec (count leaf-ids)))) edge-count)
-                 edge-to-idxs (gen/vector (gen/choose 0 (max 0 (dec (count leaf-ids)))) edge-count)]
-         (let [edges (->> (map (fn [fi ti]
-                                 (let [from-id (nth leaf-ids fi)
-                                       to-id (nth leaf-ids ti)]
-                                   (when (not= from-id to-id)
-                                     {:from from-id :to to-id :kind :function-call})))
-                               edge-from-idxs edge-to-idxs)
-                          (remove nil?)
-                          distinct
-                          vec)]
-           {:nodes wired :edges edges}))))))
+           all-fn-nodes (vec (vals fn-by-id))]
+       ;; Generate optional schema nodes per module
+       (gen/let [schema-flags (gen/vector (gen/frequency [[2 (gen/return false)]
+                                                           [1 (gen/return true)]])
+                                          (count module-names))
+                 schema-names (gen/vector gen-simple-name (count module-names))]
+         (let [schema-nodes (vec (keep-indexed
+                                   (fn [i has-schema?]
+                                     (when has-schema?
+                                       (let [module (nth modules i)
+                                             sname (nth schema-names i)
+                                             sid (str (:id module) "/" sname)]
+                                         (make-schema sid sname (:id module) (keyword sname)))))
+                                   schema-flags))
+               all-leaf-nodes (concat all-fn-nodes schema-nodes)
+               all-raw (into {root-id root}
+                             (map (fn [n] [(:id n) n]))
+                             (concat modules all-leaf-nodes))
+               wired (reduce (fn [acc [id node]]
+                               (if-let [pid (:parent node)]
+                                 (update-in acc [pid :children] conj id)
+                                 acc))
+                             all-raw
+                             all-raw)
+               fn-ids (vec (map :id all-fn-nodes))
+               schema-ids (vec (map :id schema-nodes))]
+           (gen/let [fn-edge-count (gen/choose 0 (min 10 (* (count fn-ids) 2)))
+                     fn-from-idxs (gen/vector (gen/choose 0 (max 0 (dec (count fn-ids)))) fn-edge-count)
+                     fn-to-idxs (gen/vector (gen/choose 0 (max 0 (dec (count fn-ids)))) fn-edge-count)
+                     fn-edge-kinds (gen/vector (gen/frequency [[3 (gen/return :function-call)]
+                                                                [1 (gen/return :dispatches)]])
+                                               fn-edge-count)
+                     schema-edge-count (if (>= (count schema-ids) 2)
+                                         (gen/choose 0 (min 5 (count schema-ids)))
+                                         (gen/return 0))
+                     schema-from-idxs (gen/vector (gen/choose 0 (max 0 (dec (max 1 (count schema-ids))))) (if (>= (count schema-ids) 2) 5 0))
+                     schema-to-idxs (gen/vector (gen/choose 0 (max 0 (dec (max 1 (count schema-ids))))) (if (>= (count schema-ids) 2) 5 0))]
+             (let [fn-edges (when (seq fn-ids)
+                              (->> (map (fn [fi ti kind]
+                                          (let [from-id (nth fn-ids fi)
+                                                to-id (nth fn-ids ti)]
+                                            (when (not= from-id to-id)
+                                              {:from from-id :to to-id :kind kind})))
+                                        fn-from-idxs fn-to-idxs fn-edge-kinds)
+                                   (remove nil?)))
+                   schema-edges (when (>= (count schema-ids) 2)
+                                  (->> (map (fn [fi ti]
+                                              (let [from-id (nth schema-ids fi)
+                                                    to-id (nth schema-ids ti)]
+                                                (when (not= from-id to-id)
+                                                  {:from from-id :to to-id :kind :schema-reference})))
+                                            schema-from-idxs schema-to-idxs)
+                                       (remove nil?)))
+                   edges (vec (distinct (concat fn-edges schema-edges)))]
+               {:nodes wired :edges edges}))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; gen-projection-opts
@@ -308,7 +366,8 @@
       (gen/let [view-idx (gen/choose 0 (dec (count module-ids)))
                 expanded-flags (gen/vector gen/boolean (count module-ids))
                 show-private-flags (gen/vector gen/boolean (count module-ids))
-                edge-type-choice (gen/elements [:both :code-flow-only :schema-reference-only])]
+                edge-type-choice (gen/elements [:both :code-flow-only :schema-reference-only])
+                perspective (gen/elements [:call-graph :dependency-graph])]
         {:view-id (nth module-ids view-idx)
          :expanded (into #{} (keep-indexed
                                (fn [i flag] (when flag (nth module-ids i)))
@@ -319,7 +378,8 @@
          :visible-edge-types (case edge-type-choice
                                :both #{:code-flow :schema-reference}
                                :code-flow-only #{:code-flow}
-                               :schema-reference-only #{:schema-reference})}))))
+                               :schema-reference-only #{:schema-reference})
+         :perspective perspective}))))
 
 ;; ---------------------------------------------------------------------------
 ;; gen-editor-state

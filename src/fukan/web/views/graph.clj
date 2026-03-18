@@ -42,15 +42,30 @@
 
 (defn- compute-highlighted-edges
   "Compute which edges should be highlighted for a selected node.
-   Highlights edges where node is from or to.
+   SchemaKeyHighlighting: when the selected node is a schema node,
+   edges are highlighted by matching schema-key on either endpoint.
+   RegularHighlighting: for non-schema nodes, highlights edges where
+   node is source or target.
    Works with internal edge format (:from/:to)."
-  [edges selected-id]
+  [nodes edges selected-id]
   (when selected-id
-    (->> edges
-         (keep (fn [{:keys [id from to]}]
-                 (when (or (= from selected-id) (= to selected-id))
-                   id)))
-         vec)))
+    (let [nodes-by-id (into {} (map (fn [n] [(:id n) n])) nodes)
+          selected-node (get nodes-by-id selected-id)]
+      (if (and selected-node (= :schema (:kind selected-node)))
+        ;; Schema node: match by schema-key on either endpoint
+        (let [sk (:schema-key selected-node)]
+          (->> edges
+               (keep (fn [{:keys [id from to]}]
+                       (when (or (= sk (:schema-key (get nodes-by-id from)))
+                                 (= sk (:schema-key (get nodes-by-id to))))
+                         id)))
+               vec))
+        ;; Regular node: match by from/to endpoint
+        (->> edges
+             (keep (fn [{:keys [id from to]}]
+                     (when (or (= from selected-id) (= to selected-id))
+                       id)))
+             vec)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas
@@ -79,6 +94,6 @@
         ;; Add UI state (selected?)
         graph (add-ui-state graph-projection editor-state)
         effective-selected-id (or selected-id view-id (find-projection-root nodes))
-        highlighted-edges (compute-highlighted-edges (:edges graph) effective-selected-id)]
+        highlighted-edges (compute-highlighted-edges (:nodes graph-projection) (:edges graph) effective-selected-id)]
     ;; Transform to Cytoscape format at the boundary
     (cytoscape/graph->cytoscape graph effective-selected-id highlighted-edges)))

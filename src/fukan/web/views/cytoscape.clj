@@ -26,7 +26,8 @@
    [:id {:description "Synthetic sequential ID (e.g. e0, e1)."} :string]
    [:source :NodeId]
    [:target :NodeId]
-   [:edgeType {:description "Edge type as a string: code-flow or schema-reference."} :string]])
+   [:edgeType {:description "Edge type as a string: code-flow or schema-reference."} :string]
+   [:kind {:description "Model-level edge kind: function-call, dispatches, or schema-reference."} :string]])
 
 (def ^:schema CytoscapeGraph
   [:map {:description "Complete graph payload sent to Cytoscape.js: nodes, edges, and UI selection state."}
@@ -61,11 +62,12 @@
   "Transform an internal view edge to Cytoscape format.
    Converts :from/:to to source/target, keyword edge-type to string.
    Edge highlighting is driven by the top-level highlightedEdges array."
-  [{:keys [id from to edge-type]}]
+  [{:keys [id from to edge-type kind]}]
   {:id id
    :source from
    :target to
-   :edgeType (name edge-type)})
+   :edgeType (name edge-type)
+   :kind (name kind)})
 
 (defn graph->cytoscape
   "Transform internal graph-view format to Cytoscape-compatible output.

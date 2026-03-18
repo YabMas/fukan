@@ -7,6 +7,7 @@
             [clojure.test.check.generators :as tgen]
             [clojure.test.check.properties :as prop]
             [fukan.projection.graph :as graph]
+            [fukan.projection.path :as path]
             [fukan.test-support.fixtures :as fix]
             [fukan.test-support.generators :as gen]
             [fukan.test-support.invariants.projection :as inv]))
@@ -148,6 +149,196 @@
         (is (not (contains? node-ids "cmd-find")))
         ;; Inherited edge from dispatch to navigate
         (is (contains? code-edges ["dispatch" "navigate"]))))))
+
+;; ---------------------------------------------------------------------------
+;; Finding 2: Default visible-edge-types should be #{:code-flow :schema-reference}
+
+(deftest default-visible-edge-types-test
+  (testing "When visible-edge-types is nil, defaults to #{:code-flow :schema-reference}"
+    (let [model {:nodes {"root" {:id "root" :kind :module :label "root" :parent nil
+                                  :children #{"ns-a"}
+                                  :data {:kind :module}}
+                          "ns-a" {:id "ns-a" :kind :module :label "ns-a" :parent "root"
+                                  :children #{"fn-a" "schema-a"}
+                                  :data {:kind :module}}
+                          "fn-a" {:id "fn-a" :kind :function :label "fn-a" :parent "ns-a"
+                                  :children #{} :data {:kind :function :private? false}}
+                          "schema-a" {:id "schema-a" :kind :schema :label "MySchema" :parent "ns-a"
+                                      :children #{} :data {:kind :schema :schema-key :MySchema}}}
+                  :edges []}
+          opts {:view-id "root" :expanded #{"ns-a"}}
+          projection (graph/entity-graph model opts)
+          node-ids (set (map :id (:nodes projection)))]
+      ;; Both function and schema nodes should be visible by default
+      (is (contains? node-ids "fn-a") "function nodes visible by default")
+      (is (contains? node-ids "schema-a") "schema nodes visible by default"))))
+
+;; ---------------------------------------------------------------------------
+;; Finding 3: ViewEdge should preserve model-level :kind
+
+(deftest view-edge-preserves-model-kind
+  (testing "Projected edges preserve the model-level edge kind"
+    (let [model {:nodes {"root" {:id "root" :kind :module :label "root" :parent nil
+                                  :children #{"ns-a" "ns-b"}
+                                  :data {:kind :module}}
+                          "ns-a" {:id "ns-a" :kind :module :label "ns-a" :parent "root"
+                                  :children #{"fn-a"} :data {:kind :module}}
+                          "ns-b" {:id "ns-b" :kind :module :label "ns-b" :parent "root"
+                                  :children #{"fn-b"} :data {:kind :module}}
+                          "fn-a" {:id "fn-a" :kind :function :label "fn-a" :parent "ns-a"
+                                  :children #{} :data {:kind :function :private? false}}
+                          "fn-b" {:id "fn-b" :kind :function :label "fn-b" :parent "ns-b"
+                                  :children #{} :data {:kind :function :private? false}}}
+                  :edges [{:from "fn-a" :to "fn-b" :kind :function-call}]}
+          opts {:view-id "root" :expanded #{} :show-private #{}
+                :visible-edge-types #{:code-flow}}
+          projection (graph/entity-graph model opts)
+          edge (first (:edges projection))]
+      (is (some? edge))
+      (is (= :function-call (:kind edge)) "edge should have model-level :kind"))))
+
+;; ---------------------------------------------------------------------------
+;; Finding 1: Perspective control — dispatches edges flip in dependency-graph
+
+(deftest perspective-dispatches-flip
+  (testing "dependency-graph perspective flips dispatches edges"
+    (let [model {:nodes {"root" {:id "root" :kind :module :label "root" :parent nil
+                                  :children #{"ns-a" "ns-b"}
+                                  :data {:kind :module}}
+                          "ns-a" {:id "ns-a" :kind :module :label "ns-a" :parent "root"
+                                  :children #{"dispatch-point"} :data {:kind :module}}
+                          "ns-b" {:id "ns-b" :kind :module :label "ns-b" :parent "root"
+                                  :children #{"handler"} :data {:kind :module}}
+                          "dispatch-point" {:id "dispatch-point" :kind :function :label "dispatch-point"
+                                            :parent "ns-a" :children #{}
+                                            :data {:kind :function :private? false}}
+                          "handler" {:id "handler" :kind :function :label "handler"
+                                     :parent "ns-b" :children #{}
+                                     :data {:kind :function :private? false}}}
+                  ;; dispatches: dispatch-point → handler (canonical call_graph direction)
+                  :edges [{:from "dispatch-point" :to "handler" :kind :dispatches}]}]
+
+      (testing "call-graph perspective: dispatch-point → handler (canonical)"
+        (let [opts {:view-id "root" :expanded #{} :show-private #{}
+                    :visible-edge-types #{:code-flow} :perspective :call-graph}
+              projection (graph/entity-graph model opts)
+              edge-pairs (set (map (juxt :from :to) (:edges projection)))]
+          (is (contains? edge-pairs ["ns-a" "ns-b"]))))
+
+      (testing "dependency-graph perspective: handler → dispatch-point (flipped)"
+        (let [opts {:view-id "root" :expanded #{} :show-private #{}
+                    :visible-edge-types #{:code-flow} :perspective :dependency-graph}
+              projection (graph/entity-graph model opts)
+              edge-pairs (set (map (juxt :from :to) (:edges projection)))]
+          (is (contains? edge-pairs ["ns-b" "ns-a"])))))))
+
+;; ---------------------------------------------------------------------------
+;; Finding 1+8: Perspective in leaf view
+
+(deftest leaf-view-perspective-dispatches-flip
+  (testing "leaf view respects perspective for dispatches edges"
+    (let [model {:nodes {"root" {:id "root" :kind :module :label "root" :parent nil
+                                  :children #{"ns-a" "ns-b"}
+                                  :data {:kind :module}}
+                          "ns-a" {:id "ns-a" :kind :module :label "ns-a" :parent "root"
+                                  :children #{"dispatch-point"} :data {:kind :module}}
+                          "ns-b" {:id "ns-b" :kind :module :label "ns-b" :parent "root"
+                                  :children #{"handler"} :data {:kind :module}}
+                          "dispatch-point" {:id "dispatch-point" :kind :function :label "dispatch-point"
+                                            :parent "ns-a" :children #{}
+                                            :data {:kind :function :private? false}}
+                          "handler" {:id "handler" :kind :function :label "handler"
+                                     :parent "ns-b" :children #{}
+                                     :data {:kind :function :private? false}}}
+                  :edges [{:from "dispatch-point" :to "handler" :kind :dispatches}]}]
+
+      (testing "call-graph: dispatch-point → handler"
+        (let [opts {:view-id "dispatch-point" :perspective :call-graph
+                    :visible-edge-types #{:code-flow}}
+              projection (graph/entity-graph model opts)
+              edge-pairs (set (map (juxt :from :to) (:edges projection)))]
+          (is (contains? edge-pairs ["dispatch-point" "handler"]))))
+
+      (testing "dependency-graph: handler → dispatch-point (flipped)"
+        (let [opts {:view-id "dispatch-point" :perspective :dependency-graph
+                    :visible-edge-types #{:code-flow}}
+              projection (graph/entity-graph model opts)
+              edge-pairs (set (map (juxt :from :to) (:edges projection)))]
+          (is (contains? edge-pairs ["handler" "dispatch-point"])))))))
+
+;; ---------------------------------------------------------------------------
+;; Finding 9: ConsistentAggregation invariant
+
+(defspec consistent-aggregation 50
+  (prop/for-all [model (gen/gen-model)]
+    (let [opts-gen (gen/gen-projection-opts model)]
+      (tgen/generate
+        (tgen/fmap (fn [opts]
+                     (if (and (:view-id opts) (not (is-leaf? model (:view-id opts))))
+                       (let [;; Pick a child module to expand then collapse
+                             children (get-in model [:nodes (:view-id opts) :children] #{})
+                             child-modules (->> children
+                                                (filter #(= :module (:kind (get-in model [:nodes %]))))
+                                                vec)]
+                         (if (seq child-modules)
+                           (let [mod-to-toggle (first child-modules)
+                                 ;; Collapsed
+                                 proj-before (graph/entity-graph model opts)
+                                 ;; Expanded
+                                 expanded-opts (update opts :expanded conj mod-to-toggle)
+                                 _ (graph/entity-graph model expanded-opts)
+                                 ;; Collapsed again
+                                 proj-after (graph/entity-graph model opts)]
+                             ;; Same nodes and same edge connectivity (modulo edge IDs)
+                             (and (= (set (map :id (:nodes proj-before)))
+                                     (set (map :id (:nodes proj-after))))
+                                  (= (set (map (juxt :from :to :edge-type) (:edges proj-before)))
+                                     (set (map (juxt :from :to :edge-type) (:edges proj-after))))))
+                           true))
+                       true))
+                   opts-gen)))))
+
+;; ---------------------------------------------------------------------------
+;; EntityPath returns vector
+
+(deftest entity-path-returns-vector
+  (testing "entity-path returns a vector, not a lazy seq"
+    (let [model {:nodes {"root" {:id "root" :kind :module :label "root" :parent nil
+                                  :children #{"child"} :data {:kind :module}}
+                          "child" {:id "child" :kind :module :label "child" :parent "root"
+                                   :children #{} :data {:kind :module}}}}]
+      (is (vector? (path/entity-path model nil)) "root path should be a vector")
+      (is (vector? (path/entity-path model "child")) "non-root path should be a vector"))))
+
+;; ---------------------------------------------------------------------------
+;; AggregateEdges dedup preserves multiple model kinds
+
+(deftest aggregate-edges-preserves-distinct-kinds
+  (testing "When both function-call and dispatches aggregate to same [from to], both edges appear"
+    (let [model {:nodes {"root" {:id "root" :kind :module :label "root" :parent nil
+                                  :children #{"ns-a" "ns-b"} :data {:kind :module}}
+                          "ns-a" {:id "ns-a" :kind :module :label "ns-a" :parent "root"
+                                  :children #{"caller" "dp"} :data {:kind :module}}
+                          "ns-b" {:id "ns-b" :kind :module :label "ns-b" :parent "root"
+                                  :children #{"callee" "handler"} :data {:kind :module}}
+                          "caller" {:id "caller" :kind :function :label "caller" :parent "ns-a"
+                                    :children #{} :data {:kind :function :private? false}}
+                          "dp" {:id "dp" :kind :function :label "dp" :parent "ns-a"
+                                :children #{} :data {:kind :function :private? false}}
+                          "callee" {:id "callee" :kind :function :label "callee" :parent "ns-b"
+                                    :children #{} :data {:kind :function :private? false}}
+                          "handler" {:id "handler" :kind :function :label "handler" :parent "ns-b"
+                                     :children #{} :data {:kind :function :private? false}}}
+                  :edges [{:from "caller" :to "callee" :kind :function-call}
+                          {:from "dp" :to "handler" :kind :dispatches}]}
+          opts {:view-id "root" :expanded #{} :show-private #{}
+                :visible-edge-types #{:code-flow}}
+          projection (graph/entity-graph model opts)
+          code-edges (filter #(= :code-flow (:edge-type %)) (:edges projection))
+          edge-kinds (set (map :kind code-edges))]
+      ;; Both kinds should be preserved as separate edges
+      (is (contains? edge-kinds :function-call))
+      (is (contains? edge-kinds :dispatches)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Integration: Fukan's own model satisfies projection invariants

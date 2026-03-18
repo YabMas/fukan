@@ -348,6 +348,16 @@
          (sort-by (fn [e] [(get-in e [:from-schema :label]) (get-in e [:to-schema :label])]))
          vec)))
 
+(defn- matching-raw-edges
+  "Find all raw model edges between subtrees of from-id and to-id."
+  [model from-id to-id]
+  (let [from-subtree (subtree model from-id)
+        to-subtree (subtree model to-id)]
+    (->> (:edges model)
+         (filter (fn [{:keys [from to]}]
+                   (and (contains? from-subtree from)
+                        (contains? to-subtree to)))))))
+
 (defn- compute-edge-details
   "Compute normalized details for an edge entity.
    Dispatches by edge-type:
@@ -360,30 +370,53 @@
       (case edge-type
         :code-flow
         (let [underlying-edges (compute-underlying-edges model from-id to-id)
-              called-fns (->> underlying-edges
-                              (map :to-fn)
-                              (distinct)
-                              (sort-by :label)
-                              (mapv (fn [{:keys [id label signature]}]
-                                      {:name label :schema signature :id id})))]
-          {:label      (str (:label from-node) " → " (:label to-node))
-           :kind       :edge
-           :edge-type  :code-flow
-           :called-fns called-fns
-           :schema-ids (proj.schema/schema-key->node-id model)})
+              ;; Split by model edge kind
+              fn-call-edges (filter #(= :function-call (:kind %)) (matching-raw-edges model from-id to-id))
+              dispatches-edges (filter #(= :dispatches (:kind %)) (matching-raw-edges model from-id to-id))
+              called-fns (when (seq fn-call-edges)
+                           (->> underlying-edges
+                                (filter (fn [ue]
+                                          (some #(and (= (:from %) (get-in ue [:from-fn :id]))
+                                                      (= (:to %) (get-in ue [:to-fn :id])))
+                                                fn-call-edges)))
+                                (map :to-fn)
+                                (distinct)
+                                (sort-by :label)
+                                (mapv (fn [{:keys [id label signature]}]
+                                        {:name label :schema signature :id id}))))
+              dispatched-fns (when (seq dispatches-edges)
+                               (->> underlying-edges
+                                    (filter (fn [ue]
+                                              (some #(and (= (:from %) (get-in ue [:from-fn :id]))
+                                                          (= (:to %) (get-in ue [:to-fn :id])))
+                                                    dispatches-edges)))
+                                    (map :to-fn)
+                                    (distinct)
+                                    (sort-by :label)
+                                    (mapv (fn [{:keys [id label signature]}]
+                                            {:name label :schema signature :id id}))))]
+          (cond-> {:label       (str (:label from-node) " → " (:label to-node))
+                   :kind        :edge
+                   :detail-kind :edge
+                   :edge-type   :code-flow
+                   :schema-ids  (proj.schema/schema-key->node-id model)}
+            (seq called-fns)    (assoc :called-fns called-fns)
+            (seq dispatched-fns) (assoc :dispatched-fns dispatched-fns)))
 
         :schema-reference
         (let [schema-refs (compute-underlying-schema-refs model from-id to-id)]
           {:label       (str (:label from-node) " → " (:label to-node))
            :kind        :edge
+           :detail-kind :edge
            :edge-type   :schema-reference
            :schema-refs schema-refs
            :schema-ids  (proj.schema/schema-key->node-id model)})
 
         ;; Fallback for unknown edge types
-        {:label (str (:label from-node) " → " (:label to-node))
-         :kind  :edge
-         :edge-type edge-type}))))
+        {:label       (str (:label from-node) " → " (:label to-node))
+         :kind        :edge
+         :detail-kind :edge
+         :edge-type   edge-type}))))
 
 ;; -----------------------------------------------------------------------------
 ;; Schemas

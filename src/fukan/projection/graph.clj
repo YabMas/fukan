@@ -37,19 +37,25 @@
    [:id {:description "Synthetic sequential ID (e.g. e0, e1)."} :string]
    [:from :NodeId]
    [:to :NodeId]
-   [:edge-type :ProjectionEdgeType]])
+   [:edge-type :ProjectionEdgeType]
+   [:kind {:description "Model-level edge kind preserved for detail views."} :EdgeKind]])
 
 (def ^:schema Projection
   [:map {:description "Complete graph projection result: visible nodes and edges."}
    [:nodes [:vector :ProjectionNode]]
    [:edges [:vector :ProjectionEdge]]])
 
+(def ^:schema ProjectionPerspective
+  [:enum {:description "Perspective: call-graph (invocation direction) or dependency-graph (dependency direction)."}
+   :call-graph :dependency-graph])
+
 (def ^:private ^:schema ProjectionOpts
-  [:map {:description "Options for graph projection: which entity to view, which modules are expanded, which show private children, and which edge types are visible."}
+  [:map {:description "Options for graph projection: which entity to view, which modules are expanded, which show private children, which edge types are visible, and which perspective to use."}
    [:view-id {:optional true} [:maybe :NodeId]]
    [:expanded {:optional true} [:set :NodeId]]
    [:show-private {:optional true} [:set :NodeId]]
-   [:visible-edge-types {:optional true} [:set :ProjectionEdgeType]]])
+   [:visible-edge-types {:optional true} [:set :ProjectionEdgeType]]
+   [:perspective {:optional true} :ProjectionPerspective]])
 
 ;; -----------------------------------------------------------------------------
 ;; Node accessor helpers (access via :data map)
@@ -129,20 +135,25 @@
    For each raw edge of the given kind, find which visible nodes it connects.
    Returns deduplicated edges between visible nodes.
 
+   Perspective-aware: for :dispatches edges under :dependency-graph perspective,
+   from/to are swapped before aggregation.
+
    Excludes edges where one endpoint is an ancestor of the other -
    parent-child relationships are implicit in compound node structure."
-  [model visible-set edge-kind]
-  (let [raw-edges (->> (:edges model)
+  [model visible-set edge-kind perspective]
+  (let [flip? (and (= edge-kind :dispatches) (= perspective :dependency-graph))
+        raw-edges (->> (:edges model)
                        (filter #(= edge-kind (:kind %))))]
     (->> raw-edges
          (keep (fn [{:keys [from to]}]
-                 (let [from-visible (find-visible-ancestor model from visible-set)
+                 (let [[from to] (if flip? [to from] [from to])
+                       from-visible (find-visible-ancestor model from visible-set)
                        to-visible (find-visible-ancestor model to visible-set)]
                    (when (and from-visible to-visible
                               (not= from-visible to-visible)
                               (not (descendant-of? model to-visible from-visible))
                               (not (descendant-of? model from-visible to-visible)))
-                     {:from from-visible :to to-visible}))))
+                     {:from from-visible :to to-visible :kind edge-kind}))))
          distinct
          vec)))
 
@@ -239,10 +250,14 @@
    private function to a target in a different module, finds visible
    public callers and creates edges to the visible target.
    Endpoints may be modules (collapsed) or leaf nodes.
-   Filters by edge-kind to only consider edges of the given model-level kind."
-  [model all-visible edge-kind]
-  (let [raw-edges (->> (:edges model)
-                       (filter #(= edge-kind (:kind %))))
+   Filters by edge-kind to only consider edges of the given model-level kind.
+   Perspective-aware: for :dispatches under :dependency-graph, flips from/to."
+  [model all-visible edge-kind perspective]
+  (let [flip? (and (= edge-kind :dispatches) (= perspective :dependency-graph))
+        raw-edges (->> (:edges model)
+                       (filter #(= edge-kind (:kind %)))
+                       (map (fn [{:keys [from to] :as e}]
+                              (if flip? (assoc e :from to :to from) e))))
         edges-by-target (reduce (fn [acc {:keys [from to]}]
                                   (update acc to (fnil conj #{}) from))
                                 {} raw-edges)
@@ -264,7 +279,7 @@
                                        (let [callers (find-public-callers model module-descendants from edges-by-target)]
                                          (for [caller callers
                                                :when (contains? all-visible caller)]
-                                           {:from caller :to to-visible}))))))
+                                           {:from caller :to to-visible :kind edge-kind}))))))
                                edges-in-module)))))
          distinct
          vec)))
@@ -277,8 +292,9 @@
    expanded controls which modules show their children.
    show-private controls whether private children are visible.
    visible-edge-types controls which edge types to include.
+   perspective controls direction for dispatches edges.
    Returns pure domain data - no selected? or highlighted? fields."
-  [model entity-id expanded show-private visible-edge-types]
+  [model entity-id expanded show-private visible-edge-types perspective]
   (let [;; The viewed entity is always expanded (its children are shown)
         effective-expanded (conj (or expanded #{}) entity-id)
         visible-all (compute-visible-set model entity-id effective-expanded show-private)
@@ -302,9 +318,19 @@
         edges (vec (mapcat
                     (fn [edge-type]
                       (let [model-kinds (get edge-type->model-kinds edge-type [edge-type])
-                            agg (mapcat #(aggregate-edges model visible %) model-kinds)
-                            inherited (mapcat #(private-inherited-edges model visible %) model-kinds)
-                            all (vec (distinct (concat agg inherited)))
+                            agg (mapcat #(aggregate-edges model visible % perspective) model-kinds)
+                            inherited (mapcat #(private-inherited-edges model visible % perspective) model-kinds)
+                            ;; Dedup by [from to kind] to preserve all model-level edge kinds
+                            all (->> (concat agg inherited)
+                                     (reduce (fn [acc e]
+                                               (let [k [(:from e) (:to e) (:kind e)]]
+                                                 (if (contains? (::seen acc) k)
+                                                   acc
+                                                   (-> acc
+                                                       (update ::seen conj k)
+                                                       (update ::edges conj e)))))
+                                             {::seen #{} ::edges []})
+                                     ::edges)
                             final (subsume-edges model all)]
                         (map (fn [e] (assoc e :edge-type edge-type)) final)))
                     visible-edge-types))
@@ -336,16 +362,22 @@
 
    Shows related functions grouped by their parent module,
    with leaf-level edges. Filters edges by visible-edge-types
-   and maps model edge kinds to projection edge types."
-  [model entity-id show-private visible-edge-types]
+   and maps model edge kinds to projection edge types.
+   Perspective-aware: flips dispatches edges under dependency-graph."
+  [model entity-id show-private visible-edge-types perspective]
   (let [;; Map visible edge types to model-level kinds
         edge-type->model-kinds {:code-flow #{:function-call :dispatches}
                                 :schema-reference #{:schema-reference}}
         visible-model-kinds (reduce (fn [acc et]
                                       (into acc (get edge-type->model-kinds et)))
                                     #{} visible-edge-types)
+        ;; Apply perspective flipping to dispatches edges
         raw-edges (->> (:edges model)
-                       (filter #(contains? visible-model-kinds (:kind %))))
+                       (filter #(contains? visible-model-kinds (:kind %)))
+                       (map (fn [{:keys [kind] :as e}]
+                              (if (and (= kind :dispatches) (= perspective :dependency-graph))
+                                (assoc e :from (:to e) :to (:from e))
+                                e))))
 
         ;; Find all related functions via edges
         outgoing-fn-ids (->> raw-edges
@@ -408,7 +440,8 @@
                       {:id (str "e" idx)
                        :from from
                        :to to
-                       :edge-type (get kind->edge-type kind :code-flow)})
+                       :edge-type (get kind->edge-type kind :code-flow)
+                       :kind kind})
                     relevant-edges)]
 
     {:nodes (vec (concat folder-nodes module-nodes related-fn-nodes [entity-node]))
@@ -433,15 +466,16 @@
    - nodes: vector of projection nodes (no :selected? field)
    - edges: vector of edges (no :highlighted? field)"
   {:malli/schema [:=> [:cat :Model :ProjectionOpts] :Projection]}
-  [model {:keys [view-id expanded show-private visible-edge-types]}]
+  [model {:keys [view-id expanded show-private visible-edge-types perspective]}]
   (let [;; Default to root if no view-id
         entity-id (or view-id (:id (path/find-root-node model)))
         expanded (or expanded #{})
         show-private (or show-private #{})
-        visible-edge-types (or visible-edge-types #{:code-flow})
+        visible-edge-types (or visible-edge-types #{:code-flow :schema-reference})
+        perspective (or perspective :call-graph)
 
         children-ids (get-children model entity-id)]
 
     (if (seq children-ids)
-      (compute-module-view model entity-id expanded show-private visible-edge-types)
-      (compute-leaf-view model entity-id show-private visible-edge-types))))
+      (compute-module-view model entity-id expanded show-private visible-edge-types perspective)
+      (compute-leaf-view model entity-id show-private visible-edge-types perspective))))
