@@ -39,9 +39,13 @@
           nodes))
 
 (defn- has-spec-data?
-  "True if a module node has a boundary declaration."
+  "True if a module node has spec content: a boundary, surface, or
+   the :has-spec flag set by the allium analyzer. Checked before
+   collapse-surface-to-boundary runs, so :surface and :has-spec
+   cover the pre-collapse case; :boundary covers the post-collapse case."
   [node]
-  (:boundary (:data node)))
+  (let [d (:data node)]
+    (or (:boundary d) (:surface d) (:has-spec d))))
 
 (defn- remove-empty-modules
   "Remove module nodes that have no children.
@@ -75,7 +79,7 @@
                                     ;; Root level: no parent or parent not in nodes
                                     (let [p (:parent node)]
                                       (or (nil? p) (not (contains? nodes p)))))))
-                        (remove #(= (:kind %) :function)))] ; Modules only
+                        (filter #(= (:kind %) :module)))]
       ;; If exactly one child and it's a folder, descend
       (if (and (= 1 (count children))
                (contains? folder-ids (:id (first children))))

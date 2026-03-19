@@ -53,7 +53,9 @@
         node->module (fn [nid] (:parent (get nodes nid)))
 
         ;; 3. Filter to function-targeting cross-module edges, check contracts
-        fn-edges (filter #(= :function (:kind (get nodes (:to %)))) edges)
+        fn-edges (filter #(and (= :function-call (:kind %))
+                                (= :function (:kind (get nodes (:to %)))))
+                         edges)
 
         violations
         (->> fn-edges

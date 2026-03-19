@@ -77,7 +77,7 @@ value CytoscapeEdge {
     id: String
     source: String
     target: String
-    edge_type: String      -- "code-flow" or "type-reference"
+    edge_type: String      -- "code-flow" or "schema-reference"
     kind: String           -- "function-call", "dispatches", or "schema-reference"
 }
 
@@ -387,10 +387,12 @@ rule RenderSidebar {
     --   navigates to the schema's node via full app navigation
     --   (graph + breadcrumb + sidebar update).
     --
-    -- EdgeRenderer: dispatched by edge_type and kind.
-    --   code_flow/function_call: label + "Functions Called" list.
-    --   code_flow/dispatches: label + "Dispatched Functions" list.
-    --   type_reference: label + "Schema References" list.
+    -- EdgeRenderer: dispatched by edge_type.
+    --   code_flow: label, then conditionally:
+    --     "Functions Called" section when called_fns present,
+    --     "Dispatched Functions" section when dispatched_fns present.
+    --     A single edge may have both sections.
+    --   schema_reference: label + "Schema References" list.
     --
     -- EmptyState: when no entity is selected, show placeholder text.
 

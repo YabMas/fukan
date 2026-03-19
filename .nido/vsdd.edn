@@ -1,0 +1,8 @@
+{:modules ["src/fukan/model/"
+           "src/fukan/projection/"
+           "src/fukan/web/views/"]
+ :roles {:implementer {:agent "module-owner"}
+         :critic      {:agent "critic"}
+         :architect   {:agent "architect"}}
+ :judge {:model "haiku"}
+ :max-iterations 10}

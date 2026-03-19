@@ -125,7 +125,7 @@
    (if (seq items)
      [:ul
       (for [[target-id {:keys [count label]}] items]
-        [:li {"data-on:click" (str "@get('/sse/view?select=" (url-encode target-id) "')")}
+        [:li {"data-on:click" (view-url target-id)}
          label
          (when (> count 1)
            [:span.dep-count (str " (" count ")")])])]
@@ -300,6 +300,7 @@
 
        :schema-reference
        (list
+        [:h4 label]
         [:h5 "Schema References " [:span.dep-count (str "(" (count schema-refs) ")")]]
         (if (seq schema-refs)
           (render-schema-ref-list (or schema-ids {}) schema-refs)

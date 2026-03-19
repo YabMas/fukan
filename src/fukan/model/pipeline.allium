@@ -141,17 +141,19 @@ rule CheckContracts {
     -- checked — ancestor boundaries are not consulted.
     --
     -- Boundary matching uses BoundaryFn.id to match against the called
-    -- function's NodeId. Modules without boundary functions are not
-    -- subject to contract checking.
+    -- function's NodeId. A module's boundary is enforceable only when
+    -- at least one BoundaryFn has a non-nil id. Modules where no
+    -- boundary function has an id are not subject to contract checking.
 
     when: CheckContracts(model: model/Model)
 
     let fn_edges = model.edges where kind = function_call
         and to.kind = Function
     let cross_module = fn_edges where from.parent != to.parent
+    let boundary_ids = to.parent.boundary.functions.id where id != null
     let violations = cross_module where
-        to.parent.boundary.functions.count > 0
-        and to not in to.parent.boundary.functions.id
+        boundary_ids.count > 0
+        and to not in boundary_ids
 
     ensures: LintReport.created(
         violations: violations,

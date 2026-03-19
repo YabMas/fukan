@@ -78,6 +78,45 @@
       (is (zero? (count (:violations report))))
       (is (zero? (:cross-module-edges (:stats report)))))))
 
+(deftest ignores-non-function-call-edges-targeting-functions
+  (testing "A :dispatches edge targeting a :function node is not a fn_edge per spec"
+    (let [model (update (make-model) :edges conj
+                        {:from "a.core/fn-a1" :to "b.core/fn-b2" :kind :dispatches})
+          report (lint/check-contracts model)]
+      (is (zero? (count (:violations report))))
+      (is (zero? (:cross-module-edges (:stats report)))))))
+
+(deftest boundary-fns-without-ids-excluded-from-contract-index
+  (testing "Module with boundary functions but no :id values is not contract-checked"
+    (let [model {:nodes
+                 {"c.core"
+                  {:id "c.core" :kind :module :label "c.core" :parent nil
+                   :children #{"c.core/fn-c1"}
+                   :data {:kind :module
+                          :boundary {:description "Module C"
+                                     :functions [{:name "fn-c1"}]
+                                     :schemas []}}}
+                  "c.core/fn-c1"
+                  {:id "c.core/fn-c1" :kind :function :label "fn-c1"
+                   :parent "c.core" :children #{}
+                   :data {:kind :function :private? false}}
+                  "a.core"
+                  {:id "a.core" :kind :module :label "a.core" :parent nil
+                   :children #{"a.core/fn-a1"}
+                   :data {:kind :module
+                          :boundary {:description "Module A"
+                                     :functions [{:name "fn-a1" :id "a.core/fn-a1"}]
+                                     :schemas []}}}
+                  "a.core/fn-a1"
+                  {:id "a.core/fn-a1" :kind :function :label "fn-a1"
+                   :parent "a.core" :children #{}
+                   :data {:kind :function :private? false}}}
+                 :edges [{:from "a.core/fn-a1" :to "c.core/fn-c1" :kind :function-call}]}
+          report (lint/check-contracts model)]
+      (is (zero? (count (:violations report)))
+          "Call to module with boundary fns lacking :id should not be a violation")
+      (is (= 1 (:cross-module-edges (:stats report)))))))
+
 (deftest format-report-renders-violations
   (testing "format-report produces readable output"
     (let [report {:violations [{:from "a.core/fn-a1"

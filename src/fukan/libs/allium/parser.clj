@@ -27,7 +27,7 @@
   version-number = #'[0-9]+'
 
   declarations = (declaration _)*
-  declaration = use-decl / given-block / enum-decl /
+  declaration = use-decl / given-block / enum-decl / open-question / config-block /
                 external-entity / external-value / surface-decl / variant-decl /
                 entity-decl / value-decl / rule-decl / invariant-decl
 
@@ -44,10 +44,20 @@
   given-bindings = (given-binding _ (<','> _)?)*
   given-binding = ident _ <':'> _ type-ref
 
+  (* ============ Open Question ============ *)
+
+  open-question = <'open'> __ <'question'> __ <'\"'> question-text <'\"'>
+  question-text = #'[^\"]*'
+
+  (* ============ Config Block ============ *)
+
+  config-block = <'config'> _ <'{'> config-body <'}'>
+  config-body = #'[^}]*'
+
   (* ============ Enum ============ *)
 
   enum-decl = <'enum'> __ ident _ description-string? _ <'{'> _ enum-values _ <'}'>
-  enum-values = ident (_ <'|'> _ ident)*
+  enum-values = ident (_ <'|'>? _ ident)*
 
   (* ============ External Entity ============ *)
 
@@ -86,7 +96,28 @@
   (* ============ Fields ============ *)
 
   field-list = (field-item _ (<','> _)?)*
-  <field-item> = provides-block / nested-variant / invariant-decl / field-entry
+  <field-item> = provides-block / related-block / exposes-block / nested-variant / invariant-decl / annotation / when-guard / facing-field / context-field / field-entry
+
+  (* Exposes block: exposes: followed by dotted identifiers *)
+  exposes-block = <'exposes'> _ <':'> _ exposes-entries
+  exposes-entries = (dotted-ident _)+
+  dotted-ident = #'[A-Za-z_][A-Za-z0-9_.]*'
+
+  (* Surface-specific: facing role: Type, context role: Type *)
+  facing-field = <'facing'> __ ident _ <':'> _ type-ref
+  context-field = <'context'> __ ident _ <':'> _ type-ref
+
+  (* Annotation: @guarantee Name or @guidance — absorbed with trailing comments *)
+  annotation = <'@'> ident (__ ident)?
+
+  (* When guard: when condition — appears after provides entries *)
+  when-guard = <'when'> __ when-guard-text
+  when-guard-text = #'[^\\n}]+'
+
+  (* Related block: related: followed by indented entries, captured as text *)
+  related-block = <'related'> _ <':'> _ related-body
+  related-body = related-line+
+  <related-line> = #'[^\n}@]+' / eol
   field-entry = ident _ <':'> _ field-value
 
   (* Provides block: single 'provides:' with typed operation entries.
@@ -97,10 +128,10 @@
   provides-entries = (provides-entry provides-entry-sep)*
   <provides-entry-sep> = <#'[ \\t]*\\n'> _
   provides-entry = provides-entry-name provides-params? provides-return? provides-entry-comment?
-  provides-entry-name = #'[A-Za-z_][A-Za-z0-9_]*+(?![ \\t]*:)'
+  provides-entry-name = #'[A-Z][A-Za-z0-9_]*+(?![ \\t]*:)'
   provides-params = <'('> _ provides-param-list? _ <')'>
   provides-param-list = provides-param (_ <','> _ provides-param)*
-  provides-param = ident _ <':'> _ type-ref
+  provides-param = ident (_ <':'> _ type-ref)?
   provides-return = <#'[ \\t]+'> <'->'> <#'[ \\t]+'> type-ref
   provides-entry-comment = <#'[ \\t]+--[ \\t]*'> inline-comment
 
@@ -147,9 +178,12 @@
   rule-clause = when-clause / let-clause / requires-clause / ensures-clause
 
   when-clause = <'when:'> _ trigger-expr _
-  trigger-expr = ident <'('> _ trigger-params? _ <')'>
+  trigger-expr = trigger-call / trigger-binding
+  trigger-call = ident <'('> _ trigger-params? _ <')'>
+  trigger-binding = trigger-binding-text
+  trigger-binding-text = #'[^\\n{}]+'
   trigger-params = trigger-param (_ <','> _ trigger-param)*
-  trigger-param = ident _ <':'> _ type-ref
+  trigger-param = ident (_ <':'> _ type-ref)?
 
   let-clause = <'let'> __ clause-body _
   requires-clause = <'requires:'> _ clause-body _
@@ -233,6 +267,18 @@
 
    :quoted-path identity
    :path-content str
+
+   ;; Open question
+   :open-question
+   (fn [text] {:type :open-question :text text})
+
+   :question-text str
+
+   ;; Config block
+   :config-block
+   (fn [body] {:type :config :body (str/trim body)})
+
+   :config-body str
 
    ;; Given
    :given-block
@@ -392,8 +438,9 @@
      (vec params))
 
    :provides-param
-   (fn [name type-ref]
-     {:name name :type type-ref})
+   (fn [name & args]
+     (cond-> {:name name}
+       (first args) (assoc :type (first args))))
 
    :provides-return
    (fn [type-ref]
@@ -402,6 +449,47 @@
    :provides-entry-comment
    (fn [text]
      {:provides-comment (str/trim text)})
+
+   ;; When guard
+   :when-guard
+   (fn [text]
+     {:field-kind :when-guard :condition (str/trim text)})
+
+   :when-guard-text str
+
+   ;; Exposes block
+   :exposes-block
+   (fn [entries]
+     {:field-kind :exposes :entries entries})
+
+   :exposes-entries
+   (fn [& entries]
+     (vec entries))
+
+   :dotted-ident str
+
+   ;; Surface-specific fields
+   :facing-field
+   (fn [name type-ref]
+     {:field-kind :facing :name name :type-ref type-ref})
+
+   :context-field
+   (fn [name type-ref]
+     {:field-kind :context :name name :type-ref type-ref})
+
+   ;; Annotation (@guarantee, @guidance)
+   :annotation
+   (fn [kind & args]
+     {:field-kind :annotation :kind kind :name (first args)})
+
+   ;; Related block
+   :related-block
+   (fn [& body-parts]
+     {:field-kind :related :body (str/trim (apply str (flatten body-parts)))})
+
+   :related-body
+   (fn [& parts]
+     (apply str (flatten parts)))
 
    :field-value identity
 
@@ -487,20 +575,29 @@
    (fn [trigger]
      {:clause-type :when :trigger trigger})
 
-   :trigger-expr
+   :trigger-expr identity
+
+   :trigger-call
    (fn [name & param-groups]
      (let [params (vec (apply concat
                          (map (fn [x] (if (sequential? x) x [x]))
                               param-groups)))]
        {:kind :call :name name :params params}))
 
+   :trigger-binding
+   (fn [text]
+     {:kind :binding :text (str/trim text)})
+
+   :trigger-binding-text str
+
    :trigger-params
    (fn [& params]
      (vec params))
 
    :trigger-param
-   (fn [name type-ref]
-     {:name name :type-ref type-ref})
+   (fn [name & args]
+     (cond-> {:name name}
+       (first args) (assoc :type-ref (first args))))
 
    :let-clause
    (fn [& body-parts]
