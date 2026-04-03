@@ -1,6 +1,10 @@
 # Fukan
 
-Fukan is a self-analyzing codebase visualizer. It analyzes its own source code — Clojure implementation and Allium specifications — to build a structural model, then projects and renders that model as an interactive graph in the browser. The system follows a functional core / imperative shell architecture, enforced by Allium specs.
+Fukan is a structural exploration tool for codebases in the era of LLM-driven development. It analyzes a target codebase — implementation code and behavioral specifications — to build a unified structural model, then projects and renders that model as an interactive graph in the browser. The core question it explores: as LLMs handle more low-level coding, how do humans maintain control over high-level structure and collaborate with LLMs at that level of abstraction?
+
+The system is generic and pluggable: language analyzers (currently Clojure and Allium) register via multimethod dispatch, and the build pipeline is language-agnostic. Specifications and implementation are projected onto the same model so that intended structure (boundaries, contracts, guarantees) and actual structure (namespaces, functions, schemas) appear together. Documentation is a first-class input — it flows into the model to make the explorer meaningful, not just structural.
+
+The system follows a functional core / imperative shell architecture, enforced by Allium specs.
 
 ## Spec Locations (source of truth)
 
