@@ -45,6 +45,35 @@ clj -M:dev:nrepl
 clj -M:test
 ```
 
+## Navigating the graph
+
+The graph renders modules as compound nodes that contain functions, schemas, and nested modules. Navigation works at two levels: **selection** (inspecting within the current view) and **navigation** (changing what you're viewing).
+
+| Action | Effect |
+|--------|--------|
+| **Click** a node | Select it — sidebar shows details (boundary, signatures, docs, dependencies) |
+| **Double-click** a module | Navigate into it — the module becomes the view, its children are shown |
+| **Right-click** a module | Expand/collapse — reveal or hide children inline without navigating |
+| **Shift + right-click** an expanded module | Toggle private visibility — show or hide private functions and schemas |
+| **Click** an edge | Select it — sidebar shows the underlying relationships (function calls, dispatches, schema refs) |
+| **Click** the background | Deselect — clears selection |
+| **Breadcrumb** click | Navigate to an ancestor module |
+
+### Edge modes
+
+The toolbar switches between edge modes (single-select):
+
+- **Code flow** — shows function call and dispatch edges; only function nodes visible
+- **Type reference** — shows schema reference edges; only schema nodes visible
+
+Module nodes are always visible regardless of mode. The sidebar always shows full details for a selected entity.
+
+### Visual indicators
+
+- **Expand arrow** on modules: `▶` collapsed, `▼` expanded
+- **Double border** on expanded modules: private children are hidden (shift+right-click to reveal)
+- **Dashed border, gray background**: a private node currently visible
+
 ## Project structure
 
 ```
