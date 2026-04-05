@@ -131,7 +131,7 @@
 ;; Entity rendering: section order
 
 (deftest render-entity-section-order
-  (testing "entity detail renders sections in spec order: label, defined-in, description, guarantees, defined types, interface"
+  (testing "entity detail renders sections in spec order: label, description, guarantees, defined types, interface"
     (let [detail {:label "MyModule"
                   :kind :module
                   :parent {:id "root" :label "root"}
@@ -156,29 +156,6 @@
         (is (< desc-pos guar-pos) "description before guarantees")
         (is (< guar-pos types-pos) "guarantees before defined types")
         (is (< types-pos ops-pos) "defined types before interface")))))
-
-;; ---------------------------------------------------------------------------
-;; Entity rendering: section order with :schema kind (defined-in visible)
-
-(deftest render-schema-section-order
-  (testing "schema entity renders defined-in before description"
-    (let [detail {:label "MyType"
-                  :kind :schema
-                  :parent {:id "ns:a" :label "ns.a"}
-                  :description "A type definition"
-                  :interface {:type :schema-def
-                              :items [{:tag :map :entries []}]
-                              :registry {}}
-                  :schema-ids {}
-                  :dataflow nil}
-          html (sidebar/render-sidebar-html detail)]
-      ;; Both sections present
-      (is (re-find #"Defined in" html))
-      (is (re-find #"A type definition" html))
-      ;; Verify order: defined-in before description
-      (let [defined-in-pos (.indexOf html "Defined in")
-            desc-pos (.indexOf html "A type definition")]
-        (is (< defined-in-pos desc-pos) "defined-in before description")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Interface rendering: fn-inline type

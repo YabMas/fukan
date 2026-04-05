@@ -222,22 +222,7 @@
     font-size: 0.85rem;
   }
 
-  /* Defined-in link for schemas */
-  .defined-in {
-    margin-top: 0.5rem;
-    padding: 0.5rem 0.65rem;
-    font-size: 0.85rem;
-    color: var(--color-text-muted);
-    background: var(--color-surface-alt);
-    border-left: 3px solid var(--color-border);
-    border-radius: 0 4px 4px 0;
-    cursor: pointer;
-    transition: border-left-color 0.1s, background 0.1s;
-  }
-  .defined-in:hover {
-    border-left-color: var(--color-primary);
-    background: var(--color-hover-bg);
-  }
+
   .parent-link {
     color: var(--color-primary);
   }

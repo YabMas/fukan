@@ -228,26 +228,16 @@
         [:li (when id {"data-on:click" (view-url id)})
          label])])))
 
-(defn- render-defined-in
-  "Render a clickable parent module link for schema entities.
-   Returns nil when parent is absent or kind is not :schema."
-  [kind parent]
-  (when (and (= :schema kind) parent)
-    [:div.defined-in "Defined in "
-     [:span.schema-ref {"data-on:click.stop" (view-url (:id parent))}
-      (:label parent)]]))
-
 (defn- render-entity-detail
   "Generic renderer for all non-edge entity types.
-   Iterates through sections in order: label, defined-in, description,
+   Iterates through sections in order: label, description,
    guarantees, defined types, interface."
-  [{:keys [label kind parent description guarantees schemas schema-ids interface dataflow]}]
+  [{:keys [label kind description guarantees schemas schema-ids interface dataflow]}]
   (str
    (h/html
     [:div#node-info
      [:h4 label " " [:span.kind-badge (name kind)]]
 
-     (render-defined-in kind parent)
      (render-description description)
      (render-guarantees guarantees)
      (render-defined-types schemas)
