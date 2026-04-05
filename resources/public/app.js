@@ -37,6 +37,9 @@ class GraphViewer extends HTMLElement {
     cyDiv.id = 'cy';
     this.appendChild(cyDiv);
 
+    // Suppress native context menu so ctrl+click fires cxttap on macOS
+    cyDiv.addEventListener('contextmenu', (e) => e.preventDefault());
+
     this.cy = cytoscape({
       container: cyDiv,
       elements: [],
@@ -411,7 +414,12 @@ class GraphViewer extends HTMLElement {
     cy.on('tap', 'node', (evt) => {
       const node = evt.target;
       const nodeId = node.id();
-      const nodeKind = node.data('kind');
+
+      // Ctrl+click on macOS fires tap, not cxttap
+      if (evt.originalEvent.ctrlKey) {
+        this._handleExpandToggle(node, evt.originalEvent.shiftKey);
+        return;
+      }
 
       // Visual feedback
       cy.nodes().unselect();
@@ -456,45 +464,8 @@ class GraphViewer extends HTMLElement {
 
     // Right click - toggle expand/collapse
     cy.on('cxttap', 'node', (evt) => {
-      if (evt.originalEvent.shiftKey) return;
-      const node = evt.target;
-      if (node.data('kind') !== 'module' || !node.data('expandable')) return;
-
       evt.preventDefault();
-      const moduleId = node.id();
-
-      if (this.expandedModules.has(moduleId)) {
-        this.expandedModules.delete(moduleId);
-        this.showPrivate.delete(moduleId);
-      } else {
-        this.expandedModules.add(moduleId);
-      }
-
-      this.pendingAction = 'expand-toggle';
-      this.toggleTargetId = moduleId;
-      this._emitExpandToggle();
-    });
-
-    // Shift+right click - toggle private visibility
-    cy.on('cxttap', 'node', (evt) => {
-      if (!evt.originalEvent.shiftKey) return;
-      const node = evt.target;
-      if (node.data('kind') !== 'module') return;
-      if (!this.expandedModules.has(node.id())) return;
-      if (!node.data('hasPrivateChildren')) return;
-
-      evt.preventDefault();
-      const moduleId = node.id();
-
-      if (this.showPrivate.has(moduleId)) {
-        this.showPrivate.delete(moduleId);
-      } else {
-        this.showPrivate.add(moduleId);
-      }
-
-      this.pendingAction = 'expand-toggle';
-      this.toggleTargetId = moduleId;
-      this._emitExpandToggle();
+      this._handleExpandToggle(evt.target, evt.originalEvent.shiftKey);
     });
 
     // Click background - deselect
@@ -505,6 +476,33 @@ class GraphViewer extends HTMLElement {
         this._emitSelect('');
       }
     });
+  }
+
+  _handleExpandToggle(node, shiftKey) {
+    const moduleId = node.id();
+    if (node.data('kind') !== 'module') return;
+
+    if (shiftKey) {
+      if (!this.expandedModules.has(moduleId)) return;
+      if (!node.data('hasPrivateChildren')) return;
+      if (this.showPrivate.has(moduleId)) {
+        this.showPrivate.delete(moduleId);
+      } else {
+        this.showPrivate.add(moduleId);
+      }
+    } else {
+      if (!node.data('expandable')) return;
+      if (this.expandedModules.has(moduleId)) {
+        this.expandedModules.delete(moduleId);
+        this.showPrivate.delete(moduleId);
+      } else {
+        this.expandedModules.add(moduleId);
+      }
+    }
+
+    this.pendingAction = 'expand-toggle';
+    this.toggleTargetId = moduleId;
+    this._emitExpandToggle();
   }
 
   // ---------------------------------------------------------------------------
