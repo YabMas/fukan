@@ -134,13 +134,26 @@
           doc (assoc :doc doc)))
       base)))
 
+(defn- normalize-docstring
+  "Collapse indentation whitespace in docstrings.
+   Clojure ns/var docstrings have leading spaces on continuation lines
+   from source indentation — normalize runs of whitespace to single spaces
+   and trim the result."
+  [text]
+  (when text
+    (-> text
+        (str/replace #"\s+" " ")
+        str/trim)))
+
 (defn- extract-description
   "Extract description text from a node.
-   Tries top-level :description, :data :doc, :data :boundary :description."
+   Tries top-level :description, :data :doc, :data :boundary :description.
+   Normalizes whitespace for display."
   [node]
-  (or (:description node)
-      (get-in node [:data :doc])
-      (get-in node [:data :boundary :description])))
+  (normalize-docstring
+   (or (:description node)
+       (get-in node [:data :doc])
+       (get-in node [:data :boundary :description]))))
 
 (defn- build-schema-registry
   "Build a registry of resolved schema refs found in a schema form.
