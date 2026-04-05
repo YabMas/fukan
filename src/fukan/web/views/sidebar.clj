@@ -132,10 +132,13 @@
      [:p.empty-state "None"])))
 
 (defn- render-description
-  "Render a description section. Returns nil if text is nil."
+  "Render a description section. Returns nil if text is nil.
+   Newlines are converted to <br> because the Datastar SSE transport
+   splits HTML by lines, stripping literal newline characters."
   [text]
   (when text
-    [:div.doc text]))
+    (into [:div.doc]
+          (interpose [:br] (str/split-lines text)))))
 
 (defn- render-io-sections
   "Render input and output schema type lists.
