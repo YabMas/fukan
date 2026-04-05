@@ -128,7 +128,7 @@
   provides-entries = (provides-entry provides-entry-sep)*
   <provides-entry-sep> = <#'[ \\t]*\\n'> _
   provides-entry = provides-entry-name provides-params? provides-return? provides-entry-comment?
-  provides-entry-name = #'[A-Z][A-Za-z0-9_]*+(?![ \\t]*:)'
+  provides-entry-name = #'[A-Za-z_][A-Za-z0-9_]*+(?![ \\t]*:)'
   provides-params = <'('> _ provides-param-list? _ <')'>
   provides-param-list = provides-param (_ <','> _ provides-param)*
   provides-param = ident (_ <':'> _ type-ref)?
