@@ -89,7 +89,7 @@
                               (not (re-find section-divider-re trimmed))))))
          (map strip-comment-prefix)
          (remove str/blank?)
-         (str/join " ")
+         (str/join "\n")
          not-empty)))
 
 (defn- extract-declaration-descriptions
@@ -288,7 +288,10 @@
 
             ;; Create Function nodes for rule triggers and surface names.
             ;; Both represent the module's callable interface — the things
-            ;; other modules reference via qualified names.
+            ;; other modules reference via qualified names. Marked private
+            ;; so they don't clutter the graph alongside implementation
+            ;; functions; they exist as edge endpoints for cross-module
+            ;; spec references.
             rules (->> decls (filter #(= :rule (:type %))))
             rule-fn-nodes
             (->> rules
@@ -308,7 +311,7 @@
                                        :parent module-id
                                        :children #{}
                                        :data {:kind :function
-                                              :private? false
+                                              :private? true
                                               :doc doc}}])))))
                  (into {}))
 
@@ -325,7 +328,7 @@
                                   :parent module-id
                                   :children #{}
                                   :data {:kind :function
-                                         :private? false
+                                         :private? true
                                          :doc doc}}])))
                  (into {}))]
         (-> acc
