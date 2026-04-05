@@ -74,7 +74,36 @@
   (testing "surface with description"
     (let [d (first-decl "surface PublicAPI \"The public boundary.\" {\n    facing: external\n}\n")]
       (is (= :surface (:type d)))
-      (is (= "The public boundary." (:description d))))))
+      (is (= "The public boundary." (:description d)))))
+
+  (testing "surface with provides block"
+    (let [d (first-decl (str "surface API {\n"
+                             "    provides:\n"
+                             "        navigate(model: Model, opts: Opts) -> Result -- Navigate.\n"
+                             "        inspect(model: Model, id: String) -> Details? -- Inspect.\n"
+                             "}\n"))]
+      (is (= :surface (:type d)))
+      (let [provides (->> (:fields d)
+                          (filter #(= :provides-block (:field-kind %)))
+                          first
+                          :entries)]
+        (is (= 2 (count provides)))
+        (is (= "navigate" (:name (first provides))))
+        (is (= "inspect" (:name (second provides))))
+        (is (= "Navigate." (:description (first provides))))
+        (is (some? (:return (second provides)))
+            "optional return type (Details?) should parse"))))
+
+  (testing "provides entry names accept lowercase"
+    (let [d (first-decl (str "surface API {\n"
+                             "    provides:\n"
+                             "        find_root(m: Model) -> Node\n"
+                             "}\n"))]
+      (is (= :surface (:type d)))
+      (is (= "find_root"
+             (->> (:fields d)
+                  (filter #(= :provides-block (:field-kind %)))
+                  first :entries first :name))))))
 
 (deftest entity-decl-test
   (testing "entity with fields"
