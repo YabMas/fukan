@@ -3,7 +3,8 @@
    Runs clj-kondo static analysis, discovers Malli schema definitions,
    enriches nodes with runtime metadata, and produces a complete
    AnalysisResult for the build pipeline."
-  (:require [clojure.java.shell :as shell]
+  (:require [clojure.java.io :as io]
+            [clojure.java.shell :as shell]
             [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.set :as set]
@@ -42,6 +43,9 @@
 
    Throws if clj-kondo fails to run."
   [src-path]
+  (when-not (.exists (io/file src-path))
+    (throw (ex-info "Clojure source path does not exist"
+                    {:src-path src-path})))
   (let [config "{:output {:format :edn} :analysis {:var-usages true :var-definitions {:shallow false} :namespace-usages true}}"
         result (shell/sh "clj-kondo"
                          "--lint" src-path
@@ -237,16 +241,24 @@
     {:tag :unknown :original (pr-str form)}))
 
 (defn malli->fn-signature
-  "Convert a Malli function schema [:=> [:cat a b] out] to FunctionSignature
-   {:inputs [TypeExpr] :output TypeExpr}, or nil if not a function schema."
+  "Convert a Malli function schema to FunctionSignature
+   {:inputs [TypeExpr] :output TypeExpr}, or nil if not a function schema.
+   Handles both single-arity [:=> [:cat a b] out] and multi-arity
+   [:function [:=> ...] [:=> ...]] forms. For multi-arity schemas,
+   returns the arity with the most inputs."
   {:malli/schema [:=> [:cat :any] [:maybe :FunctionSignature]]}
   [form]
-  (when (and (vector? form) (= :=> (first form)))
-    (let [[_ input output] form
-          inputs (if (and (vector? input) (= :cat (first input)))
-                   (mapv malli->type-expr (rest input))
-                   [(malli->type-expr input)])]
-      {:inputs inputs :output (malli->type-expr output)})))
+  (when (vector? form)
+    (case (first form)
+      :=> (let [[_ input output] form
+                inputs (if (and (vector? input) (= :cat (first input)))
+                         (mapv malli->type-expr (rest input))
+                         [(malli->type-expr input)])]
+            {:inputs inputs :output (malli->type-expr output)})
+      :function (let [arities (keep malli->fn-signature (rest form))]
+                  (when (seq arities)
+                    (apply max-key #(count (:inputs %)) arities)))
+      nil)))
 
 ;; -----------------------------------------------------------------------------
 ;; Schema Discovery

@@ -183,6 +183,21 @@
             :output {:tag :primitive :name "string"}}
            (clj-lang/malli->fn-signature [:=> :int :string]))))
 
+  (testing "multi-arity :function schema returns widest arity"
+    (is (= {:inputs [{:tag :primitive :name "string"} {:tag :primitive :name "int"}]
+            :output {:tag :primitive :name "int"}}
+           (clj-lang/malli->fn-signature
+             [:function
+              [:=> [:cat :string] :int]
+              [:=> [:cat :string :int] :int]]))))
+
+  (testing "single-arity :function schema"
+    (is (= {:inputs [{:tag :primitive :name "string"}]
+            :output {:tag :primitive :name "int"}}
+           (clj-lang/malli->fn-signature
+             [:function
+              [:=> [:cat :string] :int]]))))
+
   (testing "returns nil for non-function schemas"
     (is (nil? (clj-lang/malli->fn-signature [:map [:id :string]])))
     (is (nil? (clj-lang/malli->fn-signature :string)))))
@@ -238,3 +253,14 @@
   (testing "optional map entries preserve optionality"
     (let [te (clj-lang/malli->type-expr [:map [:name {:optional true} :string]])]
       (is (= true (:optional (first (:entries te))))))))
+
+;; ---------------------------------------------------------------------------
+;; Analyzer entry points
+
+(deftest analyze-missing-path
+  (testing "analyze fails fast for a missing source path"
+    (let [missing "/tmp/fukan-path-that-should-not-exist"]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"does not exist"
+           (clj-lang/analyze missing))))))
