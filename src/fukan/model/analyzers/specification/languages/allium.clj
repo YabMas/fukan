@@ -71,7 +71,7 @@
   #{"entity" "value" "variant" "rule" "surface" "enum" "config"
     "external" "invariant" "open" "use" "given"})
 
-(def ^:private section-divider-re #"^-{4,}")
+(def ^:private section-divider-re #"^(?:--\s*)?[-=]{4,}")
 
 (defn- extract-module-description
   "Extract the module description from the header comment block.
@@ -104,11 +104,24 @@
         result
         (let [line (nth lines i)]
           (if-let [[_ decl-name] (re-find decl-re line)]
-            ;; Found a declaration — scan backwards for comment block
-            (let [desc (->> (range (dec i) -1 -1)
-                            (map #(str/trim (nth lines %)))
-                            (take-while #(str/starts-with? % "--"))
-                            (remove #(re-find section-divider-re %))
+            ;; Found a declaration — scan backwards for comment block.
+            ;; Skip blank lines and one closing divider (brian style),
+            ;; then take comments until the next divider (opening).
+            (let [prev-lines (->> (range (dec i) -1 -1)
+                                  (map #(str/trim (nth lines %))))
+                  after-skip (loop [ls prev-lines, skipped-div? false]
+                               (cond
+                                 (and (seq ls) (str/blank? (first ls)))
+                                 (recur (rest ls) skipped-div?)
+
+                                 (and (seq ls) (not skipped-div?)
+                                      (re-find section-divider-re (first ls)))
+                                 (recur (rest ls) true)
+
+                                 :else ls))
+                  desc (->> after-skip
+                            (take-while #(and (str/starts-with? % "--")
+                                              (not (re-find section-divider-re %))))
                             reverse
                             (map strip-comment-prefix)
                             (remove str/blank?)
@@ -255,6 +268,58 @@
 ;; ---------------------------------------------------------------------------
 ;; Node construction
 
+(defn- type-ref->type-expr
+  "Convert a parser type-ref AST node to a model TypeExpr.
+   Uses :ref for simple types that could be schema references,
+   :primitive for builtins."
+  [type-ref]
+  (case (:kind type-ref)
+    :simple    (if (contains? builtin-types (:name type-ref))
+                 {:tag :primitive :name (:name type-ref)}
+                 {:tag :ref :name (keyword (:name type-ref))})
+    :qualified {:tag :ref :name (keyword (:ns type-ref) (:name type-ref))}
+    :optional  {:tag :maybe :inner (type-ref->type-expr (:inner type-ref))}
+    :generic   (let [base (:name type-ref)
+                     params (mapv type-ref->type-expr (:params type-ref))]
+                 (case base
+                   "List"  {:tag :vector :element (first params)}
+                   "Set"   {:tag :set :element (first params)}
+                   "Map"   (if (= 2 (count params))
+                             {:tag :map-of :key-type (first params) :value-type (second params)}
+                             {:tag :primitive :name (str base "<" (str/join ", " (map #(:name % "") params)) ">")})
+                   {:tag :primitive :name (str base "<" (str/join ", " (map #(:name % "") params)) ">")}))
+    :union     {:tag :or :variants (mapv type-ref->type-expr (:members type-ref))}
+    {:tag :unknown :original (pr-str type-ref)}))
+
+(defn- allium-field->type-expr
+  "Convert a parsed allium field to a TypeExpr map entry."
+  [field]
+  (when (= :typed (:field-kind field))
+    {:key (:name field)
+     :optional false
+     :type (type-ref->type-expr (:type-ref field))}))
+
+(defn- decl->schema-type-expr
+  "Build a :map TypeExpr from an entity/value declaration's fields."
+  [decl]
+  {:tag :map
+   :entries (->> (:fields decl)
+                 (keep allium-field->type-expr)
+                 vec)})
+
+(defn- provides-entry->signature
+  "Build a FunctionSignature from a parsed provides entry."
+  [entry]
+  (let [inputs (mapv (fn [p]
+                       (if (:type p)
+                         (type-ref->type-expr (:type p))
+                         {:tag :unknown :original (:name p)}))
+                     (:params entry))
+        output (when (:return entry)
+                 (type-ref->type-expr (:return entry)))]
+    (cond-> {:inputs inputs}
+      output (assoc :output output))))
+
 (defn- build-allium-nodes
   "Build nodes from parsed allium files.
    Each file enriches its parent directory's module node with spec data
@@ -286,12 +351,16 @@
                                    surface (assoc :surface surface))}
                           module-desc (assoc :description module-desc))
 
-            ;; Create Function nodes for rule triggers and surface names.
-            ;; Both represent the module's callable interface — the things
-            ;; other modules reference via qualified names. Marked private
-            ;; so they don't clutter the graph alongside implementation
-            ;; functions; they exist as edge endpoints for cross-module
-            ;; spec references.
+            ;; Index provides entries by name — these are the module's public API
+            provides-index (->> surfaces
+                                (mapcat :fields)
+                                (filter #(= :provides-block (:field-kind %)))
+                                (mapcat :entries)
+                                (reduce #(assoc %1 (:name %2) %2) {}))
+
+            ;; Create Function nodes for rule triggers.
+            ;; Triggers that match surface provides entries are public API
+            ;; and get signature/description from the provides entry.
             rules (->> decls (filter #(= :rule (:type %))))
             rule-fn-nodes
             (->> rules
@@ -301,18 +370,23 @@
                                        (when (and (= :when (:clause-type c))
                                                   (= :call (get-in c [:trigger :kind])))
                                          (get-in c [:trigger :name])))
-                                     (:clauses rule))]
+                                     (:clauses rule))
+                               provides-entry (get provides-index trigger-name)]
                            (when trigger-name
                              (let [fn-id (str module-id "/" trigger-name)
-                                   doc (get decl-descs (:name rule))]
-                               [fn-id {:id fn-id
-                                       :kind :function
-                                       :label trigger-name
-                                       :parent module-id
-                                       :children #{}
-                                       :data {:kind :function
-                                              :private? true
-                                              :doc doc}}])))))
+                                   doc (or (:description provides-entry)
+                                           (get decl-descs (:name rule)))
+                                   signature (when provides-entry
+                                               (provides-entry->signature provides-entry))]
+                               [fn-id (cond-> {:id fn-id
+                                               :kind :function
+                                               :label trigger-name
+                                               :parent module-id
+                                               :children #{}
+                                               :data (cond-> {:kind :function
+                                                              :private? (nil? provides-entry)}
+                                                       doc (assoc :doc doc)
+                                                       signature (assoc :signature signature))})])))))
                  (into {}))
 
             ;; Surface names as Function nodes — surfaces are referenced
@@ -330,11 +404,53 @@
                                   :data {:kind :function
                                          :private? true
                                          :doc doc}}])))
+                 (into {}))
+
+            ;; Schema nodes for entity/value declarations — makes domain
+            ;; types visible and inspectable in the graph.
+            typed-decls (->> decls (filter #(#{:entity :value} (:type %))))
+            schema-nodes
+            (->> typed-decls
+                 (map (fn [decl]
+                        (let [schema-id (str module-id "/" (:name decl))
+                              schema-key (keyword (:name decl))
+                              doc (get decl-descs (:name decl))]
+                          [schema-id {:id schema-id
+                                      :kind :schema
+                                      :label (:name decl)
+                                      :parent module-id
+                                      :children #{}
+                                      :data (cond-> {:kind :schema
+                                                     :schema-key schema-key
+                                                     :schema (decl->schema-type-expr decl)}
+                                               doc (assoc :doc doc))}])))
+                 (into {}))
+
+            ;; Schema nodes for enum declarations
+            enum-decls (->> decls (filter #(= :enum (:type %))))
+            enum-nodes
+            (->> enum-decls
+                 (map (fn [decl]
+                        (let [schema-id (str module-id "/" (:name decl))
+                              schema-key (keyword (:name decl))
+                              doc (get decl-descs (:name decl))]
+                          [schema-id {:id schema-id
+                                      :kind :schema
+                                      :label (:name decl)
+                                      :parent module-id
+                                      :children #{}
+                                      :data (cond-> {:kind :schema
+                                                     :schema-key schema-key
+                                                     :schema {:tag :enum
+                                                              :values (:values decl)}}
+                                               doc (assoc :doc doc))}])))
                  (into {}))]
         (-> acc
             (assoc module-id module-node)
             (merge rule-fn-nodes)
-            (merge surface-fn-nodes))))
+            (merge surface-fn-nodes)
+            (merge schema-nodes)
+            (merge enum-nodes))))
     {}
     parsed-files))
 

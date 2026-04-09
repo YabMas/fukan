@@ -28,6 +28,7 @@
 
   declarations = (declaration _)*
   declaration = use-decl / given-block / enum-decl / open-question / config-block /
+                deferred-decl / contract-decl / default-decl /
                 external-entity / external-value / surface-decl / variant-decl /
                 entity-decl / value-decl / rule-decl / invariant-decl
 
@@ -53,6 +54,19 @@
 
   config-block = <'config'> _ <'{'> config-body <'}'>
   config-body = #'[^}]*'
+
+  (* ============ Deferred ============ *)
+
+  deferred-decl = <'deferred'> __ ident <'.'> ident
+
+  (* ============ Contract ============ *)
+
+  contract-decl = <'contract'> __ ident _ <'{'> _ field-list _ <'}'>
+
+  (* ============ Default ============ *)
+
+  default-decl = <'default'> __ ident __ ident _ <'='> _ <'{'> default-body <'}'>
+  default-body = #'[^}]*'
 
   (* ============ Enum ============ *)
 
@@ -96,12 +110,17 @@
   (* ============ Fields ============ *)
 
   field-list = (field-item _ (<','> _)?)*
-  <field-item> = provides-block / related-block / exposes-block / nested-variant / invariant-decl / annotation / when-guard / facing-field / context-field / field-entry
+  <field-item> = provides-block / related-block / exposes-block / contracts-block / nested-variant / invariant-decl / annotation / when-guard / facing-field / context-field / field-entry
 
   (* Exposes block: exposes: followed by dotted identifiers *)
   exposes-block = <'exposes'> _ <':'> _ exposes-entries
   exposes-entries = (dotted-ident _)+
   dotted-ident = #'[A-Za-z_][A-Za-z0-9_.]*'
+
+  (* Contracts block: contracts: followed by demands entries *)
+  contracts-block = <'contracts'> _ <':'> _ contracts-entries
+  contracts-entries = (contracts-entry _)+
+  contracts-entry = <'demands'> __ ident
 
   (* Surface-specific: facing role: Type, context role: Type *)
   facing-field = <'facing'> __ ident _ <':'> _ type-ref
@@ -131,7 +150,7 @@
   provides-entry-name = #'[A-Za-z_][A-Za-z0-9_]*+(?![ \\t]*:)'
   provides-params = <'('> _ provides-param-list? _ <')'>
   provides-param-list = provides-param (_ <','> _ provides-param)*
-  provides-param = ident (_ <':'> _ type-ref)?
+  provides-param = ident <'?'>? (_ <':'> _ type-ref)?
   provides-return = <#'[ \\t]+'> <'->'> <#'[ \\t]+'> type-ref
   provides-entry-comment = <#'[ \\t]+--[ \\t]*'> inline-comment
 
@@ -183,7 +202,7 @@
   trigger-binding = trigger-binding-text
   trigger-binding-text = #'[^\\n{}]+'
   trigger-params = trigger-param (_ <','> _ trigger-param)*
-  trigger-param = ident (_ <':'> _ type-ref)?
+  trigger-param = ident <'?'>? (_ <':'> _ type-ref)?
 
   let-clause = <'let'> __ clause-body _
   requires-clause = <'requires:'> _ clause-body _
@@ -279,6 +298,26 @@
    (fn [body] {:type :config :body (str/trim body)})
 
    :config-body str
+
+   ;; Deferred
+   :deferred-decl
+   (fn [alias name]
+     {:type :deferred :alias alias :name name})
+
+   ;; Contract
+   :contract-decl
+   (fn [name & args]
+     (let [[desc field-groups] (extract-description args)]
+       (cond-> {:type :contract :name name
+                :fields (flatten-field-groups field-groups)}
+         desc (assoc :description desc))))
+
+   ;; Default
+   :default-decl
+   (fn [type-name field-name body]
+     {:type :default :type-name type-name :field-name field-name :body (str/trim body)})
+
+   :default-body str
 
    ;; Given
    :given-block
@@ -467,6 +506,19 @@
      (vec entries))
 
    :dotted-ident str
+
+   ;; Contracts block
+   :contracts-block
+   (fn [entries]
+     {:field-kind :contracts :entries entries})
+
+   :contracts-entries
+   (fn [& entries]
+     (vec entries))
+
+   :contracts-entry
+   (fn [name]
+     {:name name})
 
    ;; Surface-specific fields
    :facing-field
