@@ -468,14 +468,18 @@
   {:malli/schema [:=> [:cat :Model :ProjectionOpts] :Projection]}
   [model {:keys [view-id expanded show-private visible-edge-types perspective]}]
   (let [;; Default to root if no view-id
-        entity-id (or view-id (:id (path/find-root-node model)))
-        expanded (or expanded #{})
-        show-private (or show-private #{})
-        visible-edge-types (or visible-edge-types #{:code-flow :schema-reference})
-        perspective (or perspective :call-graph)
+        entity-id (or view-id (:id (path/find-root-node model)))]
 
-        children-ids (get-children model entity-id)]
+    (if (nil? entity-id)
+      ;; Empty model — no nodes to project
+      {:nodes [] :edges []}
 
-    (if (seq children-ids)
-      (compute-module-view model entity-id expanded show-private visible-edge-types perspective)
-      (compute-leaf-view model entity-id show-private visible-edge-types perspective))))
+      (let [expanded (or expanded #{})
+            show-private (or show-private #{})
+            visible-edge-types (or visible-edge-types #{:code-flow :schema-reference})
+            perspective (or perspective :call-graph)
+            children-ids (get-children model entity-id)]
+
+        (if (seq children-ids)
+          (compute-module-view model entity-id expanded show-private visible-edge-types perspective)
+          (compute-leaf-view model entity-id show-private visible-edge-types perspective))))))
