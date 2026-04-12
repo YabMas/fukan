@@ -1,0 +1,19 @@
+-- HTTP/SSE transport boundary — orchestration between shell and core.
+-- Parses request params, calls core functions (projection + view),
+-- and streams results to connected browser clients.
+
+use "../model/spec.allium" as model
+use "./views/spec.allium" as views
+use "../projection/spec.allium" as projection
+
+fn create_handler() -> Handler
+  -- Create the Ring handler that serves the Fukan application.
+
+guarantee PureDelegation
+  -- Transport never modifies projection or view output.
+  -- It parses request params, calls core functions, and
+  -- streams the results. No domain logic in the transport.
+
+guarantee PerRequestModel
+  -- Each request dereferences the model atom once. All
+  -- projections within a single request see the same snapshot.

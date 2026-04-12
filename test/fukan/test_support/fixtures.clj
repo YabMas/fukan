@@ -4,9 +4,10 @@
   (:require [fukan.model.build :as build]
             ;; Bare requires for defmethod registration side effects
             fukan.model.analyzers.implementation.languages.clojure
-            fukan.model.analyzers.specification.languages.allium))
+            fukan.model.analyzers.specification.languages.allium
+            fukan.model.analyzers.specification.languages.boundary))
 
 (defn build-self-model
   "Build a model from Fukan's own source using both analyzers."
   []
-  (build/build-model "src" #{:clojure :allium}))
+  (build/build-model "src" #{:clojure :allium :boundary}))

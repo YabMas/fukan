@@ -31,13 +31,13 @@
    Options:
      :src       - Path to source directory (default: \"src\")
      :port      - Server port (default: 8080)
-     :analyzers - Set of analyzer keys (required, e.g. #{:clojure :allium})
+     :analyzers - Set of analyzer keys (required, e.g. #{:clojure :allium :boundary})
 
    Examples:
-     (go {:analyzers #{:clojure :allium}})
+     (go {:analyzers #{:clojure :allium :boundary}})
      (go {:src \"/path/to/project/src\" :port 3000 :analyzers #{:clojure}})"
   [{:keys [src port analyzers] :or {src "src" port 8080}}]
-  (assert analyzers ":analyzers is required (e.g. #{:clojure :allium})")
+  (assert analyzers ":analyzers is required (e.g. #{:clojure :allium :boundary})")
   (if (infra-server/running?)
     (println "Server already running on port" (infra-server/get-port))
     (do
@@ -87,7 +87,7 @@
 
 (comment
   ;; Quick start for this project
-  (go {:analyzers #{:clojure :allium}})
+  (go {:analyzers #{:clojure :allium :boundary}})
   (halt)
   (reset)
 

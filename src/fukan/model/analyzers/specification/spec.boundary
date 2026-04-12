@@ -1,0 +1,4 @@
+-- Discover design structure from specification files.
+
+fn analyze(src: FilePath) -> AnalysisResult
+  -- Produce an analysis result from specification files.

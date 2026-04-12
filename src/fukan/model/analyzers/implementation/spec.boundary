@@ -1,0 +1,4 @@
+-- Discover code structure from implementation source files.
+
+fn analyze(src: FilePath) -> AnalysisResult
+  -- Produce an analysis result from implementation source files.

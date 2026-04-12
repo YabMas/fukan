@@ -2,14 +2,14 @@
   "Application entry point and CLI argument parsing.
    Orchestrates the analysis pipeline and starts the web server.
 
-   Usage: clj -M -m fukan.core --src /path/to/src --analyzers clojure,allium [--port 8080]"
+   Usage: clj -M -m fukan.core --src /path/to/src --analyzers clojure,allium,boundary [--port 8080]"
   (:require [clojure.string :as str]
             [fukan.infra.model :as infra-model]
             [fukan.infra.server :as infra-server]))
 
 (defn- parse-analyzers
   "Parse a comma-separated analyzer string into a set of keywords.
-   e.g. \"clojure,allium\" -> #{:clojure :allium}"
+   e.g. \"clojure,allium,boundary\" -> #{:clojure :allium}"
   [s]
   (->> (str/split s #",")
        (map (comp keyword str/trim))
@@ -37,7 +37,7 @@
    Arguments:
      --src PATH              Path to source directory (required)
      --port PORT             Server port (default: 8080)
-     --analyzers KEY,KEY,... Comma-separated analyzer keys (required, e.g. clojure,allium)"
+     --analyzers KEY,KEY,... Comma-separated analyzer keys (required, e.g. clojure,allium,boundary)"
   [& args]
   (let [{:keys [src port analyzers]} (parse-args args)]
 
@@ -45,13 +45,13 @@
     (when-not src
       (binding [*out* *err*]
         (println "Error: --src argument is required")
-        (println "Usage: clj -M -m fukan.core --src /path/to/src --analyzers clojure,allium [--port 8080]"))
+        (println "Usage: clj -M -m fukan.core --src /path/to/src --analyzers clojure,allium,boundary [--port 8080]"))
       (System/exit 1))
 
     (when-not analyzers
       (binding [*out* *err*]
         (println "Error: --analyzers argument is required")
-        (println "Usage: clj -M -m fukan.core --src /path/to/src --analyzers clojure,allium [--port 8080]"))
+        (println "Usage: clj -M -m fukan.core --src /path/to/src --analyzers clojure,allium,boundary [--port 8080]"))
       (System/exit 1))
 
     (infra-model/load-model src analyzers)

@@ -13,17 +13,8 @@ use "../model/spec.allium" as model
 use "../projection/spec.allium" as projection
 
 ------------------------------------------------------------
--- External Entities: Boundaries
+-- External Entities
 ------------------------------------------------------------
-
--- Boundary: HTTP/SSE transport.
--- Orchestrates core functions (projection + view) and streams
--- results to connected browser clients.
-
-surface WebHandler "HTTP/SSE transport layer for browser clients." {
-    provides:
-        create_handler() -> Handler -- Create the Ring handler that serves the Fukan application.
-}
 
 external entity ViewTransport {
     -- Contract: two endpoint types composing projection → view.
@@ -60,15 +51,6 @@ external entity ViewTransport {
             -- Streams: patch-elements(sidebar).
             --
             -- Used by: GraphViewer SelectNode events (single click on graph node).
-
-    @guarantee PureDelegation
-        -- Transport never modifies projection or view output.
-        -- It parses request params, calls core functions, and
-        -- streams the results. No domain logic in the transport.
-
-    @guarantee PerRequestModel
-        -- Each request dereferences the model atom once. All
-        -- projections within a single request see the same snapshot.
 
     -- Failure modes
     failures:

@@ -8,15 +8,6 @@
 use "./pipeline.allium" as pipeline
 
 ------------------------------------------------------------
--- Surface
-------------------------------------------------------------
-
-surface ImplementationAnalysis "Discover code structure from implementation source files." {
-    provides:
-        analyze(src: FilePath) -> AnalysisResult -- Produce an analysis result from implementation source files.
-}
-
-------------------------------------------------------------
 -- Boundary
 ------------------------------------------------------------
 

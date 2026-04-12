@@ -116,17 +116,6 @@ external entity SpecificationAnalyzer {
 }
 
 ------------------------------------------------------------
--- Surface
-------------------------------------------------------------
-
-surface ModelBuild "Model construction and boundary contract compliance." {
-    provides:
-        build_model(src: FilePath, analyzers: Set<AnalyzerKey>) -> Model -- Build complete model from a source path and analyzer keys.
-        check_contracts(model: Model) -> LintReport -- Check all cross-module edges against declared boundaries.
-        format_report(report: LintReport) -> String -- Render a lint report as a human-readable string.
-}
-
-------------------------------------------------------------
 -- Rules
 ------------------------------------------------------------
 

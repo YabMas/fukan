@@ -499,13 +499,24 @@
   "Merge two nodes with the same ID. Deep-merges :data maps for modules
    so that spec data (boundary, description) enriches impl data (doc)
    rather than overwriting it. Non-module nodes or nodes with different
-   kinds use simple last-wins merge."
+   kinds use simple last-wins merge.
+
+   Description priority: a node with :surface data (from a boundary or
+   spec file) has the authoritative module description. Its :description
+   takes precedence over descriptions from other sources."
   [a b]
   (if (and (= :module (:kind a)) (= :module (:kind b)))
-    (-> (merge a b)
-        (assoc :data (merge (:data a) (:data b)))
-        (assoc :parent (or (:parent b) (:parent a)))
-        (update :children (fn [c] (into (or (:children a) #{}) (or c #{})))))
+    (let [merged-data (merge (:data a) (:data b))
+          ;; Prefer description from the node that has surface data
+          desc (cond
+                 (get-in b [:data :surface]) (:description b)
+                 (get-in a [:data :surface]) (:description a)
+                 :else (or (:description b) (:description a)))]
+      (-> (merge a b)
+          (assoc :data merged-data)
+          (assoc :parent (or (:parent b) (:parent a)))
+          (update :children (fn [c] (into (or (:children a) #{}) (or c #{}))))
+          (cond-> desc (assoc :description desc))))
     b))
 
 (defn- merge-node-maps

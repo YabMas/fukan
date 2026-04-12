@@ -6,7 +6,8 @@
             [fukan.model.build :as build]
             ;; Bare requires for defmethod registration side effects
             fukan.model.analyzers.implementation.languages.clojure
-            fukan.model.analyzers.specification.languages.allium))
+            fukan.model.analyzers.specification.languages.allium
+            fukan.model.analyzers.specification.languages.boundary))
 
 (defonce ^:private state (atom {:model nil :src nil :analyzers nil}))
 
