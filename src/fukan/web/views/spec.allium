@@ -2,8 +2,8 @@
 -- views.allium
 --
 -- Scope: View and interaction layer — rendering and user interaction semantics
--- Includes: Interaction model, rendering pipeline, sidebar structure,
---           graph viewer component boundary, visual indicators
+-- Includes: Interaction model, rendering invariants, sidebar structure,
+--           graph viewer component surface, visual indicators
 -- Excludes:
 --   - Projection computation (see projection.allium)
 --   - Model construction (see model.allium)
@@ -122,17 +122,20 @@ surface GraphViewer {
             when graph_data.nodes.find(n => n.id = module_id).kind = "module"
             -- Right click on a module. Toggles expanded state.
             -- Component updates its own ViewState before emitting.
+            -- Server re-projects with the updated expanded set.
 
         TogglePrivateVisibility(module_id: String)
             when module_id in view_state.expanded
             -- Shift+right click on an expanded module.
             -- Toggles show_private for that module.
+            -- Server re-projects with the updated show_private set.
 
         SelectEdgeMode(edge_type: String)
             -- Edge mode selector click. Single-select: switches to the
             -- clicked mode, replacing the previous one.
             -- Updates visible_edge_types in ViewState to contain only
-            -- the selected type.
+            -- the selected type. Server re-projects with the filtered
+            -- node set.
 
         SelectEdge(source: String, target: String, edge_type: String)
             -- Single click on an edge. Computes edge ID from
@@ -170,6 +173,20 @@ surface GraphViewer {
         --   root node changed → navigate (layout from scratch)
         --   root unchanged → expand/collapse (animated transition)
         -- Callers do not control render mode.
+
+    @guarantee AnimatedTransition
+        -- Expand/collapse uses incremental diff rendering
+        -- (old positions → dagre → animate to new positions) for
+        -- spatial continuity.
+
+    @guarantee NodeVisibility
+        -- The active edge mode controls which leaf node kinds are
+        -- visible in the graph:
+        --   code_flow:       functions visible, schemas hidden
+        --   schema_reference: schemas visible, functions hidden
+        -- Module nodes are always visible regardless of mode.
+        -- The sidebar is unaffected — it shows full details for any
+        -- selected entity regardless of the active mode.
 }
 
 ------------------------------------------------------------
@@ -182,12 +199,8 @@ given {
 }
 
 ------------------------------------------------------------
--- Rules
+-- Interaction Rules
 ------------------------------------------------------------
-
--- ============================================================
--- Interaction Model
--- ============================================================
 --
 -- The UI distinguishes selection (highlighting within current view)
 -- from navigation (changing the viewed module).
@@ -253,38 +266,6 @@ rule NavigateToNode {
         -- GraphViewer internally resets expanded and show_private
 }
 
-rule ExpandToggle {
-    -- Right-click on module: toggle expand/collapse.
-    --
-    -- The GraphViewer updates its own ViewState (expanded set)
-    -- before emitting the event. The event includes the updated
-    -- ViewState so the server computes the new projection with
-    -- the correct expanded set.
-    --
-    -- AnimatedTransition: the component uses incremental diff
-    --   rendering (old positions → dagre → animate to new positions)
-    --   for expand/collapse, giving spatial continuity.
-
-    when: viewer.ExpandToggle(module_id)
-
-    ensures:
-        -- Server re-projects with updated expanded set from event
-        -- Graph data signal updates, component renders incrementally
-}
-
-rule ShiftRightClickModule {
-    -- Shift+right-click: toggle private visibility on an expanded module.
-    --
-    -- Only applies to expandable modules that are already expanded
-    -- and have private children. No-op otherwise.
-
-    when: viewer.TogglePrivateVisibility(module_id)
-
-    ensures:
-        -- Server re-projects with updated show_private from event
-        -- Graph data signal updates, component renders incrementally
-}
-
 rule NavigateToAncestor {
     -- Breadcrumb click: navigate to an ancestor module.
     -- The breadcrumb shows the path from smart-root to the viewed module.
@@ -297,67 +278,37 @@ rule NavigateToAncestor {
         nav.selected_id = null
 }
 
-rule SelectEdgeMode {
-    -- Switch the active edge mode (single-select).
-    --
-    -- The GraphViewer updates its own ViewState before emitting.
-    -- Clicking the already-active mode is a no-op.
-    --
-    -- NodeVisibility: the active mode also controls which leaf node
-    --   kinds are visible in the graph:
-    --     code_flow:       functions visible, schemas hidden
-    --     type_reference:  schemas visible, functions hidden
-    --   Module nodes are always visible regardless of mode.
-    --   The sidebar is unaffected — it shows full details for any
-    --   selected entity regardless of the active mode.
+------------------------------------------------------------
+-- Rendering Invariants
+------------------------------------------------------------
+--
+-- Views are pure renderers. The callable shapes
+-- (render_graph, render_sidebar_html, render_breadcrumb,
+-- render_app_shell) live in views/spec.boundary. The
+-- load-bearing content is the rendering contract below.
 
-    when: viewer.SelectEdgeMode(edge_type)
-
-    ensures:
-        -- Server re-projects with visible_edge_types = {edge_type}
-        -- Graph data signal updates with filtered node set
+invariant RenderingPurity {
+    -- Views receive pre-computed projection data and editor state,
+    -- produce HTML/JSON output, and never fetch data or compute
+    -- projections.
 }
 
--- ============================================================
--- Rendering Pipeline
--- ============================================================
---
--- RenderingPurity: views are pure renderers. They receive pre-computed
---   projection data and editor state, produce HTML/JSON output, and
---   never fetch data or compute projections.
---
--- SignalDelivery: graph data is delivered to the component via a
---   Datastar signal (patch-signals), not via script injection
---   (execute-script). The component observes the signal through
---   a data-attr binding and reacts to changes.
---
--- AtomicUpdate: each SSE response delivers breadcrumb HTML,
---   sidebar HTML, and graph data signal as a single stream.
---   All three update together — no partial states.
-
-rule RenderGraph {
-    -- Transform projection data into Cytoscape output.
-    -- The result is delivered as a signal, not executed as a script.
-
-    when: RenderGraph(graph_projection: projection/Projection, selected_id: String?)
-
-    let effective_selected = selected_id
-        ?? nav.view_id
-        ?? graph_projection.nodes.find(n => n.parent = null).id
-
-    ensures: CytoscapeGraph.created(
-        nodes: graph_projection.nodes with { selected: id = effective_selected },
-        edges: graph_projection.edges,
-        selected_id: effective_selected,
-        highlighted_edges: compute_highlighted(graph_projection.edges, effective_selected)
-    )
-
+invariant AtomicUpdate {
+    -- Each SSE response delivers breadcrumb HTML, sidebar HTML, and
+    -- graph data signal as a single stream. All three update
+    -- together — no partial states.
 }
 
-rule RenderSidebar {
-    -- Render entity details for the sidebar panel.
-    --
-    -- SectionOrder (non-edge entities):
+invariant GraphSelectionDefault {
+    -- When render_graph receives no explicit selected_id, the
+    -- effective selection falls back first to nav.view_id, then to
+    -- the first root node in the projection. Selected node flag is
+    -- propagated per-node; highlighted_edges is computed from the
+    -- effective selection.
+}
+
+invariant SidebarSectionOrder {
+    -- Non-edge sidebar sections appear in this order:
     --   1. Label — entity name + kind badge
     --   2. Defined-in — clickable parent module link (schemas only)
     --   3. Description — from doc, contract, or spec description
@@ -369,50 +320,42 @@ rule RenderSidebar {
     --      - fn_inline (functions): Inputs, Outputs
     --      - schema_def (schemas): schema detail view with registry
     --      - name_list (interfaces): plain function name list
-    --
-    -- ClickableSchemaRefs: schema type references in function
-    --   signatures and schema definitions are clickable. Clicking
-    --   navigates to the schema's node via full app navigation
-    --   (graph + breadcrumb + sidebar update).
-    --
-    -- EdgeRenderer: dispatched by edge_type.
+}
+
+invariant ClickableSchemaRefs {
+    -- Schema type references in function signatures and schema
+    -- definitions are clickable. Clicking navigates to the schema's
+    -- node via full app navigation (graph + breadcrumb + sidebar).
+}
+
+invariant EdgeRendererSections {
+    -- Edge detail renders by edge_type:
     --   code_flow: label, then conditionally:
     --     "Functions Called" section when called_fns present,
     --     "Dispatched Functions" section when dispatched_fns present.
     --     A single edge may have both sections.
     --   schema_reference: label + "Schema References" list.
-    --
-    -- EmptyState: when no entity is selected, show placeholder text.
-
-    when: RenderSidebar(detail: projection/EntityDetail | projection/EdgeDetail | null)
-
-    ensures:
-        if detail = null:
-            render_empty_sidebar()
-        else if detail.kind = edge:
-            render_edge_detail(detail)       -- projection/EdgeDetail
-        else:
-            render_entity_detail(detail)     -- projection/EntityDetail
-
 }
 
-rule RenderBreadcrumb {
-    -- Render the navigation breadcrumb from root to viewed module.
-    --
-    -- ShortLabels: namespace names show only the last dotted segment.
-    -- CurrentItem: the last item is non-clickable and styled as current.
-    -- ClickableItems: all non-last items dispatch navigation events.
-
-    when: RenderBreadcrumb(path: List<projection/PathSegment>)
-
-    ensures:
-        -- HTML with separator-delimited path items
-        -- Non-last items are clickable, last item shows as current
+invariant SidebarEmptyState {
+    -- When no entity is selected, the sidebar shows placeholder text.
 }
 
--- ============================================================
+invariant BreadcrumbShortLabels {
+    -- Namespace names show only the last dotted segment.
+}
+
+invariant BreadcrumbCurrentItem {
+    -- The last breadcrumb item is non-clickable and styled as current.
+}
+
+invariant BreadcrumbClickableItems {
+    -- All non-last breadcrumb items dispatch navigation events.
+}
+
+------------------------------------------------------------
 -- Visual Indicators
--- ============================================================
+------------------------------------------------------------
 --
 -- ExpandIndicator: small icon in the top-right corner of expandable
 --   module nodes. Signals current expand state:

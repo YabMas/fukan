@@ -2,13 +2,13 @@
 -- specification/spec.allium
 --
 -- Scope: Specification language analyzers
--- Includes: SpecificationAnalyzer boundary reference
+-- Includes: Surface fulfilling the SourceAnalyzer contract
 -- Excludes: Analyzer internals (parsing, AST transformation)
 
-use "./pipeline.allium" as pipeline
+use "../../pipeline.allium" as pipeline
 
 ------------------------------------------------------------
--- Boundary
+-- Surface
 ------------------------------------------------------------
 
 -- Specification analyzers discover design structure:
@@ -23,6 +23,18 @@ use "./pipeline.allium" as pipeline
 -- Leaf nodes (functions from provides operations) are
 -- materialized by the build pipeline during surface
 -- materialization.
---
--- See pipeline.allium SpecificationAnalyzer for the full
--- boundary contract, failure modes, and guarantees.
+
+surface SpecificationAnalysis {
+    facing caller: BuildPipeline
+
+    contracts: fulfils pipeline/SourceAnalyzer
+
+    provides:
+        analyze(src: FilePath) -> pipeline/AnalysisResult
+            -- Discover design structure from specification files.
+
+    @guarantee ModuleLevelOnly
+        -- Fulfillers produce only module-level nodes. Declaration
+        -- children (entities, values, rules) are not represented as
+        -- graph nodes — they exist as data on the module.
+}

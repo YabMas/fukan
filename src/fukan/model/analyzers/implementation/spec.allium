@@ -2,13 +2,13 @@
 -- implementation/spec.allium
 --
 -- Scope: Implementation language analyzers
--- Includes: ImplementationAnalyzer boundary reference
+-- Includes: Surface fulfilling the SourceAnalyzer contract
 -- Excludes: Analyzer internals (language-specific parsing, runtime reflection)
 
-use "./pipeline.allium" as pipeline
+use "../../pipeline.allium" as pipeline
 
 ------------------------------------------------------------
--- Boundary
+-- Surface
 ------------------------------------------------------------
 
 -- Implementation analyzers discover code structure:
@@ -17,7 +17,15 @@ use "./pipeline.allium" as pipeline
 --
 -- The Clojure analyzer is the reference implementation.
 -- It uses clj-kondo for static analysis, JVM runtime for
--- schema metadata and function signatures.
---
--- See pipeline.allium ImplementationAnalyzer for the full
--- boundary contract, failure modes, and guarantees.
+-- schema metadata and function signatures. This means analysis
+-- results depend on runtime state at analysis time.
+
+surface ImplementationAnalysis {
+    facing caller: BuildPipeline
+
+    contracts: fulfils pipeline/SourceAnalyzer
+
+    provides:
+        analyze(src: FilePath) -> pipeline/AnalysisResult
+            -- Discover code structure from implementation source files.
+}

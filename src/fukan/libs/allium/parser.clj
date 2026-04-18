@@ -117,10 +117,12 @@
   exposes-entries = (dotted-ident _)+
   dotted-ident = #'[A-Za-z_][A-Za-z0-9_.]*'
 
-  (* Contracts block: contracts: followed by demands entries *)
+  (* Contracts block: contracts: followed by demands/fulfils entries *)
   contracts-block = <'contracts'> _ <':'> _ contracts-entries
   contracts-entries = (contracts-entry _)+
-  contracts-entry = <'demands'> __ ident
+  contracts-entry = contracts-verb __ contract-ref
+  contracts-verb = 'demands' / 'fulfils'
+  contract-ref = qualified-name / ident
 
   (* Surface-specific: facing role: Type, context role: Type *)
   facing-field = <'facing'> __ ident _ <':'> _ type-ref
@@ -517,8 +519,13 @@
      (vec entries))
 
    :contracts-entry
-   (fn [name]
-     {:name name})
+   (fn [verb contract-ref]
+     {:verb verb :contract contract-ref})
+
+   :contracts-verb str
+
+   :contract-ref
+   (fn [x] (if (map? x) x {:name x}))
 
    ;; Surface-specific fields
    :facing-field

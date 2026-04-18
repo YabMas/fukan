@@ -149,288 +149,34 @@ value EdgeDetail {
 }
 
 ------------------------------------------------------------
--- Entities (Sum Types)
+-- Interface Data (Sum Type)
 ------------------------------------------------------------
 
-entity InterfaceData {
+value InterfaceData {
     -- Public interface of an entity, discriminated by display format.
     -- Each variant carries typed items appropriate to its format.
     type: FnListInterface | FnInlineInterface | SchemaDefInterface | NameListInterface
 }
 
-variant FnListInterface : InterfaceData {
+value FnListInterface {
     -- Boundary functions with optional signatures (modules).
     items: List<model/Function>
 }
 
-variant FnInlineInterface : InterfaceData {
+value FnInlineInterface {
     -- Single function signature (functions).
     items: List<model/FunctionSignature>
 }
 
-variant SchemaDefInterface : InterfaceData {
+value SchemaDefInterface {
     -- Schema form with one-level registry (schemas).
     items: List<model/TypeExpr>
     registry: Map<String, SchemaRegistryEntry>?
 }
 
-variant NameListInterface : InterfaceData {
+value NameListInterface {
     -- Bare names without schemas (interface nodes).
     items: List<String>
-}
-
-------------------------------------------------------------
--- Rules
-------------------------------------------------------------
-
-rule EntityGraph {
-    -- Compute the visible subgraph for an entity.
-    -- Dispatches to module or leaf view based on whether
-    -- the entity has children.
-    --
-    -- PerspectiveControl: perspective determines edge direction
-    --   interpretation. call_graph shows invocation flow; dependency_graph
-    --   flips dispatches edges to show dependency flow. Default: call_graph.
-    --
-    -- EdgeTypeFiltering: visible_edge_types controls which edge kinds
-    --   appear in the projection. When null, defaults to
-    --   {code_flow, schema_reference}. Filtering happens before
-    --   aggregation so layout accounts for the visible edge set.
-    --
-    -- LeafNodeFiltering: the active edge type also determines which
-    --   leaf node kinds are visible in the graph:
-    --     code_flow only:           function nodes visible, schema nodes hidden
-    --     schema_reference only:  schema nodes visible, function nodes hidden
-    --     both:                    all leaf nodes visible
-    --   Module nodes are always visible regardless of edge type selection.
-    --   This filtering applies after visible-set computation but before
-    --   edge aggregation, so edges aggregate correctly to the filtered set.
-    when: EntityGraph(view_id: String?, expanded: Set<String>, show_private: Set<String>, visible_edge_types: Set<EdgeType>?, perspective: Perspective?)
-
-    let entity_id = view_id ?? model.root_nodes.first.id
-    let entity = node_by_id(model, entity_id)      -- black box: map lookup
-    let effective_edge_types = visible_edge_types ?? { code_flow, schema_reference }
-    let effective_perspective = perspective ?? call_graph
-
-    ensures:
-        if entity.children.count > 0:
-            ModuleView(entity_id, expanded, show_private, effective_edge_types, effective_perspective)
-        else:
-            LeafView(entity_id, expanded, show_private, effective_edge_types, effective_perspective)
-}
-
-rule ModuleView {
-    -- Compute visible subgraph when viewing a module.
-    --
-    -- Structural invariants:
-    --
-    -- StrictBoundingBox: ONLY entities inside the viewed module
-    --   appear. External entities are never shown. Edges that would
-    --   cross the bounding box are not rendered. To see external
-    --   relationships, navigate to a common ancestor.
-    --
-    -- DefaultCollapsed: child modules appear as opaque nodes by
-    --   default. Their children are not visible until the user
-    --   explicitly expands them. There is no automatic drill-down.
-    --
-    -- RecursiveExpansion: expanding a module reveals its direct
-    --   children. Among those, child modules are themselves collapsed
-    --   unless independently expanded. Any nesting depth is supported.
-    --
-    -- ViewAsRoot: the viewed module is implicitly expanded — its
-    --   children are always visible. This is what "viewing a module"
-    --   means.
-    --
-    -- NoAncestorDescendantEdges: edges between a module and
-    --   its own descendants are suppressed. The parent-child
-    --   relationship is implicit in nesting.
-    --
-    -- PrivateVisibility: within an expanded module, private
-    --   children are hidden unless the module is also in
-    --   show_private.
-    --
-    -- ModuleEndpoints: aggregated edges may terminate at collapsed
-    --   modules. A collapsed module acts as a summary node for all
-    --   its hidden descendants. Expanding it "breaks apart" edges
-    --   that terminated at it; collapsing merges them back.
-    --
-    -- ConsistentAggregation: expanding then immediately collapsing
-    --   a module produces the same projection as before. The
-    --   mechanism is reversible.
-
-    when: ModuleView(entity_id: String, expanded: Set<String>, show_private: Set<String>, visible_edge_types: Set<EdgeType>, perspective: Perspective)
-
-    let effective_expanded = expanded + {entity_id}
-
-    -- 1. Visible set: descendants of entity_id reachable through
-    --    expanded modules, filtered by private visibility and
-    --    active edge types (LeafNodeFiltering).
-    --
-    --    A node N is visible iff:
-    --      a. Every module ancestor between entity_id (exclusive)
-    --         and N (exclusive) is in effective_expanded
-    --      b. N's immediate parent is in effective_expanded
-    --      c. If N is private, N's parent is in show_private
-    --      d. If N is a leaf: N's kind matches the active edge type
-    --         (functions for code_flow, schemas for schema_reference)
-    --
-    --    Equivalently: walk from entity_id toward N. If you hit
-    --    a collapsed module before reaching N, N is not visible.
-    let visible = compute_visible_set(model, entity_id, effective_expanded, show_private, effective_edge_types)
-    -- black box: recursive descent through expanded modules,
-    -- filtering by private visibility and leaf node kind
-
-    -- 2. Edge computation: each edge type aggregated independently
-    --    to closest visible ancestor, filtered by visible_edge_types.
-    --    Perspective controls direction for dispatches edges:
-    --      call_graph:       dispatch point → handler (canonical)
-    --      dependency_graph:  handler → dispatch point (flipped)
-    --    function_call and schema_reference edges are unaffected by perspective.
-    let edges = for edge_type in visible_edge_types:
-        aggregate_edges(model, visible, edge_type, perspective)    -- black box
-
-    ensures: Projection.created(
-        nodes: view_nodes_for(visible, effective_expanded),
-        edges: edges
-    )
-}
-
-rule LeafView {
-    -- Compute visible subgraph when viewing a leaf entity.
-    -- Shows the entity and all entities it has relationships with,
-    -- in both directions, grouped by parent module then by folder.
-    -- Only edges involving the selected entity are shown.
-    --
-    -- NoBoundingBox: unlike ModuleView, related entities from anywhere
-    --   in the model are shown — there is no spatial constraint.
-
-    when: LeafView(entity_id: String, expanded: Set<String>, show_private: Set<String>, visible_edge_types: Set<EdgeType>, perspective: Perspective)
-
-    let entity = node_by_id(model, entity_id)              -- black box: map lookup
-    let related_ids = related_entity_ids(model, entity_id, visible_edge_types, perspective)  -- black box: ids connected by visible edge kinds
-    -- Only edges whose type is in visible_edge_types contribute to related set.
-    -- function_call + dispatches model edges → code_flow, schema_reference model edges → schema_reference.
-    -- Perspective controls direction for dispatches edges.
-
-    -- Group related entities by parent namespace, then folder
-    let parent_ns_ids = parent_ids(model, related_ids)       -- black box: parent of each
-    let parent_folder_ids = parent_ids(model, parent_ns_ids) -- black box: grandparent of each
-
-    let visible_nodes = build_leaf_view_nodes(model, entity_id, related_ids, parent_ns_ids, parent_folder_ids)  -- black box
-    let visible_edges = edges_involving(model, entity_id, visible_edge_types, perspective)    -- black box: filtered by visible edge types, perspective-aware
-
-    ensures: Projection.created(
-        nodes: visible_nodes,
-        edges: visible_edges
-    )
-}
-
-rule AggregateEdges {
-    -- Sub-rule of ModuleView: compute edges between visible nodes
-    -- for a single projection edge type, perspective-aware.
-    --
-    -- SemanticGrouping: aggregation groups model semantics into
-    --   projection edge types:
-    --     function_call + dispatches → code_flow
-    --     schema_reference            → schema_reference
-    --   Each projection type is aggregated, deduplicated, and
-    --   subsumed independently.
-    --
-    -- PerspectiveAwareDirection: for dispatches edges, direction
-    --   depends on the active perspective:
-    --     call_graph:       from → to (canonical, invocation direction)
-    --     dependency_graph: to → from (flipped, dependency direction)
-    --   function_call and schema_reference edges are unaffected by perspective.
-    --
-    -- ClosestVisibleAncestor: for a node N, walk up the parent
-    --   chain (including N itself) until a node in the visible set
-    --   is found. If N is visible, its CVA is itself. If N is inside
-    --   a collapsed module M, its CVA is M (assuming M is visible).
-    --   If N is outside the view entirely, it has no CVA.
-    --
-    -- PrivateInheritance: when a public node's cross-module
-    --   dependencies are mediated through private nodes, the
-    --   public node inherits those dependencies as synthetic
-    --   edges. The private node itself remains hidden.
-    --   Applies to all edge kinds.
-    --
-    -- ModuleEndpoints: aggregated edges may terminate at collapsed
-    --   modules. A collapsed module acts as a summary node for all
-    --   its hidden descendants. Expanding it "breaks apart" edges
-    --   that terminated at it; collapsing merges them back.
-    --
-    -- Subsumption: a module-level edge is redundant when a visible
-    --   descendant already represents the same connection. Edge A→T
-    --   is subsumed (dropped) if there exists edge D→T where D is a
-    --   strict visible descendant of A. The more specific edge is
-    --   the representative; the less specific one is noise.
-    --
-    when: AggregateEdges(visible_set: Set<String>, edge_type: EdgeType, perspective: Perspective)
-
-    ensures: aggregate_to_visible_ancestors(model.edges, visible_set, edge_type, perspective)  -- black box
-
-    @guidance
-        -- Procedure:
-        --   1. Filter model edges to semantics matching the requested edge_type
-        --      (code_flow ← function_call + dispatches; schema_reference ← schema_reference)
-        --   2. For dispatches edges under dependency_graph perspective, swap from/to
-        --   3. For each edge, map endpoints to closest visible ancestor;
-        --      keep if both exist, are distinct, not ancestor-descendant
-        --   4. Add inherited edges from PrivateInheritance
-        --   5. Deduplicate
-        --   6. Drop subsumed edges
-}
-
-rule EntityDetails {
-    -- Compute normalized sidebar detail for any entity.
-    --
-    -- For nodes: produce EntityDetail with interface, schemas, dataflow,
-    -- and dependency info. Interface type is determined by node kind.
-    --
-    -- For edges: produce EdgeDetail listing the underlying leaf-level
-    -- relationships that aggregate to this visible edge. For code_flow
-    -- edges these are function calls and/or dispatch relationships;
-    -- for schema_reference edges these are schema_reference relationships.
-    --
-    -- Edge IDs encode their endpoints: edge~{from}~{to}~{type}
-
-    when: EntityDetails(entity_id: String)
-
-    ensures:
-        if is_edge_id(entity_id):                            -- black box: checks "edge~" prefix
-            compute_edge_detail(model, entity_id)            -- black box
-        else:
-            compute_node_detail(model, entity_id)            -- black box
-}
-
-rule EntityPath {
-    -- Compute breadcrumb path from root to entity.
-    -- Returns ordered list of PathSegments, root first.
-    -- Namespace labels are shortened to last dotted segment.
-
-    when: EntityPath(entity_id: String?)
-
-    let root = model.root_nodes.first
-
-    ensures:
-        if entity_id = null or entity_id = root.id:
-            path_to_root(model, root)                        -- black box
-        else:
-            path_to_entity(model, root, entity_id)           -- black box
-            -- Walks parent chain from entity_id to root, reverses,
-            -- and maps each node to a PathSegment with short label.
-}
-
-rule FindSchemaNodeId {
-    -- Look up a schema node's ID by its schema key.
-    -- Used by the web layer to navigate from schema references
-    -- in the sidebar to their corresponding graph nodes.
-
-    when: FindSchemaNodeId(schema_key: String)
-
-    ensures: find_node_by_schema_key(model, schema_key)      -- black box
-    -- Finds the node with kind = Schema and matching schema_key,
-    -- returns its id or null if not found.
 }
 
 ------------------------------------------------------------
@@ -452,26 +198,126 @@ value ModelOverview {
     by_kind: Map<String, Integer>   -- node kind label → count
 }
 
-rule Search {
-    -- Case-insensitive substring search on node labels.
-    -- Returns up to `limit` matches ordered by appearance.
-    -- Used by the CLI find command and available to any consumer.
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+--
+-- Projection is pure computation. The callable shapes live in
+-- projection/spec.boundary (navigate, inspect, search, overview).
+-- The load-bearing semantics are the structural promises these
+-- callables must satisfy — captured as invariants below.
 
-    when: Search(pattern: String, limit: Integer)
-
-    ensures: search_nodes(model, pattern, limit)             -- black box
-    -- Filters model.nodes to those whose label contains pattern
-    -- (case-insensitive), takes up to limit results, and maps
-    -- each to a SearchResult.
+invariant PerspectiveControl {
+    -- Perspective determines edge-direction interpretation.
+    -- call_graph shows invocation flow; dependency_graph flips
+    -- dispatches edges to show dependency flow. When omitted,
+    -- navigate defaults to call_graph.
+    --
+    -- For dispatches edges:
+    --   call_graph:       from → to (canonical, invocation direction)
+    --   dependency_graph: to → from (flipped, dependency direction)
+    -- function_call and schema_reference edges are unaffected.
 }
 
-rule Overview {
-    -- Compute model summary statistics.
-    -- Returns total counts and per-kind breakdown.
+invariant EdgeTypeFiltering {
+    -- visible_edge_types controls which edge kinds appear in the
+    -- projection. When omitted, navigate defaults to
+    -- { code_flow, schema_reference }. Filtering happens before
+    -- aggregation so layout accounts for the visible edge set.
+}
 
-    when: Overview()
+invariant LeafNodeFiltering {
+    -- The active edge type also determines which leaf node kinds
+    -- are visible:
+    --   code_flow only:        function nodes visible, schema nodes hidden
+    --   schema_reference only: schema nodes visible, function nodes hidden
+    --   both:                  all leaf nodes visible
+    -- Module nodes are always visible regardless of edge type.
+    -- Filtering applies after visible-set computation but before
+    -- edge aggregation, so edges aggregate correctly to the
+    -- filtered set.
+}
 
-    ensures: compute_overview(model)                         -- black box
-    -- Returns ModelOverview with total_nodes, total_edges,
-    -- and per-kind counts from model.nodes.
+invariant ModuleViewBoundingBox {
+    -- When navigating to a module, ONLY entities inside that module
+    -- appear. External entities are never shown. Edges that would
+    -- cross the bounding box are not rendered. To see external
+    -- relationships, navigate to a common ancestor.
+}
+
+invariant DefaultCollapsed {
+    -- Child modules appear as opaque nodes by default. Their children
+    -- are not visible until the user explicitly expands them. There
+    -- is no automatic drill-down.
+}
+
+invariant RecursiveExpansion {
+    -- Expanding a module reveals its direct children. Among those,
+    -- child modules are themselves collapsed unless independently
+    -- expanded. Any nesting depth is supported.
+}
+
+invariant ViewAsRoot {
+    -- The viewed module is implicitly expanded — its children are
+    -- always visible. This is what "viewing a module" means.
+}
+
+invariant NoAncestorDescendantEdges {
+    -- Edges between a module and its own descendants are suppressed.
+    -- The parent-child relationship is implicit in nesting.
+}
+
+invariant PrivateVisibility {
+    -- Within an expanded module, private children are hidden unless
+    -- the module is also in show_private.
+}
+
+invariant ModuleEndpoints {
+    -- Aggregated edges may terminate at collapsed modules. A
+    -- collapsed module acts as a summary node for all its hidden
+    -- descendants. Expanding it "breaks apart" edges that terminated
+    -- at it; collapsing merges them back.
+}
+
+invariant ConsistentAggregation {
+    -- Expanding then immediately collapsing a module produces the
+    -- same projection as before. The mechanism is reversible.
+}
+
+invariant LeafViewNoBoundingBox {
+    -- When navigating to a leaf entity, related entities from
+    -- anywhere in the model are shown — there is no spatial
+    -- constraint. Only edges involving the selected entity appear.
+}
+
+invariant SemanticGrouping {
+    -- Edge aggregation groups model semantics into projection edge
+    -- types:
+    --   function_call + dispatches → code_flow
+    --   schema_reference           → schema_reference
+    -- Each projection type is aggregated, deduplicated, and
+    -- subsumed independently.
+}
+
+invariant ClosestVisibleAncestor {
+    -- For a node N, walk up the parent chain (including N itself)
+    -- until a node in the visible set is found. If N is visible, its
+    -- CVA is itself. If N is inside a collapsed module M, its CVA is
+    -- M (assuming M is visible). If N is outside the view entirely,
+    -- it has no CVA.
+}
+
+invariant PrivateInheritance {
+    -- When a public node's cross-module dependencies are mediated
+    -- through private nodes, the public node inherits those
+    -- dependencies as synthetic edges. The private node itself
+    -- remains hidden. Applies to all edge kinds.
+}
+
+invariant Subsumption {
+    -- A module-level edge is redundant when a visible descendant
+    -- already represents the same connection. Edge A→T is subsumed
+    -- (dropped) if there exists edge D→T where D is a strict visible
+    -- descendant of A. The more specific edge is the representative;
+    -- the less specific one is noise.
 }

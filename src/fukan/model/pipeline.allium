@@ -3,8 +3,8 @@
 --
 -- Scope: Model build pipeline — how a Model is constructed from
 --   source analysis, and how it is checked for contract compliance
--- Includes: AnalysisResult shape, source analyzers, build rule,
---   contract linting
+-- Includes: AnalysisResult shape, SourceAnalyzer contract,
+--   contract compliance invariant
 -- Excludes:
 --   - The Model itself (see model/spec.allium)
 --   - Language-specific analyzer internals (see analyzers/)
@@ -20,13 +20,14 @@ value AnalysisResult {
     -- The language-agnostic output from each source analyzer.
     -- Each language analyzer (Clojure, Allium, future languages)
     -- independently produces an AnalysisResult from the same source path.
-    -- Results are merged additively before BuildModel runs.
+    -- Results are merged additively before the build step runs.
     --
     -- Implementation analyzers discover code structure: modules,
     -- symbols, schemas, dependencies.
     -- Specification analyzers discover design structure: entities,
     -- surfaces, fields, typed relationships.
-    -- Both produce the same shape; the pipeline defines the contract.
+    -- Both produce the same shape; the SourceAnalyzer contract
+    -- defines the obligation.
 
     source_files: List<String>
     nodes: Map<String, model/Node>
@@ -57,117 +58,52 @@ value LintStats {
 }
 
 ------------------------------------------------------------
--- External Entities
+-- Contracts
 ------------------------------------------------------------
 
--- Boundary: language-specific source analysis.
--- Produces AnalysisResults consumed by BuildModel.
--- Two categories:
---   Implementation: discovers code structure (scopes, symbols, dependencies).
---     Shells out to external tools and does runtime reflection.
---   Specification: discovers design structure (descriptions, boundaries,
---     type relationships). Produces module-level nodes only; leaf nodes
---     materialized by build pipeline.
+contract SourceAnalyzer {
+    -- Polymorphic role: any module that discovers structure from a
+    -- source path by producing a language-agnostic AnalysisResult.
+    --
+    -- Fulfilled independently by implementation analyzers (code
+    -- structure — scopes, symbols, dependencies) and specification
+    -- analyzers (design structure — entities, surfaces, fields).
+    -- Results are merged additively before the build step runs.
 
-external entity ImplementationAnalyzer {
-    -- Contract
-    analyzes: SourcePath -> AnalysisResult
+    analyzes: (src: SourcePath) -> AnalysisResult
         -- SourcePath is a filesystem directory path.
-        -- Each analyzer produces an independent AnalysisResult from the
-        -- same source path. Results are merged additively before
-        -- BuildModel consumes them.
-        --
-        -- Implementation analyzers may read runtime state during analysis.
-        -- The Clojure analyzer reads loaded JVM namespaces for schema
-        -- metadata and function signatures. This means analysis results
-        -- depend on runtime state at analysis time.
+        -- Each fulfiller produces an independent AnalysisResult from
+        -- the same source path. Fulfillers may read runtime state
+        -- during analysis (e.g. loaded JVM namespaces).
 
-    -- Failure modes
-    failures:
-        tool_unavailable    -- analyzer binary not found or not runnable
-        analysis_error      -- analyzer ran but returned non-zero exit
-        parse_failure       -- individual file failed to parse (non-fatal)
-
-    -- Guarantees
-    guarantee: parse_failure_isolation
+    @invariant ParseFailureIsolation
         -- A single file's parse failure does not prevent analysis of
-        -- other files. Failed files are silently excluded.
-}
-
-external entity SpecificationAnalyzer {
-    -- Contract
-    analyzes: SourcePath -> AnalysisResult
-        -- Discovers design structure from specification files.
-        -- Produces module-level nodes only; leaf nodes (functions from
-        -- provides operations) are materialized by the build pipeline.
-
-    -- Failure modes
-    failures:
-        parse_failure       -- individual file failed to parse (non-fatal)
-
-    -- Guarantees
-    guarantee: parse_failure_isolation
-        -- A single file's parse failure does not prevent analysis of
-        -- other files. Failed files are silently excluded.
-    guarantee: module_level_only
-        -- Specification analyzers produce only module-level nodes.
-        -- Declaration children (entities, values, rules) are not
-        -- represented as graph nodes — they exist as data on the module.
+        -- other files. Failed files are silently excluded from the
+        -- returned AnalysisResult.
 }
 
 ------------------------------------------------------------
--- Rules
+-- Invariants
 ------------------------------------------------------------
 
-rule CheckContracts {
-    -- Pure query: Model -> LintReport.
-    -- Checks that every cross-module function call targets a function
-    -- declared in the target module's boundary.
+invariant ContractCompliance {
+    -- Every cross-module function call must target a function
+    -- declared in the callee's direct-parent module boundary.
     --
-    -- Module ownership: each function's module is its direct parent node.
-    -- A call is cross-module when the caller's parent differs from the
-    -- callee's parent. Only the callee's direct parent boundary is
-    -- checked — ancestor boundaries are not consulted.
+    -- Module ownership: each function's module is its direct parent
+    -- node. A call is cross-module when the caller's parent differs
+    -- from the callee's parent. Only the callee's direct-parent
+    -- boundary is checked — ancestor boundaries are not consulted.
     --
-    -- Boundary matching uses BoundaryFn.id to match against the called
-    -- function's NodeId. A module's boundary is enforceable only when
-    -- at least one BoundaryFn has a non-nil id. Modules where no
-    -- boundary function has an id are not subject to contract checking.
+    -- Boundary matching uses BoundaryFn.id to match against the
+    -- called function's NodeId. A module's boundary is enforceable
+    -- only when at least one BoundaryFn has a non-nil id. Modules
+    -- where no boundary function has an id are not subject to
+    -- contract checking.
 
-    when: CheckContracts(model: model/Model)
-
-    let fn_edges = model.edges where kind = function_call
-        and to.kind = Function
-    let cross_module = fn_edges where from.parent != to.parent
-    let boundary_ids = to.parent.boundary.functions.id where id != null
-    let violations = cross_module where
-        boundary_ids.count > 0
-        and to not in boundary_ids
-
-    ensures: LintReport.created(
-        violations: violations,
-        stats: LintStats.created(
-            total_edges: model.edges.count,
-            cross_module_edges: cross_module.count,
-            violations: violations.count
-        )
-    )
-}
-
-rule BuildModel {
-    -- Pure transformation: merged AnalysisResults -> immutable Model.
-    --
-    -- Results from specification and implementation analyzers
-    -- are merged additively before this rule fires. Spec analyzers
-    -- produce nodes with descriptions and surface declarations.
-    -- Impl analyzers produce nodes with code structure, schemas,
-    -- and dependencies.
-
-    when: BuildModel(results: List<AnalysisResult>)
-
-    ensures: model/Model.created(
-        nodes: build_node_hierarchy(results),   -- black box
-        edges: derive_dependencies(results)     -- black box
-    )
-
+    for e in Model.edges where e.kind = function_call
+            and e.to.kind = Function
+            and e.from.parent != e.to.parent:
+        let boundary_ids = e.to.parent.boundary.functions.id where id != null
+        boundary_ids.count = 0 or e.to in boundary_ids
 }

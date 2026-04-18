@@ -2,33 +2,37 @@
 -- web.allium
 --
 -- Scope: HTTP/SSE transport boundary — orchestration between shell and core
--- Includes: Request handling, SSE streaming, composition guarantees
+-- Includes: Browser-facing SSE surface (endpoint contracts, delivery guarantees)
 -- Excludes:
 --   - Projection computation (see projection.allium)
 --   - View rendering (see views.allium)
 --   - Model construction and lifecycle (see model.allium)
+--   - Handler factory signature (see spec.boundary)
 
 use "./views/spec.allium" as views
 use "../model/spec.allium" as model
 use "../projection/spec.allium" as projection
 
 ------------------------------------------------------------
--- External Entities
+-- Surface
 ------------------------------------------------------------
 
-external entity ViewTransport {
-    -- Contract: two endpoint types composing projection → view.
-    -- Both deliver results through the same SSE mechanism:
+surface ViewTransport {
+    -- Endpoint-level contract between the browser and the handler.
+    -- Endpoints are dispatched by the Ring handler, not distinct
+    -- module callables — they sit at the party-facing layer, above
+    -- the handler factory in spec.boundary.
+    --
+    -- Both endpoints deliver results through the same SSE mechanism:
     --   patch-elements for HTML (breadcrumb, sidebar)
     --   patch-signals for data (graph)
-    --
-    -- SignalDelivery: graph data is sent via patch-signals, not
-    --   execute-script. This pushes data into a Datastar signal
-    --   that the GraphViewer component observes reactively.
-    --   Eliminates the failure mode where string-interpolated
-    --   JSON in a <script> tag breaks silently.
-    handles:
-        full_navigation(model, request) -> stream
+
+    facing client: Browser
+
+    context sse: ServerSentEvents
+
+    provides:
+        full_navigation(request)
             -- Primary endpoint. Computes graph projection, path, details.
             -- Renders breadcrumb HTML, sidebar HTML, graph CytoscapeGraph.
             -- Streams: patch-elements(breadcrumb), patch-elements(sidebar),
@@ -44,7 +48,7 @@ external entity ViewTransport {
             -- Used by: sidebar clicks, breadcrumb clicks, schema ref clicks,
             --   graph navigation events, initial page load, back/forward.
 
-        sidebar_update(model, request) -> stream
+        sidebar_update(request)
             -- Lightweight endpoint for graph-click selection.
             -- Recomputes sidebar only for a new selection.
             -- Does not update graph or breadcrumb.
@@ -52,9 +56,15 @@ external entity ViewTransport {
             --
             -- Used by: GraphViewer SelectNode events (single click on graph node).
 
-    -- Failure modes
-    failures:
-        entity_not_found        -- requested node/edge ID not in model
-        client_disconnected     -- SSE stream closed by client
+    @guarantee SignalDelivery
+        -- Graph data is sent via patch-signals, not execute-script.
+        -- This pushes data into a Datastar signal that the GraphViewer
+        -- component observes reactively. Eliminates the failure mode
+        -- where string-interpolated JSON in a <script> tag breaks
+        -- silently.
 
+    @guarantee FailureModes
+        -- Endpoints surface two failure modes to the client:
+        --   entity_not_found    — requested node/edge ID not in model
+        --   client_disconnected — SSE stream closed by client
 }

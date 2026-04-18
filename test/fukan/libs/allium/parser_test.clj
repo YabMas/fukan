@@ -382,10 +382,8 @@
         (is (= 1 (:use types)))
         (is (= 1 (:given types)))
         (is (= 2 (:enum types)))              ;; Perspective, EdgeType
-        (is (= 12 (:value types)))
-        (is (= 1 (:entity types)))
-        (is (= 4 (:variant types)))
-        (is (= 9 (:rule types)))))))
+        (is (= 17 (:value types)))            ;; including InterfaceData + 4 variants as values
+        (is (= 16 (:invariant types)))))))    ;; projection semantics as top-level invariants
 
 (deftest views-allium-integration-test
   (testing "views.allium parses completely"
@@ -394,5 +392,4 @@
       (let [types (frequencies (map :type (:declarations result)))]
         (is (= 1 (:use types)))
         (is (= 1 (:given types)))
-        (is (= 4 (:value types)))
-        (is (= 13 (:rule types)))))))
+        (is (= 4 (:value types)))))))
