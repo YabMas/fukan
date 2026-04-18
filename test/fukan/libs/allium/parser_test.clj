@@ -329,21 +329,33 @@
               (str "missing :name in " f " for " (:type d)))))))
 
   (testing "every field has :name and :field-kind"
-    (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/projection/spec.allium"
-               "src/fukan/web/views/spec.allium"]]
-      (let [result (parser/parse-file f)]
-        (doseq [d (:declarations result)
-                :when (:fields d)
-                field (:fields d)]
-          (if (= :variant (:field-kind field))
-            ;; Nested variants use :variant-name instead of :name
-            (is (string? (:variant-name field))
-                (str "missing :variant-name in nested variant: " (pr-str field)))
-            (is (string? (:name field))
-                (str "missing :name in field: " (pr-str field))))
-          (is (keyword? (:field-kind field))
-              (str "missing :field-kind in field: " (pr-str field)))))))
+    ;; Block-shaped fields are containers — they carry :entries / :body /
+    ;; :condition rather than a top-level :name. Only the named-field
+    ;; variants are expected to have :name.
+    (let [block-kinds #{:provides-block :exposes :contracts
+                        :when-guard :related}]
+      (doseq [f ["src/fukan/model/spec.allium"
+                 "src/fukan/projection/spec.allium"
+                 "src/fukan/web/views/spec.allium"]]
+        (let [result (parser/parse-file f)]
+          (doseq [d (:declarations result)
+                  :when (:fields d)
+                  field (:fields d)]
+            (cond
+              (= :variant (:field-kind field))
+              ;; Nested variants use :variant-name instead of :name
+              (is (string? (:variant-name field))
+                  (str "missing :variant-name in nested variant: " (pr-str field)))
+
+              (contains? block-kinds (:field-kind field))
+              ;; Block fields don't carry :name
+              nil
+
+              :else
+              (is (string? (:name field))
+                  (str "missing :name in field: " (pr-str field))))
+            (is (keyword? (:field-kind field))
+                (str "missing :field-kind in field: " (pr-str field))))))))
 
   (testing "every type-ref has :kind"
     (doseq [f ["src/fukan/model/spec.allium"
@@ -392,4 +404,9 @@
       (let [types (frequencies (map :type (:declarations result)))]
         (is (= 1 (:use types)))
         (is (= 1 (:given types)))
-        (is (= 4 (:value types)))))))
+        ;; ViewState, NavigationState, CytoscapeGraph, CytoscapeNode, CytoscapeEdge
+        (is (= 5 (:value types)))
+        ;; SelectNode, NavigateToNode, NavigateToAncestor
+        (is (= 3 (:rule types)))
+        ;; 1 surface (GraphViewer)
+        (is (= 1 (:surface types)))))))

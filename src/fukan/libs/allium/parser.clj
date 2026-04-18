@@ -149,16 +149,20 @@
   (* Provides block: single 'provides:' with typed operation entries.
      Uses newline-based separation between entries so that inline
      comments are captured by provides-entry-comment, not swallowed
-     by the line-comment rule in _ *)
+     by the line-comment rule in _.
+     Each entry may carry an optional `when ...` guard on the next
+     indented line — captured as provides-entry-when. *)
   provides-block = <'provides'> _ <':'> _ provides-entries
   provides-entries = (provides-entry provides-entry-sep)*
   <provides-entry-sep> = <#'[ \\t]*\\n'> _
-  provides-entry = provides-entry-name provides-params? provides-return? provides-entry-comment?
-  provides-entry-name = #'[A-Za-z_][A-Za-z0-9_]*+(?![ \\t]*:)'
+  provides-entry = provides-entry-name provides-params? provides-return? provides-entry-when? provides-entry-comment?
+  provides-entry-name = #'(?!when[ \\t\\n])[A-Za-z_][A-Za-z0-9_]*+(?![ \\t]*:)'
   provides-params = <'('> _ provides-param-list? _ <')'>
   provides-param-list = provides-param (_ <','> _ provides-param)*
   provides-param = ident <'?'>? (_ <':'> _ type-ref)?
   provides-return = <#'[ \\t]+'> <'->'> <#'[ \\t]+'> type-ref
+  provides-entry-when = <#'[ \\t]*\\n[ \\t]+'> <'when'> __ provides-entry-when-text
+  provides-entry-when-text = #'[^\\n]+'
   provides-entry-comment = <#'[ \\t]+--[ \\t]*'> inline-comment
 
   nested-variant = <'variant'> __ ident _ <'{'> _ field-list _ <'}'>
@@ -468,12 +472,14 @@
      (let [by-tag (group-by (fn [x] (cond
                                        (and (map? x) (contains? x :provides-params)) :params
                                        (and (map? x) (contains? x :provides-return)) :return
+                                       (and (map? x) (contains? x :provides-when))    :when
                                        (and (map? x) (contains? x :provides-comment)) :comment
                                        :else :unknown))
                              args)]
        (cond-> {:name name}
-         (seq (:params by-tag)) (assoc :params (:provides-params (first (:params by-tag))))
-         (seq (:return by-tag)) (assoc :return (:provides-return (first (:return by-tag))))
+         (seq (:params by-tag))  (assoc :params (:provides-params (first (:params by-tag))))
+         (seq (:return by-tag))  (assoc :return (:provides-return (first (:return by-tag))))
+         (seq (:when by-tag))    (assoc :when (:provides-when (first (:when by-tag))))
          (seq (:comment by-tag)) (assoc :description (:provides-comment (first (:comment by-tag)))))))
 
    :provides-entry-name str
@@ -500,6 +506,12 @@
    :provides-entry-comment
    (fn [text]
      {:provides-comment (str/trim text)})
+
+   :provides-entry-when
+   (fn [text]
+     {:provides-when (str/trim text)})
+
+   :provides-entry-when-text str
 
    ;; When guard
    :when-guard
