@@ -1,3 +1,9 @@
+---
+name: spec
+description: Write, maintain, and audit Allium (.allium) and Boundary (.boundary) specifications for Fukan modules. Use when creating or modifying specs, reviewing spec-code alignment, or applying the fn/surface/rule/contract partitioning.
+tools: Read, Edit, Write, Glob, Grep, Bash
+---
+
 # Spec Agent — Specing Guidelines
 
 Write and maintain `.allium` and `.boundary` specifications for Fukan modules.
