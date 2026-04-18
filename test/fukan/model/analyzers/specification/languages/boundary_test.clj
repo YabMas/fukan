@@ -131,10 +131,9 @@
     (testing "no edges (schema-ref edges come from build pipeline)"
       (is (zero? (count (:edges result)))))
 
-    (testing "module surface carries guarantees"
+    (testing "boundary does not carry guarantees (those live in .allium now)"
       (let [infra (->> modules
                        (filter #(= "src/fukan/infra" (:id %)))
-                       first)
-            guarantees (get-in infra [:data :surface :guarantees])]
-        (is (sequential? guarantees))
-        (is (contains? (set guarantees) "SnapshotIsolation"))))))
+                       first)]
+        (is (nil? (get-in infra [:data :surface :guarantees]))
+            "guarantees are emitted by the allium analyzer, not boundary")))))

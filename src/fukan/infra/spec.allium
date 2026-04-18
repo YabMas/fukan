@@ -3,22 +3,44 @@
 --
 -- Scope: Infrastructure lifecycle — mutable state management for the
 --   model and HTTP server
--- Includes: Failure modes for model and server lifecycle
+-- Includes: Whole-API guarantees, failure modes for model and server
+--   lifecycle
 -- Excludes:
 --   - The Model itself (see model/spec.allium)
 --   - Build pipeline (see model/pipeline.allium)
 --   - HTTP routing and handlers (see web/spec.allium)
---   - Public API shape and guarantees (see spec.boundary)
+--   - Public API signatures (see spec.boundary)
 
 use "../model/spec.allium" as model
+
+------------------------------------------------------------
+-- Guarantees
+------------------------------------------------------------
+
+-- Consumers read an immutable Model. A rebuild produces a new
+-- Model value; in-flight requests see the previous snapshot
+-- until the next dereference.
+guarantee SnapshotIsolation
+
+-- At most one source path is active. Rebuild replaces the
+-- entire model atomically.
+guarantee SingleModelSource
+
+-- Server and model lifecycles are independent. Model refreshes
+-- do not require server restart. The server calls get_model
+-- per-request.
+guarantee ModelServerDecoupled
+
+-- At most one server runs at a time.
+guarantee SingleServerInstance
 
 ------------------------------------------------------------
 -- Failure Modes
 ------------------------------------------------------------
 --
--- The infra module's public API shape and guarantees live in
--- spec.boundary. This file captures failure semantics not yet
--- expressible in boundary syntax.
+-- The infra module's public API signatures live in spec.boundary.
+-- This file captures the prose guarantees about that API, plus
+-- failure semantics not yet expressible in boundary syntax.
 --
 -- Model lifecycle failures:
 --   not_loaded          -- model requested before first build

@@ -2,7 +2,8 @@
 -- web.allium
 --
 -- Scope: HTTP/SSE transport boundary — orchestration between shell and core
--- Includes: Browser-facing SSE surface (endpoint contracts, delivery guarantees)
+-- Includes: Whole-API guarantees, browser-facing SSE surface
+--   (endpoint contracts, delivery guarantees)
 -- Excludes:
 --   - Projection computation (see projection.allium)
 --   - View rendering (see views.allium)
@@ -12,6 +13,19 @@
 use "./views/spec.allium" as views
 use "../model/spec.allium" as model
 use "../projection/spec.allium" as projection
+
+------------------------------------------------------------
+-- Guarantees
+------------------------------------------------------------
+
+-- Transport never modifies projection or view output.
+-- It parses request params, calls core functions, and
+-- streams the results. No domain logic in the transport.
+guarantee PureDelegation
+
+-- Each request dereferences the model atom once. All
+-- projections within a single request see the same snapshot.
+guarantee PerRequestModel
 
 ------------------------------------------------------------
 -- Surface

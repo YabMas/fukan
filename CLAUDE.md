@@ -10,8 +10,8 @@ The system follows a functional core / imperative shell architecture, enforced b
 
 Fukan uses two complementary specification languages with distinct responsibilities:
 
-- **`.boundary`** — structural contract: declares a module's public API (functions, owned types, guarantees). Answers "what crosses the module wall." Minimal IDL with four constructs: `fn`, `type`, `guarantee`, `use`.
-- **`.allium`** — behavioral specification: describes how things change over time (rules, state transitions, invariants, component interaction models). Answers "what happens and under what constraints."
+- **`.boundary`** — structural contract: declares a module's public API (functions and owned types). Answers "what crosses the module wall." Minimal IDL with three constructs: `fn`, `exposes`, `use`.
+- **`.allium`** — behavioral specification: describes how things change over time (rules, state transitions, invariants, guarantees, component interaction models). Answers "what happens and under what constraints."
 
 When both exist for a module, `.boundary` owns the public interface shape and `.allium` owns the behavioral semantics. Both are co-located in the module directory.
 
@@ -46,6 +46,6 @@ Specs are the authoritative description of system structure and behavior. Implem
 
 ## Spec Authoring Rules
 
-- **Boundary for structure, Allium for behavior.** Public function signatures, owned types, and guarantees go in `.boundary` files. Rules, state transitions, invariants, and component interaction models go in `.allium` files.
+- **Boundary for structure, Allium for behavior.** Public function signatures and owned types go in `.boundary` files. Rules, state transitions, invariants, guarantees, and component interaction models go in `.allium` files.
 - **Language-agnostic model specs.** The model, projection, and view specs describe domain concepts using standard PL terminology. Never use language-specific examples (e.g. `defmulti`, `defmethod`, `protocol`) in these specs — use generic terms like "dispatch point", "handler", "polymorphic dispatch". Language-specific details belong only in analyzer boundary specs where they describe a concrete implementation.
 - **Underscore-to-kebab mapping.** Allium and Boundary identifiers use underscores (`schema_reference`, `function_call`); Clojure implementation maps these to kebab-case keywords (`:schema-reference`, `:function-call`). This is mechanical and universal — not a per-enum decision.

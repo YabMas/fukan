@@ -14,8 +14,8 @@ Each module can have up to two spec files, co-located in the module directory:
 
 | Language | File | Answers | Constructs |
 |----------|------|---------|------------|
-| **Allium** | `.allium` | "What happens and under what constraints?" | entities, rules, state transitions, invariants, surfaces, contracts, config |
-| **Boundary** | `.boundary` | "What is the module's callable API?" | `fn` signatures, `exposes` types, `guarantee` prose, `use` imports |
+| **Allium** | `.allium` | "What happens and under what constraints?" | entities, rules, state transitions, invariants, guarantees, surfaces, contracts, config |
+| **Boundary** | `.boundary` | "What is the module's callable API?" | `fn` signatures, `exposes` types, `use` imports |
 
 ## Why Two Languages
 
@@ -110,17 +110,18 @@ Four similar names, four distinct constructs. Don't blur them.
 |-----------|-------|------|-------|
 | `invariant Name { expr }` | `.allium`, module level | Expression | Logical assertion over entity state |
 | `@invariant Name` | `.allium`, inside a contract | Prose | Behavioural obligation on any contract fulfiller |
-| `@guarantee Name` | `.allium`, inside a surface | Prose | Promise made at a specific surface boundary |
-| `guarantee Name` | `.boundary` | Prose | Structural promise about the module's API as a whole |
+| `@guarantee Name` | `.allium`, inside a surface | Prose | Promise scoped to a specific surface boundary (party-facing) |
+| `guarantee Name` | `.allium`, module level | Prose | Promise about the module's API as a whole |
 
 Expression-bearing `invariant`s are logically checkable — the tool can evaluate them against state. The three prose forms are behavioural assertions the checker does not evaluate; their value is forcing the claim into the open so reviewers, tests, and future readers can hold the implementation to it.
+
+All four constructs live in `.allium`. `.boundary` is pure structural IDL — it declares what callables exist with what signatures, but says nothing about behavioural promises. Prose claims are behavioural, so they live with the rest of the behavioural spec.
 
 ## Division of Responsibility
 
 **Boundary owns:**
 - Function signatures — name, parameter types, return type
 - Owned types — types this module defines and exports (`exposes`)
-- Structural guarantees — prose invariants about the API as a whole (`guarantee`)
 
 **Allium owns:**
 - Entity and value type definitions — fields, relationships, derived values, transitions
@@ -128,6 +129,7 @@ Expression-bearing `invariant`s are logically checkable — the tool can evaluat
 - Surfaces — actor-facing or code-to-code behavioral contracts (visible data + guarded operations)
 - Contracts — named behavioral obligations between parties
 - Invariants — assertions over entity state
+- Guarantees — prose promises about the module's API as a whole (`guarantee`) or a surface (`@guarantee`)
 - Config — module-level parameters with defaults
 
 ## Overlap Points
@@ -139,7 +141,7 @@ These constructs describe related things from different angles:
 | `fn rebuild(src) -> Model` | `surface ... provides: rebuild(src) when ...` | Boundary declares the callable signature; surface adds domain-level guards and actor context |
 | `fn rebuild(src) -> Model` | `rule { when: src.changed ensures: Model.rebuilt }` | Boundary declares the function exists; rule describes the downstream state change that accompanies it |
 | `fn serialize(v) -> ByteArray` | `contract Codec { serialize: (v) -> ByteArray }` | Boundary is the module's concrete commitment; contract is the abstract role. A module fulfilling Codec has boundary fns whose shapes match the contract's operations |
-| `guarantee PerRequestModel` | `contract.@invariant Roundtrip` | Both are prose. Boundary guarantees are local to this module's API; contract invariants apply to every fulfiller of the role |
+| n/a | `guarantee PerRequestModel` vs `contract.@invariant Roundtrip` | Both are prose, both live in `.allium`. Module-level guarantees are local to this module's API; contract invariants apply to every fulfiller of the role |
 | `fn current_model() -> Model?` | `external entity ModelLifecycle { provides: current_model -> Model? }` | Legacy pattern: using `external entity.provides` to stand in for API shape. Prefer `.boundary fn` for the module's own API; reserve `external entity` for systems *outside* this module |
 | `exposes ViewState` | `value ViewState { ... }` | Boundary declares the type crosses the module wall; Allium defines its structure |
 

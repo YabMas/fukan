@@ -89,17 +89,14 @@
 ;; Surface construction (carried for downstream collapse into Boundary)
 
 (defn- build-surface-from-boundary
-  "Build a surface map from boundary declarations.
-   Holds the description and guarantee names; the build pipeline collapses
-   this into the module's Boundary. Functions and schemas are emitted as
-   first-class nodes by build-* below, not held on the surface."
-  [decls module-desc]
-  (let [guarantees (->> decls
-                        (filter #(= :guarantee (:type %)))
-                        (mapv :name))]
-    (cond-> {}
-      module-desc       (assoc :description module-desc)
-      (seq guarantees)  (assoc :guarantees guarantees))))
+  "Build a surface map from boundary-level metadata.
+   Only the module description is carried here; the build pipeline
+   collapses it into the module's Boundary. Functions and schemas are
+   emitted as first-class nodes below. Prose guarantees live in the
+   module's .allium sibling, not in .boundary."
+  [_decls module-desc]
+  (cond-> {}
+    module-desc (assoc :description module-desc)))
 
 ;; ---------------------------------------------------------------------------
 ;; Node construction

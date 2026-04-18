@@ -8,12 +8,3 @@ use "../projection/spec.allium" as projection
 
 fn create_handler() -> Handler
   -- Create the Ring handler that serves the Fukan application.
-
-guarantee PureDelegation
-  -- Transport never modifies projection or view output.
-  -- It parses request params, calls core functions, and
-  -- streams the results. No domain logic in the transport.
-
-guarantee PerRequestModel
-  -- Each request dereferences the model atom once. All
-  -- projections within a single request see the same snapshot.

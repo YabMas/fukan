@@ -30,7 +30,8 @@
   declaration = use-decl / given-block / enum-decl / open-question / config-block /
                 deferred-decl / contract-decl / default-decl /
                 external-entity / external-value / surface-decl / variant-decl /
-                entity-decl / value-decl / rule-decl / invariant-decl
+                entity-decl / value-decl / rule-decl / invariant-decl /
+                guarantee-decl
 
   (* ============ Use ============ *)
 
@@ -92,6 +93,10 @@
   (* ============ Variant ============ *)
 
   variant-decl = <'variant'> __ ident _ description-string? _ <':'> _ type-ref _ <'{'> _ field-list _ <'}'>
+
+  (* ============ Guarantee (module-level prose promise) ============ *)
+
+  guarantee-decl = <'guarantee'> __ ident
 
   (* ============ Invariant ============ *)
 
@@ -336,6 +341,11 @@
    :given-binding
    (fn [name type-ref]
      {:name name :type-ref type-ref})
+
+   ;; Guarantee (module-level prose promise)
+   :guarantee-decl
+   (fn [name]
+     {:type :guarantee :name name})
 
    ;; Invariant
    :invariant-decl

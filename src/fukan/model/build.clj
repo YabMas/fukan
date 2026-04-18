@@ -452,10 +452,30 @@
   [a b]
   (cond
     (and (= :module (:kind a)) (= :module (:kind b)))
-    (let [merged-data (merge (:data a) (:data b))
+    (let [data-a (:data a)
+          data-b (:data b)
+          ;; Deep-merge :surface so guarantees from allium and description
+          ;; from boundary (or vice versa) don't clobber each other.
+          ;; Collection-valued keys concat + dedupe; scalars prefer b.
+          merged-surface (let [sa (:surface data-a)
+                               sb (:surface data-b)]
+                           (when (or sa sb)
+                             (merge-with
+                               (fn [x y]
+                                 (cond
+                                   (and (sequential? x) (sequential? y))
+                                   (vec (distinct (concat x y)))
+                                   :else (or y x)))
+                               (or sa {}) (or sb {}))))
+          merged-data (cond-> (merge data-a data-b)
+                        merged-surface (assoc :surface merged-surface))
+          ;; Prefer the description from the node whose surface carries
+          ;; one — that's the boundary analyzer (allium puts only
+          ;; :guarantees in its surface). Falls back to either side's
+          ;; top-level :description.
           desc (cond
-                 (get-in b [:data :surface]) (:description b)
-                 (get-in a [:data :surface]) (:description a)
+                 (get-in b [:data :surface :description]) (:description b)
+                 (get-in a [:data :surface :description]) (:description a)
                  :else (or (:description b) (:description a)))]
       (-> (merge a b)
           (assoc :data merged-data)

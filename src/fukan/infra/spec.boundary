@@ -23,20 +23,3 @@ fn stop_server() -> Unit
 
 fn get_port() -> Integer?
   -- Return the port the server is listening on.
-
-guarantee SnapshotIsolation
-  -- Consumers read an immutable Model. A rebuild produces a new
-  -- Model value; in-flight requests see the previous snapshot
-  -- until the next dereference.
-
-guarantee SingleModelSource
-  -- At most one source path is active. Rebuild replaces the
-  -- entire model atomically.
-
-guarantee ModelServerDecoupled
-  -- Server and model lifecycles are independent. Model refreshes
-  -- do not require server restart. The server calls get_model
-  -- per-request.
-
-guarantee SingleServerInstance
-  -- At most one server runs at a time.

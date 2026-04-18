@@ -13,13 +13,14 @@
 (def grammar
   "PEG grammar for the .boundary module boundary language.
 
-   Four constructs:
+   Three constructs:
    - use: import type aliases from other modules
    - fn: public function with typed signature and optional doc
    - exposes: reference to an allium-defined type, optionally narrowed
-   - guarantee: named invariant promise with prose description
 
    Module description is captured from the leading comment block.
+   Prose promises about the module live in its .allium sibling as
+   module-level `guarantee` declarations.
    Type expression grammar (for fn params/returns) matches Allium."
 
   "
@@ -28,7 +29,7 @@
   boundary-file = _ declarations _
 
   declarations = (declaration _)*
-  declaration = use-decl / fn-decl / exposes-decl / guarantee-decl
+  declaration = use-decl / fn-decl / exposes-decl
 
   (* ============ Use ============ *)
 
@@ -52,11 +53,6 @@
   exposes-decl = <'exposes'> __ ident exposes-fields?
   exposes-fields = _ <'{'> _ exposes-field-list _ <'}'>
   exposes-field-list = ident (_ <','> _ ident)*
-
-  (* ============ Guarantee ============ *)
-
-  guarantee-decl = <'guarantee'> __ ident guarantee-doc?
-  guarantee-doc = _ doc-comment
 
   (* ============ Doc Comments ============ *)
 
@@ -180,17 +176,6 @@
    :exposes-field-list
    (fn [& fields]
      (vec fields))
-
-   ;; Guarantee
-   :guarantee-decl
-   (fn [name & args]
-     (let [doc (some :guarantee-doc args)]
-       (cond-> {:type :guarantee :name name}
-         doc (assoc :description doc))))
-
-   :guarantee-doc
-   (fn [text]
-     {:guarantee-doc text})
 
    ;; Doc comments
    :doc-comment

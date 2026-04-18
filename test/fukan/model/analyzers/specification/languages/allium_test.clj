@@ -108,6 +108,25 @@
       (is (contains? model-schema-keys "MapExpr") "MapExpr variant captured")
       (is (contains? model-schema-keys "OrExpr")  "OrExpr variant captured"))))
 
+(deftest allium-extracts-module-guarantees
+  (testing "module-level `guarantee` decls land on the module's surface"
+    (let [result (analyzer/analyze "src")
+          infra (get (:nodes result) "src/fukan/infra")
+          guarantees (get-in infra [:data :surface :guarantees])]
+      (is (sequential? guarantees))
+      (is (contains? (set guarantees) "SnapshotIsolation"))
+      (is (contains? (set guarantees) "SingleModelSource"))
+      (is (contains? (set guarantees) "ModelServerDecoupled"))
+      (is (contains? (set guarantees) "SingleServerInstance"))))
+
+  (testing "web module also carries its migrated guarantees"
+    (let [result (analyzer/analyze "src")
+          web (get (:nodes result) "src/fukan/web")
+          guarantees (get-in web [:data :surface :guarantees])]
+      (is (sequential? guarantees))
+      (is (contains? (set guarantees) "PureDelegation"))
+      (is (contains? (set guarantees) "PerRequestModel")))))
+
 ;; ---------------------------------------------------------------------------
 ;; Integration: full build still satisfies model invariants
 

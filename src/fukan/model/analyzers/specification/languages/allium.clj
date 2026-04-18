@@ -73,7 +73,7 @@
   "Build a map from declaration name → description by scanning raw text."
   [text]
   (let [lines (str/split-lines text)
-        decl-re #"^\s*(?:external\s+)?(?:entity|value|variant|rule|surface|enum)\s+(\w+)"]
+        decl-re #"^\s*(?:external\s+)?(?:entity|value|variant|rule|surface|enum|guarantee)\s+(\w+)"]
     (loop [i 0
            result {}]
       (if (>= i (count lines))
@@ -206,13 +206,20 @@
             module-desc (extract-module-description text)
             decl-descs (extract-declaration-descriptions text)
 
+            guarantees (->> decls
+                            (filter #(= :guarantee (:type %)))
+                            (mapv :name))
+            surface (cond-> {}
+                      (seq guarantees) (assoc :guarantees guarantees))
+
             module-node (cond->
                           {:id module-id
                            :kind :module
                            :label (last (str/split module-id #"/"))
                            :parent nil
                            :children #{}
-                           :data {:kind :module :has-spec true}}
+                           :data (cond-> {:kind :module :has-spec true}
+                                   (seq surface) (assoc :surface surface))}
                           module-desc (assoc :description module-desc))
 
             typed-decls (->> decls (filter #(#{:entity :value :variant} (:type %))))
