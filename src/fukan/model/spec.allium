@@ -25,6 +25,21 @@
 --   see the module's description, its public API (as function children),
 --   and its owned data shapes. The only difference is that implemented
 --   modules can be expanded to reveal their internal structure.
+--
+-- Spec source-of-truth split:
+--   .boundary is the spine of the spec model. Its four constructs map
+--   directly onto graph elements:
+--     fn        -> Function node + signature
+--     exposes   -> Schema node (publicly owned by the module)
+--     guarantee -> string in the module's Boundary.guarantees list
+--     use       -> reference for type resolution
+--   .allium is enrichment. It contributes:
+--     entity / value / variant / enum -> Schema TypeExpr structure for
+--       schemas declared in .boundary exposes; Schema nodes (private)
+--       for types not exposed at the wall
+--     surface description, @guarantee  -> merged into the module's Boundary
+--   When both languages contribute to the same Schema node, .boundary
+--   sets the public marking and .allium fills in the type structure.
 
 ------------------------------------------------------------
 -- Type Expression IR
@@ -285,12 +300,13 @@ variant Function : Node {
     -- Two sources:
     -- - Implementation: discovered from code analysis (var definitions).
     --   Has full details: doc, visibility, signature.
-    -- - Specification: materialized from a spec provides operation.
-    --   Has name and signature; private is always false (spec
-    --   operations are by definition public).
+    -- - Specification: declared as a `fn` in the module's .boundary file.
+    --   Has name, signature, and optional doc; private is always false
+    --   (boundary fns are by definition public).
     --
-    -- For spec+impl modules, spec-derived functions may correspond
-    -- to implementation-discovered functions. Correspondence is by name.
+    -- For spec+impl modules, spec-derived functions correspond to
+    -- implementation-discovered functions by id (boundary names use
+    -- underscores, mapped to hyphens to match implementation labels).
     doc: String?
     private: Boolean
     signature: FunctionSignature?
@@ -306,6 +322,13 @@ variant Schema : Node {
     -- reference these schemas take a dependency on the owning module.
     -- Private schemas are internal implementation details; public
     -- schemas appear in the module's boundary.
+    --
+    -- Spec sources contribute orthogonally:
+    --   .boundary `exposes Foo`           -> Schema node, marked public
+    --   .allium `entity/value/variant Foo` -> Schema node, marked private,
+    --                                         carrying the TypeExpr structure
+    -- A type both exposed at the wall and defined in .allium produces
+    -- one merged Schema: public marking from .boundary, structure from .allium.
     schema_key: String
     form: TypeExpr
     doc: String?
@@ -339,10 +362,10 @@ entity Model {
     --   collapsed. The tree starts at the first module with multiple
     --   children or non-module children.
     --
-    -- BoundaryFunctionConsistency: every spec provides operation has
-    --   a corresponding Function child node. Spec operations are
-    --   materialized as children during build, ensuring spec-only
-    --   modules are navigable.
+    -- BoundaryFunctionConsistency: every .boundary `fn` declaration has
+    --   a corresponding Function child node. Boundary fns are emitted
+    --   directly as children by the boundary analyzer, ensuring
+    --   spec-only modules are navigable.
 
     nodes: Map<String, Node>   -- keyed by NodeId
     edges: List<Edge>

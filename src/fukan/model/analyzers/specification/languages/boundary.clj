@@ -1,13 +1,30 @@
 (ns fukan.model.analyzers.specification.languages.boundary
-  "Boundary-specific analysis that produces an AnalysisResult for the model
-   build pipeline. Discovers .boundary files, parses them, and builds
-   module nodes with surface data (provides, exposes, guarantees).
-   Type definitions and schema nodes come from the allium analyzer."
+  "Boundary-language analyzer. The .boundary file is the spec spine for a
+   module: its `fn` declarations become Function nodes, its `exposes`
+   declarations become Schema nodes, and its `guarantee` declarations
+   land in the module's Boundary. The .allium file enriches this spine
+   with TypeExpr structure for exposed schemas and surface annotations
+   (description, @guarantee) for the module."
   (:require [fukan.libs.boundary.parser :as parser]
             [fukan.model.analyzers :as analyzers]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [instaparse.core :as insta]))
+
+;; ---------------------------------------------------------------------------
+;; Constants
+
+(def ^:private builtin-types
+  "Type names that map to primitive TypeExpr tags rather than refs."
+  #{"String" "Boolean" "Integer" "Set" "List" "Map" "Unit"
+    "FilePath" "Path" "Html" "Any"})
+
+(def ^:private primitive-mapping
+  {"String"  "string"
+   "Integer" "int"
+   "Boolean" "boolean"
+   "Unit"    "nil"
+   "Any"     "any"})
 
 ;; ---------------------------------------------------------------------------
 ;; File utilities
@@ -26,48 +43,133 @@
                      (str/ends-with? (.getName %) ".boundary")))
        (mapv #(.getPath %))))
 
-;; ---------------------------------------------------------------------------
-;; Surface construction from boundary declarations
+(defn- underscore->hyphen
+  "Convert underscore-cased identifiers to kebab-case so spec-derived
+   function nodes line up with implementation labels."
+  [s]
+  (str/replace s "_" "-"))
 
-(defn- fn-decl->provides-entry
-  "Convert a boundary fn declaration to the same shape as an allium
-   provides entry, for compatibility with the build pipeline."
+;; ---------------------------------------------------------------------------
+;; Type expression conversion
+
+(defn- type-ref->type-expr
+  "Convert a parsed boundary/allium type-ref AST node to a model TypeExpr."
+  [type-ref]
+  (case (:kind type-ref)
+    :simple    (if-let [prim (get primitive-mapping (:name type-ref))]
+                 {:tag :primitive :name prim}
+                 (if (contains? builtin-types (:name type-ref))
+                   {:tag :primitive :name (:name type-ref)}
+                   {:tag :ref :name (keyword (:name type-ref))}))
+    :qualified {:tag :ref :name (keyword (:ns type-ref) (:name type-ref))}
+    :optional  {:tag :maybe :inner (type-ref->type-expr (:inner type-ref))}
+    :generic   (let [base (:name type-ref)
+                     params (mapv type-ref->type-expr (:params type-ref))]
+                 (case base
+                   "List"  {:tag :vector :element (first params)}
+                   "Set"   {:tag :set :element (first params)}
+                   "Map"   (if (= 2 (count params))
+                             {:tag :map-of :key-type (first params)
+                              :value-type (second params)}
+                             {:tag :unknown :original (str base "<...>")})
+                   {:tag :ref :name (keyword base)}))
+    :union     {:tag :or :variants (mapv type-ref->type-expr (:members type-ref))}
+    {:tag :unknown :original (pr-str type-ref)}))
+
+(defn- fn-decl->signature
+  "Build a FunctionSignature {:inputs [...] :output ...} from a parsed `fn` decl."
   [decl]
-  (cond-> {:name (:name decl)}
-    (:params decl) (assoc :params (mapv (fn [p]
-                                          (cond-> {:name (:name p)}
-                                            (:type p) (assoc :type (:type p))))
-                                        (:params decl)))
-    (:return decl) (assoc :return (:return decl))
-    (:description decl) (assoc :description (:description decl))))
+  (when (or (seq (:params decl)) (:return decl))
+    (cond-> {}
+      (seq (:params decl)) (assoc :inputs (mapv #(type-ref->type-expr (:type %))
+                                                (:params decl)))
+      (:return decl)        (assoc :output (type-ref->type-expr (:return decl))))))
+
+;; ---------------------------------------------------------------------------
+;; Surface construction (carried for downstream collapse into Boundary)
 
 (defn- build-surface-from-boundary
   "Build a surface map from boundary declarations.
-   Produces the same shape as allium's extract-surface, plus :exposes."
+   Holds the description and guarantee names; the build pipeline collapses
+   this into the module's Boundary. Functions and schemas are emitted as
+   first-class nodes by build-* below, not held on the surface."
   [decls module-desc]
-  (let [fn-decls (->> decls (filter #(= :fn (:type %))))
-        guarantees (->> decls
+  (let [guarantees (->> decls
                         (filter #(= :guarantee (:type %)))
-                        (mapv :name))
-        exposes (->> decls
-                     (filter #(= :exposes (:type %)))
-                     (mapv (fn [e]
-                             (cond-> {:name (:name e)}
-                               (:fields e) (assoc :fields (:fields e))))))
-        provides-entries (mapv fn-decl->provides-entry fn-decls)]
+                        (mapv :name))]
     (cond-> {}
-      module-desc (assoc :description module-desc)
-      (seq provides-entries) (assoc :provides provides-entries)
-      (seq exposes) (assoc :exposes exposes)
-      (seq guarantees) (assoc :guarantees guarantees))))
+      module-desc       (assoc :description module-desc)
+      (seq guarantees)  (assoc :guarantees guarantees))))
 
 ;; ---------------------------------------------------------------------------
 ;; Node construction
 
+(defn- build-fn-nodes
+  "Emit Function nodes for each `fn` decl in a parsed boundary file.
+   Labels and IDs use kebab-case so they merge with implementation-derived
+   function nodes for the same operation."
+  [module-id decls]
+  (->> decls
+       (filter #(= :fn (:type %)))
+       (map (fn [decl]
+              (let [hyphen-name (underscore->hyphen (:name decl))
+                    fn-id (str module-id "/" hyphen-name)
+                    signature (fn-decl->signature decl)
+                    description (:description decl)]
+                [fn-id
+                 (cond-> {:id fn-id
+                          :kind :function
+                          :label hyphen-name
+                          :parent module-id
+                          :children #{}
+                          :data (cond-> {:kind :function
+                                         :private? false}
+                                  signature   (assoc :signature signature)
+                                  description (assoc :doc description))})])))
+       (into {})))
+
+(defn- build-schema-nodes
+  "Emit Schema nodes for each `exposes` decl in a parsed boundary file.
+   Schemas are marked public; TypeExpr is a placeholder ref that the
+   allium analyzer fills in with concrete structure when an `entity`,
+   `value`, or `variant` of the same name is declared in the module's
+   .allium file."
+  [module-id decls]
+  (->> decls
+       (filter #(= :exposes (:type %)))
+       (map (fn [decl]
+              (let [name (:name decl)
+                    schema-id (str module-id "/" name)
+                    schema-key (keyword name)]
+                [schema-id
+                 {:id schema-id
+                  :kind :schema
+                  :label name
+                  :parent module-id
+                  :children #{}
+                  :data {:kind :schema
+                         :schema-key schema-key
+                         :schema {:tag :ref :name schema-key}
+                         :private? false}}])))
+       (into {})))
+
+(defn- build-module-node
+  "Build a Module node from a parsed boundary file."
+  [module-id module-desc surface]
+  (cond->
+    {:id module-id
+     :kind :module
+     :label (last (str/split module-id #"/"))
+     :parent nil
+     :children #{}
+     :data (cond-> {:kind :module :has-spec true}
+             (seq surface) (assoc :surface surface))}
+    module-desc (assoc :description module-desc)))
+
 (defn- build-boundary-nodes
-  "Build module nodes from parsed boundary files.
-   Each file enriches its parent directory's module node with surface data
-   (provides, exposes, guarantees). Schema nodes come from the allium analyzer."
+  "Build all nodes for a parsed boundary file: module, function nodes,
+   and schema nodes. Function and Schema nodes carry the boundary's
+   public commitment; allium enriches them via the merge step in build."
   [_src-path parsed-files]
   (reduce
     (fn [acc {:keys [filepath ast text]}]
@@ -75,17 +177,13 @@
             decls (:declarations ast)
             module-desc (parser/extract-module-description text)
             surface (build-surface-from-boundary decls module-desc)
-
-            module-node (cond->
-                          {:id module-id
-                           :kind :module
-                           :label (last (str/split module-id #"/"))
-                           :parent nil
-                           :children #{}
-                           :data (cond-> {:kind :module :has-spec true}
-                                   (seq surface) (assoc :surface surface))}
-                          module-desc (assoc :description module-desc))]
-        (assoc acc module-id module-node)))
+            module-node (build-module-node module-id module-desc surface)
+            fn-nodes (build-fn-nodes module-id decls)
+            schema-nodes (build-schema-nodes module-id decls)]
+        (-> acc
+            (assoc module-id module-node)
+            (merge fn-nodes)
+            (merge schema-nodes))))
     {}
     parsed-files))
 
@@ -94,10 +192,11 @@
 
 (defn analyze
   "Produce a boundary language analysis result from source files.
-   Discovers .boundary files under src-path, parses them, and builds
-   an AnalysisResult with module nodes. No edges — cross-module
-   schema references are derived by the build pipeline from allium
-   schema nodes' TypeExpr keyword refs."
+   Discovers .boundary files under src-path, parses them, and emits the
+   spec spine: Module + Function (from `fn`) + Schema (from `exposes`)
+   nodes, with surface metadata for downstream collapse into Boundary.
+   No edges — schema-reference edges are derived in the build pipeline
+   from TypeExpr keyword refs once allium has filled in schema structure."
   {:malli/schema [:=> [:cat :FilePath] :AnalysisResult]}
   [src-path]
   (let [files (discover-boundary-files src-path)

@@ -1,8 +1,9 @@
 (ns fukan.model.analyzers.specification.languages.allium-test
   "Unit + integration tests for the Allium analyzer.
-   Verifies file→ns-sym conversion, type reference extraction,
-   use path resolution, and that analyzing Fukan's own .allium files
-   produces a valid model analysis result."
+   Allium is the enrichment layer over the .boundary spine: it emits
+   private Schema nodes from entity/value/variant/enum declarations and
+   carries a module description, but does not emit Function nodes or
+   call-graph edges (rules are not yet first-class graph entities)."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
             [fukan.model.analyzers.specification.languages.allium :as analyzer]
@@ -10,179 +11,114 @@
             [fukan.test-support.invariants.model :as inv]))
 
 ;; ---------------------------------------------------------------------------
-;; Unit: file->ns-sym
+;; Unit: type-ref → TypeExpr conversion
 
-(deftest file->ns-sym-test
-  (testing "standard allium file path"
-    (is (= 'fukan.model.spec-allium
-           (#'analyzer/file->ns-sym "src/fukan/model/spec.allium" "src"))))
-  (testing "nested path"
-    (is (= 'fukan.web.views.spec-allium
-           (#'analyzer/file->ns-sym "src/fukan/web/views/spec.allium" "src"))))
-  (testing "src-path with trailing slash"
-    (is (= 'fukan.model.spec-allium
-           (#'analyzer/file->ns-sym "src/fukan/model/spec.allium" "src/")))))
+(deftest type-ref->type-expr-simple
+  (testing "non-builtin simple type becomes a ref"
+    (is (= {:tag :ref :name :Node}
+           (#'analyzer/type-ref->type-expr {:kind :simple :name "Node"}))))
+  (testing "builtin simple type becomes a primitive"
+    (is (= {:tag :primitive :name "String"}
+           (#'analyzer/type-ref->type-expr {:kind :simple :name "String"}))))
+  (testing "qualified type becomes a namespaced ref"
+    (is (= {:tag :ref :name :model/Node}
+           (#'analyzer/type-ref->type-expr {:kind :qualified :ns "model" :name "Node"})))))
 
-;; ---------------------------------------------------------------------------
-;; Unit: type reference extraction
-
-(deftest extract-type-refs-simple
-  (testing "simple non-builtin type"
-    (is (= #{{:name "Node"}}
-           (#'analyzer/extract-type-refs {:kind :simple :name "Node"}))))
-  (testing "builtin type ignored"
-    (is (= #{}
-           (#'analyzer/extract-type-refs {:kind :simple :name "String"}))))
-  (testing "qualified type"
-    (is (= #{{:alias "model" :name "Node"}}
-           (#'analyzer/extract-type-refs {:kind :qualified :ns "model" :name "Node"})))))
-
-(deftest extract-type-refs-compound
-  (testing "generic with builtin container"
-    (is (= #{{:name "Edge"}}
-           (#'analyzer/extract-type-refs {:kind :generic :name "List"
-                                        :params [{:kind :simple :name "Edge"}]}))))
-  (testing "generic with non-builtin container"
-    (is (= #{{:name "MyList"} {:name "Edge"}}
-           (#'analyzer/extract-type-refs {:kind :generic :name "MyList"
-                                        :params [{:kind :simple :name "Edge"}]}))))
-  (testing "optional type"
-    (is (= #{{:name "Contract"}}
-           (#'analyzer/extract-type-refs {:kind :optional
-                                        :inner {:kind :simple :name "Contract"}}))))
-  (testing "union type"
-    (is (= #{{:name "Container"} {:name "Function"}}
-           (#'analyzer/extract-type-refs {:kind :union
-                                        :members [{:kind :simple :name "Container"}
-                                                   {:kind :simple :name "Function"}]}))))
-  (testing "inline object with type refs"
-    (is (= #{{:name "DepInfo"}}
-           (#'analyzer/extract-type-refs {:kind :inline-obj
-                                        :fields [{:name "count" :type-ref {:kind :simple :name "Integer"}}
-                                                  {:name "info" :type-ref {:kind :simple :name "DepInfo"}}]}))))
-  (testing "nil type-ref"
-    (is (nil? (#'analyzer/extract-type-refs nil)))))
+(deftest type-ref->type-expr-compound
+  (testing "List<T> becomes :vector"
+    (is (= {:tag :vector :element {:tag :ref :name :Node}}
+           (#'analyzer/type-ref->type-expr {:kind :generic :name "List"
+                                            :params [{:kind :simple :name "Node"}]}))))
+  (testing "Map<K,V> becomes :map-of"
+    (is (= {:tag :map-of
+            :key-type {:tag :primitive :name "String"}
+            :value-type {:tag :ref :name :Node}}
+           (#'analyzer/type-ref->type-expr {:kind :generic :name "Map"
+                                            :params [{:kind :simple :name "String"}
+                                                     {:kind :simple :name "Node"}]}))))
+  (testing "optional becomes :maybe"
+    (is (= {:tag :maybe :inner {:tag :ref :name :Contract}}
+           (#'analyzer/type-ref->type-expr {:kind :optional
+                                            :inner {:kind :simple :name "Contract"}}))))
+  (testing "union becomes :or"
+    (is (= {:tag :or :variants [{:tag :ref :name :A} {:tag :ref :name :B}]}
+           (#'analyzer/type-ref->type-expr {:kind :union
+                                            :members [{:kind :simple :name "A"}
+                                                      {:kind :simple :name "B"}]})))))
 
 ;; ---------------------------------------------------------------------------
-;; Unit: declaration ref extraction
+;; Unit: declaration → schema TypeExpr
 
-(deftest extract-declaration-refs-test
-  (testing "entity with typed fields"
+(deftest decl->schema-type-expr-test
+  (testing "entity fields become :map entries"
     (let [decl {:type :entity :name "Edge"
                 :fields [{:name "from" :field-kind :typed
-                           :type-ref {:kind :simple :name "String"}}
-                          {:name "to" :field-kind :typed
-                           :type-ref {:kind :simple :name "Node"}}]}]
-      (is (= #{{:name "Node"}}
-             (#'analyzer/extract-declaration-refs decl)))))
-  (testing "variant with base type"
-    (let [decl {:type :variant :name "Container"
-                :base {:kind :simple :name "Node"}
-                :fields [{:name "doc" :field-kind :typed
-                           :type-ref {:kind :optional
-                                      :inner {:kind :simple :name "String"}}}]}]
-      (is (= #{{:name "Node"}}
-             (#'analyzer/extract-declaration-refs decl)))))
-  (testing "rule with when clause params"
-    (let [decl {:type :rule :name "BuildModel"
-                :clauses [{:clause-type :when
-                            :trigger {:kind :call :name "BuildModel"
-                                      :params [{:name "analysis"
-                                                :type-ref {:kind :simple :name "AnalysisData"}}]}}]}]
-      (is (= #{{:name "AnalysisData"}}
-             (#'analyzer/extract-declaration-refs decl)))))
-  (testing "enum has no type refs"
-    (is (= #{}
-           (#'analyzer/extract-declaration-refs {:type :enum :name "Status"
-                                               :values ["active" "inactive"]})))))
+                          :type-ref {:kind :simple :name "Node"}}
+                         {:name "to" :field-kind :typed
+                          :type-ref {:kind :simple :name "Node"}}]}]
+      (is (= {:tag :map
+              :entries [{:key "from" :optional false :type {:tag :ref :name :Node}}
+                        {:key "to"   :optional false :type {:tag :ref :name :Node}}]}
+             (#'analyzer/decl->schema-type-expr decl)))))
 
-;; ---------------------------------------------------------------------------
-;; Unit: use path resolution
-
-(deftest resolve-use-path-test
-  (let [registry {"model" "src/fukan/model/spec.allium"
-                  "projection" "src/fukan/projection/spec.allium"
-                  "views" "src/fukan/web/views/spec.allium"}]
-    (testing "resolves ./model.allium"
-      (is (= "src/fukan/model/spec.allium"
-             (#'analyzer/resolve-use-path "./model.allium" registry))))
-    (testing "resolves ./projection.allium"
-      (is (= "src/fukan/projection/spec.allium"
-             (#'analyzer/resolve-use-path "./projection.allium" registry))))
-    (testing "returns nil for unknown path"
-      (is (nil? (#'analyzer/resolve-use-path "./unknown.allium" registry))))))
-
-;; ---------------------------------------------------------------------------
-;; Unit: spec registry building
-
-(deftest build-spec-registry-test
-  (let [files ["src/fukan/model/spec.allium"
-               "src/fukan/projection/spec.allium"
-               "src/fukan/web/views/spec.allium"]
-        registry (#'analyzer/build-spec-registry files)]
-    (is (= "src/fukan/model/spec.allium" (get registry "model")))
-    (is (= "src/fukan/projection/spec.allium" (get registry "projection")))
-    (is (= "src/fukan/web/views/spec.allium" (get registry "views")))))
+  (testing "non-typed fields are dropped"
+    (let [decl {:type :value :name "X"
+                :fields [{:name "tag" :field-kind :literal :value "x"}
+                         {:name "n"   :field-kind :typed
+                          :type-ref {:kind :simple :name "Integer"}}]}]
+      (is (= {:tag :map
+              :entries [{:key "n" :optional false :type {:tag :primitive :name "Integer"}}]}
+             (#'analyzer/decl->schema-type-expr decl))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Integration: analyze Fukan's own .allium files
 
-(deftest allium-analyze-test
-  (testing "produces module nodes enriched with spec data"
+(deftest allium-analyze-self
+  (testing "produces module nodes plus private Schema nodes"
     (let [result (analyzer/analyze "src")]
-      (is (pos? (count (:source-files result)))
-          "should discover allium files")
-      (is (pos? (count (:nodes result)))
-          "should produce nodes")
-      ;; Modules use folder-path IDs, not spec-allium
-      (let [modules (->> (vals (:nodes result))
-                             (filter #(= :module (:kind %))))]
-        (is (>= (count modules) 2)
-            "should have at least 2 module nodes")
+      (is (pos? (count (:source-files result))) "discovers .allium files")
+      (is (pos? (count (:nodes result))) "produces nodes")
+
+      (let [nodes (vals (:nodes result))
+            modules (filter #(= :module (:kind %)) nodes)
+            schemas (filter #(= :schema (:kind %)) nodes)
+            functions (filter #(= :function (:kind %)) nodes)]
         (is (every? #(str/starts-with? (:id %) "src/") modules)
-            "all modules should use folder-path IDs")
-        (is (every? #(not (str/includes? (:id %) "allium")) modules)
-            "no module should have allium in its ID"))
-      ;; No function children — spec data lives on modules only
-      (let [functions (->> (vals (:nodes result))
-                            (filter #(= :function (:kind %))))]
+            "module ids are folder paths")
         (is (zero? (count functions))
-            "should not produce function (declaration) nodes"))
-      ;; No edges — use declarations are spec-level, not code dependencies
+            "allium emits no Function nodes (rules are not yet first-class)")
+        (is (pos? (count schemas))
+            "allium emits Schema nodes from entity/value/variant/enum")
+        (is (every? #(true? (get-in % [:data :private?])) schemas)
+            "all allium-emitted schemas are private (boundary publicizes via merge)"))
+
       (is (zero? (count (:edges result)))
-          "should not produce edges (spec imports are not code deps)"))))
+          "allium emits no edges; call edges come from impl, schema-ref edges from build"))))
 
-(deftest allium-enrichment-test
-  (testing "module uses folder-path ID matching build pipeline"
+(deftest allium-extracts-variants
+  (testing "variant declarations from model/spec.allium become Schema nodes"
     (let [result (analyzer/analyze "src")
-          model-module (get (:nodes result) "src/fukan/model")]
-      (is (some? model-module) "model folder module should exist")
-      (is (nil? (get-in model-module [:data :spec]))
-          "module should not carry raw :spec data")
-      (is (nil? (get-in model-module [:data :fields]))
-          "module should not carry :fields")
-      (is (= :module (:kind model-module))
-          "module should have kind :module"))))
+          ;; model/spec.allium declares many TypeExpr variants
+          model-schema-keys (->> (vals (:nodes result))
+                                 (filter #(= :schema (:kind %)))
+                                 (filter #(= "src/fukan/model" (:parent %)))
+                                 (map :label)
+                                 set)]
+      (is (contains? model-schema-keys "RefExpr") "RefExpr variant captured")
+      (is (contains? model-schema-keys "MapExpr") "MapExpr variant captured")
+      (is (contains? model-schema-keys "OrExpr")  "OrExpr variant captured"))))
 
-(deftest allium-model-integration-test
-  (testing "merged Clojure + Allium result builds valid model"
+;; ---------------------------------------------------------------------------
+;; Integration: full build still satisfies model invariants
+
+(deftest allium-model-integration
+  (testing "merged Clojure + Allium + Boundary result builds a valid model"
     (let [model (fix/build-self-model)]
-      (is (pos? (count (:nodes model))) "model should have nodes")
-      (is (pos? (count (:edges model))) "model should have edges")
-      ;; Allium result should merge into model modules
-      (let [allium-dirs (->> (vals (:nodes (analyzer/analyze "src")))
-                              (map :id)
-                              set)]
-        (is (some #(contains? allium-dirs %) (keys (:nodes model)))
-            "model should contain modules from allium result"))
-      ;; No spec-allium modules should exist
-      (is (empty? (->> (keys (:nodes model))
-                        (filter #(str/includes? % "spec-allium"))))
-          "no spec-allium nodes should exist in the model")
-      ;; All model invariants should hold
-      (is (true? (inv/tree-structure? model)) (str (inv/tree-structure? model)))
-      (is (true? (inv/leaf-strictness? model)) (str (inv/leaf-strictness? model)))
-      (is (true? (inv/no-empty-modules? model)) (str (inv/no-empty-modules? model)))
-      (is (true? (inv/no-self-edges? model)) (str (inv/no-self-edges? model)))
-      (is (true? (inv/edge-integrity? model)) (str (inv/edge-integrity? model)))
+      (is (pos? (count (:nodes model))) "model has nodes")
+      (is (pos? (count (:edges model))) "model has edges")
+      (is (true? (inv/tree-structure? model))     (str (inv/tree-structure? model)))
+      (is (true? (inv/leaf-strictness? model))    (str (inv/leaf-strictness? model)))
+      (is (true? (inv/no-empty-modules? model))   (str (inv/no-empty-modules? model)))
+      (is (true? (inv/no-self-edges? model))      (str (inv/no-self-edges? model)))
+      (is (true? (inv/edge-integrity? model))     (str (inv/edge-integrity? model)))
       (is (true? (inv/smart-root-pruning? model)) (str (inv/smart-root-pruning? model))))))

@@ -214,115 +214,23 @@
 ;; -----------------------------------------------------------------------------
 ;; Surface-to-boundary collapse
 
-(def ^:private allium-primitive-types
-  "Allium type names that map to primitive schema tags."
-  {"String" "string" "Integer" "int" "Boolean" "boolean"})
-
-(defn- allium-type-ref->schema
-  "Convert an Allium type-ref AST node to the internal schema format
-   used by boundary function signatures. This allows spec-declared
-   types to produce the same schema representation as malli-derived
-   types from the implementation."
-  [type-ref]
-  (when type-ref
-    (case (:kind type-ref)
-      :simple
-      (if-let [prim (allium-primitive-types (:name type-ref))]
-        {:tag :primitive :name prim}
-        {:tag :ref :name (keyword (:name type-ref))})
-
-      :optional
-      {:tag :maybe :inner (allium-type-ref->schema (:inner type-ref))}
-
-      :generic
-      (let [n (:name type-ref)
-            params (mapv allium-type-ref->schema (:params type-ref))]
-        (case n
-          "List"  {:tag :vector :element (first params)}
-          "Set"   {:tag :set :element (first params)}
-          "Map"   {:tag :map-of :key-type (first params) :value-type (second params)}
-          ;; Unknown generic — use ref with params
-          {:tag :ref :name (keyword n)}))
-
-      :union
-      {:tag :or :variants (mapv allium-type-ref->schema (:members type-ref))}
-
-      :qualified
-      {:tag :ref :name (keyword (:ns type-ref) (:name type-ref))}
-
-      nil)))
-
-(defn- allium-provides->schema
-  "Convert Allium provides entry params and return type to a function
-   signature schema {:inputs [...] :output ...}."
-  [{:keys [params return]}]
-  (when (or (seq params) return)
-    (cond-> {}
-      (seq params) (assoc :inputs (mapv #(allium-type-ref->schema (:type %)) params))
-      return       (assoc :output (allium-type-ref->schema return)))))
-
-(defn- descendant-fns-by-label
-  "Collect all Function descendants (any depth) of a module, indexed by label.
-   On label collision, prefers nodes with signatures over placeholders."
-  [nodes module-id]
-  (->> (vals nodes)
-       (filter #(= :function (:kind %)))
-       (filter (fn [node]
-                 (loop [pid (:parent node)]
-                   (cond
-                     (nil? pid) false
-                     (= pid module-id) true
-                     :else (recur (:parent (get nodes pid)))))))
-       (reduce (fn [acc node]
-                 (let [existing (get acc (:label node))]
-                   (if (and existing (get-in existing [:data :signature])
-                            (not (get-in node [:data :signature])))
-                     acc
-                     (assoc acc (:label node) node))))
-               {})))
-
-(defn- surface-provides->boundary-fns
-  "Convert surface :provides entries into boundary function declarations.
-   Matches provides names against Function descendant nodes (not just
-   direct children) to pull in signatures and docs from the implementation.
-   Descendants are searched because the surface may be on a directory-level
-   module while functions live in namespace-level child modules.
-   Provides names use underscores; implementation labels use hyphens —
-   both conventions are tried for matching."
-  [nodes module-id provides]
-  (when (seq provides)
-    (let [desc-fns (descendant-fns-by-label nodes module-id)]
-      (->> provides
-           (mapv (fn [entry]
-                   (let [{:keys [name description]} entry
-                         ;; Try both underscore→hyphen and exact match
-                         hyphen-name (str/replace name "_" "-")
-                         match (or (get desc-fns hyphen-name)
-                                   (get desc-fns name))
-                         ;; Prefer implementation schema, fall back to spec-declared types
-                         impl-schema (get-in match [:data :signature])
-                         spec-schema (allium-provides->schema entry)
-                         schema (or impl-schema spec-schema)]
-                     (cond-> {:name (or (:label match) hyphen-name)}
-                       (:id match) (assoc :id (:id match))
-                       schema (assoc :signature schema)
-                       (or description (get-in match [:data :doc])) (assoc :doc (or description (get-in match [:data :doc])))))))))))
+;; Surface :provides materialization is no longer used: the boundary
+;; analyzer emits Function nodes directly from `fn` declarations, and
+;; the allium analyzer no longer carries :provides on the surface.
 
 (defn- collapse-surface-to-boundary
   "Collapse remaining :surface data into :boundary for each module.
-   After materialization, :surface may still contain :guarantees,
-   :description, and :provides. Provides entries are reconciled against
-   existing Function children to build boundary function declarations.
-   These are merged into :boundary, then :surface is removed."
+   The boundary analyzer carries :description and :guarantees on the
+   surface; both are lifted into the module's :boundary, then :surface
+   is removed. Function and Schema commitments are emitted directly as
+   nodes by the boundary analyzer, not materialized here."
   [nodes]
   (reduce-kv
     (fn [acc id node]
       (if-let [surface (get-in node [:data :surface])]
-        (let [provides-fns (surface-provides->boundary-fns nodes id (:provides surface))
-              boundary-parts (cond-> {}
+        (let [boundary-parts (cond-> {}
                                (:guarantees surface) (assoc :guarantees (:guarantees surface))
-                               (:description surface) (assoc :description (:description surface))
-                               (seq provides-fns) (assoc :functions provides-fns))
+                               (:description surface) (assoc :description (:description surface)))
               existing-boundary (get-in node [:data :boundary])
               merged-boundary (if existing-boundary
                                 (merge existing-boundary boundary-parts)
@@ -341,7 +249,9 @@
   "Infer a boundary for a module from its child function and schema nodes.
    Reads signatures from already-built nodes instead of going to runtime.
    Excludes schema-defining symbols (they have corresponding schema nodes).
-   Collects :schema-key values from schema children into :schemas.
+   Collects :schema-key values from PUBLIC schema children into :schemas —
+   private schemas (allium-only types not exposed at the wall) are
+   internal implementation details and do not appear in the boundary.
 
    Relies on the node ID convention: function node IDs are 'parent-id/label',
    matching the ID that schema-defining symbols would have."
@@ -351,7 +261,9 @@
                              (filter #(and (= :schema (:kind %))
                                            (= parent-id (:parent %)))))
         schema-symbol-ids (into #{} (map (fn [sn] (str parent-id "/" (:label sn)))) schema-children)
-        schemas (into [] (keep #(get-in % [:data :schema-key])) schema-children)
+        public-schema-children (->> schema-children
+                                    (remove #(true? (get-in % [:data :private?]))))
+        schemas (into [] (keep #(get-in % [:data :schema-key])) public-schema-children)
         functions (->> (vals nodes)
                        (filter #(and (= :function (:kind %))
                                      (= parent-id (:parent %))
@@ -415,11 +327,18 @@
    These are redundant — the schema node represents them.
 
    Relies on the node ID convention: function node IDs are 'parent-id/label',
-   matching the ID that schema-defining symbols would have."
+   matching the ID that schema-defining symbols would have. Only Function
+   nodes are removed — spec-derived Schema nodes can themselves have IDs
+   of the form 'parent-id/label', and we must not dissoc those."
   [nodes]
   (let [schema-symbol-ids (->> (vals nodes)
                                (filter #(= :schema (:kind %)))
-                               (map (fn [sn] (str (:parent sn) "/" (:label sn))))
+                               (keep (fn [sn]
+                                       (let [candidate (str (:parent sn) "/" (:label sn))
+                                             existing (get nodes candidate)]
+                                         (when (and existing
+                                                    (= :function (:kind existing)))
+                                           candidate))))
                                set)
         cleaned (apply dissoc nodes schema-symbol-ids)]
     ;; Also remove from parent children sets
@@ -495,19 +414,45 @@
 ;; -----------------------------------------------------------------------------
 ;; AnalysisResult merging
 
+(defn- merge-schema-data
+  "Merge two schema :data maps. The boundary analyzer emits a placeholder
+   ref TypeExpr alongside :private? false; the allium analyzer emits the
+   structured TypeExpr alongside :private? true. We want the structured
+   form and the public marking. Public sticks: if either side claims
+   public, the merged schema is public."
+  [a b]
+  (let [merged (merge a b)
+        a-form (:schema a)
+        b-form (:schema b)
+        ;; A non-ref TypeExpr is more informative than a placeholder ref.
+        merged-schema (cond
+                        (and a-form (= :ref (:tag a-form))) b-form
+                        (and b-form (= :ref (:tag b-form))) a-form
+                        :else (or b-form a-form))
+        public? (or (false? (:private? a)) (false? (:private? b)))]
+    (cond-> merged
+      merged-schema (assoc :schema merged-schema)
+      true          (assoc :private? (not public?)))))
+
 (defn- merge-node-pair
-  "Merge two nodes with the same ID. Deep-merges :data maps for modules
-   so that spec data (boundary, description) enriches impl data (doc)
-   rather than overwriting it. Non-module nodes or nodes with different
-   kinds use simple last-wins merge.
+  "Merge two nodes with the same ID.
+   - Module nodes: deep-merge :data so spec data (boundary, surface,
+     description) enriches impl data (doc) rather than overwriting it.
+   - Schema nodes: deep-merge so allium TypeExpr structure combines with
+     boundary public marking — boundary emits the public commitment
+     alongside a placeholder ref; allium fills in the real structure.
+   - Function nodes: deep-merge :data so a boundary-emitted spec fn
+     (signature, doc) enriches an impl-discovered fn rather than
+     replacing its private/doc fields when they differ.
+   - Other cases use simple last-wins merge.
 
    Description priority: a node with :surface data (from a boundary or
    spec file) has the authoritative module description. Its :description
    takes precedence over descriptions from other sources."
   [a b]
-  (if (and (= :module (:kind a)) (= :module (:kind b)))
+  (cond
+    (and (= :module (:kind a)) (= :module (:kind b)))
     (let [merged-data (merge (:data a) (:data b))
-          ;; Prefer description from the node that has surface data
           desc (cond
                  (get-in b [:data :surface]) (:description b)
                  (get-in a [:data :surface]) (:description a)
@@ -517,7 +462,26 @@
           (assoc :parent (or (:parent b) (:parent a)))
           (update :children (fn [c] (into (or (:children a) #{}) (or c #{}))))
           (cond-> desc (assoc :description desc))))
-    b))
+
+    (and (= :schema (:kind a)) (= :schema (:kind b)))
+    (-> (merge a b)
+        (assoc :data (merge-schema-data (:data a) (:data b)))
+        (assoc :parent (or (:parent b) (:parent a)))
+        (update :children (fn [c] (into (or (:children a) #{}) (or c #{})))))
+
+    (and (= :function (:kind a)) (= :function (:kind b)))
+    (let [merged-data (merge (:data a) (:data b))
+          ;; If either side declares public, the merged fn is public.
+          ;; Spec fns are public by definition; impl fns have explicit private?.
+          public? (or (false? (:private? (:data a)))
+                      (false? (:private? (:data b))))
+          merged-data (assoc merged-data :private? (not public?))]
+      (-> (merge a b)
+          (assoc :data merged-data)
+          (assoc :parent (or (:parent b) (:parent a)))
+          (update :children (fn [c] (into (or (:children a) #{}) (or c #{}))))))
+
+    :else b))
 
 (defn- merge-node-maps
   "Merge multiple node maps with deep merge for shared module IDs."
@@ -538,64 +502,6 @@
   {:source-files (vec (mapcat :source-files results))
    :nodes (apply merge-node-maps (map :nodes results))
    :edges (vec (into #{} (mapcat :edges results)))})
-
-;; -----------------------------------------------------------------------------
-;; Surface materialization
-
-(defn- materialize-surface-functions
-  "Materialize surface provides operations as Function child nodes.
-   For each module with surface.provides:
-   - Searches descendants (any depth) for matching functions
-   - If a descendant match exists, enriches its :doc but does NOT create duplicates
-   - Creates a new Function child only if no descendant match is found
-   Provides names use underscores; implementation labels use hyphens.
-   Both conventions are tried when matching."
-  [nodes]
-  (reduce-kv
-    (fn [acc id node]
-      (if-let [provides (seq (get-in node [:data :surface :provides]))]
-        (let [;; Search all descendants, not just direct children
-              desc-fns (descendant-fns-by-label nodes id)
-              ;; Create or enrich for each provides entry
-              {new-nodes :nodes enrichments :enrichments}
-              (reduce
-                (fn [acc {:keys [name description]}]
-                  (let [hyphen-name (str/replace name "_" "-")
-                        match (or (get desc-fns hyphen-name)
-                                  (get desc-fns name))]
-                    (if match
-                      ;; Match: enrich existing function's doc
-                      (update acc :enrichments conj [(:id match) description])
-                      ;; No match: create new Function child with hyphenated label
-                      (let [fn-id (str id "/" hyphen-name)
-                            fn-node {:id fn-id
-                                     :kind :function
-                                     :label hyphen-name
-                                     :parent id
-                                     :children #{}
-                                     :data {:kind :function
-                                            :private? false
-                                            :doc description}}]
-                        (update acc :nodes assoc fn-id fn-node)))))
-                {:nodes {} :enrichments []}
-                provides)
-              ;; Keep :provides in surface — collapse-surface-to-boundary
-              ;; will use them for boundary function declarations
-              updated-node node]
-          (-> acc
-              (assoc id updated-node)
-              ;; Add new function nodes
-              (merge new-nodes)
-              ;; Apply enrichments to existing nodes
-              (as-> m
-                (reduce (fn [m [fn-id desc]]
-                          (if (and desc (contains? m fn-id)
-                                   (nil? (get-in m [fn-id :data :doc])))
-                            (assoc-in m [fn-id :data :doc] desc)
-                            m))
-                        m enrichments))))
-        (assoc acc id node)))
-    {} nodes))
 
 ;; -----------------------------------------------------------------------------
 ;; Build pipeline
@@ -645,9 +551,9 @@
         smart-root (find-smart-root all-nodes folder-ids)
         pruned-nodes (prune-to-smart-root all-nodes smart-root)
 
-        ;; Materialize surface provides as Function children, collapse
-        ;; remaining surface data into boundary, re-wire
-        materialized-nodes (-> (materialize-surface-functions pruned-nodes)
+        ;; Collapse remaining surface data (description, guarantees) into
+        ;; the module's boundary, then re-wire children
+        materialized-nodes (-> pruned-nodes
                                collapse-surface-to-boundary
                                wire-children)
 
