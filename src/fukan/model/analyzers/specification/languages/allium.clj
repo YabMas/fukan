@@ -73,7 +73,7 @@
   "Build a map from declaration name → description by scanning raw text."
   [text]
   (let [lines (str/split-lines text)
-        decl-re #"^\s*(?:external\s+)?(?:entity|value|variant|rule|surface|enum|guarantee)\s+(\w+)"]
+        decl-re #"^\s*(?:external\s+)?(?:entity|value|variant|rule|surface|enum|guarantee|invariant)\s+(\w+)"]
     (loop [i 0
            result {}]
       (if (>= i (count lines))
@@ -188,12 +188,39 @@
                                :private? true}
                         doc (assoc :doc doc))}]))
 
+(defn- merge-module-nodes
+  "Combine two module nodes emitted for the same module-id (i.e. two
+   .allium files sharing a parent folder). Descriptions and surface
+   guarantees concat additively; invariants concat; other scalar data
+   prefers the later value (caller order)."
+  [a b]
+  (let [surface-a (get-in a [:data :surface]) surface-b (get-in b [:data :surface])
+        merged-guarantees (vec (concat (:guarantees surface-a) (:guarantees surface-b)))
+        merged-surface (cond-> {}
+                         (or (:description surface-a) (:description surface-b))
+                         (assoc :description (or (:description surface-b) (:description surface-a)))
+                         (seq merged-guarantees)
+                         (assoc :guarantees merged-guarantees))
+        merged-invariants (vec (concat (get-in a [:data :invariants])
+                                       (get-in b [:data :invariants])))
+        merged-data (cond-> (merge (:data a) (:data b))
+                      (seq merged-surface) (assoc :surface merged-surface)
+                      (seq merged-invariants) (assoc :invariants merged-invariants))]
+    (-> (merge a b)
+        (assoc :data merged-data)
+        (cond-> (or (:description a) (:description b))
+                (assoc :description (or (:description b) (:description a)))))))
+
 (defn- build-allium-nodes
   "Build nodes from parsed allium files.
    Creates:
    - Module nodes with description (fallback when no .boundary file)
    - Schema nodes from entity/value/variant declarations (private)
    - Schema nodes from enum declarations (private)
+
+   Multiple .allium files may share a module-id (same parent folder);
+   their module-level contributions (guarantees, invariants, description)
+   are merged rather than clobbered.
 
    Schemas are emitted as private; the boundary analyzer publicizes a
    schema by emitting a public Schema with the same id, which merges
@@ -208,7 +235,17 @@
 
             guarantees (->> decls
                             (filter #(= :guarantee (:type %)))
-                            (mapv :name))
+                            (mapv (fn [d]
+                                    (cond-> {:name (:name d)}
+                                      (get decl-descs (:name d))
+                                      (assoc :description (get decl-descs (:name d)))))))
+            invariants (->> decls
+                            (filter #(= :invariant (:type %)))
+                            (mapv (fn [d]
+                                    (cond-> {:name (:name d)
+                                             :body (:body d)}
+                                      (get decl-descs (:name d))
+                                      (assoc :description (get decl-descs (:name d)))))))
             surface (cond-> {}
                       (seq guarantees) (assoc :guarantees guarantees))
 
@@ -219,7 +256,8 @@
                            :parent nil
                            :children #{}
                            :data (cond-> {:kind :module :has-spec true}
-                                   (seq surface) (assoc :surface surface))}
+                                   (seq surface) (assoc :surface surface)
+                                   (seq invariants) (assoc :invariants invariants))}
                           module-desc (assoc :description module-desc))
 
             typed-decls (->> decls (filter #(#{:entity :value :variant} (:type %))))
@@ -230,7 +268,10 @@
             enum-nodes (into {} (map #(build-enum-schema-node module-id % decl-descs))
                              enum-decls)]
         (-> acc
-            (assoc module-id module-node)
+            (update module-id (fn [existing]
+                                (if existing
+                                  (merge-module-nodes existing module-node)
+                                  module-node)))
             (merge schema-nodes)
             (merge enum-nodes))))
     {}

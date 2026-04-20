@@ -210,14 +210,36 @@
 
 (defn- render-guarantees
   "Render a guarantees section as a bullet list.
+   Each entry is {:name :description?} — description is the prose
+   harvested from the leading comment above the declaration.
    Returns nil when guarantees are empty or absent."
   [guarantees]
   (when (seq guarantees)
     (list
-     [:h5 "Guarantees"]
+     [:h5 "Guarantees " [:span.dep-count (str "(" (count guarantees) ")")]]
      [:ul
-      (for [g guarantees]
-        [:li g])])))
+      (for [{:keys [name description]} guarantees]
+        [:li
+         [:strong name]
+         (when description
+           [:div.doc description])])])))
+
+(defn- render-invariants
+  "Render an invariants section. Each entry is {:name :body :description?}.
+   The body is verbatim text from the Allium invariant block; the
+   description (leading-comment prose) is shown when present, falling back
+   to the body as the explanatory content."
+  [invariants]
+  (when (seq invariants)
+    (list
+     [:h5 "Invariants " [:span.dep-count (str "(" (count invariants) ")")]]
+     [:ul
+      (for [{:keys [name body description]} invariants]
+        [:li
+         [:strong name]
+         (when description
+           [:div.doc description])
+         [:pre.invariant-body body]])])))
 
 (defn- render-defined-types
   "Render a Defined Types section listing schemas owned by a module.
@@ -235,7 +257,7 @@
   "Generic renderer for all non-edge entity types.
    Iterates through sections in order: label, description,
    guarantees, defined types, interface."
-  [{:keys [label kind description guarantees schemas schema-ids interface dataflow]}]
+  [{:keys [label kind description guarantees invariants schemas schema-ids interface dataflow]}]
   (str
    (h/html
     [:div#node-info
@@ -243,6 +265,7 @@
 
      (render-description description)
      (render-guarantees guarantees)
+     (render-invariants invariants)
      (render-defined-types schemas)
 
      (when interface

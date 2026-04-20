@@ -61,12 +61,24 @@
       (is (= "A module for alpha things." (:description detail))))))
 
 (deftest module-with-guarantees
-  (testing "module with boundary guarantees includes them in detail"
-    (let [model (assoc-in test-model [:nodes "ns:alpha" :data :boundary]
-                          {:guarantees ["idempotent" "snapshot_isolation"]})
+  (testing "module with boundary guarantees includes them in detail as structured entries"
+    (let [guarantees [{:name "Idempotent" :description "calls may be retried safely"}
+                      {:name "SnapshotIsolation"}]
+          model (assoc-in test-model [:nodes "ns:alpha" :data :boundary]
+                          {:guarantees guarantees})
           detail (details/entity-details model "ns:alpha")]
       (is (some? (:guarantees detail)))
-      (is (= ["idempotent" "snapshot_isolation"] (:guarantees detail))))))
+      (is (= guarantees (:guarantees detail))))))
+
+(deftest module-with-invariants
+  (testing "module with top-level invariants includes them in detail"
+    (let [invariants [{:name "TreeStructure" :body "parents form a tree"}
+                      {:name "EdgeIntegrity"
+                       :body "all edge endpoints exist"
+                       :description "no dangling edges"}]
+          model (assoc-in test-model [:nodes "ns:alpha" :data :invariants] invariants)
+          detail (details/entity-details model "ns:alpha")]
+      (is (= invariants (:invariants detail))))))
 
 (deftest module-without-guarantees
   (testing "module without boundary has no guarantees"

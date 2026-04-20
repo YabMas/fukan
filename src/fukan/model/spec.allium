@@ -27,17 +27,19 @@
 --   modules can be expanded to reveal their internal structure.
 --
 -- Spec source-of-truth split:
---   .boundary is the spine of the spec model. Its four constructs map
+--   .boundary is the spine of the spec model. Its three constructs map
 --   directly onto graph elements:
 --     fn        -> Function node + signature
 --     exposes   -> Schema node (publicly owned by the module)
---     guarantee -> string in the module's Boundary.guarantees list
 --     use       -> reference for type resolution
 --   .allium is enrichment. It contributes:
 --     entity / value / variant / enum -> Schema TypeExpr structure for
 --       schemas declared in .boundary exposes; Schema nodes (private)
 --       for types not exposed at the wall
---     surface description, @guarantee  -> merged into the module's Boundary
+--     guarantee Name     -> Guarantee entry in the module's Boundary
+--                           (API-adjacent promise, prose from leading comment)
+--     invariant Name {…} -> Invariant entry on the Module itself
+--                           (structural truth that holds, not API-scoped)
 --   When both languages contribute to the same Schema node, .boundary
 --   sets the public marking and .allium fills in the type structure.
 
@@ -167,6 +169,42 @@ value BoundaryFn {
     doc: String?
 }
 
+value Guarantee {
+    -- An API-adjacent promise made by a module.
+    --
+    -- In Allium, `guarantee Name` is bodyless — the name is the tag;
+    -- the prose explaining the promise lives in the leading comment
+    -- block above the declaration. Guarantees are about what callers
+    -- can rely on when they invoke the module's API ("if you use
+    -- this, I promise X"). They attach to the module's boundary, not
+    -- to the module as a whole.
+    --
+    -- The annotation form `@guarantee Name` attaches to a specific
+    -- callable (surface provides-entry, contract obligation). That
+    -- form is not yet modeled — it waits on first-class surfaces and
+    -- contracts.
+    name: String
+    description: String?   -- prose from the leading comment block
+}
+
+value Invariant {
+    -- A structural truth about a module: a condition that holds,
+    -- independent of any particular call into the module's API.
+    --
+    -- In Allium, `invariant Name { … }` carries a body (the
+    -- grammar requires it). The body is opaque prose/expression
+    -- text at this stage — structured parsing of the condition is
+    -- deferred to a later iteration (where invariants may backlink
+    -- to the functions and schemas they constrain).
+    --
+    -- Invariants attach to the Module, not the Boundary. They are
+    -- not promises made at the wall; they are properties the module
+    -- maintains internally.
+    name: String
+    body: String           -- verbatim content between { }
+    description: String?   -- prose from the leading comment block
+}
+
 value Boundary {
     -- A module's public contract: what it promises to the outside world.
     --
@@ -182,12 +220,13 @@ value Boundary {
     --     or inferred from implementation signatures)
     --   - schemas: registry keys of data shapes this module owns and
     --     publishes (consumers of these schemas depend on this module)
-    --   - guarantees: from specification
+    --   - guarantees: API-adjacent promises from .allium `guarantee`
+    --     declarations, with prose harvested from their leading comments
 
     description: String?
     functions: List<BoundaryFn>
     schemas: List<Identifier>
-    guarantees: List<String>?
+    guarantees: List<Guarantee>
 }
 
 ------------------------------------------------------------
@@ -290,8 +329,16 @@ variant Module : Node {
     --   infers one from public function signatures when no spec or
     --   contract provides one explicitly. This ensures IO can always
     --   be derived from boundary functions at projection time.
+    --
+    -- ModuleInvariants: a module may carry zero or more invariants —
+    --   structural truths harvested from .allium `invariant` blocks.
+    --   Unlike guarantees (which live on the Boundary and describe
+    --   what callers can rely on), invariants describe properties
+    --   the module maintains internally and are not tied to any
+    --   particular API call.
 
     boundary: Boundary
+    invariants: List<Invariant>
 }
 
 variant Function : Node {

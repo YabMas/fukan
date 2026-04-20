@@ -109,23 +109,42 @@
       (is (contains? model-schema-keys "OrExpr")  "OrExpr variant captured"))))
 
 (deftest allium-extracts-module-guarantees
-  (testing "module-level `guarantee` decls land on the module's surface"
+  (testing "module-level `guarantee` decls land on the module's surface as structured entries"
     (let [result (analyzer/analyze "src")
           infra (get (:nodes result) "src/fukan/infra")
-          guarantees (get-in infra [:data :surface :guarantees])]
+          guarantees (get-in infra [:data :surface :guarantees])
+          names (set (map :name guarantees))]
       (is (sequential? guarantees))
-      (is (contains? (set guarantees) "SnapshotIsolation"))
-      (is (contains? (set guarantees) "SingleModelSource"))
-      (is (contains? (set guarantees) "ModelServerDecoupled"))
-      (is (contains? (set guarantees) "SingleServerInstance"))))
+      (is (every? map? guarantees) "each guarantee is a map, not a bare string")
+      (is (contains? names "SnapshotIsolation"))
+      (is (contains? names "SingleModelSource"))
+      (is (contains? names "ModelServerDecoupled"))
+      (is (contains? names "SingleServerInstance"))
+      (is (some :description guarantees)
+          "at least one guarantee carries leading-comment prose")))
 
   (testing "web module also carries its migrated guarantees"
     (let [result (analyzer/analyze "src")
           web (get (:nodes result) "src/fukan/web")
-          guarantees (get-in web [:data :surface :guarantees])]
+          guarantees (get-in web [:data :surface :guarantees])
+          names (set (map :name guarantees))]
       (is (sequential? guarantees))
-      (is (contains? (set guarantees) "PureDelegation"))
-      (is (contains? (set guarantees) "PerRequestModel")))))
+      (is (contains? names "PureDelegation"))
+      (is (contains? names "PerRequestModel")))))
+
+(deftest allium-extracts-module-invariants
+  (testing "top-level `invariant` decls are attached to the module with body + description"
+    (let [result (analyzer/analyze "src")
+          model-mod (get (:nodes result) "src/fukan/model")
+          invariants (get-in model-mod [:data :invariants])
+          by-name (into {} (map (juxt :name identity)) invariants)]
+      (is (sequential? invariants))
+      (is (every? map? invariants))
+      (is (contains? by-name "TreeStructure"))
+      (is (contains? by-name "EdgeIntegrity"))
+      (is (contains? by-name "LeafEdges"))
+      (is (string? (get-in by-name ["EdgeIntegrity" :body]))
+          "invariant body is captured as a string"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Integration: full build still satisfies model invariants

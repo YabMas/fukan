@@ -136,7 +136,7 @@
                   :kind :module
                   :parent {:id "root" :label "root"}
                   :description "A test module"
-                  :guarantees ["always works"]
+                  :guarantees [{:name "AlwaysWorks" :description "always works"}]
                   :schemas [{:label "MySchema" :key :MySchema :id "ns:a/MySchema"}]
                   :interface {:type :fn-list :items [{:name "do-thing" :id "ns:a/do-thing"}]}
                   :schema-ids {}

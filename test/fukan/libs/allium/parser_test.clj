@@ -381,7 +381,7 @@
       (is (not (insta/failure? result)))
       (is (= "2" (:allium-version result)))
       (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 4 (:value types)))            ;; FunctionSignature, BoundaryFn, Boundary, MapEntry
+        (is (= 6 (:value types)))            ;; MapEntry, FunctionSignature, BoundaryFn, Guarantee, Invariant, Boundary
         (is (= 4 (:entity types)))           ;; Edge, Node, Model, TypeExpr
         (is (= 17 (:variant types)))
         (is (= 5 (:invariant types)))))))    ;; NoSelfEdge, LeafStrictness + 3 top-level

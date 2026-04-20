@@ -53,20 +53,32 @@
     :FunctionSignature]
    [:doc {:optional true} :string]])
 
+(def ^:schema Guarantee
+  [:map {:description "An API-adjacent promise made by a module. Bodyless in Allium; the prose explaining the promise is the leading-comment block above the declaration."}
+   [:name :string]
+   [:description {:optional true} :string]])
+
+(def ^:schema Invariant
+  [:map {:description "A structural truth about a module: a condition that holds independent of any particular API call. Body is verbatim content from the `{ }` block."}
+   [:name :string]
+   [:body :string]
+   [:description {:optional true} :string]])
+
 (def ^:schema Boundary
   [:map {:description "A module's external boundary: the functions, schemas, and guarantees that define its public contract."}
    [:description {:optional true} :string]
    [:functions [:vector :BoundaryFn]]
    [:schemas [:vector :keyword]]
-   [:guarantees {:optional true} [:vector :string]]])
+   [:guarantees {:optional true} [:vector :Guarantee]]])
 
 (def ^:schema NodeData
   [:or {:description "Kind-specific properties attached to a node, discriminated by :kind."}
    ;; Module data (directory or namespace)
-   [:map {:description "Module node data: documentation and optional boundary."}
+   [:map {:description "Module node data: documentation, boundary, and optional invariants."}
     [:kind [:= :module]]
     [:doc {:optional true} [:maybe :string]]
-    [:boundary :Boundary]]
+    [:boundary :Boundary]
+    [:invariants {:optional true} [:vector :Invariant]]]
    ;; Function data (var definition)
    [:map {:description "Function node data: documentation, visibility, and optional type signature."}
     [:kind [:= :function]]

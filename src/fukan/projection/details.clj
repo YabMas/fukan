@@ -291,7 +291,10 @@
            :deps         deps
            :dependents   dependents}
     (seq (get-in node [:data :boundary :guarantees]))
-    (assoc :guarantees (get-in node [:data :boundary :guarantees]))))
+    (assoc :guarantees (get-in node [:data :boundary :guarantees]))
+
+    (seq (get-in node [:data :invariants]))
+    (assoc :invariants (get-in node [:data :invariants]))))
 
 ;; -----------------------------------------------------------------------------
 ;; Edge Details
@@ -502,7 +505,8 @@
     [:kind [:enum :module :function :schema]]
     [:parent [:maybe [:map [:id :string] [:label :string]]]]
     [:description [:maybe :string]]
-    [:guarantees {:optional true} [:vector :string]]
+    [:guarantees {:optional true} [:vector :Guarantee]]
+    [:invariants {:optional true} [:vector :Invariant]]
     [:interface [:maybe :InterfaceData]]
     [:schemas [:maybe [:vector :SchemaRef]]]
     [:dataflow [:maybe :DataflowData]]

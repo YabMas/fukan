@@ -130,7 +130,8 @@
             provide-count (gen/choose 0 3)
             provides (gen/vector (gen/one-of [gen-field gen-allium-provides]) provide-count)
             guarantee-count (gen/choose 0 2)
-            guarantees (gen/vector gen-simple-name guarantee-count)]
+            guarantees (gen/vector (gen/fmap (fn [n] {:name n}) gen-simple-name)
+                                   guarantee-count)]
     (cond-> {}
       has-facing? (assoc :facing facing)
       has-desc? (assoc :description desc)
