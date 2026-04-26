@@ -1,0 +1,1487 @@
+# Fukan — Model
+
+**Status:** Authoritative substrate specification — the *how* foundation underlying everything else.
+
+**Reading order:** Read [VISION.md](./VISION.md) first for motivation if you're new, then [DESIGN.md](./DESIGN.md) for protocol semantics, pipeline, and project-layer mechanics. This document is the substrate kernel itself — primitives, relations, vocabulary mechanism, constraint language, projection vocabulary, methodology contributions. [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace; K\*/R\*/V\*/C\*/P\* identifiers cited throughout this document resolve there.
+
+Supersedes the previous working drafts (former MODEL.md draft, RELATIONS.md, VOCABULARY.md, CONSTRAINTS.md).
+
+This document defines the substrate on which spec languages (`.allium` and `.boundary` in MVP; eventually `.infra`) and code analysis project their content. It is the authoritative description of what the Model is, what neutralities it commits to, what vocabulary content it permits, what constraints can be expressed against it, and what its projection targets are.
+
+---
+
+## 1. Stance
+
+The Model represents **one architectural object** — a software system — **viewable through many vocabulary lenses**. Borrowing ISO/IEC/IEEE 42010's meta-shape: there is one system; it is described through multiple viewpoints; viewpoints supply vocabulary, but they are not the system.
+
+Two commitments fall out:
+
+1. **The Model is *of the system*, not *of a spec language*.** A spec language contributes evidence about the Model; the Model is not a graph rendition of any one grammar. The same Model is contributable-to by `.allium`, by `.boundary`, by future `.infra`, and by code analysis when it returns.
+
+2. **The Model is methodology-neutral at vocabulary level; explicitly committed at substrate level.** Any methodology contributes typed vocabulary that refines the substrate's primitives. The substrate itself takes positions on a few unavoidable questions (see [§11 Substrate commitments](#11-substrate-commitments)).
+
+**Substrate-defaults choice (Path A).** Where the kernel's substrate must take a position on type-system shape (named vs anonymous shapes, closed vs open, predicate-typed vs not), it commits to Allium-aligned defaults: shapes are named, closed, composed by inclusion. Methodologies that want different semantics (Clojure-spec-style openness, predicate-typed fields, schemas-as-first-class-values) supply them via vocabulary overlay. This is a commitment, not neutrality — explicitly named and to be revisited before any major substrate change.
+
+### Force-and-gate
+
+A recurring criterion applied at every altitude of this design:
+
+> A feature belongs at altitude X iff
+> **(a)** something has forced it — a worked example that cannot be expressed without it, AND
+> **(b)** its shape is uniform across the cases that engage it.
+
+**(a)** is the force; without it, the feature is speculative.
+**(b)** is the gate; without it, the feature is methodology framing wearing a universal mask.
+
+The criterion appears at four altitudes in this document:
+- Substrate vs relation vs vocabulary (§3.7)
+- Kernel-relation vs methodology-relation (§4.2)
+- Contribution kind at the vocabulary seam (§5.1)
+- Language feature in the constraint substrate (§6.2)
+
+---
+
+## 2. MVP scope
+
+The spec described in this document is the substrate. The **MVP** is the slice of the spec that is implemented first.
+
+**In MVP:**
+- The kernel substrate (primitives, value records, V14 Type vocabulary, the thirteen relations, edge identity)
+- The vocabulary mechanism (TagDefinition / TagApplication / PredicateRegistration / renderer seam)
+- The constraint language (stratified Datalog substrate + path sugar + type-sum sugar, kernel-universal derivations)
+- The projection vocabulary as an active target — `Code(Function | DataStructure)` Artifact cases and the five V0 `projection_kind` values (§7.2, §7.4)
+- The **Allium** vocabulary: TagDefinitions, constraints, analyzer producing kernel content + tag applications
+- The **`.boundary`** analyzer: produces `triggers: Operation → Rule` binding edges and composite Container content for subsystem composition (§8.2)
+- The **Clojure analyzer**: produces `projects` edges from spec primitives to `Code.*` artifacts via convention-driven name resolution (§7.6; analyzer mechanics in [DESIGN.md](./DESIGN.md))
+- The **project layer** in two flavours — project-side constraints over the Model and project-side conventions consumed by the Clojure analyzer; both hardcoded in V0 (§10.3)
+
+**Out of MVP, architecturally seamed:**
+- `.infra` layer entirely (§10.1)
+- The `Infra(...)` and `Documentation(...)` cases of the Artifact ontology, and the `endpoint`, `resource`, `documentation`, `diagram` projection_kind values — come back with `.infra` and a future documentation analyzer (§10.1, §10.5)
+- Plugin registry mechanics (Allium / Boundary / Clojure analyzers are integrated directly; no namespace registry, no manifest)
+- Renderer plug-in mechanism (concrete shape arrives with explorer rebuild)
+- *Declarative form* of project-side project-layer entries (the language and convention strategy are implemented; the V0 registration mechanism for both constraints and conventions is hardcoded)
+- Cross-methodology stress-test vocabularies (DDD / Hex / C4) — they validated the substrate at design time; they are **not** committed support targets
+
+**Architectural commitments preserved through the cuts:**
+- The constraint language is **single**. Whatever path projects use to ship their constraints lands on the same language.
+- The kernel does not change shape for any deferred layer. Each deferred layer is additive content within the committed substrate.
+- The vocabulary mechanism's introspection surface (V6 below) is the *only* domain accessible to predicates and renderers, regardless of altitude.
+
+**Relation population in MVP.** All thirteen kernel relations are populated in MVP. Allium contributes:
+- `realises` (via `contracts: fulfils` on Surfaces — see §8.1)
+- `specialises` (via `variant from <Parent>` extension)
+- `uses` (via `contracts: demands`)
+- `exposes` (via `exposes:` — View protocol)
+- `provides` (via `provides:` — Signal protocol)
+- `triggers`, `observes`, `reads`, `writes`, `creates`, `destroys`, `emits` through Rules
+
+The `.boundary` analyzer contributes additional `triggers: Operation → Rule` edges via Operation↔Rule bindings (§8.2). The Clojure analyzer contributes `projects` edges (§7.6). Pressure-test methodologies (Hex, DDD) would add more edges to the same relations without changing kernel shape.
+
+Re-opening triggers for the deferred work are recorded in [§10 Architectural seams](#10-architectural-seams).
+
+---
+
+## 3. The kernel
+
+The kernel is the universal, fixed substrate. It defines the primitives, value records, type vocabulary, relation set, and edge identity machinery that every methodology projects content into.
+
+### 3.1 Primitives
+
+Nine primitives. Each justified by one or both of (a) addressability — a thing a human chooses to inspect as a unit, (b) structural distinctness — a navigation pattern that diverges from any other primitive's.
+
+```
+Container
+  id, label
+  description:  Text?
+  intent:       Intent?                  -- Container-level claims
+  children:     Set<Container>
+  fields:       List<Field>              -- typed data members
+  events:       Set<Event>               -- declared events owned here
+  behaviour:    Behaviour?
+  boundary:     Boundary?
+
+Actor
+  id, label
+  description:  Text?
+
+Behaviour
+  id, label
+  rules:        List<Rule>
+  intent:       Intent?
+
+Rule
+  id, label
+  description:  Text?
+  intent:       Intent?                  -- prose Clauses + Bool assertions (per §3.8)
+  body:         RuleBody?                -- definitions + effects (per §3.8)
+
+Boundary
+  id, label
+  operations:   List<Operation>
+  intent:       Intent?
+
+Operation
+  id, label
+  description:  Text?
+  parameters:   List<Parameter>
+  return_type:  Type?                    -- absent for fire-and-forget command-shaped
+  intent:       Intent?
+
+Intent
+  id, label
+  clauses:      List<Clause>             -- prose claims
+  assertions:   List<Expression: Bool>   -- logical claims (per §3.8; env from host)
+
+Clause
+  id, label?
+  body:         Text
+
+Event
+  id, label
+  description:  Text?
+  parameters:   List<Parameter>
+```
+
+#### Per-primitive notes
+
+**Container** — universal addressable structural unit. Substrate carries three optional faces (Data via `fields`, Behaviour, Boundary), plus `children` for hierarchical composition, plus `events` for declared event ownership, plus Container-level `intent`. No substrate booleans for identity/state — these derive from realising graph structure + vocabulary tags. No `parent` slot — children-on-parent stores ownership once, no drift. Container's `intent` holds claims about the Container as a whole (entity-level `@invariants`, module-level invariants). Different methodologies populate different slots: data-shape Containers use `fields`; module-shape Containers use `children`; interface-shape Containers use only `boundary`; orchestrator-shape Containers use `behaviour`. All are Containers.
+
+**Actor** — agency-bearing party outside the ownership hierarchy. Primarily for human roles/personas. Substrate is identity + description. Methodology-specific framings (Allium's `identified_by`, `within`) live in vocabulary.
+
+**Behaviour** — singular aggregate of dynamic logic per host Container. Each Container has at most one Behaviour; multiplicity lives in its Rules. Aggregate-level `intent` attaches claims spanning the Rules.
+
+**Rule** — sub-unit inside a Behaviour. Substrate: identity + description + intent + body. The Rule's *Bool claims* (`requires:` preconditions, `ensures:`-as-predicate, `guarantees:` postconditions) live as `Expression: Bool` entries in `intent.assertions`; prose `@guidance` lives in `intent.clauses` (per §3.8). The Rule's *named definitions* (`where:` typed bindings) live in `body.definitions`, in scope across `intent.assertions` and `body.effects`. The Rule's *effects* (writes, creates, destroys, emits) live as `Effect` records in `body.effects` — each materialised from a corresponding Expression in `intent.assertions` per the §3.8 kernel invariant, and each surfacing as a kernel edge with identity `(rule_id, kind, target)` per §4. The Rule's *trigger* lives as a relation (`triggers` for Event → Rule; `observes` for typed-subject conditions).
+
+**Boundary** — singular aggregate per host Container; the typed interface that crosses the wall. Substrate is `operations` + aggregate `intent`. Datashapes (what the Boundary exposes), advertised events (what events it provides), facing (who it serves), related (what it depends on) all live as relations or vocabulary. The Allium boundary protocols (View / Signal / Call) emerge from substrate + relations + vocabulary tag combinations rather than from named primitive kinds (see §3.6 below).
+
+**Operation** — sub-structure of Boundary; a typed signature. Substrate carries the signature (`parameters` + `return_type`); cross-primitive linkage (`triggers` a Rule, `realises` a Port) lives in relations. `return_type` is optional: present for call-shaped (request/response), absent for fire-and-forget command-shaped operations.
+
+**Intent** — meaning attached to a host. Singular per host (Container, Behaviour, Rule, Boundary, Operation). Carries two parallel lists: `clauses` (prose claims — descriptions, guidance, open-questions) and `assertions` (Bool-typed Expressions per §3.8 — invariants, guarantees, preconditions, postconditions). Kinds of prose claim (guidance, open-question) and kinds of Bool claim (invariant, guarantee, precondition, postcondition) are vocabulary tags on the respective items, not kernel slots. The host primitive determines the Environment (§3.8.5) in which assertions are typed: OneState for Container / Behaviour / Boundary / Operation; TwoState for Rule.
+
+**Clause** — sub-unit of an Intent. Optionally labelled for addressability; body is opaque text. Vocabulary supplies kind tags and structured parses where applicable.
+
+**Event** — discrete temporal occurrence. Owned by the qualifying Container via `Container.events`. Substrate is identity + description + parameters. Two Events with the same local name in different Containers are distinct primitives — namespace qualification is the qualifying Container. **In Allium, the qualifying Container is the Module** (the `Allium::Module`-tagged Container): Events declared at `when:`, `provides:`, or `emits:` sites within a module are owned by that module, not by the Surface/Contract/Rule where the site appears. Cross-module references via `alias/EventName` resolve through the module alias to the module's owned Event. Other methodologies may choose different qualifying levels; the kernel mechanism is altitude-agnostic.
+
+### 3.2 Substrate value records
+
+```
+record Field
+  name:         String
+  type_ref:     Type                     -- the unified Type vocabulary (§3.3)
+  optional:     Boolean
+
+record Parameter
+  name:         String
+  type_ref:     Type
+  optional:     Boolean
+  ordinal:      Integer
+
+record Definition
+  name:         String                   -- bound name in scope across Rule.intent.assertions
+                                         --   and Rule.body.effects (Rule-internal scope)
+  expression:   Expression               -- per §3.8; typed by §3.3 (not necessarily Bool)
+
+record RuleBody
+  definitions:  List<Definition>         -- `where:` bindings
+  effects:      List<Effect>             -- materialised state-change records per §3.8.2
+```
+
+Composite identity for sub-substrate:
+- Field identity: `(Container.id, Field.name)`
+- Parameter identity: `(parent_id, Parameter.name)` where parent is an Operation or an Event
+- Definition identity: `(Rule.id, Definition.name)`
+- Effect identity: `(rule_id, kind, target)` per §3.8.2
+
+RuleBody is a singular sub-substrate aggregate per Rule (cardinality pattern same as Behaviour on Container) — its identity reduces to the host Rule's id; no independent identity slot.
+
+Clause is **not** sub-substrate — it is a kernel primitive (per §3.1) with its own id. Its `label?` is a human-facing name within its parent Intent (used for addressability in tools and projection targets); it is not part of identity. Moving a Clause from one Intent to another preserves its id. (See K15a in the decisions log; resolves the §13 TBD on first-class Clause addressability.)
+
+### 3.3 Type vocabulary
+
+One vocabulary serves both substrate slots (`Field.type_ref`, `Parameter.type_ref`, `Operation.return_type`) and vocabulary payload schemas (`TagDefinition.payload_schema`). Six cases. The substrate stays generic at the target-language level — substrate Types commit to *structural shape*, not to "what kind of integer" or "which Clojure collection." Per-target-language translation lives in the project layer's translation-guidance registry (registered via §10.3; per-language registry detail in [DESIGN.md](./DESIGN.md)).
+
+```
+Type =
+  | Scalar(name: String)                              -- atomic leaf; name is methodology-supplied
+  | Enum(values: List<String>)                        -- closed set of literal values
+  | Composite(shape: CompositeShape)                  -- structured aggregate (product of slots)
+  | Collection(of: Type, semantics: CollectionSemantics)
+                                                      -- zero-or-more of the same shape (functor)
+  | Union(types: List<Type>)                          -- sum of distinct Type cases
+  | Ref(target: RefTarget, where: TagConstraint?)     -- reference to a kernel target
+
+CompositeShape =
+  | Named(container: ContainerRef)                    -- shape from a value-typed Container's fields
+  | Inline(fields: List<FieldSpec>)                   -- anonymous inline shape
+
+CollectionSemantics =
+  | Sequential                                        -- ordered, duplicates allowed
+  | Unique                                            -- unordered, no duplicates
+  | Keyed(key_type: Type)                             -- key→value association
+
+RefTarget =
+  | KernelPrimitive(kinds: Set<KernelKind>)           -- Container | Event | Actor | Rule | Operation
+                                                      -- | Behaviour | Boundary | Intent | Clause
+  | Substrate(within_kind: KernelKind,                -- Field | Parameter
+              slot_kinds: Set<SubstrateKind>?)
+
+TagConstraint = Set<TagRef>                           -- target must carry all listed tags
+
+FieldSpec { name: String, type: Type, optional: Boolean }
+```
+
+The six cases are the three type-theoretic combinators (product, sum, functor) plus three leaf shapes (atomic, closed-literal, link). No two are reducible to each other without semantic loss:
+
+| Case | Combinator | What it commits |
+|---|---|---|
+| `Scalar` | leaf | An atomic value; the methodology-supplied `name` is opaque to substrate (translation handles `"Integer"` → `:int`, `"Money"` → custom). |
+| `Enum` | leaf (closed sum of literals) | A value chosen from a known fixed set. Distinct from Union: Enum cases are *literals* with no internal type; Union cases are *full Types*. |
+| `Composite` | product | A bundle of typed slots, all present; cardinality fixed at the slot count. `Named(C)` reuses a value-typed Container's fields; `Inline` declares anonymous slots. |
+| `Collection` | functor | Zero-or-more values of one inner Type; cardinality variable. `semantics` distinguishes the three fundamental collection shapes (ordered/unique/keyed). Tuple-style positional Composite is the future fix when forced. |
+| `Union` | sum | A value typed as exactly one of several Types. Each case stays structurally distinct (no implicit coercion). |
+| `Ref` | link | An identity pointer to an addressable kernel target (primitive or substrate position). `where: TagConstraint` filters admissible targets by tag presence. |
+
+**Positions of the design:**
+
+- `Scalar` keeps the `name` field opaque to substrate. Methodology guidance assigns semantics: Allium's `"Integer"`, `"String"`, `"Boolean"` are well-known leaf scalars; Allium's `"Money"`, `"DateTime"`, etc., earn translation overrides via the project layer.
+- `Composite(Named(C))` is "shape comes from value-typed Container C's fields"; `Composite(Inline([…]))` is an anonymous inline shape. Predicates and renderers traverse `Composite` uniformly. (Tuple — positional Composite — defers until a worked example forces it; the `CompositeShape` sum extends additively.)
+- `Collection` carries an explicit `semantics` discriminator because the three shapes (ordered, unique, keyed) affect what predicates can reason about: iteration order, element duplicates, key access. Methodologies that map to a single target form (Allium's `List<X>` always being Sequential) commit explicitly to that semantics; methodologies wanting Set or Map declare it. Target-language rendering ([:vector T], [:set T], [:map-of K V] in malli; Java ArrayList/HashSet/HashMap) is project-layer translation, not substrate.
+- `Union` covers heterogeneous payloads like `Boundary::ModuleApi.exported` (Surfaces ⊕ Entities ⊕ Events ⊕ Actors ⊕ Operations) and `Allium::Surface.facing` (Actor ⊕ Container). Cross-kind heterogeneity without a common parent tag does not collapse to multi-kind `Ref`. Consumers dispatch on case via the §6.8 `matches` sugar; the §6.6 `type_refs` derivation has a Union arm that unions per-case reachability.
+- `Ref` reaches all kernel primitive kinds, not only Containers — payloads need to reference Events, Actors, Operations, Rules, none of which are Containers. `where: TagConstraint` filters admissible targets by tag presence.
+- `Ref(Substrate(...))` mirrors the `SubstrateAddress` machinery in §4.3 at the schema level — payloads can type slots as references to specific Fields / Parameters. The *type-level* `Ref(Substrate(within_kind=Container, slot_kinds={Field}))` declares "a reference to some Field on some Container"; the corresponding *value* at runtime is a `SubstrateAddress(container_id, [{slot:'field', key:'<name>'}])` per §4.3, carrying the specific Container and slot identifiers. (Clauses are reached via `Ref(KernelPrimitive({Clause}))` since Clause is a primitive — see K15a.)
+- **Optionality lives on `FieldSpec`, not as a `Type` case.** Slot-level "can be null" is a property of the slot. Nested optionality (a Collection whose elements may be null) defers until forced.
+
+#### Value-vs-Reference is explicit
+
+For a methodology with both value-typed and entity-typed Containers (Allium has `value` and `entity`), the slot-type semantics are explicit:
+
+- **Value-typed target**: `Composite(Named(C))` — the slot's value has C's shape inline.
+- **Entity-typed target**: `Ref(KernelPrimitive({Container}), where={Allium::Entity})` — the slot holds a reference.
+
+Methodologies drive the choice via their vocabulary tag on the target Container; predicates can ask "is this slot Value or Ref?" and get a kernel-level answer without inspecting target tags.
+
+#### Worked examples
+
+| Slot | `Type` |
+|---|---|
+| `Order.owner: User` (entity target) | `Ref(KernelPrimitive({Container}), where={Allium::Entity})` |
+| `Order.shipping_address: Address` (value target) | `Composite(Named(Address))` |
+| `Order.status: pending\|done` | `Enum(["pending","done"])` |
+| `Order.line_items: List<LineItem>` (value LineItem) | `Collection(of: Composite(Named(LineItem)), semantics: Sequential)` |
+| `Order.tags: Set<String>` | `Collection(of: Scalar("String"), semantics: Unique)` |
+| `Order.shipping_options: Map<String, ShippingMethod>` | `Collection(of: Composite(Named(ShippingMethod)), semantics: Keyed(Scalar("String")))` |
+| `Boundary::Exports { exported }` (heterogeneous list — Surfaces, Entities, Events, Actors, Operations) | `FieldSpec("exported", Collection(of: Union([Ref(Container, where={Allium::Surface}), Ref(Container, where={Allium::Entity}), Ref(Container, where={Allium::Value}), Ref(Container, where={Allium::Variant}), Ref(Event), Ref(Actor), Ref(Operation)]), semantics: Sequential))` |
+| `Allium::Surface { facing?, … }` (payload — accepts an Actor or an entity-tagged Container) | `FieldSpec("facing", Ref(KernelPrimitive({Actor, Container})), optional=true)` |
+| `Allium::Surface { related }` (payload — list of peer Surfaces) | `FieldSpec("related", Collection(of: Ref(KernelPrimitive({Container}), where={Allium::Surface}), semantics: Sequential))` |
+| `Boundary::ModuleApi { exported }` | same shape as `Boundary::Exports.exported` above (see §8.2) |
+| Hypothetical tag payload pointing at a Field on a Container | `FieldSpec("target_field", Ref(Substrate(within_kind=Container, slot_kinds={Field})))` |
+
+### 3.4 Cardinality patterns
+
+- **Singular aggregate** (one per host, internal substructure): Intent (Clauses), Behaviour (Rules), Boundary (Operations)
+- **Plural collection on host** (named first-class units owned directly): Container's `children`, `fields`, `events`; Operation's `parameters`
+
+Pattern: *aspects of the host's own being* → singular aggregate; *named first-class units* → plural collection.
+
+**Operational form of the substrate principle:** *Aggregated/owned content → substrate. Cross-referenced content → relations.* If a sub-thing cannot exist without its host (Field on Container, Operation on Boundary, Rule in Behaviour, Clause in Intent, Parameter on Operation, Event on its qualifying Container), it is substrate. If a sub-thing has independent identity and the host merely references it (the Event a Rule emits when distinct from the host Container's owned Events, a Field exposed by a Boundary, a Container in a `manages` derivation), it is relational.
+
+### 3.5 Asymmetries — intentional
+
+- **Singular for unified meaning, plural for distinct units.** Intent is singular (the meaning of the host) even when it carries many Clauses. Container's `children` and `events` are plural (each is its own thing). Both encode different relationships and are correctly cardinality'd.
+- **Container-level ownership is uniform across children, fields, events.** All three are direct ownership on the qualifying Container — no separate qualification relation.
+
+### 3.6 Derived — not kernel primitives
+
+**External** is not a kernel kind. *Derived* from topology: a Container referenced from outside its owning hierarchy is "external" *from the perspective of the referencing side* — but it stays a Container. Externality is a property of the *crossing*, not of the node.
+
+Allium's `external entity` declaration is a stub at the use site that creates a cross-module reference. The actual referent (if defined elsewhere in the analysed model) is a Container in its owning module. If it isn't defined, the stub is a Container with vocabulary tag `Allium::ExternalEntity` and minimal substrate content. Closed-world predicate evaluation (see §6.2) treats stubs as model objects with restricted substrate.
+
+**Stub-resolution semantics: unconditional merge.** At the merge step (per the pipeline in DESIGN.md), an `external entity` stub at use site U pointing at name N is unified with the real Container defined elsewhere if one exists: the stub's identity is rewritten to the real Container's id, the stub Container drops, all stub-referencing edges and tag payloads retarget to the real Container. The real Container retains its full substrate; the `Allium::ExternalEntity` tag does not propagate to it (the stub's external-ness was a use-site framing, not a property of the entity itself). When no real Container exists, the stub remains as a Container with `Allium::ExternalEntity` tag and restricted substrate — visible to predicates as a normal model object under CWA.
+
+The merge is unconditional with respect to the target module's visibility — closed-module / private-target cases do not change merge behaviour. DESIGN.md's pipeline catches the "stub pointing at a closed-private target" case at the *cross-module reference visibility* rule (Phase 4g), which inspects the original `external entity` site against the target module's `module exports:` and rejects the reference when the target is not listed. DESIGN.md's *export closure* rule (Phase 4f) is the upstream guarantee that makes 4g enforcement consistent: if a closed module passes closure, no signature reachable from outside it exposes a private name, so any stub naming a private target is by construction a fabrication (or a stale reference) and is correctly caught at 4g. Both rules run after merge in Phase 4 — the validator preserves the original cross-module reference sites independently of merge's identity-rewrite, so 4g can attribute violations to the referencing site.
+
+**The three Allium boundary protocols (View / Signal / Call)** are not kernel primitive *kinds*, but two of the three now have direct kernel-relation landings (R20). They are recognised by edge presence on a Boundary-bearing Container, optionally decorated by methodology tags:
+
+| Protocol | Allium keyword | Kernel signature |
+|---|---|---|
+| **View** | `exposes` | Container with Boundary; outgoing `exposes: Container → Field` edges, each reaching a Field on another Container. Optional `Allium::Exposes` tag on the edge for methodology-specific shading. |
+| **Signal** | `provides` | Container with Boundary; outgoing `provides: Container → Event` edges. Optional `Allium::Provides` tag on the edge. |
+| **Call** | `contracts` | Container with Boundary; Boundary has Operations with parameters and (typically) `return_type`. Contract relationships expressed via `realises: Surface → Contract` (`fulfils`) and `uses: Surface → Contract` (`demands`) — both kernel relations. |
+
+REST / GraphQL / gRPC / Pub/Sub / CQRS map analogously by combining the same substrate kinds with methodology-specific tags.
+
+### 3.7 The substrate principle (kernel-vs-vocabulary)
+
+A slot belongs at kernel substrate iff it is **essential to understanding the primitive in isolation**. Cross-primitive interactions live in relations. Design/intentional framing (which party is served, in what context, under what guarantees) lives in vocabulary.
+
+Examples:
+- An Operation's signature is essential — without it, the Operation is just a name. → substrate
+- A Rule's trigger is interaction — the Rule's pre/postconditions still make sense without it. → relation
+- A Boundary's facing actor is design context — the typed interface still stands without it. → vocabulary
+- A Container's fields are essential to a data-shape Container in isolation. → substrate
+- A Container's emitted events (when not declared on the Container) are cross-referenced. → relation
+- Whether a Container is a `DDD::Specification` or an `Allium::Surface` is methodological framing — the underlying Boundary-only Container is the same. → vocabulary
+- An Expression's *structure* (shape, free variables, operator at each node) is essential to its meaning. → substrate
+- An Expression's *role* in its host (whether it was authored as `requires:` vs `ensures:` vs `guarantees:`) is methodological framing. → vocabulary
+- An Effect's `kind` / `target` / `value` / `source` are essential to understanding what the Rule changes. → substrate
+
+### 3.8 Expression and Effect substrate
+
+Sub-substrate that primitive slots can hold. **Expressions** carry logical content (predicates, named bindings, computed values); **Effects** carry materialised state-change declarations. Together they replace the "opaque text" treatment earlier drafts deferred to a future expression-parser pass.
+
+The substrate is universal — used by Rule bodies, Intent assertions on any host, and the §6 constraint language. What differs across callsites is the binding **Environment**, not the Expression substrate.
+
+#### 3.8.1 Expression
+
+```
+record Expression {
+  label?:  String                  -- optional human-facing name for addressability and
+                                   --   projection (parallels Clause's label? per K15a);
+                                   --   not part of structural identity
+  form:    ExpressionForm
+}
+
+ExpressionForm =
+  | Var(name)                                             -- reference to an Environment binding
+  | Ref(target: RefTarget)                                -- reference to a kernel target (per §3.3)
+  | Lit(type: Type, value: Value)                         -- typed literal
+  | Apply(op: String, args: List<Expression>)             -- operator / function application
+  | Let(name, source: Expression, body: Expression)       -- local binding within an Expression
+  | If(cond: Expression, then: Expression, else: Expression)
+  | Match(scrutinee: Expression, arms: List<MatchArm>)
+  | Forall(var, source: Expression, body: Expression)
+  | Exists(var, source: Expression, body: Expression)
+  | Aggregate(kind: AggKind, source: Expression, projection: Expression)
+
+AggKind  = Count | Sum | Min | Max
+MatchArm = { pattern: TypePattern, body: Expression }
+```
+
+Every Expression has a type per §3.3, determined by its `form`. Predicates are Expressions whose result type is `Scalar("Boolean")`. Compositional typing follows §3.3 plus standard operator signatures.
+
+**Operators are extensible; canonicalisation patterns (§3.8.4) are not.** Kernel-committed core operators: arithmetic (`+`, `-`, `*`, `/`), comparison (`=`, `≠`, `<`, `≤`, `>`, `≥`), logical (`And`, `Or`, `Not`), set membership (`In`, `Contains`), presence (`IsPresent`, `IsAbsent`). Methodology operators register additively; the registration shape parallels §5.3 `PredicateRegistration` and concrete tokenisation is deferred until a methodology forces it (§13).
+
+#### 3.8.2 Effect
+
+```
+Effect = {
+  kind:    EffectKind                          -- Create | Write | Destroy | Emit
+  target:  SubstrateAddress | PrimitiveRef     -- per §4.3 endpoint shape
+  value:   Expression?                         -- absent for Destroy
+  source:  ExprId                              -- identity of originating Expression
+                                               --   in Rule.intent.assertions
+}
+```
+
+Effects live only inside `Rule.body.effects` (per §3.1, Rule grows the `body` slot). Edge identity for the `writes` / `creates` / `destroys` / `emits` kernel edges sourced by an Effect is `(rule_id, kind, target)` — stable across semantically-equivalent rewrites of the originating Expression.
+
+#### 3.8.3 Kernel invariant binding Expression and Effect
+
+Every Effect's content is the canonicalised materialisation of an Expression of recognised shape (§3.8.4) in `Rule.intent.assertions`, evaluated against the Rule's two-state Environment. **No qualifying Expression in such an assertion list lacks a corresponding Effect; no Effect lacks a `source` Expression resolving back to one.**
+
+The two sorts are dual readings of the same substrate content — both kernel-committed because each face serves a distinct downstream consumer: **Effect** for graph edges and direct queries (sidebar, drift detection); **Expression** for predicates, derivations, and structural introspection. Materialisation lives in the analyzer pass; the invariant is what makes both views authoritative.
+
+#### 3.8.4 Effect canonicalisation patterns
+
+The analyzer materialises an Effect from a Bool-typed Expression iff the Expression matches one of these patterns in a two-state Environment:
+
+| Pattern | Effect |
+|---|---|
+| `post.X.f = E` where `pre.X.f` does not appear free in `E` | `Effect(Write, X.f-as-SubstrateAddress, E, source)` |
+| `post.X = T.created(field_bindings…)` where `pre.X` denotes no existing instance | `Effect(Create, X typed T, T-with-bindings, source)` |
+| `not exists post.X` where `pre.X` denoted an existing instance | `Effect(Destroy, X, –, source)` |
+| `emitted(E, args…)` | `Effect(Emit, E, args, source)` |
+
+Expressions that do **not** match any pattern remain as pure assertions (e.g., `post.order.total > 0` referencing `pre.order.total` — a guarantee, not a write).
+
+The patterns are kernel-fixed (not methodology-extensible). New patterns earn kernel review and a §12 decisions-log entry. Matching is exact-shape; shape-ambiguous Expressions are structural errors the analyzer flags.
+
+#### 3.8.5 Environment
+
+The typed binding context that distinguishes callsites. Three flavours; the substrate Expression is uniform underneath.
+
+```
+Environment =
+  | OneState(bindings: Bindings)
+  | TwoState(pre: Bindings, post: Bindings, params: Bindings)
+  | ModelIntrospection(bindings: Bindings)
+
+Bindings = Map<String, Type>
+```
+
+- **OneState** — Intent assertions on Container, Behaviour, Boundary, Operation. Bindings reach the host's substrate at one moment (Container fields, Operation parameters, …). `self` is bound to the host primitive.
+- **TwoState** — Rule.intent.assertions and Rule.body. Bindings reach `pre` and `post` simultaneously (`pre.X.f` and `post.X.f` are distinct values of the same identity X). `params` carries the Rule's trigger parameters from event-shaped `when:` clauses; `Rule.body.definitions` extend `params` with named local bindings visible to assertions and effects (the only cross-slot scope rule in the kernel; precedent in Operation.parameters being visible to Operation.intent).
+- **ModelIntrospection** — §6 predicate bodies. Bindings reach the §5.4 introspection vocabulary atemporally. Predicate head parameters appear as additional bindings.
+
+Environment is part of the *callsite type*, not of the Expression itself. An Expression typed against a OneState environment cannot reference `post.X`; type-checking enforces this at parse time. An Expression authored against `Rule.intent.assertions` is implicitly in TwoState by virtue of its host.
+
+#### 3.8.6 Mode
+
+Directional evaluation, borrowed from logic programming. An Expression's variables and references have *modes* — input (bound at evaluation) or output (to be solved). Forward evaluation (compute output from input) is the standard mode; backward evaluation (compute input that produces the output) is admissible under §6's stratification rules.
+
+Mode lives in the Expression layer. The Effect's kernel edge in the graph remains directed `Rule → Target` regardless of mode.
+
+#### 3.8.7 Identity
+
+| Element | Identity |
+|---|---|
+| Expression | Structural — two Expressions with the same `form` (shape and free-variable references) are the same Expression. Within a host, addressable via `ExprId` (position-and-shape within the host's slot). **`label?` is not part of structural identity** — same shape with different labels is one Expression; the label is a human-facing addressability hook for tooling and projection (parallels K15a's `label?` on Clause). |
+| Effect | `(rule_id, kind, target)`. |
+| Definition (per §3.2) | `(Rule.id, Definition.name)`. |
+| Source-to-Effect linkage | `Effect.source: ExprId` resolves to an Expression in `Rule.intent.assertions`. |
+
+`ExprId` is kernel-internal — `Effect.source` is what uses it. Predicates do not address Expressions by `ExprId`; they query Expressions structurally (matching on shape, tags, or position in a host's list per §6).
+
+#### 3.8.8 Cross-cutting commitments
+
+- **One calculus, three callsites.** Rule bodies, top-level Intent assertions on any host, and §6 constraint predicates all use Expression; Environments distinguish them.
+- **§6's constraint language uses Expression as its sublanguage.** §6 wraps Expressions in Datalog rule heads + body literals; the underlying typed value/predicate calculus is identical (§6 cross-references this section).
+- **No imperative machinery at substrate level.** Expression has no sequencing form, no I/O, no mutable references. Effects declare state changes; Expressions compute values referentially-transparently. Runtime semantics are a projection concern.
+
+---
+
+## 4. Kernel relations
+
+Thirteen relations. Each grounded by a specific substrate push and a uniform cross-methodology semantic.
+
+### 4.1 The relation set
+
+```
+triggers   : Event | Operation              →  Rule
+observes   : Rule                           →  Container | Field
+reads      : Rule                           →  Container | Field
+writes     : Rule                           →  Container | Field
+creates    : Rule                           →  Container
+destroys   : Rule                           →  Container
+emits      : Rule                           →  Event
+realises   : Container | Operation          →  Container | Operation
+specialises: Container                       →  Container
+uses       : Container                       →  Container
+exposes    : Container                       →  Field
+provides   : Container                       →  Event
+projects   : Container | Operation | Rule | Event | Clause | Expression   →  Artifact
+```
+
+### 4.2 Per-relation semantics
+
+**`triggers` — occurrence-based causation.** A discrete occurrence at the source causes the target Rule to fire. Multi-subscriber capable (one Event firing triggers many Rules). Source `Operation` covers operation-invocation triggers (the Operation being invoked is the occurrence point). Identifying metadata: none — source endpoint discriminates.
+
+**`observes` — state-based causation.** The Rule has standing interest in a condition on the target. Per-Rule semantics (no shared firing point). Identifying metadata: `condition` (typed `Expression: Bool` per §3.8, evaluated against a OneState environment binding the observed Container/Field — e.g., `T.created`, `T.status transitions_to shipped`, `T.expires_at <= now`). The observation-mode discriminator (creation / transition / becomes / temporal / derived) is *derivable* from the condition pattern and not stored on the edge.
+
+**`reads` — data dependency.** The Rule looks at the target's state while computing its effects. Not a trigger, not an effect — a dependency. Specifically retained as a kernel relation because spec-to-code drift detection needs `reads` as a contract surface (an implementing function reading beyond what its Rule's spec declares is a drift violation). Identifying metadata: `condition` (typed `Expression: Bool` per §3.8, derived from the Expression in `Rule.intent.assertions` that referenced this target).
+
+**`writes` / `creates` / `destroys` / `emits` — effects.** Rule outputs. Each such edge is **sourced by an Effect record** in `Rule.body.effects` (per §3.8.2); the edge's identity `(rule_id, kind, target)` is the Effect's identity, stable across semantically-equivalent rewrites of the originating Expression in `Rule.intent.assertions`.
+
+| Relation | Endpoints | Semantic |
+|---|---|---|
+| `writes` | `Rule` → `Container \| Field` | State-modifying on existing identity |
+| `creates` | `Rule` → `Container` | Identity-introducing |
+| `destroys` | `Rule` → `Container` | Identity-terminating |
+| `emits` | `Rule` → `Event` | Event production |
+
+Each carries different downstream meaning for architectural rules: *"No Rule in `Hex::Core` may `create` instances of `Hex::Adapter`"* is a distinct rule from *"No Rule in `Hex::Core` may `write` to `Hex::Adapter` state."* Collapsing loses the identity-vs-state distinction. `emits` is Rule-only — a Boundary that "advertises" an Event (Allium `provides`) is a different relationship (methodology framing, lifted as a tag with back-references). Identifying metadata: `condition`, `scope` — values derived from the Effect's `source` Expression per §3.8.
+
+`creates` and `destroys` target Container only, not Field. Lifecycle of a Field independent of its Container is not a kernel concept. Field-value creation / destruction is `writes` (writing a value, including null). The asymmetry in the relation table is intentional.
+
+**`realises` — same-altitude structural realisation.** X is the concrete part that completes Y's abstract specification. Both endpoints live at the same altitude (both spec, both code). Hex Adapter→Port is the motivating case. Container-level realisation derives Operation-level matching by signature; explicit per-Operation realisation as an alternative. Identifying metadata: none — endpoints discriminate.
+
+**`specialises` — same-altitude structural extension.** X extends Y's structure: X inherits Y's fields and may add fields or narrow field semantics. Same-altitude — both endpoints at Structure altitude. Edge direction is child → parent (the specialising side is the source). Motivating case: Allium variant→parent (`variant T from P` produces `specialises: T → P`). Distinct from `realises` by intent: `specialises` is extension (child enriches parent's structure); `realises` is fulfilment (concrete completes abstract specification). Container-only endpoints in v0; Operation/Event specialisation deferred until forced. Cross-methodology pressure (DDD value-object hierarchies, OO inheritance, sum-type constructors) joins additively on the same edge shape. Identifying metadata: none — endpoints discriminate.
+
+**`uses` — same-altitude declared structural dependency.** X declares a dependency on Y's interface: X's behaviour or operations are intended to invoke operations on Y's Boundary. Same-altitude — both endpoints at Structure altitude. Edge direction is user → used (the dependent side is the source). Motivating cases: Allium `contracts: demands` on a Surface (Surface → Contract); DDD Customer-Supplier downstream → upstream; Hex Application → Driven Port; C4 "depends on" arrows. Distinct from the derived `depends_on` (§4.6): `uses` is **declared at spec altitude**; `depends_on` is **observed** from Rule effects, type references, and `realises` edges. Both feed `depends_on` in §6.6's universal derivations. Container-only endpoints in v0; Operation-level usage deferred until forced. Identifying metadata: none — endpoints discriminate. Methodology-specific shading (Customer-Supplier upstream-vs-downstream, ACL, Conformist, Published Language) layers as edge tags or relational tags on the underlying `uses` edge.
+
+**`exposes` — boundary advertisement of read-access.** X advertises Field F (on some Container) as readable at X's boundary. The View protocol's kernel form. Same-altitude — Structure. Edge direction is advertiser → advertised (Surface → Field). Motivating cases: Allium `exposes:` (Surface → Field); REST GET endpoints exposing resource fields; GraphQL query fields; DDD read models exposing state; Hex Driving Port state-query operations. The endpoint on the Field side is a `SubstrateAddress` (§4.3) — `exposes: Container → Field` reaches a specific Field on a (typically different) Container. Identifying metadata: none — endpoints discriminate. Methodology-specific shading layers as edge tags (`Allium::Exposes` carrying optional access-context metadata).
+
+**`provides` — boundary advertisement of event-entry.** X advertises Event E as an entry point at X's boundary: external parties can inject E by interacting with X. The Signal protocol's kernel form. Same-altitude — Structure. Edge direction is advertiser → advertised (Surface → Event). Motivating cases: Allium `provides:` (Surface → Event); Hex Driving Port accepting commands; REST POST endpoints accepting events; Pub/Sub publish points; CQRS command handlers. Distinct from `triggers` (Event → Rule) — `provides` is the boundary-level declaration that the Event has an external entry point; `triggers` is what fires inside the system when the Event arrives. A typical Signal-protocol flow: `provides: Surface → Event`, then `triggers: Event → Rule`. Identifying metadata: none — endpoints discriminate. Methodology-specific shading layers as edge tags (`Allium::Provides` carrying e.g. parameter binding metadata).
+
+**`projects` — spec-to-realisation projection.** A spec primitive *projects* to a realisation artifact: a chosen materialisation that *loses information* from the spec source. Spec is the source; code / infra / tests / docs are realisations of it. Per K23, implementation is not a fourth altitude — Artifacts have *flavours* (Code | Infra | Documentation per §7), not altitudes. Drift is a projection that has ceased to be valid. Identifying metadata: `projection_kind` (closed enum from projection vocab; see §7). Non-identifying metadata (kernel-committed): `validity ∈ 'valid' | 'stale' | 'absent' | 'unknown'`, `evidence: List<EvidenceClue>`, `verified_at: Timestamp?`, `source_version: VersionRef?`.
+
+### 4.3 Endpoint addressing — primitive references and substrate addresses
+
+Endpoints of a kernel relation are not always primitive ids. They form a sum:
+
+```
+RelationEndpoint =
+  | PrimitiveRef(id: PrimitiveId)                       -- Container, Rule, Event, Operation, …
+  | SubstrateAddress(container_id, path: List<PathSegment>)
+
+PathSegment = {
+  slot: String        -- substrate slot name: 'field' | 'operation' | 'parameter'
+                      --                    | 'behaviour' | 'boundary' | 'intent' | …
+  key:  String?       -- identifier within slot (omitted when slot is singular on its host)
+}
+```
+
+`Field` is the immediate driver — it's a value record on `Container.fields`, not a primitive, but `reads`, `writes`, `observes`, and `exposes` (R20) all need to point at specific Fields. V0 populates only the single-segment-Field case; the general form is committed once so the kernel doesn't change shape when Parameter earns first-class addressability. (Clause is a primitive — reached as `PrimitiveRef`, not via `SubstrateAddress` — per §3.1 / §3.2.)
+
+Concrete addresses:
+
+| Sub-substrate target | Path |
+|---|---|
+| Field `Order.priority` | `[{slot: 'field', key: 'priority'}]` |
+| Parameter `place_order(order)` on Order's boundary | `[{slot: 'boundary'}, {slot: 'operation', key: 'place_order'}, {slot: 'parameter', key: 'order'}]` |
+
+Typed segments rather than flat path strings: unambiguous (no parsing required), validatable against the kernel substrate schema, tool-friendly. The verbosity cost for the trivial Field case is mild.
+
+### 4.4 Edge identity and metadata
+
+**Edges are values.** Two edges with the same identity are the same edge — independent of when, by whom, or with what descriptive metadata they were observed.
+
+```
+edge_identity = (from, to, kind, identifying_metadata)
+```
+
+`identifying_metadata` is the *identifying subset* of an edge's metadata bag, kernel-committed per relation. Non-identifying metadata (timestamps, comparator evidence, rendering hints) mutates without changing edge identity.
+
+**Multi-edges allowed iff identifying metadata differs.** Two `writes` from the same Rule to the same Field with different `condition` content are two distinct edges; with the same (or no) `condition` content they collapse to one. **Methodologies drive granularity** by what distinguishing metadata they supply — a barebones methodology that doesn't track conditions gets coarse single-edges automatically; a rich-condition methodology gets fine edges.
+
+**Identifying-metadata slot names (kernel-committed):**
+
+| Slot | Meaning | Kernel-committed source |
+|---|---|---|
+| `condition` | Predicate expression that gates / specifies this edge instance | Kernel |
+| `scope` | Quantification / iteration context | Kernel |
+| `projection_kind` | Role discriminator on `projects` edges | Projection vocab (§7) |
+
+Per-relation applicability:
+
+| Relation | Identifying metadata |
+|---|---|
+| `triggers` | — |
+| `observes` | `condition` |
+| `reads` | `condition` |
+| `writes` | `condition`, `scope` |
+| `creates` | `condition`, `scope` |
+| `destroys` | `condition`, `scope` |
+| `emits` | `condition`, `scope` |
+| `realises` | — |
+| `specialises` | — |
+| `uses` | — |
+| `exposes` | — |
+| `provides` | — |
+| `projects` | `projection_kind` |
+
+**Slot content is typed `Expression`** (per §3.8). Identity is structural equality on Expression structure — two Expressions with the same shape, free variables, and operator at each node are the same identifying value. Semantic equivalence beyond structural identity (`"status = pending"` vs `"pending = status"`, modulo commutativity) is not a kernel concern; methodologies that want canonicalisation register a normalisation pass against the §3.8 substrate. For `writes` / `creates` / `destroys` / `emits` edges, identifying-metadata values are derived from the sourcing Effect's `source` Expression (per §3.8.2); for `observes` / `reads`, they come from the analyzer's parsed condition Expression directly.
+
+### 4.5 Direction; no inverse-pair vocabulary
+
+Relations have direction. Inverse queries ("what Events trigger this Rule" vs "what Rules does this Event trigger") work by traversing the same edge from the other endpoint — not by storing two relations. The kernel never names two relations as inverse pairs (no `triggered_by`, no `realised_by`). Methodologies that want a directional-inverse vocabulary (Hex's `offers`/`requires`, Allium's `facing`/`backed_by`) carry it in vocabulary.
+
+### 4.6 Derived relations are first-class queries
+
+`chains` (Rule emits Event → other Rule triggered by Event) is the canonical derived relation. It is **not** a kernel relation. It is a documented derivation pattern:
+
+```
+chains(R1, R2)  :=  emits(R1, E) ∧ triggers(E, R2)
+```
+
+The kernel commits to making derived relations **expressible** and **queryable** through the constraint language (§6), not to storing them as edges. Storing the derivation would risk drift. Tools rendering "Rule R1 chains to Rule R2" compute the derivation at query time.
+
+The same machinery supports cross-Container dependency derivation. Any of `reads`/`writes`/`emits`/`triggers`/`realises`/`projects`/Type references between Rules/Operations in distinct Containers yields a Container-level dependency — derived, not stored. Methodology-specific framings (DDD `manages`, `upstream_of`, `anti_corruption_layer`; C4 technology-tagged dependencies) layer as vocabulary tags on the underlying derivation.
+
+---
+
+## 5. The vocabulary mechanism
+
+The vocabulary mechanism is the seam by which methodology vocabularies layer methodology-specific content onto the kernel substrate. **Overlay-only, no new primitives.** Methodologies contribute tags, structured content, predicates, and renderers — no new node types and no escape hatch.
+
+### 5.1 Contribution kinds
+
+Three contribution kinds. Cross-methodology pressure-testing accumulated five candidates and force-and-gate collapsed two:
+
+| Kind | Outcome | Reason |
+|---|---|---|
+| Tags | Kept | Methodology classification of kernel primitives is universally shaped. |
+| Structured content per tag | Folded into Tagged content attachment | A tag application is `(identity, payload)`; pure-label tags are the empty-payload case. One mechanism, not two. |
+| Methodology-typed relations | Dissolved | Every concrete case decomposes into (i) vocabulary content with back-references to kernel primitives or (ii) methodology metadata on a stored kernel edge. No uniform "new edge kind" shape survives. |
+| Validation rules | Kept (as registration seam) | Predicate expression language handed off to constraint-language section. |
+| Rendering contract | Kept (seam) | Implementation deferred until explorer rebuilds. |
+
+Two consumers — predicates and renderers — read from the surface that tagged content exposes. The mechanism's leverage comes from this: **one introspection surface, two consumers.**
+
+### 5.2 Tagged content attachment
+
+The spine of the mechanism.
+
+```
+TagDefinition {
+    namespace:       String                       -- "Allium" | future "Boundary" | …
+    name:            String                       -- "Surface" | "Provides" | "Entity" | …
+    applies_to:      TagTarget                    -- where this tag can be applied
+    payload_schema:  Type?                        -- methodology's content shape (kernel-visible)
+    parent_tag:      TagRef?                      -- intra-namespace inheritance (optional)
+    relational:      RelationalSpec?              -- when the tag declares a relationship
+}
+
+RelationalSpec {
+    endpoints:        List<PayloadFieldName>      -- payload fields carrying the endpoint refs
+    symmetry:         directed | symmetric
+    canonical_side:   PayloadFieldName?           -- which endpoint stores the application
+                                                  --   (required for directed; symmetric uses
+                                                  --    lexicographic order on endpoint ids)
+    coherence_query:  Predicate?                  -- kernel-query expressing what observation
+                                                  --   would confirm this tag's intent
+}
+
+TagApplication {
+    tag:      TagRef                              -- which TagDefinition
+    target:   KernelTarget                        -- primitive / stored edge / sub-substrate
+    payload:  Payload                             -- conforming to tag.payload_schema
+}
+```
+
+- **`namespace`** scopes the tag identity. `Allium::Surface` and a hypothetical `DDD::Surface` are distinct tag identities even if labels collide.
+- **`applies_to`** specifies what kind of target the tag can attach to — kernel primitive, kernel stored-edge kind (e.g. `Edge<emits>`), or sub-substrate via the address machinery in §4.3 (Field, Parameter, …).
+- **`payload_schema`** is the methodology's declared content shape — **kernel-visible and introspectable via the Type vocabulary**. Absent for pure-label tags.
+- **`parent_tag`** supports intra-namespace inheritance only. Cross-namespace parents are forbidden.
+
+**Multi-tagging is structural, not exceptional.** The same Container may carry several tag applications from one or several namespaces — three independent tag applications, none with privileged status. **Methodology coexistence follows from this.** A project mixing methodologies sees the same kernel primitives carrying multiple namespaced tags simultaneously: a Surface Container can be `Allium::Surface` ∧ `Hex::DrivingPort` ∧ `DDD::AntiCorruptionLayer` at once, with each namespace's predicates and renderers operating against its own tag applications. No privileged methodology; no merging step needed beyond what the kernel already provides via the multi-tagging substrate.
+
+#### Tag inheritance — v0 semantics
+
+V0 commits a minimal inheritance shape:
+
+| Question | v0 answer | Rationale |
+|---|---|---|
+| Payload-schema extension | ✅ Child inherits parent's payload schema and may add fields | The Allium-end-to-end path uses no inheritance yet, but the C4 hierarchy pressure-test motivates extension; uniform across methodologies that engage inheritance. |
+| Tag-presence implication | ✅ Carrying child tag implies carrying parent tag (`has_tag` is reflexive over the parent chain) | Without it, every predicate has to enumerate the hierarchy by hand. |
+| Field-override of parent slot types | ❌ Forbidden | No forcing case from worked examples. |
+| Multi-parent | ❌ Forbidden | No forcing case from worked examples. |
+
+Re-opening triggers: a concrete methodology needs narrowing (field-override) or diamond resolution (multi-parent).
+
+#### Relational tags and coherence queries
+
+Tag applications carrying kernel back-references in their payload often *are* relationships in disguise. A relational tag declares the relationship shape: which payload fields are endpoints, the symmetry (directed / symmetric), and the canonical storage side. The mechanism then provides:
+
+- **Storage canonicalisation.** The methodology declares which endpoint stores the application; the mechanism enforces it. Symmetric relationships canonicalise by lexicographic order on endpoint ids.
+- **Pair-indexed lookups.** Predicates address the relationship as `Tag(endpoint_a=X, endpoint_b=Y)`, jumping to the application directly rather than scanning either primitive's tag list.
+- **Coherence checking.** See below.
+
+Multi-aspect on the same pair (multiple relational tags sharing endpoints) is independent applications coexisting by design.
+
+**Coherence queries — declaration vs observation.** A relational tag carries methodology *intent* — "I declare these two BCs stand in a Customer-Supplier relationship." Whether the model *observes* a corresponding pattern (a derived dependency edge between them) is a separate question. The mechanism keeps the two separate but linked: the tag's `coherence_query` is a kernel-query template, parameterised by the tag's endpoints, that expresses what observation would confirm the declaration's intent. Per-application evaluation answers "does this declaration's claim hold now?"
+
+For pure-classification tags (`DDD::AggregateRoot`, `DDD::Subdomain`) coherence queries are typically absent — the declaration is a label, not a claim about kernel-observable structure that can drift. For methodology-supplied tags whose intent is a structural assertion, coherence queries surface drift automatically without separately authored predicates.
+
+Default semantics for coherence-query failures: `kind: drift, severity: warning` (see §5.3). Methodologies may override severity at registration; `kind: drift` is intrinsic.
+
+#### Back-references — the dissolution of "methodology-typed relations"
+
+When a methodology wants to express a relationship the kernel doesn't carry as a relation kind, it lifts the relationship into payload content with kernel back-references. Concrete v0 cases:
+
+**Allium `provides:` (Surface → Event).** `emits` is Rule-only at the kernel level; Boundary→Event is methodology framing. Represented as:
+
+```
+TagDefinition {
+    namespace: "Allium", name: "Provides",
+    applies_to: Container (Boundary-bearing),
+    payload_schema: Composite(Inline([
+        FieldSpec("events",
+            Collection(of: Ref(KernelPrimitive({Event})),
+                       semantics: Sequential))
+    ]))
+}
+```
+
+A predicate asking "what Boundaries advertise event E?" traverses this payload's `events` back-references — no new kernel relation needed.
+
+**Allium `exposes:`** — back-reference from Boundary-bearing Container to a Field on another Container:
+
+```
+TagDefinition {
+    namespace: "Allium", name: "Exposes",
+    applies_to: Container (Boundary-bearing),
+    payload_schema: Composite(Inline([
+        FieldSpec("exposed_field",
+            Ref(Substrate(within_kind=Container, slot_kinds={Field})))
+    ]))
+}
+```
+
+**Allium `facing:` / `contracts:`** — back-references to Actor / Contract Containers respectively, with optional `where: TagConstraint`.
+
+In every case the *relationship* survives — but it lives as either payload content with back-references on the source primitive or methodology metadata on a stored kernel edge. No new edge kinds enter the kernel.
+
+#### Tags on stored kernel edges
+
+Stored kernel edges (the thirteen relations) accept tag applications as non-identifying metadata. Useful for `Allium::Trigger { kind: external_stimulus | chained }` on a `triggers` edge, `Boundary::Binding` on operation-invocation triggers from `.boundary`, `Allium::Provides` / `Allium::Exposes` carrying optional methodology-specific shading on `provides` / `exposes` edges, or methodology metadata on a `realises` edge.
+
+**Derived edges do not carry tags** — they are query results, not addressable objects. Methodology-typed relations involving derivations lift to relational tags or back-reference payloads on the source primitive.
+
+Namespace-sharing across attachment targets: edge-tags share namespaces with primitive-tags. Disambiguation is by `applies_to`, not by namespace.
+
+### 5.3 Predicate registrations
+
+The mechanism's commitment to constraints: **everything a methodology lifts onto the model is queryable.** Predicates are the registration shape for methodology-supplied validation; the expression language for predicates is the constraint language (§6).
+
+```
+PredicateRegistration {
+    namespace:        String                       -- "Allium" | project-specific | …
+    name:             String                       -- "VR30" | "ProvidesCompleteness" | …
+    severity:         error | warning              -- block vs annotate
+    kind:             Kind                         -- "integrity" | "drift" | open identifier
+    scope:            ModelScope | TagScope        -- whole-model vs per-tagged-target
+    message_template: String                       -- violation rendering, with substitution slots
+    predicate:        Predicate                    -- expression in the constraint language (§6)
+    applies_to:       TagRef?                      -- when scope = TagScope
+}
+```
+
+**Severity and kind are orthogonal axes.** Severity is the workbench action (block vs annotate). Kind is the violation category, driving reporter rendering — never the engine. Kernel-shipped well-known kinds: `integrity` (default for general validation), `drift` (default for coherence queries; intrinsic). Methodologies may register custom kinds. Severity is the constraint author's choice at registration; kind is intrinsic to the constraint.
+
+**Scope** is whole-model (one evaluation across the graph) vs per-tagged-target (evaluated once per Container/edge carrying `applies_to`).
+
+**`message_template`** is the violation-rendering hook for the explorer — predicate bindings substitute into the template. The language has no separate "tag-this-for-reporting" mechanism; every bound variable is reportable.
+
+#### Project-side registration — directional, not load-bearing for MVP
+
+The MVP commits the *single constraint language* (§6) and the *registration shape* above. The *path by which a project ships its own constraints* (file format, location, activation, composition with methodology-shipped constraints) is **directional**: such a path will exist; it is not specified in v0. Re-opening triggers for the composition mechanism (project-side severity overrides, multiple profiles, constraint bundles, transitive imports, versioning) are recorded in §10.
+
+### 5.4 The introspection surface
+
+Predicates and renderers consume one shared surface:
+
+| Surface | Examples |
+|---|---|
+| Kernel substrate | `Container.children`, `Container.fields`, `Container.events`, `Operation.parameters`, … |
+| Kernel relations | `triggers`, `observes`, `reads`, `writes`, `creates`, `destroys`, `emits`, `realises`, `specialises`, `uses`, `exposes`, `provides`, `projects` |
+| Tag presence | "does target T carry tag X?", "all targets carrying tag X" |
+| Tag payload | typed payload navigation per declared schema |
+| Derivations | Container-level dependencies, transitive closure, `chains` (per §4.6) — first-class for queries, not stored |
+| Logical composition | conjunction, disjunction, **negation**, existential and universal quantification |
+
+Negation is load-bearing. Constraints like "every `provides:` event has at least one Rule consuming it via `when:`" require asserting *absence* of a contradicting structure, not just presence of a matching one.
+
+### 5.5 Renderers
+
+Display contract per tag. Each methodology supplies visual treatment for its tagged primitives and edges; the explorer dispatches per tag application.
+
+```
+RendererRegistration {
+    tag:                  TagRef
+    node_treatment:       NodeRenderer?
+    sidebar_treatment:    SidebarRenderer?
+    edge_treatment:       EdgeRenderer?
+    layout_hint:          LayoutHint?
+}
+```
+
+Renderers consume the same introspection surface predicates consume. The difference is purpose, not access: predicates produce a boolean; renderers produce a visual treatment.
+
+**Scope:** seam committed; concrete shape arrives with the explorer rebuild. Renderers must be plugin-supplied (when plugin mechanics arrive), not explorer-hardcoded, so methodologies remain plug-and-play.
+
+**Kernel-relation rendering.** Each of the thirteen kernel relations gets a *default* explorer rendering owned by fukan (line style, colour family, arrowhead, label) so a kernel-only Model is fully navigable without any methodology renderer attached. Methodology edge tags (e.g., `Allium::Provides` on a `provides` edge, `DDD::CustomerSupplier` on a `uses` edge) layer additional visual treatment via the same `RendererRegistration` mechanism — the tag's renderer decorates the kernel default, never replaces it.
+
+### 5.6 Cross-cutting commitments
+
+**The methodology-author obligation.** For a constraint to be checkable, the content it references must be lifted onto the model via tagged content. The kernel commits *everything liftable is checkable*; lifting is the methodology author's job. **The bargain is graded by typedness.** A tag with typed payload (`Enum`, `Ref` with tag constraints, `List` of structured refs) exposes a queryable surface predicates can do real work over. A tag with opaque `description: String` payload has technically lifted content, but predicates can do little beyond presence checks. The introspection surface's value scales with how committed methodology authors are to structuring their content.
+
+**Spec altitude expresses effects, not invocation.** Rules at spec altitude describe state effects (`writes` / `creates` / `destroys`) and event emissions (`emits`), not control flow. The kernel `triggers: Operation → Rule` runs in the *handler* direction (Operation invocation triggers Rule firing); there is no `invokes: Rule → Operation` — Rules don't directly invoke Operations at spec altitude. Constraints about control flow ("Core's implementation must not directly invoke Adapter functions") live in the **implementation projection layer** — expressed over `projects` edges plus code-side call-graph derivations when those arrive — not at a "fourth altitude." Per K23, implementation is projection across the three spec altitudes, not an altitude of its own.
+
+**One-way dependency reaffirmed.** Vocabulary references kernel; kernel knows nothing of vocabulary. Predicates and renderers reference kernel substrate and relations; the kernel never references vocabulary. A kernel-only Model remains valid; zero vocabularies attached = a pure structural graph.
+
+**TagDefinitions auto-derive Datalog predicates** (per V15). Each loaded `TagDefinition` extends the §6.6 kernel-universal derivations with per-tag predicates: `<ns>_<name>(target)` (presence), `<ns>_<name>_<field>(target, value)` (per payload field), `<ns>_<name>(endpoint_a, endpoint_b)` (relational tags). These are macros over `has_tag` / `tag_payload`; they accelerate methodology-specific predicate authoring without compromising cross-vocab query uniformity. The universal tag-introspection vocabulary remains the load-bearing layer for any query that doesn't already know which vocabulary it targets.
+
+---
+
+## 6. The constraint language
+
+The single expression language methodology constraints and coherence queries are authored in. Same language regardless of who ships the constraint (methodology vocabulary, project, future plugin).
+
+**Relationship to §3.8.** §6 wraps the §3.8 `Expression` substrate in Datalog rule heads and body literals. The underlying typed value/predicate calculus is identical to what Rule bodies and Intent assertions use; what differs is the surface form (Datalog rule structure for constraints; `Rule.intent.assertions` / `Rule.body.effects` for Rule bodies) and the binding environment (ModelIntrospection for §6 per §3.8.5; OneState / TwoState for Intent assertions and Rule bodies). Sort guards, path sugar, and type-sum sugar layer over the same Expression substrate.
+
+### 6.1 Three layers
+
+```
+1. Substrate    — stratified Datalog with negation and aggregation
+2. Path sugar   — dot-access, set-access, relation arrows, tag-payload access
+3. Type sugar   — one matches operator with patterns mirroring §3.3's Type cases
+```
+
+Both sugar layers desugar mechanically to the substrate. The substrate alone is sufficient; the sugars are ergonomics. Methodology authors write at whatever altitude reads cleanest.
+
+### 6.2 Substrate: stratified Datalog with negation and aggregation
+
+**Negation — stratified, closed-world.** The model has a known extent. ExternalEntity stubs are *in* the model (per §3.6); CWA over them sees their small substrate. Externality is a tag, not a semantic mode.
+
+Open-world concerns encode as predicates, not language semantics. Methodology authors who want to ignore unloaded scope opt into a kernel-shipped scope predicate:
+
+```prolog
+% Default — closed-world, treats stubs like any other Container:
+violation(C, A) :-
+    has_tag(C, "Hex::Core"), depends_on(C, A),
+    has_tag(A, "Hex::Adapter").
+
+% Scope-aware variant — methodology opts in:
+violation_strict(C, A) :-
+    has_tag(C, "Hex::Core"), depends_on(C, A),
+    is_local(A),
+    has_tag(A, "Hex::Adapter").
+```
+
+**Stratified specifically.** Forbids non-stratifiable recursion-through-negation (`p(X) :- not q(X). q(X) :- not p(X).`). Every program terminates with a unique well-defined model. Bottom-up materialisation works.
+
+**Closed in this scope:** three-valued logic for open-world; non-stratifiable recursion-through-negation. Revisit only if real cases demand them.
+
+**Aggregation.** Committed as part of the language; concrete operator set TBD. Starting cut: `count`, `min`, `max`, `sum`. Stratified aggregation has the same semantic story as stratified negation — aggregates evaluate in lower strata than their consumers.
+
+### 6.3 Sort system
+
+The language uses the §3.3 Type vocabulary one altitude up. One sort per:
+
+| Sort family | Members |
+|---|---|
+| Kernel primitive kinds | `Container`, `Actor`, `Behaviour`, `Boundary`, `Rule`, `Operation`, `Event`, `Intent`, `Clause` |
+| Sub-substrate kinds | `Field`, `Parameter` |
+| Stored kernel edge kinds | `Edge<triggers>`, `Edge<observes>`, `Edge<reads>`, `Edge<writes>`, `Edge<creates>`, `Edge<destroys>`, `Edge<emits>`, `Edge<realises>`, `Edge<specialises>`, `Edge<uses>`, `Edge<exposes>`, `Edge<provides>`, `Edge<projects>` |
+| Tag-application sorts (parameterised) | `TagApp<Allium::Surface>`, `TagApp<Allium::Provides>`, … |
+| Payload values | All six Type cases (`Scalar`, `Enum`, `Composite`, `Collection`, `Union`, `Ref`) |
+
+Sort guards are unary predicates: `is_container(X)`, `is_rule(X)`, `is_edge_emits(E)`. They constrain quantifier scope and make rules readable.
+
+### 6.4 Quantification
+
+Free variables in rule bodies are existential; universal-over-condition is "no counterexample." Surface sugar wraps this:
+
+```
+∀ C:Container . has_tag(C, "Hex::Core") ⇒
+    ¬∃ A:Container . depends_on(C, A) ∧ has_tag(A, "Hex::Adapter")
+```
+
+desugars mechanically to:
+
+```prolog
+violation(C, A) :-
+    is_container(C), has_tag(C, "Hex::Core"),
+    is_container(A), depends_on(C, A), has_tag(A, "Hex::Adapter").
+```
+
+Nested alternation deeper than ∀∃ stratifies into named intermediate predicates — a feature, not a bug.
+
+### 6.5 Built-ins committed
+
+| Built-in | Shape |
+|---|---|
+| `=`, `≠` | Identity comparison |
+| `in` | Membership over `List<T>` payloads |
+| `member(List, Element)` | Datalog-style equivalent |
+| `is_local(X)` | True iff `X` is not an external/stub primitive |
+| `has_tag(X, T)` | Tag presence — reflexive over the parent-tag chain (§5.2 inheritance) |
+| `tag_payload(X, T, P)` | Binds `P` to the typed payload value |
+| `source(E, X)`, `target(E, Y)`, `has_tag_on_edge(E, T)` | Edge addressing |
+| Substrate navigation predicates | One per substrate slot — `behaviour_of`, `boundary_of`, `rule_in`, `field_in`, … |
+
+### 6.6 Kernel-universal derivations
+
+The catalogue fukan ships with the substrate. Universal — depend only on kernel substrate (§3) and the closed relation set (§4), with no methodology knowledge. Every predicate gets them for free.
+
+```prolog
+% Transitive closure of any kernel relation (instantiated per relation)
+emits_star(R, X)       :- emits(R, X).
+emits_star(R, X)       :- emits(R, Y), emits_star(Y, X).
+% and the same for triggers, observes, reads, writes, creates, destroys, realises, specialises, uses, exposes, provides, projects
+
+% Inter-Rule chaining
+chains(R1, R2)         :- emits(R1, E), triggers(E, R2).
+chains_star(R1, R2)    :- chains(R1, R2).
+chains_star(R1, R3)    :- chains(R1, R2), chains_star(R2, R3).
+
+% Container-level dependency (union of fine-grained dependencies)
+depends_on(A, B) :- rule_in(R, A), reads(R, X),    container_of(X, B), A ≠ B.
+depends_on(A, B) :- rule_in(R, A), writes(R, X),   container_of(X, B), A ≠ B.
+depends_on(A, B) :- rule_in(R, A), emits(R, E),    container_of(E, B), A ≠ B.
+depends_on(A, B) :- rule_in(R, A), triggers(E, R), container_of(E, B), A ≠ B.
+depends_on(A, B) :- op_in(O, A), realises(O, O'),  container_of(O', B), A ≠ B.
+depends_on(A, B) :- field_in(F, A), type_refs(F, B), A ≠ B.
+depends_on(A, B) :- uses(A, B).
+depends_on(A, B) :- exposes(A, F), field_in(F, B), A ≠ B.
+depends_on(A, B) :- provides(A, E), event_in(E, B), A ≠ B.
+depends_on_star  :- transitive closure of depends_on.
+
+% Substrate navigation
+parent_container(X, C) :- C.boundary = X.
+parent_container(X, C) :- C.behaviour = X.
+parent_container(X, C) :- C.children contains X.
+rule_in(R, C)          :- C.behaviour.rules contains R.
+field_in(F, C)         :- C.fields contains F.
+op_in(O, C)            :- C.boundary.operations contains O.
+event_in(E, C)         :- C.events contains E.
+
+% Tag indexing
+has_tag(X, T)            :- ⟨lookup TagApplication where tag = T (or descendant of T), target = X⟩.
+has_tag_payload(X, T, P) :- ⟨lookup payload⟩.
+
+% Type-vocabulary discrimination (auxiliary predicates the type-sum sugar desugars to)
+type_scalar(T, Name)
+type_enum(T, Vs)
+type_composite_named(T, C)
+type_composite_inline(T, Fs)
+type_collection(T, ElementType, Semantics)
+type_union(T, Ts)
+type_ref_kernel(T, Kinds, W)
+type_ref_substrate(T, K, Slots)
+
+% Type-reachability — Field F's type expression reaches Container B
+% (closure over Composite(Named(...)), Ref(KernelPrimitive(...)), Collection, Inline-Composite, and Union cases)
+type_refs(F, B)  :- F.type_ref matches Composite(Named(B)).
+type_refs(F, B)  :- F.type_ref matches Ref(KernelPrimitive(_), where=_), target_is(F.type_ref, B), is_container(B).
+type_refs(F, B)  :- F.type_ref matches Collection(of: ?E, semantics: _), type_refs_in(E, B).        % unwrap Collection
+type_refs(F, B)  :- F.type_ref matches Composite(Inline(?Fs)), F' in ?Fs, type_refs(F', B).
+type_refs(F, B)  :- F.type_ref matches Union(?Ts), T' in ?Ts, type_refs_in(T', B).                   % union per case
+type_refs(F, B)  :- F.type_ref matches Collection(of: _, semantics: Keyed(?K)), type_refs_in(K, B). % keyed-collection key type
+```
+
+Methodology-flavoured dependencies (DDD `manages`, `upstream_of`, Hex `backed_by` — when they arrive) layer as tag-presence predicates over `depends_on`.
+
+#### Auto-derived per-tag predicates
+
+The catalogue above is **fukan-shipped and closed**. It extends with one **open** mechanism: for each `TagDefinition` loaded by the constraint engine, fukan auto-derives a small set of Datalog predicates that compile to `has_tag` and `tag_payload`. These predicates are kernel-universal in the same sense as the rest of §6.6 — they depend only on the kernel substrate, kernel relations, and the universal tag-introspection vocabulary; they are **macros**, not engine extensions.
+
+Derivation rules:
+
+| TagDefinition shape | Auto-derived predicates |
+|---|---|
+| Pure classification (no payload) | `<ns>_<name>(target)` — presence |
+| With typed payload fields | `<ns>_<name>(target)` — presence; plus `<ns>_<name>_<field>(target, value)` per payload field (multi-row for collection fields; no row when an optional field is absent) |
+| Relational (`RelationalSpec` present) | `<ns>_<name>(endpoint_a, endpoint_b)` — binary from the endpoint payload fields |
+
+Naming convention: namespace and tag name lowercased and snake-cased; payload field names taken verbatim. Examples:
+
+```prolog
+% From TagDefinition(namespace="Allium", name="Surface",
+%                    payload_schema={facing?, context?, related, timeout?}):
+allium_surface(C)                          % presence
+allium_surface_facing(C, X)                % field — X is Actor or Container (the Union of Ref targets);
+                                           %         row iff payload's facing is set
+allium_surface_context(C, X)               % field
+allium_surface_related(C, S)               % field — one row per element in related
+allium_surface_timeout(C, T)               % field — row iff timeout is set
+
+% From TagDefinition(namespace="DDD", name="CustomerSupplier", relational={...}):
+ddd_customer_supplier(Upstream, Downstream)   % binary (relational tag)
+```
+
+Each auto-derived predicate desugars uniformly to `has_tag` + `tag_payload`. The cross-vocab query surface (kernel relations + universal `has_tag`/`tag_payload`) is unchanged; sugar accelerates methodology-specific predicate authoring.
+
+**Macro-only invariant** (per V15). Auto-derived predicates carry **no methodology-private semantics**. They cannot introduce per-vocab transitive closures, per-vocab traversal patterns, or anything beyond what `has_tag`/`tag_payload` + kernel relations express. Methodologies that need richer derived semantics author them as plain Datalog rules layered over the universal vocabulary — same as fukan-shipped derivations above. The auto-derivation is sugar; the universal layer is load-bearing.
+
+### 6.7 Path navigation sugar — four forms
+
+```
+Form 1: Substrate dot-access (singular aggregates)
+  X.behaviour.intent           % Container → Behaviour → Intent
+  R.intent                     % Rule → Intent
+  B.boundary                   % Container → Boundary
+
+Form 2: Substrate set-access (plural collections)
+  F in C.fields                % iterate Fields on Container
+  R in C.behaviour.rules       % iterate Rules in Behaviour
+  E in C.events                % iterate Events on Container
+  P in O.parameters            % iterate Parameters on Operation
+
+Form 3: Relation arrows
+  A -[:emits]-> E              % forward edge
+  R <-[:triggers]- E           % reverse edge (same edge, traversed backwards)
+  C -[:depends_on*]-> D        % transitive closure of a single relation
+  C -[:depends_on*1..3]-> D    % bounded depth
+  A -[e:emits]-> E             % bind edge value (for edge-tag queries)
+
+Form 4: Tag-payload access
+  X@Allium::Surface              % shorthand for tag_payload(X, "Allium::Surface", P), binds P
+  X@Allium::Surface.facing_actor % drills into the typed payload — P.facing_actor
+```
+
+Payload navigation is sort-checked against the tag's `payload_schema` — drilling into a slot that doesn't exist on the schema is a static error.
+
+**Linear chains only.** Branching/disjunction/cycles drop back to plain Datalog rule bodies. Branching forces the author to name what they're computing, which is usually clearer anyway.
+
+### 6.8 Type-sum case-analysis sugar
+
+One operator: `matches`. Patterns mirror the six `Type` cases:
+
+```
+T matches Scalar("String")                                 % literal match
+T matches Scalar(?Name)                                    % bind scalar name
+T matches Enum(?Vs)                                        % bind value list
+T matches Composite(Named(?C))                             % bind named container
+T matches Composite(Inline(?Fs))                           % bind inline field specs
+T matches Collection(of: ?E, semantics: ?S)                % bind element type + semantics
+T matches Collection(of: ?E, semantics: Sequential)        % match ordered collections
+T matches Collection(of: ?E, semantics: Unique)            % match set-shaped collections
+T matches Collection(of: ?V, semantics: Keyed(?K))         % match keyed collections (bind K,V)
+T matches Union(?Ts)                                       % bind case list (each ?Ts[i] recursively matchable)
+T matches Ref(KernelPrimitive(?Kinds))                     % bind kind set
+T matches Ref(KernelPrimitive(?Kinds), where=?W)           % bind kinds + tag constraint
+T matches Ref(Substrate(within_kind=?K, slot_kinds=?S))    % bind substrate-address shape
+```
+
+Each position is a bound variable (`?V`), a literal, or a nested `matches` pattern. Desugars to the per-case auxiliary predicates in §6.6.
+
+### 6.9 Coherence queries are parameterised Datalog rules
+
+A `coherence_query` slot in `RelationalSpec` (§5.2) is a rule whose head arguments come from the relational tag's endpoint payload fields. Per-application evaluation binds the endpoint variables to the application's payload and asks "does the rule body hold?"
+
+No separate sublanguage. The same rule shape with a convention about how the engine invokes it per-application.
+
+### 6.10 Worked examples (Allium-focused)
+
+**Allium VR30** — "Every trigger referenced in a Surface's `provides:` must be defined as an external-stimulus trigger in a rule of the same module."
+
+```prolog
+violation(B, E) :-
+    provides(B, E),
+    parent_container(B, M),
+    not (R in M.behaviour.rules,
+         E -[:triggers]-> R,
+         E@Allium::Event.kind = "external_stimulus").
+```
+
+**Signal-protocol gap (`signal_gap`)** — every Event advertised by a Surface has at least one Rule consuming it. Fukan-shipped well-known predicate. The R20 lift makes this expressible directly over kernel edges, without tag-namespace traversal:
+
+```prolog
+violation(B, E) :-
+    provides(B, E),
+    not (E -[:triggers]-> _).
+```
+
+**Rule purity** — Rules in a module tagged `Fukan::PureCore` may have no effect edges (purity = absence of `writes`/`creates`/`destroys`/`emits`):
+
+```prolog
+has_effect(R) :- writes(R, _).
+has_effect(R) :- creates(R, _).
+has_effect(R) :- destroys(R, _).
+has_effect(R) :- emits(R, _).
+
+violation(R) :-
+    rule_in(R, M),
+    has_tag(M, "Fukan::PureCore"),
+    has_effect(R).
+```
+
+**Architectural layering** — Hex Core may not depend on Hex Adapter (uses the §6.6 derived `depends_on`):
+
+```prolog
+violation(C, A) :-
+    has_tag(C, "Hex::Core"),
+    depends_on(C, A),
+    has_tag(A, "Hex::Adapter").
+```
+
+**External state isolation** — Core Rules may not mutate state owned by external-entity-tagged Containers:
+
+```prolog
+violation(R, X) :-
+    rule_in(R, M),
+    has_tag(M, "Hex::Core"),
+    (writes(R, X) ; creates(R, X) ; destroys(R, X)),
+    container_of(X, C),
+    has_tag(C, "Allium::ExternalEntity").
+```
+
+These three illustrate the Rule-purity commitment in §11: purity is queryable as a structural property (effect-edge presence); cross-module/cross-layer dependency is queryable via `uses`/`depends_on`; effect-target classification combines effect relations with tag-presence filters. No edge from Rule to anything Structure-altitude is needed or used.
+
+### 6.11 Cross-cutting commitments
+
+**Methodology-derived properties are plugin-authored Datalog rules over the introspection surface.** Every concrete methodology-internal derivation decomposes into kernel-universal predicate + tag-presence/payload filter:
+
+| Methodology-internal derivation | Lands as |
+|---|---|
+| Allium composite-API (Module's external API = union of Surface-tagged children's boundaries) | `composite_api(M, B) :- child(M, S), has_tag(S, "Allium::Surface"), boundary_of(S, B).` |
+| Allium `exposes` reachability | Direct kernel `exposes` edge traversal (post-R20 lift); methodology shading available via `Allium::Exposes` edge tag if needed |
+| Allium provides-completeness | Above |
+| Methodology-flavoured cross-Container deps (when applicable) | Universal `depends_on` + methodology tag |
+
+The framework is designed to make the class "exists in input but doesn't fall out of kernel" empty. If a methodology author hits a case where they can't express their derivation, the diagnosis is V7's lifting obligation: lift more typed content.
+
+**Bindings drive violation reporting.** Every bound variable in a matching rule is reportable via `message_template` substitution. The language has no separate "tag-this-for-reporting" affordance.
+
+**Materialisation vs identity.** Derived relations not stored as kernel edges is about *identity*, not *materialisation*. Caching the bottom-up materialisation of a Datalog predicate is implementation tuning, invisible to the model.
+
+**Limits of sugar.** Three places where methodology authors fall back to plain Datalog rule bodies:
+1. Branching / disjunction in a path
+2. Tag-payload navigation past a `where` constraint
+3. Aggregates over path results
+
+---
+
+## 7. The projection vocabulary (output side)
+
+The projection vocab is the **target ontology** of the `projects` relation: the closed, fukan-owned catalogue of artifact shapes that spec constructs project to. Per P1, the output vocab is a distinct mechanism from the input (methodology) vocabularies of §5.
+
+### 7.1 Why parallel kernel, not pure kernel
+
+Three properties distinguish it from primitives/relations (per P2):
+
+1. **Faster evolution lane.** Primitives and relations evolve slowly because changes ripple. Projection-vocab evolution is **additive** (new Artifact sub-kinds), **local** (each sub-kind is self-contained), and **bounded-impact** (a new sub-kind doesn't reshape existing edges).
+2. **Fukan-owned, but architected for plugin extensibility.** This scope keeps the projection vocab closed and fukan-owned for queryability, drift-detection confidence, and ontological clarity. Future opening to plugins is preserved as a refactor path (sum-extension), not a redesign.
+3. **Separate from input vocabularies.** Methodologies plug into the kernel as input vocabularies; projection targets are a distinct concern.
+
+### 7.2 v0 Artifact ontology (per P4)
+
+```
+Artifact =
+  | Code( language: String, sub: CodeSub )
+
+CodeSub =
+  | Function( qualified_name: String, source_location: SourceLocation? )
+  | DataStructure( qualified_name: String, source_location: SourceLocation? )
+```
+
+The `Infra(...)` and `Documentation(...)` cases come back when `.infra` and a documentation analyzer respectively join (§10.1, §10.5). The sum-extension shape (§7.5) means adding them later is additive on the projection-vocab lane, with no impact on existing cases.
+
+### 7.3 Identity per case
+
+Two Artifacts are equal iff their case + key fields match. `source_location` and other position metadata are non-identity.
+
+| Case | Identity tuple |
+|---|---|
+| `Code.Function` | `(language, qualified_name)` |
+| `Code.DataStructure` | `(language, qualified_name)` |
+
+### 7.4 `projection_kind` enum (per P5)
+
+Lives as an identifying-metadata slot on `projects` edges:
+
+```
+projection_kind =
+  | 'rule'         -- Rule       → Code.Function           (enactment)
+  | 'operation'    -- Operation  → Code.Function           (execution)
+  | 'invariant'    -- Invariant  → Code.Function           (check)
+  | 'schema'       -- Container | Event → Code.DataStructure
+  | 'test'         -- Rule | Operation | Invariant → Code.Function (verification)
+```
+
+Naming logic: function-shaped projections name their *source primitive kind* (`rule`, `operation`, `invariant`); the artifact-shaped projection names its *artifact shape* (`schema`). `test` is uniform across the three behavioural sources — the source endpoint discriminates what's being tested. The test cut excludes Entity / Value / Variant / Event per §7.6 (schemas are data, verified via the tests of the behavioural primitives that consume them).
+
+A spec primitive may produce multiple `projects` edges with different `projection_kind` values (e.g. a Rule produces both a `rule` projection to its enactment function and a `test` projection to its test function). The `(from, to, kind, identifying_metadata)` edge identity per §4.4 keeps them distinct.
+
+Adding a new kind (e.g. `endpoint`, `resource`, `documentation`, `diagram` when their producing analyzers join — §10.1, §10.5) is additive on the projection-vocab lane.
+
+### 7.5 Plugin-extensibility seams (per P3)
+
+The projection vocab is closed in this scope but **architected** so future opening to plugin extension is a refactor, not a redesign:
+
+1. **Sum-type shape.** Adding a case is sum-extension; existing cases unaffected.
+2. **Per-case identity is self-contained.** No cross-case coupling.
+3. **Comparators are case-dispatched.** `compare(spec_primitive, artifact) → ValidityResult` dispatches on artifact case. Replacing a fukan-owned comparator with a plugin-supplied one is one-line at the dispatch.
+4. **`projection_kind` is also a closed enum per case.** Each case enumerates valid kinds. Plugins would supply per-case kinds for their case.
+5. **No content shared across cases that would force kernel changes when a case is added or replaced.**
+
+### 7.6 Producing projections — substrate-level commitments
+
+The MVP producer is the Clojure analyzer, which reads Clojure source and emits `Code.Function` and `Code.DataStructure` Artifacts plus `projects` edges from spec primitives to those Artifacts. Mechanical detail — naming conventions, identifier transliteration, type translation, address resolution, enforcement policy — is application-design content and lives in [DESIGN.md](./DESIGN.md); the convention-driven name-resolution strategy (per P6) and the malli-defs-over-defrecords schema shape (per P8) are application-design commitments registered there. The substrate-level commitments below are what the projection vocabulary itself mandates.
+
+**Which spec primitives produce `projects` edges, and at which `projection_kind` values.** Every primitive listed here is the *from* side of one or more `projects` edges in a successful MVP build.
+
+| Spec primitive | Artifact case | `projection_kind` |
+|---|---|---|
+| Container tagged `Allium::Entity \| Value \| Variant` | `Code.DataStructure` | `schema` |
+| Event | `Code.DataStructure` | `schema` |
+| Operation on a Contract's Boundary | `Code.Function` | `operation` |
+| Rule | `Code.Function` | `rule` |
+| Expression in `Container.intent.assertions` tagged `Allium::Invariant` (with non-null `label?` per K31) | `Code.Function` | `invariant` |
+| Rule \| Operation \| Invariant Expression (above) | `Code.Function` | `test` |
+
+**Test projection cut — behavioural primitives only.** Rule, Operation, and Invariant Expression project to test artifacts; Entity / Value / Variant / Event do **not**. Schemas are data — their structural correctness is verified by the type system (malli) at load time; their *use* is verified through the tests of behavioural primitives that consume them. The per-kind cut can later move to a convention entry if a project needs to override it; MVP commits the cut as policy.
+
+**Surface and Contract have no direct projection (per P7).** Both are Boundary-only Containers (§9.1) — spec-level groupings rather than realising primitives. Their *Operations* project individually. Within-module operation-name collisions across multiple Surfaces are spec-side lint errors; rename or move to different modules.
+
+**Drift output — per-edge `validity`.** Each `projects` edge carries `validity ∈ 'valid' | 'absent' | 'stale' | 'unknown'` per §4.2. Semantics:
+
+- `valid` — expected artifact exists at the expected canonical address.
+- `absent` — expected artifact is missing (a Rule with no matching function is an implementation gap; no test function is a missing-test gap).
+- `stale` — finer-grained drift (e.g., malli-schema field-shape divergence from spec entity fields) — reserved for a future shape-comparator pass, not populated in MVP.
+- `unknown` — transient placeholder for edges produced but not yet evaluated (e.g., between analyzer phases in incremental builds); not the steady state after a successful pass.
+
+**Test projections: `valid` means presence, not coverage.** For `projection_kind = 'test'`, `validity = valid` indicates only that a function exists at the canonical test address — it does **not** verify the function actually exercises the spec primitive it projects from. Coverage analysis is a future shape-comparator concern, not part of MVP. The explorer's green marker on a `test` edge reads as "test function present," not "test coverage verified."
+
+The `Infra(...)` and `Documentation(...)` Artifact cases — and the `endpoint`, `resource`, `documentation`, `diagram` projection_kind values that would target them — are deferred per §7.2; the kernel relation set is unchanged either way.
+
+---
+
+## 8. Methodology contributions
+
+Per K1–K3, the Model is contributable-to by multiple vocabularies — each producing kernel content (primitives, relations, sub-substrate) plus its own namespaced tag applications via the §5 vocabulary mechanism. The Model itself is uniform; methodologies plug into it as overlays.
+
+The MVP carries two input-vocabulary methodologies: **Allium** (§8.1), the behavioural-and-partial-structural source vocabulary, and **Boundary** (§8.2), the Structure-altitude binding vocabulary that fills Allium's Operation↔Rule gap and adds subsystem composition. Each section maps its source-language constructs onto the kernel substrate; the application-design framing (file responsibilities, altitude rules, build pipeline) lives in [DESIGN.md](./DESIGN.md).
+
+### 8.1 Allium → kernel mapping
+
+The Allium grammar reference lives in the companion [`allium`](https://github.com/juxt/allium) repository — specifically [`references/language-reference.md`](https://github.com/juxt/allium/blob/main/references/language-reference.md). The mapping below describes how fukan's analyzer projects Allium constructs onto the kernel substrate; for the source language itself, that document is canonical.
+
+The mapping table the MVP analyzer realises.
+
+| Allium construct | Where it lands | Vocabulary tag | Notes |
+|---|---|---|---|
+| `module` | Container | `Allium::Module` | Naming scope; populates `children` (Containers in the module) and `events` (declared events); `intent` carries top-level invariants and (via `behaviour.intent`) module-level guarantees. No `boundary` — Allium modules are not API surfaces; the module's API emerges from its child Surfaces and Contracts (filtered by any `Boundary::ModuleApi` tag application — see §8.2). |
+| `entity` | Container | `Allium::Entity` | Populates `fields`; `intent` carries entity-level `@invariants` |
+| `value` | Container | `Allium::Value` | Populates `fields`; immutability semantics in vocabulary |
+| `variant` | Container | `Allium::Variant` | Populates `fields` for branch-specific fields **only** — parent fields are **not duplicated** in the variant Container; they are reached by traversing the outgoing `specialises` edge. Predicates and the Clojure analyzer must follow `specialises` to enumerate the full field set. **Field-name collision between a variant child and its parent is a structural error in MVP** — the child must not declare a field with a name already declared on the parent. Re-opening trigger: a worked Allium example that legitimately requires field shadowing or narrowing. Emits `specialises: Container → Container` to the parent Container (kernel relation, §4.1). |
+| `external entity` | Container, externally referenced | `Allium::ExternalEntity` | Cross-module reference at use site; matches the External-System convergence pattern |
+| `actor` | Actor | `Allium::Actor` payload `{identified_by: Text?, within: Text?}` | Both fields opaque text in v0 (expression parser may type them later). `identified_by` captures the Actor's identifying attribute; `within` captures the contextual scope. |
+| Entity field declaration | Field (value record in `Container.fields`) | — | Rich field semantics (enum literals, state-presence, derived, projection, relationship) layer as vocabulary content on Field |
+| `rule` | Rule (sub-unit of Behaviour) | `Allium::Rule` | Trigger via relations (per `when:` row); preconditions, postconditions, and guarantees as `Expression: Bool` entries in `Rule.intent.assertions`; named definitions in `Rule.body.definitions`; effects in `Rule.body.effects` (per §3.8). |
+| `when:` (rule trigger) | Relation (`Event —triggers→ Rule` for named events; `Rule —observes→ Container/Field` for typed-subject) | `Allium::Trigger` on the edge | Trigger kinds on `triggers` edges: `external_stimulus`, `chained`. Trigger kinds on `observes` edges: `creation`, `state_transition`, `becomes`, `temporal`, `derived`. Operation-invocation triggers are produced by the `.boundary` analyzer and carry `Boundary::Binding` on the edge instead — not `Allium::Trigger`. A Rule with multiple `when:` clauses produces one edge per clause (each with its own identifying metadata per §4.4). A single `triggers: Event → Rule` edge may carry multiple `Allium::Trigger` tag applications — one per kind — when the same edge is reachable by multiple trigger paths (e.g. external stimulus AND chained emission); this is structural multi-tagging (§5.2), not a "pick one" choice. |
+| `requires:` (inside rule) | `Expression: Bool` in `Rule.intent.assertions` (per §3.8) | `Allium::Requires` (source-clause tag on the Expression) | Precondition; TwoState env, references `pre` only. |
+| `where: x = e` (inside rule) | `Definition(name="x", expression=e)` in `Rule.body.definitions` (per §3.2) | `Allium::Where` (source-clause tag on the Definition's expression) | Typed binding visible across `Rule.intent.assertions` and `Rule.body.effects`. |
+| `ensures:` (rule body) | `Expression: Bool` in `Rule.intent.assertions`; when the Expression matches a §3.8.4 canonicalisation pattern, also materialises an `Effect` record in `Rule.body.effects` (which sources the corresponding `writes` / `creates` / `destroys` / `emits` kernel edge per §4.2) | `Allium::Ensures` (source-clause tag on the Expression) | TwoState env. Effect-shaped `ensures:` is a hybrid: the Bool form is the postcondition assertion; the Effect form is the declared change. Both readings coexist by the §3.8.3 kernel invariant. |
+| `guarantees:` (rule body — when present) | `Expression: Bool` in `Rule.intent.assertions` | `Allium::Guarantees` (source-clause tag on the Expression) | TwoState env; Bool postcondition that does **not** match any Effect canonicalisation (otherwise it would be `ensures:`). |
+| `invariant` (top-level on module) | `Expression: Bool` in `Container.intent.assertions` | `Allium::Invariant` | Module-level invariant; OneState env over the module's substrate. |
+| `@invariant` (on entity) | `Expression: Bool` in (entity-)Container's `intent.assertions` | `Allium::EntityInvariant` | OneState env with `self` bound to the entity instance. |
+| `guarantee` (top-level on module) | `Expression: Bool` in `Container.behaviour.intent.assertions` | `Allium::Guarantee` | Behaviour-aggregate claim; OneState env (history-env deferred per §13). |
+| `surface` | Container with Boundary | `Allium::Surface` payload `{facing: Ref(KernelPrimitive({Actor, Container}))?, context: Ref(KernelPrimitive({Container}), where={Allium::Entity})?, related: Collection(of: Ref(KernelPrimitive({Container}), where={Allium::Surface}), semantics: Sequential), timeout: Scalar("String")?}` | Boundary-only Container pattern. `facing` is the party the surface serves — accepts either an Actor (when the boundary has specific identity requirements) or an entity-tagged Container directly (when any instance of that entity can interact), per Allium grammar. `context` is the typing context (an entity the surface operates within). `related` lists peer Surfaces. `timeout` is opaque text in v0 (parser arrives later). `exposes:` / `provides:` / `contracts:` produce kernel edges per their own rows, not Surface payload content. The Surface's Boundary substrate has **empty `operations`** (Operations live on fulfilled Contracts, reached via outgoing `realises` edges per R6); `boundary.intent.assertions` carries `@guarantee` Bool Expressions (per the `@guarantee (on surface)` row below). |
+| `contract` | Container with Boundary | `Allium::Contract` | Boundary-only Container pattern; reusable operation bundle |
+| `provides: Action(...)` | Edge `provides: Container → Event` (kernel relation per §4.1 / R20). One edge per provided Event. | `Allium::Provides` on the edge (optional methodology metadata) | The Event referenced is on its qualifying Container (per K16). Multiple Surfaces may `provides` the same Event. |
+| `exposes: path` | Edge `exposes: Container → Field` (kernel relation per §4.1 / R20). One edge per exposed Field, endpoint is a `SubstrateAddress` (§4.3). | `Allium::Exposes` on the edge (optional methodology metadata) | The Field is on the Container at the head of the exposure path. |
+| Contract operation `Op(args) -> Return` | Operation (in kernel Boundary) | `Allium::Call` | Typed call; Operation invocation → Rule firing is `triggers: Operation → Rule` (R4); spec-to-implementation linkage is `projects` per §7.6 |
+| `contracts: fulfils <Contract>` (on a Surface) | `realises: Container → Container` (Surface → Contract); Operation-level `realises: Operation → Operation` derived by signature match | `Allium::Fulfils` on the edge (optional metadata) | Surface completes the Contract's specification; this is the structural-realisation case the kernel relation was designed for. Multiple Surfaces may fulfil the same Contract — each contributes its own `realises` edge. |
+| `contracts: demands <Contract>` (on a Surface) | `uses: Container → Container` (Surface → Contract) | `Allium::Demands` on the edge (optional metadata) | Surface declares it will invoke the Contract's operations; someone else must `fulfil`. Methodology-specific shading (e.g., DDD CustomerSupplier direction) layers as additional edge tags. |
+| `@invariant` (on contract) | `Expression: Bool` in (Contract-)Container's `intent.assertions` | `Allium::ContractInvariant` | OneState env over the Contract's structure. |
+| `@guarantee` (on surface) | `Expression: Bool` in (Surface-)Container's `boundary.intent.assertions` | `Allium::SurfaceGuarantee` | Boundary-aggregate claim; OneState env. |
+| `@guidance` annotations | Clause (prose) in the appropriate Intent's `clauses` list | `Allium::Guidance` | Prose only — does not move to `assertions`. Landing site by attachment context: Contract-level → Contract-Container's `intent.clauses`; Operation-level → Operation's `intent.clauses` (Operation carries `intent: Intent?` per §3.1); Rule-level → Rule's `intent.clauses`; Surface-level → Surface-Container's `boundary.intent.clauses` (alongside `@guarantee` assertions); module-level → module-Container's `intent.clauses`. |
+| Event (synthetic from `when:` / `provides:` / `emits:` sites) | Event in the module-Container's `events` | `Allium::Event` | Identity = `(module-Container, name)` — Events are module-scoped, regardless of which site within the module declares them. All declaration sites for a given name in the same module must agree on parameter shape (per-module shape consistency, validated by the build pipeline). Cross-module references via `alias/Foo` resolve to the aliased module's Event. |
+
+The Boundary-only Container pattern (Surface / Contract / future Specification / Port / …) is documented in §9 as a convergence pattern across methodologies. Allium contributes the first instances.
+
+### 8.2 Boundary → kernel mapping
+
+The `.boundary` file format is the Structure-altitude binding vocabulary. Its tags live in the `Boundary::*` namespace. It fills two gaps Allium leaves open: **Operation↔Rule binding** (the primary motivation — materialising `triggers: Operation → Rule` kernel edges that Allium grammar cannot express) and **subsystem composition** (composite Containers grouping `.allium` modules with declared external API). Application-design framing — file responsibilities, binding declaration syntax, parameter-signature lint, build pipeline integration — lives in [DESIGN.md](./DESIGN.md).
+
+> **Note on namespace overload.** The tag namespace `Boundary::*` names the `.boundary` *file format* — the source of these tags. It is distinct from the kernel primitive `Boundary` (the `Container.boundary` slot, K11/K13). They share the word for historical naming reasons and disambiguate by syntactic context: `Boundary::Binding` is a tag application; `Container.boundary` is a substrate slot reference.
+
+**Substrate-level commitments.** The Boundary analyzer produces:
+
+- Composite Containers (subsystem-grouped modules) carrying `Boundary::Subsystem`.
+- Tag applications on module-Containers carrying `Boundary::ModuleApi` — the closed-module public-API declaration; presence flips the bearing module from open (default) to closed.
+- Tag applications on composite Containers carrying `Boundary::Exports` — the subsystem's externally-visible items.
+- Kernel edges `triggers: Operation → Rule` (R4) — one per binding declaration. Edge identity is `(operation_ref, rule_ref)` per R15; multiple bindings to the same pair collapse to one.
+- `Boundary::Binding` tag applications on those edges, carrying optional binding name and return-derivation text.
+- PredicateRegistrations (per §5.3, with `scope = TagScope` against the composite Container) for subsystem-scoped architectural rules.
+
+Per K24, references go upward to Behaviour (Rule references) or stay same-altitude (Structure↔Structure for composition); never downward.
+
+The mapping table the MVP analyzer realises.
+
+| `.boundary` construct | Where it lands | Vocabulary tag | Notes |
+|---|---|---|---|
+| `subsystem <Name> { ... }` | Composite Container; populates `children` from `contains:` | `Boundary::Subsystem` | Composite Container's identity is the subsystem name. Each module-Container has at most one composite parent (DESIGN.md validation rule). |
+| `contains: <path>` | Adds the referenced module-Container to the composite's `children` | — | Implicit alias for in-block references: filename-stem. |
+| `exports: <ref> ...` *(subsystem-level)* | Tag application on the composite Container | `Boundary::Exports` | Payload: `{exported: Collection(of: Union([Ref(Container, where={Allium::Surface}), Ref(Container, where={Allium::Entity}), Ref(Container, where={Allium::Value}), Ref(Container, where={Allium::Variant}), Ref(Event), Ref(Actor), Ref(Operation)]), semantics: Sequential)}`. Items not listed are internal to the subsystem. Contracts, Rules, and Invariants are never `exports:` entries (see DESIGN.md for the per-kind reasoning). Non-transitive across composite nesting. |
+| `module <alias> { exports: ... }` | Tag application on the module-Container of the aliased `.allium` module | `Boundary::ModuleApi` | Payload: same shape as `Boundary::Exports.exported` above. Presence flips the module from open (default) to closed. **Excluded by design**: Contracts, Rules, Invariants — same per-kind reasoning as for `Boundary::Exports`. The build pipeline (DESIGN.md) rejects cross-module references targeting non-exported items in a closed module, and rejects closed-module `exports:` lists that fail the export closure rule. |
+| `binding <name> { operation:, invokes:, returns: }` | Edge `triggers: Operation → Rule` (R4) | `Boundary::Binding` on the edge | Payload: `{name: String?, returns_expression: Text?}`. Identity rests on `(operation_ref, rule_ref)`. Binding declaration shape and parameter-signature lint rules live in DESIGN.md. |
+| `rules: <constraint-ref>(...)` | PredicateRegistration with `scope = TagScope` against the composite Container | — | One registration per `rules:` entry. Resolves to a registered constraint by qualified name. See DESIGN.md for `.boundary` syntax. |
+| `use "<path>" as <alias>` | Analyzer-internal; not surfaced as kernel content | — | Resolves cross-module references during parsing; does not produce primitives or relations. |
+
+---
+
+## 9. Convergence patterns
+
+Across the cross-methodology pressure-test (DDD, Event Storming, Hexagonal, C4), two structural patterns recurred consistently. Neither is promoted to a primitive — they are documented as canonical shapes the universal Container correctly serves.
+
+### 9.1 Boundary-only Container
+
+A Container that populates only its `boundary` slot — no `fields`, no `behaviour`, no `children`. Represents a pure interface: an addressable structural unit whose substance is the operations *and/or* intent of its Boundary. **The Boundary's `operations` list may be populated or empty** — Boundary-only Containers split into two sub-shapes:
+
+- **Declaring** (Operations populated): the Container is the canonical declaration site of its Operations. Allium `contract` is the motivating case — Contract owns its typed signatures.
+- **Realising** (Operations empty): the Container is an interface point whose Operations are reached via outgoing `realises` edges (R6) to a declaring Container. Allium `surface` is the motivating case — a Surface's Operations live on the Contracts it fulfils; the Surface points to them via `realises` rather than holding them directly. The Boundary's `intent` slot is still meaningful — Surface `@guarantee` Clauses live in `boundary.intent`.
+
+The shape is the same primitive (Boundary-only Container) with two population patterns. Predicates and the explorer treat them uniformly; queries for "Operations at this Container" traverse `boundary.operations` directly *and* through outgoing `realises` edges (a derived view, not stored).
+
+Methodological occurrences:
+
+- Allium `contract` — declaring (Operations populated)
+- Allium `surface` — realising (Operations reached via `realises` to fulfilled Contracts)
+- (Validation) DDD `Specification` — declaring (one `evaluate(subject): Boolean` operation)
+- (Validation) Hexagonal `Port` (Driving and Driven) — declaring (Operations owned by the Port; Adapters realise the Port)
+- (Validation) C4 light touches at component-interface level
+
+### 9.2 External-System Container
+
+A Container tagged as outside-the-modelled-system, referenced from inside the system, with no internal structure modelled. Represents an external dependency, third-party service, or system-context boundary.
+
+Methodological occurrences:
+
+- Allium `external entity` — Container declared at use site, full definition outside scope
+- (Validation) DDD external dependencies in Context Maps
+- (Validation) Event Storming External System (pink)
+- (Validation) C4 Level-1 External System
+- (Validation) Hexagonal Driven-Port targets
+
+### 9.3 Pressure-test record
+
+Coverage that validated the substrate at design time. **Validation evidence; not committed support targets** — only Allium's coverage is implemented in MVP.
+
+| Scope | Constructs validated |
+|---|---|
+| Event Storming Big Picture | Aggregates, Commands, Domain Events, Policies, Read Models, Hot Spots, Pivotal Events, External Systems, Actors, Bounded Contexts, temporal ordering, workflow grouping |
+| DDD Strategic Design | Bounded Contexts, Context Map (Shared Kernel, Customer-Supplier, Conformist, ACL, OHS, Published Language, Partnership, Separate Ways, Big Ball of Mud), Subdomains, Ubiquitous Language |
+| Hexagonal | Multiple Adapters per Port, directional offers/requires, Application Service composition |
+| C4 | Free-text relationship labels, four-level taxonomy, Person→System interaction |
+
+Three deliberately hard cases survived: DDD Separate Ways (assertion of *absence*, no underlying derived edge to tag), DDD multi-aspect on a single BC pair (CS + ACL + Published Language), ES Policy → Command (the Event-vs-Command kernel distinction).
+
+Substrate adjustments driven by the pressure-test: (i) the V12 relational-tag affordance, motivated by DDD multi-aspect; (ii) the V13 coherence-query / methodology-predicate split, motivated by DDD Separate Ways; (iii) the typedness-grading commitment, motivated by C4 free-text labels.
+
+---
+
+## 10. Architectural seams
+
+Work deferred from the MVP scope but architecturally seamed — each has a concrete re-opening trigger, and none requires kernel substrate change to admit.
+
+### 10.1 `.infra` layer — Infra-altitude spec
+
+Infra-altitude spec content: declarative commitments about deployment. Likely Container population pattern: Containers tagged `Infra::Service`, `Infra::Endpoint`, `Infra::Storage`, `Infra::Channel`, `Infra::Policy`, with tag payloads carrying kind-specific fields and upward references to the Structure-altitude Operations/Surfaces they realise. Same kernel-content pattern as Allium contributes at Behaviour and Structure altitudes; no new kernel primitives needed.
+
+**Tied to this seam.** The `Infra(Endpoint | Resource)` cases of the Artifact ontology and the `endpoint`, `resource` projection_kind values come back together with `.infra`. They represent *observed deployed reality* (real services, real endpoints) reported by a future live-cluster analyzer. Infra-altitude spec `projects` to Infra-Artifacts when both exist — same drift-detection pattern as Behaviour-spec projecting to Code Artifacts. The spec-altitude and Artifact-flavour axes are independent (see §11).
+
+Re-opening trigger: project's stakeholders need the implementation-contract altitude alongside live-deployment observation.
+
+### 10.2 Plugin registry mechanics
+
+Manifest format, namespace ownership, conflict resolution, two-phase load, project-side configuration. Out of scope for MVP per the YAGNI cut — Allium, Boundary, and the Clojure analyzer are integrated directly.
+
+Re-opening triggers:
+1. A third input-vocabulary analyzer becomes real (e.g., DDD/Hex/C4 gains an authoring path), or a non-Clojure target-language analyzer joins.
+2. Project-local constraints become real and need namespace ownership to avoid collisions.
+3. The hardcoded path develops friction that namespace ownership would resolve.
+
+### 10.3 Project-side constraint registration / composition
+
+The constraint language is single and shared; the *path by which projects ship their own constraints* (file format, location, activation, severity overrides, profiles, bundle composition, transitive imports, versioning) is deferred.
+
+This seam is what DESIGN.md calls the **project layer** — project-side declarations that encode the design vocabulary a project chooses to enforce. The layer carries two flavours:
+
+1. **Constraints** — queries against the Model, in the §6 constraint language. Range from soft preferences ("surface names follow Subject + Verb"; severity = warning) to hard architectural laws ("all boundary actions are modelled as contract operations"; "no Rule in `Hex::Core` writes to `Hex::Adapter` state"; severity = error). Severity is per-registration, not per-flavour.
+2. **Conventions** — analyzer configuration consumed by the Clojure analyzer (and future analyzers). Two MVP uses:
+    - *Address-resolution rules.* How spec primitives address their realising artifacts (per [DESIGN.md](./DESIGN.md)'s Implementation linkage section) — the root-prefix knob, kind-sensitive transliteration, single-canonical-address discipline.
+    - *Type-translation rules.* How substrate `Type` cases render in the target language (per the Type-translation registry in [DESIGN.md](./DESIGN.md)). Defaults ship with the analyzer; methodologies override per `Scalar` name; projects override per-project for custom domain types.
+
+The MVP commits the constraint language (§6), the per-constraint registration shape (§5.3 `PredicateRegistration`), and the convention strategy ([DESIGN.md](./DESIGN.md), Implementation linkage section). What's deferred is the *declarative form* of either flavour — both are hardcoded in V0. The *composition* mechanics (how a project bundles, activates, and overrides project-layer entries across methodology-shipped and project-local sources) is what waits.
+
+**Namespace convention.** Methodology vocabularies use their methodology name as the `PredicateRegistration.namespace` (`Allium`, `Boundary`). Project-side project-layer entries use a project-scoped namespace; the conventional choice is the project's name (`Fukan` for this project's constraints). The mechanism is free-form — any string is admissible — but consistent project-name namespacing avoids collisions when project-layer entries are eventually shared across plugins or projects. Standardisation arrives with the declarative form.
+
+**Severity asymmetry between flavours.** `severity ∈ error | warning` is a property of *constraints* only (per §5.3 `PredicateRegistration`). *Conventions* (analyzer configuration: address-resolution rules, root-prefix knob, etc.) have no severity — their effect surfaces structurally as per-edge `validity` on `projects` edges (§4.2 / §7.6: `valid | absent | stale | unknown`), not as discrete violations. A missing canonical address is the convention-flavour equivalent of an "error"; the explorer renders it as a red drift marker rather than a sidebar violation entry.
+
+**Constraint evaluation timing.** All registered constraints — methodology-shipped, project-side, and the coherence queries bundled in relational tag definitions (§5.2) — evaluate **at build-time on every model rebuild**, with results cached. The explorer reads cached results; no on-demand evaluation in MVP. Severity is a reporting attribute, not a timing modifier (both error- and warning-severity constraints evaluate at the same point in the pipeline; severity determines how violations are surfaced, not when they're computed). Incremental re-evaluation on model-edit is a post-MVP optimisation; the cache invalidates wholesale on rebuild in V0.
+
+Per-cut re-opening triggers:
+
+| Cut | What would force it back |
+|---|---|
+| Project-side severity overrides | A project that legitimately needs different severity for an imported constraint and can't get there by writing a parallel project-local constraint |
+| Multiple named profiles | A project that needs different active sets per evaluation context (CI vs dev) and rejects per-run config as the answer |
+| Constraint bundles within a plugin | A methodology shipping sub-groups (e.g., strategic vs tactical) wanting bundle-granularity selection |
+| Transitive bundle imports | Bundles arriving and wanting to compose each other |
+| Versioning | Real plugin upgrades breaking real project constraints + projects pinning to old versions |
+
+### 10.4 Renderer plug-in mechanics
+
+The seam is committed (§5.5); concrete shape arrives with the explorer rebuild. Methodologies remain plug-and-play because renderers are plugin-supplied rather than explorer-hardcoded.
+
+### 10.5 Future projection vocab additions
+
+Deferred from V0, tied to specific seams:
+
+- **`Infra(Endpoint | Resource)` Artifact cases + `endpoint`, `resource` projection_kind values** — come back together with `.infra` (§10.1).
+- **`Documentation(Page | Diagram)` Artifact cases + `documentation`, `diagram` projection_kind values** — come back together with a documentation analyzer (no current seam in §10).
+
+Future candidates beyond the deferred set, each local-impact and additive on the projection-vocab lane:
+
+- `Code.Module` — namespace/package as projection target, if module-level projection becomes important
+- `Code.Macro` — if Lisp-style metaprogramming becomes a major projection class
+- `Documentation.DecisionRecord` — ADRs, if they earn structural treatment beyond Page
+- `Configuration` — possibly its own category if YAML/TOML/JSON config-as-projection becomes important; or a Code sub-kind; or absorbed into Infra
+- Additional `projection_kind` values as new (source, target) pairs arise
+
+### 10.6 Generics / parameterised types
+
+`Repository<Customer>`, user-defined parameterised Container types — `Collection` covers built-in Sequential/Unique/Keyed parameterisation, but user-defined parameterised types (Java generics, Clojure protocols-with-type-params) are not yet expressible. Allium doesn't need them; code analysis will. Likely a `parameters: Collection(of: Type, semantics: Sequential)` slot on a wrapping case, or a `Generic` variant on `Type`. Resolution surfaces with implementation linkage.
+
+### 10.7 Operation errors / failure modes
+
+Operations express call (`return_type` present) vs command (`return_type` absent), but no "may fail with these errors." Reality has this. Likely a relation (`Operation —may_raise→ Container`-tagged-error) so substrate stays minimal and aligns with how Events/effects are modelled. Note for future design.
+
+---
+
+## 11. Substrate commitments
+
+Positions the kernel takes on otherwise-open questions, named explicitly:
+
+- **Containment uniform, not kinded.** `Container.children` is one slot regardless of methodology-specific containment flavour.
+- **Time derived, not first-class.** No `precedes` relation in the kernel; methodologies that need temporal ordering derive it (`emits` → `triggers` chains).
+- **State-behind-wall derived, not primitive.** No `has_state` Boolean; identity / state come from realising structure + vocabulary tags.
+- **Intent first-class** — kernel primitive.
+- **Agency first-class** — Actor distinct from Container.
+- **Design framing in vocabulary, not kernel.**
+- **Type-system shape — Path A** (named, closed, composed-by-inclusion). Methodologies overlay alternatives.
+- **Operation vs Event split kept** — the addressability difference (Boundary-scoped vs Container-owned) is genuine.
+- **`Container.children` depth unconstrained** — no kernel-imposed hierarchy limit.
+- **Single Container primitive** — no specialisation by population pattern (no Interface primitive, no Aggregate primitive). Convergence patterns documented in §9, not promoted.
+- **Three spec altitudes; strict one-up reference.** Spec content lives at one of three altitudes — **Behaviour** (Rules, Events, top-level Invariants), **Structure** (Operations, Boundary, contract/composition content), **Infra** (deployment commitments). Each altitude may reference only the altitude immediately above; never downward; never skipping. Same-altitude references unrestricted. **Implementation is not a fourth altitude** — it's the projection across all three (Code | Infra-Artifact | Documentation flavours per §7).
+- **Substrate primitives are altitude-spanning.** Container, Field, Actor are referenced from any altitude — they are not themselves at an altitude. Altitude-bound primitives carry the altitude of their semantic role: Rule / Event / Behaviour → Behaviour; Operation / Boundary → Structure; future Infra primitives → Infra. Intent / Clause carry their host's altitude.
+- **Altitude is derived, not stored.** A primitive's altitude is determined by its kind and slot occupation; the kernel does not store altitude metadata on primitives or relations.
+- **Spec altitude / Artifact flavour orthogonality.** Three spec altitudes (Behaviour | Structure | Infra) and three Artifact flavours (Code | Infra | Documentation) are independent axes when fully populated. "Infra" appears in both axes and means different things: as a spec altitude it's declarative commitment about deployment; as an Artifact flavour it's observed deployed reality. Any spec altitude can project to any Artifact flavour. (V0 carries only Code Artifacts; Infra and Documentation flavours return with their producing analyzers — §10.1, §10.5.)
+- **Tag-attachment corollary for cross-altitude references.** Vocabulary tags carrying upward cross-altitude references attach to the lower-altitude side; their payload schemas reference upward. Higher-attaches-with-downward-payload is disallowed.
+- **Rule purity is the absence of effect edges.** A Rule is pure iff it has no outgoing `writes` / `creates` / `destroys` / `emits` kernel relations. Rules describe state changes within the modelled system; they do not (and cannot, per K24) reference Operations or other Structure-altitude content. **External reach of a Rule is derived**, not edge-shaped — by traversing the Rule's effect targets through boundary configuration: writing or creating against a Container tagged `Allium::ExternalEntity` (the Rule mutates state in an external Container); or an `exposes:` edge from some Surface to a written / created Field, where the Surface `facing:` an external Actor (the Rule's write becomes observable to that Actor). Outbound observation of *emitted Events* is not modelled at spec altitude in v0 — `provides:` advertises inbound entry (external party fires the Event into the system), not outbound observation; the matching outbound-advertisement substrate is an architectural seam left open. The query crosses altitudes upward (Behaviour effects + Structure boundary), respecting K24. Cross-module dependency at spec altitude is `uses` between Containers + derived `depends_on` (§6.6). At implementation altitude (per K23), spec-vs-implementation purity becomes a `projects` edge `validity` concern: the implementing function may only produce effects its Rule's spec declares — surfaced when call-graph derivations on `projects` edges land (post-MVP).
+
+---
+
+## 12. Decisions log
+
+The design-phase decision trace — every **K\***, **R\***, **V\***, **C\***, **P\*** identifier cited throughout this document — lives in [DECISIONS.md](./DECISIONS.md). It records the forces that produced each substrate commitment and the framings each decision superseded; useful when re-opening a deferred question, not needed when reading the substrate for current state.
+
+Current-state substrate commitments live in [§11](#11-substrate-commitments) above; continuation points (TBDs) live in [§13](#13-tbds-consolidated) below.
+
+---
+
+## 13. TBDs (consolidated)
+
+Items that are aligned-on-direction but not specified — continuation points, not gaps. Each tagged by track and given a re-opening trigger where one is concrete.
+
+### Kernel substrate
+
+- **Function-shaped Containers.** User-defined functions (DDD Domain Services, future C4 code-level Components). Likely Container with Boundary holding one Operation. Allium has no user-defined functions per se.
+- **Sub-Clause addressability.** When needed?
+- **First-class Parameter addressability.** The §4.3 path form supports it; v0 populates only the trivial Field case. (Clause's first-class addressability is *resolved* — Clause is a kernel primitive per §3.1 / §3.2 / K15a, reached via `PrimitiveRef`.)
+
+### Relations
+
+- **Non-identifying edge metadata schemas.** `projects` has committed-shape non-identifying metadata. Other relations carry no kernel-mandated non-identifying metadata, leaving room for vocabulary content.
+- **Visibility/scoping of relations across module/composite boundaries.** Couples with `.boundary` track.
+- **Concrete Expression tokenisation.** Substrate Expression ADT (§3.8.1) is committed; the surface tokens for authoring (parens, operator spelling, keyword forms) land at implementation. Allium's existing syntax provides the V0 mapping consumed by the analyzer; bare-substrate authoring conventions arrive when forced. (Replaces the prior "canonicalisation of condition/scope text" TBD, resolved by K28.)
+- **Operator registration shape for methodology-supplied operators.** §3.8.1 commits the kernel-core operator set and notes methodology extensibility parallels §5.3 `PredicateRegistration`; concrete registration record shape lands when the first methodology operator forces it.
+
+### Vocabulary mechanism
+
+- **Edge-tag application targets — practical enumeration and durability.** Whether all thirteen stored kernel relations *should* be edge-tag targets in practice (some may be noisy at scale). Whether edge-tag applications survive edge identity changes.
+
+### Constraint language
+
+- **Aggregate operator set.** `count`, `min`, `max`, `sum` is a starting cut. Concrete signatures and stratification rules land when first forced.
+- **Path-sugar concrete surface syntax.** Shape settled; precise notation (arrows, brackets, slashes) lands at implementation.
+- **Type-sum sugar concrete surface syntax.** Similar — `matches` plus pattern positions is the shape; exact tokenisation at implementation.
+- **Performance characteristics and cost annotations.** Classes known to be expensive (unbounded recursion + negation, large cross-products). Cost annotations or runtime ceilings — defer until real plugins surface cost concerns.
+- **Disjunction in rule bodies.** Standard Datalog admits multi-clause definitions as the disjunctive form. Whether to also admit inline disjunction (`p(X) :- q(X) ; r(X)`) is an ergonomics call; same semantics.
+- **Violation-rendering with binding extraction.** Bindings-drive-reporting commitment settles *what* is reportable; concrete `message_template` substitution syntax (positional? named? typed?) lands with implementation.
+
+### Open commitments deferred to architectural seams (§10)
+
+- `.infra`, plugin registry, project-side composition (declarative form), renderer concrete shape, generics, Operation errors.
+
+---
+
+## 14. Edge-case stress — completed (quick scan)
+
+The substrate held without modification on:
+
+- **Recursive types** — `Composite(Named(C))` pointing to self or mutual Container; the `Type` vocab admits self-reference at the schema level without special-casing.
+- **Distributed systems** — spec layer is one Container per concept; physical instances and transport are `.infra`.
+- **Event-sourced** — kernel doesn't bias toward stored vs derived state; Field substrate is shape, not storage.
+- **Multi-tenant (simple)** — shared structure + data partitioning is purely runtime.
+
+Future-stress points captured in §10.6 and §10.7.
+
+---
+
+*See [VISION.md](./VISION.md) for framing and [DESIGN.md](./DESIGN.md) for the chapter-level technical specification this document grounds.*

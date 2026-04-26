@@ -1,19 +1,31 @@
 # Fukan
 
-Fukan is a structural exploration tool for codebases in the era of LLM-driven development.
+Fukan is a structural exploration workbench for the layer humans own as LLMs handle more of the low-level coding — behavioural intent, module composition, boundary contracts, invariants, and the relationships between them.
 
-As LLMs take on more of the low-level coding work, the human's role shifts toward defining and maintaining high-level structure — module boundaries, contracts, invariants, and the relationships between them. Fukan provides tooling purpose-built for that level of work.
+It analyses a target system to build a unified structural Model, then renders it as an interactive graph in the browser. Behavioural specifications, architectural composition, and (later) implementation reality are projected onto the same Model so that what the system *is meant to do* and what it *actually does* appear together in one place.
 
-It analyzes a target codebase to build a unified structural model, then renders it as an interactive graph in the browser. Specifications and implementation are projected onto the same model, so you see intended structure and actual structure together in one place.
+> **A new chapter is in design.** Fukan is being re-foundationed as a specification-led structural explorer. The Allium specification language becomes the shape of the Model; structural composition gets its own language (`.boundary`); code joins later as a realisation layer. See [doc/VISION.md](doc/VISION.md) for the framing and roadmap, and [doc/DESIGN.md](doc/DESIGN.md) for the technical specification. The sections below describe the current implementation, which is being incrementally migrated.
+
+## Three altitudes of specification
+
+The next-chapter design separates three concerns into three languages, each at a different altitude:
+
+- **`*.allium`** — Behavioural specifications: what each module does. Entities, behaviours, invariants, surfaces, contracts, actors, triggers.
+- **`*.boundary`** — Structural specifications: how modules compose into subsystems, and which surfaces each subsystem exposes externally. (In the next chapter, `.boundary` shifts from its current role as a small API IDL to owning subsystem composition.)
+- **`*.infra`** — *(later)* Implementation specifications: how the system materialises mechanically — endpoints, storage, wire formats, transports, deployment topology.
+
+Each layer is opt-in, each enriches the same unified Model, and dependencies flow one way: higher altitudes reference lower ones, never the reverse.
+
+A separate concern, orthogonal to altitude, is the **guidance layer** — where a project makes explicit how it uses the generic spec primitives. Guidance entries serve three audiences from the same content: human readers orienting to the project, LLMs designing or extending spec, and (where machine-checkable) the build pipeline validating conformance. See [doc/DESIGN.md](doc/DESIGN.md) for the full specification.
 
 ## Key ideas
 
-- **Unified model.** Behavioral specs (boundaries, contracts, guarantees) and implementation (namespaces, functions, schemas) are merged into a single graph. This is the shared artifact that both human and LLM can reason about.
-- **Pluggable analyzers.** Language-specific analyzers register via multimethod dispatch. The build pipeline is language-agnostic — it operates on a common `AnalysisResult` format. Currently ships with Clojure and Allium analyzers.
-- **Documentation as structure.** Docstrings, spec descriptions, and surface guarantees flow into the model. The explorer is meant to convey understanding, not just shape.
-- **Boundaries as first-class citizens.** The build pipeline infers, merges, and attaches boundaries to modules — the collaboration surface where human intent meets machine output.
+- **Spec-led Model.** The Model's vocabulary is determined by what the spec says exists. Code joins later as the realisation layer beneath, with realisation edges bridging spec and reality. (Currently transitional: the implementation Model still has its origins in code-graph thinking; see [doc/DESIGN.md](doc/DESIGN.md) for the target shape.)
+- **Boundaries as first-class.** Each Surface declares one boundary between two parties, with three protocols crossing it: View (passive read), Signal (event-shaped action), Call (typed invocation). Each protocol connects to the behavioural core differently.
+- **Topology as design surface.** With `.boundary` owning structural composition, restructuring the system is a one-file edit, not a refactor. Try multiple subsystem decompositions side-by-side without disturbing behavioural specs.
+- **Documentation as structure.** Descriptions, guarantees, and prose annotations flow into the Model. The explorer conveys understanding, not just shape.
 
-## Usage
+## Usage (current implementation)
 
 ```
 clj -M:run --src /path/to/project/src --analyzers clojure,allium --port 8080
@@ -26,6 +38,8 @@ clj -M:run --src /path/to/project/src --analyzers clojure,allium --port 8080
 | `--port PORT` | Server port | 8080 |
 
 Then open `http://localhost:8080` in a browser.
+
+The Clojure analyzer (and code-analysis machinery generally) will be retired during the next-chapter migration. Future releases will analyse `.allium` and `.boundary` files only, until implementation analysis re-joins in a subsequent chapter.
 
 ## Development
 
@@ -68,6 +82,8 @@ The toolbar switches between edge modes (single-select):
 
 Module nodes are always visible regardless of mode. The sidebar always shows full details for a selected entity.
 
+The next-chapter Model expands edge modes from two to five (one per edge class), respecting visibility derived from `.boundary` composition. See [doc/DESIGN.md](doc/DESIGN.md) for the target.
+
 ### Visual indicators
 
 - **Expand arrow** on modules: `▶` collapsed, `▼` expanded
@@ -80,14 +96,17 @@ Module nodes are always visible regardless of mode. The sidebar always shows ful
 src/fukan/
   model/           Model construction — schemas, build pipeline, analyzers
     analyzers/     Language-specific analyzers (Clojure, Allium)
-    spec.allium    System model spec
+    spec.allium    Current Model spec (to be re-foundationed; see doc/DESIGN.md)
   projection/      Pure computation from model to visible subgraph
   web/             HTTP/SSE transport and view rendering
   infra/           Server and model lifecycle
-  libs/            Vendored libraries (Allium parser)
+  libs/            Vendored libraries (Allium parser, Boundary parser)
+doc/
+  VISION.md        Next-chapter framing and roadmap
+  DESIGN.md        Next-chapter technical specification
 ```
 
-Allium specs (`.allium` files) are the authoritative description of system behavior. When spec and code disagree, the spec is right.
+Allium specs (`.allium` files) are the authoritative description of system behaviour. When spec and code disagree, the spec is right. The next-chapter Model makes this principle structural rather than aspirational.
 
 ## License
 
