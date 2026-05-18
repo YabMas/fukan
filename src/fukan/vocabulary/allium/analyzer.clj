@@ -9,6 +9,7 @@
             [fukan.model.type :as t]
             [fukan.model.vocabulary :as v]
             [fukan.model.build :as build]
+            [fukan.model.expression :as e]
             [fukan.vocabulary.allium.expression :as ae]
             [fukan.vocabulary.allium.effect-canonicalise :as ec]))
 
@@ -85,6 +86,72 @@
       (p/make-field (:name field-item) inner-type optional?))))
 
 ;; ---------------------------------------------------------------------------
+;; Invariant body → kernel Expression
+;; ---------------------------------------------------------------------------
+
+(defn- invariant-body->expression
+  "Convert a Plan-2a invariant body shape to a kernel Expression.
+   For :for-quantification, wraps the assertion text in make-forall.
+   Guard is ignored for Plan 2b MVP — Plan 4 will restore it."
+  [body]
+  (case (:kind body)
+    :expression
+    (ae/parse (:text body))
+
+    :for-quantification
+    ;; Simplification: parse the assertion text only; guard ignored for now.
+    ;; Plan 4 expression engine will reconstruct the full forall with guard.
+    (let [assertion-expr (ae/parse (:assertion body))]
+      (e/make-forall (:var body)
+                     (e/make-var (:source body))
+                     assertion-expr))
+
+    ;; fallback: treat entire body as opaque text
+    (ae/parse (str body))))
+
+(defn- get-or-make-intent
+  "Return the existing intent on container, or create a fresh one with empty
+   clauses and assertions."
+  [container]
+  (or (:intent container)
+      (p/make-intent {:id         (str (:id container) "::intent")
+                      :clauses    []
+                      :assertions []})))
+
+(defn- add-expression-to-intent
+  "Add a Bool Expression to a Container's :intent.assertions.
+   Returns the updated container."
+  [container expr]
+  (let [intent  (get-or-make-intent container)
+        intent' (update intent :assertions (fnil conj []) expr)]
+    (assoc container :intent intent')))
+
+(defn- add-clause-to-container
+  "Add a Clause to a container at `intent-path` (e.g. [:intent :clauses] or
+   [:boundary :intent :clauses]). Initialises missing intent along the path.
+   Returns the updated container."
+  [container clause intent-path]
+  (let [;; Ensure the intent exists at the path
+        container' (if (= [:boundary :intent :clauses] intent-path)
+                     ;; Surface-style: need to initialise boundary.intent if absent
+                     (let [boundary (or (:boundary container)
+                                        (p/make-boundary {:id         (str (:id container) "::boundary")
+                                                          :label      (:label container)
+                                                          :operations []}))
+                           b-intent  (or (:intent boundary)
+                                         (p/make-intent {:id         (str (:id container) "::boundary::intent")
+                                                          :clauses    []
+                                                          :assertions []}))
+                           b-intent' (update b-intent :clauses (fnil conj []) clause)
+                           boundary' (assoc boundary :intent b-intent')]
+                       (assoc container :boundary boundary'))
+                     ;; Container-style: add to container's own intent.clauses
+                     (let [intent  (get-or-make-intent container)
+                           intent' (update intent :clauses (fnil conj []) clause)]
+                       (assoc container :intent intent')))]
+    container'))
+
+;; ---------------------------------------------------------------------------
 ;; Name registry
 ;; ---------------------------------------------------------------------------
 
@@ -103,12 +170,33 @@
 ;; Declaration handlers
 ;; ---------------------------------------------------------------------------
 
+(defn- analyze-top-level-invariant
+  "Handle a top-level :invariant declaration. Adds a Bool Expression to the
+   module-Container's intent.assertions and applies an Allium::Invariant tag."
+  [model decl module-coord]
+  (let [expr         (invariant-body->expression (:body decl))
+        labeled-expr (assoc expr :label (:name decl))
+        module-c     (build/get-primitive model module-coord)
+        updated-c    (add-expression-to-intent module-c labeled-expr)
+        idx          (count (-> module-c :intent :assertions (or [])))]
+    (-> model
+        (assoc-in [:primitives module-coord] updated-c)
+        (build/add-tag-application
+          (v/make-tag-application
+            {:tag    {:namespace "Allium" :name "Invariant"}
+             :target {:case      :target/substrate
+                      :container module-coord
+                      :path      [{:slot "intent"}
+                                  {:slot "assertions" :key (str idx)}]}})))))
+
 (defn- analyze-entity-like
   "Handle entity/value/variant declarations. `decl-type` is :entity/:value/:variant."
   [model decl module-coord decl-type name-registry]
   (let [container-id (qualify module-coord (:name decl))
         all-fields   (vec (keep #(field->kernel % module-coord name-registry)
                                 (:fields decl)))
+        ;; Collect entity-level invariant field-items
+        entity-invariants (filter #(= :invariant (:field-kind %)) (:fields decl))
         container    (p/make-container
                        (cond-> {:id container-id
                                 :label (:name decl)
@@ -139,12 +227,31 @@
                                :parent   parent-id
                                :colliding colliding})))))))
 
-    (let [model' (-> model
-                     (build/add-primitive container)
-                     (build/add-tag-application
-                       (v/make-tag-application
-                         {:tag    {:namespace "Allium" :name tag-name}
-                          :target {:case :target/primitive :id container-id}})))]
+    (let [model-base (-> model
+                         (build/add-primitive container)
+                         (build/add-tag-application
+                           (v/make-tag-application
+                             {:tag    {:namespace "Allium" :name tag-name}
+                              :target {:case :target/primitive :id container-id}})))
+          ;; Process entity-level invariants: add Bool Expressions to the
+          ;; entity Container's intent.assertions + Allium::Invariant tag
+          model' (reduce (fn [m inv-field]
+                           (let [expr         (invariant-body->expression (:body inv-field))
+                                 labeled-expr (assoc expr :label (:name inv-field))
+                                 current-c    (build/get-primitive m container-id)
+                                 idx          (count (-> current-c :intent :assertions (or [])))
+                                 updated-c    (add-expression-to-intent current-c labeled-expr)]
+                             (-> m
+                                 (assoc-in [:primitives container-id] updated-c)
+                                 (build/add-tag-application
+                                   (v/make-tag-application
+                                     {:tag    {:namespace "Allium" :name "Invariant"}
+                                      :target {:case      :target/substrate
+                                               :container container-id
+                                               :path      [{:slot "intent"}
+                                                           {:slot "assertions" :key (str idx)}]}})))))
+                         model-base
+                         entity-invariants)]
       ;; Variant emits specialises edge to parent
       (if (= :variant decl-type)
         (let [parent-id (qualify module-coord (-> decl :base :name))]
@@ -329,8 +436,34 @@
                    m2
                    (->> fields
                         (filter #(= :contracts (:field-kind %)))
-                        (mapcat :entries)))]
-    m3))
+                        (mapcat :entries)))
+
+        ;; annotations: @guarantee → Clause in boundary.intent.clauses (Allium::SurfaceGuarantee)
+        ;;              @guidance  → Clause in boundary.intent.clauses (Allium::Guidance)
+        annotation-items (->> fields (filter #(= :annotation (:field-kind %))))
+        m4 (reduce (fn [m ann]
+                     (let [ann-kind    (:kind ann)   ;; "guarantee", "guidance", etc.
+                           ann-name    (:name ann)   ;; optional
+                           ann-body    (or (:body ann) "")
+                           tag-name    (case ann-kind
+                                         "guarantee" "SurfaceGuarantee"
+                                         "guidance"  "Guidance"
+                                         ;; fallback for unrecognised annotation kinds on surface
+                                         (str "Surface" (str/capitalize ann-kind)))
+                           clause-id   (str container-id "::annotations::" (or ann-name ann-kind))
+                           clause      (p/make-clause (cond-> {:id clause-id :body ann-body}
+                                                        ann-name (assoc :label ann-name)))
+                           current-c   (build/get-primitive m container-id)
+                           updated-c   (add-clause-to-container current-c clause [:boundary :intent :clauses])]
+                       (-> m
+                           (assoc-in [:primitives container-id] updated-c)
+                           (build/add-tag-application
+                             (v/make-tag-application
+                               {:tag    {:namespace "Allium" :name tag-name}
+                                :target {:case :target/primitive :id container-id}})))))
+                   m3
+                   annotation-items)]
+    m4))
 
 ;; ---------------------------------------------------------------------------
 ;; Rule analysis
@@ -621,13 +754,44 @@
                     (cond-> {:id contract-id
                              :label (:name decl)
                              :boundary boundary}
-                      (:description decl) (assoc :description (:description decl))))]
-    (-> model-with-ops
-        (build/add-primitive container)
-        (build/add-tag-application
-          (v/make-tag-application
-            {:tag {:namespace "Allium" :name "Contract"}
-             :target {:case :target/primitive :id contract-id}})))))
+                      (:description decl) (assoc :description (:description decl))))
+
+        ;; Collect annotation field-items from the contract body
+        annotation-items (->> (:fields decl) (filter #(= :annotation (:field-kind %))))
+
+        ;; Build model with the contract container + Allium::Contract tag
+        m0 (-> model-with-ops
+               (build/add-primitive container)
+               (build/add-tag-application
+                 (v/make-tag-application
+                   {:tag {:namespace "Allium" :name "Contract"}
+                    :target {:case :target/primitive :id contract-id}})))
+
+        ;; Process annotations: @invariant → Clause in intent.clauses (Allium::ContractInvariant)
+        ;;                      @guidance  → Clause in intent.clauses (Allium::Guidance)
+        m1 (reduce (fn [m ann]
+                     (let [ann-kind  (:kind ann)   ;; "invariant", "guidance", etc.
+                           ann-name  (:name ann)   ;; optional
+                           ann-body  (or (:body ann) "")
+                           tag-name  (case ann-kind
+                                       "invariant" "ContractInvariant"
+                                       "guidance"  "Guidance"
+                                       ;; fallback
+                                       (str "Contract" (str/capitalize ann-kind)))
+                           clause-id (str contract-id "::annotations::" (or ann-name ann-kind))
+                           clause    (p/make-clause (cond-> {:id clause-id :body ann-body}
+                                                      ann-name (assoc :label ann-name)))
+                           current-c (build/get-primitive m contract-id)
+                           updated-c (add-clause-to-container current-c clause [:intent :clauses])]
+                       (-> m
+                           (assoc-in [:primitives contract-id] updated-c)
+                           (build/add-tag-application
+                             (v/make-tag-application
+                               {:tag    {:namespace "Allium" :name tag-name}
+                                :target {:case :target/primitive :id contract-id}})))))
+                   m0
+                   annotation-items)]
+    m1))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API
@@ -657,7 +821,8 @@
                            :external-entity 1 :actor 1
                            :contract 2
                            :surface 3
-                           :rule 4}
+                           :rule 4
+                           :invariant 5}
         sorted-decls (sort-by #(get declaration-order (:type %) 99)
                                (:declarations ast))
         ;; Process declarations in dependency order
@@ -672,6 +837,7 @@
                     :contract        (analyze-contract m decl coordinate name-registry)
                     :surface         (analyze-surface m decl coordinate name-registry)
                     :rule            (analyze-rule m decl coordinate name-registry)
+                    :invariant       (analyze-top-level-invariant m decl coordinate)
                     ;; Other declaration types: passthrough (Tasks 10–13)
                     m))
                 model-with-module

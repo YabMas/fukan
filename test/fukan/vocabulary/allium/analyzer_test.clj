@@ -480,3 +480,85 @@
           observes-edges (filter #(= :relation/observes (:kind %)) (:edges model))]
       (is (= 1 (count triggers-edges)))
       (is (= 1 (count observes-edges))))))
+
+;; ---------------------------------------------------------------------------
+;; Task 12: Invariants + annotations → Bool Expressions + Clauses
+;; ---------------------------------------------------------------------------
+
+(deftest top-level-invariant
+  (testing "top-level invariant lands as Bool Expression in module-Container's intent.assertions with Allium::Invariant tag"
+    (let [a (ast (str "invariant TotalIsPositive {\n"
+                      "    Order.total > 0\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          module-c (build/get-primitive model "shop")]
+      (is (some? (:intent module-c)))
+      (is (pos? (count (-> module-c :intent :assertions))))
+      (let [invariant-tags (filter #(= "Invariant" (-> % :tag :name)) (:tag-apps model))]
+        (is (= 1 (count invariant-tags)))
+        (is (= "shop" (-> invariant-tags first :target :container)))))))
+
+(deftest entity-level-invariant
+  (testing "entity-level invariant lands as Bool Expression in entity-Container's intent.assertions"
+    (let [a (ast (str "entity Order {\n"
+                      "    total: Integer\n"
+                      "    invariant TotalNonNeg {\n"
+                      "        total >= 0\n"
+                      "    }\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          order (build/get-primitive model "shop::Order")]
+      (is (some? (:intent order)))
+      (is (pos? (count (-> order :intent :assertions))))
+      (let [invariant-tags (filter #(and (= "Invariant" (-> % :tag :name))
+                                          (= "shop::Order" (-> % :target :container)))
+                                    (:tag-apps model))]
+        (is (= 1 (count invariant-tags)))))))
+
+(deftest surface-guarantee-annotation
+  (testing "@guarantee Name with prose body lands as Clause in surface boundary.intent.clauses with Allium::SurfaceGuarantee tag"
+    (let [a (ast (str "surface S {\n"
+                      "    facing actor: User\n"
+                      "    @guarantee Idempotent\n"
+                      "        -- repeated submissions yield identical state\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          surface (build/get-primitive model "shop::S")
+          guarantees (-> surface :boundary :intent :clauses)]
+      (is (= 1 (count guarantees)))
+      (is (= "Idempotent" (-> guarantees first :label)))
+      (is (.contains (-> guarantees first :body) "repeated submissions"))
+      (is (some? (->> (:tag-apps model)
+                      (filter #(= "SurfaceGuarantee" (-> % :tag :name)))
+                      first))))))
+
+(deftest contract-invariant-annotation
+  (testing "@invariant Name on contract lands as Clause in contract intent.clauses with Allium::ContractInvariant tag"
+    (let [a (ast (str "contract C {\n"
+                      "    foo: () -> R\n"
+                      "    @invariant Atomic\n"
+                      "        -- foo is atomic w.r.t. concurrent calls\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          contract (build/get-primitive model "shop::C")
+          invariants (-> contract :intent :clauses)]
+      (is (= 1 (count invariants)))
+      (is (= "Atomic" (-> invariants first :label)))
+      (is (some? (->> (:tag-apps model)
+                      (filter #(= "ContractInvariant" (-> % :tag :name)))
+                      first))))))
+
+(deftest guidance-annotation
+  (testing "@guidance annotation lands as Clause with Allium::Guidance tag"
+    (let [a (ast (str "surface S {\n"
+                      "    facing actor: User\n"
+                      "    @guidance\n"
+                      "        -- prefer the contract path over surface internals\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          surface (build/get-primitive model "shop::S")
+          guidance-clauses (-> surface :boundary :intent :clauses)]
+      (is (= 1 (count guidance-clauses)))
+      (is (some? (->> (:tag-apps model)
+                      (filter #(= "Guidance" (-> % :tag :name)))
+                      first))))))
