@@ -1,15 +1,24 @@
 (ns fukan.smoke-test
-  "Plan 1 end-to-end smoke test: confirms the imperative shell loads a
-   Model that validates against fukan.model.build/Model and exposes the
-   expected fixture primitives + edges."
+  "Plan 2b end-to-end smoke test: confirms the imperative shell loads the
+   real fukan corpus via the Allium pipeline and the resulting Model
+   validates against fukan.model.build/Model."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.infra.model :as infra-model]
             [fukan.model.build :as b]
             [malli.core :as m]))
 
-(deftest fixture-loader-end-to-end
-  (testing "infra-model/load-model returns a Model that validates"
+(deftest pipeline-loader-end-to-end
+  (testing "infra-model/load-model returns a validated Model with substantive content"
     (let [model (infra-model/load-model "src")]
       (is (m/validate b/Model model))
-      (is (some? (b/get-primitive model "order")))
-      (is (= 1 (count (b/edges-by-kind model :relation/writes)))))))
+      ;; The fukan corpus has 5 .allium files (infra, web, web/views, model,
+      ;; model/pipeline) — substantially more than the Plan-1 fixture's
+      ;; 2 primitives. A floor of 20 catches a regression to the fixture
+      ;; while staying robust to incidental spec edits.
+      (is (>= (count (:primitives model)) 20)
+          "loaded Model contains real Allium content, not the Plan-1 fixture")
+      ;; Each .allium file gets a module-Container with an Allium::Module tag.
+      (let [module-tags (filter #(= {:namespace "Allium" :name "Module"} (:tag %))
+                                (:tag-apps model))]
+        (is (= 5 (count module-tags))
+            "Allium::Module tag applied to each of the 5 corpus files")))))

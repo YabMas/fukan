@@ -1,6 +1,6 @@
 (ns fukan.core
-  "Application entry point. In Plan 1 the model loader is a stub; analyzers are
-   reintroduced in Plans 2/3/5.
+  "Application entry point. Plan 2b wired the Allium analyzer pipeline into
+   the model loader; Plan 3/5 will layer additional language analyzers.
 
    Usage: clj -M -m fukan.core --src /path/to/src [--port 8080]"
   (:require [fukan.infra.model :as infra-model]
