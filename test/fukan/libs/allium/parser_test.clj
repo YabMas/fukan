@@ -167,6 +167,72 @@
     (let [d (first-decl "rule Foo {\n    when: Foo(x: String)\n    requires: x != null\n    ensures: Ok.created()\n}\n")]
       (is (= :requires (-> d :clauses (nth 1) :clause-type))))))
 
+(deftest surface-facing-test
+  (testing "facing role binding"
+    (let [d (first-decl "surface Login {\n    facing actor: User\n}\n")
+          facing (->> (:fields d)
+                      (filter #(= :facing (:field-kind %)))
+                      first)]
+      (is (= :facing (:field-kind facing)))
+      (is (= "actor" (:role facing)))
+      (is (= {:kind :simple :name "User"} (:type-ref facing)))))
+
+  (testing "facing with qualified type"
+    (let [d (first-decl "surface S {\n    facing actor: auth/User\n}\n")
+          facing (->> (:fields d)
+                      (filter #(= :facing (:field-kind %)))
+                      first)]
+      (is (= {:kind :qualified :ns "auth" :name "User"} (:type-ref facing))))))
+
+(deftest surface-context-test
+  (testing "context with entity binding"
+    (let [d (first-decl "surface Editing {\n    context entity: Document\n}\n")
+          ctx (->> (:fields d)
+                   (filter #(= :context (:field-kind %)))
+                   first)]
+      (is (= :context (:field-kind ctx)))
+      (is (= "entity" (:role ctx)))
+      (is (= {:kind :simple :name "Document"} (:type-ref ctx))))))
+
+(deftest surface-timeout-test
+  (testing "timeout clause references a rule by name"
+    (let [d (first-decl "surface Op {\n    timeout: ExpireSession\n}\n")
+          t (->> (:fields d)
+                 (filter #(= :timeout (:field-kind %)))
+                 first)]
+      (is (= :timeout (:field-kind t)))
+      (is (= "ExpireSession" (:rule-name t))))))
+
+(deftest surface-related-test
+  (testing "related entries reference peer surfaces"
+    (let [d (first-decl "surface Read {\n    related:\n        Write\n        AdminOps\n}\n")
+          rel (->> (:fields d)
+                   (filter #(= :related (:field-kind %)))
+                   first)]
+      (is (= :related (:field-kind rel)))
+      (is (vector? (:entries rel)))
+      (is (= 2 (count (:entries rel))))
+      (is (= "Write" (-> rel :entries first :name)))))
+
+  (testing "related entry with args"
+    (let [d (first-decl "surface S {\n    related:\n        Write(async)\n}\n")
+          rel (->> (:fields d)
+                   (filter #(= :related (:field-kind %)))
+                   first)
+          entry (first (:entries rel))]
+      (is (= "Write" (:name entry)))
+      (is (= "async" (:args entry))))))
+
+(deftest surface-let-test
+  (testing "surface-internal let binding"
+    (let [d (first-decl "surface S {\n    let admins = users.filter(role = admin)\n}\n")
+          binding (->> (:fields d)
+                       (filter #(= :let (:field-kind %)))
+                       first)]
+      (is (= :let (:field-kind binding)))
+      (is (= "admins" (:name binding)))
+      (is (= "users.filter(role = admin)" (:expr binding))))))
+
 (deftest actor-decl-test
   (testing "actor with identified_by only"
     (let [d (first-decl "actor Author {\n    identified_by: User\n}\n")]
@@ -349,7 +415,7 @@
     ;; :condition rather than a top-level :name. Only the named-field
     ;; variants are expected to have :name.
     (let [block-kinds #{:provides-block :exposes :contracts
-                        :when-guard :related}]
+                        :when-guard :related :facing :context :timeout :let}]
       (doseq [f ["src/fukan/model/spec.allium"
                  "src/fukan/web/views/spec.allium"]]
         (let [result (parser/parse-file f)]

@@ -122,7 +122,10 @@
   (* ============ Fields ============ *)
 
   field-list = (field-item _ (<','> _)?)*
-  <field-item> = provides-block / related-block / exposes-block / contracts-block / nested-variant / invariant-decl / annotation / when-guard / facing-field / context-field / field-entry
+  <field-item> = provides-block / related-block / exposes-block / contracts-block
+               / nested-variant / invariant-decl / annotation / when-guard
+               / facing-field / context-field / timeout-field / let-field
+               / field-entry
 
   (* Exposes block: exposes: followed by dotted identifiers *)
   exposes-block = <'exposes'> _ <':'> _ exposes-entries
@@ -140,6 +143,12 @@
   facing-field = <'facing'> __ ident _ <':'> _ type-ref
   context-field = <'context'> __ ident _ <':'> _ type-ref
 
+  (* Surface-specific: timeout: RuleName *)
+  timeout-field = <'timeout'> _ <':'> _ ident
+
+  (* Surface-specific: let name = expr *)
+  let-field = <'let'> __ ident _ <'='> _ rest-of-line
+
   (* Annotation: @guarantee Name or @guidance — absorbed with trailing comments *)
   annotation = <'@'> ident (__ ident)?
 
@@ -147,10 +156,12 @@
   when-guard = <'when'> __ when-guard-text
   when-guard-text = #'[^\\n}]+'
 
-  (* Related block: related: followed by indented entries, captured as text *)
-  related-block = <'related'> _ <':'> _ related-body
-  related-body = related-line+
-  <related-line> = #'[^\n}@]+' / eol
+  (* Related block: related: followed by indented entries (structured) *)
+  related-block = <'related'> _ <':'> _ related-entries
+  related-entries = (related-entry related-entry-sep)*
+  <related-entry-sep> = <#'[ \\t]*\\n'> _
+  related-entry = ident related-entry-args?
+  related-entry-args = <'('> _ #'[^)]*' _ <')'>
   field-entry = ident _ <':'> _ field-value
 
   (* Provides block: single 'provides:' with typed operation entries.
@@ -573,26 +584,41 @@
 
    ;; Surface-specific fields
    :facing-field
-   (fn [name type-ref]
-     {:field-kind :facing :name name :type-ref type-ref})
+   (fn [role type-ref]
+     {:field-kind :facing, :role role, :type-ref type-ref})
 
    :context-field
-   (fn [name type-ref]
-     {:field-kind :context :name name :type-ref type-ref})
+   (fn [role type-ref]
+     {:field-kind :context, :role role, :type-ref type-ref})
+
+   :timeout-field
+   (fn [rule-name]
+     {:field-kind :timeout, :rule-name rule-name})
+
+   :let-field
+   (fn [name expr-text]
+     {:field-kind :let, :name name, :expr (str/trim expr-text)})
 
    ;; Annotation (@guarantee, @guidance)
    :annotation
    (fn [kind & args]
      {:field-kind :annotation :kind kind :name (first args)})
 
-   ;; Related block
+   ;; Related block — structured entries
    :related-block
-   (fn [& body-parts]
-     {:field-kind :related :body (str/trim (apply str (flatten body-parts)))})
+   (fn [entries]
+     {:field-kind :related, :entries entries})
 
-   :related-body
-   (fn [& parts]
-     (apply str (flatten parts)))
+   :related-entries
+   (fn [& entries] (vec entries))
+
+   :related-entry-args
+   (fn [args-text] (str/trim args-text))
+
+   :related-entry
+   (fn
+     ([name] {:name name})
+     ([name args] {:name name, :args args}))
 
    :field-value identity
 
