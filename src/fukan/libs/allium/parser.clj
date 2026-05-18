@@ -207,9 +207,11 @@
 
   nested-variant = <'variant'> __ ident _ <'{'> _ field-list _ <'}'>
 
-  transitions-block = <'transitions'> __ ident _ <'{'> _ transition-edges _ <'}'>
-  transition-edges = (transition-edge _)*
-  transition-edge = ident _ <'->'> _ ident
+  transitions-block = <'transitions'> __ ident _ <'{'> _ transitions-body _ <'}'>
+  transitions-body = (transition-edge / transitions-terminal-clause)*
+  transition-edge = ident _ <'->'> _ ident _
+  transitions-terminal-clause = <'terminal'> _ <':'> _ terminal-states _
+  terminal-states = ident (_ <','> _ ident)*
 
   (* Ordered alternation: try relationship, projection, typed-with-when, typed-with-comment, typed-field, then derived *)
   field-value = relationship / projection / typed-with-when / typed-with-comment / typed-field / derived-value
@@ -251,7 +253,9 @@
   rule-decl = <'rule'> __ ident _ description-string? _ <'{'> _ rule-body _ <'}'>
 
   rule-body = rule-clause+
-  rule-clause = when-clause / let-clause / requires-clause / ensures-clause
+  rule-clause = when-clause / let-clause / requires-clause / ensures-clause / for-clause
+  for-clause = <'for'> __ ident __ <'in'> __ ident (__ <'where'> __ for-guard-text)? _ <':'> _
+  for-guard-text = #'(?:(?!:[\\s]).)+?(?=:[\\s])'
 
   when-clause = <'when:'> _ trigger-expr _
   trigger-expr = trigger-call / trigger-binding
@@ -297,7 +301,7 @@
   <balanced-chunk> = brace-group / paren-group / text-chunk
   brace-group = <'{'> balanced-chunk* <'}'>
   paren-group = <'('> balanced-chunk* <')'>
-  text-chunk = #'(?:(?!\\bwhen:\\b|\\blet\\b|\\brequires:\\b|\\bensures:\\b)[^{}()\\n])+' / eol
+  text-chunk = #'(?:(?!\\bwhen:\\b|\\blet\\b|\\brequires:\\b|\\bensures:\\b|\\bfor\\b)[^{}()\\n])+' / eol
   eol = #'\\n'
 
   (* ============ Whitespace & Comments ============ *)
@@ -766,13 +770,26 @@
 
    ;; Transitions block — state-machine edges on an entity field
    :transitions-block
-   (fn [field-name edges]
-     {:field-kind :transitions
-      :field field-name
-      :edges edges})
+   (fn [field-name body]
+     (merge {:field-kind :transitions
+             :field field-name}
+            body))
 
-   :transition-edges
-   (fn [& edges] (vec edges))
+   :transitions-body
+   (fn [& items]
+     (let [edges    (filter #(and (map? %) (:from %)) items)
+           terminal (->> items
+                         (filter #(and (map? %) (:terminal %)))
+                         first
+                         :terminal)]
+       (cond-> {:edges (vec edges)}
+         terminal (assoc :terminal terminal))))
+
+   :transitions-terminal-clause
+   (fn [terminal-states-result] {:terminal terminal-states-result})
+
+   :terminal-states
+   (fn [& idents] (vec idents))
 
    :transition-edge
    (fn [from to]
@@ -946,6 +963,17 @@
      (if (map? body-or-for)
        (merge {:clause-type :ensures} body-or-for)
        {:clause-type :ensures, :body (str/trim body-or-for)}))
+
+   :for-clause
+   (fn
+     ([var-name collection]
+      {:clause-type :for-iteration, :var var-name, :collection collection})
+     ([var-name collection guard-text]
+      {:clause-type :for-iteration, :var var-name, :collection collection
+       :guard (str/trim guard-text)}))
+
+   :for-guard-text
+   (fn [text] text)
 
    :ensures-for
    (fn [var-name collection body]

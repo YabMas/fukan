@@ -601,6 +601,64 @@
       (is (= "now" (:operand tr))))))
 
 ;; ---------------------------------------------------------------------------
+;; Unit tests — transitions terminal clause
+;; ---------------------------------------------------------------------------
+
+(deftest transitions-with-terminal-test
+  (testing "transitions block with terminal clause"
+    (let [d (first-decl
+              (str "entity Order {\n"
+                   "    status: pending | shipped\n"
+                   "    transitions status {\n"
+                   "        pending -> shipped\n"
+                   "        terminal: shipped, cancelled\n"
+                   "    }\n"
+                   "}\n"))
+          tx (->> (:fields d)
+                  (filter #(= :transitions (:field-kind %)))
+                  first)]
+      (is (= 1 (count (:edges tx))))
+      (is (= ["shipped" "cancelled"] (:terminal tx))))))
+
+;; ---------------------------------------------------------------------------
+;; Unit tests — rule-level for iteration
+;; ---------------------------------------------------------------------------
+
+(deftest rule-level-for-test
+  (testing "rule-level for iteration clause"
+    (let [d (first-decl
+              (str "rule R {\n"
+                   "    when: Refresh(items: List<Item>)\n"
+                   "    for item in items:\n"
+                   "    ensures: item.touched_at = now()\n"
+                   "}\n"))
+          clauses (:clauses d)
+          for-clause (->> clauses
+                          (filter #(= :for-iteration (:clause-type %)))
+                          first)]
+      (is (= 3 (count clauses)))
+      (is (= :when (-> clauses first :clause-type)))
+      (is (= :for-iteration (:clause-type for-clause)))
+      (is (= "item" (:var for-clause)))
+      (is (= "items" (:collection for-clause)))
+      (is (= :ensures (-> clauses (nth 2) :clause-type))))))
+
+(deftest rule-level-for-with-guard-test
+  (testing "rule-level for iteration with where guard"
+    (let [d (first-decl
+              (str "rule R {\n"
+                   "    when: Refresh(users: List<User>)\n"
+                   "    for u in users where u.active:\n"
+                   "    ensures: u.touched_at = now()\n"
+                   "}\n"))
+          for-clause (->> (:clauses d)
+                          (filter #(= :for-iteration (:clause-type %)))
+                          first)]
+      (is (= "u" (:var for-clause)))
+      (is (= "users" (:collection for-clause)))
+      (is (= "u.active" (:guard for-clause))))))
+
+;; ---------------------------------------------------------------------------
 ;; Unit tests — for iteration in ensures clauses
 ;; ---------------------------------------------------------------------------
 
