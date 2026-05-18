@@ -348,3 +348,66 @@
       (is (= 3 (count assertions)))
       (is (= 2 (count requires-tags)))
       (is (= 1 (count ensures-tags))))))
+
+;; ---------------------------------------------------------------------------
+;; Task 10: Rule effects via canonicalisation
+;; ---------------------------------------------------------------------------
+
+(deftest rule-write-effect
+  (testing "ensures: post.field = E produces Effect record (edge emission best-effort)"
+    (let [a (ast (str "rule R {\n"
+                      "    when: R()\n"
+                      "    ensures: post.account.balance = 100\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "test")
+          rule (build/get-primitive model "test::R")
+          effects (-> rule :body :effects)]
+      (is (>= (count effects) 1))
+      (is (= :effect/write (-> effects first :kind))))))
+
+(deftest rule-create-effect
+  (testing "ensures: post.X = T.created(...) produces Effect record"
+    (let [a (ast (str "rule PlaceOrder {\n"
+                      "    when: P(total: Integer)\n"
+                      "    ensures: post.order = Order.created(total)\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          rule (build/get-primitive model "shop::PlaceOrder")
+          effects (-> rule :body :effects)]
+      (is (>= (count effects) 1))
+      (is (= :effect/create (-> effects first :kind))))))
+
+(deftest rule-destroy-effect
+  (testing "ensures: not exists post.X produces Effect record"
+    (let [a (ast (str "rule CancelOrder {\n"
+                      "    when: C()\n"
+                      "    ensures: not exists post.order\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          rule (build/get-primitive model "shop::CancelOrder")
+          effects (-> rule :body :effects)]
+      (is (>= (count effects) 1))
+      (is (= :effect/destroy (-> effects first :kind))))))
+
+(deftest rule-emit-effect
+  (testing "ensures: emitted(E, args) produces Effect record"
+    (let [a (ast (str "rule Ship {\n"
+                      "    when: S(order: Order)\n"
+                      "    ensures: emitted(OrderShipped, order)\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          rule (build/get-primitive model "shop::Ship")
+          effects (-> rule :body :effects)]
+      (is (>= (count effects) 1))
+      (is (= :effect/emit (-> effects first :kind))))))
+
+(deftest rule-non-effect-ensures-no-effect
+  (testing "ensures: x > 0 (Bool assertion, not effect-shaped) produces no Effect records"
+    (let [a (ast (str "rule Validate {\n"
+                      "    when: V(x: Integer)\n"
+                      "    ensures: x > 0\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "test")
+          rule (build/get-primitive model "test::Validate")
+          effects (-> rule :body :effects)]
+      (is (zero? (count effects)) "no Effect records — Bool assertion only"))))

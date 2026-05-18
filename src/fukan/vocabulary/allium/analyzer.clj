@@ -9,7 +9,8 @@
             [fukan.model.type :as t]
             [fukan.model.vocabulary :as v]
             [fukan.model.build :as build]
-            [fukan.vocabulary.allium.expression :as ae]))
+            [fukan.vocabulary.allium.expression :as ae]
+            [fukan.vocabulary.allium.effect-canonicalise :as ec]))
 
 ;; ---------------------------------------------------------------------------
 ;; Type translation
@@ -335,6 +336,15 @@
 ;; Rule analysis
 ;; ---------------------------------------------------------------------------
 
+(defn- effect-edge-kind
+  "Map Effect kind to the corresponding kernel relation kind."
+  [effect-kind]
+  (case effect-kind
+    :effect/write    :relation/writes
+    :effect/create   :relation/creates
+    :effect/destroy  :relation/destroys
+    :effect/emit     :relation/emits))
+
 (defn- analyze-rule
   [model decl module-coord _name-registry]
   (let [rule-id (qualify module-coord (:name decl))
@@ -353,11 +363,18 @@
                               (p/make-definition (str/trim name)
                                                  (ae/parse rhs))))
                           let-clauses)
+
+        ;; Canonicalise each ensures Expression into an Effect (if pattern matches)
+        effects (->> ensures-exprs
+                     (map-indexed (fn [i expr]
+                                    (ec/canonicalise expr (str rule-id "::ensures::" i))))
+                     (filterv some?))
+
         intent (p/make-intent
                  {:id (str rule-id "::intent")
                   :clauses []
                   :assertions all-assertions})
-        body   (p/make-rule-body definitions [])
+        body   (p/make-rule-body definitions effects)
         rule   (p/make-rule
                  (cond-> {:id rule-id
                           :label (:name decl)
@@ -407,8 +424,21 @@
                                    :path      [{:slot "body"}
                                                {:slot "definitions" :key (str i)}]}})))
                    m2
-                   (range (count definitions)))]
-    m3))
+                   (range (count definitions)))
+
+        ;; Emit writes/creates/destroys/emits kernel edges from effects (best-effort)
+        m4 (reduce (fn [m effect]
+                     (let [edge-kind (effect-edge-kind (:kind effect))
+                           edge (r/make-edge edge-kind
+                                             (r/primitive-ref rule-id)
+                                             (:target effect)
+                                             (cond-> {}
+                                               (:value effect) (assoc :condition (:value effect))))]
+                       (try (build/add-edge m edge)
+                            (catch Exception _ m))))
+                   m3
+                   effects)]
+    m4))
 
 ;; ---------------------------------------------------------------------------
 ;; Contract analysis helpers
