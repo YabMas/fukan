@@ -331,6 +331,69 @@
     m3))
 
 ;; ---------------------------------------------------------------------------
+;; Contract analysis helpers
+;; ---------------------------------------------------------------------------
+
+(defn- analyze-operation
+  "Convert a provides-entry (from a contract's provides-block entries) into an
+   Operation primitive plus an Allium::Call tag application.
+   Returns [updated-model operation-id]."
+  [model op-entry module-coord contract-name name-registry]
+  (let [op-name (:name op-entry)
+        op-id (qualify module-coord (str contract-name "." op-name))
+        params (mapv (fn [i param]
+                       (p/make-parameter
+                         (:name param)
+                         (translate-type-ref (or (:type-ref param) (:type param)) module-coord name-registry)
+                         false
+                         i))
+                     (range)
+                     (or (:params op-entry) []))
+        return-type (when-let [tr (:return op-entry)]
+                      (translate-type-ref tr module-coord name-registry))
+        op (p/make-operation
+             (cond-> {:id op-id
+                      :label op-name
+                      :parameters params}
+               return-type (assoc :return-type return-type)))]
+    [(-> model
+         (build/add-primitive op)
+         (build/add-tag-application
+           (v/make-tag-application
+             {:tag {:namespace "Allium" :name "Call"}
+              :target {:case :target/primitive :id op-id}})))
+     op-id]))
+
+(defn- analyze-contract
+  [model decl module-coord name-registry]
+  (let [contract-id (qualify module-coord (:name decl))
+        ;; Contract operations come through provides-block entries
+        op-entries (->> (:fields decl)
+                        (filter #(= :provides-block (:field-kind %)))
+                        (mapcat :entries))
+        [model-with-ops op-ids]
+        (reduce (fn [[m ids] op-entry]
+                  (let [[m' op-id] (analyze-operation m op-entry module-coord (:name decl) name-registry)]
+                    [m' (conj ids op-id)]))
+                [model []]
+                op-entries)
+        boundary (p/make-boundary
+                   {:id (str contract-id "::boundary")
+                    :label (:name decl)
+                    :operations op-ids})
+        container (p/make-container
+                    (cond-> {:id contract-id
+                             :label (:name decl)
+                             :boundary boundary}
+                      (:description decl) (assoc :description (:description decl))))]
+    (-> model-with-ops
+        (build/add-primitive container)
+        (build/add-tag-application
+          (v/make-tag-application
+            {:tag {:namespace "Allium" :name "Contract"}
+             :target {:case :target/primitive :id contract-id}})))))
+
+;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
@@ -369,14 +432,7 @@
                     :variant         (analyze-entity-like m decl coordinate :variant name-registry)
                     :external-entity (analyze-external-entity m decl coordinate name-registry)
                     :actor           (analyze-actor m decl coordinate name-registry)
-                    ;; Stub Container for contract so surface edge endpoints resolve.
-                    ;; Full contract analysis arrives in Task 8.
-                    :contract        (let [contract-id (qualify coordinate (:name decl))]
-                                       (if (build/get-primitive m contract-id)
-                                         m
-                                         (build/add-primitive m (p/make-container
-                                                                   {:id    contract-id
-                                                                    :label (:name decl)}))))
+                    :contract        (analyze-contract m decl coordinate name-registry)
                     :surface         (analyze-surface m decl coordinate name-registry)
                     ;; Other declaration types: passthrough (Tasks 9–13)
                     m))
@@ -385,7 +441,7 @@
         ;; Collect child ids from Container declarations (entity, value, variant, external-entity, surface)
         ;; Actors are Actor primitives — not Containers — so they are NOT added to :children
         child-ids (->> (:declarations ast)
-                       (filter #(#{:entity :value :variant :external-entity :surface} (:type %)))
+                       (filter #(#{:entity :value :variant :external-entity :surface :contract} (:type %)))
                        (map #(qualify coordinate (:name %)))
                        set)
         ;; Update module-Container's :children (direct assoc-in bypasses

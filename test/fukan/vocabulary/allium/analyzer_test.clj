@@ -227,3 +227,49 @@
       (is (= "shop::PaymentGateway" (-> uses-edges first :to :id)))
       (let [demands-tag-apps (filter #(= "Demands" (-> % :tag :name)) (:tag-apps model))]
         (is (pos? (count demands-tag-apps)) "Allium::Demands edge-tag applied")))))
+
+(deftest contract-declaration-basic
+  (testing "contract becomes Container with Allium::Contract tag"
+    (let [a (ast "contract Foo {}")
+          model (analyzer/analyze-file (build/empty-model) a "shop")]
+      (is (some? (build/get-primitive model "shop::Foo")))
+      (let [tag-app (->> (:tag-apps model)
+                         (filter #(and (= "Contract" (-> % :tag :name))
+                                       (= "shop::Foo" (-> % :target :id))))
+                         first)]
+        (is (some? tag-app))))))
+
+(deftest contract-with-operations
+  (testing "contract operations become Operation primitives on the Boundary with Allium::Call tag"
+    (let [a (ast (str "contract OrderSubmission {\n"
+                      "    provides:\n"
+                      "        submit(order: Order, key: String) -> Confirmation\n"
+                      "        cancel(order: Order) -> Confirmation\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          contract (build/get-primitive model "shop::OrderSubmission")
+          boundary (:boundary contract)
+          op-ids (set (:operations boundary))]
+      (is (= 2 (count op-ids)))
+      (is (contains? op-ids "shop::OrderSubmission.submit"))
+      (is (contains? op-ids "shop::OrderSubmission.cancel"))
+      ;; Operations themselves should be in the Model
+      (let [submit-op (build/get-primitive model "shop::OrderSubmission.submit")]
+        (is (= :primitive/operation (:kind submit-op)))
+        (is (= 2 (count (:parameters submit-op))))
+        (is (= "order" (-> submit-op :parameters first :name)))
+        (is (some? (:return-type submit-op))))
+      ;; Each Operation gets an Allium::Call tag
+      (let [call-tags (filter #(= "Call" (-> % :tag :name)) (:tag-apps model))]
+        (is (= 2 (count call-tags)))))))
+
+(deftest contract-fire-and-forget-operation
+  (testing "operation with no return type has nil :return-type"
+    (let [a (ast (str "contract X {\n"
+                      "    provides:\n"
+                      "        notify(payload: Payload)\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "test")
+          op (build/get-primitive model "test::X.notify")]
+      (is (some? op))
+      (is (nil? (:return-type op))))))
