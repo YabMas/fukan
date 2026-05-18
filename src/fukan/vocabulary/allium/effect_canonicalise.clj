@@ -11,7 +11,8 @@
      not exists post.X → Apply(\"not-exists\", [Apply(\".\", [Var(\"post\"), Var(\"X\")])])
      T.created(args) → Apply(\"call\", [Apply(\".\", [Var(T), Var(\"created\")]), args...])
      emitted(E, args) → Apply(\"emitted\", [Var(E), args...])"
-  (:require [fukan.model.effect :as fx]
+  (:require [clojure.string :as str]
+            [fukan.model.effect :as fx]
             [fukan.model.relations :as r]))
 
 ;; ---------------------------------------------------------------------------
@@ -66,17 +67,39 @@
                 (when (= "created" (var-name method))
                   (var-name obj))))))))))
 
+(defn- dotted-var-name
+  "Flatten a left-nested Apply(\".\", [Var(a), Var(b)]) into the string
+   \"a.b\". Returns nil when the chain contains non-Var leaves."
+  [expr]
+  (loop [e expr, segs ()]
+    (let [form (:form e)]
+      (cond
+        (= :expr/var (:case form))
+        (str/join "." (cons (:name form) segs))
+
+        (dot-apply? form)
+        (let [[left right] (:args form)
+              seg (var-name right)]
+          (if seg
+            (recur left (cons seg segs))
+            nil))
+
+        :else nil))))
+
 (defn- emitted-call
   "If the expression is emitted(E, args...) — parsed as
-   Apply(\"emitted\", [Var(E), arg1, ...]) — return [event-name args-vec];
-   else nil."
+   Apply(\"emitted\", [Var(E)|dotted, arg1, ...]) — return
+   [event-name args-vec]; else nil. The first argument may be a dotted
+   chain (e.g. `alias.EventName`) which we flatten into
+   \"alias.EventName\"; cross-module retargeting happens in the analyzer."
   [expr]
   (let [form (:form expr)]
     (when (and (= :expr/apply (:case form))
                (= "emitted" (:op form)))
       (let [args (:args form)
             event-expr (first args)]
-        (when-let [ename (var-name event-expr)]
+        (when-let [ename (or (var-name event-expr)
+                             (dotted-var-name event-expr))]
           [ename (vec (rest args))])))))
 
 ;; ---------------------------------------------------------------------------

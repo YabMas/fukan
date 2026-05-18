@@ -1,0 +1,7 @@
+-- allium: 2
+-- Fixture: defines a different Logger entity (the other ambiguous candidate).
+
+entity Logger {
+    id: String
+    sink: String
+}
