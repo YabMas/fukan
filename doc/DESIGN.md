@@ -2,7 +2,7 @@
 
 **Status:** Application-design specification — the *what* of the next chapter, sitting between framing and substrate.
 
-**Reading order:** Read [VISION.md](./VISION.md) first if you're new (motivation and the spec-graph-of-the-system framing). This document covers boundary protocols, altitudes, build pipeline, project layer, and the Clojure analyzer. [MODEL.md](./MODEL.md) is the authoritative substrate spec (kernel primitives, vocabulary mechanism, constraint language). [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace (K\*/R\*/V\*/C\*/P\* identifiers cited throughout).
+**Reading order:** Read [VISION.md](./VISION.md) first if you're new (motivation and the spec-graph-of-the-system framing). This document covers boundary protocols, altitudes, build pipeline, project layer, and the Clojure Target language extension (Analyzer + Projector). [MODEL.md](./MODEL.md) is the authoritative substrate spec (kernel primitives, vocabulary mechanism, constraint language, projection mechanic). [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace (K\*/R\*/V\*/C\*/P\* identifiers cited throughout).
 
 ---
 
@@ -13,10 +13,11 @@ This document specifies the application-level design — the choices that sit *b
 - The three Allium boundary protocols — View, Signal, Call — and their connection to behavioural content
 - The three spec altitudes — Behaviour, Structure, Infra — and the files (`.allium`, `.boundary`, `.infra`) that produce content at each
 - The build pipeline shape and what filesystem-inferred structure stops being authoritative
-- The project layer mechanics
+- The project layer mechanics (projection inputs + constraints)
+- The Clojure Target language extension — both Analyzer and Projector, the Implementation Blueprint, the generation flow
 - What changes in the projection and view layers
 
-Substrate-level content (kernel primitives, kernel relations, edge identity, vocabulary mechanism, constraint language, Allium→kernel mapping, the realisation/projection schema) lives in [MODEL.md](./MODEL.md). A concrete phase-by-phase implementation plan will be written separately once the design is finalised.
+Substrate-level content (kernel primitives, kernel relations, edge identity, vocabulary mechanism, constraint language, Allium→kernel mapping, the projection vocabulary, the projection mechanic and Blueprint protocol) lives in [MODEL.md](./MODEL.md). A concrete phase-by-phase implementation plan will be written separately once the design is finalised.
 
 ---
 
@@ -28,7 +29,7 @@ Every design choice in this chapter is derived from three constraints:
 2. **Every relationship a human would choose to follow must be traversable.** If a connection only exists in one party's prose, the model has no leverage. This determines what is a kernel relation or a relational tag.
 3. **The artefact must reveal where intent and reality diverge.** If you cannot see drift, the workbench is a viewer, not an instrument. This determines what bridges layers.
 
-The Allium grammar provides the vocabulary of intent. Code analysis (later) provides the vocabulary of reality. Fukan's job is to make both expressible in one Model with the bridge visible.
+The Allium grammar provides the vocabulary of intent. The Clojure Target language extension — both reading existing code and generating new code from spec — provides the vocabulary of reality. Fukan's job is to make both expressible in one Model with the bridge visible and bidirectional.
 
 ---
 
@@ -86,6 +87,8 @@ Rules can also fire **without any boundary involvement**. Allium's trigger taxon
 | Temporal (`T.expires_at <= now`) | typed-subject | `Rule —observes→ Field` |
 | Derived condition (`T.is_valid` flips true) | typed-subject | `Rule —observes→ Field` |
 
+**Wall-clock periodic triggers (cron-style scheduling) fit row 1** — `external_stimulus`. The scheduler is an external Actor (e.g., a `Scheduler` Actor); the platform exposes a Surface `facing:` that Actor which `provides:` named scheduled Events (e.g., `NightlyMaintenance`); Rules trigger on those Events through the ordinary `Event —triggers→ Rule` path. The substrate is identical to any other external-stimulus trigger — no new kernel relation, no new trigger kind. The schedule expression itself (`0 9 * * MON`) is Infra-altitude content, landing in `.infra` when it arrives and realising the scheduler Surface the same way an HTTP endpoint realises a user-facing one. The "temporal" typed-subject row above is reserved for **data-driven** time — a stored Field crossing `now`; periodic wall-clock cadence has no subject Field and does not belong there. At MVP the cadence is invisible from spec, but Signal-protocol gap detection still surfaces "scheduled Event with no consumer" automatically.
+
 Internal-only Rules (named or typed-subject) are common and supported. The Model must not assume every Rule has a boundary entry point.
 
 ---
@@ -125,7 +128,7 @@ Each spec file pattern produces content at one or more altitudes.
 
 **Allium covers Behaviour and partial Structure.** Allium produces both Rules (Behaviour) and Operations-in-contracts / Surfaces (Structure). What Allium *cannot* produce is the binding between them — the awkward middle ground that motivated `.boundary`. `.boundary` is the Structure-altitude binding layer that fills the gap. See [MODEL.md §8.2](./MODEL.md#82-boundary--kernel-mapping).
 
-For MVP, `.allium` and `.boundary` are both implemented, plus the Clojure analyzer producing `projects` edges from spec primitives to `Code.*` artifacts (substrate-level shape per [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments); analyzer mechanics in the Implementation linkage section below). Only `.infra` remains architecturally seamed — see [MODEL.md §10 Architectural seams](./MODEL.md#10-architectural-seams).
+For MVP, `.allium` and `.boundary` are both implemented, plus the Clojure Target language extension — both Analyzer (producing `projects` edges from spec primitives to `Code.*` artifacts; substrate-level shape per [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments)) and Projector (producing Implementation Blueprints on demand for LLM-driven code generation; [MODEL.md §7.7](./MODEL.md#77-the-target-language-extension--analyzer-and-projector)). Mechanics in the Implementation linkage section below. Only `.infra` remains architecturally seamed — see [MODEL.md §10 Architectural seams](./MODEL.md#10-architectural-seams).
 
 ### `.allium` responsibilities
 
@@ -139,7 +142,7 @@ Allium is the source of truth for behaviour. Each `.allium` file declares one mo
 - Contracts (with their Operations)
 - Implicit Events (named events from `when:`, `provides:`, and `emits:` sites within the module; identity per [MODEL.md §8.1](./MODEL.md#81-allium--kernel-mapping))
 
-Rule body parsing follows MODEL.md §8.1: `requires:` / `where:` / `ensures:` / `guarantees:` produce Expressions in `Rule.intent.assertions` and Definitions / Effects in `Rule.body` with `Allium::Requires` / `Where` / `Ensures` / `Guarantees` source-clause tags. Effect-shaped `ensures:` clauses materialise Effect records that source the corresponding `writes` / `creates` / `destroys` / `emits` kernel edges (identity stable per the §3.8 kernel invariant).
+Rule body parsing follows MODEL.md §8.1: `requires:` / `where:` / `ensures:` produce Expressions in `Rule.intent.assertions` and Definitions / Effects in `Rule.body` with `Allium::Requires` / `Where` / `Ensures` source-clause tags. Effect-shaped `ensures:` clauses materialise Effect records that source the corresponding `writes` / `creates` / `destroys` / `emits` kernel edges (identity stable per the §3.8 kernel invariant).
 
 Cross-module references continue via `use "..." as alias` and qualified names (`alias/TypeName`). External entities mark types managed by other modules.
 
@@ -256,11 +259,12 @@ Filesystem-inferred structure is dropped. `.boundary` is the sole source of trut
            │                     │                     │
            ▼                     ▼                     ▼
   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-  │ Allium analyzer  │  │ Boundary analyzer│  │ Clojure analyzer │
+  │ Allium parser    │  │ Boundary parser  │  │ Clojure Analyzer │
   │ (leaf Container  │  │ (composite       │  │ (Code.* Artifacts│
-  │  + Allium tags + │  │  Container +     │  │  + convention-   │
-  │  kernel edges)   │  │  Operation↔Rule  │  │  resolved        │
-  │                  │  │  bindings)       │  │  projects edges) │
+  │  + Allium tags + │  │  Container +     │  │  + projects      │
+  │  kernel edges)   │  │  Operation↔Rule  │  │  edges via       │
+  │                  │  │  bindings +      │  │  projection-     │
+  │                  │  │  External::*)    │  │  input rules)    │
   └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
            │                     │                     │
            └─────────────────────┼─────────────────────┘
@@ -272,39 +276,45 @@ Filesystem-inferred structure is dropped. `.boundary` is the sole source of trut
                                ▼
                   ┌────────────────────────────┐
                   │   Constraint evaluation    │
-                  │   (methodology + project   │
-                  │    constraints +           │
-                  │    conventions)            │
+                  │   (Vocabulary-shipped +    │
+                  │    project-shipped +       │
+                  │    .boundary-scoped)       │
                   └────────────┬───────────────┘
                                ▼
                   ┌────────────────────────────┐
-                  │   Projection / view        │
+                  │   Explorer / on-demand     │
+                  │   Projection (Blueprint    │
+                  │    generation per click)   │
                   └────────────────────────────┘
 ```
 
-Conventions feed the Clojure analyzer (which artifacts to look for at which addresses); constraints run after merge against the unified Model. Both are flavours of project-side project-layer entries ([MODEL.md §10.3](./MODEL.md#103-project-side-constraint-registration--composition)).
+Projection inputs feed the Clojure Target language extension's Analyzer (which artifacts to look for at which addresses; for the Projector they shape the on-demand Blueprint, not the build pipeline directly); constraints run after merge against the unified Model. Both sub-loci are part of the project layer ([MODEL.md §10.3](./MODEL.md#103-the-project-layer--sub-loci-and-composition)).
 
 ### Phase ordering and error semantics
 
-The pipeline runs as a fixed sequence of phases. The three analyzers parse independently in Phase 1 — the visual parallelism in the diagram above is real at that step. The dependency lives at **Phase 2**, where Boundary's cross-analyzer reference resolution targets Allium-produced Operations / Rules / module-Containers, and the Clojure analyzer enumerates expected projections from Allium-produced spec primitives; both consume Allium's Phase 1 output. The full sequence formalises that dependency and adds two strategic halt gates so users see the complete set of attributable problems at each level without downstream noise.
+The pipeline runs as a fixed sequence of phases. The three Phase-1 producers (Allium parser, Boundary parser, Clojure Analyzer) parse independently — the visual parallelism in the diagram above is real at that step. The dependency lives at **Phase 2**, where Boundary's cross-analyzer reference resolution targets Allium-produced Operations / Rules / module-Containers, and the Clojure Analyzer enumerates expected projections from Allium-produced spec primitives; both consume Allium's Phase 1 output. The full sequence formalises that dependency and adds two strategic halt gates so users see the complete set of attributable problems at each level without downstream noise.
 
 **Within a phase, all violations are aggregated before moving on.** Fail-fast on the first violation would force a fix-then-re-run loop on cosmetic issues; aggregating per phase lets the user fix everything at one level before learning about the next.
 
 **Severity.** Violations carry `severity ∈ error | warning` (the [MODEL.md §5.3](./MODEL.md#53-predicate-registrations) shape, lifted from constraints to a pipeline-wide concept). **Errors trip the gates; warnings never do.**
 
 ```
-Phase 1 — Per-analyzer parsing
-  Allium analyzer    : parse *.allium files; produce kernel content (primitives,
-                       kernel edges, Expression and Effect substrate per
-                       MODEL.md §3.8) and `Allium::*` tag applications
-                       (including `Allium::Requires` / `Where` / `Ensures` /
-                       `Guarantees` source-clause tags on Rule-body Expressions);
-                       aggregate parse + grammar errors
-  Boundary analyzer  : parse *.boundary files; aggregate parse + grammar errors
-  Clojure analyzer   : read source; per-file parse failures emit *warnings*,
-                       file skipped, no Code.* artifacts produced
+Phase 1 — Per-extension parsing
+  Allium spec parser  : parse *.allium files; produce kernel content (primitives,
+                        kernel edges, Expression and Effect substrate per
+                        MODEL.md §3.8) and `Allium::*` tag applications
+                        (including `Allium::Requires` / `Where` / `Ensures`
+                        source-clause tags on Rule-body Expressions);
+                        aggregate parse + grammar errors. Intra-module structural
+                        errors caught here include the variant field-name-collision
+                        check (per MODEL.md §8.1 variant row) — a variant child
+                        must not declare a field that shadows a name already
+                        declared on the parent Container.
+  Boundary spec parser: parse *.boundary files; aggregate parse + grammar errors
+  Clojure Analyzer    : read source; per-file parse failures emit *warnings*,
+                        file skipped, no Code.* artifacts produced
 
-Phase 2 — Cross-analyzer reference resolution
+Phase 2 — Cross-extension reference resolution
   Boundary `binding operation:` / `invokes:` resolve to Allium Operations / Rules
   Boundary subsystem `contains:`            resolves to module-Containers
   Boundary `module <alias>`                 resolves to its module-Container
@@ -350,9 +360,9 @@ Phase 6 — Projection / render
 
 **Why Phase 4 sub-phases are ordered.** Composition (4a) produces the topology every later sub-phase reads. Event and binding rules (4b, 4c) validate primitive-level consistency and don't depend on visibility. Module-visibility (4d) must resolve `module exports:` lists before the closure rule (4f) can ask whether they're self-coherent. Closure (4f) must hold before cross-module reference visibility (4g) can trust that every name reachable from outside a module is in fact exported. Sub-phases run in this order so attribution is stable: each violation is reported against the sub-phase that found it, with no upstream ambiguity.
 
-**Analyzer dependency.** Phase 2 is where the analyzer dependency lives. Allium runs alone in Phase 1; Boundary's reference resolution depends on Allium-produced Operations, Rules, and module-Containers; the Clojure analyzer enumerates expected projections from Allium-produced spec primitives. Clojure does *not* depend on Boundary — bindings don't affect spec-primitive identity.
+**Analyzer dependency.** Phase 2 is where the analyzer dependency lives. The Allium spec parser runs alone in Phase 1; the Boundary spec parser's reference resolution depends on Allium-produced Operations, Rules, and module-Containers; the Clojure Target language extension's Analyzer enumerates expected projections from Allium-produced spec primitives. The Clojure Analyzer does *not* depend on Boundary — bindings don't affect spec-primitive identity.
 
-**Asymmetry of the Clojure analyzer.** Clojure parse failures are warnings, not errors. The spec layer is independent of code; missing `projects` edges to unparseable code show up exactly where the drift surface is meant to put them. The pipeline doesn't halt on code — that's the whole point of the drift surface.
+**Asymmetry of the Clojure Analyzer.** Clojure parse failures are warnings, not errors. The spec layer is independent of code; missing `projects` edges to unparseable code show up exactly where the drift surface is meant to put them. The pipeline doesn't halt on code — that's the whole point of the drift surface.
 
 ### Design-level validation rules
 
@@ -399,7 +409,7 @@ A closed module's `exports:` list must be **self-coherent**: every type referenc
 
 | Exported kind | Types whose closure must hold (when defined in M) |
 |---|---|
-| **Surface** | The Events referenced in `provides:` (each Event's parameter types); the Operations on Contracts the Surface `fulfils:` / `demands:` (their parameter and return types); the Actor in `facing:`; the Container in `context:`; peer Surfaces in `related:` |
+| **Surface** | The Events referenced in `provides:` (each Event's parameter types); the Operations on Contracts the Surface `fulfils:` / `demands:` (their parameter and return types); the owning Containers of Fields referenced in `exposes:` (external readers need to name the Container to reach the Field); the Actor in `facing:`; the Container in `context:`; peer Surfaces in `related:` |
 | **Operation `Contract.op`** | Parameter types; return type (when set) |
 | **Event** | Parameter types |
 | **Entity** | Types of every field; transitive closure through nested `Composite(Named(...))` fields |
@@ -444,7 +454,7 @@ ERROR  orders.boundary:4   export closure violation
 
 - Filesystem-derived hierarchy logic in the build pipeline
 - The "smart root pruning" step (no longer needed without FS hierarchy)
-- The old code-graph machinery: `Function` / `Schema` node kinds, `function_call` / `dispatches` / `schema_reference` edges, runtime reflection, the old merge step combining analyzer outputs — *replaced* by `projects` edges from spec primitives to `Code.*` artifacts per [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments). The Clojure analyzer itself stays, but produces convention-resolved `projects` edges, not the old code-graph.
+- The old code-graph machinery: `Function` / `Schema` node kinds, `function_call` / `dispatches` / `schema_reference` edges, runtime reflection, the old merge step combining analyzer outputs — *replaced* by `projects` edges from spec primitives to `Code.*` artifacts per [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments). The Clojure Target language extension's Analyzer stays, but produces convention-resolved `projects` edges, not the old code-graph; the Projector is the new generation-direction operation.
 - The merge-conflict resolution between filesystem and `.boundary` (no second source to conflict with)
 
 ---
@@ -453,38 +463,94 @@ ERROR  orders.boundary:4   export closure violation
 
 Allium is intentionally flexible. `provides` actions and contract operations both express "an action at a boundary," with different protocols. `exposes` declares public visibility but doesn't pin down whether reads happen via direct field access or via wrapper operations. Two engineers describing the same system with different primitives can both be technically correct.
 
-The project layer is where a project makes its choices explicit — which primitives it uses for which situations, and the way it applies them:
+The project layer is where a project makes its choices explicit — which primitives it uses for which situations, and the way it applies them, and how those choices materialise as concrete code in the project's target language:
 
 > "All boundary actions are modelled as contract operations; `provides` is reserved for system-internal events."
 >
 > "Surfaces facing external users must declare an Actor; surfaces facing internal services may use entity types directly."
 >
 > "Event names follow `Subject + Verb` convention."
+>
+> "`Money` renders as `[:and :int [:>= 0]]` in malli; entity ids are tagged uuid shapes."
+>
+> "For `test` projections of Rules, use property-based testing with `clojure.test.check`."
 
-Each entry names a situation, the chosen primitive, and the way it is applied — optionally with a machine-checkable expression. The layer serves three audiences from the same content:
+Each entry names a situation and the way it is applied — optionally with a machine-checkable expression or a target-language rendering. The layer serves three audiences from the same content:
 
-- **Human readers** — orientation: how does this project use the spec languages?
-- **LLMs designing or extending spec** — generation context: which patterns should new spec content conform to?
-- **The build pipeline** — validation: does the Model in fact conform to the pattern?
+- **Human readers** — orientation: how does this project use the spec languages, and how do those choices land in code?
+- **LLMs designing or extending spec, or generating code** — context: which patterns should new spec content or generated code conform to?
+- **The build pipeline** — verification: does the Model conform to the patterns? Do generated artifacts match the spec?
 
 The primary purpose is making the project's design vocabulary explicit. Validation and generation are useful consequences of having made it explicit.
 
 ### Position
 
-The project layer is **not** a fourth language at a different altitude. The three spec languages declare what the system is; the project layer describes how this project chooses to use those declarations. The relationship is annotation, not peerage.
+The project layer is **not** a fourth language at a different altitude. The three spec languages declare what the system is; the project layer describes how this project chooses to use those declarations and how they realise in target-language code. The relationship is annotation, not peerage.
 
-Project-layer entries carry two flavours: **constraints** register against the constraint language MODEL.md §6 defines (single language, methodologies + projects alike), and **conventions** register as analyzer configuration consumed by the Clojure analyzer (mechanics in the Implementation linkage section below). For MVP, the *registration path* for both flavours is hardcoded ([MODEL.md §10.3](./MODEL.md#103-project-side-constraint-registration--composition)); the declarative-form and composition mechanics (activation, severity overrides, bundles, versioning) wait until forced by concrete project need.
+The layer carries **two sub-loci** ([MODEL.md §10.3](./MODEL.md#103-the-project-layer--sub-loci-and-composition)):
 
-A constraint can be a soft preference (`severity = warning`) — naming styles, conformance to a project idiom — or a hard architectural law (`severity = error`) — module-isolation rules, layering rules, signal-gap detection. Severity is per-registration; the layer makes no commitment about hardness, only about origin (project-side, not kernel, not methodology).
+1. **Projection inputs** — address-resolution knobs, type-translation overrides, and idioms (per-primitive-kind patterns, per-projection-kind patterns, per-address-match patterns). All variants of one mechanism: "how kernel concept X projects concretely in this project, in this target language." Consumed on demand by the projection mechanic ([MODEL.md §7.7](./MODEL.md#77-the-target-language-extension--analyzer-and-projector)) to assemble Implementation Blueprints (see Implementation linkage section below). Persisted in a declarative form day 1 — the shape is fully specified by each Target language extension's schema.
+2. **Constraints** — `PredicateRegistration` entries ([MODEL.md §5.3](./MODEL.md#53-predicate-registrations)) in the single constraint language ([MODEL.md §6](./MODEL.md#6-the-constraint-language)). Range from soft preferences (`severity = warning` — naming styles, project idioms) to hard architectural laws (`severity = error` — module-isolation, layering, signal-gap detection). Same registration shape as Vocabulary-shipped constraints; the locus differs, not the language. V0 authors constraints in Datalog AST form (data structures encoding rule heads and body literals) until path-sugar and type-sum-sugar tokenisation lands ([MODEL.md §13](./MODEL.md#13-tbds-consolidated)).
 
-Conventions split into two MVP uses:
+What's *not* in the project layer:
 
-- **Address-resolution rules** — how spec primitives address their realising artifacts (the root-prefix knob, kind-sensitive transliteration, single-canonical-address discipline; full rules in the Implementation linkage section below).
-- **Type-translation rules** — how substrate `Type` cases render in the target language. Substrate Types are kept generic at the target level (`Scalar(name)` is opaque to substrate; `Collection(of: T, semantics: ...)` commits to shape but not to Clojure-vs-Java collection idioms; `Composite(Named(C))` declares structure but not malli-vs-defrecord). A `TypeTranslation` entry maps a substrate Type pattern to a target-language rendering — how `Scalar("Integer")` becomes Clojure `:int`, how `Collection(of: T, Sequential)` becomes `[:vector T]`, how `Composite(Named(C))` resolves to a malli `def` reference. Default translations ship with the Clojure analyzer covering all six Type cases; methodologies override per `Scalar` name (Allium ships overrides for domain scalars like `"Money"`, `"DateTime"`); projects override per-project for custom domain types. The per-case default table lives in the Implementation linkage section below.
+- **External-system enrichment** moves into Boundary vocab content authored in `.boundary` files, under the module-as-wrapper rule ([MODEL.md §8.2](./MODEL.md#82-boundary--kernel-mapping)). Earlier drafts placed `External::*` tag applications here; they are structural facts about the system (an external dependency *is* a module), not project-side configuration.
+- **Subsystem-scoped architectural rules** live in `.boundary` `rules:` clauses — at the structural altitude where the composite is declared. The registration mechanism is the same `PredicateRegistration` shape; only the authoring locus differs.
 
-The same TypeTranslation shape is the seam for future target-language analyzers (TypeScript, Java) — each registers its own per-case defaults without substrate change.
+### Projection inputs — one mechanism, contextual selection
+
+Address-resolution, type-translation, and idioms are not separate categories. They are all instances of "how does kernel X project concretely in this target." The project layer has one projection-input bucket; different *content* lives at different sub-routes, but registration is uniform.
+
+| Sub-route | Examples |
+|---|---|
+| Address-resolution | Root-prefix knob (Allium module name → target-namespace prefix); kind-sensitive transliteration overrides |
+| Type-translation overrides | `Scalar("Money")` → project's Money rendering; `Scalar("OrderId")` → project's id-shape |
+| Per-primitive-kind idioms | "for Surface implementations, follow this pattern"; "for Operations, prefer X" |
+| Per-projection-kind idioms | "for `test` projections, use property-based testing"; "for `rule` projections, prefer pure functions" |
+| Per-address-match idioms | Patterns matching specific addresses or modules — narrower applicability |
+
+The projection mechanic ([MODEL.md §7.7](./MODEL.md#77-the-target-language-extension--analyzer-and-projector)) selects applicable entries by matching the current `(primitive_kind, projection_kind, address_match)` against each entry's routing predicate. Multiple matching entries compose; conflict-resolution mechanics defer to forcing examples.
+
+Defaults ship with the Target language extension; the project layer overrides per-project. The same shape is the seam for future Target language extensions (TypeScript, Java) without substrate change.
+
+### Constraints — one registration shape across loci
+
+The constraint language is single. Three authoring loci share one registration shape:
+
+| Locus | Default scope | Owner |
+|---|---|---|
+| Vocabulary extension (Allium VR30, Boundary signal_gap, …) | Model-wide (or `TagScope` against the methodology's marker tag) | Travels with the Vocabulary |
+| Project layer | Model-wide (or `TagScope` against any tag the project chooses) | Persisted in the project |
+| `.boundary` `rules:` | `TagScope` against the composite Container | Lives in the `.boundary` file |
+
+Severity is per-registration (`error | warning`). Constraints from any locus surface in the explorer as sidebar violation entries with severity. Fukan-shipped well-known constraints (per [MODEL.md §10.3](./MODEL.md#103-the-project-layer--sub-loci-and-composition)) — `signal_gap`, `no_dependency`, `no_circular_refs`, `naming_convention`, `external_must_have_wrapper` — are available for projects to register and for `.boundary rules:` to parameterise without re-authoring.
+
+### Surfacing
 
 ```
+┌─────────────────┐
+│  Projection     │  consumed
+│  inputs         │ ──────────► Projection mechanic (Target language extension)
+└─────────────────┘                       │
+                                          ▼
+                                 ┌─────────────────┐    consumed by
+                                 │  Implementation │ ──────► LLM (code generation)
+                                 │  Blueprint      │ ──────► Analyzer (verification)
+                                 │  (ephemeral,    │
+                                 │   per call)     │
+                                 └─────────────────┘
+                                          │
+                                          │ Analyzer emits projects edges
+                                          ▼
+                                 ┌─────────────────┐
+                                 │  per-edge       │  surfaced in
+                                 │  validity       │ ──────► Explorer
+                                 │  on projects    │          (drift markers
+                                 │  edges          │           on projecting
+                                 │  (valid/absent/ │           primitives;
+                                 │   stale/unknown)│           generate affordance
+                                 └─────────────────┘           on absent)
+
 ┌─────────────────┐
 │  Constraints    │  read
 └─────────────────┘ ──────────► Model
@@ -496,24 +562,9 @@ The same TypeTranslation shape is the seam for future target-language analyzers 
 │  (errors /      │ ──────────► Explorer (sidebar markers, node emphasis)
 │   warnings)     │
 └─────────────────┘
-
-┌─────────────────┐
-│  Conventions    │  configure
-└─────────────────┘ ──────────► Clojure analyzer
-                                     │
-                                     │ emits `projects` edges
-                                     ▼
-                            ┌─────────────────┐
-                            │  per-edge       │  surfaced in
-                            │  validity       │ ──────► Explorer (drift markers
-                            │  (valid /       │          on projecting primitives)
-                            │   absent /      │
-                            │   stale /       │
-                            │   unknown)      │
-                            └─────────────────┘
 ```
 
-The two flavours surface differently. Constraints produce discrete violations the explorer renders as sidebar entries with severity. Conventions (analyzer configuration: the root-prefix knob, address-resolution rules) have no severity — their effect manifests as per-edge `validity` on `projects` edges ([MODEL.md §4.2](./MODEL.md#42-per-relation-semantics)), rendered in the explorer as red drift markers on spec primitives whose canonical address is missing. See [MODEL.md §10.3](./MODEL.md#103-project-side-constraint-registration--composition) for the severity-asymmetry note.
+The two sub-loci surface differently. Constraints produce discrete violations the explorer renders as sidebar entries with severity. Projection inputs have no severity — their effect manifests as per-edge `validity` on `projects` edges ([MODEL.md §4.2](./MODEL.md#42-per-relation-semantics)), rendered in the explorer as red drift markers on spec primitives whose canonical address is missing (`absent`) or has diverged (`stale`, future shape-comparator). An `absent` drift marker is also the entry point for on-demand generation — clicking summons the Projector for that primitive.
 
 ### Architectural style enforcement
 
@@ -523,23 +574,32 @@ This is the same direction the substrate-vs-vocabulary force-and-gate (MODEL.md 
 
 ### Coupling — explicit
 
-The project layer reads the Model; the Model does not know about the project layer. This is the only direction. Constraint violations and convention drift markers are both *annotations over the Model*, not *content of the Model*.
+The project layer reads the Model and configures the projection mechanic; the Model does not know about the project layer. This is the only direction. Constraint violations and projection-input-driven drift markers are both *annotations over the Model*, not *content of the Model*.
 
 ### Forward compatibility
 
-Conventions about *implementation idioms* — how Model concepts translate into sound, testable code in this project's tech stack (e.g., "in this project, prefer core.async for temporal rules") — sit adjacent to this layer but belong to a future chapter. Distinct from the conventions already in MVP, which are about *spec-to-code address resolution* rather than *coding patterns*. The same entry shape and audience model apply; the architectural seam is open. We don't build implementation-idiom conventions now.
+The Target language extension's projection inputs (address-resolution, type-translation, idioms) are the seam for future target languages — a TypeScript extension would register its own defaults under the same shape, with no substrate change. The same goes for future Vocabularies adding domain-specific constraints (DDD layering rules, Hex port-adapter discipline) — same `PredicateRegistration` shape; new namespaces.
+
+The composition mechanics that let methodology-shipped idiom bundles override project-shipped idioms (and vice versa), and the multi-profile / severity-override / versioning machinery, defer per [MODEL.md §10.3](./MODEL.md#103-the-project-layer--sub-loci-and-composition). The single-shape registration commitment makes those additions purely additive.
 
 ---
 
-## Implementation linkage — the Clojure analyzer
+## Implementation linkage — the Clojure Target language extension
 
-The Clojure analyzer reads Clojure source and emits `Code.Function` and `Code.DataStructure` Artifacts plus `projects` edges from spec primitives to those Artifacts, enabling spec-to-code drift detection. The substrate-level commitments — which spec primitives produce projections, what each `projection_kind` means, drift semantics, the test-projection cut, the Surface/Contract no-direct-projection rule — live in [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments). This section covers the application-design choices: address resolution conventions, identifier transliteration, type translation, and enforcement policy.
+The Clojure Target language extension ([MODEL.md §7.7](./MODEL.md#77-the-target-language-extension--analyzer-and-projector)) is fukan's MVP linkage between spec and Clojure. It exposes two operations sharing one body of configuration:
 
-**Convention-driven binding.** No code-side annotations and no out-of-band binding files. The analyzer resolves each expected projection via mechanical name resolution against a small set of project-level conventions (registered as project-layer entries per the Project layer section above). Spec is the source; code aligns or fukan flags drift.
+- **Analyzer** — reads Clojure source, emits `Code.Function` and `Code.DataStructure` Artifacts plus `projects` edges from spec primitives to those Artifacts with per-edge `validity`. Build-time, build-pipeline-integrated (Phase 1, code-side).
+- **Projector** — for a given spec primitive (with `projection_kind`), assembles an Implementation Blueprint on demand for LLM-driven code generation. The same Blueprint shape is what the Analyzer would compare actual code against for verification.
 
-**The convention rules.** A project sets one configuration knob — the **Clojure root namespace prefix** relative to Allium module names (empty when layout is identity, as in fukan-on-fukan). All other mapping is mechanical and non-negotiable:
+The substrate-level commitments — which spec primitives produce projections, what each `projection_kind` means, drift semantics, the test-projection cut, the Surface/Contract no-direct-projection rule — live in [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments); the projection mechanic and Blueprint protocol live in [MODEL.md §7.7](./MODEL.md#77-the-target-language-extension--analyzer-and-projector). This section covers the application-design choices: address-resolution rules, identifier transliteration, type-translation registry, idiom selection, the concrete Blueprint record shape, generation flow, and enforcement policy.
 
-| Spec primitive | Projects to | `projection_kind` |
+**Convention-driven binding.** No code-side annotations and no out-of-band binding files. The Analyzer resolves each expected projection via mechanical name resolution against project-layer projection inputs (Project layer section above). The Projector applies the same resolution in reverse — given a spec primitive, produce the canonical address plus the Blueprint that should land there. Spec is the source; code aligns or fukan flags drift.
+
+### Address resolution
+
+A project sets one configuration knob — the **Clojure root namespace prefix** relative to Allium module names (empty when layout is identity, as in fukan-on-fukan). All other mapping is mechanical and non-negotiable:
+
+| Spec primitive | Canonical address | `projection_kind` |
 |---|---|---|
 | Container tagged `Allium::Entity \| Value \| Variant` | `Code.DataStructure({module-ns}/{Name})` | `schema` |
 | Event | `Code.DataStructure({module-ns}/{Name})` | `schema` |
@@ -554,9 +614,9 @@ The Clojure analyzer reads Clojure source and emits `Code.Function` and `Code.Da
 
 So Entity `Order` → `Code.DataStructure(ns/Order)`; Rule `ProcessSubmission` → `Code.Function(ns/process-submission)`; Operation `submit` → `Code.Function(ns/submit)`.
 
-**Schemas as malli values, not defrecords.** Clojure `Code.DataStructure` artifacts are recognised as top-level `(def Name <expr>)` forms in the expected namespace, without requiring `<expr>` to be a defrecord. This naturally accommodates malli schemas (`(def Order [:map [:id :string] ...])`), which are *data* and therefore introspectable — enabling finer-grained structural drift detection (does the schema's field list match the spec entity's field list?) as a later enhancement on the same substrate.
+### Type translation
 
-**Type-translation registry.** When emitting `Code.DataStructure` projections — and when the future shape-comparator pass compares spec Field types against malli schemas — the Clojure analyzer consults a Type-translation registry to render each substrate `Type` case as malli content. The registry covers the substrate's six Type cases with defaults:
+Substrate `Type` cases render in Clojure via a Type-translation registry consulted by both operations — the Analyzer to compute expected shape for comparison; the Projector to render shape in the Blueprint. Defaults cover the substrate's Type cases:
 
 | Substrate Type | Default malli rendering |
 |---|---|
@@ -571,13 +631,67 @@ So Entity `Order` → `Code.DataStructure(ns/Order)`; Rule `ProcessSubmission` �
 | `Ref(KernelPrimitive(_), _)` | `:any` by default; a stricter id-type predicate registered per kernel kind raises the bar (e.g., id-uuid for Entities) |
 | `Ref(Substrate(...))` | a registered substrate-address predicate (defaults to `:any` until a richer encoding is needed) |
 
-Methodologies override per `Scalar` name (Allium ships overrides for domain scalars like `"Money"`, `"DateTime"`, `"Email"` — each rendering as a methodology-specific malli sub-schema). Projects override per-project for custom domain types (e.g., `"OrderId"` → project's id-shape). Override registration uses the convention-entry shape; a missing translation is a structural error (the analyzer can't render the spec). Default translations cover all six cases; methodology and project entries refine, never remove.
+Vocabularies override per `Scalar` name (Allium ships overrides for domain scalars like `"Money"`, `"DateTime"`, `"Email"` — each rendering as a methodology-specific malli sub-schema). Projects override per-project for custom domain types (e.g., `"OrderId"` → project's id-shape). Overrides register as projection-input entries (Project layer section above); a missing translation is a structural error (neither operation can complete the projection).
 
-This same registry shape is the seam for other target-language analyzers when they arrive — a TypeScript analyzer would register `Scalar("String")` → `string`, `Collection(of: T, Sequential)` → `T[]`, etc., with no substrate change.
+This same registry shape is the seam for other Target language extensions when they arrive — a TypeScript extension would register `Scalar("String")` → `string`, `Collection(of: T, Sequential)` → `T[]`, etc., with no substrate change.
 
-**Strict enforcement.** Exactly one function per Rule, one function per Operation, one var per Entity / Value / Variant / Event must exist at the expected canonical address. Multiple definitions at the same address is a lint error. The discipline is the whole point: spec authority depends on the project committing to one canonical address per spec primitive. Detection of "work scattered across helpers" is intentionally **not** mechanical — helpers appear as unprojected `Code.Function` nodes in the explorer, making the topology visible, and the canonical entry point's drift state (valid / absent per [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments)) is sufficient signal. Whether to refactor scattered helpers into the canonical entry is editorial, not analyzer-enforced.
+**Schemas as malli values, not defrecords.** Clojure `Code.DataStructure` artifacts are recognised as top-level `(def Name <expr>)` forms in the expected namespace, without requiring `<expr>` to be a defrecord. This naturally accommodates malli schemas (`(def Order [:map [:id :string] ...])`), which are *data* and therefore introspectable — enabling finer-grained structural drift detection (does the schema's field list match the spec entity's field list?) as a later enhancement on the same substrate.
 
-**Couplings.** This convention strategy presupposes the project follows one-Allium-module ↔ one-Clojure-namespace discipline (modulo root prefix). Cross-module placement (Allium content implemented in a non-matching namespace) is not supported — refactor the layout. Code that doesn't match any expected projection address appears in the model as an unprojected `Code.Function` / `Code.DataStructure` node — visible in the explorer, not bound to any spec primitive.
+### Idioms
+
+Beyond address resolution and type translation, the project layer carries **idioms** — projection inputs that shape what *inside* the canonical address should look like, routed by primitive kind, projection kind, or address pattern:
+
+- *Per-primitive-kind idioms* — patterns for how each primitive's body is laid out. Example: "Allium::Surface realisations front through Reitit-style handler shape."
+- *Per-projection-kind idioms* — patterns for one kind of projection. Example: "for `test` projections, use `clojure.test.check` for state-bearing Rules; plain `deftest` for pure Invariants."
+- *Per-address-match idioms* — patterns narrow to specific addresses or modules. Example: "in `fukan.web.*`, prefer Ring middleware over inline composition."
+
+Idiom entries declare a routing predicate (`primitive_kind`, `projection_kind`, optional address pattern) and body content the Projector includes in the Blueprint. Multiple matching entries compose; conflict-resolution mechanics defer until forcing examples arrive. The Analyzer's compare path does not consume idiom content in MVP (presence-check only); a future shape-comparator pass may compare narrower aspects of code against idiom expectations.
+
+### Implementation Blueprint — concrete shape
+
+A Blueprint for one projection bundles:
+
+1. **Canonical address** — derived from address-resolution rules.
+2. **Artifact kind** — `Code.Function` or `Code.DataStructure`, per the projection table above.
+3. **Expected signature** — mechanically derived from the spec primitive (Rule's `when:` event shape; Operation's parameter list and return type; Entity's field map).
+4. **Type renderings** — every Type the signature touches, rendered via the registry (incl. project overrides).
+5. **Surrounding model context** — related primitives reachable from this one: Events the Rule consumes, Effects it produces, Contracts an Operation belongs to, Fields an Entity declares, Types referenced transitively.
+6. **Selected idioms** — the routing-predicate-matched entries from the project layer.
+
+The exact serialisation (structured EDN map, prompt-shaped markdown, hybrid) is implementation-time detail. The substrate commitments per [MODEL.md §7.7](./MODEL.md#77-the-target-language-extension--analyzer-and-projector): all six pieces present; ephemeral, never persisted; regenerated on every call from current project layer + current spec.
+
+### Generation flow (MVP)
+
+```
+User clicks "generate" on red drift marker (absent validity on a projects edge)
+                      │
+                      ▼
+Projector(spec_primitive, target=Clojure, projection_kind=...)
+                      │
+                      ▼
+  Implementation Blueprint  (ephemeral)
+                      │
+                      ▼
+  system_prompt + Blueprint  →  LLM  →  Clojure code
+                      │
+                      ▼
+  Write to canonical address (with diff preview for human review)
+                      │
+                      ▼
+  Next build: Analyzer detects validity = valid
+```
+
+The flow is single-primitive in MVP — batch generation ("regenerate all `absent` Rules") is polish on the same mechanism. Detection of human-side edits to generated code (so regeneration warns before overwriting) is not part of MVP; the canonical address is treated as authoritative once written and re-flips to `absent` only on deletion.
+
+Inspection-only Blueprint requests ("show me what the LLM would receive for projecting Rule X as a test") are an explorer affordance separate from the generation flow — same Projector call, no LLM invocation, Blueprint surfaced to the user for review.
+
+### Strict enforcement
+
+Exactly one function per Rule, one function per Operation, one var per Entity / Value / Variant / Event must exist at the expected canonical address. Multiple definitions at the same address is a lint error. The discipline is the whole point: spec authority depends on the project committing to one canonical address per spec primitive. Detection of "work scattered across helpers" is intentionally **not** mechanical — helpers appear as unprojected `Code.Function` nodes in the explorer, making the topology visible, and the canonical entry point's drift state (valid / absent per [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments)) is sufficient signal. Whether to refactor scattered helpers into the canonical entry is editorial, not analyzer-enforced.
+
+### Couplings
+
+This convention strategy presupposes the project follows one-Allium-module ↔ one-Clojure-namespace discipline (modulo root prefix). Cross-module placement (Allium content implemented in a non-matching namespace) is not supported — refactor the layout. Code that doesn't match any expected projection address appears in the model as an unprojected `Code.Function` / `Code.DataStructure` node — visible in the explorer, not bound to any spec primitive.
 
 ---
 
@@ -585,7 +699,7 @@ This same registry shape is the seam for other target-language analyzers when th
 
 ### Edge filtering
 
-The current explorer has two edge modes (`code_flow`, `schema_reference`). The new explorer surfaces the kernel's thirteen relations (`triggers`, `observes`, `reads`, `writes`, `creates`, `destroys`, `emits`, `realises`, `specialises`, `uses`, `exposes`, `provides`, `projects`) plus tag-applied projections (e.g., views scoped to one methodology namespace, or relational tags from [MODEL.md §5 V12](./MODEL.md#5-the-vocabulary-mechanism)). All thirteen are populated in MVP. Allium contributes `realises` via `contracts: fulfils`, `specialises` via `variant from <Parent>` (R18), `uses` via `contracts: demands` (R19), `exposes` via `exposes:` (View protocol, R20), `provides` via `provides:` (Signal protocol, R20), plus the seven causation/effect/projection relations through Rules. The `.boundary` analyzer adds `triggers: Operation → Rule` edges; the Clojure analyzer adds `projects` edges.
+The current explorer has two edge modes (`code_flow`, `schema_reference`). The new explorer surfaces the kernel's thirteen relations (`triggers`, `observes`, `reads`, `writes`, `creates`, `destroys`, `emits`, `realises`, `specialises`, `uses`, `exposes`, `provides`, `projects`) plus tag-applied projections (e.g., views scoped to one methodology namespace, or relational tags from [MODEL.md §5 V12](./MODEL.md#5-the-vocabulary-mechanism)). All thirteen are populated in MVP. Allium contributes `realises` via `contracts: fulfils`, `specialises` via `variant from <Parent>` (R18), `uses` via `contracts: demands` (R19), `exposes` via `exposes:` (View protocol, R20), `provides` via `provides:` (Signal protocol, R20), plus the seven Rule-sourced causation, observation, and effect relations (`triggers`, `observes`, `reads`, `writes`, `creates`, `destroys`, `emits`). The Boundary Vocabulary's spec parser adds `triggers: Operation → Rule` edges; the Clojure Target language extension's Analyzer adds `projects` edges.
 
 Concrete UI grouping is design TBD — likely a small set of conceptual groupings (causation, data flow, boundary, cross-altitude) rather than nine individual switches. Single-mode-at-a-time toggle works as today; multi-select (show two groupings at once, with visual distinction) is a polish improvement.
 
@@ -607,15 +721,16 @@ This requires the projection layer to walk up the Container tree to determine "w
 
 Each kernel primitive carries richer content than today's Function/Schema nodes. Sidebars are populated by reading kernel substrate, kernel relations, and the tag applications attached to each primitive. Examples for Allium-tagged content:
 
-- **Container (Allium::Module)** — child counts by tag, top-level invariants (Bool Expressions in `Container.intent.assertions` tagged `Allium::Invariant`), module-level guarantees (Bool Expressions in `Container.behaviour.intent.assertions` tagged `Allium::Guarantee`), declared events (`Container.events`), derived metrics. Modules themselves have no `boundary` slot. If the module carries a `Boundary::ModuleApi` tag (i.e. a `.boundary` file declared `module <this> { exports: ... }`), the sidebar surfaces the **closed public API** — the explicit `exports:` list (Surfaces, Entities, Values, Variants, Events, Actors, individual `Contract.operation` Operations) — with visual distinction from internal items, plus the always-visible Contracts shown separately at the type level, plus an indication of Rules reachable from outside (via exported Events or Operation bindings). Without the tag, the module is **open** and the sidebar shows the full top-level declaration list.
-- **Container (Allium::Entity / Value / Variant)** — fields, projections, derived values, state machines, entity-level invariants (Bool Expressions in the Container's `intent.assertions` tagged `Allium::EntityInvariant`), incoming/outgoing relations. For Variant Containers specifically, outgoing `specialises` edge to the parent Container, plus incoming `specialises` from any further child Variants — variant hierarchies surface as a parent/child fold in the sidebar.
-- **Rule (Allium::Rule)** — trigger (incoming `triggers` from Event, or outgoing `observes` to Container/Field), preconditions / postconditions / guarantees (Bool Expressions in `Rule.intent.assertions`, distinguished by source-clause tags `Allium::Requires` / `Ensures` / `Guarantees`), definitions (`Rule.body.definitions` with `Allium::Where` tags), effects (Effect records in `Rule.body.effects`, surfacing as outgoing `writes` / `creates` / `destroys` / `emits` kernel edges with identity from the Effect)
-- **Container (Allium::Surface)** — `facing` party (Actor or entity-tagged Container) and `context` (`Allium::Surface` payload), outgoing `exposes` to Fields (View protocol), outgoing `provides` to Events (Signal protocol), outgoing `realises` to fulfilled Contracts, outgoing `uses` to demanded Contracts, related Surfaces, timeouts, guarantees (Bool Expressions in `boundary.intent.assertions` tagged `Allium::SurfaceGuarantee`). **Operations available at this Surface** is a *derived view*: traverse the Surface's outgoing `realises` edges to fulfilled Contracts and pull Operations from each Contract's `boundary.operations`. Not stored on Surface directly — Surface's own Boundary has empty `operations` per §9.1 (realising sub-shape).
-- **Container (Allium::Contract)** — operations on the Container's Boundary (parameters, return types), contract-level invariants (Bool Expressions in the Container's `intent.assertions` tagged `Allium::ContractInvariant`), `@guidance` Clauses in `intent.clauses`, incoming `realises` from fulfilling Surfaces, incoming `uses` from demanding Surfaces
+- **Container (Allium::Module)** — child counts by tag, top-level invariants (Bool Expressions in `Container.intent.assertions` tagged `Allium::Invariant`), declared events (`Container.events`), derived metrics. Modules themselves have no `boundary` slot. If the module carries a `Boundary::ModuleApi` tag (i.e. a `.boundary` file declared `module <this> { exports: ... }`), the sidebar surfaces the **closed public API** — the explicit `exports:` list (Surfaces, Entities, Values, Variants, Events, Actors, individual `Contract.operation` Operations) — with visual distinction from internal items, plus the always-visible Contracts shown separately at the type level, plus an indication of Rules reachable from outside (via exported Events or Operation bindings). Without the tag, the module is **open** and the sidebar shows the full top-level declaration list.
+- **Container (Allium::Entity / Value / Variant)** — fields, projections, derived values, state machines, entity-level invariants (Bool Expressions in the Container's `intent.assertions` tagged `Allium::Invariant` — same tag as module-level invariants, scope discriminated by host), incoming/outgoing relations. For Variant Containers specifically, outgoing `specialises` edge to the parent Container, plus incoming `specialises` from any further child Variants — variant hierarchies surface as a parent/child fold in the sidebar.
+- **Rule (Allium::Rule)** — trigger (incoming `triggers` from Event, or outgoing `observes` to Container/Field), preconditions / postconditions (Bool Expressions in `Rule.intent.assertions`, distinguished by source-clause tags `Allium::Requires` / `Ensures`), definitions (`Rule.body.definitions` with `Allium::Where` tags), effects (Effect records in `Rule.body.effects`, surfacing as outgoing `writes` / `creates` / `destroys` / `emits` kernel edges with identity from the Effect)
+- **Container (Allium::Surface)** — `facing` party (Actor or entity-tagged Container) and `context` (`Allium::Surface` payload), outgoing `exposes` to Fields (View protocol), outgoing `provides` to Events (Signal protocol), outgoing `realises` to fulfilled Contracts, outgoing `uses` to demanded Contracts, related Surfaces, timeouts, `@guarantee` prose Clauses in `boundary.intent.clauses` tagged `Allium::SurfaceGuarantee` (Allium v3 ships guarantees as prose; the parallel `boundary.intent.assertions` slot is reserved but unpopulated under Allium-only loading). **Operations available at this Surface** is a *derived view*: traverse the Surface's outgoing `realises` edges to fulfilled Contracts and pull Operations from each Contract's `boundary.operations`. Not stored on Surface directly — Surface's own Boundary has empty `operations` per §9.1 (realising sub-shape).
+- **Container (Allium::Contract)** — operations on the Container's Boundary (parameters, return types), `@invariant` prose Clauses in the Container's `intent.clauses` tagged `Allium::ContractInvariant` (Allium v3 ships these as prose; the parallel `intent.assertions` slot is reserved but unpopulated under Allium-only loading), `@guidance` Clauses in `intent.clauses`, incoming `realises` from fulfilling Surfaces, incoming `uses` from demanding Surfaces
 - **Operation** — parameters, return type, parent Boundary's Container, fulfilling Surfaces (computed)
 - **Actor** — `identified_by`/`within` vocabulary content, surfaces facing this Actor (computed)
+- **Container tagged `Boundary::External::Service | Storage | Library`** — `Boundary::External::*` payload fields (`name`, `vendor`, `docs_url`, `description`) with `docs_url` rendered as a clickable link; the tagged Container *is* the wrapping module per the module-as-wrapper rule ([MODEL.md §8.2](./MODEL.md#82-boundary--kernel-mapping)), so touchpoints surface naturally from the module's structural content: entity-shaped imports (`external entity X` declarations resolving into this module's exports) and Contracts the wrapping module declares (demanded by Surfaces in dependent modules through the ordinary `uses` edge). Drift markers do not apply — external-wrapping modules have no in-system implementation projection beyond the wrapper code itself.
 - **Event** — qualified name (`Container/local_name`), kind, parameters, providers (Surfaces, via incoming `provides`), emitters (Rules, via incoming `emits`), consumers (Rules, via incoming `triggers`)
-- **Assertion (Bool Expression in an Intent)** — structure, free variables, source-clause tag (e.g., `Allium::Invariant`, `Allium::Guarantee`), host primitive (Container / Behaviour / Boundary / Operation / Rule), subjects (kernel primitives referenced)
+- **Assertion (Bool Expression in an Intent)** — structure, free variables, source-clause tag (e.g., `Allium::Invariant`, `Allium::Requires`, `Allium::Ensures`), host primitive (Container / Behaviour / Boundary / Operation / Rule), subjects (kernel primitives referenced)
 - **Clause (in `Intent.clauses`)** — body (prose), source-clause tag if any (e.g., `Allium::Guidance`)
 - **Any projecting primitive** (Container/Entity, Operation, Rule, Event, top-level Invariant Expression) — outgoing `projects` edges with `projection_kind` and `validity` per edge; drift markers (red for absent, green for valid) inline
 
@@ -628,9 +743,9 @@ This is the largest UX surface area change.
 Application-level couplings the design pushes onto adjacent decisions. Substrate-level couplings (Event identity, edge identity, relation endpoint shapes, projection vocabulary scope) live in MODEL.md's decisions log and substrate commitments.
 
 1. **Strict containment for composites.** Each module-Container has at most one composite parent. Multi-membership (a module belonging to two subsystems simultaneously) is intentionally unsupported. If needed later, this becomes a non-trivial change to the parent/children mechanism.
-2. **Project-layer scope.** Project-wide project-layer entries (constraints + conventions) register against the shared mechanism; subsystem-scoped rules live in `.boundary`. This split is by *scope*, not by mechanism. All are read-only annotations or analyzer configuration over the Model.
+2. **Project-layer scope.** Project-wide project-layer entries (projection inputs + constraints) register against the shared mechanism; subsystem-scoped constraints live in `.boundary` `rules:`. This split is by *scope*, not by mechanism. All are read-only annotations over the Model or configuration consumed by the projection mechanic.
 3. **No filesystem inference.** Without `.boundary`, modules are flat. This is the *intended* default — projects that want hierarchy write hierarchy. Single-file projects work without `.boundary` at all.
-4. **Realisation binding is convention-driven.** Container-to-DataStructure, Rule-to-Function, Operation-to-Function, Invariant-to-Function bindings all resolve via mechanical name resolution against project-level conventions (one root-prefix knob + kind-sensitive transliteration). No code-side annotations; no out-of-band binding files. Strict enforcement — single canonical address per spec primitive; multiple matches or scatter is a lint violation. See the Implementation linkage section above.
+4. **Realisation binding resolves against projection inputs.** Container-to-DataStructure, Rule-to-Function, Operation-to-Function, Invariant-to-Function bindings all resolve via mechanical name resolution against the Target language extension's address-resolution rules plus project-layer projection inputs (one root-prefix knob + kind-sensitive transliteration). No code-side annotations; no out-of-band binding files. Strict enforcement — single canonical address per spec primitive; multiple matches or scatter is a lint violation. See the Implementation linkage section above.
 
 ---
 
@@ -638,17 +753,19 @@ Application-level couplings the design pushes onto adjacent decisions. Substrate
 
 Application-design questions not resolved in this chapter. Substrate-level TBDs live in [MODEL.md §13](./MODEL.md#13-tbds-consolidated).
 
-1. **Final token-level syntax for `.boundary`.** The reference grammar — `use "..." as <alias>` imports and `alias/Name` qualification (with `contains:` implicit-aliasing inside subsystem blocks) — is settled (see binding semantics above). What remains is token-level polish: precise keyword choices, separator conventions, file header form, whether nested subsystem declarations live in one file or across files. Likely follows Allium's syntactic style for consistency.
-2. **Project-layer entry format.** Hardcoded for v0 (both constraints and conventions — per [MODEL.md §10.3](./MODEL.md#103-project-side-constraint-registration--composition)); declarative form in a future iteration. The shape waits until we have enough lived experience to know what's painful.
-3. **External-API rendering for composites.** When a user clicks on a composite Container (subsystem), what does the sidebar show — the union of exported surface details, an aggregated boundary summary, or both? Likely both, but the relative emphasis matters for usability.
+1. **Final token-level syntax for `.boundary`.** The reference grammar — `use "..." as <alias>` imports, `alias/Name` qualification (with `contains:` implicit-aliasing inside subsystem blocks), the `external <kind> <Name> { ... }` file-level external-system declaration — is settled (see binding semantics above and [MODEL.md §8.2](./MODEL.md#82-boundary--kernel-mapping)). What remains is token-level polish: precise keyword choices, separator conventions, file header form, whether nested subsystem declarations live in one file or across files. Likely follows Allium's syntactic style for consistency.
+2. **Concrete Blueprint serialisation.** The Blueprint's six-piece content is committed (Implementation linkage section); whether it serialises as structured EDN, prompt-shaped markdown, or a hybrid is implementation-time detail. The LLM-prompting side may want markdown; the Analyzer's comparison side may want structured data. Likely both surfaces produced by one Projector call.
+3. **Projection-input authoring locus.** Projection inputs are declarative in V0 ([MODEL.md §10.3](./MODEL.md#103-the-project-layer--sub-loci-and-composition)) but the file format and on-disk location are unspecified — likely an EDN file at the project root (e.g., `project.fukan.edn`) with sections for address-resolution, type-translations, idioms. Concrete shape lands at implementation.
+4. **External-API rendering for composites.** When a user clicks on a composite Container (subsystem), what does the sidebar show — the union of exported surface details, an aggregated boundary summary, or both? Likely both, but the relative emphasis matters for usability.
+5. **Generation UX details.** The flow shape is committed (drift-marker → Projector → Blueprint → LLM → diff preview → write); the concrete affordance shape (button placement, batch operations, diff UI, accept/reject mechanics) lands at implementation.
 
 ---
 
 ## Summary
 
-The application design layers cleanly onto MODEL.md's substrate. Three Allium boundary protocols (View / Signal / Call) connect Allium's boundary clauses to behavioural content asymmetrically — mutations event-shaped, reads passive or call-shaped. Three spec altitudes — Behaviour, Structure, Infra — with strict one-up reference (lower references upper, never down, never skipping); Implementation is projection across all three. `.allium` covers Behaviour and partial Structure; `.boundary` is the Structure-altitude binding layer that fills Allium's Operation↔Rule gap and adds subsystem composition; `.infra` is the Infra-altitude spec layer. `.allium`, `.boundary`, and the Clojure analyzer (producing convention-resolved `projects` edges to `Code.*` artifacts) are all in MVP; `.infra` is architecturally seamed. A project layer carries two flavours of project-side declaration — constraints over the Model and conventions consumed by the Clojure analyzer — both making the project's design vocabulary explicit for human readers, for LLMs generating spec, and for the build pipeline. The explorer respects visibility, surfaces gaps, and renders cross-altitude drift markers actively.
+The application design layers cleanly onto MODEL.md's substrate. Three Allium boundary protocols (View / Signal / Call) connect Allium's boundary clauses to behavioural content asymmetrically — mutations event-shaped, reads passive or call-shaped. Three spec altitudes — Behaviour, Structure, Infra — with strict one-up reference (lower references upper, never down, never skipping); Implementation is projection across all three. `.allium` covers Behaviour and partial Structure; `.boundary` is the Structure-altitude binding layer that fills Allium's Operation↔Rule gap and adds subsystem composition (now also carrying the `Boundary::External::*` enrichment under the module-as-wrapper rule); `.infra` is the Infra-altitude spec layer. `.allium`, `.boundary`, and the Clojure Target language extension (both Analyzer and Projector — code analysis *and* spec-driven code generation via Implementation Blueprints) are all in MVP; `.infra` is architecturally seamed. A project layer carries two sub-loci — projection inputs (consumed by the projection mechanic) and constraints (in the single constraint language) — both making the project's design vocabulary explicit for human readers, for LLMs generating spec or code, and for the build pipeline. The explorer respects visibility, surfaces gaps, and renders cross-altitude drift markers actively with on-demand generation affordances.
 
-Each addition is justified by a constraint that admits no other clean solution; each deferral preserves the architectural seam for later. The MVP runs spec-plus-code end-to-end; subsequent chapters add layers (`.infra`, more methodologies, declarative project-layer form) without rewriting the substrate.
+Each addition is justified by a constraint that admits no other clean solution; each deferral preserves the architectural seam for later. The MVP runs spec-plus-code end-to-end in both directions (analysis + generation); subsequent chapters add layers (`.infra`, more methodologies, more Target language extensions, project-layer composition mechanics) without rewriting the substrate.
 
 ---
 
