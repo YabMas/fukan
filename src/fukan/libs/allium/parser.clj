@@ -156,8 +156,14 @@
   (* Surface-specific: let name = expr *)
   let-field = <'let'> __ ident _ <'='> _ rest-of-line
 
-  (* Annotation: @guarantee Name or @guidance — absorbed with trailing comments *)
-  annotation = <'@'> ident (__ ident)?
+  (* Annotation: @guarantee Name or @guidance
+     Optional leading prose block: contiguous '--' lines immediately preceding '@'.
+     annotation-prose is the block of prose-lines; annotation-mark is the '@' line.
+     prose-line strips the leading '--' prefix and captures the raw content. *)
+  annotation = annotation-prose? <#'[ \t]*'> annotation-mark
+  annotation-prose = (prose-line)+
+  prose-line = <#'[ \t]*--[ \t]?'> #'[^\n]*' <'\n'>
+  annotation-mark = <'@'> ident (__ ident)?
 
   (* When guard: when condition — appears after provides entries *)
   when-guard = <'when'> __ when-guard-text
@@ -282,7 +288,7 @@
   <__> = (ws / line-comment / section-divider)+
 
   <ws> = <#'[\\s]+'>
-  <line-comment> = <#'--[^\\n]*\\n'>
+  <line-comment> = <#'(?:[ \\t]*--[^\\n]*\\n)++(?![ \\t]*@)'>
   <section-divider> = <#'-{4,}[^\\n]*\\n'>
 
   (* ============ Identifiers ============ *)
@@ -694,9 +700,23 @@
      {:field-kind :let, :name name, :expr (str/trim expr-text)})
 
    ;; Annotation (@guarantee, @guidance)
+   ;; New shape: {:field-kind :annotation, :kind <kind>, :name? <name>, :body? <prose>}
    :annotation
-   (fn [kind & args]
-     {:field-kind :annotation :kind kind :name (first args)})
+   (fn
+     ([mark] (merge {:field-kind :annotation} mark))
+     ([prose mark]
+      (merge {:field-kind :annotation, :body prose} mark)))
+
+   :annotation-prose
+   (fn [& lines] (clojure.string/join "\n" (map clojure.string/trim lines)))
+
+   :prose-line
+   (fn [content] content)
+
+   :annotation-mark
+   (fn
+     ([kind] {:kind kind})
+     ([kind name] {:kind kind, :name name}))
 
    ;; Related block — structured entries
    :related-block

@@ -668,6 +668,42 @@
       (is (= 3 (count (:params d)))))))
 
 ;; ---------------------------------------------------------------------------
+;; Unit tests — annotation prose-body capture
+;; ---------------------------------------------------------------------------
+
+(deftest annotation-with-prose-test
+  (testing "@guarantee with leading comment block"
+    (let [d (first-decl
+              (str "surface Login {\n"
+                   "    facing actor: User\n"
+                   "    -- the operation completes within the timeout\n"
+                   "    -- regardless of which path was taken\n"
+                   "    @guarantee Idempotent\n"
+                   "}\n"))
+          ann (->> (:fields d)
+                   (filter #(= :annotation (:field-kind %)))
+                   first)]
+      (is (= :annotation (:field-kind ann)))
+      (is (= "guarantee" (:kind ann)))
+      (is (= "Idempotent" (:name ann)))
+      (is (= "the operation completes within the timeout\nregardless of which path was taken"
+             (:body ann))))))
+
+(deftest annotation-no-prose-test
+  (testing "@guidance with no leading comment block"
+    (let [d (first-decl
+              (str "surface S {\n"
+                   "    facing actor: U\n"
+                   "    @guidance\n"
+                   "}\n"))
+          ann (->> (:fields d)
+                   (filter #(= :annotation (:field-kind %)))
+                   first)]
+      (is (= :annotation (:field-kind ann)))
+      (is (= "guidance" (:kind ann)))
+      (is (nil? (:body ann))))))
+
+;; ---------------------------------------------------------------------------
 ;; Corpus-regression — every .allium file in src/ must parse clean
 ;; ---------------------------------------------------------------------------
 
