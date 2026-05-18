@@ -258,13 +258,22 @@
   trigger-call = trigger-call-name <'('> _ trigger-params? _ <')'>
   trigger-call-name = ident (<'.'> ident)*
 
-  (* trigger-binding has two forms:
-     - trigger-binding-op: var ':' source op operand?   (transitions_to, becomes, <=, etc.)
-     - trigger-binding-created: var ':' source '.' 'created'  (no operand, lifecycle event) *)
-  trigger-binding = trigger-binding-op / trigger-binding-created
-  trigger-binding-op = ident _ <':'> _ binding-source _ trigger-operator (_ trigger-operand)?
+  (* trigger-binding has three forms:
+     - trigger-binding-op:      var ':' lhs op operand?   (transitions_to, becomes, <=, etc.)
+       The LHS is captured as text so it accepts both plain dotted paths and arithmetic
+       expressions such as 'Session.expires_at - grace_period'.
+     - trigger-binding-created: var ':' base '.' 'created'  (no operand, lifecycle event)
+     - trigger-binding-derived: var ':' dotted-path         (boolean derived field, no operator)
+       Tried last so the more-specific forms above win on any ambiguous input. *)
+  trigger-binding = trigger-binding-op / trigger-binding-created / trigger-binding-derived
+  trigger-binding-op = ident _ <':'> _ binding-lhs trigger-operator (_ trigger-operand)?
   trigger-binding-created = ident _ <':'> _ binding-source-base <'.'> <'created'>
+  trigger-binding-derived = ident _ <':'> _ binding-source
 
+  (* binding-lhs captures everything up to (but not including) the operator.
+     Negative lookahead on each char ensures we stop before the operator keyword/symbol.
+     Non-greedy .+? combined with lookahead anchors to the first operator occurrence. *)
+  binding-lhs = #'(?:(?!transitions_to|becomes|<=|>=|<|>|=).)+?(?=transitions_to|becomes|<=|>=|<|>|=)'
   binding-source = dotted-path
   binding-source-base = ident
   dotted-path = ident (<'.'> ident)*
@@ -885,6 +894,14 @@
    :trigger-binding-created
    (fn [var-name source-base]
      {:kind :binding, :var var-name, :source source-base, :operator "created"})
+
+   :trigger-binding-derived
+   (fn [var-name source]
+     {:kind :binding-derived, :var var-name, :source source})
+
+   ;; binding-lhs captures LHS text including any arithmetic; trim trailing ws.
+   :binding-lhs
+   (fn [text] (str/trim text))
 
    :binding-source
    (fn [dotted-path-result]

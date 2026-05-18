@@ -580,6 +580,26 @@
       (is (= "<=" (:operator tr)))
       (is (= "now" (:operand tr))))))
 
+(deftest trigger-derived-test
+  (testing "derived-condition trigger (no operator)"
+    (let [d (first-decl
+              "rule R {\n    when: interview: Interview.all_feedback_in\n    ensures: Ok.created()\n}\n")
+          tr (-> d :clauses first :trigger)]
+      (is (= :binding-derived (:kind tr)))
+      (is (= "interview" (:var tr)))
+      (is (= "Interview.all_feedback_in" (:source tr)))
+      (is (nil? (:operator tr)))
+      (is (nil? (:operand tr))))))
+
+(deftest trigger-temporal-arithmetic-lhs-test
+  (testing "temporal trigger with arithmetic on LHS"
+    (let [d (first-decl
+              "rule R {\n    when: s: Session.expires_at - grace_period <= now\n    ensures: Ok.created()\n}\n")
+          tr (-> d :clauses first :trigger)]
+      (is (= "Session.expires_at - grace_period" (:source tr)))
+      (is (= "<=" (:operator tr)))
+      (is (= "now" (:operand tr))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Unit tests — for iteration in ensures clauses
 ;; ---------------------------------------------------------------------------
