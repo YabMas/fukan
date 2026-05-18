@@ -500,6 +500,25 @@
         ;; 1 surface (GraphViewer)
         (is (= 1 (:surface types)))))))
 
+(deftest transitions-graph-test
+  (testing "transitions graph with multiple edges"
+    (let [d (first-decl
+              (str "entity Order {\n"
+                   "    status: pending | shipped\n"
+                   "    transitions status {\n"
+                   "        pending -> shipped\n"
+                   "        pending -> cancelled\n"
+                   "    }\n"
+                   "}\n"))
+          tx (->> (:fields d)
+                  (filter #(= :transitions (:field-kind %)))
+                  first)]
+      (is (= :transitions (:field-kind tx)))
+      (is (= "status" (:field tx)))
+      (is (= 2 (count (:edges tx))))
+      (is (= {:from "pending" :to "shipped"} (first (:edges tx))))
+      (is (= {:from "pending" :to "cancelled"} (second (:edges tx)))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Corpus-regression — every .allium file in src/ must parse clean
 ;; ---------------------------------------------------------------------------

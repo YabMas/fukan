@@ -125,6 +125,7 @@
   <field-item> = provides-block / related-block / exposes-block / contracts-block
                / nested-variant / invariant-decl / annotation / when-guard
                / facing-field / context-field / timeout-field / let-field
+               / transitions-block
                / field-entry
 
   (* Exposes block: exposes: followed by dotted identifiers *)
@@ -184,6 +185,10 @@
   provides-entry-comment = <#'[ \\t]+--[ \\t]*'> inline-comment
 
   nested-variant = <'variant'> __ ident _ <'{'> _ field-list _ <'}'>
+
+  transitions-block = <'transitions'> __ ident _ <'{'> _ transition-edges _ <'}'>
+  transition-edges = (transition-edge _)*
+  transition-edge = ident _ <'->'> _ ident
 
   (* Ordered alternation: try relationship, projection, typed-with-when, typed-with-comment, typed-field, then derived *)
   field-value = relationship / projection / typed-with-when / typed-with-comment / typed-field / derived-value
@@ -621,6 +626,20 @@
    (fn
      ([name] {:name name})
      ([name args] {:name name, :args args}))
+
+   ;; Transitions block — state-machine edges on an entity field
+   :transitions-block
+   (fn [field-name edges]
+     {:field-kind :transitions
+      :field field-name
+      :edges edges})
+
+   :transition-edges
+   (fn [& edges] (vec edges))
+
+   :transition-edge
+   (fn [from to]
+     {:from from, :to to})
 
    :field-value identity
 
