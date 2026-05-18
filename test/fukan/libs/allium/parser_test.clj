@@ -396,3 +396,21 @@
         (is (= 3 (:rule types)))
         ;; 1 surface (GraphViewer)
         (is (= 1 (:surface types)))))))
+
+;; ---------------------------------------------------------------------------
+;; Corpus-regression — every .allium file in src/ must parse clean
+;; ---------------------------------------------------------------------------
+
+(def ^:private corpus-files
+  ["src/fukan/infra/spec.allium"
+   "src/fukan/web/spec.allium"
+   "src/fukan/web/views/spec.allium"
+   "src/fukan/model/spec.allium"
+   "src/fukan/model/pipeline.allium"])
+
+(deftest corpus-regression-test
+  (testing "every .allium file in src/ parses without failure"
+    (doseq [f corpus-files]
+      (let [result (parser/parse-file f)]
+        (is (not (insta/failure? result))
+            (str "parse failed for " f ": " (pr-str result)))))))

@@ -12,14 +12,15 @@
 
 ## Plan-of-plans context
 
-This is **Plan 1 of 6** for the next-chapter overhaul. The full sequence:
+This is **Plan 1 of 7** for the next-chapter overhaul (Plan 2 was split into 2a + 2b after the kernel substrate landed; see `2026-05-18-allium-parser.md`). The full sequence:
 
 1. **Kernel substrate** *(this plan)* — primitives, value records, Type, relations, Expression / Effect, vocabulary mechanism shells, v0 Artifact ontology, fixture-only Model construction.
-2. **Allium analyzer** — Allium AST → kernel content + `Allium::*` tags ([MODEL.md §8.1](../MODEL.md#81-allium--kernel-mapping)). Reuses `libs/allium/parser.clj`.
-3. **Boundary analyzer + build pipeline + validation rules** — settles `.boundary` token syntax; new parser; Phases 1–4 with gates G1/G2; sub-phases 4a–4g ([DESIGN.md "Build pipeline"](../DESIGN.md)).
-4. **Constraint language + Phase 5** — stratified Datalog substrate, kernel-universal derivations, methodology-shipped predicates.
-5. **Clojure Target extension + project layer** — Analyzer (`projects` edges with validity) + Projector (Implementation Blueprints).
-6. **Explorer rewrite + generation flow** — new views, sidebars, edge filtering, drift markers, click-to-generate UX.
+2. **2a. Allium parser completion** — bring `libs/allium/parser.clj` to canonical Allium coverage; expression bodies stay text-captured (see `2026-05-18-allium-parser.md`).
+3. **2b. Allium analyzer** — AST → kernel content + `Allium::*` tags ([MODEL.md §8.1](../MODEL.md#81-allium--kernel-mapping)); embedded expression parser; fills the Plan-1 `fukan.model.effect/canonicalise` stub.
+4. **Boundary analyzer + build pipeline + validation rules** — settles `.boundary` token syntax; new parser; Phases 1–4 with gates G1/G2; sub-phases 4a–4g ([DESIGN.md "Build pipeline"](../DESIGN.md)).
+5. **Constraint language + Phase 5** — stratified Datalog substrate, kernel-universal derivations, methodology-shipped predicates.
+6. **Clojure Target extension + project layer** — Analyzer (`projects` edges with validity) + Projector (Implementation Blueprints).
+7. **Explorer rewrite + generation flow** — new views, sidebars, edge filtering, drift markers, click-to-generate UX.
 
 Authoritative substrate spec: [doc/MODEL.md](../MODEL.md). Application design: [doc/DESIGN.md](../DESIGN.md). Decision trace: [doc/DECISIONS.md](../DECISIONS.md). Framing: [doc/VISION.md](../VISION.md).
 
