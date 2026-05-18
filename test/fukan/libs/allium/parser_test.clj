@@ -167,6 +167,24 @@
     (let [d (first-decl "rule Foo {\n    when: Foo(x: String)\n    requires: x != null\n    ensures: Ok.created()\n}\n")]
       (is (= :requires (-> d :clauses (nth 1) :clause-type))))))
 
+(deftest actor-decl-test
+  (testing "actor with identified_by only"
+    (let [d (first-decl "actor Author {\n    identified_by: User\n}\n")]
+      (is (= :actor (:type d)))
+      (is (= "Author" (:name d)))
+      (is (= {:kind :simple :name "User"} (:identified-by d)))
+      (is (nil? (:within d)))))
+
+  (testing "actor with identified_by and within"
+    (let [d (first-decl "actor Editor {\n    identified_by: User\n    within: Workspace\n}\n")]
+      (is (= :actor (:type d)))
+      (is (= {:kind :simple :name "User"} (:identified-by d)))
+      (is (= {:kind :simple :name "Workspace"} (:within d)))))
+
+  (testing "actor with qualified type in identified_by"
+    (let [d (first-decl "actor Admin {\n    identified_by: auth/User\n}\n")]
+      (is (= {:kind :qualified :ns "auth" :name "User"} (:identified-by d))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Unit tests — field variants
 ;; ---------------------------------------------------------------------------

@@ -31,7 +31,7 @@
                 deferred-decl / contract-decl / default-decl /
                 external-entity / external-value / surface-decl / variant-decl /
                 entity-decl / value-decl / rule-decl / invariant-decl /
-                guarantee-decl
+                guarantee-decl / actor-decl
 
   (* ============ Use ============ *)
 
@@ -97,6 +97,13 @@
   (* ============ Guarantee (module-level prose promise) ============ *)
 
   guarantee-decl = <'guarantee'> __ ident
+
+  (* ============ Actor ============ *)
+
+  actor-decl = <'actor'> __ ident _ <'{'> _ actor-body _ <'}'>
+  actor-body = identified-by-clause _ within-clause? _
+  identified-by-clause = <'identified_by'> _ <':'> _ type-ref
+  within-clause = <'within'> _ <':'> _ type-ref
 
   (* ============ Invariant ============ *)
 
@@ -407,6 +414,21 @@
      (let [[desc _] (extract-description args)]
        (cond-> {:type :external-value :name name}
          desc (assoc :description desc))))
+
+   ;; Actor
+   :actor-decl
+   (fn [name actor-body]
+     (merge {:type :actor, :name name} actor-body))
+
+   :actor-body
+   (fn [& clauses]
+     (reduce (fn [acc clause] (merge acc clause)) {} clauses))
+
+   :identified-by-clause
+   (fn [type-ref] {:identified-by type-ref})
+
+   :within-clause
+   (fn [type-ref] {:within type-ref})
 
    ;; Surface
    :surface-decl
