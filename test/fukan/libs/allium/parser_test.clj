@@ -53,6 +53,12 @@
       (is (= "EdgeType" (:name d)))
       (is (= ["code_flow" "schema_flow" "data_flow"] (:values d))))))
 
+(deftest backtick-enum-literal-test
+  (testing "enum value with backtick-quoted literal"
+    (let [d (first-decl "enum Locale { `en-US` | de_DE | `de-CH-1996` }\n")]
+      (is (= :enum (:type d)))
+      (is (= ["en-US" "de_DE" "de-CH-1996"] (:values d))))))
+
 (deftest external-entity-test
   (testing "empty external entity"
     (let [d (first-decl "external entity Foo {\n}\n")]

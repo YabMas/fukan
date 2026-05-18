@@ -73,7 +73,9 @@
   (* ============ Enum ============ *)
 
   enum-decl = <'enum'> __ ident _ description-string? _ <'{'> _ enum-values _ <'}'>
-  enum-values = ident (_ <'|'>? _ ident)*
+  enum-values = enum-value (_ <'|'>? _ enum-value)*
+  enum-value = backtick-literal / ident
+  backtick-literal = <'`'> #'[^`]+' <'`'>
 
   (* ============ External Entity ============ *)
 
@@ -505,6 +507,12 @@
    :enum-values
    (fn [& vals]
      (vec vals))
+
+   :enum-value
+   (fn [v] v)
+
+   :backtick-literal
+   (fn [content] content)
 
    ;; External entity
    :external-body
