@@ -23,7 +23,8 @@
             [fukan.libs.allium.parser :as parser]
             [fukan.vocabulary.allium.analyzer :as analyzer]
             [fukan.vocabulary.allium.tags :as tags]
-            [fukan.model.build :as build]))
+            [fukan.model.build :as build])
+  (:import (java.nio.file Paths)))
 
 ;; ---------------------------------------------------------------------------
 ;; File discovery + coordinate derivation
@@ -48,6 +49,50 @@
         (cond-> (str/starts-with? abs-path prefix)
                 (subs (count prefix)))
         (str/replace-first #"\.allium$" ""))))
+
+(defn- canonicalise-use-path
+  "Convert a raw `use \"<path>\" as <alias>` path string into a root-relative
+   coordinate that matches `coordinate-of`'s output (no `.allium` extension,
+   no leading `/`, no `./` or `../` segments).
+
+   `host-coord` is the coordinate of the file containing the `use` declaration
+   (e.g. `fukan/web/views/spec`). Relative paths starting with `./` or `../`
+   resolve against the host file's *directory* (the parent of `host-coord`).
+   Absolute-looking paths (no leading `./` or `../`) are treated as already
+   root-relative and only stripped of their `.allium` suffix and leading `/`.
+
+   Examples (root-relative outputs):
+     host=`fukan/web/spec`           path=`./views/spec.allium`     → `fukan/web/views/spec`
+     host=`fukan/web/spec`           path=`../model/spec.allium`    → `fukan/model/spec`
+     host=`fukan/model/pipeline`     path=`./spec.allium`           → `fukan/model/spec`
+     host=`b`                        path=`a`                       → `a`
+     host=anything                   path=`/some/abs.allium`        → `some/abs`"
+  [host-coord raw-path]
+  (let [;; Strip trailing .allium first (it survives path arithmetic anyway,
+        ;; but stripping before resolution avoids carrying it through normalize)
+        stripped (str/replace-first raw-path #"\.allium$" "")
+        relative? (or (str/starts-with? stripped "./")
+                      (str/starts-with? stripped "../"))
+        empty-str-array (into-array String [])]
+    (if relative?
+      (let [host-path (Paths/get host-coord empty-str-array)
+            host-dir  (or (.getParent host-path)
+                          (Paths/get "" empty-str-array))
+            resolved  (-> host-dir (.resolve stripped) .normalize str)]
+        ;; Strip any leading "/" to keep paths aligned with coordinate-of output.
+        (str/replace-first resolved #"^/" ""))
+      ;; Absolute-looking path: just strip leading "/" if any.
+      (str/replace-first stripped #"^/" ""))))
+
+(defn- canonicalise-use-aliases
+  "Apply `canonicalise-use-path` to every value in the raw alias map for the
+   file at `host-coord`. Returns a new map with the same keys but root-relative,
+   `.allium`-stripped coordinates."
+  [host-coord raw-aliases]
+  (reduce-kv (fn [acc alias raw-path]
+               (assoc acc alias (canonicalise-use-path host-coord raw-path)))
+             {}
+             raw-aliases))
 
 (defn- register-allium-tags [model]
   (reduce build/add-tag-definition model tags/allium-tag-definitions))
@@ -297,11 +342,8 @@
 (defn- resolve-cross-module-refs
   "Second pass over the merged Model. Per-file alias resolution happens
    inline in the analyzer (which has the per-file alias map at hand); the
-   pipeline's remaining cross-module work is stub-unification per §3.6.
-   `coord->use-aliases` is accepted but currently unused — kept on the
-   signature in case Plan-3+ validation needs to attribute violations back
-   to their referencing module."
-  [model _coord->use-aliases]
+   pipeline's remaining cross-module work is stub-unification per §3.6."
+  [model]
   (unify-external-entity-stubs model))
 
 ;; ---------------------------------------------------------------------------
@@ -311,19 +353,22 @@
 (defn load-source
   "Walk `source-root`, parse every `.allium` file, run the per-file analyzer
    with each file's use-alias map, then perform cross-file stub
-   unification (§3.6). Returns a validated Model."
+   unification (§3.6). Returns a validated Model.
+
+   Per-file use-alias maps are canonicalised before reaching the analyzer:
+   raw paths like `./views/spec.allium` become root-relative coordinates
+   (`fukan/web/views/spec`) that line up with `coordinate-of`'s output."
   [source-root]
   (let [allium-files (find-allium-files source-root)
         initial      (register-allium-tags (build/empty-model))]
-    (loop [model              initial
-           coord->use-aliases {}
-           files              allium-files]
+    (loop [model initial
+           files allium-files]
       (if (empty? files)
-        (resolve-cross-module-refs model coord->use-aliases)
+        (resolve-cross-module-refs model)
         (let [f           (first files)
               coord       (coordinate-of source-root f)
               ast         (parser/parse-file f)
-              use-aliases (analyzer/extract-use-aliases ast)]
+              raw-aliases (analyzer/extract-use-aliases ast)
+              use-aliases (canonicalise-use-aliases coord raw-aliases)]
           (recur (analyzer/analyze-file model ast coord use-aliases)
-                 (assoc coord->use-aliases coord use-aliases)
                  (rest files)))))))

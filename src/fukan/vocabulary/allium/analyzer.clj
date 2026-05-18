@@ -187,6 +187,28 @@
                   [(:name d) (:type d)]))
               (:declarations ast))))
 
+(defn- collect-facing-roles
+  "First pass: build a set of facing-role names declared on any surface in
+   this AST. Surface `facing <role>: <Type>` clauses introduce a role that
+   `rule when:`/`emits` sites use to address the surface's provided events:
+   `viewer.SelectNode` means \"the SelectNode event on the surface I face\".
+   Since the surface lives in this module, the event lives in this module
+   too — `<module-coord>::events::SelectNode`.
+
+   Returns a set of role-name strings. (A single role-name maps unambiguously
+   within a module because facing roles are typically named for the actor
+   they address; collisions would be ambiguous spec authoring and currently
+   surface a warning when a trigger uses them.)"
+  [ast]
+  (into #{}
+        (keep (fn [d]
+                (when (= :surface (:type d))
+                  (some (fn [field]
+                          (when (= :facing (:field-kind field))
+                            (:role field)))
+                        (:fields d))))
+              (:declarations ast))))
+
 ;; ---------------------------------------------------------------------------
 ;; Declaration handlers
 ;; ---------------------------------------------------------------------------
@@ -449,7 +471,10 @@
                                        :fields [(p/make-field field-name
                                                               (t/make-scalar "AlliumText")
                                                               false)]}))
-                                  (catch Exception _ m)))
+                                  (catch clojure.lang.ExceptionInfo e
+                                    (if (= "Duplicate primitive id" (.getMessage e))
+                                      m
+                                      (throw e)))))
                            edge    (r/make-edge :relation/exposes
                                                 (r/primitive-ref container-id)
                                                 (r/substrate-address target-container-id
@@ -487,7 +512,10 @@
                                              (p/make-container
                                                {:id    contract-id
                                                 :label (-> entry :contract :name)}))
-                                           (catch Exception _ m))
+                                           (catch clojure.lang.ExceptionInfo e
+                                             (if (= "Duplicate primitive id" (.getMessage e))
+                                               m
+                                               (throw e))))
                                          m)
                            relation    (case verb
                                          "fulfils" :relation/realises
@@ -564,26 +592,46 @@
                        comparison ops against \"now\" operand => temporal
      :binding-derived — {:kind :binding-derived, :var ..., :source \"Entity.field\"}
 
-   `use-aliases` resolves `alias/EventName` call-triggers to the imported
-   module's coordinate. Unknown aliases leave the event-id as
-   `<host>::events::alias/EventName`."
-  [model when-clause module-coord rule-id use-aliases]
+   Dotted call names (`X.EventName`) are resolved in order:
+   1. If `X` is a known use-alias → event-id is `<imported-coord>::events::EventName`.
+   2. If `X` is a facing-role name declared on a surface in this module →
+      the trigger is for the event the surface `provides:` — event-id is
+      `<this-module>::events::EventName`.
+   3. Otherwise → fall through to the legacy treat-as-local path, which
+      embeds the dot in the event-id; a warning is emitted to stderr so
+      this latent garbage doesn't accumulate silently."
+  [model when-clause module-coord rule-id use-aliases facing-roles]
   (let [trigger (:trigger when-clause)]
     (case (:kind trigger)
       :call
       ;; Event-shaped: triggers: Event -> Rule
       ;; Event-id uses the slot-aware form <module>::events::<EventName>
-      ;; (per K16a). When the call name is dotted (`alias.EventName`) and
-      ;; the leading segment is a known alias, retarget the event-id to
-      ;; <imported-coord>::events::EventName.
+      ;; (per K16a).
       (let [raw-name   (:name trigger)
             dotted?    (.contains ^String raw-name ".")
             [alias-part name-part] (if dotted?
                                      (str/split raw-name #"\." 2)
                                      [nil raw-name])
             aliased?     (and alias-part (contains? use-aliases alias-part))
-            target-coord (if aliased? (get use-aliases alias-part) module-coord)
-            event-name   (if aliased? name-part raw-name)
+            facing?      (and (not aliased?)
+                              alias-part
+                              (contains? facing-roles alias-part))
+            target-coord (cond
+                           aliased? (get use-aliases alias-part)
+                           facing?  module-coord
+                           :else    module-coord)
+            event-name   (cond
+                           aliased? name-part
+                           facing?  name-part
+                           :else    raw-name)
+            ;; Warn on dotted trigger names whose leading segment is neither
+            ;; a known alias nor a facing-role — legacy treat-as-local path.
+            _ (when (and dotted? (not aliased?) (not facing?))
+                (binding [*out* *err*]
+                  (println (str "[allium-analyzer] dotted trigger name has no matching"
+                                " use-alias or facing-role; treating as local: "
+                                (pr-str {:trigger raw-name
+                                         :rule    rule-id})))))
             ev-id      (event-id target-coord event-name)
             ;; Create a stub Event primitive if one doesn't exist yet
             m'         (if (build/get-primitive model ev-id)
@@ -687,7 +735,7 @@
       model)))
 
 (defn- analyze-rule
-  [model decl module-coord _name-registry use-aliases]
+  [model decl module-coord _name-registry use-aliases facing-roles]
   (let [rule-id (qualify module-coord (:name decl))
         clauses (:clauses decl)
         requires-clauses (filter #(= :requires (:clause-type %)) clauses)
@@ -776,20 +824,27 @@
         m4 (reduce (fn [m effect]
                      (let [edge-kind (effect-edge-kind (:kind effect))
                            target    (:target effect)
-                           ;; Resolve cross-module emit targets: the
-                           ;; canonicaliser stores a dotted name like
-                           ;; `alias.EventName` when the emit name is dotted.
-                           ;; If the leading segment matches a use-alias, the
-                           ;; event lives in the imported coord; otherwise
-                           ;; the event lives in this module.
+                           ;; Resolve emit targets. The canonicaliser stores
+                           ;; either a bare local name ("OrderShipped") or a
+                           ;; dotted name ("alias.X" or "facingRole.X"). Order
+                           ;; of precedence:
+                           ;;   1. dotted + leading segment is a use-alias
+                           ;;      → event in imported coord
+                           ;;   2. dotted + leading segment is a facing-role
+                           ;;      → event in this module, name = right side
+                           ;;   3. anything else → event in this module, name = raw
                            emit-spec (when (and (= :effect/emit (:kind effect))
                                                 (= :endpoint/primitive (:case target)))
-                                       (let [raw   (:id target)
-                                             dot?  (.contains ^String raw ".")
-                                             [a n] (if dot? (str/split raw #"\." 2) [nil raw])
-                                             use?  (and a (contains? use-aliases a))]
-                                         {:coord (if use? (get use-aliases a) module-coord)
-                                          :event-local (if use? n raw)}))
+                                       (let [raw    (:id target)
+                                             dot?   (.contains ^String raw ".")
+                                             [a n]  (if dot? (str/split raw #"\." 2) [nil raw])
+                                             use?   (and a (contains? use-aliases a))
+                                             facing? (and (not use?) a (contains? facing-roles a))]
+                                         {:coord       (if use? (get use-aliases a) module-coord)
+                                          :event-local (cond
+                                                         use?    n
+                                                         facing? n
+                                                         :else   raw)}))
                            target'   (if emit-spec
                                        (r/primitive-ref (event-id (:coord emit-spec)
                                                                   (:event-local emit-spec)))
@@ -813,7 +868,7 @@
                    effects)
         ;; Emit triggers/observes kernel edges from when: clauses
         m5 (reduce (fn [m when-clause]
-                     (analyze-rule-trigger m when-clause module-coord rule-id use-aliases))
+                     (analyze-rule-trigger m when-clause module-coord rule-id use-aliases facing-roles))
                    m4
                    (filter #(= :when (:clause-type %)) clauses))]
     m5))
@@ -969,15 +1024,29 @@
    where :kind ∈ #{:provides :when :emits}.
 
    Cross-module event references (alias.EventName in when:/emits) are
-   filtered out — they belong to the imported module's synthesis pass."
-  [ast model module-coord use-aliases]
+   filtered out — they belong to the imported module's synthesis pass.
+
+   Facing-role-prefixed names (`viewer.SelectNode` where `viewer` is a
+   facing role declared on a surface in this module) refer to events the
+   surface `provides:` — the leading segment is stripped so the trigger
+   site merges with the matching provides site."
+  [ast model module-coord use-aliases facing-roles]
   (let [sites (atom {})
         add!  (fn [event-name site]
                 (swap! sites update event-name (fnil conj []) site))
+        split-dotted (fn [name]
+                       (let [dotted? (.contains ^String name ".")]
+                         (when dotted? (str/split name #"\." 2))))
         cross-module? (fn [dotted-name]
-                        (let [dotted? (.contains ^String dotted-name ".")
-                              [a _]   (when dotted? (str/split dotted-name #"\." 2))]
-                          (and dotted? (contains? use-aliases a))))]
+                        (when-let [[a _] (split-dotted dotted-name)]
+                          (contains? use-aliases a)))
+        local-event-name (fn [raw]
+                           ;; If raw is `<facing-role>.<EventName>` and the
+                           ;; leading segment is a facing-role on a surface
+                           ;; in this module, strip it; otherwise return raw.
+                           (if-let [[a n] (split-dotted raw)]
+                             (if (contains? facing-roles a) n raw)
+                             raw))]
     ;; provides: blocks on Surfaces and Contracts. Per K16, Event identity
     ;; comes from `provides:` on Surfaces (Surface entries are Events).
     ;; Contract provides entries are Operations — handled separately. We only
@@ -998,13 +1067,14 @@
       (let [rule-id (qualify module-coord (:name decl))
             rule    (build/get-primitive model rule-id)]
         ;; when:call sites — from AST. Skip cross-module triggers; they
-        ;; synthesise in the imported module's pass.
+        ;; synthesise in the imported module's pass. Strip facing-role
+        ;; prefixes so triggers merge with the surface's provides site.
         (doseq [clause (:clauses decl)
                 :when (= :when (:clause-type clause))
                 :let [trigger (:trigger clause)]
                 :when (and (= :call (:kind trigger))
                            (not (cross-module? (:name trigger))))]
-          (add! (:name trigger)
+          (add! (local-event-name (:name trigger))
                 {:kind :when
                  :params (or (:params trigger) [])
                  :shape (trigger-param-shape trigger)}))
@@ -1019,7 +1089,7 @@
                 :when (= :endpoint/primitive (:case target))
                 :let [raw (:id target)]
                 :when (not (cross-module? raw))]
-          (add! raw
+          (add! (local-event-name raw)
                 {:kind :emits
                  :params []
                  :shape (or (emit-param-shape (:value effect))
@@ -1094,9 +1164,13 @@
      - synthesize/overwrite the Event primitive with canonical params
      - apply Allium::Event tag with :declaration-sites payload
      - add event-id to module-Container's :events set
-   Cross-file Event references via aliases land in Task 14."
-  [model ast module-coord name-registry use-aliases]
-  (let [site-map (collect-event-sites ast model module-coord use-aliases)]
+   Cross-file Event references via aliases land in Task 14.
+
+   `facing-roles` is the set of facing-role names declared on surfaces in
+   this module; used to strip facing-role prefixes from trigger/emit
+   names so they merge with the surface's provides site."
+  [model ast module-coord name-registry use-aliases facing-roles]
+  (let [site-map (collect-event-sites ast model module-coord use-aliases facing-roles)]
     (reduce (fn [m [event-name event-sites]]
               ;; Validate shape agreement first — throws on mismatch
               (verify-event-shape-agreement event-name event-sites)
@@ -1172,6 +1246,7 @@
                 {:tag    {:namespace "Allium" :name "Module"}
                  :target {:case :target/primitive :id coordinate}})))
         name-registry (collect-name-registry ast)
+        facing-roles  (collect-facing-roles ast)
         ;; Pre-sort declarations so entity/value/variant/contract come before
         ;; surface (ensuring same-module contract endpoints are registered first).
         declaration-order {:entity 0 :value 0 :variant 0
@@ -1193,7 +1268,7 @@
                     :actor           (analyze-actor m decl coordinate name-registry use-aliases)
                     :contract        (analyze-contract m decl coordinate name-registry use-aliases)
                     :surface         (analyze-surface m decl coordinate name-registry use-aliases)
-                    :rule            (analyze-rule m decl coordinate name-registry use-aliases)
+                    :rule            (analyze-rule m decl coordinate name-registry use-aliases facing-roles)
                     :invariant       (analyze-top-level-invariant m decl coordinate)
                     ;; Other declaration types: passthrough (Tasks 10–13)
                     m))
@@ -1214,4 +1289,4 @@
     ;; (provides:, when:call, emits ensures). Verifies parameter-shape
     ;; agreement, overwrites stub Event primitives, applies Allium::Event tag,
     ;; and adds the event ids to the module-Container's :events set.
-    (synthesize-events model-with-children ast coordinate name-registry use-aliases))))
+    (synthesize-events model-with-children ast coordinate name-registry use-aliases facing-roles))))

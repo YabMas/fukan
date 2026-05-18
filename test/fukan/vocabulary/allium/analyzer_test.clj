@@ -1,5 +1,6 @@
 (ns fukan.vocabulary.allium.analyzer-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [fukan.vocabulary.allium.analyzer :as analyzer]
             [fukan.libs.allium.parser :as parser]
             [fukan.model.build :as build]))
@@ -485,6 +486,36 @@
           observes-edges (filter #(= :relation/observes (:kind %)) (:edges model))]
       (is (= 1 (count triggers-edges)))
       (is (= 1 (count observes-edges))))))
+
+(deftest rule-trigger-on-facing-role-event
+  (testing "when: <facing-role>.EventName resolves to a local event-id without embedding the role name"
+    ;; Mirrors the views/spec.allium pattern:
+    ;;   surface S { facing viewer: User; provides: Pick(x: Integer) }
+    ;;   rule R   { when: viewer.Pick(x); ensures: Ok }
+    ;; Before the fix, the rule's trigger event-id would be
+    ;; `viewz::events::viewer.Pick` (latent garbage). After the fix,
+    ;; it resolves to `viewz::events::Pick` and merges with the
+    ;; surface's provides site under event synthesis.
+    (let [a (ast (str "actor User { identified_by: String }\n"
+                      "surface S {\n"
+                      "    facing viewer: User\n"
+                      "    provides:\n"
+                      "        Pick(x: Integer)\n"
+                      "}\n"
+                      "rule R {\n"
+                      "    when: viewer.Pick(x)\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "viewz")
+          triggers-edges (filter #(= :relation/triggers (:kind %)) (:edges model))
+          trigger-event-ids (set (map #(-> % :from :id) triggers-edges))]
+      (is (= 1 (count triggers-edges))
+          "exactly one triggers edge emitted for the rule's when:call")
+      (is (contains? trigger-event-ids "viewz::events::Pick")
+          "trigger event-id is the local Pick event, not viewer.Pick")
+      (is (not-any? (fn [id] (str/includes? id "viewer."))
+                    trigger-event-ids)
+          "no trigger event-id embeds the facing-role prefix"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Task 12: Invariants + annotations → Bool Expressions + Clauses

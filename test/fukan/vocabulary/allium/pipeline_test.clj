@@ -1,31 +1,79 @@
 (ns fukan.vocabulary.allium.pipeline-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [fukan.vocabulary.allium.pipeline :as pipeline]
             [fukan.model.build :as build]
             [malli.core :as m]))
 
 (deftest pipeline-loads-fukan-corpus
-  (testing "loading src/ produces a validated Model with the 5 fukan module-Containers"
+  (testing "loading src/ produces a validated Model covering all 5 fukan modules"
     (let [model (pipeline/load-source "src")]
       (is (m/validate build/Model model)
           "loaded Model validates against fukan.model.build/Model schema")
 
-      (testing "5 module-Containers exist"
-        (let [module-containers (filter (fn [[_ p]]
-                                          (= :primitive/container (:kind p)))
-                                        (:primitives model))]
-          ;; coordinates are: fukan/infra, fukan/web, fukan/web/views,
-          ;;                  fukan/model, fukan/model/pipeline
-          (is (>= (count module-containers) 5)
-              "at least one Container per .allium file")))
-
-      (testing "every module has an Allium::Module tag"
+      (testing "every .allium file gets an Allium::Module tag"
         (let [module-tag-apps (filter (fn [ta]
                                         (= {:namespace "Allium" :name "Module"}
                                            (:tag ta)))
-                                      (:tag-apps model))]
-          (is (>= (count module-tag-apps) 5)
-              "Allium::Module tag applied to each module-Container"))))))
+                                      (:tag-apps model))
+              module-ids       (set (map (comp :id :target) module-tag-apps))]
+          ;; The fukan corpus has 5 .allium files: infra, web, web/views,
+          ;; model, model/pipeline.
+          (is (= 5 (count module-tag-apps))
+              "Allium::Module tag applied to each .allium file in src/")
+          (is (= #{"fukan/infra/spec"
+                   "fukan/web/spec"
+                   "fukan/web/views/spec"
+                   "fukan/model/spec"
+                   "fukan/model/pipeline"}
+                 module-ids)
+              "module-Container ids are the canonical root-relative coordinates")))
+
+      (testing "cross-module refs resolve cleanly (path canonicalisation)"
+        ;; AnalysisResult lives in fukan/model/pipeline and references
+        ;; Node/Edge from fukan/model/spec via `use \"./spec.allium\" as model`.
+        ;; If path canonicalisation works, the fields resolve to
+        ;; Composite-named("fukan/model/spec::Node") and ::Edge respectively
+        ;; rather than `./spec.allium::Node`.
+        (let [ar    (build/get-primitive model "fukan/model/pipeline::AnalysisResult")
+              nodes (some #(when (= "nodes" (:name %)) %) (:fields ar))
+              edges (some #(when (= "edges" (:name %)) %) (:fields ar))]
+          (is (some? ar) "AnalysisResult Container exists in loaded corpus")
+          (is (= "fukan/model/spec::Node"
+                 (-> nodes :type-ref :of :shape :container))
+              "AnalysisResult.nodes resolves to fukan/model/spec::Node")
+          (is (= "fukan/model/spec::Edge"
+                 (-> edges :type-ref :of :shape :container))
+              "AnalysisResult.edges resolves to fukan/model/spec::Edge"))))))
+
+(deftest corpus-cross-module-refs-resolve
+  (testing "no Composite-named ref in the loaded src/ Model carries a raw `.allium` suffix or `./`/`../` prefix"
+    (let [model      (pipeline/load-source "src")
+          composite-ids (atom #{})
+          walk-type   (fn walk-type [t]
+                        (when (map? t)
+                          (when (= :type/composite (:case t))
+                            (when-let [c (-> t :shape :container)]
+                              (swap! composite-ids conj c)))
+                          (when-let [of (:of t)] (walk-type of))
+                          (when (= :type/union (:case t))
+                            (doseq [x (:types t)] (walk-type x)))
+                          (when-let [sem (:semantics t)]
+                            (when (= :semantics/keyed (:case sem))
+                              (walk-type (:key-type sem))))))]
+      (doseq [[_ pr] (:primitives model)
+              field (:fields pr)]
+        (walk-type (:type-ref field)))
+      (doseq [[_ pr] (:primitives model)
+              param (:parameters pr)]
+        (walk-type (:type-ref param)))
+      (let [stale (filter (fn [c]
+                            (or (str/starts-with? c "./")
+                                (str/starts-with? c "../")
+                                (str/ends-with? c ".allium")))
+                          @composite-ids)]
+        (is (empty? stale)
+            (str "found stale composite-named container ids: " (pr-str stale)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Cross-module reference resolution (Task 14)
