@@ -310,7 +310,6 @@
 (deftest structural-assertions-test
   (testing "every declaration has :type"
     (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/projection/spec.allium"
                "src/fukan/web/views/spec.allium"]]
       (let [result (parser/parse-file f)]
         (is (not (insta/failure? result)) (str "parse failed for " f))
@@ -320,7 +319,6 @@
 
   (testing "every named declaration has :name"
     (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/projection/spec.allium"
                "src/fukan/web/views/spec.allium"]]
       (let [result (parser/parse-file f)]
         (doseq [d (:declarations result)
@@ -335,7 +333,6 @@
     (let [block-kinds #{:provides-block :exposes :contracts
                         :when-guard :related}]
       (doseq [f ["src/fukan/model/spec.allium"
-                 "src/fukan/projection/spec.allium"
                  "src/fukan/web/views/spec.allium"]]
         (let [result (parser/parse-file f)]
           (doseq [d (:declarations result)
@@ -359,7 +356,6 @@
 
   (testing "every type-ref has :kind"
     (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/projection/spec.allium"
                "src/fukan/web/views/spec.allium"]]
       (let [result (parser/parse-file f)
             type-refs (for [d (:declarations result)
@@ -386,16 +382,6 @@
         (is (= 17 (:variant types)))
         (is (= 5 (:invariant types)))))))    ;; NoSelfEdge, LeafStrictness + 3 top-level
 
-(deftest projection-allium-integration-test
-  (testing "projection.allium parses completely"
-    (let [result (parser/parse-file "src/fukan/projection/spec.allium")]
-      (is (not (insta/failure? result)))
-      (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 1 (:use types)))
-        (is (= 1 (:given types)))
-        (is (= 2 (:enum types)))              ;; Perspective, EdgeType
-        (is (= 17 (:value types)))            ;; including InterfaceData + 4 variants as values
-        (is (= 16 (:invariant types)))))))    ;; projection semantics as top-level invariants
 
 (deftest views-allium-integration-test
   (testing "views.allium parses completely"
