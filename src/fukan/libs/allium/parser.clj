@@ -107,8 +107,13 @@
 
   (* ============ Invariant ============ *)
 
-  invariant-decl = <'invariant'> __ ident _ description-string? _ <'{'> _ invariant-body _ <'}'>
-  invariant-body = invariant-chunk+
+  invariant-decl = <'invariant'> __ ident _ description-string? _ <'{'> _ invariant-form _ <'}'>
+  invariant-form = invariant-for-quantification / invariant-expression
+  invariant-for-quantification = <'for'> __ ident __ <'in'> __ ident _ invariant-guard? _ <':'> _ invariant-assertion
+  invariant-guard = <'where'> __ #'(?:(?!:[\\s]).)+(?=:[\\s])'
+  invariant-assertion = invariant-chunk+
+  invariant-expression = invariant-chunk+
+
   <invariant-chunk> = inv-brace-group / inv-paren-group / inv-text-chunk
   inv-brace-group = '{' invariant-chunk* '}'
   inv-paren-group = '(' invariant-chunk* ')'
@@ -310,6 +315,20 @@
          (map (fn [x] (if (sequential? x) x [x]))
               groups))))
 
+(defn- text-of
+  "Reconstruct text from a single balanced-chunk transform result.
+   A chunk is either a string or a vector (from inv-brace-group / inv-paren-group)."
+  [chunk]
+  (if (sequential? chunk)
+    (apply str chunk)
+    (str chunk)))
+
+(defn- text-of-chunks
+  "Reconstruct text from a sequence of balanced-chunk transform results.
+   Each chunk is either a string or a vector (from inv-brace-group / inv-paren-group)."
+  [chunks]
+  (apply str (map text-of chunks)))
+
 ;; ---------------------------------------------------------------------------
 ;; Transform map
 ;; ---------------------------------------------------------------------------
@@ -396,13 +415,38 @@
    :invariant-decl
    (fn [name & args]
      (let [[desc rest-args] (extract-description args)
-           body (first rest-args)]
-       (cond-> {:type :invariant :field-kind :invariant :name name :body body}
+           form (first rest-args)]
+       (cond-> {:type :invariant, :field-kind :invariant, :name name, :body form}
          desc (assoc :description desc))))
 
-   :invariant-body
-   (fn [& parts]
-     (str/trim (apply str (flatten parts))))
+   :invariant-form
+   (fn [form] form)
+
+   :invariant-for-quantification
+   (fn
+     ([var-name source assertion]
+      {:kind :for-quantification
+       :var var-name
+       :source source
+       :assertion (str/trim (text-of assertion))})
+     ([var-name source guard assertion]
+      {:kind :for-quantification
+       :var var-name
+       :source source
+       :guard (str/trim guard)
+       :assertion (str/trim (text-of assertion))}))
+
+   :invariant-expression
+   (fn [& chunks]
+     {:kind :expression
+      :text (str/trim (text-of-chunks chunks))})
+
+   :invariant-assertion
+   (fn [& chunks]
+     (text-of-chunks chunks))
+
+   :invariant-guard
+   (fn [guard-text] (str/trim guard-text))
 
    :inv-brace-group
    (fn [& parts]

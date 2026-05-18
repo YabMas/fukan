@@ -580,6 +580,41 @@
       (is (= "item.touched_at = now()" (:body ens))))))
 
 ;; ---------------------------------------------------------------------------
+;; Unit tests — for quantification in top-level invariants
+;; ---------------------------------------------------------------------------
+
+(deftest invariant-for-quantification-test
+  (testing "top-level invariant with for-quantification"
+    (let [d (first-decl
+              (str "invariant LeafNoChildren {\n"
+                   "    for n in Node where n.kind = leaf: n.children = []\n"
+                   "}\n"))]
+      (is (= :invariant (:type d)))
+      (is (= "LeafNoChildren" (:name d)))
+      (is (= :for-quantification (-> d :body :kind)))
+      (is (= "n" (-> d :body :var)))
+      (is (= "Node" (-> d :body :source)))
+      (is (= "n.kind = leaf" (-> d :body :guard)))
+      (is (= "n.children = []" (-> d :body :assertion))))))
+
+(deftest invariant-expression-body-test
+  (testing "invariant body without for-quantification stays as text"
+    (let [d (first-decl
+              "invariant TotalIsPositive {\n    Order.total > 0\n}\n")]
+      (is (= :expression (-> d :body :kind)))
+      (is (= "Order.total > 0" (-> d :body :text))))))
+
+(deftest invariant-for-no-guard-test
+  (testing "for-quantification without 'where' guard"
+    (let [d (first-decl
+              "invariant ChildrenOk {\n    for n in Node: n.children = []\n}\n")]
+      (is (= :for-quantification (-> d :body :kind)))
+      (is (= "n" (-> d :body :var)))
+      (is (= "Node" (-> d :body :source)))
+      (is (nil? (-> d :body :guard)))
+      (is (= "n.children = []" (-> d :body :assertion))))))
+
+;; ---------------------------------------------------------------------------
 ;; Corpus-regression — every .allium file in src/ must parse clean
 ;; ---------------------------------------------------------------------------
 
