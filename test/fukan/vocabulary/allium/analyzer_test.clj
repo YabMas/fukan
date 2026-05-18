@@ -411,3 +411,72 @@
           rule (build/get-primitive model "test::Validate")
           effects (-> rule :body :effects)]
       (is (zero? (count effects)) "no Effect records — Bool assertion only"))))
+
+;; ---------------------------------------------------------------------------
+;; Task 11: Rule triggers — triggers/observes edges with Allium::Trigger tags
+;; ---------------------------------------------------------------------------
+
+(deftest rule-trigger-event-shaped
+  (testing "when: EventCall(args) emits triggers: Event -> Rule edge with Allium::Trigger kind external_stimulus"
+    (let [a (ast (str "rule ProcessOrder {\n"
+                      "    when: OrderPlaced(order: Order)\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          triggers-edges (filter #(= :relation/triggers (:kind %)) (:edges model))]
+      (is (= 1 (count triggers-edges)))
+      ;; Verify Allium::Trigger tag applied
+      (let [trigger-tags (filter #(= "Trigger" (-> % :tag :name)) (:tag-apps model))]
+        (is (>= (count trigger-tags) 1))
+        (is (= "external_stimulus" (-> trigger-tags first :payload :kind)))))))
+
+(deftest rule-trigger-transitions-to
+  (testing "when: x: T.field transitions_to v emits observes edge with kind state_transition"
+    (let [a (ast (str "entity Order { status: pending | shipped }\n"
+                      "rule Ship {\n"
+                      "    when: order: Order.status transitions_to shipped\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          observes-edges (filter #(= :relation/observes (:kind %)) (:edges model))
+          trigger-tags (filter #(= "Trigger" (-> % :tag :name)) (:tag-apps model))]
+      (is (= 1 (count observes-edges)))
+      (is (= "state_transition" (-> trigger-tags first :payload :kind))))))
+
+(deftest rule-trigger-created
+  (testing "when: x: T.created emits observes edge with kind creation"
+    (let [a (ast (str "entity Order { id: String }\n"
+                      "rule Index {\n"
+                      "    when: order: Order.created\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          observes-edges (filter #(= :relation/observes (:kind %)) (:edges model))
+          trigger-tags (filter #(= "Trigger" (-> % :tag :name)) (:tag-apps model))]
+      (is (= 1 (count observes-edges)))
+      (is (= "creation" (-> trigger-tags first :payload :kind))))))
+
+(deftest rule-trigger-derived
+  (testing "when: x: T.derived_field emits observes edge with kind derived"
+    (let [a (ast (str "rule R {\n"
+                      "    when: o: Order.is_complete\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          observes-edges (filter #(= :relation/observes (:kind %)) (:edges model))
+          trigger-tags (filter #(= "Trigger" (-> % :tag :name)) (:tag-apps model))]
+      (is (= 1 (count observes-edges)))
+      (is (= "derived" (-> trigger-tags first :payload :kind))))))
+
+(deftest rule-multiple-when-clauses
+  (testing "rule with multiple when: clauses emits one edge per clause"
+    (let [a (ast (str "rule R {\n"
+                      "    when: OrderPlaced(order: Order)\n"
+                      "    when: order: Order.created\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          triggers-edges (filter #(= :relation/triggers (:kind %)) (:edges model))
+          observes-edges (filter #(= :relation/observes (:kind %)) (:edges model))]
+      (is (= 1 (count triggers-edges)))
+      (is (= 1 (count observes-edges))))))

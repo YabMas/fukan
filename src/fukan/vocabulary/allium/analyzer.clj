@@ -345,6 +345,127 @@
     :effect/destroy  :relation/destroys
     :effect/emit     :relation/emits))
 
+(defn- analyze-rule-trigger
+  "Process one :when clause and emit the appropriate kernel edge + Trigger tag.
+   Returns updated model. Best-effort endpoint resolution via try/catch.
+
+   AST trigger shapes (from parser):
+     :call          — {:kind :call, :name \"EventName\", :params [...]}
+     :binding       — {:kind :binding, :var ..., :source ..., :operator op, :operand ...}
+                       operator=\"created\" => creation
+                       operator=\"transitions_to\" => state_transition
+                       operator=\"becomes\" => becomes
+                       comparison ops against \"now\" operand => temporal
+     :binding-derived — {:kind :binding-derived, :var ..., :source \"Entity.field\"}"
+  [model when-clause module-coord rule-id]
+  (let [trigger (:trigger when-clause)]
+    (case (:kind trigger)
+      :call
+      ;; Event-shaped: triggers: Event -> Rule
+      ;; Event-id placeholder; Task 13 (Event synthesis) will retarget
+      (let [event-name (:name trigger)
+            event-id   (str module-coord "::events::" event-name)
+            ;; Create a stub Event primitive if one doesn't exist yet
+            m'         (if (build/get-primitive model event-id)
+                         model
+                         (build/add-primitive model (p/make-event {:id         event-id
+                                                                    :label      event-name
+                                                                    :parameters []})))
+            edge       (r/make-edge :relation/triggers
+                                    (r/primitive-ref event-id)
+                                    (r/primitive-ref rule-id))
+            edge-id    (r/edge-identity edge)]
+        (try (-> m'
+                 (build/add-edge edge)
+                 (build/add-tag-application
+                   (v/make-tag-application
+                     {:tag     {:namespace "Allium" :name "Trigger"}
+                      :target  {:case :target/edge :edge-identity edge-id}
+                      :payload {:kind "external_stimulus"}})))
+             (catch Exception _ model)))
+
+      :binding
+      ;; operator "created" => observes: Rule -> Container (creation)
+      ;; other operators    => observes: Rule -> Field (various sub-kinds)
+      (let [operator (:operator trigger)
+            source   (:source trigger)]
+        (if (= operator "created")
+          ;; T.created — source is the entity name (no dot notation)
+          (let [entity-id (qualify module-coord source)
+                m'        (if (build/get-primitive model entity-id)
+                            model
+                            (build/add-primitive model (p/make-container {:id     entity-id
+                                                                           :label  source
+                                                                           :fields []})))
+                edge      (r/make-edge :relation/observes
+                                       (r/primitive-ref rule-id)
+                                       (r/primitive-ref entity-id))
+                edge-id   (r/edge-identity edge)]
+            (try (-> m'
+                     (build/add-edge edge)
+                     (build/add-tag-application
+                       (v/make-tag-application
+                         {:tag     {:namespace "Allium" :name "Trigger"}
+                          :target  {:case :target/edge :edge-identity edge-id}
+                          :payload {:kind "creation"}})))
+                 (catch Exception _ model)))
+          ;; operator-based: source is "Entity.field", determine kind from operator
+          (let [[entity-name field-name] (str/split source #"\." 2)
+                entity-id (qualify module-coord entity-name)
+                edge      (r/make-edge :relation/observes
+                                       (r/primitive-ref rule-id)
+                                       (r/substrate-address entity-id
+                                                            [{:slot "field"
+                                                              :key  (or field-name "")}]))
+                edge-id   (r/edge-identity edge)
+                kind      (case operator
+                            "transitions_to" "state_transition"
+                            "becomes"        "becomes"
+                            ;; comparison ops: temporal if operand is "now", else derived
+                            ("<=" "<" ">=" ">" "=" "!=")
+                            (if (= "now" (some-> (:operand trigger) str/trim))
+                              "temporal"
+                              "derived")
+                            ;; fallback
+                            "derived")]
+            (try (-> model
+                     (build/add-edge edge)
+                     (build/add-tag-application
+                       (v/make-tag-application
+                         {:tag     {:namespace "Allium" :name "Trigger"}
+                          :target  {:case :target/edge :edge-identity edge-id}
+                          :payload {:kind kind}})))
+                 (catch Exception _ model)))))
+
+      :binding-derived
+      ;; Derived-condition: observes: Rule -> Container (entity)
+      ;; Derived fields are computed/virtual and may not appear in the kernel
+      ;; field list, so we target the entity container (primitive-ref) and
+      ;; create a stub container if it doesn't exist yet.
+      (let [source       (:source trigger)
+            [entity-name _field-name] (str/split source #"\." 2)
+            entity-id    (qualify module-coord entity-name)
+            m'           (if (build/get-primitive model entity-id)
+                           model
+                           (build/add-primitive model (p/make-container {:id     entity-id
+                                                                          :label  entity-name
+                                                                          :fields []})))
+            edge         (r/make-edge :relation/observes
+                                      (r/primitive-ref rule-id)
+                                      (r/primitive-ref entity-id))
+            edge-id      (r/edge-identity edge)]
+        (try (-> m'
+                 (build/add-edge edge)
+                 (build/add-tag-application
+                   (v/make-tag-application
+                     {:tag     {:namespace "Allium" :name "Trigger"}
+                      :target  {:case :target/edge :edge-identity edge-id}
+                      :payload {:kind "derived"}})))
+             (catch Exception _ model)))
+
+      ;; Unknown trigger kind: skip
+      model)))
+
 (defn- analyze-rule
   [model decl module-coord _name-registry]
   (let [rule-id (qualify module-coord (:name decl))
@@ -437,8 +558,13 @@
                        (try (build/add-edge m edge)
                             (catch Exception _ m))))
                    m3
-                   effects)]
-    m4))
+                   effects)
+        ;; Emit triggers/observes kernel edges from when: clauses
+        m5 (reduce (fn [m when-clause]
+                     (analyze-rule-trigger m when-clause module-coord rule-id))
+                   m4
+                   (filter #(= :when (:clause-type %)) clauses))]
+    m5))
 
 ;; ---------------------------------------------------------------------------
 ;; Contract analysis helpers
