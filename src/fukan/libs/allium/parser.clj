@@ -159,13 +159,19 @@
   let-field = <'let'> __ ident _ <'='> _ rest-of-line
 
   (* Annotation: @guarantee Name or @guidance
-     Optional leading prose block: contiguous '--' lines immediately preceding '@'.
-     annotation-prose is the block of prose-lines; annotation-mark is the '@' line.
-     prose-line strips the leading '--' prefix and captures the raw content. *)
-  annotation = annotation-prose? <#'[ \t]*'> annotation-mark
-  annotation-prose = (prose-line)+
-  prose-line = <#'[ \t]*--[ \t]?'> #'[^\n]*' <'\n'>
+     Optional trailing prose block: contiguous indented '--' lines immediately
+     following the '@kind Name' marker line.
+     annotation-trailing-prose captures the block of indented prose-lines;
+     annotation-mark is the '@kind Name' line itself.
+     annotation-prose-line consumes the leading newline + indentation + '--'
+     prefix and captures the raw prose content.
+     The [ \t]+ after the newline requires at least one whitespace, so a
+     top-level (unindented) '--' line after the annotation is NOT consumed as
+     prose — it remains a line-comment for the next declaration. *)
+  annotation = annotation-mark annotation-trailing-prose?
   annotation-mark = <'@'> ident (__ ident)?
+  annotation-trailing-prose = (annotation-prose-line)+
+  annotation-prose-line = <#'[ \t]*\n[ \t]+--[ \t]?'> #'[^\n]*'
 
   (* When guard: when condition — appears after provides entries *)
   when-guard = <'when'> __ when-guard-text
@@ -290,7 +296,7 @@
   <__> = (ws / line-comment / section-divider)+
 
   <ws> = <#'[\\s]+'>
-  <line-comment> = <#'(?:[ \\t]*--[^\\n]*\\n)++(?![ \\t]*@)'>
+  <line-comment> = <#'[ \\t]*--[^\\n]*\\n'>
   <section-divider> = <#'-{4,}[^\\n]*\\n'>
 
   (* ============ Identifiers ============ *)
@@ -708,17 +714,18 @@
      {:field-kind :let, :name name, :expr (str/trim expr-text)})
 
    ;; Annotation (@guarantee, @guidance)
-   ;; New shape: {:field-kind :annotation, :kind <kind>, :name? <name>, :body? <prose>}
+   ;; Shape: {:field-kind :annotation, :kind <kind>, :name? <name>, :body? <prose>}
+   ;; Trailing prose: indented '--' lines after '@kind Name', each consumed by
+   ;; annotation-prose-line; joined into a single string in :annotation-trailing-prose.
    :annotation
    (fn
      ([mark] (merge {:field-kind :annotation} mark))
-     ([prose mark]
-      (merge {:field-kind :annotation, :body prose} mark)))
+     ([mark prose] (merge {:field-kind :annotation, :body prose} mark)))
 
-   :annotation-prose
+   :annotation-trailing-prose
    (fn [& lines] (clojure.string/join "\n" (map clojure.string/trim lines)))
 
-   :prose-line
+   :annotation-prose-line
    (fn [content] content)
 
    :annotation-mark

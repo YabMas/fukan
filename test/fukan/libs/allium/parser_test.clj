@@ -678,13 +678,13 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest annotation-with-prose-test
-  (testing "@guarantee with leading comment block"
+  (testing "@guarantee with trailing indented comment block"
     (let [d (first-decl
               (str "surface Login {\n"
                    "    facing actor: User\n"
-                   "    -- the operation completes within the timeout\n"
-                   "    -- regardless of which path was taken\n"
                    "    @guarantee Idempotent\n"
+                   "        -- the operation completes within the timeout\n"
+                   "        -- regardless of which path was taken\n"
                    "}\n"))
           ann (->> (:fields d)
                    (filter #(= :annotation (:field-kind %)))
@@ -696,7 +696,7 @@
              (:body ann))))))
 
 (deftest annotation-no-prose-test
-  (testing "@guidance with no leading comment block"
+  (testing "@guidance with no trailing comment block"
     (let [d (first-decl
               (str "surface S {\n"
                    "    facing actor: U\n"
@@ -708,6 +708,23 @@
       (is (= :annotation (:field-kind ann)))
       (is (= "guidance" (:kind ann)))
       (is (nil? (:body ann))))))
+
+(deftest annotation-corpus-prose-test
+  (testing "real corpus annotation in web/views/spec.allium captures prose"
+    (let [result (parser/parse-file "src/fukan/web/views/spec.allium")
+          ;; find any @guarantee annotation in any surface declaration
+          all-annotations (for [d (:declarations result)
+                                :when (and (:fields d) (= :surface (:type d)))
+                                f (:fields d)
+                                :when (= :annotation (:field-kind f))]
+                            f)
+          guarantee-anns (filter #(= "guarantee" (:kind %)) all-annotations)]
+      (is (pos? (count guarantee-anns)) "corpus must contain @guarantee annotations")
+      (doseq [ann guarantee-anns]
+        (is (some? (:body ann))
+            (str "annotation @" (:kind ann) " " (:name ann) " must have :body captured"))
+        (is (pos? (count (:body ann)))
+            (str "annotation @" (:kind ann) " " (:name ann) " :body must not be empty"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Corpus-regression — every .allium file in src/ must parse clean
