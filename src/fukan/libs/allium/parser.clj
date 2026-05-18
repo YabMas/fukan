@@ -315,6 +315,22 @@
          (map (fn [x] (if (sequential? x) x [x]))
               groups))))
 
+(defn- field-itemise
+  "If a field-item is an invariant-decl-shaped map (:type :invariant),
+   convert to :field-kind shape so it merges with the field-items list
+   cleanly. Top-level invariants keep :type; entity-internal ones should
+   not carry :type at the field level."
+  [item]
+  (if (= :invariant (:type item))
+    (-> item (dissoc :type) (assoc :field-kind :invariant))
+    item))
+
+(defn- ->fields
+  "Build a fields vector from raw field-item groups, flattening groups
+   and normalising any invariant-decl-shaped items to field-item shape."
+  [field-groups]
+  (mapv field-itemise (flatten-field-groups field-groups)))
+
 (defn- text-of
   "Reconstruct text from a single balanced-chunk transform result.
    A chunk is either a string or a vector (from inv-brace-group / inv-paren-group)."
@@ -416,7 +432,7 @@
    (fn [name & args]
      (let [[desc rest-args] (extract-description args)
            form (first rest-args)]
-       (cond-> {:type :invariant, :field-kind :invariant, :name name, :body form}
+       (cond-> {:type :invariant, :name name, :body form}
          desc (assoc :description desc))))
 
    :invariant-form
@@ -513,7 +529,7 @@
    (fn [name & args]
      (let [[desc field-groups] (extract-description args)]
        (cond-> {:type :surface :name name
-                :fields (flatten-field-groups field-groups)}
+                :fields (->fields field-groups)}
          desc (assoc :description desc))))
 
    ;; Entity / Value
@@ -521,14 +537,14 @@
    (fn [name & args]
      (let [[desc field-groups] (extract-description args)]
        (cond-> {:type :entity :name name
-                :fields (flatten-field-groups field-groups)}
+                :fields (->fields field-groups)}
          desc (assoc :description desc))))
 
    :value-decl
    (fn [name & args]
      (let [[desc field-groups] (extract-description args)]
        (cond-> {:type :value :name name
-                :fields (flatten-field-groups field-groups)}
+                :fields (->fields field-groups)}
          desc (assoc :description desc))))
 
    ;; Variant
@@ -538,7 +554,7 @@
            base (first rest-args)
            field-groups (rest rest-args)]
        (cond-> {:type :variant :name name :base base
-                :fields (flatten-field-groups field-groups)}
+                :fields (->fields field-groups)}
          desc (assoc :description desc))))
 
    ;; Fields

@@ -590,6 +590,7 @@
                    "    for n in Node where n.kind = leaf: n.children = []\n"
                    "}\n"))]
       (is (= :invariant (:type d)))
+      (is (nil? (:field-kind d)) "top-level invariants must not carry :field-kind")
       (is (= "LeafNoChildren" (:name d)))
       (is (= :for-quantification (-> d :body :kind)))
       (is (= "n" (-> d :body :var)))
@@ -613,6 +614,27 @@
       (is (= "Node" (-> d :body :source)))
       (is (nil? (-> d :body :guard)))
       (is (= "n.children = []" (-> d :body :assertion))))))
+
+;; ---------------------------------------------------------------------------
+;; Unit tests — entity-level invariants
+;; ---------------------------------------------------------------------------
+
+(deftest entity-level-invariant-test
+  (testing "invariant nested inside an entity body"
+    (let [d (first-decl
+              (str "entity Order {\n"
+                   "    total: Money\n"
+                   "    invariant TotalIsPositive {\n"
+                   "        total > 0\n"
+                   "    }\n"
+                   "}\n"))
+          inv (->> (:fields d)
+                   (filter #(= :invariant (:field-kind %)))
+                   first)]
+      (is (= :invariant (:field-kind inv)))
+      (is (= "TotalIsPositive" (:name inv)))
+      (is (= :expression (-> inv :body :kind)))
+      (is (= "total > 0" (-> inv :body :text))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Corpus-regression — every .allium file in src/ must parse clean
