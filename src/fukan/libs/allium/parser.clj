@@ -53,8 +53,9 @@
 
   (* ============ Config Block ============ *)
 
-  config-block = <'config'> _ <'{'> config-body <'}'>
-  config-body = #'[^}]*'
+  config-block = <'config'> _ <'{'> _ config-params _ <'}'>
+  config-params = (config-param _)*
+  config-param = ident _ <':'> _ type-ref (_ <'='> _ rest-of-line)?
 
   (* ============ Deferred ============ *)
 
@@ -382,9 +383,19 @@
 
    ;; Config block
    :config-block
-   (fn [body] {:type :config :body (str/trim body)})
+   (fn [params]
+     {:type :config, :params (vec params)})
 
-   :config-body str
+   :config-params
+   (fn [& params]
+     (vec (remove nil? params)))
+
+   :config-param
+   (fn
+     ([name type-ref]
+      {:name name, :type-ref type-ref})
+     ([name type-ref default-text]
+      {:name name, :type-ref type-ref, :default (str/trim default-text)}))
 
    ;; Deferred
    :deferred-decl

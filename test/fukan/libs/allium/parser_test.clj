@@ -637,6 +637,37 @@
       (is (= "total > 0" (-> inv :body :text))))))
 
 ;; ---------------------------------------------------------------------------
+;; Unit tests — config block
+;; ---------------------------------------------------------------------------
+
+(deftest config-block-test
+  (testing "config with typed parameter and default"
+    (let [d (first-decl "config {\n    timeout: Integer = 30\n}\n")]
+      (is (= :config (:type d)))
+      (is (= 1 (count (:params d))))
+      (let [p (first (:params d))]
+        (is (= "timeout" (:name p)))
+        (is (= {:kind :simple :name "Integer"} (:type-ref p)))
+        (is (= "30" (:default p))))))
+
+  (testing "config with no default"
+    (let [d (first-decl "config {\n    db_url: String\n}\n")]
+      (is (= :config (:type d)))
+      (let [p (first (:params d))]
+        (is (= "db_url" (:name p)))
+        (is (= {:kind :simple :name "String"} (:type-ref p)))
+        (is (nil? (:default p))))))
+
+  (testing "config with multiple parameters"
+    (let [d (first-decl
+              (str "config {\n"
+                   "    timeout: Integer = 30\n"
+                   "    retries: Integer = 3\n"
+                   "    db_url: String\n"
+                   "}\n"))]
+      (is (= 3 (count (:params d)))))))
+
+;; ---------------------------------------------------------------------------
 ;; Corpus-regression — every .allium file in src/ must parse clean
 ;; ---------------------------------------------------------------------------
 
