@@ -197,15 +197,18 @@
    :nav-dot  (fn [n] [:nav-dot n])
    :nav-opt  (fn [n] [:nav-opt n])
    :nav-call (fn [& args]
-               ;; Filter out whitespace strings; arglist becomes a vec of Expressions
-               (into [:nav-call] (filterv expr? args)))
+               ;; :arglist is transformed to a vector of Expressions and arrives as one
+               ;; element among whitespace strings in args. Find the first vector.
+               (let [exprs (or (some #(when (vector? %) %) args) [])]
+                 (into [:nav-call] exprs)))
 
    :arglist  (fn [& args]
                (filterv expr? args))
 
-   ;; func-call: (name arg1 arg2 …) — name is a string, rest are Expressions
+   ;; func-call: name is a string; :arglist is transformed to a vector of Expressions
+   ;; and arrives as one element among whitespace strings in args. Find the first vector.
    :func-call (fn [func-name & args]
-                (let [exprs (filterv expr? args)]
+                (let [exprs (or (some #(when (vector? %) %) args) [])]
                   (e/make-apply func-name exprs)))
 
    ;; existence-expr: wraps the nav expression in exists; whitespace stripped

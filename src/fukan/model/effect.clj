@@ -30,11 +30,20 @@
   [rule-id (:kind effect) (:target effect)])
 
 (defn canonicalise
-  "Plan-2 stub. The Allium analyzer (Plan 2) replaces this body with the
-   §3.8.4 four-pattern matcher: post.X.f = E ⇒ Write; post.X = T.created(…)
-   ⇒ Create; not exists post.X ⇒ Destroy; emitted(E, args…) ⇒ Emit."
-  [_expression]
-  nil)
+  "Per §3.8.4. Delegates to the Allium analyzer's canonicaliser via
+   requiring-resolve to avoid a circular load (this kernel module can't
+   statically depend on fukan.vocabulary.allium.*). Future Vocabulary
+   extensions (Boundary, DDD, Hex) would register their own canonicalisers
+   via a methodology-operator extension seam (deferred — see §3.8 TBDs).
+
+   The single-arg form uses an anonymous source-expr-id; analyzers calling
+   from within a Rule context should call
+   fukan.vocabulary.allium.effect-canonicalise/canonicalise directly with
+   the actual source ExprId."
+  [expression]
+  ((requiring-resolve 'fukan.vocabulary.allium.effect-canonicalise/canonicalise)
+   expression
+   "anonymous-source"))
 
 ;; -- Malli schema -------------------------------------------------------------
 
