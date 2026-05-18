@@ -3,6 +3,7 @@
    The entry point `analyze-file` takes a Model, an AST, and a coordinate;
    returns the Model extended with this file's content."
   (:require [clojure.set]
+            [clojure.string :as str]
             [fukan.model.primitives :as p]
             [fukan.model.relations :as r]
             [fukan.model.type :as t]
@@ -193,6 +194,143 @@
              :payload (actor-payload decl)})))))
 
 ;; ---------------------------------------------------------------------------
+;; Surface analysis helpers
+;; ---------------------------------------------------------------------------
+
+(defn- surface-payload
+  "Extract the Allium::Surface payload from the surface declaration's
+   structured field-items."
+  [decl _module-coord]
+  (let [fields (:fields decl)
+        facing  (->> fields (filter #(= :facing  (:field-kind %))) first)
+        context (->> fields (filter #(= :context (:field-kind %))) first)
+        timeout (->> fields (filter #(= :timeout (:field-kind %))) first)
+        related (->> fields (filter #(= :related (:field-kind %))) first)]
+    (cond-> {}
+      facing
+      (assoc :facing {:role          (:role facing)
+                      :type-ref-name (-> facing :type-ref :name)
+                      :type-ref-ns   (-> facing :type-ref :ns)})
+      context
+      (assoc :context {:role          (:role context)
+                       :type-ref-name (-> context :type-ref :name)
+                       :type-ref-ns   (-> context :type-ref :ns)})
+      timeout
+      (assoc :timeout (:rule-name timeout))
+      related
+      (assoc :related (mapv :name (:entries related))))))
+
+(defn- resolve-contract-ref-id
+  "Convert a contract-ref shape into a primitive id.
+   Simple names (`{:name \"X\"}`) get qualified to the current module.
+   Qualified names (`{:kind :qualified :ns A :name X}`) become `<ns>/<name>`
+   placeholders for Task 13 to retarget."
+  [contract-ref module-coord]
+  (if (= :qualified (:kind contract-ref))
+    (str (:ns contract-ref) "/" (:name contract-ref))
+    (qualify module-coord (:name contract-ref))))
+
+(defn- analyze-surface
+  [model decl module-coord _name-registry]
+  (let [container-id (qualify module-coord (:name decl))
+        boundary     (p/make-boundary
+                       {:id         (str container-id "::boundary")
+                        :label      (:name decl)
+                        :operations []})
+        container    (p/make-container
+                       (cond-> {:id       container-id
+                                :label    (:name decl)
+                                :boundary boundary}
+                         (:description decl) (assoc :description (:description decl))))
+        fields       (:fields decl)
+
+        ;; Add the Surface container + Allium::Surface tag
+        m0 (-> model
+               (build/add-primitive container)
+               (build/add-tag-application
+                 (v/make-tag-application
+                   {:tag     {:namespace "Allium" :name "Surface"}
+                    :target  {:case :target/primitive :id container-id}
+                    :payload (surface-payload decl module-coord)})))
+
+        ;; provides: — create stub Event primitive then emit provides edge + Allium::Provides tag
+        m1 (reduce (fn [m entry]
+                     (let [event-name (:name entry)
+                           event-id   (qualify module-coord event-name)
+                           ;; Only add the event stub if it doesn't already exist
+                           m' (if (build/get-primitive m event-id)
+                                m
+                                (build/add-primitive m (p/make-event {:id    event-id
+                                                                       :label event-name
+                                                                       :parameters []})))
+                           edge    (r/make-edge :relation/provides
+                                                (r/primitive-ref container-id)
+                                                (r/primitive-ref event-id))
+                           edge-id (r/edge-identity edge)]
+                       (try (-> m'
+                                (build/add-edge edge)
+                                (build/add-tag-application
+                                  (v/make-tag-application
+                                    {:tag    {:namespace "Allium" :name "Provides"}
+                                     :target {:case :target/edge :edge-identity edge-id}})))
+                            (catch Exception _ m'))))
+                   m0
+                   (->> fields
+                        (filter #(= :provides-block (:field-kind %)))
+                        (mapcat :entries)))
+
+        ;; exposes: — emit exposes Container -> Field(substrate) edges + Allium::Exposes tag
+        m2 (reduce (fn [m exposed-path]
+                     (let [segs                (str/split exposed-path #"\.")
+                           container-name      (first segs)
+                           field-name          (last segs)
+                           target-container-id (qualify module-coord container-name)
+                           edge    (r/make-edge :relation/exposes
+                                                (r/primitive-ref container-id)
+                                                (r/substrate-address target-container-id
+                                                                      [{:slot "field" :key field-name}]))
+                           edge-id (r/edge-identity edge)]
+                       ;; Skip if endpoint resolution fails (cross-module or missing field)
+                       (try (-> m
+                                (build/add-edge edge)
+                                (build/add-tag-application
+                                  (v/make-tag-application
+                                    {:tag    {:namespace "Allium" :name "Exposes"}
+                                     :target {:case :target/edge :edge-identity edge-id}})))
+                            (catch Exception _ m))))
+                   m1
+                   (->> fields
+                        (filter #(= :exposes (:field-kind %)))
+                        (mapcat :entries)))
+
+        ;; contracts: fulfils / demands + Allium::Fulfils / Allium::Demands tags
+        m3 (reduce (fn [m entry]
+                     (let [verb        (:verb entry)
+                           contract-id (resolve-contract-ref-id (:contract entry) module-coord)
+                           relation    (case verb
+                                         "fulfils" :relation/realises
+                                         "demands" :relation/uses)
+                           tag-name    (case verb
+                                         "fulfils" "Fulfils"
+                                         "demands" "Demands")
+                           edge    (r/make-edge relation
+                                                (r/primitive-ref container-id)
+                                                (r/primitive-ref contract-id))
+                           edge-id (r/edge-identity edge)]
+                       (try (-> m
+                                (build/add-edge edge)
+                                (build/add-tag-application
+                                  (v/make-tag-application
+                                    {:tag    {:namespace "Allium" :name tag-name}
+                                     :target {:case :target/edge :edge-identity edge-id}})))
+                            (catch Exception _ m))))
+                   m2
+                   (->> fields
+                        (filter #(= :contracts (:field-kind %)))
+                        (mapcat :entries)))]
+    m3))
+
+;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
@@ -214,7 +352,15 @@
                 {:tag    {:namespace "Allium" :name "Module"}
                  :target {:case :target/primitive :id coordinate}})))
         name-registry (collect-name-registry ast)
-        ;; Process entity-like declarations in order
+        ;; Pre-sort declarations so entity/value/variant/contract come before
+        ;; surface (ensuring same-module contract endpoints are registered first).
+        declaration-order {:entity 0 :value 0 :variant 0
+                           :external-entity 1 :actor 1
+                           :contract 2
+                           :surface 3}
+        sorted-decls (sort-by #(get declaration-order (:type %) 99)
+                               (:declarations ast))
+        ;; Process declarations in dependency order
         model-with-decls
         (reduce (fn [m decl]
                   (case (:type decl)
@@ -223,14 +369,23 @@
                     :variant         (analyze-entity-like m decl coordinate :variant name-registry)
                     :external-entity (analyze-external-entity m decl coordinate name-registry)
                     :actor           (analyze-actor m decl coordinate name-registry)
-                    ;; Other declaration types: passthrough (Tasks 7–13)
+                    ;; Stub Container for contract so surface edge endpoints resolve.
+                    ;; Full contract analysis arrives in Task 8.
+                    :contract        (let [contract-id (qualify coordinate (:name decl))]
+                                       (if (build/get-primitive m contract-id)
+                                         m
+                                         (build/add-primitive m (p/make-container
+                                                                   {:id    contract-id
+                                                                    :label (:name decl)}))))
+                    :surface         (analyze-surface m decl coordinate name-registry)
+                    ;; Other declaration types: passthrough (Tasks 9–13)
                     m))
                 model-with-module
-                (:declarations ast))
-        ;; Collect child ids from Container declarations (entity, value, variant, external-entity)
+                sorted-decls)
+        ;; Collect child ids from Container declarations (entity, value, variant, external-entity, surface)
         ;; Actors are Actor primitives — not Containers — so they are NOT added to :children
         child-ids (->> (:declarations ast)
-                       (filter #(#{:entity :value :variant :external-entity} (:type %)))
+                       (filter #(#{:entity :value :variant :external-entity :surface} (:type %)))
                        (map #(qualify coordinate (:name %)))
                        set)
         ;; Update module-Container's :children (direct assoc-in bypasses

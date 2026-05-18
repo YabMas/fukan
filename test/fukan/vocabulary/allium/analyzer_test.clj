@@ -152,3 +152,78 @@
                        first)]
       (is (= "User" (-> tag-app :payload :identified_by)))
       (is (= "Workspace" (-> tag-app :payload :within))))))
+
+(deftest surface-declaration-basic
+  (testing "surface becomes Boundary-only Container with Allium::Surface tag"
+    (let [a (ast "actor User { identified_by: U }\nsurface Login { facing actor: User }")
+          model (analyzer/analyze-file (build/empty-model) a "auth")]
+      (is (some? (build/get-primitive model "auth::Login")))
+      (let [tag-app (->> (:tag-apps model)
+                         (filter #(and (= "Surface" (-> % :tag :name))
+                                       (= "auth::Login" (-> % :target :id))))
+                         first)]
+        (is (some? tag-app))
+        (is (= {:role "actor" :type-ref-name "User"}
+               (-> tag-app :payload :facing (select-keys [:role :type-ref-name]))))))))
+
+(deftest surface-provides-emits-provides-edge
+  (testing "provides: clauses emit provides Container -> Event edges with Allium::Provides edge-tag"
+    (let [a (ast (str "surface API {\n"
+                      "    facing actor: User\n"
+                      "    provides:\n"
+                      "        SubmitForm(payload: Payload)\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "web")
+          edges (filter #(= :relation/provides (:kind %)) (:edges model))]
+      (is (pos? (count edges)))
+      ;; the provides edge connects the Surface to the Event (qualified
+      ;; as <module>/<EventName> — Task 13 will retarget cross-module
+      ;; events through use-aliases)
+      (is (= "web::API" (-> edges first :from :id)))
+      (let [provides-tag-apps (filter #(= "Provides" (-> % :tag :name)) (:tag-apps model))]
+        (is (pos? (count provides-tag-apps)) "Allium::Provides edge-tag applied")))))
+
+(deftest surface-exposes-emits-exposes-edge
+  (testing "exposes: clauses emit exposes Container -> Field edges with Allium::Exposes edge-tag"
+    (let [a (ast (str "entity Order { items: String, status: String }\n"
+                      "surface ReadOrder {\n"
+                      "    facing actor: User\n"
+                      "    exposes: Order.items\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          edges (filter #(= :relation/exposes (:kind %)) (:edges model))]
+      (is (pos? (count edges)))
+      (let [exposes-tag-apps (filter #(= "Exposes" (-> % :tag :name)) (:tag-apps model))]
+        (is (pos? (count exposes-tag-apps)) "Allium::Exposes edge-tag applied")))))
+
+(deftest surface-contracts-fulfils-emits-realises
+  (testing "contracts: fulfils X emits realises edge with Allium::Fulfils tag"
+    (let [a (ast (str "contract OrderSubmission {}\n"
+                      "surface Submit {\n"
+                      "    facing actor: User\n"
+                      "    contracts:\n"
+                      "        fulfils OrderSubmission\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          realises-edges (filter #(= :relation/realises (:kind %)) (:edges model))]
+      (is (pos? (count realises-edges)))
+      (is (= "shop::Submit" (-> realises-edges first :from :id)))
+      (is (= "shop::OrderSubmission" (-> realises-edges first :to :id)))
+      (let [fulfils-tag-apps (filter #(= "Fulfils" (-> % :tag :name)) (:tag-apps model))]
+        (is (pos? (count fulfils-tag-apps)) "Allium::Fulfils edge-tag applied")))))
+
+(deftest surface-contracts-demands-emits-uses
+  (testing "contracts: demands X emits uses edge with Allium::Demands tag"
+    (let [a (ast (str "contract PaymentGateway {}\n"
+                      "surface Checkout {\n"
+                      "    facing actor: User\n"
+                      "    contracts:\n"
+                      "        demands PaymentGateway\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          uses-edges (filter #(= :relation/uses (:kind %)) (:edges model))]
+      (is (pos? (count uses-edges)))
+      (is (= "shop::Checkout" (-> uses-edges first :from :id)))
+      (is (= "shop::PaymentGateway" (-> uses-edges first :to :id)))
+      (let [demands-tag-apps (filter #(= "Demands" (-> % :tag :name)) (:tag-apps model))]
+        (is (pos? (count demands-tag-apps)) "Allium::Demands edge-tag applied")))))
