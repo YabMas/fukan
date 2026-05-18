@@ -185,8 +185,10 @@
 
   nested-variant = <'variant'> __ ident _ <'{'> _ field-list _ <'}'>
 
-  (* Ordered alternation: try relationship, projection, typed-with-comment, typed-field, then derived *)
-  field-value = relationship / projection / typed-with-comment / typed-field / derived-value
+  (* Ordered alternation: try relationship, projection, typed-with-when, typed-with-comment, typed-field, then derived *)
+  field-value = relationship / projection / typed-with-when / typed-with-comment / typed-field / derived-value
+
+  typed-with-when = type-ref _ <'when'> _ <':'> _ rest-of-line
 
   relationship = type-ref __ <'with'> __ rest-of-line
   projection   = ident __ <'where'> __ rest-of-line
@@ -629,6 +631,13 @@
    :projection
    (fn [source predicate]
      {:field-kind :projection :source source :predicate predicate})
+
+   ;; All declared-type field variants share :field-kind :typed; :when and
+   ;; :comment are optional enrichments. Consumers iterate :typed fields and
+   ;; check for the optional keys.
+   :typed-with-when
+   (fn [type-ref when-text]
+     {:field-kind :typed, :type-ref type-ref, :when (str/trim when-text)})
 
    :typed-with-comment
    (fn [type-ref comment]

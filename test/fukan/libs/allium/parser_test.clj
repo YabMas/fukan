@@ -344,6 +344,25 @@
       (is (= :typed (:field-kind f)))
       (is (= "NodeId" (:comment f))))))
 
+(deftest field-when-clause-test
+  (testing "field with lifecycle when:"
+    (let [d (first-decl
+              "entity Order {\n    status: pending | shipped\n    shipped_at: DateTime when: status = shipped\n}\n")
+          f2 (-> d :fields second)]
+      (is (= :typed (:field-kind f2)))
+      (is (= "shipped_at" (:name f2)))
+      (is (= {:kind :simple :name "DateTime"} (:type-ref f2)))
+      (is (= "status = shipped" (:when f2)))))
+
+  (testing "optional field with when:"
+    (let [d (first-decl
+              "entity Order {\n    status: pending | shipped\n    shipped_at: DateTime? when: status = shipped\n}\n")
+          f2 (-> d :fields second)]
+      (is (= :typed (:field-kind f2)))
+      (is (= "shipped_at" (:name f2)))
+      (is (= {:kind :optional :inner {:kind :simple :name "DateTime"}} (:type-ref f2)))
+      (is (= "status = shipped" (:when f2))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Unit tests — nested variants
 ;; ---------------------------------------------------------------------------
