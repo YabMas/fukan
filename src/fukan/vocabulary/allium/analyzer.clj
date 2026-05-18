@@ -152,6 +152,46 @@
                          (r/primitive-ref parent-id))))
         model'))))
 
+(defn- analyze-external-entity
+  [model decl module-coord _name-registry]
+  (let [container-id (qualify module-coord (:name decl))
+        container (p/make-container
+                    {:id container-id
+                     :label (:name decl)})]
+    (-> model
+        (build/add-primitive container)
+        (build/add-tag-application
+          (v/make-tag-application
+            {:tag {:namespace "Allium" :name "ExternalEntity"}
+             :target {:case :target/primitive :id container-id}})))))
+
+(defn- actor-payload [decl]
+  (let [identified-by-text
+        (when-let [tr (:identified-by decl)]
+          (str (:name tr)
+               (when-let [w (:identified-by-where decl)]
+                 (str " where " w))))
+        within-text
+        (when-let [tr (:within decl)]
+          (:name tr))]
+    (cond-> {}
+      identified-by-text (assoc :identified_by identified-by-text)
+      within-text        (assoc :within within-text))))
+
+(defn- analyze-actor
+  [model decl module-coord _name-registry]
+  (let [actor-id (qualify module-coord (:name decl))
+        actor (p/make-actor
+                {:id actor-id
+                 :label (:name decl)})]
+    (-> model
+        (build/add-primitive actor)
+        (build/add-tag-application
+          (v/make-tag-application
+            {:tag {:namespace "Allium" :name "Actor"}
+             :target {:case :target/primitive :id actor-id}
+             :payload (actor-payload decl)})))))
+
 ;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
@@ -178,16 +218,19 @@
         model-with-decls
         (reduce (fn [m decl]
                   (case (:type decl)
-                    :entity  (analyze-entity-like m decl coordinate :entity  name-registry)
-                    :value   (analyze-entity-like m decl coordinate :value   name-registry)
-                    :variant (analyze-entity-like m decl coordinate :variant name-registry)
-                    ;; Other declaration types: passthrough (Tasks 6–13)
+                    :entity          (analyze-entity-like m decl coordinate :entity  name-registry)
+                    :value           (analyze-entity-like m decl coordinate :value   name-registry)
+                    :variant         (analyze-entity-like m decl coordinate :variant name-registry)
+                    :external-entity (analyze-external-entity m decl coordinate name-registry)
+                    :actor           (analyze-actor m decl coordinate name-registry)
+                    ;; Other declaration types: passthrough (Tasks 7–13)
                     m))
                 model-with-module
                 (:declarations ast))
-        ;; Collect child ids from all entity-like declarations
+        ;; Collect child ids from Container declarations (entity, value, variant, external-entity)
+        ;; Actors are Actor primitives — not Containers — so they are NOT added to :children
         child-ids (->> (:declarations ast)
-                       (filter #(#{:entity :value :variant} (:type %)))
+                       (filter #(#{:entity :value :variant :external-entity} (:type %)))
                        (map #(qualify coordinate (:name %)))
                        set)
         ;; Update module-Container's :children (direct assoc-in bypasses

@@ -109,3 +109,46 @@
           name-field (->> (:fields x) (filter #(= "name" (:name %))) first)]
       (is (= :type/scalar (-> name-field :type-ref :case)))
       (is (= "String" (-> name-field :type-ref :name))))))
+
+(deftest external-entity-declaration
+  (testing "external entity becomes Container with Allium::ExternalEntity tag"
+    (let [a (ast "external entity Foo {}")
+          model (analyzer/analyze-file (build/empty-model) a "user")]
+      (is (some? (build/get-primitive model "user::Foo")))
+      (is (some? (->> (:tag-apps model)
+                      (filter #(and (= "ExternalEntity" (-> % :tag :name))
+                                    (= "user::Foo" (-> % :target :id))))
+                      first))))))
+
+(deftest actor-declaration-simple
+  (testing "actor with identified_by only"
+    (let [a (ast "actor Author { identified_by: User }")
+          model (analyzer/analyze-file (build/empty-model) a "interviews")]
+      (is (some? (build/get-primitive model "interviews::Author")))
+      (let [actor (build/get-primitive model "interviews::Author")]
+        (is (= :primitive/actor (:kind actor))))
+      (let [tag-app (->> (:tag-apps model)
+                         (filter #(and (= "Actor" (-> % :tag :name))
+                                       (= "interviews::Author" (-> % :target :id))))
+                         first)]
+        (is (some? tag-app) "Allium::Actor tag applied")
+        (is (= "User" (-> tag-app :payload :identified_by)))))))
+
+(deftest actor-with-where-predicate
+  (testing "actor with where predicate concatenates into identified_by text"
+    (let [a (ast "actor Admin { identified_by: User where role = admin }")
+          model (analyzer/analyze-file (build/empty-model) a "auth")
+          tag-app (->> (:tag-apps model)
+                       (filter #(= "Actor" (-> % :tag :name)))
+                       first)]
+      (is (= "User where role = admin" (-> tag-app :payload :identified_by))))))
+
+(deftest actor-with-within
+  (testing "actor with within clause populates within payload slot"
+    (let [a (ast "actor Editor { identified_by: User within: Workspace }")
+          model (analyzer/analyze-file (build/empty-model) a "docs")
+          tag-app (->> (:tag-apps model)
+                       (filter #(= "Actor" (-> % :tag :name)))
+                       first)]
+      (is (= "User" (-> tag-app :payload :identified_by)))
+      (is (= "Workspace" (-> tag-app :payload :within))))))
