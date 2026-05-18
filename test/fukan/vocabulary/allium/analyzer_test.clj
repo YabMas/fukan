@@ -276,6 +276,11 @@
 
 (deftest rule-declaration-basic
   (testing "rule becomes Rule primitive with Allium::Rule tag"
+    ;; Rule and event may share the same local name within a module — K16a's
+    ;; slot-aware Event id-string (`<module>::events::<name>`) keeps them in
+    ;; distinct kernel-id namespaces. This test exercises the equal-name case
+    ;; head-on; see `module-with-rule-and-event-sharing-name` for the locking
+    ;; assertion that both primitives coexist with distinct ids.
     (let [a (ast "rule ProcessOrder { when: ProcessOrder() ensures: Ok }")
           model (analyzer/analyze-file (build/empty-model) a "shop")]
       (let [rule (build/get-primitive model "shop::ProcessOrder")]
@@ -562,3 +567,194 @@
       (is (some? (->> (:tag-apps model)
                       (filter #(= "Guidance" (-> % :tag :name)))
                       first))))))
+
+;; ---------------------------------------------------------------------------
+;; Task 13: Event synthesis from when/provides/emits sites
+;; ---------------------------------------------------------------------------
+
+(deftest event-synthesis-from-surface-provides
+  (testing "Surface provides: clause synthesizes an Event with typed parameters"
+    (let [a (ast (str "value Payload { data: String }\n"
+                      "surface API {\n"
+                      "    facing actor: User\n"
+                      "    provides:\n"
+                      "        SubmitForm(payload: Payload)\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "web")
+          event (build/get-primitive model "web::events::SubmitForm")]
+      (is (some? event) "Event primitive synthesized")
+      (is (= :primitive/event (:kind event)))
+      (is (= "SubmitForm" (:label event)))
+      (is (= 1 (count (:parameters event))) "one typed parameter from provides")
+      (is (= "payload" (-> event :parameters first :name)))
+      ;; Allium::Event tag applied
+      (let [event-tags (filter #(and (= "Event" (-> % :tag :name))
+                                     (= "web::events::SubmitForm" (-> % :target :id)))
+                               (:tag-apps model))]
+        (is (= 1 (count event-tags)) "Allium::Event tag applied")
+        (is (contains? (set (-> event-tags first :payload :declaration-sites))
+                       "provides"))))))
+
+(deftest event-synthesis-added-to-module-events
+  (testing "synthesized Event id is added to module-Container's :events set"
+    (let [a (ast (str "surface API {\n"
+                      "    facing actor: User\n"
+                      "    provides:\n"
+                      "        Ping()\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "web")
+          module-c (build/get-primitive model "web")]
+      (is (contains? (:events module-c) "web::events::Ping")))))
+
+(deftest event-synthesis-merges-provides-and-when-call
+  (testing "provides: + when: EventCall on same name share one Event; params from provides"
+    (let [a (ast (str "value Order { id: String }\n"
+                      "surface API {\n"
+                      "    facing actor: User\n"
+                      "    provides:\n"
+                      "        OrderPlaced(order: Order)\n"
+                      "}\n"
+                      "rule HandleOrder {\n"
+                      "    when: OrderPlaced(order: Order)\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          event (build/get-primitive model "shop::events::OrderPlaced")
+          event-tags (filter #(and (= "Event" (-> % :tag :name))
+                                   (= "shop::events::OrderPlaced" (-> % :target :id)))
+                             (:tag-apps model))]
+      (is (some? event))
+      ;; Only one Event primitive
+      (is (= 1 (count event-tags)) "exactly one Allium::Event tag")
+      ;; Parameters from provides (typed)
+      (is (= 1 (count (:parameters event))))
+      (is (= "order" (-> event :parameters first :name)))
+      ;; Declaration sites include both
+      (let [sites (set (-> event-tags first :payload :declaration-sites))]
+        (is (contains? sites "provides"))
+        (is (contains? sites "when"))))))
+
+(deftest event-synthesis-emit-target-retargeted
+  (testing "ensures: emitted(E, ...) edges target the synthesized Event id, not the bare name"
+    (let [a (ast (str "value Order { id: String }\n"
+                      "surface API {\n"
+                      "    facing actor: User\n"
+                      "    provides:\n"
+                      "        OrderShipped(order: Order)\n"
+                      "}\n"
+                      "rule Ship {\n"
+                      "    when: ShipRequest(order: Order)\n"
+                      "    ensures: emitted(OrderShipped, order)\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          emits-edges (filter #(= :relation/emits (:kind %)) (:edges model))]
+      (is (= 1 (count emits-edges)))
+      ;; Edge :to must point at the slot-aware Event id, not the bare name
+      (is (= "shop::events::OrderShipped" (-> emits-edges first :to :id))))))
+
+(deftest event-synthesis-from-emit-alone
+  (testing "Rule emits: an Event with no provides/when synthesizes from the emit site"
+    (let [a (ast (str "value Order { id: String }\n"
+                      "rule Ship {\n"
+                      "    when: ShipRequest(order: Order)\n"
+                      "    ensures: emitted(OrderShipped, order)\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          event (build/get-primitive model "shop::events::OrderShipped")
+          event-tags (filter #(and (= "Event" (-> % :tag :name))
+                                   (= "shop::events::OrderShipped" (-> % :target :id)))
+                             (:tag-apps model))
+          emits-edges (filter #(= :relation/emits (:kind %)) (:edges model))]
+      (is (some? event) "Event synthesized from emit site")
+      (is (= 1 (count event-tags)))
+      ;; Edge :to retargeted
+      (is (= 1 (count emits-edges)))
+      (is (= "shop::events::OrderShipped" (-> emits-edges first :to :id)))
+      (is (contains? (set (-> event-tags first :payload :declaration-sites))
+                     "emits")))))
+
+(deftest event-synthesis-from-when-alone
+  (testing "when: EventCall on its own synthesizes an Event"
+    (let [a (ast (str "rule R {\n"
+                      "    when: ExternalSignal(x: String)\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "test")
+          event (build/get-primitive model "test::events::ExternalSignal")
+          triggers-edges (filter #(= :relation/triggers (:kind %)) (:edges model))]
+      (is (some? event) "Event synthesized from when:call site")
+      ;; Edge :from points at the slot-aware Event id
+      (is (= 1 (count triggers-edges)))
+      (is (= "test::events::ExternalSignal" (-> triggers-edges first :from :id))))))
+
+(deftest event-synthesis-arity-mismatch-throws
+  (testing "two provides: declaring the same event with different arity throws"
+    (is (thrown-with-msg?
+          Exception #"(?i)event.*shape|shape.*mismatch|arity"
+          (let [a (ast (str "value A {}\n"
+                            "value B {}\n"
+                            "surface S1 {\n"
+                            "    facing actor: User\n"
+                            "    provides:\n"
+                            "        E(a: A)\n"
+                            "}\n"
+                            "surface S2 {\n"
+                            "    facing actor: User\n"
+                            "    provides:\n"
+                            "        E(a: A, b: B)\n"
+                            "}\n"))]
+            (analyzer/analyze-file (build/empty-model) a "test"))))))
+
+(deftest event-synthesis-typed-vs-untyped-arity-ok
+  (testing "untyped sites only constrain arity, not types — single provides + matching-arity when is fine"
+    (let [a (ast (str "value Order { id: String }\n"
+                      "surface API {\n"
+                      "    facing actor: User\n"
+                      "    provides:\n"
+                      "        OrderPlaced(order: Order)\n"
+                      "}\n"
+                      "rule R {\n"
+                      "    when: OrderPlaced(o: Order)\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "shop")
+          event (build/get-primitive model "shop::events::OrderPlaced")]
+      (is (some? event))
+      (is (= 1 (count (:parameters event))))
+      ;; Param name from provides
+      (is (= "order" (-> event :parameters first :name))))))
+
+;; ---------------------------------------------------------------------------
+;; K16a: slot-aware Event id keeps rule/event names from colliding
+;; ---------------------------------------------------------------------------
+
+(deftest module-with-rule-and-event-sharing-name
+  (testing "rule and Event with identical local names coexist as distinct primitives"
+    ;; K16a: Events use `<module>::events::<name>`, Rules use `<module>::<name>`.
+    ;; The pattern `rule X { when: X(...) ... }` mirrors web/views/spec.allium's
+    ;; `rule SelectNode { ... when: viewer.SelectNode(...) ... }` shape.
+    (let [a (ast (str "value NodeId { id: String }\n"
+                      "actor User { identified_by: U }\n"
+                      "surface Viewer {\n"
+                      "    facing actor: User\n"
+                      "    provides:\n"
+                      "        SelectNode(node_id: NodeId)\n"
+                      "}\n"
+                      "rule SelectNode {\n"
+                      "    when: SelectNode(node_id: NodeId)\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "views")
+          rule  (build/get-primitive model "views::SelectNode")
+          event (build/get-primitive model "views::events::SelectNode")]
+      (is (some? rule) "Rule primitive at flat <module>::<name>")
+      (is (= :primitive/rule (:kind rule)))
+      (is (some? event) "Event primitive at slot-aware <module>::events::<name>")
+      (is (= :primitive/event (:kind event)))
+      ;; Distinct ids — the load-bearing assertion
+      (is (not= (:id rule) (:id event)))
+      ;; triggers edge :from points at the Event id, :to at the Rule id
+      (let [t-edges (filter #(= :relation/triggers (:kind %)) (:edges model))]
+        (is (= 1 (count t-edges)))
+        (is (= "views::events::SelectNode" (-> t-edges first :from :id)))
+        (is (= "views::SelectNode" (-> t-edges first :to :id)))))))

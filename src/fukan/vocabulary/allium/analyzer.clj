@@ -23,6 +23,15 @@
 (defn- qualify [module-coord local-name]
   (str module-coord "::" local-name))
 
+(defn- event-id
+  "Construct the slot-aware kernel id for an Event. Per K16/K16a, Event
+   identity is `(qualifying Container, local-name)`; this is encoded in the
+   id-string as `<container-id>::events::<local-name>`. Rules and Containers
+   use the flat `<container-id>::<local-name>`; the `::events::` segment
+   prevents rule/event name collisions within the same module."
+  [module-coord event-name]
+  (str module-coord "::events::" event-name))
+
 (defn- translate-type-ref
   "Convert Plan-2a type-ref shape into a fukan.model.type Type value.
    `name-registry` is a map of local-name → declaration-type (#{:entity :value :variant}),
@@ -365,16 +374,16 @@
         ;; provides: — create stub Event primitive then emit provides edge + Allium::Provides tag
         m1 (reduce (fn [m entry]
                      (let [event-name (:name entry)
-                           event-id   (qualify module-coord event-name)
+                           ev-id      (event-id module-coord event-name)
                            ;; Only add the event stub if it doesn't already exist
-                           m' (if (build/get-primitive m event-id)
+                           m' (if (build/get-primitive m ev-id)
                                 m
-                                (build/add-primitive m (p/make-event {:id    event-id
+                                (build/add-primitive m (p/make-event {:id    ev-id
                                                                        :label event-name
                                                                        :parameters []})))
                            edge    (r/make-edge :relation/provides
                                                 (r/primitive-ref container-id)
-                                                (r/primitive-ref event-id))
+                                                (r/primitive-ref ev-id))
                            edge-id (r/edge-identity edge)]
                        (try (-> m'
                                 (build/add-edge edge)
@@ -495,17 +504,19 @@
     (case (:kind trigger)
       :call
       ;; Event-shaped: triggers: Event -> Rule
-      ;; Event-id placeholder; Task 13 (Event synthesis) will retarget
+      ;; Event-id uses the slot-aware form <module>::events::<EventName>
+      ;; (per K16a); Task 13's synthesis pass replaces the stub with
+      ;; canonical typed parameters at end-of-file.
       (let [event-name (:name trigger)
-            event-id   (str module-coord "::events::" event-name)
+            ev-id      (event-id module-coord event-name)
             ;; Create a stub Event primitive if one doesn't exist yet
-            m'         (if (build/get-primitive model event-id)
+            m'         (if (build/get-primitive model ev-id)
                          model
-                         (build/add-primitive model (p/make-event {:id         event-id
+                         (build/add-primitive model (p/make-event {:id         ev-id
                                                                     :label      event-name
                                                                     :parameters []})))
             edge       (r/make-edge :relation/triggers
-                                    (r/primitive-ref event-id)
+                                    (r/primitive-ref ev-id)
                                     (r/primitive-ref rule-id))
             edge-id    (r/edge-identity edge)]
         (try (-> m'
@@ -680,16 +691,33 @@
                    m2
                    (range (count definitions)))
 
-        ;; Emit writes/creates/destroys/emits kernel edges from effects (best-effort)
+        ;; Emit writes/creates/destroys/emits kernel edges from effects (best-effort).
+        ;; For :effect/emit, the canonicaliser produces a primitive-ref by bare
+        ;; event-name; encode it as the slot-aware Event id
+        ;; <module>::events::<EventName> (per K16a) and ensure a stub Event
+        ;; primitive exists (the synthesis post-pass will canonicalise its
+        ;; parameters at end of file).
         m4 (reduce (fn [m effect]
                      (let [edge-kind (effect-edge-kind (:kind effect))
+                           target    (:target effect)
+                           target'   (if (and (= :effect/emit (:kind effect))
+                                              (= :endpoint/primitive (:case target)))
+                                       (r/primitive-ref (event-id module-coord (:id target)))
+                                       target)
+                           m'        (if (and (= :effect/emit (:kind effect))
+                                              (= :endpoint/primitive (:case target'))
+                                              (not (build/get-primitive m (:id target'))))
+                                       (build/add-primitive m (p/make-event {:id         (:id target')
+                                                                              :label      (:id target)
+                                                                              :parameters []}))
+                                       m)
                            edge (r/make-edge edge-kind
                                              (r/primitive-ref rule-id)
-                                             (:target effect)
+                                             target'
                                              (cond-> {}
                                                (:value effect) (assoc :condition (:value effect))))]
-                       (try (build/add-edge m edge)
-                            (catch Exception _ m))))
+                       (try (build/add-edge m' edge)
+                            (catch Exception _ m'))))
                    m3
                    effects)
         ;; Emit triggers/observes kernel edges from when: clauses
@@ -794,6 +822,220 @@
     m1))
 
 ;; ---------------------------------------------------------------------------
+;; Event synthesis (Task 13)
+;; ---------------------------------------------------------------------------
+
+(defn- event-param-shape
+  "Reduce a list of parameter maps to an arity-only summary used for cross-site
+   agreement: a vector of param names (positions). Typed sites add type info
+   under :types — only meaningful when all sites agree. Untyped sites omit it."
+  [params typed?]
+  (let [names (mapv :name params)]
+    (cond-> {:arity (count params), :names names}
+      typed? (assoc :types
+                    (mapv (fn [p] (or (:type-ref p) (:type p))) params)))))
+
+(defn- provides-param-shape
+  "Convert a provides-block entry's params (which use :type key) to the shape
+   used for cross-site comparison. provides params are always typed at the
+   grammar level."
+  [entry]
+  (event-param-shape (or (:params entry) []) true))
+
+(defn- trigger-param-shape
+  "Convert a when-call trigger's params (which use :type-ref key, optional)
+   to the shape used for cross-site comparison. Trigger params may or may not
+   carry types; treat the whole site as typed only if every param has a type."
+  [trigger]
+  (let [params (or (:params trigger) [])
+        all-typed? (and (seq params) (every? :type-ref params))]
+    (event-param-shape params all-typed?)))
+
+(defn- emit-param-shape
+  "Synthesize a shape for an emits site. The canonicaliser captures emitted
+   args as an Expression (tuple Apply for multi-arg, single expr for 1-arg, or
+   nil for zero-arg). We only know arity at this stage, with anonymous names.
+   Returns nil if we cannot determine arity (e.g. opaque value)."
+  [emit-value]
+  (cond
+    (nil? emit-value)
+    {:arity 0 :names []}
+
+    (and (map? emit-value)
+         (= :expr/apply (:case emit-value))
+         (= "tuple" (:op emit-value)))
+    (let [args (:args emit-value)]
+      {:arity (count args)
+       :names (mapv (fn [i] (str "arg" i)) (range (count args)))})
+
+    :else
+    ;; Single expression argument
+    {:arity 1 :names ["arg0"]}))
+
+(defn- collect-event-sites
+  "Walk the AST and the model's effects list to collect declaration sites for
+   each event-name. Returns a map of event-name → vector of {:kind, :shape, :params, :raw}
+   where :kind ∈ #{:provides :when :emits}."
+  [ast model module-coord]
+  (let [sites (atom {})
+        add!  (fn [event-name site]
+                (swap! sites update event-name (fnil conj []) site))]
+    ;; provides: blocks on Surfaces and Contracts. Per K16, Event identity
+    ;; comes from `provides:` on Surfaces (Surface entries are Events).
+    ;; Contract provides entries are Operations — handled separately. We only
+    ;; harvest provides entries from Surface declarations here.
+    (doseq [decl (:declarations ast)
+            :when (= :surface (:type decl))
+            field (:fields decl)
+            :when (= :provides-block (:field-kind field))
+            entry (:entries field)]
+      (add! (:name entry)
+            {:kind :provides
+             :params (or (:params entry) [])
+             :shape (provides-param-shape entry)}))
+
+    ;; when:call triggers and emits effects from Rules
+    (doseq [decl (:declarations ast)
+            :when (= :rule (:type decl))]
+      (let [rule-id (qualify module-coord (:name decl))
+            rule    (build/get-primitive model rule-id)]
+        ;; when:call sites — from AST
+        (doseq [clause (:clauses decl)
+                :when (= :when (:clause-type clause))
+                :let [trigger (:trigger clause)]
+                :when (= :call (:kind trigger))]
+          (add! (:name trigger)
+                {:kind :when
+                 :params (or (:params trigger) [])
+                 :shape (trigger-param-shape trigger)}))
+        ;; emit effects — from canonicalised effects on the synthesized Rule
+        (doseq [effect (-> rule :body :effects)
+                :when (= :effect/emit (:kind effect))
+                :let [target (:target effect)]
+                :when (= :endpoint/primitive (:case target))]
+          ;; Effect target was qualified at edge time with the slot-aware
+          ;; encoding <module>::events::<EventName> (per K16a); recover the
+          ;; local name by stripping that exact prefix.
+          (let [ev-id      (:id target)
+                prefix     (str module-coord "::events::")
+                event-name (if (.startsWith ^String ev-id prefix)
+                             (subs ev-id (count prefix))
+                             ev-id)]
+            (add! event-name
+                  {:kind :emits
+                   :params []
+                   :shape (or (emit-param-shape (:value effect))
+                              {:arity 0 :names []})})))))
+    @sites))
+
+(defn- pick-canonical-shape
+  "Among the declaration sites for one event-name, pick canonical parameters.
+   Returns a vector of Parameter records (kernel substrate values).
+
+   Preference order:
+     1. First typed `provides:` site (carries full type info).
+     2. First typed `when:` site.
+     3. Any site — names from the site, types are Scalar('AlliumText')
+        placeholders (mirroring the expression-parser fallback).
+   Untyped sites only constrain arity."
+  [event-sites module-coord name-registry]
+  (let [provides-site (first (filter #(= :provides (:kind %)) event-sites))
+        typed-when    (first (filter #(and (= :when (:kind %))
+                                           (every? :type-ref (:params %)))
+                                     event-sites))
+        chosen        (or provides-site typed-when (first event-sites))
+        params        (:params chosen)]
+    (mapv (fn [i p]
+            (let [tr (or (:type-ref p) (:type p))
+                  type-val (if tr
+                             (translate-type-ref tr module-coord name-registry)
+                             (t/make-scalar "AlliumText"))]
+              (p/make-parameter (or (:name p) (str "arg" i))
+                                type-val
+                                false
+                                i)))
+          (range)
+          (or params []))))
+
+(defn- verify-event-shape-agreement
+  "Throw ex-info {:type :event-shape-mismatch ...} if any two sites for the
+   same event-name disagree on arity, or two typed sites disagree on type
+   sequences."
+  [event-name event-sites]
+  (let [arities (set (map (comp :arity :shape) event-sites))]
+    (when (> (count arities) 1)
+      (throw (ex-info (str "Event shape mismatch: event '" event-name
+                           "' declared with inconsistent arity across sites")
+                      {:type        :event-shape-mismatch
+                       :event       event-name
+                       :arities     arities
+                       :sites       (mapv (fn [s]
+                                            {:kind  (:kind s)
+                                             :shape (:shape s)})
+                                          event-sites)}))))
+  ;; Cross-site type agreement: any two typed sites must agree on the type
+  ;; sequence. Compare on :types vectors (only typed sites have :types).
+  (let [typed-shapes (->> event-sites
+                          (map :shape)
+                          (filter :types))
+        type-seqs    (set (map :types typed-shapes))]
+    (when (> (count type-seqs) 1)
+      (throw (ex-info (str "Event shape mismatch: event '" event-name
+                           "' declared with inconsistent parameter types across sites")
+                      {:type     :event-shape-mismatch
+                       :event    event-name
+                       :sites    (mapv (fn [s]
+                                         {:kind  (:kind s)
+                                          :shape (:shape s)})
+                                       event-sites)})))))
+
+(defn- synthesize-events
+  "Task 13 post-pass. After per-decl analysis on a single file, walk
+   declaration sites for events (provides, when:call, emits) and:
+     - validate parameter-shape agreement across sites
+     - synthesize/overwrite the Event primitive with canonical params
+     - apply Allium::Event tag with :declaration-sites payload
+     - add event-id to module-Container's :events set
+   Cross-file Event references via aliases land in Task 14."
+  [model ast module-coord name-registry]
+  (let [site-map (collect-event-sites ast model module-coord)]
+    (reduce (fn [m [event-name event-sites]]
+              ;; Validate shape agreement first — throws on mismatch
+              (verify-event-shape-agreement event-name event-sites)
+              (let [ev-id        (event-id module-coord event-name)
+                    params       (pick-canonical-shape event-sites module-coord name-registry)
+                    sites-set    (into (sorted-set) (map (comp name :kind)) event-sites)
+                    event-prim   (p/make-event {:id         ev-id
+                                                :label      event-name
+                                                :parameters params})
+                    ;; Defensive: under K16a the slot-aware id-string keeps
+                    ;; Events in their own namespace, but if anything ever
+                    ;; collides at this id with a non-Event primitive, fail
+                    ;; loudly rather than silently obliterate.
+                    existing     (build/get-primitive m ev-id)
+                    _            (when (and existing
+                                            (not= :primitive/event (:kind existing)))
+                                   (throw (ex-info "event-id collision: id is occupied by a non-Event primitive"
+                                                   {:type          :event-id-collision
+                                                    :event-id      ev-id
+                                                    :existing-kind (:kind existing)})))
+                    ;; Safe overwrite of any stub Event primitive at this id.
+                    m'           (assoc-in m [:primitives ev-id] event-prim)
+                    ;; Add Allium::Event tag with declaration-sites payload.
+                    m''          (build/add-tag-application
+                                   m'
+                                   (v/make-tag-application
+                                     {:tag     {:namespace "Allium" :name "Event"}
+                                      :target  {:case :target/primitive :id ev-id}
+                                      :payload {:declaration-sites (vec sites-set)}}))
+                    ;; Add the event-id to the module-Container's :events set.
+                    module-c     (build/get-primitive m'' module-coord)
+                    module-c'    (update module-c :events (fnil conj #{}) ev-id)]
+                (assoc-in m'' [:primitives module-coord] module-c')))
+            model
+            site-map)))
+
+;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
@@ -851,5 +1093,10 @@
         ;; Update module-Container's :children (direct assoc-in bypasses
         ;; add-primitive's duplicate-id check)
         updated-module (-> (build/get-primitive model-with-decls coordinate)
-                           (update :children (fnil into #{}) child-ids))]
-    (assoc-in model-with-decls [:primitives coordinate] updated-module)))
+                           (update :children (fnil into #{}) child-ids))
+        model-with-children (assoc-in model-with-decls [:primitives coordinate] updated-module)]
+    ;; Task 13 post-pass: synthesize Events from declaration sites
+    ;; (provides:, when:call, emits ensures). Verifies parameter-shape
+    ;; agreement, overwrites stub Event primitives, applies Allium::Event tag,
+    ;; and adds the event ids to the module-Container's :events set.
+    (synthesize-events model-with-children ast coordinate name-registry)))
