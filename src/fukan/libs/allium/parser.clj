@@ -103,9 +103,10 @@
 
   (* ============ Actor ============ *)
 
-  actor-decl = <'actor'> __ ident _ <'{'> _ actor-body _ <'}'>
-  actor-body = identified-by-clause _ within-clause? _
-  identified-by-clause = <'identified_by'> _ <':'> _ type-ref
+  actor-decl = <'actor'> __ ident _ <'{'> _ actor-clause* _ <'}'>
+  <actor-clause> = identified-by-clause _ / within-clause _
+  identified-by-clause = <'identified_by'> _ <':'> _ type-ref (__ <'where'> __ identified-by-where-text)?
+  identified-by-where-text = #'[^\n}]+'
   within-clause = <'within'> _ <':'> _ type-ref
 
   (* ============ Invariant ============ *)
@@ -542,15 +543,20 @@
 
    ;; Actor
    :actor-decl
-   (fn [name actor-body]
-     (merge {:type :actor, :name name} actor-body))
-
-   :actor-body
-   (fn [& clauses]
-     (reduce (fn [acc clause] (merge acc clause)) {} clauses))
+   (fn [name & clauses]
+     (reduce (fn [acc clause] (merge acc clause))
+             {:type :actor, :name name}
+             clauses))
 
    :identified-by-clause
-   (fn [type-ref] {:identified-by type-ref})
+   (fn
+     ([type-ref] {:identified-by type-ref})
+     ([type-ref where-text]
+      {:identified-by type-ref
+       :identified-by-where (str/trim where-text)}))
+
+   :identified-by-where-text
+   (fn [text] text)
 
    :within-clause
    (fn [type-ref] {:within type-ref})

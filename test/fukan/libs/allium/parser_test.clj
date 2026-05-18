@@ -255,7 +255,20 @@
 
   (testing "actor with qualified type in identified_by"
     (let [d (first-decl "actor Admin {\n    identified_by: auth/User\n}\n")]
-      (is (= {:kind :qualified :ns "auth" :name "User"} (:identified-by d))))))
+      (is (= {:kind :qualified :ns "auth" :name "User"} (:identified-by d)))))
+
+  (testing "actor identified_by with trailing where"
+    (let [d (first-decl "actor Interviewer {\n    identified_by: User where role = interviewer\n}\n")]
+      (is (= :actor (:type d)))
+      (is (= "Interviewer" (:name d)))
+      (is (= {:kind :simple :name "User"} (:identified-by d)))
+      (is (= "role = interviewer" (:identified-by-where d)))))
+
+  (testing "actor with within before identified_by"
+    (let [d (first-decl "actor WorkspaceAdmin {\n    within: Workspace\n    identified_by: User\n}\n")]
+      (is (= :actor (:type d)))
+      (is (= {:kind :simple :name "User"} (:identified-by d)))
+      (is (= {:kind :simple :name "Workspace"} (:within d))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Unit tests — field variants
