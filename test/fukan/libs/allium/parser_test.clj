@@ -520,6 +520,48 @@
       (is (= {:from "pending" :to "cancelled"} (second (:edges tx)))))))
 
 ;; ---------------------------------------------------------------------------
+;; Unit tests — structured trigger bindings (state/temporal operators)
+;; ---------------------------------------------------------------------------
+
+(deftest trigger-transitions-to-test
+  (testing "transitions_to trigger"
+    (let [d (first-decl
+              "rule R {\n    when: order: Order.status transitions_to shipped\n    ensures: Ok.created()\n}\n")
+          tr (-> d :clauses first :trigger)]
+      (is (= :binding (:kind tr)))
+      (is (= "order" (:var tr)))
+      (is (= "Order.status" (:source tr)))
+      (is (= "transitions_to" (:operator tr)))
+      (is (= "shipped" (:operand tr))))))
+
+(deftest trigger-becomes-test
+  (testing "becomes trigger"
+    (let [d (first-decl
+              "rule R {\n    when: order: Order.is_paid becomes true\n    ensures: Ok.created()\n}\n")
+          tr (-> d :clauses first :trigger)]
+      (is (= "becomes" (:operator tr)))
+      (is (= "true" (:operand tr))))))
+
+(deftest trigger-created-test
+  (testing "created trigger"
+    (let [d (first-decl
+              "rule R {\n    when: order: Order.created\n    ensures: Ok.created()\n}\n")
+          tr (-> d :clauses first :trigger)]
+      (is (= :binding (:kind tr)))
+      (is (= "order" (:var tr)))
+      (is (= "Order" (:source tr)))
+      (is (= "created" (:operator tr)))
+      (is (nil? (:operand tr))))))
+
+(deftest trigger-temporal-test
+  (testing "temporal trigger with `<= now`"
+    (let [d (first-decl
+              "rule R {\n    when: s: Session.expires_at <= now\n    ensures: Ok.created()\n}\n")
+          tr (-> d :clauses first :trigger)]
+      (is (= "<=" (:operator tr)))
+      (is (= "now" (:operand tr))))))
+
+;; ---------------------------------------------------------------------------
 ;; Corpus-regression — every .allium file in src/ must parse clean
 ;; ---------------------------------------------------------------------------
 

@@ -234,9 +234,23 @@
 
   when-clause = <'when:'> _ trigger-expr _
   trigger-expr = trigger-call / trigger-binding
-  trigger-call = ident <'('> _ trigger-params? _ <')'>
-  trigger-binding = trigger-binding-text
-  trigger-binding-text = #'[^\\n{}]+'
+  trigger-call = trigger-call-name <'('> _ trigger-params? _ <')'>
+  trigger-call-name = ident (<'.'> ident)*
+
+  (* trigger-binding has two forms:
+     - trigger-binding-op: var ':' source op operand?   (transitions_to, becomes, <=, etc.)
+     - trigger-binding-created: var ':' source '.' 'created'  (no operand, lifecycle event) *)
+  trigger-binding = trigger-binding-op / trigger-binding-created
+  trigger-binding-op = ident _ <':'> _ binding-source _ trigger-operator (_ trigger-operand)?
+  trigger-binding-created = ident _ <':'> _ binding-source-base <'.'> <'created'>
+
+  binding-source = dotted-path
+  binding-source-base = ident
+  dotted-path = ident (<'.'> ident)*
+
+  trigger-operator = 'transitions_to' / 'becomes' / '<=' / '>=' / '<' / '>' / '='
+  trigger-operand = #'[^\\n]+'
+
   trigger-params = trigger-param (_ <','> _ trigger-param)*
   trigger-param = ident <'?'>? (_ <':'> _ type-ref)?
 
@@ -734,6 +748,9 @@
 
    :trigger-expr identity
 
+   :trigger-call-name
+   (fn [& idents] (clojure.string/join "." idents))
+
    :trigger-call
    (fn [name & param-groups]
      (let [params (vec (apply concat
@@ -741,11 +758,39 @@
                               param-groups)))]
        {:kind :call :name name :params params}))
 
-   :trigger-binding
-   (fn [text]
-     {:kind :binding :text (str/trim text)})
+   :trigger-binding identity
 
-   :trigger-binding-text str
+   :trigger-binding-op
+   (fn
+     ([var-name source operator]
+      {:kind :binding, :var var-name, :source source, :operator operator})
+     ([var-name source operator operand]
+      {:kind :binding, :var var-name, :source source
+       :operator operator, :operand operand}))
+
+   :trigger-binding-created
+   (fn [var-name source-base]
+     {:kind :binding, :var var-name, :source source-base, :operator "created"})
+
+   :binding-source
+   (fn [dotted-path-result]
+     ;; dotted-path-result may be a vec (from :dotted-path transform) or a
+     ;; raw value depending on how instaparse hands it back. Coerce to string.
+     (if (vector? dotted-path-result)
+       (clojure.string/join "." dotted-path-result)
+       (str dotted-path-result)))
+
+   :binding-source-base
+   (fn [ident] ident)
+
+   :dotted-path
+   (fn [& idents] (vec idents))
+
+   :trigger-operator
+   (fn [op] op)
+
+   :trigger-operand
+   (fn [s] (str/trim s))
 
    :trigger-params
    (fn [& params]
