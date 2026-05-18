@@ -8,7 +8,8 @@
             [fukan.model.relations :as r]
             [fukan.model.type :as t]
             [fukan.model.vocabulary :as v]
-            [fukan.model.build :as build]))
+            [fukan.model.build :as build]
+            [fukan.vocabulary.allium.expression :as ae]))
 
 ;; ---------------------------------------------------------------------------
 ;; Type translation
@@ -331,6 +332,85 @@
     m3))
 
 ;; ---------------------------------------------------------------------------
+;; Rule analysis
+;; ---------------------------------------------------------------------------
+
+(defn- analyze-rule
+  [model decl module-coord _name-registry]
+  (let [rule-id (qualify module-coord (:name decl))
+        clauses (:clauses decl)
+        requires-clauses (filter #(= :requires (:clause-type %)) clauses)
+        let-clauses      (filter #(= :let (:clause-type %)) clauses)
+        ensures-clauses  (filter #(= :ensures (:clause-type %)) clauses)
+        ;; Build assertions list — requires first, then ensures
+        requires-exprs (mapv #(ae/parse (:body %)) requires-clauses)
+        ensures-exprs  (mapv #(ae/parse (:body %)) ensures-clauses)
+        all-assertions (vec (concat requires-exprs ensures-exprs))
+        ;; Build definitions from let clauses. Parse `name = rhs` from body text.
+        definitions (mapv (fn [let-clause]
+                            (let [body (:body let-clause)
+                                  [name rhs] (str/split body #"\s*=\s*" 2)]
+                              (p/make-definition (str/trim name)
+                                                 (ae/parse rhs))))
+                          let-clauses)
+        intent (p/make-intent
+                 {:id (str rule-id "::intent")
+                  :clauses []
+                  :assertions all-assertions})
+        body   (p/make-rule-body definitions [])
+        rule   (p/make-rule
+                 (cond-> {:id rule-id
+                          :label (:name decl)
+                          :intent intent
+                          :body body}
+                   (:description decl) (assoc :description (:description decl))))
+        ;; Add Rule primitive and Allium::Rule tag
+        m0 (-> model
+               (build/add-primitive rule)
+               (build/add-tag-application
+                 (v/make-tag-application
+                   {:tag    {:namespace "Allium" :name "Rule"}
+                    :target {:case :target/primitive :id rule-id}})))
+        ;; Apply Allium::Requires source-clause tags (substrate path by index)
+        m1 (reduce (fn [m i]
+                     (build/add-tag-application
+                       m
+                       (v/make-tag-application
+                         {:tag    {:namespace "Allium" :name "Requires"}
+                          :target {:case      :target/substrate
+                                   :container rule-id
+                                   :path      [{:slot "intent"}
+                                               {:slot "assertions" :key (str i)}]}})))
+                   m0
+                   (range (count requires-exprs)))
+        ;; Apply Allium::Ensures source-clause tags (offset by requires count)
+        m2 (reduce (fn [m i]
+                     (let [idx (+ i (count requires-exprs))]
+                       (build/add-tag-application
+                         m
+                         (v/make-tag-application
+                           {:tag    {:namespace "Allium" :name "Ensures"}
+                            :target {:case      :target/substrate
+                                     :container rule-id
+                                     :path      [{:slot "intent"}
+                                                 {:slot "assertions" :key (str idx)}]}}))))
+                   m1
+                   (range (count ensures-exprs)))
+        ;; Apply Allium::Let source-clause tags
+        m3 (reduce (fn [m i]
+                     (build/add-tag-application
+                       m
+                       (v/make-tag-application
+                         {:tag    {:namespace "Allium" :name "Let"}
+                          :target {:case      :target/substrate
+                                   :container rule-id
+                                   :path      [{:slot "body"}
+                                               {:slot "definitions" :key (str i)}]}})))
+                   m2
+                   (range (count definitions)))]
+    m3))
+
+;; ---------------------------------------------------------------------------
 ;; Contract analysis helpers
 ;; ---------------------------------------------------------------------------
 
@@ -420,7 +500,8 @@
         declaration-order {:entity 0 :value 0 :variant 0
                            :external-entity 1 :actor 1
                            :contract 2
-                           :surface 3}
+                           :surface 3
+                           :rule 4}
         sorted-decls (sort-by #(get declaration-order (:type %) 99)
                                (:declarations ast))
         ;; Process declarations in dependency order
@@ -434,7 +515,8 @@
                     :actor           (analyze-actor m decl coordinate name-registry)
                     :contract        (analyze-contract m decl coordinate name-registry)
                     :surface         (analyze-surface m decl coordinate name-registry)
-                    ;; Other declaration types: passthrough (Tasks 9–13)
+                    :rule            (analyze-rule m decl coordinate name-registry)
+                    ;; Other declaration types: passthrough (Tasks 10–13)
                     m))
                 model-with-module
                 sorted-decls)

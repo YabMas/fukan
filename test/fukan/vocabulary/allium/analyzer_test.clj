@@ -273,3 +273,78 @@
           op (build/get-primitive model "test::X.notify")]
       (is (some? op))
       (is (nil? (:return-type op))))))
+
+(deftest rule-declaration-basic
+  (testing "rule becomes Rule primitive with Allium::Rule tag"
+    (let [a (ast "rule ProcessOrder { when: ProcessOrder() ensures: Ok }")
+          model (analyzer/analyze-file (build/empty-model) a "shop")]
+      (let [rule (build/get-primitive model "shop::ProcessOrder")]
+        (is (some? rule))
+        (is (= :primitive/rule (:kind rule))))
+      (is (some? (->> (:tag-apps model)
+                      (filter #(and (= "Rule" (-> % :tag :name))
+                                    (= "shop::ProcessOrder" (-> % :target :id))))
+                      first))))))
+
+(deftest rule-requires-clause
+  (testing "requires: clause adds Bool Expression to intent.assertions with Allium::Requires tag"
+    (let [a (ast (str "rule R {\n"
+                      "    when: R(x: String)\n"
+                      "    requires: x != null\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "test")
+          rule (build/get-primitive model "test::R")
+          assertions (-> rule :intent :assertions)]
+      (is (= 2 (count assertions))
+          "two assertions: requires + ensures")
+      ;; Allium::Requires tag applied to one of the assertions
+      (is (some? (->> (:tag-apps model)
+                      (filter #(= "Requires" (-> % :tag :name)))
+                      first))))))
+
+(deftest rule-let-clause
+  (testing "let x = expr adds Definition to body.definitions with Allium::Let tag"
+    (let [a (ast (str "rule R {\n"
+                      "    when: R(x: String)\n"
+                      "    let y = x.upper\n"
+                      "    ensures: Ok\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "test")
+          rule (build/get-primitive model "test::R")
+          definitions (-> rule :body :definitions)]
+      (is (= 1 (count definitions)))
+      (is (= "y" (-> definitions first :name)))
+      (is (some? (->> (:tag-apps model)
+                      (filter #(= "Let" (-> % :tag :name)))
+                      first))))))
+
+(deftest rule-ensures-clause
+  (testing "ensures: clause adds Bool Expression to intent.assertions with Allium::Ensures tag"
+    (let [a (ast (str "rule R {\n"
+                      "    when: R(x: Integer)\n"
+                      "    ensures: x > 0\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "test")
+          rule (build/get-primitive model "test::R")]
+      (is (some? rule))
+      (is (some? (->> (:tag-apps model)
+                      (filter #(= "Ensures" (-> % :tag :name)))
+                      first))))))
+
+(deftest rule-multiple-assertions
+  (testing "multiple requires/ensures clauses each get their own Expression + source tag"
+    (let [a (ast (str "rule R {\n"
+                      "    when: R(x: Integer)\n"
+                      "    requires: x > 0\n"
+                      "    requires: x < 100\n"
+                      "    ensures: y = x * 2\n"
+                      "}\n"))
+          model (analyzer/analyze-file (build/empty-model) a "test")
+          rule (build/get-primitive model "test::R")
+          assertions (-> rule :intent :assertions)
+          requires-tags (filter #(= "Requires" (-> % :tag :name)) (:tag-apps model))
+          ensures-tags (filter #(= "Ensures" (-> % :tag :name)) (:tag-apps model))]
+      (is (= 3 (count assertions)))
+      (is (= 2 (count requires-tags)))
+      (is (= 1 (count ensures-tags))))))
