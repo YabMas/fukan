@@ -256,15 +256,17 @@
 
   let-clause = <'let'> __ clause-body _
   requires-clause = <'requires:'> _ clause-body _
-  ensures-clause = <'ensures:'> _ clause-body _
+  ensures-clause = <'ensures:'> _ (ensures-for / ensures-expr) _
+  ensures-for = <'for'> __ ident __ <'in'> __ ident _ <':'> _ clause-body
+  ensures-expr = clause-body
 
   (* ============ Clause Body Capture ============ *)
   (* Brace/paren-balanced text capture. Terminates before next clause keyword or } *)
 
   clause-body = balanced-chunk+
   <balanced-chunk> = brace-group / paren-group / text-chunk
-  brace-group = '{' balanced-chunk* '}'
-  paren-group = '(' balanced-chunk* ')'
+  brace-group = <'{'> balanced-chunk* <'}'>
+  paren-group = <'('> balanced-chunk* <')'>
   text-chunk = #'(?:(?!\\bwhen:\\b|\\blet\\b|\\brequires:\\b|\\bensures:\\b)[^{}()\\n])+' / eol
   eol = #'\\n'
 
@@ -810,8 +812,21 @@
      {:clause-type :requires :body (str/trim (apply str (flatten body-parts)))})
 
    :ensures-clause
-   (fn [& body-parts]
-     {:clause-type :ensures :body (str/trim (apply str (flatten body-parts)))})
+   (fn [body-or-for]
+     ;; body-or-for is either an ensures-for result (map) or an ensures-expr result (string)
+     (if (map? body-or-for)
+       (merge {:clause-type :ensures} body-or-for)
+       {:clause-type :ensures, :body (str/trim body-or-for)}))
+
+   :ensures-for
+   (fn [var-name collection body]
+     {:kind :for-iteration
+      :var var-name
+      :collection collection
+      :body (str/trim body)})
+
+   :ensures-expr
+   (fn [body] (str/trim body))
 
    ;; Clause body
    :clause-body

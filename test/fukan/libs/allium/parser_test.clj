@@ -562,6 +562,24 @@
       (is (= "now" (:operand tr))))))
 
 ;; ---------------------------------------------------------------------------
+;; Unit tests — for iteration in ensures clauses
+;; ---------------------------------------------------------------------------
+
+(deftest ensures-for-iteration-test
+  (testing "ensures: for x in coll: body"
+    (let [d (first-decl
+              (str "rule R {\n"
+                   "    when: R(items: List<Item>)\n"
+                   "    ensures: for item in items: item.touched_at = now()\n"
+                   "}\n"))
+          ens (-> d :clauses (nth 1))]
+      (is (= :ensures (:clause-type ens)))
+      (is (= :for-iteration (:kind ens)))
+      (is (= "item" (:var ens)))
+      (is (= "items" (:collection ens)))
+      (is (= "item.touched_at = now()" (:body ens))))))
+
+;; ---------------------------------------------------------------------------
 ;; Corpus-regression — every .allium file in src/ must parse clean
 ;; ---------------------------------------------------------------------------
 
