@@ -226,9 +226,17 @@
     :local-attach   (analyze-fn-attach      model decl coord use-aliases)
     :foreign-attach (analyze-fn-attach      model decl coord use-aliases)))
 
-(defn- analyze-exports [model _decl _coord _use-aliases]
-  ;; Task 6 implements.
-  model)
+(defn- analyze-exports
+  "Per MODEL.md §8.2: exports: clause applies Boundary::ModuleApi tag to the
+   bearing module-Container with payload {:exported [<entries>]}.
+   Presence flips the module to closed; Phase 4d enforces visibility."
+  [model decl coord _use-aliases]
+  (let [m0      (ensure-module-container model coord)
+        tag-app (v/make-tag-application
+                  {:tag     {:namespace "Boundary" :name "ModuleApi"}
+                   :target  {:case :target/primitive :id coord}
+                   :payload {:exported (vec (:entries decl))}})]
+    (build/add-tag-application m0 tag-app)))
 
 (defn- analyze-subsystem [model _decl _coord _use-aliases]
   ;; Task 7 implements.
@@ -262,6 +270,11 @@
       (throw (ex-info "mixed module-bound and subsystem-bound shapes in one file"
                       {:type :boundary-shape-error
                        :coord coord})))
+    (let [exports-count (count (filter #(= :exports (:type %)) decls))]
+      (when (> exports-count 1)
+        (throw (ex-info "multiple exports: declarations in one .boundary file"
+                        {:type :boundary-shape-error :coord coord
+                         :count exports-count}))))
     (reduce (fn [m decl] (analyze-decl m decl coord use-aliases))
             model
             decls)))

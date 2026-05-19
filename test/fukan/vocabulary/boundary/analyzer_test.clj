@@ -203,3 +203,27 @@
                           [{:type :fn :form :local-attach
                             :contract "X" :op "y" :prose nil
                             :body {:triggers nil :returns nil}}])))))
+
+(deftest exports-applies-module-api-tag
+  (testing "exports: produces a Boundary::ModuleApi tag on the module-Container"
+    (let [decl  {:type :exports
+                 :entries ["ViewState" "NavigationState" "OrderSubmission.submit"]}
+          model (analyze (build/empty-model) [decl])
+          tags  (filter (fn [ta]
+                          (and (= "Boundary" (-> ta :tag :namespace))
+                               (= "ModuleApi" (-> ta :tag :name))))
+                        (:tag-apps model))]
+      (is (= 1 (count tags)))
+      (let [ta (first tags)]
+        (is (= :target/primitive (-> ta :target :case)))
+        (is (= "test/module" (-> ta :target :id))
+            "tag targets the module-Container at the file's coord")
+        (is (= ["ViewState" "NavigationState" "OrderSubmission.submit"]
+               (-> ta :payload :exported)))))))
+
+(deftest multiple-exports-clauses-rejected
+  (testing "more than one :exports declaration in one file is a structural error"
+    (is (thrown? Exception
+                 (analyze (build/empty-model)
+                          [{:type :exports :entries ["A"]}
+                           {:type :exports :entries ["B"]}])))))
