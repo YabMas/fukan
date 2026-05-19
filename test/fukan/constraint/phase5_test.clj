@@ -2,7 +2,9 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.constraint.phase5 :as phase5]
             [fukan.model.build :as build]
-            [fukan.model.pipeline :as model-pipeline]))
+            [fukan.model.pipeline :as model-pipeline]
+            [fukan.model.primitives :as p]
+            [fukan.model.vocabulary :as v]))
 
 (deftest phase5-on-empty-model-passes
   (testing "an empty model produces no Phase 5 violations"
@@ -18,6 +20,29 @@
           m1 (phase5/run m0)]
       (is (= 1 (count (:violations m1)))
           "Phase 5 stub didn't strip existing violations"))))
+
+(deftest phase5-runs-one-registered-constraint
+  (testing "a registered constraint with a matching rule produces violations"
+    (let [reg {:namespace "test" :name "every-module-must-have-orders"
+               :severity :error :kind :test
+               :message-template "missing orders entity"
+               :predicate
+               {:head {:predicate :violation :args [:?m]}
+                :body [{:kind :atom :predicate :has-tag :args [:?m "Allium::Module"]}
+                       {:kind :negation
+                        :inner {:kind :atom :predicate :in-module
+                                :args [:?o :?m]}}]}}
+          model (-> (build/empty-model)
+                    (build/add-primitive (p/make-container {:id "m" :label "m"}))
+                    (build/add-tag-application
+                      (v/make-tag-application
+                        {:tag {:namespace "Allium" :name "Module"}
+                         :target {:case :target/primitive :id "m"}}))
+                    (update :predicates (fnil conj []) reg))
+          m1 (phase5/run model)
+          phase5-vs (filter #(= :phase5 (:phase %)) (:violations m1))]
+      (is (= 1 (count phase5-vs)))
+      (is (= :error (-> phase5-vs first :severity))))))
 
 (deftest combined-pipeline-with-phase5-runs-cleanly
   (testing "fukan-on-fukan loads through Allium + Boundary + Phase 4 + Phase 5"
