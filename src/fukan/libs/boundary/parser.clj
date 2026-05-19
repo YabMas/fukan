@@ -32,9 +32,14 @@
   declarations = (declaration _)*
   declaration = use-decl   (* tasks 1+ add fn-decl, exports-decl, subsystem-decl *)
 
-  (* ============ Use (placeholder — Task 1 implements) ============ *)
+  (* ============ Use ============ *)
 
-  use-decl = <'use'> __ <'\"'> #'[^\"]*' <'\"'> __ <'as'> __ #'[a-zA-Z_][a-zA-Z0-9_]*'
+  use-decl = <'use'> __ quoted-path __ <'as'> __ ident
+
+  quoted-path = <'\"'> path-content <'\"'>
+  path-content = #'[^\"]*'
+
+  ident = #'[a-zA-Z_][a-zA-Z0-9_]*'
 
   (* ============ Whitespace / comments ============ *)
 
@@ -56,6 +61,9 @@
    :header           (fn [v] {:boundary-version v})
    :declarations     (fn [& ds] (vec ds))
    :declaration      identity
+   :ident            identity
+   :path-content     identity
+   :quoted-path      identity
    :use-decl         (fn [path alias]
                        {:type :use :path path :alias alias})
    :boundary-file    (fn [header decls]
