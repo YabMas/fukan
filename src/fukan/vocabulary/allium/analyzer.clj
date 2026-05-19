@@ -1125,37 +1125,48 @@
           (range)
           (or params []))))
 
-(defn- verify-event-shape-agreement
-  "Throw ex-info {:type :event-shape-mismatch ...} if any two sites for the
-   same event-name disagree on arity, or two typed sites disagree on type
-   sequences."
-  [event-name event-sites]
-  (let [arities (set (map (comp :arity :shape) event-sites))]
-    (when (> (count arities) 1)
-      (throw (ex-info (str "Event shape mismatch: event '" event-name
-                           "' declared with inconsistent arity across sites")
-                      {:type        :event-shape-mismatch
-                       :event       event-name
-                       :arities     arities
-                       :sites       (mapv (fn [s]
-                                            {:kind  (:kind s)
-                                             :shape (:shape s)})
-                                          event-sites)}))))
-  ;; Cross-site type agreement: any two typed sites must agree on the type
-  ;; sequence. Compare on :types vectors (only typed sites have :types).
-  (let [typed-shapes (->> event-sites
-                          (map :shape)
-                          (filter :types))
-        type-seqs    (set (map :types typed-shapes))]
-    (when (> (count type-seqs) 1)
-      (throw (ex-info (str "Event shape mismatch: event '" event-name
-                           "' declared with inconsistent parameter types across sites")
-                      {:type     :event-shape-mismatch
-                       :event    event-name
-                       :sites    (mapv (fn [s]
-                                         {:kind  (:kind s)
-                                          :shape (:shape s)})
-                                       event-sites)})))))
+(defn- detect-event-shape-mismatches
+  "Return a vector of mismatch records (possibly empty) describing any
+   shape disagreements among declaration sites for the same event-name.
+
+   A mismatch record is a map of:
+     :event-id     — kernel event id (qualified by module coord)
+     :event-name   — the bare event name within the module
+     :module-coord — the owning module coordinate
+     :reason       — :arity-mismatch | :type-mismatch
+     :shapes       — vector of per-site {:kind :shape} for diagnostic
+     :arities      — set of arities (when :arity-mismatch)
+     :type-seqs    — set of type sequences (when :type-mismatch)
+
+   Plan 3c §4b consumes this state via fukan.validation.rules-4b — the
+   analyzer no longer throws ex-info on shape disagreement (Plan 2b
+   carry-forward per DESIGN.md §4b)."
+  [event-name event-sites module-coord]
+  (let [ev-id        (event-id module-coord event-name)
+        shapes-out   (mapv (fn [s] {:kind (:kind s) :shape (:shape s)})
+                           event-sites)
+        arities      (set (map (comp :arity :shape) event-sites))
+        typed-shapes (->> event-sites (map :shape) (filter :types))
+        type-seqs    (set (map :types typed-shapes))
+        base         {:event-id     ev-id
+                      :event-name   event-name
+                      :module-coord module-coord
+                      :shapes       shapes-out}]
+    (cond-> []
+      (> (count arities)   1) (conj (assoc base :reason :arity-mismatch
+                                                :arities arities))
+      (> (count type-seqs) 1) (conj (assoc base :reason :type-mismatch
+                                                :type-seqs type-seqs)))))
+
+(defn- record-event-shape-mismatches
+  "Append zero-or-more mismatch records into the model's
+   `:phase4-state.event-shape-mismatches`. Plan 3c §4b reads from this slot."
+  [model mismatches]
+  (if (seq mismatches)
+    (update model :phase4-state
+            (fn [s] (update (or s {}) :event-shape-mismatches
+                            (fnil into []) mismatches)))
+    model))
 
 (defn- synthesize-events
   "Task 13 post-pass. After per-decl analysis on a single file, walk
@@ -1168,13 +1179,18 @@
 
    `facing-roles` is the set of facing-role names declared on surfaces in
    this module; used to strip facing-role prefixes from trigger/emit
-   names so they merge with the surface's provides site."
+   names so they merge with the surface's provides site.
+
+   Shape disagreement across declaration sites (Plan 2b carry-forward) no
+   longer throws — mismatches are stored in `:phase4-state` for Plan 3c §4b
+   rules (`fukan.validation.rules-4b`) to surface as Violations."
   [model ast module-coord name-registry use-aliases facing-roles]
   (let [site-map (collect-event-sites ast model module-coord use-aliases facing-roles)]
     (reduce (fn [m [event-name event-sites]]
-              ;; Validate shape agreement first — throws on mismatch
-              (verify-event-shape-agreement event-name event-sites)
-              (let [ev-id        (event-id module-coord event-name)
+              (let [mismatches   (detect-event-shape-mismatches
+                                   event-name event-sites module-coord)
+                    m-recorded   (record-event-shape-mismatches m mismatches)
+                    ev-id        (event-id module-coord event-name)
                     params       (pick-canonical-shape event-sites module-coord name-registry use-aliases)
                     sites-set    (into (sorted-set) (map (comp name :kind)) event-sites)
                     event-prim   (p/make-event {:id         ev-id
@@ -1184,7 +1200,7 @@
                     ;; Events in their own namespace, but if anything ever
                     ;; collides at this id with a non-Event primitive, fail
                     ;; loudly rather than silently obliterate.
-                    existing     (build/get-primitive m ev-id)
+                    existing     (build/get-primitive m-recorded ev-id)
                     _            (when (and existing
                                             (not= :primitive/event (:kind existing)))
                                    (throw (ex-info "event-id collision: id is occupied by a non-Event primitive"
@@ -1192,7 +1208,7 @@
                                                     :event-id      ev-id
                                                     :existing-kind (:kind existing)})))
                     ;; Safe overwrite of any stub Event primitive at this id.
-                    m'           (assoc-in m [:primitives ev-id] event-prim)
+                    m'           (assoc-in m-recorded [:primitives ev-id] event-prim)
                     ;; Add Allium::Event tag with declaration-sites payload.
                     m''          (build/add-tag-application
                                    m'

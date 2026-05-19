@@ -718,23 +718,29 @@
       (is (= 1 (count triggers-edges)))
       (is (= "test::events::ExternalSignal" (-> triggers-edges first :from :id))))))
 
-(deftest event-synthesis-arity-mismatch-throws
-  (testing "two provides: declaring the same event with different arity throws"
-    (is (thrown-with-msg?
-          Exception #"(?i)event.*shape|shape.*mismatch|arity"
-          (let [a (ast (str "value A {}\n"
-                            "value B {}\n"
-                            "surface S1 {\n"
-                            "    facing actor: User\n"
-                            "    provides:\n"
-                            "        E(a: A)\n"
-                            "}\n"
-                            "surface S2 {\n"
-                            "    facing actor: User\n"
-                            "    provides:\n"
-                            "        E(a: A, b: B)\n"
-                            "}\n"))]
-            (analyzer/analyze-file (build/empty-model) a "test"))))))
+(deftest event-synthesis-arity-mismatch-recorded
+  (testing "two provides: declaring the same event with different arity are
+    recorded in :phase4-state (Plan 2b carry-forward — analyzer no longer
+    throws on shape mismatch; Plan 3c §4b surfaces the record as a Violation)"
+    (let [a         (ast (str "value A {}\n"
+                              "value B {}\n"
+                              "surface S1 {\n"
+                              "    facing actor: User\n"
+                              "    provides:\n"
+                              "        E(a: A)\n"
+                              "}\n"
+                              "surface S2 {\n"
+                              "    facing actor: User\n"
+                              "    provides:\n"
+                              "        E(a: A, b: B)\n"
+                              "}\n"))
+          model     (analyzer/analyze-file (build/empty-model) a "test")
+          mismatches (get-in model [:phase4-state :event-shape-mismatches])]
+      (is (some? model) "analyzer no longer throws on shape mismatch")
+      (is (pos? (count mismatches))
+          "shape disagreement is recorded for Phase 4 to surface")
+      (is (some #(= :arity-mismatch (:reason %)) mismatches))
+      (is (every? #(= "test" (:module-coord %)) mismatches)))))
 
 (deftest event-synthesis-typed-vs-untyped-arity-ok
   (testing "untyped sites only constrain arity, not types — single provides + matching-arity when is fine"
