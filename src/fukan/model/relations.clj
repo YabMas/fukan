@@ -40,6 +40,12 @@
 (defn substrate-address [container-id path]
   {:case :endpoint/substrate, :container container-id, :path (vec path)})
 
+(defn artifact-ref
+  "Endpoint for a Code.* (or future Infra/Docs) Artifact. art-identity is
+   the identity tuple from fukan.model.artifact/artifact-identity."
+  [art-identity]
+  {:case :endpoint/artifact, :id art-identity})
+
 (defn make-edge
   "Construct a kernel edge.
 
@@ -73,10 +79,14 @@
    [:container :string]
    [:path [:vector [:map [:slot :string] [:key {:optional true} :string]]]]])
 
+(def ^:private EndpointArtifact
+  [:map [:case [:= :endpoint/artifact]] [:id [:tuple :keyword :string :string]]])
+
 (def Endpoint
   [:multi {:dispatch :case}
    [:endpoint/primitive EndpointPrimitive]
-   [:endpoint/substrate EndpointSubstrate]])
+   [:endpoint/substrate EndpointSubstrate]
+   [:endpoint/artifact  EndpointArtifact]])
 
 (def projection-kinds
   #{:projection-kind/rule :projection-kind/operation

@@ -52,16 +52,14 @@
 
 ;; -- Edge registry -----------------------------------------------------------
 
-;; NOTE: `:relation/projects` edges to real Artifacts cannot currently be
-;; added via add-edge — Artifacts live in the Model's :artifacts map (keyed
-;; by artifact-identity), not in :primitives. Plan 5 (Clojure Target
-;; language extension) will resolve this by either extending the Endpoint
-;; sum with an :endpoint/artifact case or by widening endpoint-resolves?
-;; to look up artifact identities. Until then, projects-edge tests use
-;; primitive endpoints as stand-ins for the artifact endpoint.
-(defn- endpoint-resolves? [model endpoint]
+(defn- endpoint-resolves?
+  "True iff the endpoint's target is present in the model. Primitives are
+   looked up in :primitives; Artifacts in :artifacts; substrate addresses
+   validate their container is in :primitives."
+  [model endpoint]
   (case (:case endpoint)
     :endpoint/primitive (some? (get-primitive model (:id endpoint)))
+    :endpoint/artifact  (contains? (:artifacts model) (:id endpoint))
     :endpoint/substrate
     (let [{:keys [container path]} endpoint
           c (get-primitive model container)
