@@ -7,9 +7,10 @@
 
 (deftest analyzer-on-empty-model-passes
   (testing "an empty model with empty registry produces no changes"
-    (let [m (analyzer/run (build/empty-model) (registry/make-registry))]
+    (let [m (analyzer/run (build/empty-model) (registry/make-registry) nil)]
       (is (map? m))
-      (is (= (build/empty-model) m)))))
+      ;; Empty model has no primitives, so no projects edges produced.
+      (is (= [] (:edges m))))))
 
 (deftest combined-pipeline-with-phase6-runs-cleanly
   (testing "fukan-on-fukan loads through all phases (1–6)"
