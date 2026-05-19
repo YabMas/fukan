@@ -121,7 +121,9 @@
 
     :comparison
     (let [op (:op atom)
-          op-fn ({:= = :!= not= :< < :<= <= :> > :>= >=} op)]
+          op-fn ({:= = :!= not= :< < :<= <= :> > :>= >=
+                  :matches-regex     (fn [s pat] (boolean (re-find (re-pattern pat) s)))
+                  :not-matches-regex (fn [s pat] (not (boolean (re-find (re-pattern pat) s))))} op)]
       (set (filter (fn [b]
                      (op-fn (substitute (:left atom) b)
                             (substitute (:right atom) b)))

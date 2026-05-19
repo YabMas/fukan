@@ -48,6 +48,11 @@
              field (:fields prim)]
          [id (:name field)])))
 
+(defn- has-label-tuples [model]
+  (set (for [[id prim] (:primitives model)
+             :when (:label prim)]
+         [id (:label prim)])))
+
 (defn model->edb
   "Translate a kernel Model into a Datalog EDB (predicate → set of tuples).
    Plan 4 derivations include only the kernel-universal predicates per
@@ -59,4 +64,5 @@
    :tag-payload     (tag-payload-tuples model)
    :in-module       (in-module-tuples model)
    :edge            (edge-tuples model)
-   :has-field       (has-field-tuples model)})
+   :has-field       (has-field-tuples model)
+   :has-label       (has-label-tuples model)})
