@@ -6,7 +6,8 @@
    - Subsystem-bound: declarations are use + one :subsystem.
 
    This namespace is built up across Tasks 2-7."
-  (:require [fukan.model.build :as build]
+  (:require [clojure.string :as str]
+            [fukan.model.build :as build]
             [fukan.model.primitives :as p]
             [fukan.model.relations :as r]
             [fukan.model.type :as t]
@@ -33,6 +34,33 @@
 
 (defn- qualify [coord local-name]
   (str coord "::" local-name))
+
+(defn- canonicalise-contains-path
+  "Resolve a `contains:` entry (relative path like \"./oauth/spec.allium\"
+   or \"./inner.boundary\") to a canonical root-relative coord (no extension).
+   Replicates the pattern from fukan.vocabulary.allium.pipeline. Lifting
+   this to a shared utility is Plan 4+."
+  [host-coord raw-path]
+  (let [no-ext (cond
+                 (str/ends-with? raw-path ".allium")
+                 (subs raw-path 0 (- (count raw-path) 7))
+                 (str/ends-with? raw-path ".boundary")
+                 (subs raw-path 0 (- (count raw-path) 9))
+                 :else raw-path)
+        host-dir (let [idx (.lastIndexOf ^String host-coord "/")]
+                   (if (neg? idx) "" (subs host-coord 0 idx)))]
+    (cond
+      (str/starts-with? no-ext "./")
+      (let [tail (subs no-ext 2)]
+        (if (empty? host-dir) tail (str host-dir "/" tail)))
+
+      (str/starts-with? no-ext "../")
+      (let [up-idx (.lastIndexOf ^String host-dir "/")
+            parent (if (neg? up-idx) "" (subs host-dir 0 up-idx))
+            tail (subs no-ext 3)]
+        (if (empty? parent) tail (str parent "/" tail)))
+
+      :else no-ext)))
 
 (defn- translate-type-ref
   "Convert a Plan 3a parser type-ref into a kernel Type value.
@@ -238,9 +266,48 @@
                    :payload {:exported (vec (:entries decl))}})]
     (build/add-tag-application m0 tag-app)))
 
-(defn- analyze-subsystem [model _decl _coord _use-aliases]
-  ;; Task 7 implements.
-  model)
+(defn- analyze-subsystem
+  "Per MODEL.md §8.2: subsystem <Name> { contains:, exports:, rules: }
+   creates a composite Container at the .boundary file's coord. The
+   subsystem name lives in the Boundary::Subsystem tag payload.
+
+   contains: entries are resolved to module-Container coords via
+   path canonicalisation (./, ../, bare paths; .allium / .boundary
+   extensions stripped) and stored as the composite's :children set
+   of id strings — matching the Allium analyzer's convention.
+
+   rules: entries become PredicateRegistrations on the model with
+   scope = TagScope against the composite. The kernel's
+   :predicate-registrations slot materialises on first registration
+   via (fnil conj [])."
+  [model decl coord _use-aliases]
+  (let [contains-coords (mapv #(canonicalise-contains-path coord %)
+                              (:contains decl))
+        composite       (p/make-container
+                          {:id coord
+                           :label (:name decl)
+                           :children contains-coords})
+        m0              (build/add-primitive model composite)
+        sub-tag         (v/make-tag-application
+                          {:tag     {:namespace "Boundary" :name "Subsystem"}
+                           :target  {:case :target/primitive :id coord}
+                           :payload {:name (:name decl)}})
+        exports-tag     (v/make-tag-application
+                          {:tag     {:namespace "Boundary" :name "Exports"}
+                           :target  {:case :target/primitive :id coord}
+                           :payload {:exported (vec (:exports decl))}})
+        m1              (-> m0
+                            (build/add-tag-application sub-tag)
+                            (build/add-tag-application exports-tag))
+        rules           (:rules decl)]
+    (reduce (fn [m rule-entry]
+              (let [reg {:predicate (:name rule-entry)
+                         :scope     {:case :scope/tag :container coord}
+                         :args      (:args rule-entry)}]
+                (update m :predicate-registrations
+                        (fnil conj []) reg)))
+            m1
+            rules)))
 
 (defn- analyze-decl [model decl coord use-aliases]
   (case (:type decl)

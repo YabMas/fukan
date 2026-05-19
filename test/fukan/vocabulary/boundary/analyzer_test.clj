@@ -227,3 +227,61 @@
                  (analyze (build/empty-model)
                           [{:type :exports :entries ["A"]}
                            {:type :exports :entries ["B"]}])))))
+
+(deftest subsystem-creates-composite-container
+  (testing "subsystem block produces a composite Container + Boundary::Subsystem tag"
+    (let [decl  {:type :subsystem :name "Auth"
+                 :contains ["./oauth/spec.allium" "./password/spec.allium"]
+                 :exports  ["oauth/OAuthLogin"]
+                 :rules    []}
+          model (analyzer/analyze-file (build/empty-model)
+                                       {:boundary-version 1 :declarations [decl]}
+                                       "test/auth"
+                                       {})
+          composite (build/get-primitive model "test/auth")]
+      (is (some? composite) "composite Container created at file coord")
+      (is (= :primitive/container (:kind composite)))
+      (is (= 2 (count (:children composite))))
+      (let [sub-tag (->> (:tag-apps model)
+                         (filter (fn [ta]
+                                   (and (= "Boundary" (-> ta :tag :namespace))
+                                        (= "Subsystem" (-> ta :tag :name)))))
+                         first)]
+        (is (some? sub-tag))
+        (is (= "Auth" (-> sub-tag :payload :name)))))))
+
+(deftest subsystem-exports-tag-applied
+  (testing "subsystem's exports: produces a Boundary::Exports tag on the composite"
+    (let [decl  {:type :subsystem :name "Auth"
+                 :contains ["./oauth/spec.allium"]
+                 :exports  ["oauth/OAuthLogin" "oauth/SessionRevoked"]
+                 :rules    []}
+          model (analyzer/analyze-file (build/empty-model)
+                                       {:boundary-version 1 :declarations [decl]}
+                                       "test/auth"
+                                       {})
+          exports-tag (->> (:tag-apps model)
+                           (filter (fn [ta]
+                                     (and (= "Boundary" (-> ta :tag :namespace))
+                                          (= "Exports"  (-> ta :tag :name)))))
+                           first)]
+      (is (some? exports-tag))
+      (is (= ["oauth/OAuthLogin" "oauth/SessionRevoked"]
+             (-> exports-tag :payload :exported))))))
+
+(deftest subsystem-rules-produce-predicate-registrations
+  (testing "subsystem rules: clause produces PredicateRegistrations on the model"
+    (let [decl  {:type :subsystem :name "Auth"
+                 :contains ["./oauth/spec.allium"]
+                 :exports  ["oauth/OAuthLogin"]
+                 :rules    [{:name "no_dependency"
+                             :args [{:key "from" :value "oauth"}
+                                    {:key "to"   :value "password"}]}]}
+          model (analyzer/analyze-file (build/empty-model)
+                                       {:boundary-version 1 :declarations [decl]}
+                                       "test/auth"
+                                       {})
+          regs (:predicate-registrations model)]
+      (is (>= (count regs) 1))
+      (is (= "no_dependency" (-> regs first :predicate)))
+      (is (= "test/auth" (-> regs first :scope :container))))))
