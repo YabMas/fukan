@@ -19,7 +19,8 @@
   {:namespace "fukan"
    :name "signal_gap"
    :severity :warning
-   :kind :methodology
+   :kind "methodology"
+   :scope :scope/model
    :message-template "Event has no triggers: consumer"
    :predicate
    {:head {:predicate :violation :args [:?event]}
@@ -36,7 +37,8 @@
   {:namespace "fukan"
    :name "external_must_have_wrapper"
    :severity :warning
-   :kind :methodology
+   :kind "methodology"
+   :scope :scope/model
    :message-template "External entity has no wrapping module"
    :predicate
    {:head {:predicate :violation :args [:?ext]}
@@ -53,7 +55,8 @@
   {:namespace "fukan"
    :name "no_dependency"
    :severity :error
-   :kind :methodology
+   :kind "methodology"
+   :scope :scope/model
    :message-template (str from-tag " must not depend on " to-tag)
    :predicate
    {:head {:predicate :violation :args [:?from :?to]}
@@ -68,7 +71,8 @@
   {:namespace "fukan"
    :name "no_circular_refs"
    :severity :error
-   :kind :methodology
+   :kind "methodology"
+   :scope :scope/model
    :message-template "circular reference detected"
    :predicate
    {:head {:predicate :violation :args [:?x]}
@@ -84,7 +88,8 @@
   {:namespace "fukan"
    :name "naming_convention"
    :severity :warning
-   :kind :methodology
+   :kind "methodology"
+   :scope :scope/model
    :message-template (str (name kind) " label doesn't match " regex)
    :predicate
    {:head {:predicate :violation :args [:?x :?label]}
