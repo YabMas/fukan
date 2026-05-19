@@ -70,3 +70,46 @@
         m1 (run-with model [(wk/no-circular-refs)])]
     (is (pos? (count (phase5-violations m1)))
         "self-edge detected as circular reference")))
+
+(deftest no-circular-refs-fires-on-transitive-cycle
+  ;; a → b → a: not a self-edge but a 2-cycle; depends-on closure detects it.
+  (let [model (-> (build/empty-model)
+                  (build/add-primitive (p/make-container {:id "a" :label "a"}))
+                  (build/add-primitive (p/make-container {:id "b" :label "b"}))
+                  (build/add-edge
+                    (r/make-edge :relation/triggers
+                                 (r/primitive-ref "a")
+                                 (r/primitive-ref "b")))
+                  (build/add-edge
+                    (r/make-edge :relation/triggers
+                                 (r/primitive-ref "b")
+                                 (r/primitive-ref "a"))))
+        m1 (run-with model [(wk/no-circular-refs)])]
+    (is (pos? (count (phase5-violations m1)))
+        "transitive 2-cycle detected as circular reference")))
+
+(deftest no-dependency-fires-on-indirect-dependency
+  ;; tagged-A → mid → tagged-B: depends-on closes over the intermediate hop.
+  (let [model (-> (build/empty-model)
+                  (build/add-primitive (p/make-container {:id "a" :label "a"}))
+                  (build/add-primitive (p/make-container {:id "mid" :label "mid"}))
+                  (build/add-primitive (p/make-container {:id "b" :label "b"}))
+                  (build/add-tag-application
+                    (v/make-tag-application
+                      {:tag {:namespace "Test" :name "LayerA"}
+                       :target {:case :target/primitive :id "a"}}))
+                  (build/add-tag-application
+                    (v/make-tag-application
+                      {:tag {:namespace "Test" :name "LayerB"}
+                       :target {:case :target/primitive :id "b"}}))
+                  (build/add-edge
+                    (r/make-edge :relation/triggers
+                                 (r/primitive-ref "a")
+                                 (r/primitive-ref "mid")))
+                  (build/add-edge
+                    (r/make-edge :relation/triggers
+                                 (r/primitive-ref "mid")
+                                 (r/primitive-ref "b"))))
+        m1 (run-with model [(wk/no-dependency "Test::LayerA" "Test::LayerB")])]
+    (is (pos? (count (phase5-violations m1)))
+        "indirect dependency detected by no-dependency via depends-on closure")))

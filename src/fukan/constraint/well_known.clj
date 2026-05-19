@@ -62,11 +62,12 @@
    {:head {:predicate :violation :args [:?from :?to]}
     :body [{:kind :atom :predicate :has-tag :args [:?from from-tag]}
            {:kind :atom :predicate :has-tag :args [:?to to-tag]}
-           {:kind :atom :predicate :edge
-            :args [:?from :?_rel :?to]}]}})
+           {:kind :atom :predicate :depends-on
+            :args [:?from :?to]}]}})
 
 (defn no-circular-refs
-  "no_circular_refs: no primitive has a self-edge (any relation kind)."
+  "no_circular_refs: no primitive has a transitive dependency on itself
+   (i.e. is part of a dependency cycle, per the :depends-on derivation)."
   []
   {:namespace "fukan"
    :name "no_circular_refs"
@@ -76,8 +77,8 @@
    :message-template "circular reference detected"
    :predicate
    {:head {:predicate :violation :args [:?x]}
-    :body [{:kind :atom :predicate :edge
-            :args [:?x :?_rel :?x]}]}})
+    :body [{:kind :atom :predicate :depends-on
+            :args [:?x :?x]}]}})
 
 (defn naming-convention
   "naming_convention(kind, regex): every primitive of `kind` must have

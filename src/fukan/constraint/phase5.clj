@@ -7,7 +7,8 @@
    under :violations alongside Phase 4 violations."
   (:require [fukan.validation.violation :as v]
             [fukan.constraint.evaluator :as e]
-            [fukan.constraint.derivations :as d]))
+            [fukan.constraint.derivations :as d]
+            [fukan.constraint.derivations-extra :as dx]))
 
 (defn- evaluate-registration
   "Evaluate one PredicateRegistration against the EDB. Returns a vector
@@ -17,7 +18,7 @@
         head      (:head predicate)
         body      (:body predicate)
         rule      {:head head :body body}
-        derived   (e/evaluate-rules [rule] edb)
+        derived   (e/evaluate-rules (cons rule (dx/depends-on-rules)) edb)
         head-pred (:predicate head)
         head-args (:args head)
         results   (get derived head-pred #{})]
