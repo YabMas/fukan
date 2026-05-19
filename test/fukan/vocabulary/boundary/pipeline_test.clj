@@ -30,16 +30,29 @@
     (let [model (pipeline/load-source "src")]
       (is (m/validate build/Model model)
           "loaded Model validates against build/Model schema")
-      (testing "Boundary tags get registered"
-        (let [tag-namespaces (->> (:tag-defs model)
-                                  (map :namespace)
-                                  set)]
-          (is (contains? tag-namespaces "Boundary")
-              "expected at least one Boundary::* TagDefinition registered")))
-      (testing "Boundary::Function tag applied to fn-declared Operations"
-        (let [function-tag-apps (filter (fn [ta]
-                                          (= {:namespace "Boundary" :name "Function"}
-                                             (:tag ta)))
-                                        (:tag-apps model))]
-          (is (pos? (count function-tag-apps))
-              "at least one fn declaration should produce a Boundary::Function tag"))))))
+      ;; Boundary tag-definitions registered (Function, Binding, ModuleApi, Subsystem, Exports):
+      (let [boundary-tag-defs (filter #(= "Boundary" (:namespace %))
+                                      (:tag-defs model))]
+        (is (= 5 (count boundary-tag-defs))
+            "all 5 Boundary::* tag-definitions registered"))
+      ;; Allium output preserved (still has Allium tag-defs):
+      (let [allium-tag-defs (filter #(= "Allium" (:namespace %))
+                                    (:tag-defs model))]
+        (is (pos? (count allium-tag-defs))
+            "Allium tag-definitions still registered"))
+      ;; Boundary::Function tags applied to fn-declared Operations:
+      ;; Corpus has 15 fn declarations (7 in infra, 1 in web, 3 in model/pipeline, 4 in web/views)
+      (let [fn-tags (filter (fn [ta]
+                              (and (= "Boundary" (-> ta :tag :namespace))
+                                   (= "Function" (-> ta :tag :name))))
+                            (:tag-apps model))]
+        (is (= 15 (count fn-tags))
+            "all 15 corpus fn declarations produce Boundary::Function tags"))
+      ;; Boundary::ModuleApi tags on modules with exports:
+      ;; Corpus has 2 files with exports: (model/pipeline.boundary, web/views/spec.boundary)
+      (let [api-tags (filter (fn [ta]
+                               (and (= "Boundary" (-> ta :tag :namespace))
+                                    (= "ModuleApi" (-> ta :tag :name))))
+                             (:tag-apps model))]
+        (is (= 2 (count api-tags))
+            "exactly 2 Boundary::ModuleApi tags (model/pipeline, web/views)")))))
