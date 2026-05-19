@@ -73,6 +73,38 @@
 
     nil))
 
+(defn- outgoing-edges-of
+  [model primitive-id]
+  (filter (fn [e]
+            (and (= :endpoint/primitive (-> e :from :case))
+                 (= primitive-id (-> e :from :id))
+                 (not= :relation/projects (:kind e))))
+          (:edges model)))
+
+(defn- edge->context-entry
+  [model edge]
+  (let [to (:to edge)
+        target-id (case (:case to)
+                    :endpoint/primitive (:id to)
+                    :endpoint/substrate (:container to)
+                    :endpoint/artifact  nil)
+        target-label (when target-id
+                       (or (get-in model [:primitives target-id :label]) target-id))]
+    {:kind     (:kind edge)
+     :to-label target-label}))
+
+(defn- context-for
+  [model primitive primitive-id]
+  {:description   (:description primitive)
+   :intent        (:intent primitive)
+   :related-edges (mapv #(edge->context-entry model %)
+                        (outgoing-edges-of model primitive-id))
+   :host          (when-let [host-edge (first (filter (fn [e]
+                                                        (and (= :relation/exposes (:kind e))
+                                                             (= primitive-id (-> e :to :id))))
+                                                      (:edges model)))]
+                    (-> host-edge :from :id))})
+
 (defn project
   "Project a primitive into a Blueprint.
 
@@ -88,10 +120,12 @@
           address        (addr/canonical registry primitive-kind projection-kind
                                          module-coord (:label primitive))
           artifact-kind  (artifact-kind-for projection-kind)
-          signature      (signature-for registry primitive projection-kind)]
+          signature      (signature-for registry primitive projection-kind)
+          context        (context-for model primitive primitive-id)]
       (bp/make
         {:primitive-id    primitive-id
          :projection-kind projection-kind
          :address         address
          :artifact-kind   artifact-kind
-         :signature       signature}))))
+         :signature       signature
+         :context         context}))))
