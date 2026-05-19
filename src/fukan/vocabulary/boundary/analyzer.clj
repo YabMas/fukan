@@ -5,10 +5,11 @@
    - Module-bound: declarations are mix of :use, :fn, :exports.
    - Subsystem-bound: declarations are use + one :subsystem.
 
-   Task 3 adds the build require when the fn handler starts emitting
-   kernel content.
-
-   This namespace is built up across Tasks 2-7.")
+   This namespace is built up across Tasks 2-7."
+  (:require [fukan.model.build :as build]
+            [fukan.model.primitives :as p]
+            [fukan.model.type :as t]
+            [fukan.model.vocabulary :as v]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shape detection
@@ -26,6 +27,78 @@
       :else                                      :module-bound)))
 
 ;; ---------------------------------------------------------------------------
+;; Helpers
+;; ---------------------------------------------------------------------------
+
+(defn- qualify [coord local-name]
+  (str coord "::" local-name))
+
+(defn- translate-type-ref
+  "Convert a Plan 3a parser type-ref into a kernel Type value.
+   Cross-module refs (:qualified) resolve through use-aliases when possible;
+   else fall through to a Scalar placeholder (Plan 3c will validate).
+   Optional wrappers are unwrapped — callers handle optionality at the
+   parameter/return-type level."
+  [tr coord use-aliases]
+  (case (:kind tr)
+    :simple
+    (t/make-scalar (:name tr))
+
+    :optional
+    (translate-type-ref (:inner tr) coord use-aliases)
+
+    :generic
+    (case (:name tr)
+      "List" (t/make-collection
+               (translate-type-ref (first (:params tr)) coord use-aliases)
+               :sequential)
+      "Set"  (t/make-collection
+               (translate-type-ref (first (:params tr)) coord use-aliases)
+               :unique)
+      "Map"  (let [[k v] (:params tr)]
+               (t/make-collection
+                 (translate-type-ref v coord use-aliases)
+                 (t/keyed (translate-type-ref k coord use-aliases))))
+      (t/make-scalar (:name tr)))
+
+    :qualified
+    (if-let [resolved-coord (get use-aliases (:ns tr))]
+      (t/make-composite-named (qualify resolved-coord (:name tr)))
+      (t/make-scalar (str (:ns tr) "/" (:name tr))))))
+
+(defn- param->kernel
+  "Convert a Plan 3a fn-param into a kernel Parameter value record.
+   p/make-parameter is positional: [name type optional? ordinal]."
+  [coord use-aliases ordinal param]
+  (let [tr        (:type-ref param)
+        optional? (= :optional (:kind tr))
+        type-val  (translate-type-ref tr coord use-aliases)]
+    (p/make-parameter (:name param) type-val optional? ordinal)))
+
+(defn- ensure-module-container
+  "Find the module-Container at `coord`, or create a minimal stub if absent.
+   Returns updated model."
+  [model coord]
+  (if (build/get-primitive model coord)
+    model
+    (build/add-primitive model
+                         (p/make-container {:id coord :label coord}))))
+
+(defn- add-operation-to-boundary
+  "Append an Operation id to the module-Container's boundary.operations
+   slot. Creates the Boundary if absent. Stores plain id strings per
+   the Boundary schema and the Allium analyzer's established convention."
+  [model coord op-id]
+  (let [container  (build/get-primitive model coord)
+        boundary   (or (:boundary container)
+                       (p/make-boundary {:id    (str coord "::boundary")
+                                         :label coord
+                                         :operations []}))
+        boundary'  (update boundary :operations conj op-id)
+        container' (assoc container :boundary boundary')]
+    (assoc-in model [:primitives coord] container')))
+
+;; ---------------------------------------------------------------------------
 ;; Per-decl handlers (Tasks 3-7 fill these in)
 ;; ---------------------------------------------------------------------------
 
@@ -34,9 +107,34 @@
   ;; via use-aliases); no kernel content produced here.
   model)
 
-(defn- analyze-fn [model _decl _coord _use-aliases]
-  ;; Tasks 3-5 implement.
-  model)
+(defn- analyze-fn-declare-new
+  "Per MODEL.md §8.2: `fn name(params) -> R` declares a new Operation on the
+   bearing module-Container's boundary.operations. Body handling stays nil
+   for this task; Task 4 adds triggers: → R4 edge."
+  [model decl coord use-aliases]
+  (let [fn-name  (:name decl)
+        op-id    (qualify coord fn-name)
+        params   (vec (map-indexed (fn [i p] (param->kernel coord use-aliases i p))
+                                   (:params decl)))
+        return-t (when-let [tr (:return-type decl)]
+                   (translate-type-ref tr coord use-aliases))
+        op       (p/make-operation
+                   (cond-> {:id op-id :label fn-name :parameters params}
+                     return-t (assoc :return-type return-t)))
+        m0       (-> model
+                     (ensure-module-container coord)
+                     (build/add-primitive op)
+                     (add-operation-to-boundary coord op-id))
+        tag-app  (v/make-tag-application
+                   {:tag    {:namespace "Boundary" :name "Function"}
+                    :target {:case :target/operation :id op-id}})]
+    (build/add-tag-application m0 tag-app)))
+
+(defn- analyze-fn [model decl coord use-aliases]
+  (case (:form decl)
+    :declare-new (analyze-fn-declare-new model decl coord use-aliases)
+    ;; Tasks 4-5 add :local-attach and :foreign-attach handlers.
+    model))
 
 (defn- analyze-exports [model _decl _coord _use-aliases]
   ;; Task 6 implements.
