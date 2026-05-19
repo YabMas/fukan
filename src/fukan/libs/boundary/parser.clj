@@ -152,8 +152,10 @@
    :simple-type      (fn [n] {:kind :simple :name n})
    :qualified-type   (fn [ns n] {:kind :qualified :ns ns :name n})
    :optional-type    (fn [inner] {:kind :optional :inner inner})
-   :generic-type     (fn [name & params]
-                       {:kind :generic :name name :params (vec params)})
+   :generic-type     (fn [name params]
+                       ;; `params` arrives as the already-vectorised result of
+                       ;; the `type-ref-list` rule — don't wrap it again.
+                       {:kind :generic :name name :params params})
    :type-ref-list    (fn [& ts] (vec ts))
    :type-ref         identity
    :return-type      identity
