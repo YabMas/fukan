@@ -11,15 +11,14 @@
         `:phase4-state.event-shape-mismatches`; this rule surfaces each
         record as a Violation.
 
-   Two further rules from DESIGN.md §4b are NOT implemented here:
-     - Cross-module event-name collisions: impossible by construction
-       (Allium namespaces qualify event ids by module coordinate).
-     - Allium rule 30 (Surface `provides:` triggers must be external-
-       stimulus in a rule of the same module): deferred to Plan 4's
-       constraint engine — it requires walking edges from Surface to
-       Event to Rule and inspecting the Allium::Trigger payload on the
-       Event→Rule edge."
-  (:require [fukan.validation.violation :as v]))
+   Plan 4 Task 7 implements:
+     3. :4b/provides-no-external-stimulus (error) — every Surface's provides:
+        edge to an Event must have at least one external-stimulus triggers
+        consumer in the same module (Allium rule 30). This is a hand-coded
+        Phase 4b rule checking kernel-level edges and tag applications."
+  (:require [fukan.validation.violation :as v]
+            [fukan.model.relations :as r]
+            [clojure.string :as str]))
 
 (defn- events
   "All Event primitives in the model."
@@ -64,9 +63,53 @@
                       " has inconsistent parameter shapes across declaration sites: "
                       (pr-str (:shapes mm)))})))
 
+;; -- Rule 3: provides: must have external-stimulus triggers in same module -----
+
+(defn- module-of-id
+  "Extract the module-coord prefix from an id like 'm/sub::events::Foo'.
+   Returns nil if no '::' is present."
+  [id]
+  (when (and (string? id) (str/includes? id "::"))
+    (first (str/split id #"::" 2))))
+
+(defn- provides-edges [model]
+  (filter #(= :relation/provides (:kind %)) (:edges model)))
+
+(defn- triggers-edges [model]
+  (filter #(= :relation/triggers (:kind %)) (:edges model)))
+
+(defn- external-stimulus-edge?
+  "True iff the edge has an Allium::Trigger tag-app with payload :kind
+   'external_stimulus'."
+  [model edge]
+  (let [edge-id (r/edge-identity edge)]
+    (some (fn [ta]
+            (and (= "Allium" (-> ta :tag :namespace))
+                 (= "Trigger" (-> ta :tag :name))
+                 (= edge-id (-> ta :target :edge-identity))
+                 (= "external_stimulus" (-> ta :payload :kind))))
+          (:tag-apps model))))
+
+(defn- provides-without-external-stimulus [model]
+  (for [pe (provides-edges model)
+        :let [event-id (-> pe :to :id)
+              event-module (module-of-id event-id)
+              ext-triggers (filter (fn [te]
+                                     (and (= event-id (-> te :from :id))
+                                          (= event-module (module-of-id (-> te :to :id)))
+                                          (external-stimulus-edge? model te)))
+                                   (triggers-edges model))]
+        :when (empty? ext-triggers)]
+    (v/make-violation
+      {:severity :error :phase :phase4 :sub-phase :4b
+       :kind :4b/provides-no-external-stimulus
+       :location {:provides-edge pe :event-id event-id :module event-module}
+       :message (str "Event " event-id " is provided by a Surface but has no external-stimulus triggers consumer in module " event-module)})))
+
 (defn check
   "Run all 4b event rules. Returns a vector of Violations."
   [model]
   (vec (concat
          (events-without-declaration-sites model)
-         (shape-mismatches model))))
+         (shape-mismatches model)
+         (provides-without-external-stimulus model))))

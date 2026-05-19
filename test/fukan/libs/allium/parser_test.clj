@@ -514,8 +514,9 @@
         (is (= 1 (:given types)))
         ;; ViewState, NavigationState, CytoscapeGraph, CytoscapeNode, CytoscapeEdge
         (is (= 5 (:value types)))
-        ;; SelectNode, NavigateToNode, NavigateToAncestor
-        (is (= 3 (:rule types)))
+        ;; SelectNode, NavigateToNode, NavigateToAncestor, ExpandToggle,
+        ;; TogglePrivateVisibility, SelectEdgeMode, SelectEdge, Deselect
+        (is (= 8 (:rule types)))
         ;; 1 surface (GraphViewer)
         (is (= 1 (:surface types)))))))
 

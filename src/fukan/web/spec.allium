@@ -45,30 +45,11 @@ surface ViewTransport {
 
     context sse: ServerSentEvents
 
-    provides:
-        full_navigation(request)
-            -- Primary endpoint. Computes graph projection, path, details.
-            -- Renders breadcrumb HTML, sidebar HTML, graph CytoscapeGraph.
-            -- Streams: patch-elements(breadcrumb), patch-elements(sidebar),
-            --          patch-signals(graph_data).
-            --
-            -- Parameters (from request query string):
-            --   select: node to select (determines sidebar and graph highlight)
-            --   id: module to view (optional; inferred from select if absent)
-            --   expanded: comma-separated expanded module IDs (from ViewState)
-            --   show_private: comma-separated private-visible module IDs
-            --   visible_edge_types: comma-separated edge type filters
-            --
-            -- Used by: sidebar clicks, breadcrumb clicks, schema ref clicks,
-            --   graph navigation events, initial page load, back/forward.
-
-        sidebar_update(request)
-            -- Lightweight endpoint for graph-click selection.
-            -- Recomputes sidebar only for a new selection.
-            -- Does not update graph or breadcrumb.
-            -- Streams: patch-elements(sidebar).
-            --
-            -- Used by: GraphViewer SelectNode events (single click on graph node).
+    -- Note: HTTP endpoints (full_navigation, sidebar_update) are callable
+    -- signatures, not behavioral events — they don't appear in provides:
+    -- because they're not state transitions triggered by rules; they're
+    -- procedures called by the client. Their signatures belong in
+    -- spec.boundary when the full router is implemented (Plan 6).
 
     @guarantee SignalDelivery
         -- Graph data is sent via patch-signals, not execute-script.

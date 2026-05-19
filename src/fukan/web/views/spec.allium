@@ -278,6 +278,62 @@ rule NavigateToAncestor {
         nav.selected_id = null
 }
 
+rule ExpandToggle {
+    -- Right click on a module: toggle expanded state in ViewState.
+    -- Component updates its own state before emitting; server re-projects
+    -- with the updated expanded set.
+
+    when: viewer.ExpandToggle(module_id)
+
+    ensures:
+        -- Component's expanded set is toggled
+        -- Server re-projects with updated expanded set
+}
+
+rule TogglePrivateVisibility {
+    -- Shift+right click on an expanded module: toggle show_private state.
+    -- Server re-projects with the updated show_private set.
+
+    when: viewer.TogglePrivateVisibility(module_id)
+
+    ensures:
+        -- Component's show_private set is toggled for that module
+        -- Server re-projects with updated show_private set
+}
+
+rule SelectEdgeMode {
+    -- Edge mode selector click: change the visible edge type filter.
+    -- Single-select: switches to the clicked mode.
+
+    when: viewer.SelectEdgeMode(edge_type)
+
+    ensures:
+        -- Component updates visible_edge_types to {edge_type}
+        -- Server re-projects with the filtered node set
+}
+
+rule SelectEdge {
+    -- Click on an edge: select it for sidebar inspection.
+    -- Component computes edge ID from source, target, and type.
+
+    when: viewer.SelectEdge(source, target, edge_type)
+
+    ensures:
+        -- Sidebar shows edge details
+        -- Edge is highlighted
+}
+
+rule Deselect {
+    -- Click on background: clear the current selection.
+
+    when: viewer.Deselect()
+
+    ensures:
+        nav.selected_id = null
+        -- Sidebar returns to empty state
+        -- No edges are highlighted
+}
+
 ------------------------------------------------------------
 -- Rendering Invariants
 ------------------------------------------------------------
