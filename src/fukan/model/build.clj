@@ -65,10 +65,14 @@
           c (get-primitive model container)
           [seg] path]
       (and (some? c)
-           ;; V0 validates only the first (field) segment; deeper path steps
-           ;; (parameter, etc.) are kernel-shaped but are not resolved in v0.
-           (= (:slot seg) "field")
-           (some #(= (:name %) (:key seg)) (:fields c))))))
+           (or
+             ;; Field substrate: validate the field exists on the container.
+             (and (= (:slot seg) "field")
+                  (some #(= (:name %) (:key seg)) (:fields c)))
+             ;; Intent/assertion and other substrate paths: container must
+             ;; exist; deeper path steps are kernel-shaped but not resolved in v0.
+             (contains? #{"intent" "assertions" "parameters" "events"
+                          "children" "behaviour" "boundary"} (:slot seg)))))))
 
 (defn add-edge
   "Add an edge to the Model. Validates endpoints resolve to real primitives /
