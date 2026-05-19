@@ -82,23 +82,33 @@
     (when (= :primitive/rule (:kind p)) p)))
 
 (defn- signature-mismatches
-  "Reduced-fidelity check at MVP: warn when the bound Rule has no event-shaped
-   triggers edge beyond the binding itself. Plan 4's constraint language will
-   subsume the full signature-equality check."
+  "MVP fidelity (Plan 4): warn when a binding's target Rule has no other
+   incoming triggers edge (i.e., no event-shaped when: clause was registered
+   by Allium). Full signature equality (param names + types) requires kernel
+   work that's out of scope for Plan 4.
+
+   The warning narrows when:
+   - The Operation has at least one parameter (no point checking a zero-arg
+     op's signature alignment).
+   - The Rule has no OTHER triggers edges (so the binding's edge would be
+     the only path to firing it — signature mismatch would be unrecoverable)."
   [model]
   (for [edge (binding-edges model)
-        :let [rule-id (-> edge :to :id)
+        :let [op-id (-> edge :from :id)
+              rule-id (-> edge :to :id)
+              op (operation-by-id model op-id)
               rule (rule-by-id model rule-id)
-              ;; Other triggers edges pointing at this Rule (excluding `edge`):
               other-triggers (filter #(and (= :relation/triggers (:kind %))
                                            (= rule-id (-> % :to :id))
                                            (not= (-> edge :from :id) (-> % :from :id)))
                                      (:edges model))]
-        :when (and rule (empty? other-triggers))]
+        :when (and op rule
+                   (pos? (count (:parameters op)))
+                   (empty? other-triggers))]
     (v/make-violation
       {:severity :warning :phase :phase4 :sub-phase :4c
        :kind :4c/signature-match-uncertain
-       :location {:rule-id rule-id :op-id (-> edge :from :id)}
+       :location {:rule-id rule-id :op-id op-id}
        :message (str "Rule " rule-id " has no event-shaped when: clause beyond the binding itself — signature match cannot be verified at MVP fidelity")})))
 
 (defn check
