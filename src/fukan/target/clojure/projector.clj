@@ -105,6 +105,25 @@
                                                       (:edges model)))]
                     (-> host-edge :from :id))})
 
+(defn- idiom-matches?
+  [route ctx]
+  (let [{:keys [primitive-kind projection-kind address-pattern]} route
+        {:keys [primitive-kind-actual projection-kind-actual address-name]} ctx]
+    (and (or (nil? primitive-kind)   (= primitive-kind primitive-kind-actual))
+         (or (nil? projection-kind)  (= projection-kind projection-kind-actual))
+         (or (nil? address-pattern)  (re-find address-pattern address-name)))))
+
+(defn- select-idioms
+  [registry primitive projection-kind address]
+  (let [ctx {:primitive-kind-actual  (:kind primitive)
+             :projection-kind-actual projection-kind
+             :address-name           (:name address)}]
+    (vec
+      (keep (fn [idiom]
+              (when (idiom-matches? (:route idiom) ctx)
+                (:body idiom)))
+            (:idioms registry)))))
+
 (defn project
   "Project a primitive into a Blueprint.
 
@@ -121,11 +140,13 @@
                                          module-coord (:label primitive))
           artifact-kind  (artifact-kind-for projection-kind)
           signature      (signature-for registry primitive projection-kind)
-          context        (context-for model primitive primitive-id)]
+          context        (context-for model primitive primitive-id)
+          idioms         (select-idioms registry primitive projection-kind address)]
       (bp/make
         {:primitive-id    primitive-id
          :projection-kind projection-kind
          :address         address
          :artifact-kind   artifact-kind
          :signature       signature
-         :context         context}))))
+         :context         context
+         :idioms          idioms}))))
