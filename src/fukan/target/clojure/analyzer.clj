@@ -194,6 +194,36 @@
         (emit-projects-edge from-endpoint aid :projection-kind/invariant validity)
         (emit-projects-edge from-endpoint aid :projection-kind/test validity))))
 
+;; ---------------------------------------------------------------------------
+;; Unprojected artifact materialisation (Plan 6 Task 13)
+;; ---------------------------------------------------------------------------
+
+(defn- symbol->artifact
+  [{:keys [ns name kind file]}]
+  (let [qname (str ns "/" name)
+        loc   {:file file}]
+    (case kind
+      :function       (a/make-code-function "clojure" qname loc)
+      :data-structure (a/make-code-data-structure "clojure" qname loc)
+      :function-private (a/make-code-function "clojure" qname loc)
+      nil)))
+
+(defn- materialize-unprojected
+  "For every symbol whose canonical artifact-id isn't already in :artifacts,
+   add the artifact (no projects edge — these are unbound code per
+   DESIGN.md 'Couplings')."
+  [model symbols]
+  (reduce
+    (fn [m sym]
+      (if-let [art (symbol->artifact sym)]
+        (let [aid (a/artifact-identity art)]
+          (if (get-in m [:artifacts aid])
+            m
+            (assoc-in m [:artifacts aid] art)))
+        m))
+    model
+    symbols))
+
 (defn run
   "Run the Clojure Analyzer on the model. Emits Code.Function and
    Code.DataStructure artifacts and :relation/projects edges with
@@ -205,7 +235,9 @@
 
    Plan 5 Task 6 covers function-shaped analyzers (Operation, Rule).
    Plan 5 Task 7 covers DataStructure (Entity/Value/Variant/Event) and
-   Invariant analyzers. Phase 6 is non-gating."
+   Invariant analyzers. Phase 6 is non-gating.
+   Plan 6 Task 13 materialises unprojected Code.* artifacts for defns
+   not bound to any spec primitive."
   [model registry code-root]
   (let [symbols       (walk-symbols code-root)
         source-index  (index-from-symbols symbols)
@@ -239,5 +271,8 @@
                        m source-index registry ev-id :primitive/event (:label ev)))
                    m3 (events m3))
         m5 (reduce (fn [m inv] (emit-invariant-projection m source-index registry inv))
-                   m4 (invariants m4))]
-    (update m5 :violations (fnil into []) dup-violations)))
+                   m4 (invariants m4))
+        m-final (-> m5
+                    (update :violations (fnil into []) dup-violations)
+                    (materialize-unprojected symbols))]
+    m-final))
