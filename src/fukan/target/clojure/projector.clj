@@ -10,4 +10,7 @@
   "Project a primitive into a Blueprint. Stub: returns identity Blueprint.
    Tasks 1-6 implement the six-component assembly."
   [_model _registry _primitive-id _projection-kind]
-  (bp/make-blueprint))
+  (bp/make {:primitive-id _primitive-id
+            :projection-kind _projection-kind
+            :address {:ns "" :name ""}
+            :artifact-kind :code/function}))
