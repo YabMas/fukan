@@ -1,7 +1,8 @@
 (ns fukan.libs.boundary.parser-test
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.libs.boundary.parser :as parser]
-            [instaparse.core :as insta]))
+            [instaparse.core :as insta]
+            [clojure.java.io :as io]))
 
 (defn- parse [text]
   (parser/parse-boundary text))
@@ -314,3 +315,48 @@
                :exports ["inner/InnerSurface"]
                :rules []}]
              (:declarations result))))))
+
+(deftest parses-fukan-corpus
+  (testing "all .boundary files under src/ parse without warnings"
+    (let [files (->> (file-seq (io/file "src"))
+                     (filter #(.isFile %))
+                     (filter #(.endsWith (.getName %) ".boundary")))]
+      (is (>= (count files) 4)
+          "expected at least 4 .boundary files in the corpus")
+      (doseq [f files]
+        (let [result (parser/parse-file (.getPath f))]
+          (is (map? result)
+              (str f " did not parse to a map (got: " (pr-str result) ")"))
+          (is (= 1 (:boundary-version result))
+              (str f " does not declare boundary version 1"))
+          (is (every? map? (:declarations result))
+              (str f " produced non-map declarations")))))))
+
+(deftest structural-shape-assertions
+  (testing "every declaration carries a :type with one of the known kinds"
+    (let [valid-types #{:use :fn :exports :subsystem}
+          files (->> (file-seq (io/file "src"))
+                     (filter #(.isFile %))
+                     (filter #(.endsWith (.getName %) ".boundary")))]
+      (doseq [f files
+              decl (:declarations (parser/parse-file (.getPath f)))]
+        (is (contains? valid-types (:type decl))
+            (str f ": unknown declaration :type — " (:type decl)))
+        (when (= :fn (:type decl))
+          (is (#{:declare-new :local-attach :foreign-attach} (:form decl))
+              (str f ": fn declaration missing/invalid :form — "
+                   (:form decl))))))))
+
+(deftest module-bound-vs-subsystem-bound
+  (testing "files have either fn/exports OR subsystem, not both"
+    (let [files (->> (file-seq (io/file "src"))
+                     (filter #(.isFile %))
+                     (filter #(.endsWith (.getName %) ".boundary")))]
+      (doseq [f files]
+        (let [decls (:declarations (parser/parse-file (.getPath f)))
+              kinds (set (map :type decls))
+              has-fn-or-exports (or (contains? kinds :fn)
+                                    (contains? kinds :exports))
+              has-subsystem (contains? kinds :subsystem)]
+          (is (not (and has-fn-or-exports has-subsystem))
+              (str f " mixes module-bound and subsystem-bound shapes")))))))
