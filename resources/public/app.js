@@ -447,6 +447,18 @@ class GraphViewer extends HTMLElement {
       cy.edges().removeClass('highlighted');
       edge.addClass('highlighted');
 
+      // Plan 6: clicking a drift edge logs the /projector URL for inspection.
+      // Full modal/sidebar rendering waits on the shell rewrite (follow-on plan).
+      if (edge.data('drift') === 'absent') {
+        const projKind = edge.data('projectionKind');
+        const url = `/projector?primitive-id=${encodeURIComponent(source)}&projection-kind=${encodeURIComponent(projKind)}`;
+        console.log(`[fukan] absent projection — fetch Blueprint at ${url}`);
+        fetch(url)
+          .then(r => r.json())
+          .then(bp => console.log('[fukan] Blueprint:', bp))
+          .catch(e => console.error('[fukan] /projector fetch failed:', e));
+      }
+
       this._emitSelect(edgeId);
     });
 
@@ -651,6 +663,30 @@ class GraphViewer extends HTMLElement {
           'width': 2,
           'curve-style': 'bezier',
           'arrow-scale': 0.8
+        }
+      },
+      // Plan 6: :relation/projects edges with :validity :absent render as
+      // red dashed drift markers per VISION.md ('clicking a red absent
+      // drift marker summons the Projector'). The Projector endpoint
+      // (/projector?primitive-id=X&projection-kind=Y) is reachable directly;
+      // wiring it to the cytoscape click-handler waits for the shell↔graph
+      // refactor in a follow-on plan.
+      {
+        selector: 'edge[drift="absent"]',
+        style: {
+          'line-style': 'dashed',
+          'line-color': '#e74c3c',
+          'target-arrow-color': '#e74c3c',
+          'line-dash-pattern': [4, 4],
+          'width': 2
+        }
+      },
+      {
+        selector: 'edge[drift="absent"]:selected',
+        style: {
+          'line-color': '#c0392b',
+          'target-arrow-color': '#c0392b',
+          'width': 3
         }
       },
       {
