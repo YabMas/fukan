@@ -145,3 +145,61 @@
           model (analyze (build/empty-model) [fn-decl])]
       (is (empty? (filter #(= :relation/triggers (:kind %)) (:edges model)))
           "no triggers edge produced when :triggers is nil"))))
+
+(deftest fn-local-attach-emits-binding-against-existing-operation
+  (testing "fn Contract.op { triggers: Rule } finds the local Operation and emits an edge"
+    (let [m0      (-> (build/empty-model)
+                      ;; Pre-seed the Allium-declared Operation (Plan 2b's id shape):
+                      (build/add-primitive
+                        (p/make-operation
+                          {:id "test/module::OrderSubmission.submit"
+                           :label "submit" :parameters []}))
+                      (build/add-primitive
+                        (p/make-rule
+                          {:id "test/module::ProcessOrder" :label "ProcessOrder"})))
+          fn-decl {:type :fn :form :local-attach
+                   :contract "OrderSubmission" :op "submit"
+                   :prose nil
+                   :body {:triggers {:kind :local :name "ProcessOrder"}
+                          :returns "Confirmation(post.order.id)"}}
+          model (analyze m0 [fn-decl])
+          edges (filter #(= :relation/triggers (:kind %)) (:edges model))]
+      (is (= 1 (count edges)))
+      (is (= "test/module::OrderSubmission.submit" (-> edges first :from :id)))
+      (is (= "test/module::ProcessOrder"           (-> edges first :to :id))))))
+
+(deftest fn-foreign-attach-resolves-through-use-alias
+  (testing "fn alias/Contract.op { ... } resolves via use-aliases"
+    (let [m0      (-> (build/empty-model)
+                      (build/add-primitive
+                        (p/make-operation
+                          {:id "other/coord::PaymentRequested.charge"
+                           :label "charge" :parameters []}))
+                      (build/add-primitive
+                        (p/make-rule
+                          {:id "test/module::HandleCharge" :label "HandleCharge"})))
+          fn-decl {:type :fn :form :foreign-attach
+                   :alias "c" :contract "PaymentRequested" :op "charge"
+                   :prose nil
+                   :body {:triggers {:kind :local :name "HandleCharge"}
+                          :returns nil}}
+          model (analyzer/analyze-file m0
+                                       {:boundary-version 1 :declarations [fn-decl]}
+                                       "test/module"
+                                       {"c" "other/coord"})
+          edges (filter #(= :relation/triggers (:kind %)) (:edges model))]
+      (is (= 1 (count edges)))
+      (is (= "other/coord::PaymentRequested.charge" (-> edges first :from :id))))))
+
+(deftest fn-attach-empty-body-throws
+  (testing "attach form with no body or empty body is a structural error"
+    (is (thrown? Exception
+                 (analyze (build/empty-model)
+                          [{:type :fn :form :local-attach
+                            :contract "X" :op "y"
+                            :prose nil :body nil}])))
+    (is (thrown? Exception
+                 (analyze (build/empty-model)
+                          [{:type :fn :form :local-attach
+                            :contract "X" :op "y" :prose nil
+                            :body {:triggers nil :returns nil}}])))))

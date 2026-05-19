@@ -181,11 +181,50 @@
                          coord use-aliases)
       m1)))
 
+(defn- attach-op-id
+  "Build the kernel Operation id for an attach-form fn.
+   For local-attach: <coord>::<Contract>.<op>.
+   For foreign-attach: resolve alias through use-aliases, then qualify."
+  [decl coord use-aliases]
+  (let [contract (:contract decl)
+        op       (:op decl)]
+    (case (:form decl)
+      :local-attach   (qualify coord (str contract "." op))
+      :foreign-attach (when-let [resolved (get use-aliases (:alias decl))]
+                        (qualify resolved (str contract "." op))))))
+
+(defn- analyze-fn-attach
+  "Per MODEL.md §8.2: fn Contract.op { ... } / fn alias/Contract.op { ... }
+   attaches behaviour to an EXISTING Allium-declared Operation. No new
+   Operation primitive — just emit the binding edge if `triggers:` is
+   present. Empty body is a structural error."
+  [model decl coord use-aliases]
+  (let [body (:body decl)]
+    (when (or (nil? body)
+              (and (nil? (:triggers body)) (nil? (:returns body))))
+      (throw (ex-info "attach-form fn requires non-empty body (triggers: and/or returns:)"
+                      {:type :boundary-shape-error
+                       :coord coord
+                       :form (:form decl)}))))
+  (if-let [op-id (attach-op-id decl coord use-aliases)]
+    (let [body (:body decl)]
+      (if-let [trigger (:triggers body)]
+        (emit-binding-edge model op-id trigger (:returns body) coord use-aliases)
+        ;; Body has returns: but no triggers: — no edge to tag. Warn + skip.
+        (do (warn! "attach-form fn has returns: but no triggers: — no edge to tag"
+                   {:coord coord :form (:form decl)
+                    :contract (:contract decl) :op (:op decl)})
+            model)))
+    (do (warn! "attach-form fn could not resolve op-id"
+               {:coord coord :form (:form decl) :alias (:alias decl)
+                :use-aliases (keys use-aliases)})
+        model)))
+
 (defn- analyze-fn [model decl coord use-aliases]
   (case (:form decl)
-    :declare-new (analyze-fn-declare-new model decl coord use-aliases)
-    ;; Tasks 4-5 add :local-attach and :foreign-attach handlers.
-    model))
+    :declare-new    (analyze-fn-declare-new model decl coord use-aliases)
+    :local-attach   (analyze-fn-attach      model decl coord use-aliases)
+    :foreign-attach (analyze-fn-attach      model decl coord use-aliases)))
 
 (defn- analyze-exports [model _decl _coord _use-aliases]
   ;; Task 6 implements.
