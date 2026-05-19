@@ -1,18 +1,18 @@
 (ns fukan.infra.model
   "Model lifecycle management.
    Holds a Model value (per fukan.model.build/Model) and offers load /
-   refresh / get. Plan 2b wired the Allium pipeline in here; calling
-   `load-model` on a source root walks every `.allium` file under it,
-   analyses each, and unifies cross-module external-entity stubs."
-  (:require [fukan.vocabulary.allium.pipeline :as pipeline]))
+   refresh / get. Plan 3b wires the top-level multi-extension pipeline
+   (Allium + Boundary) in here; calling `load-model` on a source root
+   composes both extension parsers."
+  (:require [fukan.model.pipeline :as pipeline]))
 
 (defonce ^:private state (atom {:model nil :src nil}))
 
 (defn load-model
   "Build (or reload) the Model for the given src path by invoking the
-   Allium pipeline. Closes Plan 2b — replaces the Plan-1 fixture."
+   top-level multi-extension pipeline (Allium + Boundary). Closes Plan 3b."
   [src]
-  (println "Loading model from" src "(Allium pipeline — Plan 2b)")
+  (println "Loading model from" src "(Allium + Boundary — Plan 3b)")
   (let [m (pipeline/load-source src)]
     (reset! state {:model m :src src})
     (println "Loaded:" (count (:primitives m)) "primitives,"
