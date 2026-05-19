@@ -31,7 +31,7 @@
   version-number = #'[0-9]+'
 
   declarations = (declaration _)*
-  declaration = use-decl / fn-decl   (* tasks 4+ add exports-decl, subsystem-decl *)
+  declaration = use-decl / fn-decl / exports-decl   (* task 6 adds subsystem-decl *)
 
   (* ============ Use ============ *)
 
@@ -85,6 +85,13 @@
      'returns:' is the expression. Multi-line expressions can be added
      in Plan 4 when the constraint-language expression parser arrives. *)
   returns-text = #'[^\\n}]+'
+
+  (* ============ Exports (module-bound) ============ *)
+
+  exports-decl = <'exports:'> _ export-entry*
+  export-entry = (qualified-export / simple-export) _
+  simple-export = ident
+  qualified-export = ident <'.'> ident
 
   (* ============ Type references ============ *)
 
@@ -187,6 +194,10 @@
                            :op op
                            :prose prose
                            :body body}))
+   :simple-export     identity
+   :qualified-export  (fn [c o] (str c "." o))
+   :export-entry      identity
+   :exports-decl      (fn [& entries] {:type :exports :entries (vec entries)})
    :boundary-file    (fn [header decls]
                        {:boundary-version (:boundary-version header)
                         :declarations decls})})

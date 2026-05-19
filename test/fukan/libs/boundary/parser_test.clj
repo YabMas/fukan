@@ -210,3 +210,35 @@
       (is (= :declare-new (-> r1 :declarations first :form))))
     (let [r2 (parse "-- boundary: 1\nfn Sub.submit { triggers: R }\n")]
       (is (= :local-attach (-> r2 :declarations first :form))))))
+
+(deftest exports-simple
+  (testing "exports: with bare-name entries"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "exports:\n"
+                             "    ViewState\n"
+                             "    NavigationState\n"
+                             "    CytoscapeGraph\n"))]
+      (is (= [{:type :exports
+               :entries ["ViewState" "NavigationState" "CytoscapeGraph"]}]
+             (:declarations result))))))
+
+(deftest exports-mixed
+  (testing "exports: with bare-name and Contract.op entries"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "exports:\n"
+                             "    OrderSubmission.submit\n"
+                             "    Order\n"
+                             "    OrderConfirmed\n"))]
+      (is (= [{:type :exports
+               :entries ["OrderSubmission.submit" "Order" "OrderConfirmed"]}]
+             (:declarations result))))))
+
+(deftest exports-after-fn-declarations
+  (testing "exports: can follow fn declarations in the same file"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "fn render_graph() -> CytoscapeGraph\n"
+                              "exports:\n"
+                              "    ViewState\n"))
+          exports (->> (:declarations result)
+                       (filter #(= :exports (:type %))))]
+      (is (= [{:type :exports :entries ["ViewState"]}] exports)))))
