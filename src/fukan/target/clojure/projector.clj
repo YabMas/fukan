@@ -141,12 +141,13 @@
           artifact-kind  (artifact-kind-for projection-kind)
           signature      (signature-for registry primitive projection-kind)
           context        (context-for model primitive primitive-id)
-          idioms         (select-idioms registry primitive projection-kind address)]
-      (bp/make
-        {:primitive-id    primitive-id
-         :projection-kind projection-kind
-         :address         address
-         :artifact-kind   artifact-kind
-         :signature       signature
-         :context         context
-         :idioms          idioms}))))
+          idioms         (select-idioms registry primitive projection-kind address)
+          base           (bp/make {:primitive-id    primitive-id
+                                   :projection-kind projection-kind
+                                   :address         address
+                                   :artifact-kind   artifact-kind
+                                   :signature       signature
+                                   :context         context
+                                   :idioms          idioms})]
+      (assoc base :rendered {:edn      (bp/to-edn base)
+                             :markdown (bp/to-markdown base)}))))
