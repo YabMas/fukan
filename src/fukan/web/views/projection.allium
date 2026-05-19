@@ -1,0 +1,29 @@
+-- allium: 2
+
+-- Stub for projection module types referenced by views/spec.allium.
+-- Authored to close the Plan 2b deferred gap where `use "./projection.allium"`
+-- pointed at a non-existent file. The real projection module spec is intended
+-- to live elsewhere (likely src/fukan/projection/spec.allium); this stub
+-- satisfies the local alias resolution until the full projection.allium is
+-- authored.
+--
+-- Field/type names mirror the projection-shaped references in
+-- web/views/spec.allium (e.g. `projection.nodes.find(...)`).
+
+entity Projection {
+    nodes: List<Node>
+    edges: List<Edge>
+}
+
+entity Node {
+    id: NodeId
+    label: String
+    parent: NodeId?
+}
+
+entity Edge {
+    source: NodeId
+    target: NodeId
+}
+
+external entity NodeId

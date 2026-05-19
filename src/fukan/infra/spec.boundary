@@ -1,3 +1,5 @@
+-- boundary: 1
+
 -- Infrastructure lifecycle — mutable state management for the
 -- model and HTTP server.
 

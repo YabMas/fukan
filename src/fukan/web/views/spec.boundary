@@ -1,7 +1,9 @@
+-- boundary: 1
+
 -- Pure view rendering — transforms projection data into HTML
 -- and Cytoscape JSON. No data fetching, no side effects.
 
-use "../projection/spec.allium" as projection
+use "./projection.allium" as projection
 
 fn render_app_shell() -> Html
   -- Render the initial HTML shell for the application.
@@ -15,8 +17,9 @@ fn render_breadcrumb(path: EntityPath) -> Html
 fn render_sidebar_html(detail: EntityDetails) -> Html
   -- Render entity or edge details as sidebar HTML.
 
-exposes ViewState
-exposes NavigationState
-exposes CytoscapeGraph
-exposes CytoscapeNode
-exposes CytoscapeEdge
+exports:
+    ViewState
+    NavigationState
+    CytoscapeGraph
+    CytoscapeNode
+    CytoscapeEdge

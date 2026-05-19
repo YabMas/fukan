@@ -1,3 +1,5 @@
+-- boundary: 1
+
 -- Model construction and boundary contract compliance.
 
 use "./spec.allium" as model
@@ -11,7 +13,8 @@ fn check_contracts(model: Model) -> LintReport
 fn format_report(report: LintReport) -> String
   -- Render a lint report as a human-readable string.
 
-exposes AnalysisResult
-exposes LintViolation
-exposes LintReport
-exposes LintStats
+exports:
+    AnalysisResult
+    LintViolation
+    LintReport
+    LintStats
