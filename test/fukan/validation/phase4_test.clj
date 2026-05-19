@@ -43,3 +43,18 @@
     (let [model (model-pipeline/load-source "src")]
       (is (or (map? model) (some? model))
           "pipeline returns a model or a {:model :violations} map"))))
+
+(deftest sub-phase-order-is-fixed
+  (testing "run-sub-phases visits 4a → 4b → 4c → 4d → 4e → 4f → 4g in order"
+    (let [calls (atom [])
+          fake-rule (fn [phase-key]
+                      (fn [_model] (swap! calls conj phase-key) []))]
+      (with-redefs [phase4/rules-4a (fake-rule :4a)
+                    phase4/rules-4b (fake-rule :4b)
+                    phase4/rules-4c (fake-rule :4c)
+                    phase4/rules-4d (fake-rule :4d)
+                    phase4/rules-4e (fake-rule :4e)
+                    phase4/rules-4f (fake-rule :4f)
+                    phase4/rules-4g (fake-rule :4g)]
+        (#'phase4/run-sub-phases (build/empty-model))
+        (is (= [:4a :4b :4c :4d :4e :4f :4g] @calls))))))

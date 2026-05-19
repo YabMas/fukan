@@ -10,10 +10,60 @@
    Throws ex-info {:type :gate-g2-halt :violations [...]} on error."
   (:require [fukan.validation.violation :as v]))
 
+(defn rules-4a [model]
+  (try
+    (when-let [check (requiring-resolve 'fukan.validation.rules-4a/check)]
+      (check model))
+    (catch java.io.FileNotFoundException _ [])))
+
+(defn rules-4b [model]
+  (try
+    (when-let [check (requiring-resolve 'fukan.validation.rules-4b/check)]
+      (check model))
+    (catch java.io.FileNotFoundException _ [])))
+
+(defn rules-4c [model]
+  (try
+    (when-let [check (requiring-resolve 'fukan.validation.rules-4c/check)]
+      (check model))
+    (catch java.io.FileNotFoundException _ [])))
+
+(defn rules-4d [model]
+  (try
+    (when-let [check (requiring-resolve 'fukan.validation.rules-4d/check)]
+      (check model))
+    (catch java.io.FileNotFoundException _ [])))
+
+(defn rules-4e [model]
+  (try
+    (when-let [check (requiring-resolve 'fukan.validation.rules-4e/check)]
+      (check model))
+    (catch java.io.FileNotFoundException _ [])))
+
+(defn rules-4f [model]
+  (try
+    (when-let [check (requiring-resolve 'fukan.validation.rules-4f/check)]
+      (check model))
+    (catch java.io.FileNotFoundException _ [])))
+
+(defn rules-4g [model]
+  (try
+    (when-let [check (requiring-resolve 'fukan.validation.rules-4g/check)]
+      (check model))
+    (catch java.io.FileNotFoundException _ [])))
+
 (defn- run-sub-phases
-  "Tasks 1-10 register sub-phase runners here. For now, no rules: returns []."
-  [_model]
-  [])
+  "Runs all Phase 4 sub-phases (4a-4g) in fixed order. Tasks 4-10 register
+   their check functions via their respective rules-XY namespaces."
+  [model]
+  (vec (concat
+         (or (rules-4a model) [])
+         (or (rules-4b model) [])
+         (or (rules-4c model) [])
+         (or (rules-4d model) [])
+         (or (rules-4e model) [])
+         (or (rules-4f model) [])
+         (or (rules-4g model) []))))
 
 (defn gate-g2
   "Halt iff there are any errors among the violations. Tasks-1+ wire this
