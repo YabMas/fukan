@@ -45,11 +45,15 @@
       (is (= :error (-> phase5-vs first :severity))))))
 
 (deftest combined-pipeline-with-phase5-runs-cleanly
-  (testing "fukan-on-fukan loads through all phases (Allium + Boundary + Phase 4 + Phase 5)"
+  (testing "fukan-on-fukan loads through all phases — no errors, Phase 5 silent"
     (let [m (model-pipeline/load-source "src")]
       (is (map? m))
       (is (contains? m :violations))
-      (let [errors (filter #(= :error (:severity %)) (:violations m))]
+      (let [errors    (filter #(= :error (:severity %)) (:violations m))
+            phase5-vs (filter #(= :phase5 (:phase %)) (:violations m))]
         (is (empty? errors)
-            (str "Phase 4/5 produced unexpected errors: "
-                 (pr-str (mapv (juxt :phase :sub-phase :kind :message) errors))))))))
+            (str "Pipeline produced unexpected errors: "
+                 (pr-str (mapv (juxt :phase :sub-phase :kind :message) errors))))
+        (is (zero? (count phase5-vs))
+            (str "Phase 5 violations against corpus: "
+                 (pr-str (mapv (juxt :kind :message) phase5-vs))))))))
