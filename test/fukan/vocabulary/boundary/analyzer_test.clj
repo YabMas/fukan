@@ -1,7 +1,8 @@
 (ns fukan.vocabulary.boundary.analyzer-test
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.vocabulary.boundary.analyzer :as analyzer]
-            [fukan.model.build :as build]))
+            [fukan.model.build :as build]
+            [fukan.model.primitives :as p]))
 
 (defn- analyze [model decls]
   (analyzer/analyze-file model
@@ -82,3 +83,65 @@
       (is (= "src" (-> op :parameters first :name)))
       (is (= "analyzers" (-> op :parameters second :name)))
       (is (some? (:return-type op)) "return type was captured"))))
+
+(deftest fn-declare-new-with-triggers
+  (testing "fn body's triggers: clause produces an R4 edge + Boundary::Binding tag"
+    (let [m0      (-> (build/empty-model)
+                      ;; Pre-seed the local Rule the fn references — analyzer
+                      ;; doesn't create it, just emits an edge against it
+                      ;; (Allium runs first in the real pipeline).
+                      (build/add-primitive
+                        (p/make-rule
+                          {:id "test/module::SelectNode" :label "SelectNode"})))
+          fn-decl {:type :fn :form :declare-new :name "select_node"
+                   :params [{:name "node_id"
+                             :type-ref {:kind :simple :name "NodeId"}}]
+                   :return-type nil :prose nil
+                   :body {:triggers {:kind :local :name "SelectNode"}
+                          :returns nil}}
+          model (analyze m0 [fn-decl])
+          triggers-edges (filter #(= :relation/triggers (:kind %))
+                                 (:edges model))]
+      (is (= 1 (count triggers-edges))
+          "one R4 edge emitted")
+      (let [edge (first triggers-edges)]
+        (is (= "test/module::select_node" (-> edge :from :id)))
+        (is (= "test/module::SelectNode"  (-> edge :to :id))))
+      (let [binding-tags (filter (fn [ta]
+                                   (and (= "Boundary" (-> ta :tag :namespace))
+                                        (= "Binding"  (-> ta :tag :name))))
+                                 (:tag-apps model))]
+        (is (= 1 (count binding-tags)) "one Boundary::Binding tag on the edge")
+        (is (= :target/edge (-> binding-tags first :target :case)))))))
+
+(deftest fn-body-returns-captured-in-binding-payload
+  (testing "returns: clause stored as Boundary::Binding payload"
+    (let [m0      (-> (build/empty-model)
+                      (build/add-primitive
+                        (p/make-rule
+                          {:id "test/module::ProcessOrder" :label "ProcessOrder"})))
+          fn-decl {:type :fn :form :declare-new :name "submit_order"
+                   :params [{:name "order"
+                             :type-ref {:kind :simple :name "Order"}}]
+                   :return-type {:kind :simple :name "SubmissionReceipt"}
+                   :prose nil
+                   :body {:triggers {:kind :local :name "ProcessOrder"}
+                          :returns "SubmissionReceipt(order.id, post.order.created_at)"}}
+          model (analyze m0 [fn-decl])
+          binding-tag (->> (:tag-apps model)
+                           (filter (fn [ta]
+                                     (and (= "Boundary" (-> ta :tag :namespace))
+                                          (= "Binding"  (-> ta :tag :name)))))
+                           first)]
+      (is (= "SubmissionReceipt(order.id, post.order.created_at)"
+             (-> binding-tag :payload :returns_expression))))))
+
+(deftest fn-body-without-triggers-no-edge
+  (testing "fn with body but no triggers: emits no R4 edge"
+    (let [fn-decl {:type :fn :form :declare-new :name "get_view_state"
+                   :params [] :return-type {:kind :simple :name "ViewState"}
+                   :prose nil
+                   :body {:triggers nil :returns "current_view_state"}}
+          model (analyze (build/empty-model) [fn-decl])]
+      (is (empty? (filter #(= :relation/triggers (:kind %)) (:edges model)))
+          "no triggers edge produced when :triggers is nil"))))

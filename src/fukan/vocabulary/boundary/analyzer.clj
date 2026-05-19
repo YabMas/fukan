@@ -8,6 +8,7 @@
    This namespace is built up across Tasks 2-7."
   (:require [fukan.model.build :as build]
             [fukan.model.primitives :as p]
+            [fukan.model.relations :as r]
             [fukan.model.type :as t]
             [fukan.model.vocabulary :as v]))
 
@@ -107,10 +108,54 @@
   ;; via use-aliases); no kernel content produced here.
   model)
 
+(defn- resolve-rule-ref
+  "Translate a fn-body :triggers ref to a kernel Rule id.
+   Local refs qualify against `coord`; qualified refs resolve through
+   `use-aliases`. Returns nil if the alias is unknown — caller decides
+   whether to emit a warning or skip."
+  [trigger-ref coord use-aliases]
+  (case (:kind trigger-ref)
+    :local     (qualify coord (:name trigger-ref))
+    :qualified (when-let [resolved (get use-aliases (:ns trigger-ref))]
+                 (qualify resolved (:name trigger-ref)))))
+
+(defn- warn! [msg ctx]
+  (binding [*out* *err*]
+    (println (str "[boundary-analyzer] " msg " " (pr-str ctx)))))
+
+(defn- emit-binding-edge
+  "Best-effort emission of an R4 triggers edge + Boundary::Binding tag.
+   Skips silently (with warning) on unresolved rule refs or kernel errors."
+  [model op-id trigger-ref returns-text coord use-aliases]
+  (if-let [rule-id (resolve-rule-ref trigger-ref coord use-aliases)]
+    (let [edge            (r/make-edge :relation/triggers
+                                       (r/primitive-ref op-id)
+                                       (r/primitive-ref rule-id))
+          edge-id         (r/edge-identity edge)
+          binding-payload (cond-> {}
+                            returns-text (assoc :returns_expression returns-text))
+          tag-app         (v/make-tag-application
+                            (cond-> {:tag    {:namespace "Boundary" :name "Binding"}
+                                     :target {:case :target/edge :edge-identity edge-id}}
+                              (seq binding-payload) (assoc :payload binding-payload)))]
+      (try
+        (-> model
+            (build/add-edge edge)
+            (build/add-tag-application tag-app))
+        (catch Exception e
+          (warn! "binding edge emission failed"
+                 {:op op-id :rule rule-id :ex (ex-message e)})
+          model)))
+    (do
+      (warn! "unresolved trigger ref"
+             {:op op-id :trigger trigger-ref :use-aliases (keys use-aliases)})
+      model)))
+
 (defn- analyze-fn-declare-new
   "Per MODEL.md §8.2: `fn name(params) -> R` declares a new Operation on the
-   bearing module-Container's boundary.operations. Body handling stays nil
-   for this task; Task 4 adds triggers: → R4 edge."
+   bearing module-Container's boundary.operations. When body has :triggers,
+   emits R4 (triggers: Operation → Rule) edge with Boundary::Binding tag
+   carrying :returns_expression payload when present."
   [model decl coord use-aliases]
   (let [fn-name  (:name decl)
         op-id    (qualify coord fn-name)
@@ -125,10 +170,16 @@
                      (ensure-module-container coord)
                      (build/add-primitive op)
                      (add-operation-to-boundary coord op-id))
-        tag-app  (v/make-tag-application
-                   {:tag    {:namespace "Boundary" :name "Function"}
-                    :target {:case :target/operation :id op-id}})]
-    (build/add-tag-application m0 tag-app)))
+        m1       (build/add-tag-application
+                   m0
+                   (v/make-tag-application
+                     {:tag    {:namespace "Boundary" :name "Function"}
+                      :target {:case :target/operation :id op-id}}))
+        body     (:body decl)]
+    (if (and body (:triggers body))
+      (emit-binding-edge m1 op-id (:triggers body) (:returns body)
+                         coord use-aliases)
+      m1)))
 
 (defn- analyze-fn [model decl coord use-aliases]
   (case (:form decl)
