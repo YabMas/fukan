@@ -14,7 +14,8 @@
         WARNING when Rule has no event-shaped trigger beyond the binding
         itself. Plan 4's constraint engine subsumes full equality check."
   (:require [fukan.validation.violation :as v]
-            [fukan.model.build :as build]))
+            [fukan.model.build :as build]
+            [fukan.model.relations :as r]))
 
 (defn- binding-issues [model]
   (get-in model [:phase4-state :binding-issues] []))
@@ -64,7 +65,7 @@
   (for [edge (binding-edges model)
         :let [op-id (-> edge :from :id)
               op (operation-by-id model op-id)
-              edge-id ((requiring-resolve 'fukan.model.relations/edge-identity) edge)
+              edge-id (r/edge-identity edge)
               binding-tag (binding-tag-for-edge model edge-id)
               has-return (some? (:return-type op))
               has-returns-clause (some? (-> binding-tag :payload :returns_expression))]

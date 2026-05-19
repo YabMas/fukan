@@ -252,7 +252,7 @@
 
    rules: entries become PredicateRegistrations on the model with
    scope = TagScope against the composite. The kernel's
-   :predicate-registrations slot materialises on first registration
+   :predicates slot materialises on first registration
    via (fnil conj [])."
   [model decl coord _use-aliases]
   (let [contains-coords (mapv #(coord/canonicalise-path coord %)
