@@ -173,3 +173,40 @@
           fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
       (is (= {:kind :qualified :ns "other" :name "SomeRule"}
              (-> fn-decl :body :triggers))))))
+
+(deftest fn-local-attach
+  (testing "fn Contract.op { ... } attaches behaviour to a local Allium Operation"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "fn OrderSubmission.submit {\n"
+                              "    triggers: ProcessOrder\n"
+                              "    returns: Confirmation(post.order.id)\n"
+                              "}\n"))
+          fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
+      (is (= :local-attach (:form fn-decl)))
+      (is (= "OrderSubmission" (:contract fn-decl)))
+      (is (= "submit" (:op fn-decl)))
+      (is (= {:kind :local :name "ProcessOrder"}
+             (-> fn-decl :body :triggers)))
+      (is (= "Confirmation(post.order.id)"
+             (-> fn-decl :body :returns))))))
+
+(deftest fn-foreign-attach
+  (testing "fn alias/Contract.op { ... } attaches to a foreign Allium Operation"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "use \"../c.allium\" as c\n"
+                              "fn c/PaymentRequested.charge {\n"
+                              "    triggers: HandleCharge\n"
+                              "    returns: Receipt(amount, post.txn.id)\n"
+                              "}\n"))
+          fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
+      (is (= :foreign-attach (:form fn-decl)))
+      (is (= "c" (:alias fn-decl)))
+      (is (= "PaymentRequested" (:contract fn-decl)))
+      (is (= "charge" (:op fn-decl))))))
+
+(deftest fn-attach-discriminated-by-absence-of-parens
+  (testing "the parser distinguishes attach (no parens) from declare-new (parens)"
+    (let [r1 (parse "-- boundary: 1\nfn submit(o: Order) -> R\n")]
+      (is (= :declare-new (-> r1 :declarations first :form))))
+    (let [r2 (parse "-- boundary: 1\nfn Sub.submit { triggers: R }\n")]
+      (is (= :local-attach (-> r2 :declarations first :form))))))

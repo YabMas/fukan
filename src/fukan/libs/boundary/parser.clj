@@ -42,9 +42,20 @@
 
   ident = #'[a-zA-Z_][a-zA-Z0-9_]*'
 
-  (* ============ Fn — declare-new ============ *)
+  (* ============ Fn — three forms ============
 
-  fn-decl = <'fn'> __ ident _ <'('> _ params? _ <')'> (_ return-type)? prose? _ fn-body?
+     Ordered alternation: the foreign-attach form has the most
+     discriminating token (a '/'), so it's tried first. local-attach
+     ('.' separator, no parens) is tried next, falling through to the
+     classic declare-new form (parenthesised parameter list). *)
+
+  fn-decl = fn-foreign-attach / fn-local-attach / fn-declare-new
+
+  fn-declare-new = <'fn'> __ ident _ <'('> _ params? _ <')'> (_ return-type)? prose? _ fn-body?
+
+  fn-local-attach = <'fn'> __ ident <'.'> ident _ prose? _ fn-body
+
+  fn-foreign-attach = <'fn'> __ ident <'/'> ident <'.'> ident _ prose? _ fn-body
 
   params = param (_ <','> _ param)*
   param = ident _ <':'> _ type-ref
@@ -133,22 +144,49 @@
                            (reduce (fn [body [k v]] (assoc body k v))
                                    {:triggers nil :returns nil}
                                    clauses))
-   :fn-decl          (fn [name & rest]
-                       (let [ps    (or (some #(when (vector? %) %) rest) [])
-                             ret   (some #(when (and (map? %)
-                                                     (contains? % :kind))
-                                            %) rest)
-                             body  (some #(when (and (map? %)
-                                                     (contains? % :triggers))
-                                            %) rest)
-                             prose (some #(when (string? %) %) rest)]
-                         {:type :fn
-                          :form :declare-new
-                          :name name
-                          :params ps
-                          :return-type ret
-                          :prose prose
-                          :body body}))
+   :fn-decl           identity   ; passthrough; variants below do the work
+
+   :fn-declare-new    (fn [name & rest]
+                        (let [ps    (or (some #(when (vector? %) %) rest) [])
+                              ret   (some #(when (and (map? %)
+                                                      (contains? % :kind))
+                                             %) rest)
+                              body  (some #(when (and (map? %)
+                                                      (contains? % :triggers))
+                                             %) rest)
+                              prose (some #(when (string? %) %) rest)]
+                          {:type :fn
+                           :form :declare-new
+                           :name name
+                           :params ps
+                           :return-type ret
+                           :prose prose
+                           :body body}))
+
+   :fn-local-attach   (fn [contract op & rest]
+                        (let [body  (some #(when (and (map? %)
+                                                      (contains? % :triggers))
+                                             %) rest)
+                              prose (some #(when (string? %) %) rest)]
+                          {:type :fn
+                           :form :local-attach
+                           :contract contract
+                           :op op
+                           :prose prose
+                           :body body}))
+
+   :fn-foreign-attach (fn [alias contract op & rest]
+                        (let [body  (some #(when (and (map? %)
+                                                      (contains? % :triggers))
+                                             %) rest)
+                              prose (some #(when (string? %) %) rest)]
+                          {:type :fn
+                           :form :foreign-attach
+                           :alias alias
+                           :contract contract
+                           :op op
+                           :prose prose
+                           :body body}))
    :boundary-file    (fn [header decls]
                        {:boundary-version (:boundary-version header)
                         :declarations decls})})
