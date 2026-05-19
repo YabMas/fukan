@@ -148,46 +148,69 @@ Cross-module references continue via `use "..." as alias` and qualified names (`
 
 ### `.boundary` responsibilities
 
-`.boundary` is the Structure-altitude binding layer. It fills two gaps Allium leaves open:
+`.boundary` is the Structure-altitude language. It exists because Allium's structural coverage is partial: Allium's primitives (Contract Operations, Surfaces, Rules) all carry behavioural framing, and a lot of what *actually crosses a module wall* — getters, setters, renders, lifecycle calls, pure transforms — is structurally mundane and doesn't deserve Rule weight. Forcing such things into Rules bloats Allium specs and obscures which Rules represent genuine behavioural commitment. `.boundary` fills the gap with **one primitive** (`fn`) carrying no behavioural framing, and adds two adjacent capabilities at the same altitude: **module-API closure** and **subsystem composition**.
 
-**1. Operation↔Rule binding (primary).** Allium has Operations (contract signatures) at Structure altitude and Rules (behavioural units) at Behaviour altitude, but no grammar connecting them. `.boundary` declares which Rule fires when which Operation is invoked, materialising `triggers: Operation → Rule` edges (kernel relation R4).
+The three capabilities:
 
-**2. Subsystem composition (secondary).** A logical grouping of `.allium` modules (and possibly nested subsystems) with a declared external API.
+**1. The function primitive — `fn` (primary).** A typed callable on a module's own Boundary. Signature only by default; optionally attached to a behaviour-bearing Allium Rule via a `triggers:` body clause, optionally with a `returns:` derivation when the function's return value isn't the Rule's natural output. Most `fn`s are signature-only declarations whose implementation lives in code (tracked via `projects` per [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments)).
 
-**Sketch syntax** (final syntax to be designed; this captures the conceptual primitives):
+**2. Module-API closure.** `exports:` flips a module from open (default — every Allium top-level decl externally visible) to closed (only listed items public). `fn`-declared Operations are implicitly part of the public face; `exports:` enumerates the Allium-side items (Entities, Surfaces, Events, Actors, Variants, `Contract.op` Operations) that remain visible.
+
+**3. Subsystem composition.** A `subsystem <Name> { contains:, exports:, rules: }` block declares a composite Container grouping multiple Allium modules with its own externally-visible API. Composition replaces filesystem-derived hierarchy — topology becomes a design surface (see VISION.md), not a side effect of file layout.
+
+**Sketch syntax** (module-bound shape):
+
+```
+-- views/spec.boundary
+-- boundary: 1
+
+use "../projection/spec.allium" as projection
+use "./contracts/spec.allium" as c
+
+-- Signature only — pure render, implementation lives in code.
+fn render_app_shell() -> Html
+  -- Renders the initial HTML shell.
+
+fn render_graph(p: projection/Projection, state: EditorState) -> CytoscapeGraph
+  -- Transforms projection data into Cytoscape JSON.
+
+-- Behaviourally attached: invoking this fires a local Allium Rule.
+fn select_node(node_id: NodeId) {
+    triggers: SelectNode
+}
+
+-- Declared as a fn AND attached, with a custom return derivation.
+fn submit_order(order: Order) -> SubmissionReceipt {
+    triggers: ProcessOrder
+    returns:  SubmissionReceipt(order.id, post.order.created_at, status: "received")
+}
+
+-- Behavioural attachment to an Allium-declared Contract Operation
+-- (no new Operation primitive — the signature already exists in Allium).
+fn c/PaymentRequested.charge {
+    triggers: HandleCharge
+    returns:  Receipt(amount, post.txn.id)
+}
+
+-- Module closure: presence flips the module to closed.
+-- fn-declared Operations are implicitly exported regardless of this list.
+exports:
+    ViewState
+    NavigationState
+    CytoscapeGraph
+```
+
+**Sketch syntax** (subsystem-bound shape, separate file):
 
 ```
 -- auth.boundary
--- Header: -- boundary: 1
-
-use "./oauth.allium" as oauth
-use "./session.allium" as session
-
--- Module-level API declaration: oauth.allium's public surface.
--- Anything declared at oauth's top level but not listed here is module-private —
--- references from other modules to those items are structural errors.
--- Contracts are not listed: they are always cross-module visible at the type level
--- (so `fulfils`/`demands` declarations work); their Operations are individually exported.
-module oauth {
-    exports:
-        OAuthLogin                  -- Surface
-        EventSubmitter.submit       -- Operation (on Contract EventSubmitter)
-        EventSubmitter.cancel       -- Operation (on Contract EventSubmitter)
-        SessionRevoked              -- Event
-        AuthError                   -- Variant
-}
-
-binding submit_handler {
-    operation: oauth/EventSubmitter.submit
-    invokes:   session/ProcessSubmission
-    returns:   the EventSubmission created by ProcessSubmission
-}
+-- boundary: 1
 
 subsystem Auth {
     contains:
-        ./oauth.allium
-        ./password.allium
-        ./session.allium
+        ./oauth/spec.allium
+        ./password/spec.allium
+        ./session/spec.allium
 
     exports:
         oauth/OAuthLogin
@@ -196,36 +219,49 @@ subsystem Auth {
 
     -- Optional: subsystem-scoped architectural rules
     rules:
-        no_dependency from oauth to password
+        no_dependency(from: oauth, to: password)
 }
 ```
 
 **Primitives provided by `.boundary`:**
 
-1. **`binding`** — declares an Operation→Rule binding. One Rule per binding; multiple bindings for one→many fan-out (one Operation invokes many Rules). Many→one fan-in (multiple Operations bound to the same Rule) is supported by `(operation_ref, rule_ref)` identity — but the parameter-signature lint (below) applies per binding, so fan-in forces every bound Operation to share parameter shape with the Rule's `when:`. In practice this constrains fan-in to Operations that are *semantically* the same call shape (e.g., a single `submit` Rule fronted by both an HTTP and an internal queue Operation). Identity = `(operation_ref, rule_ref)`. Optional binding name for addressability.
-2. **`module`** — declares a single `.allium` module's public API. References the module by its `use`'d alias; lists items that are part of the module's external face via `exports:`. **Exportable kinds** are exactly those Allium primitives with a spec-level cross-module reference site: Surfaces (referenced via Surface `related:`), Entities / Values / Variants (via field type declarations and `variant from <parent>`), Events (via Rule `when:` / Surface `provides:` / Rule `emits:`), Actors (via Surface `facing:`), and individual Operations written `Contract.operation` (via `.boundary` binding `operation:` clauses). **Not exportable:**
+1. **`fn`** — a typed callable on a module's Boundary. Three name forms, all parsed as `fn`:
+    - `fn name(params) -> R` — *declare-new*. Adds an Operation primitive to the bearing module-Container's `boundary.operations`. The implementation lives in code; `projects` edges per §7.6 link spec to code.
+    - `fn Contract.op { ... }` — *local-attach*. No new Operation; `Contract.op` resolves to an Allium-declared Operation on a local Contract. The body provides behavioural attachment via `triggers:` and/or `returns:`.
+    - `fn alias/Contract.op { ... }` — *foreign-attach*. Same as local-attach but the Contract lives in another module reached through `use`.
+
+    A `fn` body has two optional clauses: `triggers: <RuleRef>` (single — the Allium Rule this Operation invokes; materialises `triggers: Operation → Rule` per R4) and `returns: <expression>` (return derivation, opaque text initially per the constraint-language deferral). A body with neither clause is identical to no body. An attach-form `fn` with an empty body is a structural error — there's no reason to attach without a clause. *Identity.* Operations from declare-new `fn`s are identified by `(module-Container, name)` per K14. Bindings (the R4 edges produced by `triggers:` clauses, regardless of which `fn` shape carried them) have identity `(operation_ref, rule_ref)`; multiple `fn`s producing the same `(op, rule)` collapse to one edge.
+
+2. **`exports:`** *(module-bound files only)* — declares the module's public face. Exportable kinds are exactly those Allium primitives with a spec-level cross-module reference site: Surfaces, Entities / Values / Variants, Events, Actors, and individual Operations written `Contract.op`. **Not exportable:**
     - **Contracts** — always cross-module type-visible (so `fulfils`/`demands` declarations work with full structural inspection of the Contract's signatures); listing a bare Contract name is a structural error.
-    - **Rules** — no spec-level cross-module reference site exists. The only cross-module Rule reference is `.boundary` binding `invokes:`, which is the wiring layer and is exempt from visibility checks (a binding's `invokes:` may reach any Rule in any module, open or closed; the *public* thing being invoked is the bound Operation, which IS subject to export). Rule visibility from outside a closed module happens indirectly: through the bound Operation, or through an exported Event the Rule triggers on.
-    - **Invariants** — no cross-module reference site at all; they are module-scoped predicate-shaped clauses addressed only by methodology-shipped constraints inspecting the Model.
+    - **Rules** — no spec-level cross-module reference site. The only cross-module Rule reference is a `fn` body's `triggers:` clause, which is the wiring layer and is exempt from visibility checks.
+    - **Invariants** — no cross-module reference site at all.
 
-    **Anything else declared at the module's top level but not listed in `exports:` is module-private** — cross-module references targeting non-exported items are structural errors. The design rule: sub-substrate with independent reference identity (Operations) is individually exportable; sub-substrate without (Fields, Parameters, sub-Clauses) comes along with the parent's type and isn't separately listable. The default for a module with **no** `module` declaration in any `.boundary` file is **open** (every top-level declaration externally visible — matches Allium's stock semantics and preserves single-file projects). Adding any `module X { exports: ... }` for module X **flips X to closed**: the listed items are the entirety of X's public face. This is symmetric with subsystem `exports:` one altitude down — explicit encapsulation as a deliberate tool. Allium itself has no module-level visibility construct today; this primitive is the fukan-side mechanism filling that gap. (If Allium later adopts a module-level `exports:` upstream, the `.boundary` `module` primitive sunsets and the analyzer reads from the Allium source instead.)
-3. **`contains`** — declares which modules belong to the subsystem. References `.allium` files (or nested `.boundary` subsystems).
-4. **`exports`** *(inside a `subsystem` block)* — names which Surfaces (or Contracts) of the contained modules / nested subsystems are externally visible at this composite's boundary. Surfaces not listed are internal to the subsystem. **Exporting is explicit and non-transitive across composite nesting**: if composite A contains composite B and B exports Surface S, A must list S in its own `exports:` for S to be visible at A's external boundary. This is a deliberate re-encapsulation tool — an outer composite can selectively expose only some of an inner composite's exported surface. Items a subsystem `exports:` must themselves be `module`-exported if their owning module has flipped closed.
-5. **`rules`** *(optional)* — subsystem-scoped architectural constraints. Each entry is a reference to a registered constraint (by qualified name `<namespace>/<name>` — methodology-shipped, fukan-shipped well-known, or project-side) plus parameters; the entry is materialised as a `PredicateRegistration` with `scope = TagScope` against the composite Container ([MODEL.md §5.3](./MODEL.md#53-predicate-registrations)). *Scope semantics.* `TagScope` against the composite is about **where the registration lives** (evaluated once per matching composite Container) — not about restricting the constraint body's access. The body has the full §5.4 introspection surface and must scope itself appropriately (e.g., `no_dependency(from, to)` parameterised by the composite's contained-modules set; `no_circular_refs` walking the composite's `children` transitive closure). "Subsystem-scoped" is therefore *editorial* — describing how authors *use* the registration, not what the engine enforces. Concrete in-`.boundary` token syntax is part of the deferred token-level work (open question 1 below). Fukan-shipped well-known constraints for v0: `no_dependency(from, to)`, `no_circular_refs`, `naming_convention(target, pattern)`, `signal_gap` (an outgoing `provides: Surface → Event` edge with no `triggers: Event → Rule` edge — the Signal-protocol gap detection that motivated the R20 kernel lift) — extended additively. Project-wide constraints live in the project layer (file-scope); subsystem-scoped constraints live here (composite-scope). Same registration mechanism; different scope.
+    `fn`-declared Operations are implicitly part of the public face regardless of `exports:` — they're declared at the wall. Anything else declared in the sibling `.allium` and not listed in `exports:` is module-private — cross-module references to those items are structural errors (caught by Phase 4 validation). The default for a module with **no `.boundary` file at all**, or a `.boundary` file with no `exports:` clause, is **open** (every Allium top-level decl externally visible — matches Allium's stock semantics and preserves single-file projects). Adding any `exports:` clause flips the module to closed.
 
-**Binding semantics (settled this design phase):**
+3. **`subsystem`** — declares a composite Container grouping one or more Allium modules (and possibly nested subsystem files). Top-level construct in a subsystem-bound file; the file contains exactly one `subsystem` block and no module-level `fn`/`exports:` clauses.
 
-- **Parameter-signature lint** *(strict, enforced)*. The bound Rule must have **at least one** event-shaped `when:` clause whose parameter **names, positions, and types** match the Operation's parameter signature exactly. The matching clause is selected structurally — by name-and-shape match against the Operation's signature — not by ordering or by author annotation; the binding's parameter mapping is identity by construction with respect to that clause. Other `when:` clauses on the same Rule (additional event-shaped clauses with different shapes, or typed-subject clauses) are unconstrained by the binding and continue to produce their own kernel edges. Zero matching event-shaped clauses is a lint error; multiple matching clauses are unusual but not an error — binding identity is `(operation_ref, rule_ref)`, independent of which clause matched. Typed-subject Rule triggers (state transition, temporal, becomes, derived, creation) cannot serve as the matching clause — bind to an event-shaped Rule whose effects produce the state condition.
-- **Return derivation** *(strict)*. `returns:` is required iff the Operation has a `return_type`; forbidden when null. Opaque-text expression initially; typed when an expression parser arrives.
-- **Trigger composition**. Each binding produces one `triggers: Operation → Rule` (R4) edge. The Rule's declared `when:` Event continues to exist as a kernel primitive (per [DECISIONS.md K16](./DECISIONS.md#kernel-primitives)) and produces its own `Event → Rule` edge — both trigger paths coexist. Operation invocation fires the Rule directly via the R4 edge; the binding does **not** implicitly emit the Event. A Rule may therefore be reached via Operation invocation, via Event emission elsewhere, or both — and when reachable only via binding, its `when:` Event is a *signature-alignment device* that may never be emitted at runtime. That is a valid pattern (the Event surface enforces parameter-shape discipline on the Rule); an "Event declared in `when:` but neither emitted nor `provides`'d" diagnostic is a candidate constraint, not a structural error.
-- **Naming**. Bindings have optional names for addressability. Identity rests on `(operation_ref, rule_ref)`. Anonymous bindings are valid; named bindings useful for constraints and rendering.
-- **Reference grammar**. `.boundary` adopts Allium's import-and-qualification shape verbatim. `use "<path>" as <alias>` at the file head (or within a subsystem block) declares cross-module aliases. All cross-module references use Allium's `alias/Name` pattern: `alias/RuleName`, `alias/EntityName`, `alias/ContractName.operation_name` (alias scopes the Contract; dot scopes the Operation within the Contract). Inside a `subsystem` block, each entry in `contains:` implicitly binds the module's filename-stem as an alias (e.g., `./oauth.allium` → `oauth`), so `exports:` and subsystem-scoped bindings can use those names without an explicit `use`. Top-level bindings spanning modules require explicit `use` statements. Unqualified bare names outside a `contains:`-scoped block are a structural error.
+4. **`contains:`** *(inside `subsystem`)* — paths to `.allium` files (modules) and/or `.boundary` files (nested subsystems) belonging to the composite. Each entry's filename-stem implicitly binds as an alias for use in `exports:` and `rules:`.
+
+5. **`exports:`** *(inside `subsystem`)* — names which items of the contained modules / nested subsystems are externally visible at this composite's boundary. **Exporting is explicit and non-transitive across composite nesting**: if composite A contains composite B and B exports Surface S, A must list S in its own `exports:` for S to be visible at A's external boundary. Items a subsystem `exports:` must themselves be `exports:`'d by their owning module if that module has flipped closed.
+
+6. **`rules:`** *(inside `subsystem`, optional)* — subsystem-scoped architectural constraints. Each entry is a reference to a registered constraint (by qualified name `<namespace>/<name>` — methodology-shipped, fukan-shipped well-known, or project-side) plus parameters; the entry is materialised as a `PredicateRegistration` with `scope = TagScope` against the composite Container ([MODEL.md §5.3](./MODEL.md#53-predicate-registrations)). *Scope semantics.* `TagScope` against the composite is about **where the registration lives** (evaluated once per matching composite Container) — not about restricting the constraint body's access. The body has the full §5.4 introspection surface and must scope itself appropriately. Project-wide constraints live in the project layer (file-scope); subsystem-scoped constraints live here (composite-scope). Same registration mechanism; different scope.
+
+**Binding semantics** (the `triggers:` / `returns:` clauses on a `fn`):
+
+- **Parameter-signature lint** *(strict, enforced)*. The Rule referenced in `triggers:` must have **at least one** event-shaped `when:` clause whose parameter **names, positions, and types** match the Operation's parameter signature exactly. The matching clause is selected structurally — by name-and-shape match — not by ordering or by author annotation. Zero matching event-shaped clauses is a lint error. Typed-subject Rule triggers (state transition, temporal, becomes, derived, creation) cannot serve as the matching clause — bind to an event-shaped Rule whose effects produce the state condition. For attach-form `fn`s (`fn Contract.op`), the Operation signature comes from Allium; for declare-new `fn`s, the signature is the one in the declaration.
+- **Return derivation** *(strict)*. `returns:` is required iff the Operation has a `return_type`; forbidden when the return type is absent. Opaque-text expression initially; typed when the constraint-language expression parser arrives.
+- **Trigger composition**. Each `fn` with `triggers:` produces one `triggers: Operation → Rule` (R4) edge. The Rule's declared `when:` Event continues to exist as a kernel primitive (per [DECISIONS.md K16](./DECISIONS.md#kernel-primitives)) and produces its own `Event → Rule` edge — both trigger paths coexist. Operation invocation fires the Rule directly via the R4 edge; the binding does **not** implicitly emit the Event. A Rule may therefore be reached via Operation invocation, via Event emission elsewhere, or both — and when reachable only via binding, its `when:` Event is a *signature-alignment device* that may never be emitted at runtime. That is a valid pattern; an "Event declared in `when:` but neither emitted nor `provides`'d" diagnostic is a candidate constraint, not a structural error.
+- **Reference grammar**. `.boundary` adopts Allium's import-and-qualification shape verbatim. `use "<path>" as <alias>` at the file head declares cross-module aliases. All cross-module references use Allium's `alias/Name` pattern: `alias/RuleName`, `alias/EntityName`, `alias/ContractName.operation_name` (alias scopes the Contract; dot scopes the Operation within the Contract). Inside a `subsystem` block, each entry in `contains:` implicitly binds the module's filename-stem as an alias.
 - **`use` semantics**. Imports are **non-transitive**: aliases declared in a `.boundary` file do not propagate to other files that `use` it (each file declares its own). **Cycles in `use` imports are structural errors** — A using B and B using A creates resolution ambiguity (Allium follows the same rule).
 
+**File-coordinate rule.** A module-bound `.boundary` file must be a sibling to a `.allium` file at the same coordinate (`views/spec.allium` ↔ `views/spec.boundary`). The `.boundary` file's identity *is* the sibling module — no `module <alias> { }` wrapper. Subsystem-bound files are standalone; their identity is the subsystem name declared in the `subsystem` block.
+
 **What `.boundary` does not do:**
-- It does not introduce new behavioural primitives.
+- It does not introduce new behavioural primitives. `fn` is structural; Rules remain Allium-side.
 - It does not specify implementation mechanism (transport / process / serialisation — those are `.infra` concerns).
-- It does not extend Allium grammar. It speaks at the same altitude as Allium's Structure content (Operations, Surfaces, contracts).
+- It does not extend Allium grammar. It speaks at the same altitude as Allium's Structure content, filling the gap Allium leaves.
+- It does not (in MVP) carry external-system enrichment for non-entity externals (third-party services, vendor storage, imported libraries). The original `Boundary::External::Service` / `Storage` / `Library` enrichment and module-as-wrapper rule are deferred — see [MODEL.md §9.2](./MODEL.md#92-external-system-container) for the deferral framing.
 
 ### `.infra` responsibilities — deferred but pre-positioned
 
@@ -494,7 +530,7 @@ The layer carries **two sub-loci** ([MODEL.md §10.3](./MODEL.md#103-the-project
 
 What's *not* in the project layer:
 
-- **External-system enrichment** moves into Boundary vocab content authored in `.boundary` files, under the module-as-wrapper rule ([MODEL.md §8.2](./MODEL.md#82-boundary--kernel-mapping)). Earlier drafts placed `External::*` tag applications here; they are structural facts about the system (an external dependency *is* a module), not project-side configuration.
+- **External-system enrichment** is not a project-layer concern. Entity-shaped externals live in Allium as `external entity` (per [MODEL.md §3.6](./MODEL.md#36-derived--not-kernel-primitives)). Non-entity externals (services, storage, libraries) are deferred from MVP — see [MODEL.md §9.2](./MODEL.md#92-external-system-container) for the deferral. They are structural facts about the system, not project-side configuration; when the deferral closes they'll land structurally as well.
 - **Subsystem-scoped architectural rules** live in `.boundary` `rules:` clauses — at the structural altitude where the composite is declared. The registration mechanism is the same `PredicateRegistration` shape; only the authoring locus differs.
 
 ### Projection inputs — one mechanism, contextual selection
@@ -523,7 +559,7 @@ The constraint language is single. Three authoring loci share one registration s
 | Project layer | Model-wide (or `TagScope` against any tag the project chooses) | Persisted in the project |
 | `.boundary` `rules:` | `TagScope` against the composite Container | Lives in the `.boundary` file |
 
-Severity is per-registration (`error | warning`). Constraints from any locus surface in the explorer as sidebar violation entries with severity. Fukan-shipped well-known constraints (per [MODEL.md §10.3](./MODEL.md#103-the-project-layer--sub-loci-and-composition)) — `signal_gap`, `no_dependency`, `no_circular_refs`, `naming_convention`, `external_must_have_wrapper` — are available for projects to register and for `.boundary rules:` to parameterise without re-authoring.
+Severity is per-registration (`error | warning`). Constraints from any locus surface in the explorer as sidebar violation entries with severity. Fukan-shipped well-known constraints (per [MODEL.md §10.3](./MODEL.md#103-the-project-layer--sub-loci-and-composition)) — `signal_gap`, `no_dependency`, `no_circular_refs`, `naming_convention`, `external_must_have_wrapper` — are available for projects to register and for `subsystem rules:` to parameterise without re-authoring. (The `external_must_have_wrapper` constraint covers entity-shaped externals in MVP; non-entity externals are deferred per [MODEL.md §9.2](./MODEL.md#92-external-system-container).)
 
 ### Surfacing
 
@@ -728,7 +764,7 @@ Each kernel primitive carries richer content than today's Function/Schema nodes.
 - **Container (Allium::Contract)** — operations on the Container's Boundary (parameters, return types), `@invariant` prose Clauses in the Container's `intent.clauses` tagged `Allium::ContractInvariant` (Allium v3 ships these as prose; the parallel `intent.assertions` slot is reserved but unpopulated under Allium-only loading), `@guidance` Clauses in `intent.clauses`, incoming `realises` from fulfilling Surfaces, incoming `uses` from demanding Surfaces
 - **Operation** — parameters, return type, parent Boundary's Container, fulfilling Surfaces (computed)
 - **Actor** — `identified_by`/`within` vocabulary content, surfaces facing this Actor (computed)
-- **Container tagged `Boundary::External::Service | Storage | Library`** — `Boundary::External::*` payload fields (`name`, `vendor`, `docs_url`, `description`) with `docs_url` rendered as a clickable link; the tagged Container *is* the wrapping module per the module-as-wrapper rule ([MODEL.md §8.2](./MODEL.md#82-boundary--kernel-mapping)), so touchpoints surface naturally from the module's structural content: entity-shaped imports (`external entity X` declarations resolving into this module's exports) and Contracts the wrapping module declares (demanded by Surfaces in dependent modules through the ordinary `uses` edge). Drift markers do not apply — external-wrapping modules have no in-system implementation projection beyond the wrapper code itself.
+- **Container tagged `Allium::ExternalEntity`** (entity-shaped externals; per [MODEL.md §3.6](./MODEL.md#36-derived--not-kernel-primitives)) — the marker tag and any associated description; outgoing references from in-system code (field types in importing modules' Entities, parameter types in their Contract Operations). Drift markers do not apply — external entities have no in-system implementation projection. Non-entity-shaped externals (services, storage, libraries) are deferred from MVP per [MODEL.md §9.2](./MODEL.md#92-external-system-container).
 - **Event** — qualified name (`Container/local_name`), kind, parameters, providers (Surfaces, via incoming `provides`), emitters (Rules, via incoming `emits`), consumers (Rules, via incoming `triggers`)
 - **Assertion (Bool Expression in an Intent)** — structure, free variables, source-clause tag (e.g., `Allium::Invariant`, `Allium::Requires`, `Allium::Ensures`), host primitive (Container / Behaviour / Boundary / Operation / Rule), subjects (kernel primitives referenced)
 - **Clause (in `Intent.clauses`)** — body (prose), source-clause tag if any (e.g., `Allium::Guidance`)
@@ -763,7 +799,7 @@ Application-design questions not resolved in this chapter. Substrate-level TBDs 
 
 ## Summary
 
-The application design layers cleanly onto MODEL.md's substrate. Three Allium boundary protocols (View / Signal / Call) connect Allium's boundary clauses to behavioural content asymmetrically — mutations event-shaped, reads passive or call-shaped. Three spec altitudes — Behaviour, Structure, Infra — with strict one-up reference (lower references upper, never down, never skipping); Implementation is projection across all three. `.allium` covers Behaviour and partial Structure; `.boundary` is the Structure-altitude binding layer that fills Allium's Operation↔Rule gap and adds subsystem composition (now also carrying the `Boundary::External::*` enrichment under the module-as-wrapper rule); `.infra` is the Infra-altitude spec layer. `.allium`, `.boundary`, and the Clojure Target language extension (both Analyzer and Projector — code analysis *and* spec-driven code generation via Implementation Blueprints) are all in MVP; `.infra` is architecturally seamed. A project layer carries two sub-loci — projection inputs (consumed by the projection mechanic) and constraints (in the single constraint language) — both making the project's design vocabulary explicit for human readers, for LLMs generating spec or code, and for the build pipeline. The explorer respects visibility, surfaces gaps, and renders cross-altitude drift markers actively with on-demand generation affordances.
+The application design layers cleanly onto MODEL.md's substrate. Three Allium boundary protocols (View / Signal / Call) connect Allium's boundary clauses to behavioural content asymmetrically — mutations event-shaped, reads passive or call-shaped. Three spec altitudes — Behaviour, Structure, Infra — with strict one-up reference (lower references upper, never down, never skipping); Implementation is projection across all three. `.allium` covers Behaviour and partial Structure; `.boundary` is the Structure-altitude language that fills the gap Allium leaves on the structural side — adding `fn` as the typed-callable primitive (module Boundary Operations, with optional `triggers:`/`returns:` attachment to Rules), module-API closure via `exports:`, and subsystem composition; `.infra` is the Infra-altitude spec layer. `.allium`, `.boundary`, and the Clojure Target language extension (both Analyzer and Projector — code analysis *and* spec-driven code generation via Implementation Blueprints) are all in MVP; `.infra` is architecturally seamed. A project layer carries two sub-loci — projection inputs (consumed by the projection mechanic) and constraints (in the single constraint language) — both making the project's design vocabulary explicit for human readers, for LLMs generating spec or code, and for the build pipeline. The explorer respects visibility, surfaces gaps, and renders cross-altitude drift markers actively with on-demand generation affordances.
 
 Each addition is justified by a constraint that admits no other clean solution; each deferral preserves the architectural seam for later. The MVP runs spec-plus-code end-to-end in both directions (analysis + generation); subsequent chapters add layers (`.infra`, more methodologies, more Target language extensions, project-layer composition mechanics) without rewriting the substrate.
 

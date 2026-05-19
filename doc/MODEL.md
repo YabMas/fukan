@@ -51,7 +51,7 @@ The spec described in this document is the substrate. The **MVP** is the slice o
 - The constraint language (stratified Datalog substrate + path sugar + type-sum sugar, kernel-universal derivations)
 - The projection vocabulary as an active target — `Code(Function | DataStructure)` Artifact cases and the five V0 `projection_kind` values (§7.2, §7.4)
 - The **Allium** Vocabulary extension (§5.0): TagDefinitions, predicates, renderers, plus the Allium spec parser producing kernel content + tag applications
-- The **Boundary** Vocabulary extension: TagDefinitions (including `Boundary::Subsystem`, `Boundary::ModuleApi`, `Boundary::Binding`, `Boundary::External::*`), predicates, plus the `.boundary` spec parser producing binding edges, composite Container content, and external-system enrichment (§8.2)
+- The **Boundary** Vocabulary extension: TagDefinitions (`Boundary::Function`, `Boundary::ModuleApi`, `Boundary::Binding`, `Boundary::Subsystem`, `Boundary::Exports`), predicates, plus the `.boundary` spec parser producing Operations on module-Container Boundaries, R4 binding edges, and composite Container content (§8.2)
 - The **Clojure Target language extension** (§7.7) — both operations: the Analyzer producing `projects` edges from spec primitives to `Code.*` artifacts via convention-driven name resolution, and the Projector producing Implementation Blueprints on demand for LLM-driven code generation (mechanics in [DESIGN.md](./DESIGN.md))
 - The **project layer** in two sub-loci (§10.3) — projection inputs (consumed by the projection mechanic) and constraints (in the constraint language); projection inputs declarative in V0, constraints authored in language AST until surface tokenisation lands (§13)
 
@@ -1351,34 +1351,49 @@ The Boundary-only Container pattern (Surface / Contract / future Specification /
 
 ### 8.2 Boundary → kernel mapping
 
-The `.boundary` file format is the Structure-altitude binding vocabulary. Its tags live in the `Boundary::*` namespace. It fills two gaps Allium leaves open: **Operation↔Rule binding** (the primary motivation — materialising `triggers: Operation → Rule` kernel edges that Allium grammar cannot express) and **subsystem composition** (composite Containers grouping `.allium` modules with declared external API). Application-design framing — file responsibilities, binding declaration syntax, parameter-signature lint, build pipeline integration — lives in [DESIGN.md](./DESIGN.md).
+The `.boundary` file format is the Structure-altitude language. Its tags live in the `Boundary::*` namespace. It exists because Allium's structural coverage is partial — Allium's primitives (Contract Operations, Surfaces, Rules) carry behavioural framing that's overkill for the *mundane structural callables* every system has: getters, setters, renders, lifecycle operations, pure transforms. Forcing those into Rules makes Allium specs verbose and Rule-overloaded. `.boundary` fills that gap with one primitive — `fn` — that carries no behavioural weight, and offers two adjacent capabilities (module-API closure and subsystem composition) at the same altitude. Application-design framing — file responsibilities, syntax sketch, parameter-signature lint, build pipeline integration — lives in [DESIGN.md](./DESIGN.md).
 
-> **Note on namespace overload.** The tag namespace `Boundary::*` names the `.boundary` *file format* — the source of these tags. It is distinct from the kernel primitive `Boundary` (the `Container.boundary` slot, K11/K13). They share the word for historical naming reasons and disambiguate by syntactic context: `Boundary::Binding` is a tag application; `Container.boundary` is a substrate slot reference.
+> **Note on namespace overload.** The tag namespace `Boundary::*` names the `.boundary` *file format* — the source of these tags. It is distinct from the kernel primitive `Boundary` (the `Container.boundary` slot, K11/K13). They share the word for historical naming reasons and disambiguate by syntactic context: `Boundary::Function` is a tag application; `Container.boundary` is a substrate slot reference.
 
-**Substrate-level commitments.** The Boundary spec parser produces:
+**File shapes.** A `.boundary` file is either *module-bound* (sibling to a `.allium` file at the same coordinate; declares functions, closure, and optional behavioural attachments for that module) or *subsystem-bound* (standalone; declares one composite Container grouping multiple Allium modules). The two are syntactically discriminated by whether the file's top level is a `subsystem` block or a mix of `fn`/`exports:` declarations; mixing both shapes in one file is a structural error.
 
+**The single primitive: `fn`.** Three reference shapes disambiguate by name form:
+
+- **Declare-new** (`fn name(params) -> R`): a new Operation on the bearing module-Container's Boundary. Most common form.
+- **Local-attach** (`fn Contract.op { ... }`): no new Operation — the signature already exists on a local Allium Contract — just attach behavioural connections (`triggers:` and/or `returns:`).
+- **Foreign-attach** (`fn alias/Contract.op { ... }`): same as local-attach, but the Contract is in another module reached via `use`.
+
+The `fn` body has two optional clauses: `triggers: <RuleRef>` (single — the Rule this Operation invokes; materialises R4 `triggers: Operation → Rule`) and `returns: <expression>` (return derivation, opaque text initially per the constraint-language deferral). A body with neither clause means "just the signature, no behavioural attachment." A `fn` with no body is identical to a `fn` with an empty body.
+
+**Substrate-level commitments.** The Boundary parser produces:
+
+- Operation primitives — one per `fn name(...)` declare-new declaration, added to the bearing module-Container's `boundary.operations` (per K13). Tagged `Boundary::Function`. This is what populates a module-Container's own Boundary, which Allium leaves empty (Allium populates surfaces/contracts/rules in the module's *children*, not the module's outer-facing operations).
+- Kernel edges `triggers: Operation → Rule` (R4) — one per `fn` body with a `triggers:` clause, regardless of declare-new vs. attach shape. Edge identity is `(operation_ref, rule_ref)` per R15; multiple `fn`s with the same `(operation, rule)` collapse to one.
+- `Boundary::Binding` tag applications on those edges, carrying optional return-derivation expression.
+- Tag applications on module-Containers carrying `Boundary::ModuleApi` — the closed-module public-API declaration; presence flips the bearing module from open (default) to closed. `fn`-declared Operations are implicitly part of the public face regardless of the export list — they're declared at the wall.
 - Composite Containers (subsystem-grouped modules) carrying `Boundary::Subsystem`.
-- Tag applications on module-Containers carrying `Boundary::ModuleApi` — the closed-module public-API declaration; presence flips the bearing module from open (default) to closed.
 - Tag applications on composite Containers carrying `Boundary::Exports` — the subsystem's externally-visible items.
-- Tag applications on module-Containers carrying `Boundary::External::Service` / `Storage` / `Library` — the external-system enrichment under the **module-as-wrapper rule** (see mapping row below and §9.2). One external per module.
-- Kernel edges `triggers: Operation → Rule` (R4) — one per binding declaration. Edge identity is `(operation_ref, rule_ref)` per R15; multiple bindings to the same pair collapse to one.
-- `Boundary::Binding` tag applications on those edges, carrying optional binding name and return-derivation text.
 - PredicateRegistrations (per §5.3, with `scope = TagScope` against the composite Container) for subsystem-scoped architectural rules.
 
-Per K24, references go upward to Behaviour (Rule references) or stay same-altitude (Structure↔Structure for composition); never downward.
+Per K24, references go upward to Behaviour (Rule references in `fn` `triggers:` clauses) or stay same-altitude (Structure↔Structure for `fn Contract.op` attachments and subsystem composition); never downward.
 
 The mapping table the MVP analyzer realises.
 
 | `.boundary` construct | Where it lands | Vocabulary tag | Notes |
 |---|---|---|---|
-| `subsystem <Name> { ... }` | Composite Container; populates `children` from `contains:` | `Boundary::Subsystem` | Composite Container's identity is the subsystem name. Each module-Container has at most one composite parent (DESIGN.md validation rule). |
-| `contains: <path>` | Adds the referenced module-Container to the composite's `children` | — | Implicit alias for in-block references: filename-stem. |
-| `exports: <ref> ...` *(subsystem-level)* | Tag application on the composite Container | `Boundary::Exports` | Payload: `{exported: Collection(of: Union([Ref(Container, where={Allium::Surface}), Ref(Container, where={Allium::Entity}), Ref(Container, where={Allium::Value}), Ref(Container, where={Allium::Variant}), Ref(Event), Ref(Actor), Ref(Operation)]), semantics: Sequential)}`. Items not listed are internal to the subsystem. Contracts, Rules, and Invariants are never `exports:` entries (see DESIGN.md for the per-kind reasoning). Non-transitive across composite nesting. |
-| `module <alias> { exports: ... }` | Tag application on the module-Container of the aliased `.allium` module | `Boundary::ModuleApi` | Payload: same shape as `Boundary::Exports.exported` above. Presence flips the module from open (default) to closed. **Excluded by design**: Contracts, Rules, Invariants — same per-kind reasoning as for `Boundary::Exports`. The build pipeline (DESIGN.md) rejects cross-module references targeting non-exported items in a closed module, and rejects closed-module `exports:` lists that fail the export closure rule. |
-| `binding <name> { operation:, invokes:, returns: }` | Edge `triggers: Operation → Rule` (R4) | `Boundary::Binding` on the edge | Payload: `{name: String?, returns_expression: Text?}`. Identity rests on `(operation_ref, rule_ref)`. Binding declaration shape and parameter-signature lint rules live in DESIGN.md. |
-| `rules: <constraint-ref>(...)` | PredicateRegistration with `scope = TagScope` against the composite Container | — | One registration per `rules:` entry. Resolves to a registered constraint by qualified name. See DESIGN.md for `.boundary` syntax. |
-| `external <kind> <Name> { ... }` *(file-level `.boundary` declaration — concrete syntax in DESIGN.md)* | Tag application on the module-Container of the `.boundary` file containing this declaration | `Boundary::External::Service` \| `Boundary::External::Storage` \| `Boundary::External::Library` (one tag per `<kind>` keyword) | Payload: `{name: Text, vendor: Text?, docs_url: Text?, description: Text?}`. **Module-as-wrapper rule**: the module-Container declared by the same `.boundary` file *is* the idiomatic wrapper for the external dependency — the tag application always targets that module, never an arbitrary Container. One external per module. Service / Storage / Library is a rendering and shading discriminator; substrate semantics are uniform across the three. A fukan-shipped well-known constraint flags "external usage without a wrapping module" as a violation (see §10.3 well-known set). |
-| `use "<path>" as <alias>` | Analyzer-internal; not surfaced as kernel content | — | Resolves cross-module references during parsing; does not produce primitives or relations. |
+| `fn name(params) -> R` *(declare-new, no body)* | Operation primitive in the bearing module-Container's `boundary.operations`. | `Boundary::Function` on the Operation. | Params and return type taken from the declaration. The Operation has no `triggers` edge — its implementation lives in code (tracked via `projects` per §7.6). |
+| `fn name(params) -> R { triggers: Rule }` *(declare-new + binding)* | Operation primitive + `triggers: Operation → Rule` edge. | `Boundary::Function` on the Operation; `Boundary::Binding` on the edge. | Phase-4 lint: the Rule's `when:` must have an event-shaped clause whose parameter names, positions, and types match the `fn` exactly. |
+| `fn name(params) -> R { triggers: Rule; returns: <expr> }` *(declare-new + binding + return derivation)* | As above. | `Boundary::Binding` payload `{returns_expression: Text}`. | Return-derivation expression is opaque text until Plan 4 lands; structurally captured. |
+| `fn Contract.op { ... }` *(local-attach)* | No new Operation — `Contract.op` resolves to the existing Allium-declared Operation. Body produces the `triggers` edge + tag and/or carries `returns:` derivation as `Boundary::Binding` payload. | `Boundary::Binding` on the edge. | Empty body (neither `triggers:` nor `returns:`) is a structural error — the only reason to use the attach form is to add a clause. |
+| `fn alias/Contract.op { ... }` *(foreign-attach)* | As local-attach, against the foreign Operation reached through the use-alias. | As local-attach. | Subject to the same Phase-4 lint as local-attach. |
+| `exports: <ref> ...` *(module-bound file)* | Tag application on the bearing module-Container. | `Boundary::ModuleApi` | Payload: `{exported: Collection(of: Union([Ref(Container, where={Allium::Surface}), Ref(Container, where={Allium::Entity}), Ref(Container, where={Allium::Value}), Ref(Container, where={Allium::Variant}), Ref(Event), Ref(Actor), Ref(Operation)]), semantics: Sequential)}`. Presence flips the module from open (default) to closed. `fn`-declared Operations are implicitly exported regardless of `exports:` content. **Excluded by design**: Contracts, Rules, Invariants — Contracts are always cross-module type-visible (so `fulfils`/`demands` works); Rules have no spec-level cross-module reference site (`fn` attachments are the wiring layer); Invariants have no cross-module reference site at all. Listing any of those is a structural error. |
+| `subsystem <Name> { ... }` *(subsystem-bound file)* | Composite Container; populates `children` from `contains:`. | `Boundary::Subsystem` | Composite Container's identity is the subsystem name. Each module-Container has at most one composite parent (DESIGN.md validation rule). |
+| `contains: <path>` *(inside `subsystem`)* | Adds the referenced module-Container or nested subsystem to the composite's `children`. | — | Implicit alias for in-block references: filename-stem. Paths ending in `.boundary` reference nested subsystem-bound files. |
+| `exports: <ref> ...` *(inside `subsystem`)* | Tag application on the composite Container. | `Boundary::Exports` | Payload shape: same as `Boundary::ModuleApi.exported` above. Items not listed are internal to the subsystem. Non-transitive across composite nesting. |
+| `rules: <constraint-ref>(...)` *(inside `subsystem`)* | PredicateRegistration with `scope = TagScope` against the composite Container. | — | One registration per `rules:` entry. Resolves to a registered constraint by qualified name. |
+| `use "<path>" as <alias>` | Analyzer-internal; not surfaced as kernel content. | — | Resolves cross-module references during parsing; does not produce primitives or relations. |
+
+**External-system enrichment.** Non-entity externals (third-party services, vendor storage, imported libraries) are not modelled by the MVP `.boundary` language. Allium's `external entity` (per §3.6) covers entity-shaped externals; non-entity externals compose via methodology tags until a concrete need surfaces. The originally-designed `Boundary::External::Service` / `Storage` / `Library` enrichment is deferred — see §9.2 for the convergence-pattern framing that survives the deferral.
 
 ---
 
@@ -1409,14 +1424,14 @@ A Container tagged as outside-the-modelled-system, referenced from inside the sy
 
 Methodological occurrences:
 
-- Allium `external entity` — Container declared at use site, full definition outside scope; `Allium::ExternalEntity` is the §3.6 marker for the pattern
-- Boundary `external <kind> <Name>` — file-level `.boundary` declaration that tags the file's module-Container with `Boundary::External::Service` / `Storage` / `Library` and carries vendor / documentation metadata. Per the **module-as-wrapper rule** (§8.2 mapping row), the tagged module *is* the idiomatic wrapper for the external dependency — non-entity-shaped externals (third-party APIs, vendor storage, imported libraries) compose with the marker pattern via this wrapper, not as free-floating tags on arbitrary Containers.
+- Allium `external entity` — Container declared at use site, full definition outside scope; `Allium::ExternalEntity` is the §3.6 marker for the pattern. **MVP coverage.**
+- (Deferred) Non-entity-shaped externals (third-party APIs, vendor storage, imported libraries). The originally-designed `Boundary::External::Service` / `Storage` / `Library` enrichment with vendor/documentation payload (and the corresponding "module-as-wrapper rule") is deferred from MVP — `.boundary` MVP grammar carries no `external <kind>` construct. Non-entity externals compose via methodology tags until a concrete need re-opens the seam. The structural pattern (a tagged Container with no internal substrate, referenced from inside) remains available — only the dedicated `Boundary::External::*` shading awaits.
 - (Validation) DDD external dependencies in Context Maps
 - (Validation) Event Storming External System (pink)
 - (Validation) C4 Level-1 External System
 - (Validation) Hexagonal Driven-Port targets
 
-The marker tag (`Allium::ExternalEntity` or methodology equivalent) is what makes the Container an External-System under §3.6's "externality is a tag" commitment; the `Boundary::External::*` enrichment composes with the marker without replacing it. When `.infra` lands (§10.1), `Infra::Service` / `Infra::Storage` subsume the `Boundary::External::*` role on the same Container — Container identity does not churn; the lift is one rename of the enrichment tag.
+The marker tag (`Allium::ExternalEntity` or methodology equivalent) is what makes the Container an External-System under §3.6's "externality is a tag" commitment. When `.infra` lands (§10.1), `Infra::Service` / `Infra::Storage` directly subsume the non-entity-external role on the appropriate Container — Container identity does not churn; the enrichment tag arrives with its eventual home, sidestepping the deferred `Boundary::External::*` interim layer entirely.
 
 ### 9.3 Pressure-test record
 
@@ -1478,7 +1493,7 @@ The Target language extension ships projection-input defaults; the project layer
 
 **One mechanism for projection inputs.** Address-resolution, type-translation, and idioms are not separate categories — they are all instances of the same question ("how does kernel X project concretely in target Y for this project"). The project layer has one projection-input bucket; different *content* lives at different sub-routes (per primitive kind, per projection kind, per address-match pattern), but the registration mechanism is uniform. Selection at projection-time is context-keyed — the projection mechanic selects applicable entries by matching the current `(primitive_kind, projection_kind, address_match)` against the entry's routing.
 
-**External-system enrichment is not a project-layer entry.** Earlier drafts placed `External::*` tag applications in the project layer; they have moved to Boundary vocab content authored in `.boundary` files (§8.2). The module-as-wrapper rule formalises that move: an external dependency is a module, declared structurally, not a project-side annotation.
+**External-system enrichment placement.** Earlier drafts placed `External::*` tag applications in the project layer. They are structural facts (an external dependency *is* a module), not project-side configuration. Entity-shaped externals live in Allium as `external entity` (per §3.6) carrying `Allium::ExternalEntity`. Non-entity-shaped externals (services, storage, libraries) are deferred from MVP — see §9.2 for the deferral.
 
 #### MVP commitments
 
@@ -1497,7 +1512,7 @@ A small set of constraints fukan ships independently of any specific Vocabulary,
 | `no_dependency(from, to)` | The derived `depends_on` relation (§6.6) does not hold from any Container tagged `from` to any Container tagged `to` |
 | `no_circular_refs(scope)` | Within the `scope` Container's transitive `children` closure, no `depends_on` cycle exists |
 | `naming_convention(target, pattern)` | Every primitive of kind `target` has a label matching `pattern` |
-| `external_must_have_wrapper` | Every Container carrying `Allium::ExternalEntity` or `Boundary::External::*` belongs to a module declared in a `.boundary` file (i.e. the module-as-wrapper rule from §8.2 is upheld) |
+| `external_must_have_wrapper` | Every Container carrying `Allium::ExternalEntity` belongs to a module declared in a `.boundary` file (entity-shaped externals are wrapped by a module boundary). Non-entity-shaped externals are deferred per §9.2; the constraint extends to cover them when the `Boundary::External::*` enrichment lands. |
 
 Concrete predicate bodies and message templates are application-design content in DESIGN.md; the substrate commitment is that these five exist in V0 and extend additively.
 
