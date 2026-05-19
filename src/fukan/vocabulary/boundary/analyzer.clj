@@ -301,11 +301,16 @@
                             (build/add-tag-application exports-tag))
         rules           (:rules decl)]
     (reduce (fn [m rule-entry]
-              (let [reg {:predicate (:name rule-entry)
-                         :scope     {:case :scope/tag :container coord}
-                         :args      (:args rule-entry)}]
-                (update m :predicate-registrations
-                        (fnil conj []) reg)))
+              (let [reg (v/make-predicate-registration
+                          {:namespace "Boundary"
+                           :name      (:name rule-entry)
+                           :severity  :error
+                           :kind      "subsystem-rule"
+                           :scope     :scope/tag
+                           :message-template ""
+                           :predicate {:args (:args rule-entry)
+                                      :container coord}})]
+                (build/add-predicate m reg)))
             m1
             rules)))
 

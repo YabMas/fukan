@@ -281,7 +281,14 @@
                                        {:boundary-version 1 :declarations [decl]}
                                        "test/auth"
                                        {})
-          regs (:predicate-registrations model)]
-      (is (>= (count regs) 1))
-      (is (= "no_dependency" (-> regs first :predicate)))
-      (is (= "test/auth" (-> regs first :scope :container))))))
+          regs (:predicates model)]
+      (is (>= (count regs) 1) "registration lands in kernel :predicates slot")
+      (let [reg (first regs)]
+        (is (= "no_dependency" (:name reg))
+            "predicate name preserved from rule entry")
+        (is (= :scope/tag (:scope reg))
+            "scope is scope/tag per MODEL.md §5.3")
+        (is (= [{:key "from" :value "oauth"}
+                {:key "to" :value "password"}]
+               (-> reg :predicate :args))
+            "rule args preserved in predicate field")))))
