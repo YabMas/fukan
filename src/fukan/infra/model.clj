@@ -37,3 +37,8 @@
   (if-let [src (:src @state)]
     (load-model src)
     (do (println "No src path set. Use load-model first.") nil)))
+
+(defn set-model-for-test!
+  "Test helper — directly sets the model atom. Never call from production code."
+  [m]
+  (reset! state {:model m :src "test"}))

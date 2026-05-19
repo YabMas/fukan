@@ -328,6 +328,18 @@
 ;; -----------------------------------------------------------------------------
 ;; Public API
 
+(defn render-entity
+  "MVP sidebar: render primitive id/label/intent OR artifact label/source-location.
+   Accepts a raw model primitive or artifact map."
+  [entity]
+  (str
+    "<div class='entity-panel'>"
+    "<h3>" (or (:label entity) (:id entity)) "</h3>"
+    "<p><strong>Kind:</strong> " (:kind entity) "</p>"
+    (when (:description entity)
+      (str "<p>" (:description entity) "</p>"))
+    "</div>"))
+
 (defn render-sidebar-html
   "Render the sidebar content for an entity detail.
    Takes a normalized entity detail map from projection/details."
