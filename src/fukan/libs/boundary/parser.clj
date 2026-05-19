@@ -31,7 +31,7 @@
   version-number = #'[0-9]+'
 
   declarations = (declaration _)*
-  declaration = use-decl / fn-decl / exports-decl   (* task 6 adds subsystem-decl *)
+  declaration = use-decl / fn-decl / exports-decl / subsystem-decl
 
   (* ============ Use ============ *)
 
@@ -92,6 +92,27 @@
   export-entry = (qualified-export / simple-export) _
   simple-export = ident
   qualified-export = ident <'.'> ident
+
+  (* ============ Subsystem ============ *)
+
+  subsystem-decl = <'subsystem'> __ ident _ <'{'> _ subsystem-body _ <'}'>
+
+  subsystem-body = contains-clause _ subsystem-exports-clause _ subsystem-rules-clause?
+
+  contains-clause = <'contains:'> _ contains-entry*
+  contains-entry = path _
+  path = #'[^\\s]+'
+
+  subsystem-exports-clause = <'exports:'> _ subsystem-export-entry*
+  subsystem-export-entry = (qualified-subsystem-export / simple-subsystem-export) _
+  simple-subsystem-export = ident
+  qualified-subsystem-export = ident <'/'> (qualified-export / simple-export)
+
+  subsystem-rules-clause = <'rules:'> _ rule-entry*
+  rule-entry = ident _ <'('> _ rule-args? _ <')'> _
+  rule-args = rule-arg (_ <','> _ rule-arg)*
+  rule-arg = ident _ <':'> _ rule-arg-value
+  rule-arg-value = #'[^,)\\n]+'
 
   (* ============ Type references ============ *)
 
@@ -198,6 +219,26 @@
    :qualified-export  (fn [c o] (str c "." o))
    :export-entry      identity
    :exports-decl      (fn [& entries] {:type :exports :entries (vec entries)})
+
+   :path                       identity
+   :contains-entry             identity
+   :contains-clause            (fn [& paths] [:contains (vec paths)])
+   :simple-subsystem-export    identity
+   :qualified-subsystem-export (fn [alias rest] (str alias "/" rest))
+   :subsystem-export-entry     identity
+   :subsystem-exports-clause   (fn [& entries] [:exports (vec entries)])
+   :rule-arg-value             (fn [v] (str/trim v))
+   :rule-arg                   (fn [k v] {:key k :value v})
+   :rule-args                  (fn [& args] (vec args))
+   :rule-entry                 (fn [name & args]
+                                 {:name name :args (or (first args) [])})
+   :subsystem-rules-clause     (fn [& entries] [:rules (vec entries)])
+   :subsystem-body             (fn [& clauses]
+                                 (reduce (fn [body [k v]] (assoc body k v))
+                                         {:contains [] :exports [] :rules []}
+                                         clauses))
+   :subsystem-decl             (fn [name body]
+                                 (merge {:type :subsystem :name name} body))
    :boundary-file    (fn [header decls]
                        {:boundary-version (:boundary-version header)
                         :declarations decls})})

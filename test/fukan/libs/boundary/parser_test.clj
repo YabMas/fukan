@@ -242,3 +242,75 @@
           exports (->> (:declarations result)
                        (filter #(= :exports (:type %))))]
       (is (= [{:type :exports :entries ["ViewState"]}] exports)))))
+
+(deftest subsystem-basic
+  (testing "subsystem block with contains: and exports:"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "subsystem Auth {\n"
+                             "    contains:\n"
+                             "        ./oauth/spec.allium\n"
+                             "        ./password/spec.allium\n"
+                             "\n"
+                             "    exports:\n"
+                             "        oauth/OAuthLogin\n"
+                             "        password/PasswordLogin\n"
+                             "}\n"))]
+      (is (= [{:type :subsystem
+               :name "Auth"
+               :contains ["./oauth/spec.allium" "./password/spec.allium"]
+               :exports ["oauth/OAuthLogin" "password/PasswordLogin"]
+               :rules []}]
+             (:declarations result))))))
+
+(deftest subsystem-with-rules
+  (testing "subsystem with optional rules: clause"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "subsystem Auth {\n"
+                             "    contains:\n"
+                             "        ./oauth/spec.allium\n"
+                             "        ./password/spec.allium\n"
+                             "\n"
+                             "    exports:\n"
+                             "        oauth/OAuthLogin\n"
+                             "\n"
+                             "    rules:\n"
+                             "        no_dependency(from: oauth, to: password)\n"
+                             "}\n"))
+          sub    (-> result :declarations first)]
+      (is (= "Auth" (:name sub)))
+      (is (= 1 (count (:rules sub))))
+      (is (= "no_dependency" (-> sub :rules first :name)))
+      (is (= [{:key "from" :value "oauth"}
+              {:key "to" :value "password"}]
+             (-> sub :rules first :args))))))
+
+(deftest subsystem-name-stem-alias-in-exports
+  (testing "exports: inside subsystem use the contains-entry filename stem as alias"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "subsystem Auth {\n"
+                             "    contains:\n"
+                             "        ./oauth/spec.allium\n"
+                             "\n"
+                             "    exports:\n"
+                             "        oauth/OAuthLogin\n"
+                             "}\n"))]
+      ;; The parser doesn't resolve aliases — it just captures the string.
+      ;; Plan 3b's analyzer resolves the stem alias.
+      (is (= ["oauth/OAuthLogin"] (-> result :declarations first :exports))))))
+
+(deftest subsystem-nested-boundary-reference
+  (testing "contains: can reference nested subsystem .boundary files"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "subsystem Outer {\n"
+                             "    contains:\n"
+                             "        ./inner.boundary\n"
+                             "\n"
+                             "    exports:\n"
+                             "        inner/InnerSurface\n"
+                             "}\n"))]
+      (is (= [{:type :subsystem
+               :name "Outer"
+               :contains ["./inner.boundary"]
+               :exports ["inner/InnerSurface"]
+               :rules []}]
+             (:declarations result))))))
