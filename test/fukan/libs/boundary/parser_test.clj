@@ -39,3 +39,84 @@
               {:type :use :path "b.allium" :alias "b"}
               {:type :use :path "c.allium" :alias "c"}]
              (:declarations result))))))
+
+(deftest fn-decl-signature-only
+  (testing "a fn declaration with simple param types and return type"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "fn render_app_shell() -> Html\n"))]
+      (is (= [{:type :fn
+               :form :declare-new
+               :name "render_app_shell"
+               :params []
+               :return-type {:kind :simple :name "Html"}
+               :prose nil
+               :body nil}]
+             (:declarations result))))))
+
+(deftest fn-decl-with-params
+  (testing "a fn declaration with multiple typed params"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "fn render_graph(p: Projection, state: EditorState) -> CytoscapeGraph\n"))]
+      (is (= [{:type :fn
+               :form :declare-new
+               :name "render_graph"
+               :params [{:name "p" :type-ref {:kind :simple :name "Projection"}}
+                        {:name "state" :type-ref {:kind :simple :name "EditorState"}}]
+               :return-type {:kind :simple :name "CytoscapeGraph"}
+               :prose nil
+               :body nil}]
+             (:declarations result))))))
+
+(deftest fn-decl-no-return
+  (testing "a fn with no return type (implicit Unit)"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "fn stop_server()\n"))]
+      (is (= [{:type :fn
+               :form :declare-new
+               :name "stop_server"
+               :params []
+               :return-type nil
+               :prose nil
+               :body nil}]
+             (:declarations result))))))
+
+(deftest fn-decl-optional-return
+  (testing "a fn whose return type is optional (Type?)"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "fn get_port() -> Integer?\n"))]
+      (is (= [{:type :fn
+               :form :declare-new
+               :name "get_port"
+               :params []
+               :return-type {:kind :optional
+                             :inner {:kind :simple :name "Integer"}}
+               :prose nil
+               :body nil}]
+             (:declarations result))))))
+
+(deftest fn-decl-with-prose
+  (testing "a -- comment line directly under a fn becomes its prose"
+    (let [result (parse (str "-- boundary: 1\n"
+                             "fn render_app_shell() -> Html\n"
+                             "  -- Render the initial HTML shell.\n"))]
+      (is (= "Render the initial HTML shell."
+             (-> result :declarations first :prose))))))
+
+(deftest fn-decl-qualified-param-type
+  (testing "param types can be alias-qualified (alias/Type)"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "use \"../projection/spec.allium\" as projection\n"
+                              "fn render_graph(p: projection/Projection) -> CytoscapeGraph\n"))
+          fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
+      (is (= {:kind :qualified :ns "projection" :name "Projection"}
+             (-> fn-decl :params first :type-ref))))))
+
+(deftest fn-decl-generic-param-type
+  (testing "param types can be generic (e.g. Set<X>)"
+    (let [result          (parse (str "-- boundary: 1\n"
+                                      "fn load_model(src: FilePath, analyzers: Set<AnalyzerKey>) -> Model\n"))
+          fn-decl         (->> (:declarations result) (filter #(= :fn (:type %))) first)
+          analyzers-param (-> fn-decl :params second)]
+      (is (= "analyzers" (:name analyzers-param)))
+      (is (= :generic (-> analyzers-param :type-ref :kind)))
+      (is (= "Set" (-> analyzers-param :type-ref :name))))))

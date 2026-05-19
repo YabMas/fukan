@@ -12,7 +12,8 @@
    Grammar follows the Allium parser's idioms. Expression bodies inside
    fn `triggers:` / `returns:` clauses are captured as text or simple
    references — the Plan 4 expression parser will type them."
-  (:require [instaparse.core :as insta]))
+  (:require [instaparse.core :as insta]
+            [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
 ;; Grammar
@@ -30,7 +31,7 @@
   version-number = #'[0-9]+'
 
   declarations = (declaration _)*
-  declaration = use-decl   (* tasks 1+ add fn-decl, exports-decl, subsystem-decl *)
+  declaration = use-decl / fn-decl   (* tasks 4+ add exports-decl, subsystem-decl *)
 
   (* ============ Use ============ *)
 
@@ -40,6 +41,33 @@
   path-content = #'[^\"]*'
 
   ident = #'[a-zA-Z_][a-zA-Z0-9_]*'
+
+  (* ============ Fn — declare-new ============ *)
+
+  fn-decl = <'fn'> __ ident _ <'('> _ params? _ <')'> (_ return-type)? prose?
+
+  params = param (_ <','> _ param)*
+  param = ident _ <':'> _ type-ref
+
+  return-type = <'->'> _ type-ref
+
+  (* Prose lines: indented '--' lines immediately following a fn.
+     Leading-whitespace requirement disambiguates fn prose from
+     top-level comments. Mirrors Allium's annotation-trailing-prose.
+     No `_` precedes prose: the prose-line regex consumes the leading
+     newline + indentation itself, so a greedy `_` must not eat it. *)
+  prose = (prose-line)+
+  prose-line = <#'[ \\t]*\\n[ \\t]+--[ \\t]?'> #'[^\\n]*'
+
+  (* ============ Type references ============ *)
+
+  type-ref = generic-type / optional-type / qualified-type / simple-type
+
+  generic-type = ident <'<'> _ type-ref-list _ <'>'>
+  optional-type = (generic-type / qualified-type / simple-type) <'?'>
+  qualified-type = ident <'/'> ident
+  simple-type = ident
+  type-ref-list = type-ref (_ <','> _ type-ref)*
 
   (* ============ Whitespace / comments ============ *)
 
@@ -66,6 +94,31 @@
    :quoted-path      identity
    :use-decl         (fn [path alias]
                        {:type :use :path path :alias alias})
+   :simple-type      (fn [n] {:kind :simple :name n})
+   :qualified-type   (fn [ns n] {:kind :qualified :ns ns :name n})
+   :optional-type    (fn [inner] {:kind :optional :inner inner})
+   :generic-type     (fn [name & params]
+                       {:kind :generic :name name :params (vec params)})
+   :type-ref-list    (fn [& ts] (vec ts))
+   :type-ref         identity
+   :return-type      identity
+   :param            (fn [name type-ref] {:name name :type-ref type-ref})
+   :params           (fn [& ps] (vec ps))
+   :prose-line       identity
+   :prose            (fn [& lines] (str/join "\n" (map str/trim lines)))
+   :fn-decl          (fn [name & rest]
+                       (let [ps    (or (some #(when (vector? %) %) rest) [])
+                             ret   (some #(when (and (map? %)
+                                                     (contains? % :kind))
+                                            %) rest)
+                             prose (some #(when (string? %) %) rest)]
+                         {:type :fn
+                          :form :declare-new
+                          :name name
+                          :params ps
+                          :return-type ret
+                          :prose prose
+                          :body nil}))
    :boundary-file    (fn [header decls]
                        {:boundary-version (:boundary-version header)
                         :declarations decls})})
