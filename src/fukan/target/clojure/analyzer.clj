@@ -19,14 +19,33 @@
 ;; Source index
 ;; ---------------------------------------------------------------------------
 
-(defn- build-source-index
-  "Walk `code-root` and produce a map from [ns name kind] → source record."
+(defn- walk-symbols
+  "Walk `code-root` and return a flat vector of all source symbol records."
   [code-root]
   (if (and code-root (.exists (io/file code-root)))
-    (let [files (source/find-clj-files code-root)
-          syms (mapcat source/extract-symbols files)]
-      (into {} (map (fn [s] [[(:ns s) (:name s) (:kind s)] s]) syms)))
-    {}))
+    (let [files (source/find-clj-files code-root)]
+      (vec (mapcat source/extract-symbols files)))
+    []))
+
+(defn- index-from-symbols
+  "Build a map from [ns name kind] → source record from a flat symbol list."
+  [symbols]
+  (into {} (map (fn [s] [[(:ns s) (:name s) (:kind s)] s]) symbols)))
+
+(defn- detect-duplicate-addresses
+  "Group source-index entries by [ns name kind]; emit one violation per
+   group of size > 1."
+  [files-symbols]
+  (let [grouped (group-by (fn [s] [(:ns s) (:name s) (:kind s)])
+                          files-symbols)]
+    (for [[[ns nm kind] group] grouped
+          :when (> (count group) 1)]
+      {:severity :error :phase :phase6
+       :kind :phase6/duplicate-canonical-address
+       :location {:ns ns :name nm :kind kind :files (mapv :file group)}
+       :message (str "multiple " (name kind) " at " ns "/" nm
+                     " across " (count group) " files: "
+                     (str/join ", " (mapv :file group)))})))
 
 (defn- find-symbol
   "Look up a symbol by ns + name + kind. Returns the source record or nil."
@@ -188,7 +207,9 @@
    Plan 5 Task 7 covers DataStructure (Entity/Value/Variant/Event) and
    Invariant analyzers. Phase 6 is non-gating."
   [model registry code-root]
-  (let [source-index (build-source-index code-root)
+  (let [symbols       (walk-symbols code-root)
+        source-index  (index-from-symbols symbols)
+        dup-violations (detect-duplicate-addresses symbols)
         m1 (reduce (fn [m [op-id op]]
                      (-> m
                          (emit-function-projection
@@ -219,4 +240,4 @@
                    m3 (events m3))
         m5 (reduce (fn [m inv] (emit-invariant-projection m source-index registry inv))
                    m4 (invariants m4))]
-    m5))
+    (update m5 :violations (fnil into []) dup-violations)))
