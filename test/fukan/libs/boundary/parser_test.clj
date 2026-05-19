@@ -120,3 +120,56 @@
       (is (= "analyzers" (:name analyzers-param)))
       (is (= :generic (-> analyzers-param :type-ref :kind)))
       (is (= "Set" (-> analyzers-param :type-ref :name))))))
+
+(deftest fn-body-triggers-only
+  (testing "fn with body containing just a triggers: clause"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "fn select_node(node_id: NodeId) {\n"
+                              "    triggers: SelectNode\n"
+                              "}\n"))
+          fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
+      (is (= {:triggers {:kind :local :name "SelectNode"}
+              :returns nil}
+             (:body fn-decl))))))
+
+(deftest fn-body-returns-only
+  (testing "fn with body containing just a returns: clause (no triggers)"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "fn get_view_state() -> ViewState {\n"
+                              "    returns: current_view_state\n"
+                              "}\n"))
+          fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
+      (is (= {:triggers nil
+              :returns "current_view_state"}
+             (:body fn-decl))))))
+
+(deftest fn-body-both-clauses
+  (testing "fn with body containing both triggers: and returns:"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "fn submit_order(order: Order) -> SubmissionReceipt {\n"
+                              "    triggers: ProcessOrder\n"
+                              "    returns: SubmissionReceipt(order.id, post.order.created_at)\n"
+                              "}\n"))
+          fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
+      (is (= {:kind :local :name "ProcessOrder"}
+             (-> fn-decl :body :triggers)))
+      (is (= "SubmissionReceipt(order.id, post.order.created_at)"
+             (-> fn-decl :body :returns))))))
+
+(deftest fn-body-empty
+  (testing "fn with empty body { } parses as :body {:triggers nil :returns nil}"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "fn render_app_shell() -> Html { }\n"))
+          fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
+      (is (= {:triggers nil :returns nil} (:body fn-decl))))))
+
+(deftest fn-body-triggers-qualified
+  (testing "triggers: can reference a foreign rule via alias"
+    (let [result  (parse (str "-- boundary: 1\n"
+                              "use \"../other.allium\" as other\n"
+                              "fn local_fn(x: X) -> Y {\n"
+                              "    triggers: other/SomeRule\n"
+                              "}\n"))
+          fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
+      (is (= {:kind :qualified :ns "other" :name "SomeRule"}
+             (-> fn-decl :body :triggers))))))

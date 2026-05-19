@@ -44,7 +44,7 @@
 
   (* ============ Fn — declare-new ============ *)
 
-  fn-decl = <'fn'> __ ident _ <'('> _ params? _ <')'> (_ return-type)? prose?
+  fn-decl = <'fn'> __ ident _ <'('> _ params? _ <')'> (_ return-type)? prose? _ fn-body?
 
   params = param (_ <','> _ param)*
   param = ident _ <':'> _ type-ref
@@ -58,6 +58,22 @@
      newline + indentation itself, so a greedy `_` must not eat it. *)
   prose = (prose-line)+
   prose-line = <#'[ \\t]*\\n[ \\t]+--[ \\t]?'> #'[^\\n]*'
+
+  (* ============ Fn body — optional behavioural attachment ============ *)
+
+  fn-body = <'{'> _ fn-body-clause* _ <'}'>
+  fn-body-clause = triggers-clause / returns-clause
+  triggers-clause = <'triggers:'> _ rule-ref _
+  returns-clause = <'returns:'> _ returns-text _
+
+  rule-ref = qualified-rule-ref / simple-rule-ref
+  simple-rule-ref = ident
+  qualified-rule-ref = ident <'/'> ident
+
+  (* returns-text: single-line capture — the rest of the line after
+     'returns:' is the expression. Multi-line expressions can be added
+     in Plan 4 when the constraint-language expression parser arrives. *)
+  returns-text = #'[^\\n}]+'
 
   (* ============ Type references ============ *)
 
@@ -106,10 +122,24 @@
    :params           (fn [& ps] (vec ps))
    :prose-line       identity
    :prose            (fn [& lines] (str/join "\n" (map str/trim lines)))
+   :simple-rule-ref      (fn [n] {:kind :local :name n})
+   :qualified-rule-ref   (fn [ns n] {:kind :qualified :ns ns :name n})
+   :rule-ref             identity
+   :triggers-clause      (fn [ref] [:triggers ref])
+   :returns-text         (fn [s] (str/trim s))
+   :returns-clause       (fn [text] [:returns text])
+   :fn-body-clause       identity
+   :fn-body              (fn [& clauses]
+                           (reduce (fn [body [k v]] (assoc body k v))
+                                   {:triggers nil :returns nil}
+                                   clauses))
    :fn-decl          (fn [name & rest]
                        (let [ps    (or (some #(when (vector? %) %) rest) [])
                              ret   (some #(when (and (map? %)
                                                      (contains? % :kind))
+                                            %) rest)
+                             body  (some #(when (and (map? %)
+                                                     (contains? % :triggers))
                                             %) rest)
                              prose (some #(when (string? %) %) rest)]
                          {:type :fn
@@ -118,7 +148,7 @@
                           :params ps
                           :return-type ret
                           :prose prose
-                          :body nil}))
+                          :body body}))
    :boundary-file    (fn [header decls]
                        {:boundary-version (:boundary-version header)
                         :declarations decls})})
