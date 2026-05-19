@@ -121,13 +121,15 @@
     :qualified (when-let [resolved (get use-aliases (:ns trigger-ref))]
                  (qualify resolved (:name trigger-ref)))))
 
-(defn- warn! [msg ctx]
-  (binding [*out* *err*]
-    (println (str "[boundary-analyzer] " msg " " (pr-str ctx)))))
+(defn- record-issue
+  "Append a Phase 4 prep entry to the model's :phase4-state.
+   Phase 4 reads these entries in rules_4c and produces Violations."
+  [model kind data]
+  (update-in model [:phase4-state :binding-issues] (fnil conj []) (assoc data :kind kind)))
 
 (defn- emit-binding-edge
   "Best-effort emission of an R4 triggers edge + Boundary::Binding tag.
-   Skips silently (with warning) on unresolved rule refs or kernel errors."
+   Records issues into :phase4-state on unresolved rule refs or kernel errors."
   [model op-id trigger-ref returns-text coord use-aliases]
   (if-let [rule-id (resolve-rule-ref trigger-ref coord use-aliases)]
     (let [edge            (r/make-edge :relation/triggers
@@ -145,13 +147,12 @@
             (build/add-edge edge)
             (build/add-tag-application tag-app))
         (catch Exception e
-          (warn! "binding edge emission failed"
-                 {:op op-id :rule rule-id :ex (ex-message e)})
-          model)))
-    (do
-      (warn! "unresolved trigger ref"
-             {:op op-id :trigger trigger-ref :use-aliases (keys use-aliases)})
-      model)))
+          (record-issue model :unresolved-trigger-rule
+                        {:op op-id :rule rule-id :reason :edge-emission-failed
+                         :ex (ex-message e)}))))
+    (record-issue model :unresolved-trigger-rule
+                  {:op op-id :trigger trigger-ref
+                   :use-aliases (vec (keys use-aliases))})))
 
 (defn- analyze-fn-declare-new
   "Per MODEL.md §8.2: `fn name(params) -> R` declares a new Operation on the
@@ -212,15 +213,14 @@
     (let [body (:body decl)]
       (if-let [trigger (:triggers body)]
         (emit-binding-edge model op-id trigger (:returns body) coord use-aliases)
-        ;; Body has returns: but no triggers: — no edge to tag. Warn + skip.
-        (do (warn! "attach-form fn has returns: but no triggers: — no edge to tag"
-                   {:coord coord :form (:form decl)
-                    :contract (:contract decl) :op (:op decl)})
-            model)))
-    (do (warn! "attach-form fn could not resolve op-id"
-               {:coord coord :form (:form decl) :alias (:alias decl)
-                :use-aliases (keys use-aliases)})
-        model)))
+        ;; Body has returns: but no triggers: — no edge to tag. Record + skip.
+        (record-issue model :attach-returns-without-triggers
+                      {:coord coord :form (:form decl)
+                       :contract (:contract decl) :op (:op decl)})))
+    (record-issue model :unresolved-operation
+                  {:coord coord :form (:form decl) :alias (:alias decl)
+                   :contract (:contract decl) :op (:op decl)
+                   :use-aliases (vec (keys use-aliases))})))
 
 (defn- analyze-fn [model decl coord use-aliases]
   (case (:form decl)
