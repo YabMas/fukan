@@ -21,10 +21,10 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [fukan.libs.allium.parser :as parser]
+            [fukan.libs.coordinate :as coord]
             [fukan.vocabulary.allium.analyzer :as analyzer]
             [fukan.vocabulary.allium.tags :as tags]
-            [fukan.model.build :as build])
-  (:import (java.nio.file Paths)))
+            [fukan.model.build :as build]))
 
 ;; ---------------------------------------------------------------------------
 ;; File discovery + coordinate derivation
@@ -50,47 +50,14 @@
                 (subs (count prefix)))
         (str/replace-first #"\.allium$" ""))))
 
-(defn- canonicalise-use-path
-  "Convert a raw `use \"<path>\" as <alias>` path string into a root-relative
-   coordinate that matches `coordinate-of`'s output (no `.allium` extension,
-   no leading `/`, no `./` or `../` segments).
-
-   `host-coord` is the coordinate of the file containing the `use` declaration
-   (e.g. `fukan/web/views/spec`). Relative paths starting with `./` or `../`
-   resolve against the host file's *directory* (the parent of `host-coord`).
-   Absolute-looking paths (no leading `./` or `../`) are treated as already
-   root-relative and only stripped of their `.allium` suffix and leading `/`.
-
-   Examples (root-relative outputs):
-     host=`fukan/web/spec`           path=`./views/spec.allium`     → `fukan/web/views/spec`
-     host=`fukan/web/spec`           path=`../model/spec.allium`    → `fukan/model/spec`
-     host=`fukan/model/pipeline`     path=`./spec.allium`           → `fukan/model/spec`
-     host=`b`                        path=`a`                       → `a`
-     host=anything                   path=`/some/abs.allium`        → `some/abs`"
-  [host-coord raw-path]
-  (let [;; Strip trailing .allium first (it survives path arithmetic anyway,
-        ;; but stripping before resolution avoids carrying it through normalize)
-        stripped (str/replace-first raw-path #"\.allium$" "")
-        relative? (or (str/starts-with? stripped "./")
-                      (str/starts-with? stripped "../"))
-        empty-str-array (into-array String [])]
-    (if relative?
-      (let [host-path (Paths/get host-coord empty-str-array)
-            host-dir  (or (.getParent host-path)
-                          (Paths/get "" empty-str-array))
-            resolved  (-> host-dir (.resolve stripped) .normalize str)]
-        ;; Strip any leading "/" to keep paths aligned with coordinate-of output.
-        (str/replace-first resolved #"^/" ""))
-      ;; Absolute-looking path: just strip leading "/" if any.
-      (str/replace-first stripped #"^/" ""))))
 
 (defn- canonicalise-use-aliases
-  "Apply `canonicalise-use-path` to every value in the raw alias map for the
+  "Apply `coord/canonicalise-path` to every value in the raw alias map for the
    file at `host-coord`. Returns a new map with the same keys but root-relative,
    `.allium`-stripped coordinates."
   [host-coord raw-aliases]
   (reduce-kv (fn [acc alias raw-path]
-               (assoc acc alias (canonicalise-use-path host-coord raw-path)))
+               (assoc acc alias (coord/canonicalise-path host-coord raw-path)))
              {}
              raw-aliases))
 

@@ -6,7 +6,7 @@
    - Subsystem-bound: declarations are use + one :subsystem.
 
    This namespace is built up across Tasks 2-7."
-  (:require [clojure.string :as str]
+  (:require [fukan.libs.coordinate :as coord]
             [fukan.model.build :as build]
             [fukan.model.primitives :as p]
             [fukan.model.relations :as r]
@@ -35,32 +35,6 @@
 (defn- qualify [coord local-name]
   (str coord "::" local-name))
 
-(defn- canonicalise-contains-path
-  "Resolve a `contains:` entry (relative path like \"./oauth/spec.allium\"
-   or \"./inner.boundary\") to a canonical root-relative coord (no extension).
-   Replicates the pattern from fukan.vocabulary.allium.pipeline. Lifting
-   this to a shared utility is Plan 4+."
-  [host-coord raw-path]
-  (let [no-ext (cond
-                 (str/ends-with? raw-path ".allium")
-                 (subs raw-path 0 (- (count raw-path) 7))
-                 (str/ends-with? raw-path ".boundary")
-                 (subs raw-path 0 (- (count raw-path) 9))
-                 :else raw-path)
-        host-dir (let [idx (.lastIndexOf ^String host-coord "/")]
-                   (if (neg? idx) "" (subs host-coord 0 idx)))]
-    (cond
-      (str/starts-with? no-ext "./")
-      (let [tail (subs no-ext 2)]
-        (if (empty? host-dir) tail (str host-dir "/" tail)))
-
-      (str/starts-with? no-ext "../")
-      (let [up-idx (.lastIndexOf ^String host-dir "/")
-            parent (if (neg? up-idx) "" (subs host-dir 0 up-idx))
-            tail (subs no-ext 3)]
-        (if (empty? parent) tail (str parent "/" tail)))
-
-      :else no-ext)))
 
 (defn- translate-type-ref
   "Convert a Plan 3a parser type-ref into a kernel Type value.
@@ -281,7 +255,7 @@
    :predicate-registrations slot materialises on first registration
    via (fnil conj [])."
   [model decl coord _use-aliases]
-  (let [contains-coords (mapv #(canonicalise-contains-path coord %)
+  (let [contains-coords (mapv #(coord/canonicalise-path coord %)
                               (:contains decl))
         composite       (p/make-container
                           {:id coord
