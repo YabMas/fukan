@@ -174,7 +174,7 @@
                    m0
                    (v/make-tag-application
                      {:tag    {:namespace "Boundary" :name "Function"}
-                      :target {:case :target/operation :id op-id}}))
+                      :target {:case :target/primitive :id op-id}}))
         body     (:body decl)]
     (if (and body (:triggers body))
       (emit-binding-edge m1 op-id (:triggers body) (:returns body)
