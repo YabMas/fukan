@@ -35,14 +35,14 @@
       (is (= 1 (count (:violations result)))))))
 
 (deftest combined-pipeline-with-phase4-runs-cleanly
-  ;; Smoke: fukan-on-fukan loads through both extensions, runs Phase 4,
-  ;; and either passes cleanly OR raises a documented Gate G2 with
-  ;; expected violations. Until Tasks 4-10 land rules, this returns
-  ;; the model with [] violations.
-  (testing "Phase 4 runs on the fukan corpus without throwing"
+  (testing "fukan-on-fukan loads through Allium + Boundary + Phase 4"
     (let [model (model-pipeline/load-source "src")]
-      (is (or (map? model) (some? model))
-          "pipeline returns a model or a {:model :violations} map"))))
+      (is (map? model))
+      (is (contains? model :violations))
+      (let [errors (filter #(= :error (:severity %)) (:violations model))]
+        (is (empty? errors)
+            (str "Phase 4 produced unexpected errors: "
+                 (pr-str (mapv (juxt :sub-phase :kind :message) errors))))))))
 
 (deftest sub-phase-order-is-fixed
   (testing "run-sub-phases visits 4a → 4b → 4c → 4d → 4e → 4f → 4g in order"
