@@ -16,7 +16,8 @@
             [fukan.project-layer.defaults :as project-defaults]
             [fukan.web.views.shell :as views.shell]
             [fukan.web.views.graph :as views.graph]
-            [fukan.web.views.sidebar :as views.sidebar]))
+            [fukan.web.views.sidebar :as views.sidebar]
+            [fukan.web.agent-handlers :as agent-handlers]))
 
 (defn- json-response [body]
   {:status 200
@@ -63,6 +64,8 @@
                               :headers {"Content-Type" "text/html"}
                               :body (views.shell/render-shell req)})}]
        ["/graph"     {:get handle-graph}]
-       ["/projector" {:get handle-projector}]
-       ["/sidebar"   {:get handle-sidebar}]]
+       ["/projector"   {:get  handle-projector}]
+       ["/sidebar"     {:get  handle-sidebar}]
+       ["/agent/eval"   {:post agent-handlers/handle-eval}]
+       ["/agent/status" {:get  agent-handlers/handle-status}]]
       {:data {:middleware [parameters/parameters-middleware]}})))
