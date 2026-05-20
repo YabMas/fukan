@@ -46,3 +46,27 @@
     (let [r (get-status)]
       (is (true? (-> r :result :model-loaded?)))
       (is (= 4 (-> r :result :primitive-count))))))
+
+(deftest e2e-eval-sandbox-refusal
+  (testing "POST /agent/eval refuses System/exit; response is well-formed"
+    (let [r (post-eval "(System/exit 0)")]
+      (is (false? (:ok? r)))
+      (is (string? (:error/message r))))))
+
+(deftest e2e-eval-timeout
+  (testing "POST /agent/eval times out an infinite loop"
+    (let [r (post-eval "(loop [] (recur))")]
+      (is (false? (:ok? r)))
+      (is (= "timeout" (name (keyword (:error/kind r))))))))
+
+(deftest e2e-drift-derivation
+  (testing "agent can derive drift from L0/L1 and from L2; same answer"
+    (let [via-l1 (post-eval "(count (:rows (relations :kind :projects :validity :absent)))")
+          via-l2 (post-eval "(count (drift))")]
+      (is (= (:result via-l1) (:result via-l2))))))
+
+(deftest e2e-help
+  (testing "help surfaces L1 primitives entry"
+    (let [r (post-eval "(get-in (help) ['fukan.agent.api :L1])")]
+      (is (true? (:ok? r)))
+      (is (some #(= "primitives" (name (keyword (:name %)))) (:result r))))))
