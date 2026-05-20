@@ -31,3 +31,10 @@
     (let [r (agent-sci/eval-string "(status)")]
       (is (true? (:ok? r)))
       (is (true? (-> r :result :model-loaded?))))))
+
+(deftest eval-timeout
+  (testing "infinite loop returns :timeout, daemon still healthy"
+    (let [r (agent-sci/eval-string "(loop [] (recur))" {:timeout-ms 100})]
+      (is (false? (:ok? r)))
+      (is (= :timeout (:error/kind r)))
+      (is (number? (:error/elapsed-ms r))))))

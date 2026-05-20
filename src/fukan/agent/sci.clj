@@ -15,16 +15,32 @@
     (sci/init
       {:namespaces {'user merged}})))
 
+(def ^:private default-timeout-ms 5000)
+
 (defn eval-string
   "Evaluate the given expression string in the agent sandbox.
-   Returns either {:ok? true :result …} or {:ok? false :error/kind … :error/message …}."
-  [s]
-  (try
-    (let [ctx    (make-ctx)
-          result (sci/eval-string* ctx s)]
-      {:ok? true :result result})
-    (catch Exception e
-      (let [data (ex-data e)]
-        {:ok? false
-         :error/kind (or (:type data) :runtime)
-         :error/message (.getMessage e)}))))
+   Optional opts: {:timeout-ms N} (default 5000).
+   Returns {:ok? true :result ... :elapsed-ms N} or
+           {:ok? false :error/kind k :error/message m :elapsed-ms N}."
+  ([s] (eval-string s {}))
+  ([s {:keys [timeout-ms] :or {timeout-ms default-timeout-ms}}]
+   (let [ctx       (make-ctx)
+         start     (System/currentTimeMillis)
+         fut       (future
+                     (try {:ok? true :result (sci/eval-string* ctx s)}
+                          (catch Throwable e
+                            {:ok? false
+                             :error/kind (or (some-> e ex-data :type) :runtime)
+                             :error/message (.getMessage e)})))
+         result    (deref fut timeout-ms ::timeout)
+         elapsed   (- (System/currentTimeMillis) start)]
+     (cond
+       (= result ::timeout)
+       (do (future-cancel fut)
+           {:ok? false
+            :error/kind :timeout
+            :error/elapsed-ms elapsed
+            :error/message (str "eval exceeded " timeout-ms "ms")})
+
+       :else
+       (assoc result :elapsed-ms elapsed)))))
