@@ -6,7 +6,8 @@
         cheshire/cheshire {:mvn/version "5.12.0"}
         dev.data-star.clojure/http-kit {:mvn/version "1.0.0-RC7"}
         metosin/malli {:mvn/version "0.16.4"}
-        instaparse/instaparse {:mvn/version "1.5.0"}}
+        instaparse/instaparse {:mvn/version "1.5.0"}
+        org.babashka/sci {:mvn/version "0.8.41"}}
  :aliases
  {:run {:main-opts ["-m" "fukan.core"]}
   :dev {:extra-paths ["dev"]
