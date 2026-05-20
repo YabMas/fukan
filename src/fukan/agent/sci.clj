@@ -13,7 +13,11 @@
         system-bindings (ns-bindings 'fukan.agent.system)
         merged          (merge api-bindings system-bindings)]
     (sci/init
-      {:namespaces {'user merged}})))
+      {:namespaces {'user merged}
+       :deny       '[def defn defmacro defprotocol deftype defrecord
+                     alter-var-root intern
+                     binding var]
+       :classes    {}})))
 
 (def ^:private default-timeout-ms 5000)
 

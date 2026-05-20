@@ -38,3 +38,28 @@
       (is (false? (:ok? r)))
       (is (= :timeout (:error/kind r)))
       (is (number? (:error/elapsed-ms r))))))
+
+(deftest sandbox-refuses-system-exit
+  (testing "(System/exit 0) is refused; daemon stays up"
+    (let [r (agent-sci/eval-string "(System/exit 0)")]
+      (is (false? (:ok? r))))))
+
+(deftest sandbox-refuses-java-io
+  (testing "(slurp \"/etc/passwd\") is refused"
+    (let [r (agent-sci/eval-string "(slurp \"/etc/passwd\")")]
+      (is (false? (:ok? r))))))
+
+(deftest sandbox-refuses-shell
+  (testing "no access to clojure.java.shell"
+    (let [r (agent-sci/eval-string "(require '[clojure.java.shell]) (clojure.java.shell/sh \"echo\" \"hi\")")]
+      (is (false? (:ok? r))))))
+
+(deftest sandbox-refuses-internal-ns
+  (testing "no access to fukan.* internal namespaces"
+    (let [r (agent-sci/eval-string "(fukan.model.build/empty-model)")]
+      (is (false? (:ok? r))))))
+
+(deftest sandbox-refuses-runtime-def
+  (testing "def is refused at eval-time"
+    (let [r (agent-sci/eval-string "(def x 1)")]
+      (is (false? (:ok? r))))))
