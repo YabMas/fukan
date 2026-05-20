@@ -1,0 +1,55 @@
+{:primitives
+ {"container:hex/core"
+  {:kind :primitive/container
+   :id "container:hex/core"
+   :label "hex/core"
+   :description "Core module of hex"}
+
+  "behaviour:hex/core/r-mint"
+  {:kind :primitive/behaviour
+   :id "behaviour:hex/core/r-mint"
+   :label "mint"
+   :rules ["intent:mint"]}
+
+  "behaviour:hex/core/r-burn"
+  {:kind :primitive/behaviour
+   :id "behaviour:hex/core/r-burn"
+   :label "burn"
+   :rules ["intent:burn"]}
+
+  "boundary:hex/core/api"
+  {:kind :primitive/boundary
+   :id "boundary:hex/core/api"
+   :label "api"
+   :operations ["op:mint" "op:burn"]}}
+
+ :edges
+ [{:kind :projects
+   :from {:endpoint/primitive "behaviour:hex/core/r-mint"}
+   :to   nil
+   :validity :absent
+   :projection-kind :clojure
+   :expected-address "hex.core/mint"}
+  {:kind :projects
+   :from {:endpoint/primitive "behaviour:hex/core/r-burn"}
+   :to   {:endpoint/artifact ["clojure" "hex.core" "burn"]}
+   :validity :valid
+   :projection-kind :clojure}
+  {:kind :owns
+   :from {:endpoint/primitive "container:hex/core"}
+   :to   {:endpoint/primitive "behaviour:hex/core/r-mint"}}
+  {:kind :owns
+   :from {:endpoint/primitive "container:hex/core"}
+   :to   {:endpoint/primitive "behaviour:hex/core/r-burn"}}
+  {:kind :owns
+   :from {:endpoint/primitive "container:hex/core"}
+   :to   {:endpoint/primitive "boundary:hex/core/api"}}]
+
+ :artifacts
+ {["clojure" "hex.core" "burn"]
+  {:kind :artifact/clojure-fn
+   :id ["clojure" "hex.core" "burn"]
+   :namespace "hex.core"
+   :name "burn"}}
+
+ :tag-apps []}
