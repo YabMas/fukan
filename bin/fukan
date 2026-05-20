@@ -29,6 +29,9 @@
 (defn cmd-eval [args]
   (when (empty? args)
     (die "usage: fukan eval '<expression>'"))
+  (when-not (get-status)
+    (die (str "fukan daemon not reachable at " daemon-url
+              ". Start it with `clj -M:run` from the fukan repo.")))
   (let [expr (str/join " " args)
         resp (http/post (str daemon-url "/agent/eval")
                         {:headers {"Content-Type" "application/json"}
