@@ -1,0 +1,58 @@
+#!/usr/bin/env bb
+
+(ns fukan.cli
+  (:require [babashka.http-client :as http]
+            [cheshire.core :as json]
+            [clojure.string :as str]))
+
+(def daemon-url
+  (or (System/getenv "FUKAN_URL") "http://127.0.0.1:8080"))
+
+(defn die [msg & {:keys [code] :or {code 1}}]
+  (binding [*out* *err*] (println msg))
+  (System/exit code))
+
+(defn- get-status []
+  (try
+    (let [resp (http/get (str daemon-url "/agent/status")
+                         {:throw false :timeout 2000})]
+      (when (= 200 (:status resp))
+        (json/parse-string (:body resp) true)))
+    (catch Exception _ nil)))
+
+(defn cmd-status [_args]
+  (if-let [s (get-status)]
+    (println (json/generate-string s {:pretty true}))
+    (die (str "fukan daemon not reachable at " daemon-url
+              ". Start it with `clj -M:run` from the fukan repo."))))
+
+(defn cmd-eval [args]
+  (when (empty? args)
+    (die "usage: fukan eval '<expression>'"))
+  (let [expr (str/join " " args)
+        resp (http/post (str daemon-url "/agent/eval")
+                        {:headers {"Content-Type" "application/json"}
+                         :body (json/generate-string {:expr expr})
+                         :throw false})]
+    (println (:body resp))
+    (let [parsed (json/parse-string (:body resp) true)]
+      (when-not (:ok? parsed) (System/exit 2)))))
+
+(defn cmd-primer [_args]
+  ;; Implemented in Task 24
+  (die "primer not yet implemented"))
+
+(defn cmd-init [_args]
+  ;; Implemented in Task 25
+  (die "init not yet implemented"))
+
+(defn -main [& argv]
+  (let [[cmd & args] argv]
+    (case cmd
+      "status" (cmd-status args)
+      "eval"   (cmd-eval args)
+      "primer" (cmd-primer args)
+      "init"   (cmd-init args)
+      (die (str "usage: fukan {status|eval|primer|init} …")))))
+
+(apply -main *command-line-args*)
