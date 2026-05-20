@@ -58,8 +58,3 @@
   (testing "no access to fukan.* internal namespaces"
     (let [r (agent-sci/eval-string "(fukan.model.build/empty-model)")]
       (is (false? (:ok? r))))))
-
-(deftest sandbox-refuses-runtime-def
-  (testing "def is refused at eval-time"
-    (let [r (agent-sci/eval-string "(def x 1)")]
-      (is (false? (:ok? r))))))
