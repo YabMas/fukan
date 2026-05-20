@@ -50,9 +50,37 @@
       (print (slurp primer-path))
       (die "primer not found; set FUKAN_HOME or run from the Fukan repo root"))))
 
+(def ^:private fukan-section-marker "<!-- fukan:agents-section -->")
+(def ^:private fukan-section
+  (str fukan-section-marker "\n"
+       "## Fukan\n\n"
+       "Fukan is available — a structural workbench for the spec graph.\n\n"
+       "- Get the agent primer: `fukan primer`\n"
+       "- Quick status:         `fukan status`\n"
+       "- Query the Model:      `fukan eval '(primitives :kind :primitive/behaviour)'`\n"
+       "- Open the explorer:    http://127.0.0.1:8080/\n\n"
+       fukan-section-marker))
+
 (defn cmd-init [_args]
-  ;; Implemented in Task 25
-  (die "init not yet implemented"))
+  (let [agents-md (java.io.File. "AGENTS.md")]
+    (cond
+      (not (.exists agents-md))
+      (do (spit agents-md (str "# Project agents guide\n\n" fukan-section "\n"))
+          (println "Created AGENTS.md with Fukan section."))
+
+      (str/includes? (slurp agents-md) fukan-section-marker)
+      (let [existing (slurp agents-md)
+            updated  (str/replace existing
+                                  (re-pattern (str fukan-section-marker
+                                                   "[\\s\\S]*?"
+                                                   fukan-section-marker))
+                                  fukan-section)]
+        (spit agents-md updated)
+        (println "Updated Fukan section in AGENTS.md."))
+
+      :else
+      (do (spit agents-md (str (slurp agents-md) "\n" fukan-section "\n"))
+          (println "Added Fukan section to existing AGENTS.md.")))))
 
 (defn -main [& argv]
   (let [[cmd & args] argv]
