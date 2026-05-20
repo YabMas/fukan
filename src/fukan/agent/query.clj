@@ -47,3 +47,37 @@
     {:find  (mapv (fn [s] (if (variable? s) (->var-key s) s)) find-clauses)
      :where (mapv parse-atom where-clauses)
      :in    (mapv ->var-key (:in sections []))}))
+
+(defn- unify-arg [pattern-arg tuple-val binding]
+  (cond
+    (and (keyword? pattern-arg)
+         (.startsWith (name pattern-arg) "?"))
+    (if-let [existing (get binding pattern-arg)]
+      (when (= existing tuple-val) binding)
+      (assoc binding pattern-arg tuple-val))
+    (= pattern-arg tuple-val) binding
+    :else nil))
+
+(defn- unify-tuple [args tuple binding]
+  (reduce (fn [b [pa tv]]
+            (if-let [b' (unify-arg pa tv b)]
+              b'
+              (reduced nil)))
+          binding
+          (map vector args tuple)))
+
+(defn- match-atom [atm edb binding]
+  (let [tuples (get edb (:predicate atm) #{})]
+    (keep (fn [tup] (unify-tuple (:args atm) tup binding)) tuples)))
+
+(defn evaluate
+  "Evaluate a parsed query against an EDB. Returns a vector of result rows
+   where each row is a map from :find var keyword → value."
+  [parsed edb]
+  (let [bindings (reduce (fn [bs atm]
+                           (mapcat #(match-atom atm edb %) bs))
+                         [{}]
+                         (:where parsed))]
+    (mapv (fn [b]
+            (into {} (map (fn [v] [v (get b v)]) (:find parsed))))
+          bindings)))
