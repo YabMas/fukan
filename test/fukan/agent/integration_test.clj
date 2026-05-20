@@ -61,7 +61,7 @@
 
 (deftest e2e-drift-derivation
   (testing "agent can derive drift from L0/L1 and from L2; same answer"
-    (let [via-l1 (post-eval "(count (:rows (relations :kind :projects :validity :absent)))")
+    (let [via-l1 (post-eval "(count (:rows (relations :kind :relation/projects :validity :absent)))")
           via-l2 (post-eval "(count (drift))")]
       (is (= (:result via-l1) (:result via-l2))))))
 

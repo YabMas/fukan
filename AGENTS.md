@@ -155,9 +155,9 @@ writing a query.
 ```clojure
 ;; L2 shorthand — already does the join for you:
 (drift)
-;; => [{:from {:endpoint/primitive "rule:fukan/model/r-merge"}
+;; => [{:from {:case :endpoint/primitive :id "rule:fukan/model/r-merge"}
 ;;      :to nil
-;;      :kind :projects
+;;      :kind :relation/projects
 ;;      :validity :absent
 ;;      :primitive {:id "rule:..." :kind :primitive/rule :label "..."}}
 ;;     ...]
@@ -166,18 +166,18 @@ writing a query.
 (drift :projection-kind :clojure)
 
 ;; If you want only rules, compose at L1:
-(->> (:rows (relations :kind :projects :validity :absent))
-     (map #(-> % :from :endpoint/primitive))
+(->> (:rows (relations :kind :relation/projects :validity :absent))
+     (map #(-> % :from :id))
      (map get-primitive)
      (filter #(= :primitive/rule (:kind %))))
 
 ;; Or with full aggregation at L0:
 (q '[:find ?m (count ?p)
      :where
-       [?r :kind :projects]
-       [?r :validity :absent]
-       [?r :from ?p]
-       [?p :owner ?m]])
+       [?r :relation/kind :relation/projects]
+       [?r :relation/validity :absent]
+       [?r :relation/from ?p]
+       [?p :primitive/owner ?m]])
 ```
 
 Both L1 and L0 forms produce the same data. Use `(drift)` for the
@@ -214,8 +214,8 @@ Add a plain Clojure `defn` that composes L0 + L1:
 (defn unrealised-by-kind
   "Absent projections grouped by the source primitive's kind."
   []
-  (->> (:rows (relations :kind :projects :validity :absent))
-       (map #(-> % :from :endpoint/primitive))
+  (->> (:rows (relations :kind :relation/projects :validity :absent))
+       (map #(-> % :from :id))
        (map get-primitive)
        (group-by :kind)))
 ```
@@ -276,9 +276,11 @@ map. It cannot reach beyond `fukan.agent.api` and `fukan.agent.system`.
   `:limit` and `:offset`. `q` results are subject to the same cap.
 - Response body byte cap — ~8 MB hard ceiling. Large result sets
   return `:exceeded-cap`; reduce scope with filters.
-- `def` and `defn` are refused at eval time (`:forbidden`). Define
-  persistent views in `.fukan/agent-views.clj` and reload with
-  `(refresh)`.
+- `def` and `defn` work at eval time AND inside `.fukan/agent-views.clj`
+  (a single shared SCI context backs both). But ad-hoc defs at eval time
+  clutter the shared namespace and don't survive a daemon restart —
+  prefer file-based views, which are persistent, reviewable, and
+  shareable across humans and other agents on the project.
 
 **If you need something not currently exposed:** propose adding it to
 `fukan.agent.api` rather than reaching around via interop. The surface

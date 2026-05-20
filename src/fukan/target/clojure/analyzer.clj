@@ -92,15 +92,23 @@
 (defn- emit-function-projection
   "Emit one projects edge from a primitive (as :endpoint/primitive) to a
    Code.Function artifact at the canonical address.
-   ALWAYS materializes the artifact so add-edge never throws for :absent edges."
+   ALWAYS materializes the artifact so add-edge never throws for :absent edges.
+
+   :public? is derived from the source-index lookup:
+   - `:function` (defn)        → :public? true
+   - `:function-private` (defn-) → :public? false
+   - not found                 → :public? nil (the artifact is a spec claim with
+                                  no realising code yet, so publicity is unknown)"
   [model source-index reg primitive-id primitive-kind projection-kind primitive-label]
   (let [module-coord (module-coord-of-primitive primitive-id)
         {:keys [ns name]} (addr/canonical reg primitive-kind projection-kind
                                           module-coord primitive-label)
-        artifact (a/make-code-function "clojure" (str ns "/" name))
+        public-match  (find-symbol source-index ns name :function)
+        private-match (find-symbol source-index ns name :function-private)
+        public?  (cond public-match true private-match false :else nil)
+        artifact (a/make-code-function "clojure" (str ns "/" name) nil public?)
         aid (a/artifact-identity artifact)
-        found (find-symbol source-index ns name :function)
-        validity (if found :valid :absent)
+        validity (if public-match :valid :absent)
         m1 (ensure-artifact model artifact)]  ;; ALWAYS materialize
     (emit-projects-edge m1
                         (r/primitive-ref primitive-id)
@@ -203,9 +211,9 @@
   (let [qname (str ns "/" name)
         loc   {:file file}]
     (case kind
-      :function       (a/make-code-function "clojure" qname loc)
-      :data-structure (a/make-code-data-structure "clojure" qname loc)
-      :function-private (a/make-code-function "clojure" qname loc)
+      :function         (a/make-code-function "clojure" qname loc true)
+      :data-structure   (a/make-code-data-structure "clojure" qname loc)
+      :function-private (a/make-code-function "clojure" qname loc false)
       nil)))
 
 (defn- materialize-unprojected

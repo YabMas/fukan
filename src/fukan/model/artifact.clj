@@ -15,11 +15,13 @@
     :projection-kind/test})
 
 (defn make-code-function
-  ([language qualified-name] (make-code-function language qualified-name nil))
-  ([language qualified-name source-location]
+  ([language qualified-name] (make-code-function language qualified-name nil nil))
+  ([language qualified-name source-location] (make-code-function language qualified-name source-location nil))
+  ([language qualified-name source-location public?]
    (cond-> {:case :artifact/code, :language language
             :sub {:case :code/function, :qualified-name qualified-name}}
-     source-location (assoc-in [:sub :source-location] source-location))))
+     source-location          (assoc-in [:sub :source-location] source-location)
+     (some? public?)          (assoc-in [:sub :public?]         public?))))
 
 (defn make-code-data-structure
   ([language qualified-name] (make-code-data-structure language qualified-name nil))
@@ -50,7 +52,8 @@
        [:code/function
         [:map [:case [:= :code/function]]
          [:qualified-name :string]
-         [:source-location {:optional true} SourceLocation]]]
+         [:source-location {:optional true} SourceLocation]
+         [:public? {:optional true} :boolean]]]
        [:code/data-structure
         [:map [:case [:= :code/data-structure]]
          [:qualified-name :string]

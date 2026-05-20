@@ -15,8 +15,8 @@
 (defn- endpoint->id [endpoint]
   (cond
     (nil? endpoint) nil
-    (:endpoint/primitive endpoint) (:endpoint/primitive endpoint)
-    (:endpoint/artifact  endpoint) (str "artifact:" (vec (:endpoint/artifact endpoint)))
+    (= :endpoint/primitive (:case endpoint)) (:id endpoint)
+    (= :endpoint/artifact  (:case endpoint)) (str "artifact:" (vec (:id endpoint)))
     :else nil))
 
 (defn- edge-id [_edge idx]

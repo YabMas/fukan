@@ -12,7 +12,7 @@
     (let [m (load-fixture)]
       (is (= 4 (count (:primitives m))))
       (is (= 5 (count (:edges m))))
-      (is (= 1 (count (:artifacts m)))))))
+      (is (= 3 (count (:artifacts m)))))))
 
 (deftest model->edb-projects-primitives
   (testing "every primitive becomes a :primitive/kind tuple"

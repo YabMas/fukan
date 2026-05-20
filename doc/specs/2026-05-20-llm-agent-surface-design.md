@@ -150,10 +150,10 @@ The bulk of the design work lives in this namespace. Everything else (CLI, HTTP,
 - **L1** — orthogonal kw-args filtering across the five "kinds of thing" the agent navigates:
     - **Vocabulary:** `(vocabulary)`, `(vocabulary :altitude :behaviour)`, `(schema :kind :rule)` — what primitive kinds and relation kinds exist; what attributes a given kind has; what relations it can participate in.
     - **Primitives (nodes):** `(primitives)`, `(primitives :kind :rule :owner "hex/core")`, `(primitives :address-prefix "Code.fukan.model.*")`, `(primitives :pred '(fn [p] ...))`. Returns summary maps; capped + paginated by default. `(get-primitive id)` returns full detail including attributes, source location, and docs.
-    - **Relations (edges):** `(relations :from id)`, `(relations :kind :projects :validity :absent)`. Same filtering pattern.
+    - **Relations (edges):** `(relations :from id)`, `(relations :kind :relation/projects :validity :absent)`. Same filtering pattern.
     - **Project layer:** `(idioms)`, `(idioms :primitive-kind :surface)`, `(constraints)`, `(violations)`, `(violations :severity :error)`.
 - **L2** — built-in MVP canon, kept small (so the agent isn't over-shaped by our notion of useful views):
-    - `(drift)` — `(relations :kind :projects :validity :absent)` joined with `get-primitive` for the source side. Optional `:projection-kind`.
+    - `(drift)` — `(relations :kind :relation/projects :validity :absent)` joined with `get-primitive` for the source side. Optional `:projection-kind`.
     - `(neighborhood id)` — a primitive + all its one-hop relations (both directions) + summary maps for the directly-connected neighbors. Local exploration without writing a query. Multi-hop traversal is the agent's job at L0 if needed.
 
 ### Output shape, illustrative
@@ -171,10 +171,10 @@ The bulk of the design work lives in this namespace. Everything else (CLI, HTTP,
  :attributes {:triggers [...] :guarantees [...]}
  :doc "..."}
 
-;; (first (relations :kind :projects :validity :absent))
-{:from "rule:hex/core/r-mint"
+;; (first (:rows (relations :kind :relation/projects :validity :absent)))
+{:from {:case :endpoint/primitive :id "rule:hex/core/r-mint"}
  :to nil
- :kind :projects
+ :kind :relation/projects
  :projection-kind :clojure
  :validity :absent
  :expected-address "hex.core/mint"}
@@ -184,17 +184,17 @@ The bulk of the design work lives in this namespace. Everything else (CLI, HTTP,
 
 ```clojure
 ;; "What spec primitives have no Clojure realisation yet?"
-(->> (relations :kind :projects :validity :absent)
-     (map :from)
+(->> (:rows (relations :kind :relation/projects :validity :absent))
+     (map #(-> % :from :id))
      (map get-primitive))
 
 ;; "Group absent projections by owning module"
 (q '[:find ?m (count ?p)
      :where
-       [?r :kind :projects]
-       [?r :validity :absent]
-       [?r :from ?p]
-       [?p :owner ?m]])
+       [?r :relation/kind :relation/projects]
+       [?r :relation/validity :absent]
+       [?r :relation/from ?p]
+       [?p :primitive/owner ?m]])
 ```
 
 The agent learns to derive drift, gaps, neighborhoods, etc. by composing L0 + L1. When a pattern recurs enough to be worth naming, it's promoted to L2 (see §6).
@@ -250,8 +250,8 @@ Plain Clojure defs written against L0 + L1. Same shape as built-in L2; the agent
 (defn unrealised-by-altitude
   "Absent projections, bucketed by the spec primitive's altitude."
   []
-  (->> (relations :kind :projects :validity :absent)
-       (map :from)
+  (->> (:rows (relations :kind :relation/projects :validity :absent))
+       (map #(-> % :from :id))
        (map get-primitive)
        (group-by :altitude)))
 ```
@@ -400,7 +400,7 @@ Success envelope:
     - No `java.*` interop, no `clojure.java.io`, no `clojure.java.shell`, no `slurp`/`spit`.
     - No `System/exit`, no thread spawning, no `Thread/sleep` beyond a small ceiling.
     - No reach into other `fukan.*` namespaces — only `fukan.agent.api` + `fukan.agent.system` vars bound.
-    - `def`/`defn` allowed only during the `agent-views.clj` load path; at eval-time, `def` is refused (`:forbidden`). Agents extend via file edits.
+    - `def`/`defn` are permitted at eval time as well as during `agent-views.clj` load — the implementation uses a single shared SCI context so that view defs persist across calls and become reachable from regular eval. Trade-off: agents can clutter the shared SCI namespace with ad-hoc defs. The encouraged pattern remains file-based views (`.fukan/agent-views.clj`) since they are persistent, reviewable, and shareable. Runtime def is bounded by the rest of the sandbox (no Java interop, no IO, no escape) so the security perimeter is unaffected.
 - **Daemon-not-running** is a CLI-level error, not an eval error; CLI emits a structured stderr message and exits non-zero before hitting the daemon.
 
 ### Testing — three layers

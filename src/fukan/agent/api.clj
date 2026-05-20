@@ -44,24 +44,27 @@
                              {:type :unknown-filter :filter k})))))
     true filters))
 
-(defn- envelope [rows limit]
-  (let [total (count rows)]
-    {:rows (vec (take limit rows))
-     :truncated? (> total limit)
-     :total total}))
+(defn- envelope [rows limit offset]
+  (let [total   (count rows)
+        page    (vec (->> rows (drop offset) (take limit)))
+        end     (+ offset (count page))]
+    {:rows page
+     :truncated? (< end total)
+     :total total
+     :offset offset}))
 
 (defn ^{:agent/layer :L1
         :agent/doc "List Model primitive summaries. Optional filters: :kind :label.
                     Returns {:rows … :truncated? bool :total N}."
         :agent/example "(primitives :kind :primitive/behaviour)"}
   primitives
-  [& {:keys [limit] :or {limit default-limit} :as opts}]
+  [& {:keys [limit offset] :or {limit default-limit offset 0} :as opts}]
   (let [m       (ensure-model)
         filters (dissoc opts :limit :offset)
         rows    (->> (vals (:primitives m))
                      (filter #(apply-filters % filters))
                      (map summary))]
-    (envelope rows limit)))
+    (envelope rows limit offset)))
 
 (defn ^{:agent/layer :L1
         :agent/doc "Return the full primitive map for an id, or nil if absent."
@@ -80,8 +83,8 @@
       (throw (ex-info (str "unknown relation filter: " (first unknown))
                       {:type :unknown-filter :filter (first unknown)}))))
   (and (or (nil? kind) (= kind (:kind edge)))
-       (or (nil? from) (= from (-> edge :from :endpoint/primitive)))
-       (or (nil? to)   (= to   (-> edge :to   :endpoint/primitive)))
+       (or (nil? from) (= from (-> edge :from :id)))
+       (or (nil? to)   (= to   (-> edge :to   :id)))
        (or (nil? validity) (= validity (:validity edge)))
        (or (nil? projection-kind) (= projection-kind (:projection-kind edge)))))
 
@@ -91,12 +94,12 @@
                     Each row is a full edge map (edges are compact)."
         :agent/example "(relations :kind :projects :validity :absent)"}
   relations
-  [& {:keys [limit] :or {limit default-limit} :as opts}]
+  [& {:keys [limit offset] :or {limit default-limit offset 0} :as opts}]
   (let [m       (ensure-model)
         filters (dissoc opts :limit :offset)
         rows    (->> (:edges m)
                      (filter #(relation-matches? % filters)))]
-    (envelope rows limit)))
+    (envelope rows limit offset)))
 
 (defn ^{:agent/layer :L1
         :agent/doc "Surface the primitive-kinds and relation-kinds present in the
@@ -123,14 +126,52 @@
         ids     (into #{} (map :id) matched)
         rels    (into #{}
                       (keep (fn [e]
-                              (when (or (ids (-> e :from :endpoint/primitive))
-                                        (ids (-> e :to :endpoint/primitive)))
+                              (when (or (ids (-> e :from :id))
+                                        (ids (-> e :to :id)))
                                 (:kind e))))
                       (:edges m))]
     {:kind kind
      :attributes (sort attrs)
      :relations  (sort rels)
      :count      (count matched)}))
+
+(def ^:private known-artifact-filters
+  #{:sub-case :language :public?})
+
+(defn- artifact-summary [a]
+  (let [sub (:sub a)]
+    {:id            (str "artifact:" (vec [(get sub :case)
+                                            (:language a)
+                                            (:qualified-name sub)]))
+     :case          (:case a)
+     :sub-case      (:case sub)
+     :language      (:language a)
+     :qualified-name (:qualified-name sub)
+     :public?       (:public? sub)
+     :source-location (:source-location sub)}))
+
+(defn- artifact-matches? [a {:keys [sub-case language public?] :as filters}]
+  (let [unknown (seq (remove known-artifact-filters (keys filters)))]
+    (when unknown
+      (throw (ex-info (str "unknown artifact filter: " (first unknown))
+                      {:type :unknown-filter :filter (first unknown)}))))
+  (and (or (nil? sub-case) (= sub-case (-> a :sub :case)))
+       (or (nil? language) (= language (:language a)))
+       (or (nil? public?)  (= public?  (-> a :sub :public?)))))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "List artifact summaries. Filters: :sub-case (:code/function or
+                    :code/data-structure), :language, :public?. Returns the
+                    standard envelope {:rows … :truncated? bool :total N}."
+        :agent/example "(artifacts :sub-case :code/function :public? true)"}
+  artifacts
+  [& {:keys [limit offset] :or {limit default-limit offset 0} :as opts}]
+  (let [m       (ensure-model)
+        filters (dissoc opts :limit :offset)
+        rows    (->> (vals (:artifacts m))
+                     (filter #(artifact-matches? % filters))
+                     (map artifact-summary))]
+    (envelope rows limit offset)))
 
 (defn ^{:agent/layer :L1
         :agent/doc "Project-layer idiom entries. Returns a vector of entry maps."
@@ -177,10 +218,10 @@
   drift
   [& {:keys [projection-kind]}]
   (let [rows (if projection-kind
-               (:rows (relations :kind :projects :validity :absent :projection-kind projection-kind))
-               (:rows (relations :kind :projects :validity :absent)))]
+               (:rows (relations :kind :relation/projects :validity :absent :projection-kind projection-kind))
+               (:rows (relations :kind :relation/projects :validity :absent)))]
     (mapv (fn [e]
-            (assoc e :primitive (get-primitive (-> e :from :endpoint/primitive))))
+            (assoc e :primitive (get-primitive (-> e :from :id))))
           rows)))
 
 (defn ^{:agent/layer :L2
@@ -195,8 +236,8 @@
     (let [out (:rows (relations :from id))
           in  (:rows (relations :to id))
           neighbor-ids (->> (concat out in)
-                            (mapcat (juxt #(-> % :from :endpoint/primitive)
-                                          #(-> % :to   :endpoint/primitive)))
+                            (mapcat (juxt #(-> % :from :id)
+                                          #(-> % :to   :id)))
                             (remove #{id nil})
                             distinct)
           neighbors (mapv #(let [np (get-primitive %)]
@@ -206,3 +247,40 @@
        :outgoing  out
        :incoming  in
        :neighbors neighbors})))
+
+(defn ^{:agent/layer :L2
+        :agent/origin :built-in
+        :agent/doc "Spec→code coverage for public Clojure functions.
+                    Returns a map with counts and percentages. Public functions
+                    only — spec is not expected to cover private helpers or
+                    data structures. A function is 'covered' when at least one
+                    inbound :projects edge has :validity :valid; 'expected' when
+                    edges exist but all are :absent/:stale; 'unprojected' when
+                    no spec primitive references it."
+        :agent/example "(coverage)"}
+  coverage
+  []
+  (let [m            (ensure-model)
+        publics      (->> (vals (:artifacts m))
+                          (filter #(and (= :code/function (-> % :sub :case))
+                                        (true? (-> % :sub :public?)))))
+        edges        (filter #(= :relation/projects (:kind %)) (:edges m))
+        valid-tos    (set (keep #(when (= :valid   (:validity %)) (-> % :to :id)) edges))
+        absent-tos   (set (keep #(when (= :absent  (:validity %)) (-> % :to :id)) edges))
+        any-edge-tos (set (keep #(-> % :to :id) edges))
+        artifact-id  (fn [a]
+                       [(-> a :sub :case) (:language a) (-> a :sub :qualified-name)])
+        covered      (filter #(contains? valid-tos    (artifact-id %)) publics)
+        expected     (filter #(and (contains? any-edge-tos (artifact-id %))
+                                   (not (contains? valid-tos (artifact-id %))))
+                             publics)
+        unprojected  (remove #(contains? any-edge-tos (artifact-id %)) publics)
+        total        (count publics)
+        ratio        (fn [n] (if (zero? total) 0.0 (/ (double n) total)))]
+    {:total-public-functions total
+     :covered                (count covered)
+     :expected-not-realised  (count expected)
+     :unprojected            (count unprojected)
+     :covered-ratio          (ratio (count covered))
+     :unprojected-ratio      (ratio (count unprojected))
+     :absent-edge-count      (count absent-tos)}))

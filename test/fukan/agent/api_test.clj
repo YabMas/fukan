@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.set :as set]
             [fukan.agent.api :as api]
             [fukan.infra.model :as infra-model]))
 
@@ -39,7 +40,24 @@
     (let [r (api/primitives :limit 2)]
       (is (= 2 (count (:rows r))))
       (is (true? (:truncated? r)))
-      (is (= 4 (:total r))))))
+      (is (= 4 (:total r)))
+      (is (zero? (:offset r))))))
+
+(deftest primitives-offset-pagination
+  (testing "successive pages via :limit + :offset cover the full set without overlap"
+    (let [page1 (api/primitives :limit 2 :offset 0)
+          page2 (api/primitives :limit 2 :offset 2)
+          page3 (api/primitives :limit 2 :offset 4)
+          ids-1 (set (map :id (:rows page1)))
+          ids-2 (set (map :id (:rows page2)))]
+      (is (= 2 (count (:rows page1))))
+      (is (= 2 (count (:rows page2))))
+      (is (empty? (:rows page3)))
+      (is (true?  (:truncated? page1)))
+      (is (false? (:truncated? page2)))
+      (is (= 2 (:offset page2)))
+      (is (empty? (set/intersection ids-1 ids-2))
+          "offset shifts to the next slice — no overlap with previous page"))))
 
 (deftest get-primitive-returns-full-detail
   (testing "get-primitive returns the full primitive map, not the summary"
@@ -59,30 +77,30 @@
       (is (= 5 (:total r))))))
 
 (deftest relations-by-kind
-  (testing "(relations :kind :projects) filters to projects edges"
-    (let [r (api/relations :kind :projects)]
+  (testing "(relations :kind :relation/projects) filters to projects edges"
+    (let [r (api/relations :kind :relation/projects)]
       (is (= 2 (count (:rows r)))))))
 
 (deftest relations-by-validity
-  (testing "(relations :kind :projects :validity :absent) finds drift candidates"
-    (let [r (api/relations :kind :projects :validity :absent)]
+  (testing "(relations :kind :relation/projects :validity :absent) finds drift candidates"
+    (let [r (api/relations :kind :relation/projects :validity :absent)]
       (is (= 1 (count (:rows r))))
       (is (= "behaviour:hex/core/r-mint"
-             (-> r :rows first :from :endpoint/primitive))))))
+             (-> r :rows first :from :id))))))
 
 (deftest relations-by-from
   (testing "(relations :from id) filters edges originating at id"
     (let [r (api/relations :from "container:hex/core")]
       (is (every? #(= "container:hex/core"
-                      (-> % :from :endpoint/primitive)) (:rows r))))))
+                      (-> % :from :id)) (:rows r))))))
 
 (deftest vocabulary-returns-kinds-in-use
   (testing "vocabulary surfaces primitive-kinds and relation-kinds present in the loaded Model"
     (let [v (api/vocabulary)]
       (is (contains? (set (:primitive-kinds v)) :primitive/behaviour))
       (is (contains? (set (:primitive-kinds v)) :primitive/container))
-      (is (contains? (set (:relation-kinds v)) :projects))
-      (is (contains? (set (:relation-kinds v)) :owns)))))
+      (is (contains? (set (:relation-kinds v)) :relation/projects))
+      (is (contains? (set (:relation-kinds v)) :relation/owns)))))
 
 (deftest schema-for-kind
   (testing "(schema :kind :primitive/behaviour) surfaces attribute keys observed in fixture"
@@ -106,15 +124,15 @@
   (testing "(drift) returns absent projections with their source primitive"
     (let [d (api/drift)]
       (is (= 1 (count d)))
-      (is (= "behaviour:hex/core/r-mint" (-> d first :from :endpoint/primitive)))
+      (is (= "behaviour:hex/core/r-mint" (-> d first :from :id)))
       (is (= :primitive/behaviour (-> d first :primitive :kind))))))
 
 (deftest drift-equivalent-to-l1-form
   (testing "drift result set matches the L1 composition it documents"
-    (let [drift-l2 (set (map (juxt :validity #(-> % :from :endpoint/primitive))
+    (let [drift-l2 (set (map (juxt :validity #(-> % :from :id))
                              (api/drift)))
-          drift-l1 (set (map (juxt :validity #(-> % :from :endpoint/primitive))
-                             (:rows (api/relations :kind :projects :validity :absent))))]
+          drift-l1 (set (map (juxt :validity #(-> % :from :id))
+                             (:rows (api/relations :kind :relation/projects :validity :absent))))]
       (is (= drift-l1 drift-l2)))))
 
 (deftest drift-filter-by-projection-kind
@@ -128,6 +146,34 @@
       (is (= 3 (count (:outgoing n))))
       (is (= 0 (count (:incoming n))))
       (is (= 3 (count (:neighbors n)))))))
+
+(deftest artifacts-listing
+  (testing "(artifacts) returns the standard envelope"
+    (let [r (api/artifacts)]
+      (is (= 3 (count (:rows r))))
+      (is (= 3 (:total r))))))
+
+(deftest artifacts-by-public
+  (testing "(artifacts :public? true) filters to public functions only"
+    (let [r (api/artifacts :public? true)]
+      (is (= 2 (count (:rows r))))
+      (is (every? :public? (:rows r))))))
+
+(deftest artifacts-by-sub-case
+  (testing "(artifacts :sub-case :code/function) filters by sub-case"
+    (let [r (api/artifacts :sub-case :code/function)]
+      (is (= 3 (count (:rows r)))))))
+
+(deftest coverage-computes-public-fn-coverage
+  (testing "(coverage) counts public functions covered by spec via :valid edges"
+    (let [c (api/coverage)]
+      ;; fixture: 2 public fns (burn covered, mint-helper unprojected), 1 private
+      (is (= 2 (:total-public-functions c)))
+      (is (= 1 (:covered c)))
+      (is (= 1 (:unprojected c)))
+      (is (= 0 (:expected-not-realised c)))
+      (is (= 0.5 (:covered-ratio c)))
+      (is (= 0.5 (:unprojected-ratio c))))))
 
 (deftest neighborhood-missing-returns-nil
   (is (nil? (api/neighborhood "behaviour:does-not-exist"))))
