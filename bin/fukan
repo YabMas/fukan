@@ -42,8 +42,13 @@
       (when-not (:ok? parsed) (System/exit 2)))))
 
 (defn cmd-primer [_args]
-  ;; Implemented in Task 24
-  (die "primer not yet implemented"))
+  (let [;; Prefer FUKAN_HOME if set, else assume running from fukan repo root.
+        primer-path (or (some-> (System/getenv "FUKAN_HOME")
+                                (str "/AGENTS.md"))
+                        "AGENTS.md")]
+    (if (.exists (java.io.File. primer-path))
+      (print (slurp primer-path))
+      (die "primer not found; set FUKAN_HOME or run from the Fukan repo root"))))
 
 (defn cmd-init [_args]
   ;; Implemented in Task 25
