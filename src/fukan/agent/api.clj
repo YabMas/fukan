@@ -131,3 +131,36 @@
      :attributes (sort attrs)
      :relations  (sort rels)
      :count      (count matched)}))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "Project-layer idiom entries. Returns a vector of entry maps."
+        :agent/example "(idioms)"}
+  idioms
+  [& _opts]
+  (or (when-let [m (infra-model/get-model)]
+        (vec (or (:idioms m) (-> m :project-layer :idioms))))
+      []))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "Project-layer constraint definitions. Returns a vector."
+        :agent/example "(constraints)"}
+  constraints
+  [& _opts]
+  (or (when-let [m (infra-model/get-model)]
+        (vec (or (:constraints m) (-> m :project-layer :constraints))))
+      []))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "Current constraint violations. Filters: :severity."
+        :agent/example "(violations :severity :error)"}
+  violations
+  [& {:keys [severity] :as opts}]
+  (let [unknown (seq (remove #{:severity} (keys opts)))]
+    (when unknown
+      (throw (ex-info (str "unknown violation filter: " (first unknown))
+                      {:type :unknown-filter :filter (first unknown)}))))
+  (let [m (infra-model/get-model)
+        all (vec (or (:violations m) []))]
+    (if severity
+      (filterv #(= severity (:severity %)) all)
+      all)))

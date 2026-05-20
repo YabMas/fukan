@@ -89,3 +89,15 @@
     (let [s (api/schema :kind :primitive/behaviour)]
       (is (contains? (set (:attributes s)) :rules))
       (is (contains? (set (:attributes s)) :label)))))
+
+(deftest idioms-empty-on-fixture
+  (testing "idioms returns empty vec when project layer has no entries"
+    (is (vector? (api/idioms)))))
+
+(deftest constraints-empty-on-fixture
+  (testing "constraints returns empty vec on fixture (no constraint defs)"
+    (is (vector? (api/constraints)))))
+
+(deftest violations-empty-on-fixture
+  (testing "violations returns empty vec on fixture"
+    (is (vector? (api/violations)))))
