@@ -51,3 +51,27 @@
 (deftest get-primitive-missing-returns-nil
   (testing "missing id returns nil"
     (is (nil? (api/get-primitive "behaviour:does-not-exist")))))
+
+(deftest relations-all
+  (testing "(relations) returns all edges in the model"
+    (let [r (api/relations)]
+      (is (= 5 (count (:rows r))))
+      (is (= 5 (:total r))))))
+
+(deftest relations-by-kind
+  (testing "(relations :kind :projects) filters to projects edges"
+    (let [r (api/relations :kind :projects)]
+      (is (= 2 (count (:rows r)))))))
+
+(deftest relations-by-validity
+  (testing "(relations :kind :projects :validity :absent) finds drift candidates"
+    (let [r (api/relations :kind :projects :validity :absent)]
+      (is (= 1 (count (:rows r))))
+      (is (= "behaviour:hex/core/r-mint"
+             (-> r :rows first :from :endpoint/primitive))))))
+
+(deftest relations-by-from
+  (testing "(relations :from id) filters edges originating at id"
+    (let [r (api/relations :from "container:hex/core")]
+      (is (every? #(= "container:hex/core"
+                      (-> % :from :endpoint/primitive)) (:rows r))))))

@@ -70,3 +70,30 @@
   [id]
   (when-let [m (infra-model/get-model)]
     (get-in m [:primitives id])))
+
+(def ^:private known-relation-filters
+  #{:kind :from :to :validity :projection-kind})
+
+(defn- relation-matches? [edge {:keys [kind from to validity projection-kind] :as filters}]
+  (let [unknown (seq (remove known-relation-filters (keys filters)))]
+    (when unknown
+      (throw (ex-info (str "unknown relation filter: " (first unknown))
+                      {:type :unknown-filter :filter (first unknown)}))))
+  (and (or (nil? kind) (= kind (:kind edge)))
+       (or (nil? from) (= from (-> edge :from :endpoint/primitive)))
+       (or (nil? to)   (= to   (-> edge :to   :endpoint/primitive)))
+       (or (nil? validity) (= validity (:validity edge)))
+       (or (nil? projection-kind) (= projection-kind (:projection-kind edge)))))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "List Model relations (edges). Filters: :kind :from :to :validity
+                    :projection-kind. Returns {:rows … :truncated? bool :total N}.
+                    Each row is a full edge map (edges are compact)."
+        :agent/example "(relations :kind :projects :validity :absent)"}
+  relations
+  [& {:keys [limit] :or {limit default-limit} :as opts}]
+  (let [m       (ensure-model)
+        filters (dissoc opts :limit :offset)
+        rows    (->> (:edges m)
+                     (filter #(relation-matches? % filters)))]
+    (envelope rows limit)))
