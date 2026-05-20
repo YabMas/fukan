@@ -28,3 +28,31 @@
     (let [s (system/status)]
       (is (false? (:model-loaded? s)))
       (is (zero? (:primitive-count s))))))
+
+(deftest help-lists-surface
+  (testing "(help) groups fns by namespace and layer"
+    (let [h (system/help)]
+      (is (contains? h 'fukan.agent.api))
+      (is (contains? h 'fukan.agent.system))
+      (let [api (get h 'fukan.agent.api)]
+        (is (contains? api :L0))
+        (is (contains? api :L1))
+        (is (contains? api :L2))
+        (is (some #(= 'primitives (:name %)) (:L1 api)))
+        (is (some #(= 'q (:name %)) (:L0 api)))
+        (is (some #(= 'drift (:name %)) (:L2 api)))))))
+
+(deftest help-for-single-fn
+  (testing "(help 'primitives) returns docstring + signatures + examples"
+    (let [h (system/help 'primitives)]
+      (is (= 'primitives (:name h)))
+      (is (= :L1 (:layer h)))
+      (is (string? (:doc h)))
+      (is (string? (:example h))))))
+
+(deftest source-returns-implementation
+  (testing "(source 'drift) returns the L2 implementation as a string"
+    (let [s (system/source 'drift)]
+      (is (= 'drift (:name s)))
+      (is (string? (:source s)))
+      (is (re-find #"defn drift" (:source s))))))

@@ -1,7 +1,9 @@
 (ns fukan.agent.system
   "Operating Fukan: status, refresh, help, source. Flat namespace.
    Sandbox surface alongside fukan.agent.api."
-  (:require [fukan.infra.model :as infra-model]))
+  (:require [fukan.infra.model :as infra-model]
+            [clojure.repl :as repl]
+            [clojure.string :as str]))
 
 (defn ^{:agent/doc "Snapshot of the daemon and loaded Model."
         :agent/example "(status)"}
@@ -21,3 +23,69 @@
   []
   (infra-model/refresh-model)
   (status))
+
+(def ^:private surface-namespaces ['fukan.agent.api 'fukan.agent.system])
+
+(defn- collect-var-meta [ns-sym]
+  (require ns-sym)
+  (->> (ns-publics ns-sym)
+       vals
+       (map (fn [v]
+              (let [m (meta v)]
+                {:name      (:name m)
+                 :layer     (:agent/layer m)
+                 :doc       (or (:agent/doc m) (:doc m) "")
+                 :example   (or (:agent/example m) "")
+                 :origin    (:agent/origin m)
+                 :var       v})))))
+
+(defn ^{:agent/doc "List the surface. Without args: nested map grouped by namespace
+                    and (for fukan.agent.api) by layer. With a symbol: docstring +
+                    signatures + example for that single fn."
+        :agent/example "(help) (help 'primitives)"}
+  help
+  ([]
+   (let [api-meta (collect-var-meta 'fukan.agent.api)
+         sys-meta (collect-var-meta 'fukan.agent.system)]
+     {'fukan.agent.api
+      (reduce (fn [acc {:keys [layer] :as m}]
+                (let [k (or layer :other)]
+                  (update acc k (fnil conj []) (dissoc m :var))))
+              {:L0 [] :L1 [] :L2 []}
+              api-meta)
+      'fukan.agent.system
+      (mapv #(dissoc % :var) sys-meta)}))
+  ([fn-sym]
+   (some (fn [ns-sym]
+           (require ns-sym)
+           (when-let [v (ns-resolve (find-ns ns-sym) fn-sym)]
+             (let [m (meta v)]
+               {:name      (:name m)
+                :ns        ns-sym
+                :layer     (:agent/layer m)
+                :doc       (or (:agent/doc m) (:doc m) "")
+                :example   (or (:agent/example m) "")
+                :arglists  (str (:arglists m))})))
+         surface-namespaces)))
+
+(defn- normalize-source
+  "Strip top-level metadata map from a defn source string so that
+   `(defn ^{...}\\n  name` becomes `(defn name` — more useful as a template."
+  [src]
+  (str/replace src #"\(defn \^[\s\S]*?\}\s*\n\s+" "(defn "))
+
+(defn ^{:agent/doc "Return the source text of an L1/L2 fn so the agent can read
+                    built-in views as templates."
+        :agent/example "(source 'drift)"}
+  source
+  [fn-sym]
+  (some (fn [ns-sym]
+          (require ns-sym)
+          (when-let [_v (ns-resolve (find-ns ns-sym) fn-sym)]
+            (let [fqsym (symbol (str ns-sym) (str fn-sym))
+                  src   (try (clojure.repl/source-fn fqsym)
+                             (catch Exception _ nil))]
+              {:name fn-sym
+               :ns   ns-sym
+               :source (if src (normalize-source src) "<source unavailable>")})))
+        surface-namespaces))
