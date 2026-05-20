@@ -120,3 +120,14 @@
 (deftest drift-filter-by-projection-kind
   (testing "(drift :projection-kind :clojure) returns only clojure-target drift"
     (is (= 1 (count (api/drift :projection-kind :clojure))))))
+
+(deftest neighborhood-returns-primitive-and-one-hop
+  (testing "(neighborhood id) returns primitive + outgoing + incoming + neighbor summaries"
+    (let [n (api/neighborhood "container:hex/core")]
+      (is (= "container:hex/core" (-> n :primitive :id)))
+      (is (= 3 (count (:outgoing n))))
+      (is (= 0 (count (:incoming n))))
+      (is (= 3 (count (:neighbors n)))))))
+
+(deftest neighborhood-missing-returns-nil
+  (is (nil? (api/neighborhood "behaviour:does-not-exist"))))

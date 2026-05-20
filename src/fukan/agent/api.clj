@@ -182,3 +182,27 @@
     (mapv (fn [e]
             (assoc e :primitive (get-primitive (-> e :from :endpoint/primitive))))
           rows)))
+
+(defn ^{:agent/layer :L2
+        :agent/origin :built-in
+        :agent/doc "Primitive + its one-hop outgoing and incoming edges + summaries
+                    of the directly-connected neighbors. Multi-hop is the caller's
+                    job at L0."
+        :agent/example "(neighborhood \"container:hex/core\")"}
+  neighborhood
+  [id]
+  (when-let [p (get-primitive id)]
+    (let [out (:rows (relations :from id))
+          in  (:rows (relations :to id))
+          neighbor-ids (->> (concat out in)
+                            (mapcat (juxt #(-> % :from :endpoint/primitive)
+                                          #(-> % :to   :endpoint/primitive)))
+                            (remove #{id nil})
+                            distinct)
+          neighbors (mapv #(let [np (get-primitive %)]
+                             (select-keys np [:id :kind :label]))
+                          neighbor-ids)]
+      {:primitive p
+       :outgoing  out
+       :incoming  in
+       :neighbors neighbors})))
