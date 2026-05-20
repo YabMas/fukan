@@ -2,6 +2,7 @@
   "Operating Fukan: status, refresh, help, source. Flat namespace.
    Sandbox surface alongside fukan.agent.api."
   (:require [fukan.infra.model :as infra-model]
+            [fukan.agent.views-loader :as views-loader]
             [clojure.repl :as repl]
             [clojure.string :as str]))
 
@@ -15,13 +16,15 @@
      :primitive-count (if m (count (:primitives m)) 0)
      :relation-count  (if m (count (:edges m)) 0)
      :artifact-count  (if m (count (:artifacts m)) 0)
-     :violation-count (if m (count (or (:violations m) [])) 0)}))
+     :violation-count (if m (count (or (:violations m) [])) 0)
+     :views           (views-loader/last-report)}))
 
 (defn ^{:agent/doc "Rebuild the loaded Model. Blocks; returns the new status."
         :agent/example "(refresh)"}
   refresh
   []
   (infra-model/refresh-model)
+  (views-loader/auto-load! (infra-model/get-src))
   (status))
 
 (def ^:private surface-namespaces ['fukan.agent.api 'fukan.agent.system])

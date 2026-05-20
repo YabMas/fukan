@@ -6,19 +6,21 @@
    into a load report. The agent sees successful defs as if they were
    built-in L2 views."
   (:refer-clojure :exclude [reset!])
-  (:require [fukan.agent.sci :as agent-sci]))
+  (:require [clojure.java.io :as io]))
 
 (defonce ^:private load-report (atom {:loaded [] :errors []}))
 
 (defn reset! []
   (clojure.core/reset! load-report {:loaded [] :errors []})
-  (agent-sci/reset-ctx!))
+  (let [agent-sci (requiring-resolve 'fukan.agent.sci/reset-ctx!)]
+    (agent-sci)))
 
 (defn last-report [] @load-report)
 
 (defn load-file! [path]
   (reset!)
-  (let [parsed (try
+  (let [eval-fn (requiring-resolve 'fukan.agent.sci/eval-string-as-view)
+        parsed (try
                  {:ok (read-string (str "[" (slurp path) "]"))}
                  (catch Exception e
                    {:err {:error/kind :syntax
@@ -29,10 +31,20 @@
           @load-report)
       (do
         (doseq [form (:ok parsed)]
-          (let [r (agent-sci/eval-string-as-view (pr-str form))]
+          (let [r (eval-fn (pr-str form))]
             (if (:ok? r)
               (when-let [sym (and (seq? form) (= 'defn (first form)) (second form))]
                 (swap! load-report update :loaded conj sym))
               (swap! load-report update :errors conj
                      (merge r {:error/form form})))))
         @load-report))))
+
+(defn discover [target-src]
+  (when target-src
+    (let [candidate (io/file target-src ".fukan" "agent-views.clj")]
+      (when (.exists candidate) (.getCanonicalPath candidate)))))
+
+(defn auto-load! [target-src]
+  (if-let [path (discover target-src)]
+    (load-file! path)
+    (do (reset!) @load-report)))

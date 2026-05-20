@@ -3,6 +3,7 @@
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [fukan.agent.system :as system]
+            [fukan.agent.views-loader :as views-loader]
             [fukan.infra.model :as infra-model]))
 
 (defn load-fixture []
@@ -10,6 +11,7 @@
 
 (defn with-fixture-model [f]
   (infra-model/set-model-for-test! (load-fixture))
+  (views-loader/reset!)
   (f))
 
 (use-fixtures :each with-fixture-model)
@@ -56,3 +58,9 @@
       (is (= 'drift (:name s)))
       (is (string? (:source s)))
       (is (re-find #"defn drift" (:source s))))))
+
+(deftest status-includes-views-report
+  (let [s (system/status)]
+    (is (contains? s :views))
+    (is (contains? (:views s) :loaded))
+    (is (contains? (:views s) :errors))))
