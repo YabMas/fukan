@@ -97,3 +97,37 @@
         rows    (->> (:edges m)
                      (filter #(relation-matches? % filters)))]
     (envelope rows limit)))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "Surface the primitive-kinds and relation-kinds present in the
+                    loaded Model. Optional :altitude filter (post-MVP)."
+        :agent/example "(vocabulary)"}
+  vocabulary
+  [& _opts]
+  (let [m  (ensure-model)
+        pk (into [] (distinct (map :kind (vals (:primitives m)))))
+        rk (into [] (distinct (map :kind (:edges m))))]
+    {:primitive-kinds (sort pk)
+     :relation-kinds  (sort rk)}))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "Surface the attribute keys observed on primitives of a given :kind,
+                    plus the relation kinds they participate in. Empirical — read from
+                    the loaded Model, not the static schema."
+        :agent/example "(schema :kind :primitive/behaviour)"}
+  schema
+  [& {:keys [kind]}]
+  (let [m       (ensure-model)
+        matched (filter #(= kind (:kind %)) (vals (:primitives m)))
+        attrs   (into #{} (mapcat keys) matched)
+        ids     (into #{} (map :id) matched)
+        rels    (into #{}
+                      (keep (fn [e]
+                              (when (or (ids (-> e :from :endpoint/primitive))
+                                        (ids (-> e :to :endpoint/primitive)))
+                                (:kind e))))
+                      (:edges m))]
+    {:kind kind
+     :attributes (sort attrs)
+     :relations  (sort rels)
+     :count      (count matched)}))

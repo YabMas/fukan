@@ -75,3 +75,17 @@
     (let [r (api/relations :from "container:hex/core")]
       (is (every? #(= "container:hex/core"
                       (-> % :from :endpoint/primitive)) (:rows r))))))
+
+(deftest vocabulary-returns-kinds-in-use
+  (testing "vocabulary surfaces primitive-kinds and relation-kinds present in the loaded Model"
+    (let [v (api/vocabulary)]
+      (is (contains? (set (:primitive-kinds v)) :primitive/behaviour))
+      (is (contains? (set (:primitive-kinds v)) :primitive/container))
+      (is (contains? (set (:relation-kinds v)) :projects))
+      (is (contains? (set (:relation-kinds v)) :owns)))))
+
+(deftest schema-for-kind
+  (testing "(schema :kind :primitive/behaviour) surfaces attribute keys observed in fixture"
+    (let [s (api/schema :kind :primitive/behaviour)]
+      (is (contains? (set (:attributes s)) :rules))
+      (is (contains? (set (:attributes s)) :label)))))
