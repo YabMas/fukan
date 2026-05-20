@@ -164,3 +164,21 @@
     (if severity
       (filterv #(= severity (:severity %)) all)
       all)))
+
+;; -- L2 Views -----------------------------------------------------------------
+
+(defn ^{:agent/layer :L2
+        :agent/origin :built-in
+        :agent/doc "Absent projections, joined with their source primitive.
+                    Optional :projection-kind filter. Returns a vector (not a
+                    listing envelope) because L2 views are pre-shaped for the
+                    question they answer."
+        :agent/example "(drift) (drift :projection-kind :clojure)"}
+  drift
+  [& {:keys [projection-kind]}]
+  (let [rows (if projection-kind
+               (:rows (relations :kind :projects :validity :absent :projection-kind projection-kind))
+               (:rows (relations :kind :projects :validity :absent)))]
+    (mapv (fn [e]
+            (assoc e :primitive (get-primitive (-> e :from :endpoint/primitive))))
+          rows)))

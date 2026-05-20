@@ -101,3 +101,22 @@
 (deftest violations-empty-on-fixture
   (testing "violations returns empty vec on fixture"
     (is (vector? (api/violations)))))
+
+(deftest drift-finds-absent-projections
+  (testing "(drift) returns absent projections with their source primitive"
+    (let [d (api/drift)]
+      (is (= 1 (count d)))
+      (is (= "behaviour:hex/core/r-mint" (-> d first :from :endpoint/primitive)))
+      (is (= :primitive/behaviour (-> d first :primitive :kind))))))
+
+(deftest drift-equivalent-to-l1-form
+  (testing "drift result set matches the L1 composition it documents"
+    (let [drift-l2 (set (map (juxt :validity #(-> % :from :endpoint/primitive))
+                             (api/drift)))
+          drift-l1 (set (map (juxt :validity #(-> % :from :endpoint/primitive))
+                             (:rows (api/relations :kind :projects :validity :absent))))]
+      (is (= drift-l1 drift-l2)))))
+
+(deftest drift-filter-by-projection-kind
+  (testing "(drift :projection-kind :clojure) returns only clojure-target drift"
+    (is (= 1 (count (api/drift :projection-kind :clojure))))))
