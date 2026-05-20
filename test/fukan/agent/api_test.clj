@@ -40,3 +40,14 @@
       (is (= 2 (count (:rows r))))
       (is (true? (:truncated? r)))
       (is (= 4 (:total r))))))
+
+(deftest get-primitive-returns-full-detail
+  (testing "get-primitive returns the full primitive map, not the summary"
+    (let [p (api/get-primitive "behaviour:hex/core/r-mint")]
+      (is (= :primitive/behaviour (:kind p)))
+      (is (contains? p :rules))
+      (is (= "mint" (:label p))))))
+
+(deftest get-primitive-missing-returns-nil
+  (testing "missing id returns nil"
+    (is (nil? (api/get-primitive "behaviour:does-not-exist")))))

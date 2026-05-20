@@ -62,3 +62,11 @@
                      (filter #(apply-filters % filters))
                      (map summary))]
     (envelope rows limit)))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "Return the full primitive map for an id, or nil if absent."
+        :agent/example "(get-primitive \"behaviour:hex/core/r-mint\")"}
+  get-primitive
+  [id]
+  (when-let [m (infra-model/get-model)]
+    (get-in m [:primitives id])))
