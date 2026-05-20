@@ -25,3 +25,40 @@
   [form]
   (let [m (ensure-model)]
     (query/evaluate (query/parse form) (edb/model->edb m))))
+
+;; -- L1 Probes ----------------------------------------------------------------
+
+(def ^:private default-limit 1000)
+
+(defn- summary [p]
+  (select-keys p [:id :kind :label]))
+
+(defn- apply-filters [p filters]
+  (reduce-kv
+    (fn [keep? k v]
+      (and keep?
+           (case k
+             :kind  (= v (:kind p))
+             :label (= v (:label p))
+             (throw (ex-info (str "unknown primitive filter: " k)
+                             {:type :unknown-filter :filter k})))))
+    true filters))
+
+(defn- envelope [rows limit]
+  (let [total (count rows)]
+    {:rows (vec (take limit rows))
+     :truncated? (> total limit)
+     :total total}))
+
+(defn ^{:agent/layer :L1
+        :agent/doc "List Model primitive summaries. Optional filters: :kind :label.
+                    Returns {:rows … :truncated? bool :total N}."
+        :agent/example "(primitives :kind :primitive/behaviour)"}
+  primitives
+  [& {:keys [limit] :or {limit default-limit} :as opts}]
+  (let [m       (ensure-model)
+        filters (dissoc opts :limit :offset)
+        rows    (->> (vals (:primitives m))
+                     (filter #(apply-filters % filters))
+                     (map summary))]
+    (envelope rows limit)))
