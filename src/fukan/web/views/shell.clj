@@ -2,7 +2,7 @@
   "Plan 1 placeholder page. The full explorer is rewritten in Plan 6."
   (:require [hiccup2.core :as h]))
 
-(defn render-shell
+(defn render-app-shell
   "Render the placeholder page."
   [_request]
   (str

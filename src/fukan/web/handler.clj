@@ -52,7 +52,7 @@
       (let [primitive (get-in m [:primitives id])]
         {:status 200
          :headers {"Content-Type" "text/html"}
-         :body (views.sidebar/render-entity primitive)})
+         :body (views.sidebar/render-sidebar-html primitive)})
       (bad-request "missing id or model"))))
 
 (defn create-handler
@@ -62,7 +62,7 @@
       [["/"          {:get (fn [req]
                              {:status 200
                               :headers {"Content-Type" "text/html"}
-                              :body (views.shell/render-shell req)})}]
+                              :body (views.shell/render-app-shell req)})}]
        ["/graph"     {:get handle-graph}]
        ["/projector"   {:get  handle-projector}]
        ["/sidebar"     {:get  handle-sidebar}]

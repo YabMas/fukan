@@ -1,0 +1,49 @@
+-- allium: 2
+-- web/views/sidebar.allium
+--
+-- Scope: Sidebar rendering — entity / edge detail panel
+-- Includes: render_sidebar_html signature (in sidebar.boundary);
+--   sidebar layout / content invariants
+-- Excludes:
+--   - Graph rendering (see graph.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant SidebarSectionOrder {
+    -- Non-edge sidebar sections appear in this order:
+    --   1. Label — entity name + kind badge
+    --   2. Defined-in — clickable parent module link (schemas only)
+    --   3. Description — from doc, contract, or spec description
+    --   4. Guarantees — API-adjacent promises from the module's boundary,
+    --      each with name and leading-comment prose (when present)
+    --   5. Invariants — structural truths about the module, each with
+    --      name, leading-comment prose, and verbatim body (when present)
+    --   6. Defined Types — schemas owned by this module that appear
+    --      in its operation signatures (modules only)
+    --   7. Interface — dispatched by type:
+    --      - fn_list (modules): Operations with clickable schema refs
+    --      - fn_inline (functions): Inputs, Outputs
+    --      - schema_def (schemas): schema detail view with registry
+    --      - name_list (interfaces): plain function name list
+}
+
+invariant ClickableSchemaRefs {
+    -- Schema type references in function signatures and schema
+    -- definitions are clickable. Clicking navigates to the schema's
+    -- node via full app navigation (graph + breadcrumb + sidebar).
+}
+
+invariant EdgeRendererSections {
+    -- Edge detail renders by edge_type:
+    --   code_flow: label, then conditionally:
+    --     "Functions Called" section when called_fns present,
+    --     "Dispatched Functions" section when dispatched_fns present.
+    --     A single edge may have both sections.
+    --   schema_reference: label + "Schema References" list.
+}
+
+invariant SidebarEmptyState {
+    -- When no entity is selected, the sidebar shows placeholder text.
+}

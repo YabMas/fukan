@@ -1,0 +1,6 @@
+-- boundary: 1
+
+-- Sidebar rendering — entity or edge detail panel.
+
+fn render_sidebar_html(detail: EntityDetails) -> Html
+  -- Render entity or edge details as sidebar HTML.

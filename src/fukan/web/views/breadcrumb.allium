@@ -1,0 +1,26 @@
+-- allium: 2
+-- web/views/breadcrumb.allium
+--
+-- Scope: Breadcrumb rendering — navigation trail from smart-root
+--   to the current view
+-- Includes: render_breadcrumb signature (in breadcrumb.boundary);
+--   breadcrumb display invariants
+-- Excludes:
+--   - Other view rendering (see shell.allium, graph.allium,
+--     sidebar.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant BreadcrumbShortLabels {
+    -- Namespace names show only the last dotted segment.
+}
+
+invariant BreadcrumbCurrentItem {
+    -- The last breadcrumb item is non-clickable and styled as current.
+}
+
+invariant BreadcrumbClickableItems {
+    -- All non-last breadcrumb items dispatch navigation events.
+}

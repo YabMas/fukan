@@ -1,0 +1,10 @@
+-- allium: 2
+-- web/views/shell.allium
+--
+-- Scope: HTML shell rendering — the initial page skeleton
+-- Includes: render_app_shell signature (in shell.boundary)
+-- Excludes:
+--   - Graph rendering (see graph.allium)
+--   - Sidebar rendering (see sidebar.allium)
+--   - Breadcrumb rendering (see breadcrumb.allium)
+--   - Cytoscape value types (see cytoscape.allium)

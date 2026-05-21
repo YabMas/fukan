@@ -1,0 +1,45 @@
+-- allium: 2
+-- web/views/cytoscape.allium
+--
+-- Scope: Cytoscape.js output value types — the wire shape
+--   the frontend graph library consumes
+-- Includes: CytoscapeGraph, CytoscapeNode, CytoscapeEdge value types
+-- Excludes:
+--   - Graph rendering (see graph.allium)
+--
+-- No boundary file: module is open by default. All three value types
+-- are externally visible (CytoscapeGraph is the render_graph return
+-- type; CytoscapeNode and CytoscapeEdge are its constituents).
+
+value CytoscapeGraph {
+    -- Output payload for the Cytoscape.js frontend.
+    -- Domain data transformed to Cytoscape conventions:
+    --   from/to → source/target, kebab-case → camelCase.
+    nodes: List<CytoscapeNode>
+    edges: List<CytoscapeEdge>
+    selected_id: String?
+    highlighted_edges: List<String>
+}
+
+value CytoscapeNode {
+    id: String
+    kind: String           -- "module", "function", "schema"
+    label: String
+    parent: String?
+    selected: Boolean
+    expandable: Boolean
+    has_private_children: Boolean
+    is_expanded: Boolean
+    showing_private: Boolean
+    child_count: Integer
+    private: Boolean?
+    schema_key: String?    -- present for schema nodes
+}
+
+value CytoscapeEdge {
+    id: String
+    source: String
+    target: String
+    edge_type: String      -- "code-flow" or "schema-reference"
+    kind: String           -- "function-call", "dispatches", or "schema-reference"
+}

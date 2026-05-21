@@ -5,7 +5,6 @@
 -- and streams results to connected browser clients.
 
 use "../model/spec.allium" as model
-use "./views/spec.allium" as views
 
 fn create_handler() -> Handler
   -- Create the Ring handler that serves the Fukan application.

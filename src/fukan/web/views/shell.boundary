@@ -1,0 +1,6 @@
+-- boundary: 1
+
+-- HTML shell — renders the initial page skeleton.
+
+fn render_app_shell() -> Html
+  -- Render the initial HTML shell for the application.

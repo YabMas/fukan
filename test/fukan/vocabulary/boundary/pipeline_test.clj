@@ -41,7 +41,9 @@
         (is (pos? (count allium-tag-defs))
             "Allium tag-definitions still registered"))
       ;; Boundary::Function tags applied to fn-declared Operations:
-      ;; Corpus has 15 fn declarations (7 in infra, 1 in web, 3 in model/pipeline, 4 in web/views)
+      ;; Corpus has 15 fn declarations (7 in infra, 1 in web, 1 in web/views/shell,
+      ;; 1 in web/views/graph, 1 in web/views/sidebar, 1 in web/views/breadcrumb,
+      ;; 3 in model/pipeline)
       (let [fn-tags (filter (fn [ta]
                               (and (= "Boundary" (-> ta :tag :namespace))
                                    (= "Function" (-> ta :tag :name))))
@@ -49,10 +51,10 @@
         (is (= 15 (count fn-tags))
             "all 15 corpus fn declarations produce Boundary::Function tags"))
       ;; Boundary::ModuleApi tags on modules with exports:
-      ;; Corpus has 3 files with exports: (infra/server.boundary, model/pipeline.boundary, web/views/spec.boundary)
+      ;; Corpus has 3 files with exports: (infra/server.boundary, model/pipeline.boundary, web/views/graph.boundary)
       (let [api-tags (filter (fn [ta]
                                (and (= "Boundary" (-> ta :tag :namespace))
                                     (= "ModuleApi" (-> ta :tag :name))))
                              (:tag-apps model))]
         (is (= 3 (count api-tags))
-            "exactly 3 Boundary::ModuleApi tags (infra/server, model/pipeline, web/views)")))))
+            "exactly 3 Boundary::ModuleApi tags (infra/server, model/pipeline, web/views/graph)")))))

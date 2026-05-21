@@ -1,0 +1,12 @@
+-- boundary: 1
+
+-- Graph rendering — transforms projection data into CytoscapeGraph.
+
+use "./projection.allium" as projection
+
+fn render_graph(projection: Projection, editor_state: EditorState) -> CytoscapeGraph
+  -- Transform projection data into CytoscapeGraph output.
+
+exports:
+    ViewState
+    NavigationState

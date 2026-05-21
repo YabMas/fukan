@@ -1,0 +1,6 @@
+-- boundary: 1
+
+-- Breadcrumb rendering — navigation trail.
+
+fn render_breadcrumb(path: EntityPath) -> Html
+  -- Render the navigation breadcrumb trail.

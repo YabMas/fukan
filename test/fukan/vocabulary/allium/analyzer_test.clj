@@ -768,7 +768,7 @@
 (deftest module-with-rule-and-event-sharing-name
   (testing "rule and Event with identical local names coexist as distinct primitives"
     ;; K16a: Events use `<module>::events::<name>`, Rules use `<module>::<name>`.
-    ;; The pattern `rule X { when: X(...) ... }` mirrors web/views/spec.allium's
+    ;; The pattern `rule X { when: X(...) ... }` mirrors web/views/graph.allium's
     ;; `rule SelectNode { ... when: viewer.SelectNode(...) ... }` shape.
     (let [a (ast (str "value NodeId { id: String }\n"
                       "actor User { identified_by: U }\n"

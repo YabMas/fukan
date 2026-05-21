@@ -8,7 +8,7 @@
 -- authored.
 --
 -- Field/type names mirror the projection-shaped references in
--- web/views/spec.allium (e.g. `projection.nodes.find(...)`).
+-- web/views/graph.allium (e.g. `projection.nodes.find(...)`).
 
 entity Projection {
     nodes: List<Node>

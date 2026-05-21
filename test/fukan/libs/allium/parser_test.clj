@@ -432,7 +432,7 @@
 (deftest structural-assertions-test
   (testing "every declaration has :type"
     (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/web/views/spec.allium"]]
+               "src/fukan/web/views/graph.allium"]]
       (let [result (parser/parse-file f)]
         (is (not (insta/failure? result)) (str "parse failed for " f))
         (doseq [d (:declarations result)]
@@ -441,7 +441,7 @@
 
   (testing "every named declaration has :name"
     (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/web/views/spec.allium"]]
+               "src/fukan/web/views/graph.allium"]]
       (let [result (parser/parse-file f)]
         (doseq [d (:declarations result)
                 :when (not (#{:given :use} (:type d)))]
@@ -455,7 +455,7 @@
     (let [block-kinds #{:provides-block :exposes :contracts
                         :when-guard :related :facing :context :timeout :let}]
       (doseq [f ["src/fukan/model/spec.allium"
-                 "src/fukan/web/views/spec.allium"]]
+                 "src/fukan/web/views/graph.allium"]]
         (let [result (parser/parse-file f)]
           (doseq [d (:declarations result)
                   :when (:fields d)
@@ -478,7 +478,7 @@
 
   (testing "every type-ref has :kind"
     (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/web/views/spec.allium"]]
+               "src/fukan/web/views/graph.allium"]]
       (let [result (parser/parse-file f)
             type-refs (for [d (:declarations result)
                            :when (:fields d)
@@ -506,14 +506,15 @@
 
 
 (deftest views-allium-integration-test
-  (testing "views.allium parses completely"
-    (let [result (parser/parse-file "src/fukan/web/views/spec.allium")]
+  (testing "graph.allium parses completely"
+    (let [result (parser/parse-file "src/fukan/web/views/graph.allium")]
       (is (not (insta/failure? result)))
       (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 1 (:use types)))
+        ;; use ./projection.allium and use ./cytoscape.allium
+        (is (= 2 (:use types)))
         (is (= 1 (:given types)))
-        ;; ViewState, NavigationState, CytoscapeGraph, CytoscapeNode, CytoscapeEdge
-        (is (= 5 (:value types)))
+        ;; ViewState, NavigationState (Cytoscape types moved to cytoscape.allium)
+        (is (= 2 (:value types)))
         ;; SelectNode, NavigateToNode, NavigateToAncestor, ExpandToggle,
         ;; TogglePrivateVisibility, SelectEdgeMode, SelectEdge, Deselect
         (is (= 8 (:rule types)))
@@ -802,8 +803,8 @@
       (is (nil? (:body ann))))))
 
 (deftest annotation-corpus-prose-test
-  (testing "real corpus annotation in web/views/spec.allium captures prose"
-    (let [result (parser/parse-file "src/fukan/web/views/spec.allium")
+  (testing "real corpus annotation in web/views/graph.allium captures prose"
+    (let [result (parser/parse-file "src/fukan/web/views/graph.allium")
           ;; find any @guarantee annotation in any surface declaration
           all-annotations (for [d (:declarations result)
                                 :when (and (:fields d) (= :surface (:type d)))
@@ -826,7 +827,11 @@
   ["src/fukan/infra/model.allium"
    "src/fukan/infra/server.allium"
    "src/fukan/web/handler.allium"
-   "src/fukan/web/views/spec.allium"
+   "src/fukan/web/views/shell.allium"
+   "src/fukan/web/views/graph.allium"
+   "src/fukan/web/views/sidebar.allium"
+   "src/fukan/web/views/cytoscape.allium"
+   "src/fukan/web/views/breadcrumb.allium"
    "src/fukan/model/spec.allium"
    "src/fukan/model/pipeline.allium"])
 

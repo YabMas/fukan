@@ -10,7 +10,6 @@
 --   - Model construction and lifecycle (see model.allium)
 --   - Handler factory signature (see handler.boundary)
 
-use "./views/spec.allium" as views
 use "../model/spec.allium" as model
 use "../projection/spec.allium" as projection
 

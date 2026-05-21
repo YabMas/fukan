@@ -1,12 +1,12 @@
 (ns fukan.web.views.sidebar
   "Sidebar panel renderer for Plan 7 Explorer.
-   render-entity handles primitive and artifact panels.
+   render-sidebar-html handles primitive and artifact panels.
    Expanded rendering of related edges is added in Task 6.")
 
 ;; -----------------------------------------------------------------------------
 ;; Public API
 
-(defn render-entity
+(defn render-sidebar-html
   "MVP sidebar: render primitive id/label/intent OR artifact label/source-location.
    Accepts a raw model primitive or artifact map."
   [entity]
