@@ -5,8 +5,55 @@
    Plan 1 ships the data shapes and v0 inheritance semantics (V9): payload-
    schema extension ✅, tag-presence implication ✅, field-override ❌,
    multi-parent ❌. Concrete predicate-language semantics arrive in Plan 4;
-   renderer treatments arrive in Plan 6."
+   renderer treatments arrive in Plan 6.
+
+   This namespace also hosts the kernel-primitive descriptive surface
+   (`primitive-kind-docs`, `primitive-kind-face-roles`) consumed by the agent
+   `(vocabulary)` view. Substrate framing: a Container hosts four alternative
+   interface-style faces — `fields` (data), `boundary` (callable),
+   `behaviour` (reactive), `intent` (contract) — through which other
+   primitives interact with it."
   (:require [fukan.model.type :as t]))
+
+;; -- Primitive kind descriptive surface --------------------------------------
+;;
+;; The kernel substrate declares nine primitive kinds in
+;; `fukan.model.primitives/primitive-kinds`. The maps below carry their
+;; one-sentence substrate framing and their face-role grouping, surfaced
+;; through the agent's `(vocabulary)` view. Keep entries aligned with that
+;; set — every kernel kind has a doc and a face-role.
+
+(def primitive-kind-docs
+  "One-sentence substrate framing per kernel primitive kind. Each docstring
+   names what the kind IS in the substrate, in the language of Container's
+   four interface-style faces (data / callable / reactive / contract)."
+  {:primitive/container "A primitive that hosts the four interface-style faces — data (fields), callable (boundary), reactive (behaviour), contract (intent) — and aggregates child primitives."
+   :primitive/boundary  "The callable interface a Container presents — the wall of named Operations through which other primitives invoke it."
+   :primitive/behaviour "The reactive interface a Container presents — the aggregate of its Rules, defining what events it responds to and what state transitions it participates in."
+   :primitive/intent    "The contract interface a Container presents — the aggregate of its Clauses, defining what assertions must hold over its identity."
+   :primitive/operation "A typed callable on a Boundary — the unit of a Container's callable interface."
+   :primitive/rule      "A typed event-handler / state-transition declaration — the unit of a Container's reactive interface (its Behaviour)."
+   :primitive/clause    "A typed assertion — the unit of a Container's contract interface (its Intent)."
+   :primitive/event     "A peer primitive representing a discrete occurrence that Containers' Rules can trigger on, and that other primitives can emit."
+   :primitive/actor     "A peer primitive representing a thing-that-acts-on-Containers — invokes Boundaries, observes Behaviours, satisfies Intents."})
+
+(def primitive-kind-face-roles
+  "Face-role grouping over kernel primitive kinds. Four roles:
+     :face-host       — Container, hosts the interface-style faces;
+     :face-interface  — Boundary, Behaviour, Intent: the three first-class
+                        interface-styles a Container presents;
+     :face-component  — Operation, Rule, Clause: units that live inside a face;
+     :face-peer       — Event, Actor: peers that interact with faces but are
+                        not themselves faces."
+  {:primitive/container :face-host
+   :primitive/boundary  :face-interface
+   :primitive/behaviour :face-interface
+   :primitive/intent    :face-interface
+   :primitive/operation :face-component
+   :primitive/rule      :face-component
+   :primitive/clause    :face-component
+   :primitive/event     :face-peer
+   :primitive/actor     :face-peer})
 
 ;; -- TagDefinition ------------------------------------------------------------
 

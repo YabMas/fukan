@@ -4,7 +4,10 @@
    call (help) for the live catalog."
   (:require [fukan.agent.edb :as edb]
             [fukan.agent.query :as query]
-            [fukan.infra.model :as infra-model]))
+            [fukan.infra.model :as infra-model]
+            [fukan.model.primitives :as primitives]
+            [fukan.model.relations :as relations]
+            [fukan.model.vocabulary :as vocab]))
 
 ;; -- Helpers ------------------------------------------------------------------
 
@@ -101,17 +104,48 @@
                      (filter #(relation-matches? % filters)))]
     (envelope rows limit offset)))
 
+(def ^:private known-vocabulary-filters #{:face-role})
+
+(defn- primitive-kind-entry [kind in-use-pks]
+  {:kind      kind
+   :doc       (get vocab/primitive-kind-docs kind)
+   :face-role (get vocab/primitive-kind-face-roles kind)
+   :in-use?   (contains? in-use-pks kind)})
+
+(defn- relation-kind-entry [kind in-use-rks]
+  {:kind    kind
+   :in-use? (contains? in-use-rks kind)})
+
 (defn ^{:agent/layer :L1
-        :agent/doc "Surface the primitive-kinds and relation-kinds present in the
-                    loaded Model. Optional :altitude filter (post-MVP)."
-        :agent/example "(vocabulary)"}
+        :agent/doc "Surface the kernel-declared primitive-kinds (with one-sentence
+                    docs and :face-role tags) and relation-kinds. Includes every
+                    kind the kernel substrate declares, whether or not the loaded
+                    Model contains an instance — each entry carries :in-use? so
+                    callers can distinguish 'kernel surface' from 'observed in
+                    this model'. Optional filter: :face-role (one of :face-host,
+                    :face-interface, :face-component, :face-peer)."
+        :agent/example "(vocabulary) (vocabulary :face-role :face-interface)"}
   vocabulary
-  [& _opts]
-  (let [m  (ensure-model)
-        pk (into [] (distinct (map :kind (vals (:primitives m)))))
-        rk (into [] (distinct (map :kind (:edges m))))]
-    {:primitive-kinds (sort pk)
-     :relation-kinds  (sort rk)}))
+  [& {:as opts}]
+  (let [unknown (seq (remove known-vocabulary-filters (keys opts)))]
+    (when unknown
+      (throw (ex-info (str "unknown vocabulary filter: " (first unknown))
+                      {:type :unknown-filter :filter (first unknown)}))))
+  (let [m           (ensure-model)
+        in-use-pks  (into #{} (map :kind) (vals (:primitives m)))
+        in-use-rks  (into #{} (map :kind) (:edges m))
+        face-role   (:face-role opts)
+        pk-entries  (->> primitives/primitive-kinds
+                         (map #(primitive-kind-entry % in-use-pks))
+                         (filter #(or (nil? face-role) (= face-role (:face-role %))))
+                         (sort-by :kind)
+                         vec)
+        rk-entries  (->> relations/relation-kinds
+                         (map #(relation-kind-entry % in-use-rks))
+                         (sort-by :kind)
+                         vec)]
+    (cond-> {:primitive-kinds pk-entries}
+      (nil? face-role) (assoc :relation-kinds rk-entries))))
 
 (defn ^{:agent/layer :L1
         :agent/doc "Surface the attribute keys observed on primitives of a given :kind,

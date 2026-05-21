@@ -391,14 +391,32 @@ entity Clause {
 ------------------------------------------------------------
 
 entity Container {
-    -- Universal addressable structural unit. Three optional faces (data
-    -- via fields, behaviour, boundary), plus children for hierarchical
-    -- composition, plus events for declared event ownership, plus
-    -- container-level intent. No substrate booleans for identity/state —
-    -- these derive from realising graph structure plus vocabulary tags.
-    -- No parent slot — children-on-parent stores ownership once, no drift.
+    -- Universal addressable structural unit. Hosts FOUR ALTERNATIVE
+    -- INTERFACE-STYLE FACES through which other primitives interact with
+    -- it:
+    --   fields    -> data interface     (a value to read)
+    --   boundary  -> callable interface (Operations to invoke)
+    --   behaviour -> reactive interface (Events to react to, state
+    --                                    transitions to participate in)
+    --   intent    -> contract interface (Clauses / assertions to satisfy)
+    -- These four singular-aggregate slots are interface-styles, not
+    -- decorations: each Container presents some subset of them, and the
+    -- subset is what determines how peers can engage with it.
     --
-    -- Different methodologies populate different slots: data-shape
+    -- Behaviour is the kernel-honest seat for the reactive interface-style;
+    -- it stands alongside Boundary and Intent as one of the three first-
+    -- class interface-style faces. Authors do not write Behaviour records
+    -- directly — a Container's Behaviour is synthesised by analyzers from
+    -- the Container's rule-bearing children (synthesis machinery: planned,
+    -- not yet shipped). Authoring surfaces remain at the Rule level.
+    --
+    -- Beyond the interface-style faces the Container also carries
+    -- `children` for hierarchical composition and `events` for declared
+    -- event ownership. No substrate booleans for identity/state — these
+    -- derive from realising graph structure plus vocabulary tags. No
+    -- parent slot — children-on-parent stores ownership once, no drift.
+    --
+    -- Different methodologies populate different face subsets: data-shape
     -- Containers use fields; module-shape Containers use children;
     -- interface-shape Containers use only boundary; orchestrator-shape
     -- Containers use behaviour. All are Containers.

@@ -94,13 +94,40 @@
       (is (every? #(= "container:hex/core"
                       (-> % :from :id)) (:rows r))))))
 
-(deftest vocabulary-returns-kinds-in-use
-  (testing "vocabulary surfaces primitive-kinds and relation-kinds present in the loaded Model"
-    (let [v (api/vocabulary)]
-      (is (contains? (set (:primitive-kinds v)) :primitive/behaviour))
-      (is (contains? (set (:primitive-kinds v)) :primitive/container))
-      (is (contains? (set (:relation-kinds v)) :relation/projects))
-      (is (contains? (set (:relation-kinds v)) :relation/owns)))))
+(deftest vocabulary-surfaces-all-kernel-primitive-kinds
+  (testing "vocabulary surfaces every kernel-declared primitive kind, with doc + face-role"
+    (let [v       (api/vocabulary)
+          pk-by-k (into {} (map (juxt :kind identity)) (:primitive-kinds v))]
+      ;; All nine kernel kinds are present, regardless of in-use? in fixture.
+      (is (= #{:primitive/container :primitive/actor :primitive/behaviour
+               :primitive/rule :primitive/boundary :primitive/operation
+               :primitive/intent :primitive/clause :primitive/event}
+             (set (keys pk-by-k))))
+      ;; Every entry carries a docstring and a face-role.
+      (is (every? string?  (map :doc (:primitive-kinds v))))
+      (is (every? keyword? (map :face-role (:primitive-kinds v))))
+      ;; Face-role assignments.
+      (is (= :face-host      (-> pk-by-k :primitive/container :face-role)))
+      (is (= :face-interface (-> pk-by-k :primitive/behaviour :face-role)))
+      (is (= :face-interface (-> pk-by-k :primitive/boundary  :face-role)))
+      (is (= :face-interface (-> pk-by-k :primitive/intent    :face-role)))
+      (is (= :face-component (-> pk-by-k :primitive/rule      :face-role)))
+      (is (= :face-component (-> pk-by-k :primitive/operation :face-role)))
+      (is (= :face-component (-> pk-by-k :primitive/clause    :face-role)))
+      (is (= :face-peer      (-> pk-by-k :primitive/event     :face-role)))
+      (is (= :face-peer      (-> pk-by-k :primitive/actor     :face-role)))
+      ;; in-use? reflects what the loaded fixture contains.
+      (is (true?  (-> pk-by-k :primitive/behaviour :in-use?)))
+      (is (true?  (-> pk-by-k :primitive/container :in-use?)))
+      ;; Relation kinds: kernel-declared set, with :in-use? tag.
+      (is (contains? (set (map :kind (:relation-kinds v))) :relation/projects))
+      (is (every? #(contains? % :in-use?) (:relation-kinds v))))))
+
+(deftest vocabulary-face-role-filter
+  (testing "vocabulary :face-role filters primitive-kinds to that face-role"
+    (let [v (api/vocabulary :face-role :face-interface)]
+      (is (= #{:primitive/behaviour :primitive/boundary :primitive/intent}
+             (set (map :kind (:primitive-kinds v))))))))
 
 (deftest schema-for-kind
   (testing "(schema :kind :primitive/behaviour) surfaces attribute keys observed in fixture"
