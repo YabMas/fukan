@@ -825,7 +825,7 @@
 (def ^:private corpus-files
   ["src/fukan/infra/model.allium"
    "src/fukan/infra/server.allium"
-   "src/fukan/web/spec.allium"
+   "src/fukan/web/handler.allium"
    "src/fukan/web/views/spec.allium"
    "src/fukan/model/spec.allium"
    "src/fukan/model/pipeline.allium"])

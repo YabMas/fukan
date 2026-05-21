@@ -1,5 +1,5 @@
 -- allium: 2
--- web.allium
+-- web/handler.allium
 --
 -- Scope: HTTP/SSE transport boundary — orchestration between shell and core
 -- Includes: Whole-API guarantees, browser-facing SSE surface
@@ -8,7 +8,7 @@
 --   - Projection computation (see projection.allium)
 --   - View rendering (see views.allium)
 --   - Model construction and lifecycle (see model.allium)
---   - Handler factory signature (see spec.boundary)
+--   - Handler factory signature (see handler.boundary)
 
 use "./views/spec.allium" as views
 use "../model/spec.allium" as model
@@ -35,7 +35,7 @@ surface ViewTransport {
     -- Endpoint-level contract between the browser and the handler.
     -- Endpoints are dispatched by the Ring handler, not distinct
     -- module callables — they sit at the party-facing layer, above
-    -- the handler factory in spec.boundary.
+    -- the handler factory in handler.boundary.
     --
     -- Both endpoints deliver results through the same SSE mechanism:
     --   patch-elements for HTML (breadcrumb, sidebar)
@@ -49,7 +49,7 @@ surface ViewTransport {
     -- signatures, not behavioral events — they don't appear in provides:
     -- because they're not state transitions triggered by rules; they're
     -- procedures called by the client. Their signatures belong in
-    -- spec.boundary when the full router is implemented (Plan 6).
+    -- handler.boundary when the full router is implemented (Plan 6).
 
     @guarantee SignalDelivery
         -- Graph data is sent via patch-signals, not execute-script.

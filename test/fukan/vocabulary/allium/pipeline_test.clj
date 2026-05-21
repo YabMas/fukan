@@ -23,7 +23,7 @@
               "Allium::Module tag applied to each .allium file in src/")
           (is (= #{"fukan/infra/model"
                    "fukan/infra/server"
-                   "fukan/web/spec"
+                   "fukan/web/handler"
                    "fukan/web/views/spec"
                    "fukan/web/views/projection"
                    "fukan/model/spec"
