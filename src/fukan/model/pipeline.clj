@@ -28,8 +28,8 @@
         new (remove (fn [r] (existing [(:namespace r) (:name r)])) defaults)]
     (update model :predicates (fnil into []) new)))
 
-(defn load-source
-  "Top-level load: Allium → Boundary → Phase 4 → Phase 5 → Phase 6. Returns
+(defn build-model
+  "Top-level build: Allium → Boundary → Phase 4 → Phase 5 → Phase 6. Returns
    the unified Model with :violations from Phase 4 (gating), Phase 5
    (non-gating), and :artifacts + :relation/projects edges from Phase 6.
    Raises on Gate G2 halt during Phase 4."

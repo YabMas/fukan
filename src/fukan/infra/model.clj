@@ -13,7 +13,7 @@
    top-level multi-extension pipeline (Phases 1-6)."
   [src]
   (println "Loading model from" src "(Phases 1-6)")
-  (let [m (pipeline/load-source src)]
+  (let [m (pipeline/build-model src)]
     (reset! state {:model m :src src})
     (println "Loaded:" (count (:primitives m)) "primitives,"
                        (count (:artifacts m)) "artifacts,"

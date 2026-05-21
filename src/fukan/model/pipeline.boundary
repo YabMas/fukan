@@ -1,17 +1,11 @@
 -- boundary: 1
 
--- Model construction and boundary contract compliance.
+-- Model construction.
 
 use "./spec.allium" as model
 
 fn build_model(src: FilePath, analyzers: Set<AnalyzerKey>) -> Model
   -- Build complete model from a source path and analyzer keys.
-
-fn check_contracts(model: Model) -> LintReport
-  -- Check all cross-module edges against declared boundaries.
-
-fn format_report(report: LintReport) -> String
-  -- Render a lint report as a human-readable string.
 
 exports:
     AnalysisResult

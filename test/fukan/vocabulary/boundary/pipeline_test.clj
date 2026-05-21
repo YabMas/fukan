@@ -27,7 +27,7 @@
 (deftest combined-pipeline-loads-fukan-corpus
   (testing "loading src/ through the multi-extension pipeline produces a
             validated Model carrying both Allium and Boundary content"
-    (let [model (pipeline/load-source "src")]
+    (let [model (pipeline/build-model "src")]
       (is (m/validate build/Model model)
           "loaded Model validates against build/Model schema")
       ;; Boundary tag-definitions registered (Function, Binding, ModuleApi, Subsystem, Exports):
@@ -41,15 +41,15 @@
         (is (pos? (count allium-tag-defs))
             "Allium tag-definitions still registered"))
       ;; Boundary::Function tags applied to fn-declared Operations:
-      ;; Corpus has 15 fn declarations (7 in infra, 1 in web, 1 in web/views/shell,
+      ;; Corpus has 13 fn declarations (7 in infra, 1 in web, 1 in web/views/shell,
       ;; 1 in web/views/graph, 1 in web/views/sidebar, 1 in web/views/breadcrumb,
-      ;; 3 in model/pipeline)
+      ;; 1 in model/pipeline)
       (let [fn-tags (filter (fn [ta]
                               (and (= "Boundary" (-> ta :tag :namespace))
                                    (= "Function" (-> ta :tag :name))))
                             (:tag-apps model))]
-        (is (= 15 (count fn-tags))
-            "all 15 corpus fn declarations produce Boundary::Function tags"))
+        (is (= 13 (count fn-tags))
+            "all 13 corpus fn declarations produce Boundary::Function tags"))
       ;; Boundary::ModuleApi tags on modules with exports:
       ;; Corpus has 3 files with exports: (infra/server.boundary, model/pipeline.boundary, web/views/graph.boundary)
       (let [api-tags (filter (fn [ta]
