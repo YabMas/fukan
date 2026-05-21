@@ -1,109 +1,98 @@
 -- allium: 2
--- pipeline.allium
+-- model/pipeline.allium
 --
--- Scope: Model build pipeline — how a Model is constructed from
---   source analysis, and how it is checked for contract compliance
--- Includes: AnalysisResult shape, SourceAnalyzer contract,
---   contract compliance invariant
+-- Scope: Multi-extension build pipeline — phase ordering, gating semantics,
+--   and fukan-shipped well-known constraint registration.
+-- Includes:
+--   - PhaseOrdering, GateG2Halts, NonGatingPhases guarantees
+--   - DefaultsRegistrationIsIdempotent guarantee
+--   - The orchestration Rule fired by the build_model operation
 -- Excludes:
---   - The Model itself (see model/spec.allium)
---   - Language-specific analyzer internals (see analyzers/)
---   - Model state management (see infra/model.allium)
+--   - The Model substrate itself (see model/spec.allium)
+--   - Language-specific analyzer internals (Allium parser, Boundary parser,
+--     Clojure target analyzer — see their own modules)
+--   - Phase-4 sub-phase validation rules (live with the validation module)
+--   - Phase-5 constraint evaluation semantics (live with the constraint
+--     module; pipeline only orchestrates)
+--   - Model lifecycle / snapshot management (see infra/model.allium)
+--
+-- Stance:
+--   This module is a thin orchestrator. Its substance is the phase
+--   *ordering* and the gating contract — what halts the pipeline, what is
+--   non-gating, and where fukan-shipped defaults enter the Model. Each
+--   phase's internal rules live in the module that owns the phase.
 
 use "./spec.allium" as model
 
 ------------------------------------------------------------
--- Value Types
+-- Guarantees
 ------------------------------------------------------------
 
-value AnalysisResult {
-    -- The language-agnostic output from each source analyzer.
-    -- Each language analyzer (Clojure, Allium, future languages)
-    -- independently produces an AnalysisResult from the same source path.
-    -- Results are merged additively before the build step runs.
+guarantee PhaseOrdering
+-- The build runs a fixed sequence:
+--   Phase 1-3 (Allium parser -> Boundary parser, merging by identity)
+--   Phase 4   (structural validation, sub-phases 4a-4g)
+--   Register fukan-shipped well-known constraint defaults
+--   Phase 5   (constraint evaluation, kernel-universal + project-shipped)
+--   Phase 6   (Clojure target analyzer -- projection edges to Code.*
+--             artifacts with per-edge :validity)
+-- Defaults are registered *between* Phase 4 and Phase 5 so they participate
+-- in the same evaluation pass as project-shipped constraints. See
+-- doc/DESIGN.md "Build pipeline".
+
+guarantee GateG2Halts
+-- Phase 4 is the last gate. If Phase 4 reports errors, the build raises
+-- and downstream phases (defaults registration, Phase 5, Phase 6) do not
+-- run. A Model with broken composition or unresolved references would
+-- produce noisy or misattributed constraint output, so the pipeline halts
+-- at the last point where attribution is clean. Per doc/DESIGN.md "Why
+-- two gates" (G2).
+
+guarantee NonGatingPhases
+-- Phases 5 and 6 are non-gating: their outputs are accumulated onto the
+-- Model rather than raising.
+--   Phase 5 violations append to Model.violations alongside Phase 4's.
+--   Phase 6 projection edges append to Model.edges with per-edge :validity
+--           (:valid | :stale | :absent | :unknown); :absent edges are the
+--           drift surface, not errors.
+
+guarantee DefaultsRegistrationIsIdempotent
+-- The pipeline appends fukan-shipped well-known constraint registrations
+-- onto the Model's predicate registry before Phase 5 evaluation. Repeat
+-- invocations do not double-register: an existing (namespace, name) tuple
+-- in the predicate registry is skipped. A rebuilt Model containing prior
+-- defaults retains exactly one registration per default.
+--
+-- Currently shipped defaults:
+--   fukan/signal_gap                  (warning) -- every provides:
+--                                     Container -> Event has at least
+--                                     one triggers: Event -> Rule
+--                                     consumer
+--   fukan/external_must_have_wrapper  (warning) -- every Container
+--                                     tagged Allium::ExternalEntity
+--                                     belongs to a known module
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule BuildModel {
+    -- The top-level build orchestration.
     --
-    -- Implementation analyzers discover code structure: modules,
-    -- symbols, schemas, dependencies.
-    -- Specification analyzers discover design structure: entities,
-    -- surfaces, fields, typed relationships.
-    -- Both produce the same shape; the SourceAnalyzer contract
-    -- defines the obligation.
-
-    source_files: List<String>
-    nodes: Map<String, model/Node>
-    edges: List<model/Edge>
-}
-
-value LintViolation {
-    -- A single contract violation: a cross-module call to a function
-    -- not declared in the target module's boundary.
-    from: String               -- NodeId of the calling function
-    to: String                 -- NodeId of the called function (not in boundary)
-    from_module: String        -- Module containing the caller (direct parent)
-    to_module: String          -- Module containing the callee (direct parent)
-    contract_fns: List<String> -- Function names the target module does export
-}
-
-value LintReport {
-    -- Contract compliance report: violations and aggregate statistics.
-    violations: List<LintViolation>
-    stats: LintStats
-}
-
-value LintStats {
-    -- Aggregate edge counts for a lint check.
-    total_edges: Integer
-    cross_module_edges: Integer
-    violations: Integer
-}
-
-------------------------------------------------------------
--- Contracts
-------------------------------------------------------------
-
-contract SourceAnalyzer {
-    -- Polymorphic role: any module that discovers structure from a
-    -- source path by producing a language-agnostic AnalysisResult.
+    -- Inputs: a source-root FilePath.
+    -- Output: a Model carrying primitives, relations (kernel edges +
+    --   projection edges), artifacts, violations, and the predicate
+    --   registry.
     --
-    -- Fulfilled independently by implementation analyzers (code
-    -- structure — scopes, symbols, dependencies) and specification
-    -- analyzers (design structure — entities, surfaces, fields).
-    -- Results are merged additively before the build step runs.
-
-    analyzes: (src: SourcePath) -> AnalysisResult
-        -- SourcePath is a filesystem directory path.
-        -- Each fulfiller produces an independent AnalysisResult from
-        -- the same source path. Fulfillers may read runtime state
-        -- during analysis (e.g. loaded JVM namespaces).
-
-    @invariant ParseFailureIsolation
-        -- A single file's parse failure does not prevent analysis of
-        -- other files. Failed files are silently excluded from the
-        -- returned AnalysisResult.
-}
-
-------------------------------------------------------------
--- Invariants
-------------------------------------------------------------
-
-invariant ContractCompliance {
-    -- Every cross-module function call must target a function
-    -- declared in the callee's direct-parent module boundary.
+    -- Behaviour: run Phase 1-3 (Allium then Boundary loaders, merged by
+    -- identity), then Phase 4 (structural validation; gate G2). On Phase 4
+    -- success, append fukan-shipped well-known constraint defaults to the
+    -- predicate registry (idempotent on (namespace, name)), then run
+    -- Phase 5 (constraint evaluation) and Phase 6 (Clojure target
+    -- analyzer).
     --
-    -- Module ownership: each function's module is its direct parent
-    -- node. A call is cross-module when the caller's parent differs
-    -- from the callee's parent. Only the callee's direct-parent
-    -- boundary is checked — ancestor boundaries are not consulted.
-    --
-    -- Boundary matching uses BoundaryFn.id to match against the
-    -- called function's NodeId. A module's boundary is enforceable
-    -- only when at least one BoundaryFn has a non-nil id. Modules
-    -- where no boundary function has an id are not subject to
-    -- contract checking.
+    -- Guarantees that apply: PhaseOrdering, GateG2Halts, NonGatingPhases,
+    -- DefaultsRegistrationIsIdempotent (declared above).
 
-    for e in Model.edges where e.kind = function_call
-            and e.to.kind = Function
-            and e.from.parent != e.to.parent:
-        let boundary_ids = e.to.parent.boundary.functions.id where id != null
-        boundary_ids.count = 0 or e.to in boundary_ids
+    when: BuildModel(source_root: FilePath)
 }

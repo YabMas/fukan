@@ -1,14 +1,11 @@
 -- boundary: 1
 
--- Model construction.
+-- Multi-extension build pipeline — public surface.
 
 use "./spec.allium" as model
 
-fn build_model(src: FilePath) -> Model
-  -- Build complete model from a source path.
-
-exports:
-    AnalysisResult
-    LintViolation
-    LintReport
-    LintStats
+fn build_model(source_root: FilePath) -> Model
+    -- Top-level build. Orchestrates Allium -> Boundary -> Phase 4 ->
+    -- defaults registration -> Phase 5 -> Phase 6. Returns the unified
+    -- Model. Raises on Phase 4 (Gate G2) errors. Behavioural commitment
+    -- lives in the BuildModel Rule in pipeline.allium.

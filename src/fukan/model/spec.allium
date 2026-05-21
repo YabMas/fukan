@@ -1,458 +1,991 @@
 -- allium: 2
--- model.allium
+-- model/spec.allium
 --
--- Scope: System model — the structured representation of a system combining
---   specification and implementation
--- Includes: Node hierarchy, edge semantics, module boundaries,
---   structural invariants, spec/impl realization states
+-- Scope: The kernel substrate — universal, fixed primitives, value records,
+--   type vocabulary, relations, edge identity, projection vocabulary, and
+--   the vocabulary mechanism that allows methodologies to refine the
+--   substrate.
+-- Includes:
+--   - Nine kernel primitives (Container, Actor, Behaviour, Rule, Boundary,
+--     Operation, Intent, Clause, Event)
+--   - Value records (Field, Parameter, Definition, RuleBody, Effect,
+--     Expression)
+--   - Type vocabulary (six cases; Scalar, Enum, Composite, Collection,
+--     Union, Ref)
+--   - Thirteen kernel relations and edge identity
+--   - Endpoint addressing (PrimitiveRef, SubstrateAddress, ArtifactRef)
+--   - Projection vocabulary (Artifact — Code.* in V0; Infra/Documentation
+--     deferred)
+--   - Vocabulary mechanism (TagDefinition, TagApplication,
+--     PredicateRegistration, RendererRegistration)
 -- Excludes:
---   - Build pipeline and analysis (see model/pipeline.allium)
---   - Language-specific analyzers (see model/languages specs)
---   - Infrastructure lifecycle (see infra/model.allium and infra/server.allium)
---   - Projection and filtering (see projection.allium)
---   - View rendering and interaction (see views.allium)
+--   - Build pipeline and analysis loops (see model/pipeline.allium)
+--   - Methodology vocabulary content (Allium, Boundary, Clojure target —
+--     see their respective vocabulary modules)
+--   - Constraint language evaluation (Plan 4 — deferred)
+--   - Infrastructure lifecycle (see infra/*.allium)
+--   - Projection rendering and explorer views (see projection/, web/)
 --
--- Design context:
---   The model represents three realization states:
---   - Spec-only: design-phase modules with descriptions, boundary
---     declarations, and spec-derived function nodes — but no implementation.
---   - Spec + impl: the richest nodes. Spec provides purpose and boundaries;
---     implementation provides concrete structure.
---   - Impl-only: imperative shell modules that don't need specs. Populated
---     from code analysis alone — thinner but perfectly valid.
+-- Design ground-truth: doc/MODEL.md is authoritative. This spec describes
+-- the substrate-as-implemented in primitives.clj, relations.clj,
+-- artifact.clj, vocabulary.clj, type.clj, expression.clj, effect.clj.
 --
---   At the default view level, spec-only and spec+impl look the same: you
---   see the module's description, its public API (as function children),
---   and its owned data shapes. The only difference is that implemented
---   modules can be expanded to reveal their internal structure.
+-- Stance:
+--   The substrate represents one architectural object — a software system —
+--   viewable through many vocabulary lenses. The kernel is methodology-
+--   neutral at vocabulary level; methodologies contribute typed vocabulary
+--   that refines the substrate's primitives. The substrate is intentionally
+--   committed at the level of type-system shape (Path A — Allium-aligned
+--   floor: named, closed, composed by inclusion); methodologies relax it
+--   via vocabulary overlay.
 --
--- Spec source-of-truth split:
---   .boundary is the spine of the spec model. Its three constructs map
---   directly onto graph elements:
---     fn        -> Function node + signature
---     exposes   -> Schema node (publicly owned by the module)
---     use       -> reference for type resolution
---   .allium is enrichment. It contributes:
---     entity / value / variant / enum -> Schema TypeExpr structure for
---       schemas declared in .boundary exposes; Schema nodes (private)
---       for types not exposed at the wall
---     guarantee Name     -> Guarantee entry in the module's Boundary
---                           (API-adjacent promise, prose from leading comment)
---     invariant Name {…} -> Invariant entry on the Module itself
---                           (structural truth that holds, not API-scoped)
---   When both languages contribute to the same Schema node, .boundary
---   sets the public marking and .allium fills in the type structure.
+-- Language-agnostic vocabulary discipline:
+--   This spec describes the substrate using generic PL terminology. No
+--   target-language constructs (no defmulti, defmethod, protocol, deftype,
+--   atom, var). Target-language realisation lives in the projection layer
+--   and the Clojure Target language extension.
 
 ------------------------------------------------------------
--- Type Expression IR
+-- Type Vocabulary
 ------------------------------------------------------------
+--
+-- One vocabulary serves both substrate slots (Field.type_ref,
+-- Parameter.type_ref, Operation.return_type) and vocabulary payload
+-- schemas (TagDefinition.payload_schema). Six cases — three combinators
+-- (product, sum, functor) plus three leaf shapes (atomic, closed-literal,
+-- link). Substrate stays generic at the target-language level; per-target-
+-- language translation lives in the project layer.
 
-value MapEntry {
-    -- A single field in a map type expression.
-    key: String
+entity Type {
+    -- A type expression. Closed over six cases; case discriminates shape.
+    -- Substrate commits to structural shape, not to "which integer width"
+    -- or "which target collection". Methodologies and target-language
+    -- translation overlays map cases to concrete forms.
+    case: scalar | enum | composite | collection | union | ref
+}
+
+variant ScalarType : Type {
+    -- Atomic leaf. `name` is methodology-supplied and opaque to substrate.
+    -- Per-target-language translation (e.g. "Integer" -> int32, "Money" ->
+    -- custom) lives in the project layer.
+    name: String
+}
+
+variant EnumType : Type {
+    -- Closed set of literal values. Each case is a literal — distinct from
+    -- Union, whose cases are full Types.
+    values: List<String>
+}
+
+variant CompositeType : Type {
+    -- Product of typed slots. Shape is either Named (reuses a value-typed
+    -- Container's fields) or Inline (anonymous slot list).
+    shape: NamedShape | InlineShape
+}
+
+value NamedShape {
+    -- Composite whose shape comes from a value-typed Container's fields.
+    container: Identifier
+}
+
+value InlineShape {
+    -- Composite with anonymous inline fields.
+    fields: List<FieldSpec>
+}
+
+value FieldSpec {
+    -- A slot in an InlineShape. Optionality lives on FieldSpec, not on
+    -- Type — slot-level nullability is a property of the slot.
+    name: String
+    type: Type
     optional: Boolean
-    type: TypeExpr
+}
+
+variant CollectionType : Type {
+    -- Zero-or-more of an inner Type, with explicit collection semantics.
+    -- `semantics` distinguishes the three shapes that affect what
+    -- predicates can reason about: iteration order, element duplicates,
+    -- key access.
+    of: Type
+    semantics: CollectionSemantics
+}
+
+entity CollectionSemantics {
+    -- Closed sum: Sequential | Unique | Keyed(K).
+    case: sequential | unique | keyed
+}
+
+variant KeyedSemantics : CollectionSemantics {
+    -- Keyed association from `key_type` to the Collection's element type.
+    key_type: Type
+}
+
+variant UnionType : Type {
+    -- Sum of distinct Types. Cases stay structurally distinct — no
+    -- implicit coercion. Consumers dispatch on case.
+    types: List<Type>
+}
+
+variant RefType : Type {
+    -- Reference to a kernel target. RefTarget reaches kernel primitives
+    -- or sub-substrate slots. `where` filters admissible targets by tag
+    -- presence.
+    target: RefTarget
+    where: Set<TagRef>?
+}
+
+entity RefTarget {
+    -- Closed sum: KernelPrimitive(kinds) | Substrate(within_kind, slot_kinds).
+    case: kernel_primitive | substrate
+}
+
+variant KernelPrimitiveTarget : RefTarget {
+    -- Reference to a kernel primitive of one of the listed kinds.
+    -- Kinds: container | event | actor | rule | operation | behaviour
+    --      | boundary | intent | clause
+    kinds: Set<PrimitiveKind>
+}
+
+variant SubstrateTarget : RefTarget {
+    -- Reference to a sub-substrate slot on a primitive of `within_kind`.
+    -- v0 populates :field; :parameter is committed shape-wise but deferred.
+    within_kind: PrimitiveKind
+    slot_kinds: Set<SubstrateSlotKind>
+}
+
+enum PrimitiveKind {
+    container | actor | behaviour | rule | boundary
+    | operation | intent | clause | event
+}
+
+enum SubstrateSlotKind { field | parameter }
+
+------------------------------------------------------------
+-- Substrate Value Records
+------------------------------------------------------------
+--
+-- Sub-substrate carried on primitive slots. Identity is composite — derived
+-- from the owning primitive plus a local discriminator (typically `name`).
+-- Sub-substrate has no independent identity; moving it to a different host
+-- changes its identity.
+
+value Field {
+    -- A typed data member owned by a Container. Identity:
+    -- (Container.id, Field.name).
+    name: String
+    type_ref: Type
+    optional: Boolean
+}
+
+value Parameter {
+    -- An ordered, typed parameter on an Operation or Event. Identity:
+    -- (parent_id, Parameter.name). `ordinal` carries declared order;
+    -- naming is the identity discriminator.
+    name: String
+    type_ref: Type
+    optional: Boolean
+    ordinal: Integer
+}
+
+value Definition {
+    -- A typed `let` binding inside a Rule body. In scope across
+    -- Rule.intent.assertions and Rule.body.effects (the only cross-slot
+    -- scope rule in the kernel). Identity: (Rule.id, Definition.name).
+    name: String
+    expression: Expression
+}
+
+value RuleBody {
+    -- Bundles definitions and effects under a Rule. Singular aggregate per
+    -- Rule (same cardinality pattern as Behaviour on Container). No
+    -- independent identity — reduces to host Rule's id.
+    definitions: List<Definition>
+    effects: List<Effect>
+}
+
+------------------------------------------------------------
+-- Expression sub-substrate
+------------------------------------------------------------
+--
+-- Universal calculus used by Rule bodies, Intent assertions on any host,
+-- and the constraint language. What differs across callsites is the
+-- binding Environment, not the Expression substrate.
+
+value Expression {
+    -- An expression. Identity is structural over `form`; `label` is
+    -- addressability-only (parallels Clause's `label`). Type is determined
+    -- by `form`; predicates are Expressions whose result type is Boolean.
+    label: String?
+    form: ExpressionForm
+}
+
+entity ExpressionForm {
+    -- Closed sum of expression cases. Operators are extensible;
+    -- canonicalisation patterns (effect materialisation) are not.
+    case: var | ref | lit | apply | let | if
+        | match | forall | exists | aggregate
+}
+
+variant VarForm : ExpressionForm {
+    -- Reference to an Environment binding.
+    name: String
+}
+
+variant RefForm : ExpressionForm {
+    -- Reference to a kernel target (per Type.Ref shape).
+    target: RefTarget
+}
+
+variant LitForm : ExpressionForm {
+    -- Typed literal.
+    type: Type
+    value: Value
+}
+
+variant ApplyForm : ExpressionForm {
+    -- Operator / function application. Core operators include arithmetic,
+    -- comparison, logical, set membership, presence. Methodology operators
+    -- register additively.
+    op: String
+    args: List<Expression>
+}
+
+variant LetForm : ExpressionForm {
+    -- Local binding within an Expression.
+    name: String
+    source: Expression
+    body: Expression
+}
+
+variant IfForm : ExpressionForm {
+    cond: Expression
+    then: Expression
+    else: Expression
+}
+
+variant MatchForm : ExpressionForm {
+    -- Pattern-match on a scrutinee. Arm patterns mirror the six Type cases.
+    scrutinee: Expression
+    arms: List<MatchArm>
+}
+
+value MatchArm {
+    pattern: TypePattern
+    body: Expression
+}
+
+variant ForallForm : ExpressionForm {
+    -- Universal quantification over `source`, binding `var` in `body`.
+    var: String
+    source: Expression
+    body: Expression
+}
+
+variant ExistsForm : ExpressionForm {
+    -- Existential quantification.
+    var: String
+    source: Expression
+    body: Expression
+}
+
+variant AggregateForm : ExpressionForm {
+    -- Aggregation over `source`, projecting via `projection`.
+    kind: AggregateKind
+    source: Expression
+    projection: Expression
+}
+
+enum AggregateKind { count | sum | min | max }
+
+entity TypePattern {
+    -- Patterns mirror the six Type cases. Each position is a literal, a
+    -- bound variable, or a nested TypePattern. Surface syntax for
+    -- TypePattern is the `matches` operator in the constraint language.
+    case: scalar | enum | composite | collection | union | ref
+}
+
+entity Environment {
+    -- Typed binding context that distinguishes callsites. Three flavours;
+    -- the substrate Expression is uniform underneath. Environment is part
+    -- of the callsite type, not of the Expression itself.
+    case: one_state | two_state | model_introspection
+}
+
+variant OneStateEnv : Environment {
+    -- Intent assertions on Container, Behaviour, Boundary, Operation.
+    -- Bindings reach the host's substrate at one moment. `self` is bound
+    -- to the host primitive.
+    bindings: Map<String, Type>
+}
+
+variant TwoStateEnv : Environment {
+    -- Rule.intent.assertions and Rule.body. Bindings reach `pre` and
+    -- `post` simultaneously. `params` carries the Rule's trigger
+    -- parameters; Rule.body.definitions extend `params` with named local
+    -- bindings visible to assertions and effects.
+    pre: Map<String, Type>
+    post: Map<String, Type>
+    params: Map<String, Type>
+}
+
+variant ModelIntrospectionEnv : Environment {
+    -- Constraint-language predicate bodies. Bindings reach the
+    -- introspection vocabulary atemporally.
+    bindings: Map<String, Type>
+}
+
+------------------------------------------------------------
+-- Effect sub-substrate
+------------------------------------------------------------
+
+value Effect {
+    -- A materialised state-change declaration. Lives only inside
+    -- Rule.body.effects. Identity: (rule_id, kind, target). Every Effect
+    -- is the canonicalised materialisation of an Expression of recognised
+    -- shape in Rule.intent.assertions (see EffectExpressionParity below);
+    -- `source` resolves back to that Expression. Edges sourced by Effects
+    -- (writes / creates / destroys / emits) carry the Effect's identity.
+    kind: EffectKind
+    target: Endpoint
+    value: Expression?       -- absent for Destroy
+    source: ExpressionId     -- addresses originating Expression in Rule.intent.assertions
+}
+
+enum EffectKind { create | write | destroy | emit }
+
+-- ExpressionId is kernel-internal — kernel addressability for an Expression
+-- within its host slot (position-and-shape). Predicates do not address
+-- Expressions by id; they query Expressions structurally.
+
+------------------------------------------------------------
+-- Intent and Clause
+------------------------------------------------------------
+
+entity Intent {
+    -- Meaning attached to a host. Singular per host (Container, Behaviour,
+    -- Rule, Boundary, Operation). Two parallel lists: prose claims
+    -- (clauses) and Bool-typed Expressions (assertions). Kinds of prose
+    -- claim (guidance, open-question) and kinds of Bool claim (invariant,
+    -- guarantee, precondition, postcondition) are vocabulary tags on the
+    -- respective items, not kernel slots.
+    --
+    -- The host primitive determines the Environment in which assertions
+    -- are typed: OneState for Container/Behaviour/Boundary/Operation;
+    -- TwoState for Rule.
+    label: String?
+    clauses: List<Clause>
+    assertions: List<Expression>   -- Bool-typed
+}
+
+entity Clause {
+    -- Sub-unit of an Intent. First-class addressable primitive (per K15a).
+    -- `label` is human-facing addressability within parent Intent, not
+    -- part of identity. Body is opaque text; vocabulary supplies kind tags
+    -- and structured parses where applicable.
+    label: String?
+    body: String
+}
+
+------------------------------------------------------------
+-- The Nine Kernel Primitives
+------------------------------------------------------------
+
+entity Container {
+    -- Universal addressable structural unit. Three optional faces (data
+    -- via fields, behaviour, boundary), plus children for hierarchical
+    -- composition, plus events for declared event ownership, plus
+    -- container-level intent. No substrate booleans for identity/state —
+    -- these derive from realising graph structure plus vocabulary tags.
+    -- No parent slot — children-on-parent stores ownership once, no drift.
+    --
+    -- Different methodologies populate different slots: data-shape
+    -- Containers use fields; module-shape Containers use children;
+    -- interface-shape Containers use only boundary; orchestrator-shape
+    -- Containers use behaviour. All are Containers.
+    description: String?
+    intent: Intent?
+    children: Set<Identifier>     -- ids of child Containers
+    fields: List<Field>
+    events: Set<Identifier>       -- ids of owned Events
+    behaviour: Behaviour?
+    boundary: Boundary?
+
+    invariant SingularBehaviour {
+        -- At most one Behaviour per Container; multiplicity lives in Rules.
+        behaviour is at most one
+    }
+
+    invariant SingularBoundary {
+        -- At most one Boundary per Container; multiplicity lives in
+        -- Operations.
+        boundary is at most one
+    }
+}
+
+entity Actor {
+    -- Agency-bearing party outside the ownership hierarchy. Primarily for
+    -- human roles/personas. Substrate is identity plus description.
+    -- Methodology-specific framings live in vocabulary.
     description: String?
 }
 
-entity TypeExpr {
-    -- A generic, language-agnostic type expression.
-    -- Produced by language analyzers at build time. Consumed by
-    -- projection (reference extraction) and views (rendering).
-    -- Replaces raw Malli forms — only the Clojure analyzer knows Malli.
-    --
-    -- Keyword classification for refs vs primitives:
-    --   uppercase-initial (:Model, :NodeId) → ref tag
-    --   lowercase (:string, :int, :any)     → primitive tag
-    -- The projection layer filters refs against the schema registry,
-    -- so false positives are harmless.
+entity Behaviour {
+    -- Singular aggregate of dynamic logic per host Container.
+    -- Aggregate-level intent attaches claims spanning the Rules.
+    rules: List<Identifier>     -- ids of Rules
+    intent: Intent?
+}
 
-    tag: ref | primitive | map | map_of | vector | set
-       | maybe | or | and | enum | tuple | fn | predicate | unknown
+entity Rule {
+    -- Sub-unit inside a Behaviour. The Rule's Bool claims (preconditions,
+    -- postconditions, guarantees, invariants) live as Bool Expressions in
+    -- intent.assertions; prose guidance lives in intent.clauses. The
+    -- Rule's named definitions (typed local bindings) live in
+    -- body.definitions, in scope across intent.assertions and
+    -- body.effects. The Rule's effects live as Effect records in
+    -- body.effects — each materialised from a corresponding Expression in
+    -- intent.assertions, each surfacing as a kernel edge.
+    --
+    -- The Rule's trigger lives as a relation (`triggers` for Event ->
+    -- Rule; `observes` for typed-subject conditions).
     description: String?
+    intent: Intent?
+    body: RuleBody?
 }
 
-variant RefExpr : TypeExpr {
-    -- Named reference to another type (e.g. :Model, :NodeId).
-    -- The name is an identifier (registry key), not an arbitrary string.
-    -- In Clojure, this maps to a keyword.
-    name: Identifier
+entity Boundary {
+    -- Singular aggregate per host Container; the typed interface that
+    -- crosses the wall. Substrate is operations plus aggregate intent.
+    -- Datashapes exposed, events advertised, facing party, related
+    -- dependencies all live as relations or vocabulary. Boundary
+    -- protocols (read-access advertising, signal-entry advertising,
+    -- typed call) emerge from substrate plus relations plus vocabulary
+    -- tag combinations rather than from named primitive kinds.
+    operations: List<Identifier>     -- ids of Operations
+    intent: Intent?
 }
 
-variant PrimitiveExpr : TypeExpr {
-    -- Built-in primitive type (e.g. "string", "int", "any").
-    name: String
-}
-
-variant MapExpr : TypeExpr {
-    -- Structured map with named, typed entries.
-    entries: List<MapEntry>
-}
-
-variant MapOfExpr : TypeExpr {
-    -- Homogeneous map from key type to value type.
-    key_type: TypeExpr
-    value_type: TypeExpr
-}
-
-variant VectorExpr : TypeExpr {
-    -- Homogeneous ordered collection.
-    element: TypeExpr
-}
-
-variant SetExpr : TypeExpr {
-    -- Homogeneous unordered collection.
-    element: TypeExpr
-}
-
-variant MaybeExpr : TypeExpr {
-    -- Optional/nullable wrapper.
-    inner: TypeExpr
-}
-
-variant OrExpr : TypeExpr {
-    -- Union of type alternatives.
-    variants: List<TypeExpr>
-}
-
-variant AndExpr : TypeExpr {
-    -- Intersection of type constraints.
-    types: List<TypeExpr>
-}
-
-variant EnumExpr : TypeExpr {
-    -- Fixed set of literal values.
-    -- Values may be strings, keywords, numbers, or other literals
-    -- depending on the source language.
-    values: List<Value>
-}
-
-variant TupleExpr : TypeExpr {
-    -- Fixed-length heterogeneous sequence.
-    elements: List<TypeExpr>
-}
-
-variant FnExpr : TypeExpr {
-    -- Function type (in type position, not FunctionSignature).
-    inputs: List<TypeExpr>
-    output: TypeExpr
-}
-
-variant PredicateExpr : TypeExpr {
-    -- Opaque predicate constraint (e.g. Malli :fn).
-}
-
-variant UnknownExpr : TypeExpr {
-    -- Unconvertible form, preserved as string for debugging.
-    original: String
-}
-
-------------------------------------------------------------
--- Value Types
-------------------------------------------------------------
-
-value FunctionSignature {
-    -- The type contract of a function: ordered input types and a return type.
-    -- Schema references within types are the basis for deriving data flow
-    -- perspectives at projection time.
-    inputs: List<TypeExpr>
-    output: TypeExpr
-}
-
-value BoundaryFn {
-    -- Summary of a public function in a module boundary.
-    -- Not the full Function entity — just the contract-relevant fields.
-    -- Appears in Boundary.functions to describe what a module provides.
-    name: String
-    id: Identifier?          -- NodeId of corresponding Function child, if any
-    signature: FunctionSignature?
-    doc: String?
-}
-
-value Guarantee {
-    -- An API-adjacent promise made by a module.
+entity Operation {
+    -- Sub-structure of Boundary; a typed signature. Substrate carries the
+    -- signature (parameters plus return_type); cross-primitive linkage
+    -- (triggers a Rule, realises another Operation) lives in relations.
     --
-    -- In Allium, `guarantee Name` is bodyless — the name is the tag;
-    -- the prose explaining the promise lives in the leading comment
-    -- block above the declaration. Guarantees are about what callers
-    -- can rely on when they invoke the module's API ("if you use
-    -- this, I promise X"). They attach to the module's boundary, not
-    -- to the module as a whole.
-    --
-    -- The annotation form `@guarantee Name` attaches to a specific
-    -- callable (surface provides-entry, contract obligation). That
-    -- form is not yet modeled — it waits on first-class surfaces and
-    -- contracts.
-    name: String
-    description: String?   -- prose from the leading comment block
-}
-
-value Invariant {
-    -- A structural truth about a module: a condition that holds,
-    -- independent of any particular call into the module's API.
-    --
-    -- In Allium, `invariant Name { … }` carries a body (the
-    -- grammar requires it). The body is opaque prose/expression
-    -- text at this stage — structured parsing of the condition is
-    -- deferred to a later iteration (where invariants may backlink
-    -- to the functions and schemas they constrain).
-    --
-    -- Invariants attach to the Module, not the Boundary. They are
-    -- not promises made at the wall; they are properties the module
-    -- maintains internally.
-    name: String
-    body: String           -- verbatim content between { }
-    description: String?   -- prose from the leading comment block
-}
-
-value Boundary {
-    -- A module's public contract: what it promises to the outside world.
-    --
-    -- The boundary is a manifest — it declares the module's public API
-    -- and the data shapes it owns. Summaries, not entity references:
-    -- BoundaryFn captures the contract-relevant slice of each function,
-    -- and schema keys identify owned schemas by registry key.
-    --
-    -- Assembled from specification and implementation:
-    --   - description: from spec surface description, namespace docstring,
-    --     or entity description (first available, in that priority)
-    --   - functions: public API operations (from spec surface provides,
-    --     or inferred from implementation signatures)
-    --   - schemas: registry keys of data shapes this module owns and
-    --     publishes (consumers of these schemas depend on this module)
-    --   - guarantees: API-adjacent promises from .allium `guarantee`
-    --     declarations, with prose harvested from their leading comments
-
+    -- return_type is optional: present for call-shaped (request/response),
+    -- absent for fire-and-forget command-shaped operations.
     description: String?
-    functions: List<BoundaryFn>
-    schemas: List<Identifier>
-    guarantees: List<Guarantee>
+    parameters: List<Parameter>
+    return_type: Type?
+    intent: Intent?
+}
+
+entity Event {
+    -- Discrete temporal occurrence. Owned by a qualifying Container via
+    -- Container.events. Two Events with the same local name in different
+    -- Containers are distinct primitives — namespace qualification is the
+    -- qualifying Container.
+    description: String?
+    parameters: List<Parameter>
 }
 
 ------------------------------------------------------------
--- Entities
+-- Endpoints
 ------------------------------------------------------------
+--
+-- Endpoints of a kernel relation form a sum.
 
-enum EdgeKind { function_call | dispatches | schema_reference }
--- function_call:     A directly invokes B. A's source names B's var with
---                    invocation intent. The common case for function dependencies.
+entity Endpoint {
+    -- Closed sum: PrimitiveRef | SubstrateAddress | ArtifactRef.
+    -- ArtifactRef is used for `projects` edges that point at code/infra/
+    -- documentation realisations.
+    case: primitive | substrate | artifact
+}
+
+variant PrimitiveRef : Endpoint {
+    -- Reference to a kernel primitive by id.
+    id: Identifier
+}
+
+variant SubstrateAddress : Endpoint {
+    -- Reference to a sub-substrate slot on a Container. v0 populates the
+    -- single-segment Field case; the general form is committed once so the
+    -- kernel does not change shape when Parameter earns first-class
+    -- addressability.
+    container: Identifier
+    path: List<PathSegment>
+}
+
+value PathSegment {
+    -- Typed segment within a SubstrateAddress path. `slot` names a
+    -- substrate slot (field | operation | parameter | behaviour | boundary
+    -- | intent | …). `key` is the identifier within the slot, omitted
+    -- when the slot is singular on its host.
+    slot: String
+    key: String?
+}
+
+variant ArtifactRef : Endpoint {
+    -- Reference to a projection-target Artifact. Identity tuple per the
+    -- Artifact ontology: (case-discriminator, language, qualified-name).
+    artifact_id: ArtifactIdentity
+}
+
+value ArtifactIdentity {
+    -- Tuple identity for an Artifact (per the projection vocabulary).
+    case: ArtifactSubCase     -- e.g. code/function | code/data_structure
+    language: String
+    qualified_name: String
+}
+
+------------------------------------------------------------
+-- Kernel Relations
+------------------------------------------------------------
 --
--- dispatches:        A polymorphically routes to B at runtime.
---                    A is a dispatch point, B is a handler. Stored once in the
---                    canonical direction (dispatch point → handler). The
---                    reverse reading — "B implements A" — is a projection
---                    concern, not a separate edge.
---
--- schema_reference:  A's type structure names B. Schema-to-schema keyword
---                    references within TypeExpr forms.
---
--- Projection perspectives:
---   Call graph (who invokes whom):
---     function_call edges: from → to (direct invocation)
---     dispatches edges: from → to (dispatch point routes to handler)
---   Dependency graph (who depends on whom):
---     function_call edges: from → to (caller depends on callee) — same direction
---     dispatches edges: to → from (handler depends on dispatch point) — flipped
---   Both perspectives use the same stored edges; projection controls direction.
+-- Thirteen relations. Each grounded by a specific substrate push and a
+-- uniform cross-methodology semantic. Edges are values; identity is
+-- (from, to, kind, identifying_metadata). Multi-edges are allowed iff the
+-- identifying-metadata subset differs.
+
+enum RelationKind {
+    triggers | observes | reads | writes | creates | destroys | emits
+    | realises | specialises | uses | exposes | provides | projects
+}
+
+enum ProjectionKind {
+    -- Role discriminator on `projects` edges. The five V0 values; future
+    -- values (endpoint, resource, documentation, diagram) arrive with
+    -- their producing methodologies.
+    rule | operation | invariant | schema | test
+}
 
 entity Edge {
-    -- Directed relationship between two leaf nodes.
-    -- Edges are strictly leaf-to-leaf: both endpoints are Function
-    -- or Schema nodes. Module-level relationships are derived by
-    -- the projection layer through ancestor aggregation.
-    --
-    -- The canonical direction is always stored. For code edges (calls,
-    -- dispatches) this is the invocation direction: caller → callee,
-    -- dispatch point → handler. Projection may flip direction when
-    -- rendering dependency perspectives.
-    --
-    -- EdgeKindEndpoints: the kind constrains valid endpoint types.
-    --   function_call: from is Function, to is Function or Schema
-    --     (a function may reference a var replaced by a schema node)
-    --   dispatches: both endpoints are Function
-    --     (dispatch point and handler are both functions)
-    --   schema_reference: both endpoints are Schema
-    from: Node
-    to: Node
-    kind: EdgeKind
+    -- Directed relationship between two Endpoints. Identifying metadata
+    -- is the per-relation subset that contributes to edge identity;
+    -- non-identifying metadata (timestamps, evidence, rendering hints)
+    -- mutates without changing edge identity.
+    from: Endpoint
+    to: Endpoint
+    kind: RelationKind
+
+    -- Identifying metadata (per-relation applicability — see invariants
+    -- below). Slot content is typed Expression where applicable;
+    -- identity is structural equality on Expression structure.
+    condition: Expression?       -- typed Bool
+    scope: Expression?
+    projection_kind: ProjectionKind?
 
     invariant NoSelfEdge {
         from != to
     }
-}
 
-entity Node {
-    -- An entity in the system model.
-    --
-    -- Nodes represent both specification concepts and implementation
-    -- artifacts in a unified graph. A node may exist from:
-    --   spec-only: design-phase, no implementation yet
-    --   impl-only: imperative shell, no spec needed
-    --   both: specced functional core with implementation
-    --
-    -- Structural invariants (hold for all nodes in a well-formed model):
-    --
-    -- TreeStructure: each node has at most one parent, which exists in
-    --   the model. The hierarchy forms a strict tree — no cycles.
-    --
-    -- LeafStrictness: Function and Schema nodes never have children.
-    --
-    -- SchemaReplacesFunction: when a var defines a schema, no function
-    --   node exists for that var. A schema node takes its place.
-
-    kind: Module | Function | Schema
-    label: String
-
-    -- Hierarchy
-    parent: Node?
-    children: Node with parent = this
-
-    -- Derived
-    is_leaf: children.count = 0
-    is_root: parent = null
-
-    invariant LeafStrictness {
-        kind in {Function, Schema} implies children.count = 0
+    invariant IdentifyingMetadataPerRelation {
+        -- Per-relation identifying-metadata slots (closed table):
+        --   triggers, realises, specialises, uses, exposes, provides: none
+        --   observes, reads:                                          condition
+        --   writes, creates, destroys, emits:                         condition, scope
+        --   projects:                                                 projection_kind
+        for e in Edge:
+            (e.kind in {triggers, realises, specialises, uses, exposes, provides})
+                implies (e.condition = null and e.scope = null
+                         and e.projection_kind = null)
+            and (e.kind in {observes, reads})
+                implies (e.scope = null and e.projection_kind = null)
+            and (e.kind in {writes, creates, destroys, emits})
+                implies (e.projection_kind = null)
+            and (e.kind = projects)
+                implies (e.condition = null and e.scope = null
+                         and e.projection_kind != null)
     }
 }
 
-variant Module : Node {
-    -- A module in the system: directory, namespace, or specification scope.
-    -- Organizes the tree hierarchy and defines module boundaries.
-    --
-    -- Three realization states:
-    --   spec-only: has boundary from spec, no implementation children
-    --   impl-only: has code children, boundary inferred from signatures
-    --   both: spec provides the "what", impl children provide the "how"
-    --
-    -- ModuleBoundary: every module has a boundary. The build pipeline
-    --   infers one from public function signatures when no spec or
-    --   contract provides one explicitly. This ensures IO can always
-    --   be derived from boundary functions at projection time.
-    --
-    -- ModuleInvariants: a module may carry zero or more invariants —
-    --   structural truths harvested from .allium `invariant` blocks.
-    --   Unlike guarantees (which live on the Boundary and describe
-    --   what callers can rely on), invariants describe properties
-    --   the module maintains internally and are not tied to any
-    --   particular API call.
+-- Per-relation semantics (one line each — see doc/MODEL.md §4.2 for full
+-- treatment).
 
-    boundary: Boundary
-    invariants: List<Invariant>
+guarantee TriggersIsOccurrenceCausation
+-- An Event or Operation occurrence causes the target Rule to fire.
+-- Endpoints: Event | Operation -> Rule. Multi-subscriber capable.
+
+guarantee ObservesIsStateCausation
+-- The Rule has standing interest in a condition on the target.
+-- Endpoints: Rule -> Container | Field. Per-Rule semantics.
+
+guarantee ReadsIsDataDependency
+-- The Rule looks at the target's state while computing its effects.
+-- Not a trigger, not an effect — a dependency. Retained because
+-- spec-to-code drift detection needs `reads` as a contract surface.
+-- Endpoints: Rule -> Container | Field.
+
+guarantee WritesIsStateModification
+-- Rule modifies state on existing identity. Endpoints: Rule ->
+-- Container | Field. Sourced by an Effect record in Rule.body.effects.
+
+guarantee CreatesIsIdentityIntroduction
+-- Rule introduces a new identity. Endpoints: Rule -> Container.
+-- Sourced by an Effect. Field-only creation is `writes`, not `creates`.
+
+guarantee DestroysIsIdentityTermination
+-- Rule terminates an identity. Endpoints: Rule -> Container.
+-- Sourced by an Effect. Field-only destruction is `writes`, not
+-- `destroys`.
+
+guarantee EmitsIsEventProduction
+-- Rule produces an Event. Endpoints: Rule -> Event. Sourced by an
+-- Effect. Distinct from `provides` (boundary advertisement of an
+-- event-entry point).
+
+guarantee RealisesIsStructuralRealisation
+-- X is the concrete part that completes Y's abstract specification.
+-- Same-altitude. Endpoints: Container | Operation -> Container | Operation.
+
+guarantee SpecialisesIsStructuralExtension
+-- X extends Y's structure: inherits Y's fields, may add or narrow.
+-- Same-altitude. Endpoints: Container -> Container. Edge direction is
+-- child -> parent.
+
+guarantee UsesIsDeclaredDependency
+-- X declares a dependency on Y's interface. Same-altitude. Endpoints:
+-- Container -> Container. Distinct from the derived `depends_on`:
+-- `uses` is declared at spec altitude; `depends_on` is observed.
+
+guarantee ExposesIsViewProtocol
+-- X advertises Field F as readable at X's boundary. Endpoints:
+-- Container -> Field (the Field side is a SubstrateAddress).
+
+guarantee ProvidesIsSignalProtocol
+-- X advertises Event E as an entry point at X's boundary. Endpoints:
+-- Container -> Event. Distinct from `triggers` — `provides` is the
+-- boundary-level declaration that the Event has an external entry
+-- point; `triggers` is what fires when the Event arrives.
+
+guarantee ProjectsIsSpecToRealisation
+-- A spec primitive projects to a realisation Artifact (code, infra,
+-- docs, tests). Spec is the source; realisations lose information.
+-- Endpoints: Container | Operation | Rule | Event | Clause | Expression
+-- -> Artifact. Carries projection_kind in identity; carries `validity`
+-- as a memoised derivation (non-identifying) over
+-- (spec_primitive, expected_address, code_at_address).
+
+enum ProjectionValidity { valid | stale | absent | unknown }
+
+------------------------------------------------------------
+-- Substrate principle
+------------------------------------------------------------
+
+invariant SubstratePrinciple {
+    -- A slot belongs at kernel substrate iff it is essential to
+    -- understanding the primitive in isolation. Cross-primitive
+    -- interactions live in relations. Design/intentional framing lives
+    -- in vocabulary.
+    -- Operational corollary: aggregated/owned content -> substrate;
+    -- cross-referenced content -> relations.
+    substrate is essential
 }
 
-variant Function : Node {
-    -- An operation within a module.
-    --
-    -- Two sources:
-    -- - Implementation: discovered from code analysis (var definitions).
-    --   Has full details: doc, visibility, signature.
-    -- - Specification: declared as a `fn` in the module's .boundary file.
-    --   Has name, signature, and optional doc; private is always false
-    --   (boundary fns are by definition public).
-    --
-    -- For spec+impl modules, spec-derived functions correspond to
-    -- implementation-discovered functions by id (boundary names use
-    -- underscores, mapped to hyphens to match implementation labels).
-    doc: String?
-    private: Boolean
-    signature: FunctionSignature?
+invariant ChildrenOnParent {
+    -- Container ownership is stored once on the parent (`children`); no
+    -- `parent` slot. Tree integrity is enforced by traversal, not by a
+    -- mutable back-pointer.
+    for c in Container:
+        for child_id in c.children:
+            exists d in Container: d.id = child_id
 }
 
-variant Schema : Node {
-    -- A named schema definition within a namespace.
-    -- When a var defines a schema, the function node for that var is
-    -- removed and a schema node takes its place in the tree.
-    --
-    -- Schema nodes are owned by their parent module. They form part
-    -- of that module's published data contract — other modules that
-    -- reference these schemas take a dependency on the owning module.
-    -- Private schemas are internal implementation details; public
-    -- schemas appear in the module's boundary.
-    --
-    -- Spec sources contribute orthogonally:
-    --   .boundary `exposes Foo`           -> Schema node, marked public
-    --   .allium `entity/value/variant Foo` -> Schema node, marked private,
-    --                                         carrying the TypeExpr structure
-    -- A type both exposed at the wall and defined in .allium produces
-    -- one merged Schema: public marking from .boundary, structure from .allium.
-    schema_key: String
-    form: TypeExpr
-    doc: String?
-    private: Boolean
+invariant SingularAggregatesPerHost {
+    -- Behaviour, Boundary, Intent, RuleBody are singular aggregates on
+    -- their hosts. Multiplicity lives in their sub-units (Rules,
+    -- Operations, Clauses, Definitions/Effects).
+    for c in Container:
+        c.behaviour is at most one
+        and c.boundary is at most one
 }
+
+invariant ClausesAreFirstClass {
+    -- Per K15a: Clause is a kernel primitive with its own id, despite
+    -- being owned by Intent. Moving a Clause between Intents preserves
+    -- its id. Clause.label is human-facing addressability, not identity.
+    Clause has identity
+}
+
+invariant EffectExpressionParity {
+    -- Per §3.8.3: every Effect is the canonicalised materialisation of an
+    -- Expression of recognised shape in Rule.intent.assertions, and every
+    -- such qualifying Expression has a corresponding Effect. The
+    -- materialisation is committed at kernel level because the Effect is
+    -- the source of stored kernel edges (writes/creates/destroys/emits);
+    -- those edges are first-class substrate consumed by graph queries.
+    --
+    -- The relation is bidirectional:
+    --   - No qualifying Bool Expression in Rule.intent.assertions lacks a
+    --     corresponding Effect.
+    --   - No Effect in Rule.body.effects lacks a `source` Expression
+    --     resolving back to one.
+    for r in Rule:
+        for e in r.body.effects:
+            exists a in r.intent.assertions: a matches a canonicalisation pattern
+                                              and e.source = a.id
+        and for a in r.intent.assertions:
+            (a matches a canonicalisation pattern)
+                implies (exists e in r.body.effects: e.source = a.id)
+}
+
+invariant ModeIsCallsiteTyped {
+    -- Per §3.8.6: variable mode (input-bound / output-solved) lives in
+    -- the constraint-language rule structure that uses an Expression,
+    -- not in the Expression record. Structural identity is therefore
+    -- mode-free.
+    Expression has no mode slot
+}
+
+invariant EnvironmentIsCallsiteTyped {
+    -- Per §3.8.5: Environment is part of the callsite type. An
+    -- Expression typed against OneState cannot reference post.X; type-
+    -- checking enforces this at parse time.
+    Expression has no environment slot
+}
+
+------------------------------------------------------------
+-- Stub-resolution semantics
+------------------------------------------------------------
+
+invariant StubResolutionIsUnconditional {
+    -- Per §3.6: the merge step is a function
+    --   Model = merge(analyzer_outputs)
+    -- An external-entity stub at use site U pointing at name N is
+    -- identified with the real Container defined elsewhere if one
+    -- exists: the Model contains a single Container under the real id;
+    -- all references resolve to it. The real Container retains full
+    -- substrate; the ExternalEntity tag does not propagate to it.
+    --
+    -- When no real Container exists, the stub appears in the Model as a
+    -- Container with the ExternalEntity tag and restricted substrate.
+    --
+    -- Merge is unconditional with respect to target-module visibility;
+    -- closed-module / private-target cases are caught in the build
+    -- pipeline's cross-module reference visibility rule.
+    for stub_site:
+        exists real_container_with_matching_name
+            implies merged_model_uses_real_container_id_only
+}
+
+------------------------------------------------------------
+-- Projection Vocabulary
+------------------------------------------------------------
+--
+-- The Artifact ontology — projection targets that spec primitives may
+-- `project` to. V0 commits one category (Code) with two leaf cases.
+-- Infra and Documentation arrive with their producing analyzers
+-- (deferred).
+
+entity Artifact {
+    -- Closed sum at top level. V0: only Code; Infra and Documentation
+    -- cases come back with .infra and a future documentation analyzer.
+    case: code
+    language: String
+    sub: ArtifactSub
+}
+
+entity ArtifactSub {
+    -- Sub-discriminator within an Artifact. V0: code/function |
+    -- code/data_structure.
+    case: ArtifactSubCase
+}
+
+enum ArtifactSubCase { code_function | code_data_structure }
+
+variant CodeFunction : ArtifactSub {
+    -- A function (or function-like) realisation in some target language.
+    -- Identity: (code_function, language, qualified_name) per the
+    -- artifact-identity tuple.
+    qualified_name: String
+    source_location: SourceLocation?
+    public: Boolean?
+}
+
+variant CodeDataStructure : ArtifactSub {
+    -- A data-structure realisation in some target language.
+    -- Identity: (code_data_structure, language, qualified_name).
+    qualified_name: String
+    source_location: SourceLocation?
+}
+
+value SourceLocation {
+    -- Non-identifying — Artifact identity is independent of where the
+    -- target lives on disk.
+    file: String
+    line: Integer?
+}
+
+------------------------------------------------------------
+-- Vocabulary Mechanism
+------------------------------------------------------------
+--
+-- Methodologies extend the substrate by registering typed tags,
+-- predicates, and renderer treatments. Plan 1 ships the data shapes and
+-- v0 inheritance semantics: payload-schema extension is in; field-
+-- override and multi-parent are out.
+
+value TagRef {
+    -- A namespaced tag identifier.
+    namespace: String
+    name: String
+}
+
+entity TagDefinition {
+    -- Registration of a methodology tag. `applies_to` restricts where the
+    -- tag may be applied (which kernel target kind). `payload_schema` is
+    -- typed against the unified Type vocabulary. `parent_tag` enables tag-
+    -- presence implication via V9 inheritance (carrying a child tag
+    -- implies carrying every ancestor). `relational` makes the tag an
+    -- edge-shaped vocabulary (introduces endpoint-style content).
+    namespace: String
+    name: String
+    applies_to: TagTargetKind
+    payload_schema: Type?
+    parent_tag: TagRef?
+    relational: RelationalSpec?
+}
+
+enum TagTargetKind {
+    container | actor | behaviour | rule | boundary | operation
+    | intent | clause | event | edge | substrate
+}
+
+value RelationalSpec {
+    -- Spec for relational tags (edge-shaped vocabulary).
+    endpoints: List<String>
+    symmetry: directed | symmetric
+    canonical_side: String?
+    coherence_query: Value?
+}
+
+entity TagApplication {
+    -- An application of a registered TagDefinition to a target. Target is
+    -- a primitive, an edge, or a substrate-slot address. Payload is typed
+    -- against the TagDefinition's payload_schema.
+    tag: TagRef
+    target: TagTarget
+    payload: Map<String, Value>
+}
+
+entity TagTarget {
+    -- Closed sum: primitive | edge | substrate. Plan 1's
+    -- has_tag_with_ancestors matches only :target/primitive; edge and
+    -- substrate matching arrive with the constraint engine (Plan 4).
+    case: primitive | edge | substrate
+}
+
+variant PrimitiveTagTarget : TagTarget {
+    id: Identifier
+}
+
+variant EdgeTagTarget : TagTarget {
+    edge_identity: Value     -- (from, to, kind, identifying-subset) per §4.4
+}
+
+variant SubstrateTagTarget : TagTarget {
+    container: Identifier
+    path: List<PathSegment>
+}
+
+entity PredicateRegistration {
+    -- Registration of a methodology predicate. `severity` drives violation
+    -- routing (error blocks publication; warning surfaces in views).
+    -- `scope` distinguishes model-wide predicates from tag-scoped ones.
+    -- Concrete predicate-language semantics arrive in Plan 4.
+    namespace: String
+    name: String
+    severity: error | warning
+    kind: String
+    scope: model | tag
+    message_template: String
+    predicate: Value           -- predicate body; semantics deferred to Plan 4
+    applies_to: TagRef?
+}
+
+entity RendererRegistration {
+    -- Registration of a methodology renderer treatment. Concrete treatments
+    -- arrive with the explorer rebuild (Plan 6).
+    tag: TagRef
+    node_treatment: Value?
+    sidebar_treatment: Value?
+    edge_treatment: Value?
+    layout_hint: Value?
+}
+
+------------------------------------------------------------
+-- Inheritance Semantics (V9 — Plan 1 commitments)
+------------------------------------------------------------
+
+guarantee PayloadSchemaExtension
+-- A child tag's payload-schema extends its parent's: every parent slot
+-- is present (and may be narrowed); new slots may be added.
+
+guarantee TagPresenceImplication
+-- A target carrying a child tag is treated, for predicate purposes, as
+-- carrying every ancestor tag in the parent_tag chain (transitively).
+
+guarantee NoFieldOverride
+-- Plan 1 does not support per-slot override of parent payload values by
+-- a child tag application.
+
+guarantee NoMultiParent
+-- Plan 1 supports a single parent_tag per TagDefinition; multi-parent
+-- inheritance is deferred.
+
+------------------------------------------------------------
+-- Edge Direction and Derived Relations
+------------------------------------------------------------
+
+guarantee NoInversePairs
+-- Relations have direction. The kernel never names two relations as
+-- inverse pairs (no `triggered_by`, no `realised_by`). Inverse queries
+-- traverse the same edge from the other endpoint. Methodologies that
+-- want directional-inverse vocabulary carry it in their vocabulary.
+
+guarantee DerivedRelationsAreQueries
+-- Derived relations (canonical example: `chains` — Rule emits Event ->
+-- Rule triggered by Event) are NOT kernel relations. The kernel commits
+-- to making them expressible and queryable through the constraint
+-- language, not to storing them as edges. Storing the derivation would
+-- risk drift.
+
+------------------------------------------------------------
+-- Type-System Floor (Path A commitment)
+------------------------------------------------------------
+
+guarantee NamedClosedIncludedFloor
+-- Where the substrate must take a position on type-system shape, it
+-- commits to Allium-aligned defaults: shapes are named, closed, composed
+-- by inclusion. This is the most restrictive of the common choices, so
+-- methodologies can selectively relax it (opening, predicate-typing,
+-- anonymising) via vocabulary overlay. The substrate sees the relaxed
+-- view through the overlay; tightening a permissive substrate from above
+-- is unreachable without breaking earlier vocabulary content.
+
+------------------------------------------------------------
+-- The Model — top-level value
+------------------------------------------------------------
 
 entity Model {
-    -- Complete system model. Immutable after construction.
-    -- Combines specification and implementation into a unified graph
-    -- where both are navigable with the same tools.
+    -- Complete substrate. Immutable after construction (a value, per the
+    -- substrate principle: rebuild produces a new Model; in-flight
+    -- consumers see the previous snapshot until next dereference).
     --
-    -- Structural invariants:
-    --
-    -- NoEmptyModules: modules without children are removed during
-    --   build. Exception: spec-only modules with a boundary declaration
-    --   are retained — they represent design-phase definitions that may
-    --   have no child functions yet.
-    --
-    -- NoSelfEdges: every edge has from != to.
-    --
-    -- EdgeIntegrity: both endpoints of every edge exist in nodes.
-    --
-    -- LeafEdges: both endpoints of every edge are leaf nodes
-    --   (Function or Schema). Module-level edges do not exist in
-    --   the model — they are derived on demand by projection.
-    --
-    -- EdgeKindEndpoints: endpoint node kinds are constrained by
-    --   edge kind (see EdgeKind enum and Edge entity).
-    --
-    -- SmartRootPruning: single-child module chains at the root are
-    --   collapsed. The tree starts at the first module with multiple
-    --   children or non-module children.
-    --
-    -- BoundaryFunctionConsistency: every .boundary `fn` declaration has
-    --   a corresponding Function child node. Boundary fns are emitted
-    --   directly as children by the boundary analyzer, ensuring
-    --   spec-only modules are navigable.
-
-    nodes: Map<String, Node>   -- keyed by NodeId
+    -- Contains all kernel primitives, all kernel edges, and the
+    -- vocabulary registry (tag definitions, applications, predicate
+    -- registrations, renderer registrations). The pipeline.allium spec
+    -- describes how the Model is built from analyzer outputs.
+    primitives: Map<Identifier, Primitive>     -- keyed by id
     edges: List<Edge>
-
-    -- Projections
-    modules: nodes where kind = Module
-    root_nodes: nodes where is_root
+    tag_definitions: List<TagDefinition>
+    tag_applications: List<TagApplication>
+    predicate_registrations: List<PredicateRegistration>
+    renderer_registrations: List<RendererRegistration>
 }
 
-------------------------------------------------------------
--- Invariants
-------------------------------------------------------------
-
-invariant EdgeIntegrity {
-    for e in Model.edges:
-        e.from in Model.nodes and e.to in Model.nodes
+entity Primitive {
+    -- Closed sum over the nine kernel primitives. Each Primitive value
+    -- carries a `kind` discriminator (per primitive-kinds in the
+    -- implementation).
+    kind: PrimitiveKind
 }
 
-invariant LeafEdges {
-    for e in Model.edges:
-        e.from.kind in {Function, Schema}
-        and e.to.kind in {Function, Schema}
-}
-
-invariant EdgeKindEndpoints {
-    for e in Model.edges:
-        e.kind = dispatches implies
-            (e.from.kind = Function and e.to.kind = Function)
-        e.kind = schema_reference implies
-            (e.from.kind = Schema and e.to.kind = Schema)
-}
-
-invariant TreeStructure {
-    for n in Model.nodes:
-        n.parent != null implies n.parent in Model.nodes
-}
-
-invariant NoEmptyImplModules {
-    -- Modules without children are removed during build.
-    -- Exception: spec-only modules with boundary declarations are retained.
-    for n in Model.modules:
-        n.children.count = 0 implies n.boundary.description != null
-}
