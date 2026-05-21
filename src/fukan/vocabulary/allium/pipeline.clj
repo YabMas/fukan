@@ -314,6 +314,65 @@
   (unify-external-entity-stubs model))
 
 ;; ---------------------------------------------------------------------------
+;; Inline-primitive lift (K15a: Intent/Clause/Boundary are first-class)
+;; ---------------------------------------------------------------------------
+;;
+;; The per-file analyzer creates Intent / Clause / Boundary values inline on
+;; their host primitive's substrate (Container.boundary, Container.intent,
+;; Rule.intent, Boundary.intent, Intent.clauses). Per K15a these are kernel
+;; primitives with first-class identity — they must also be addressable
+;; top-level by id so queries like `(get-primitive id)` and `(vocabulary)`
+;; surface them. The lift step walks every host primitive and registers the
+;; inline values into `:primitives` (overwriting any prior lift to keep the
+;; top-level copy in sync with the substrate copy). The inline references are
+;; preserved verbatim — host primitives retain their substrate face.
+
+(defn- lift-intent-and-clauses
+  "Register `intent` (if present) and each clause it owns into `:primitives`.
+   No-op when intent is nil."
+  [model intent]
+  (if (nil? intent)
+    model
+    (let [m (assoc-in model [:primitives (:id intent)] intent)]
+      (reduce (fn [acc clause]
+                (assoc-in acc [:primitives (:id clause)] clause))
+              m
+              (:clauses intent)))))
+
+(defn- lift-inline-primitives-for
+  "Lift inline Intent / Clause / Boundary values from one host primitive."
+  [model prim]
+  (case (:kind prim)
+    :primitive/container
+    (let [m1 (lift-intent-and-clauses model (:intent prim))
+          boundary (:boundary prim)
+          m2 (if (nil? boundary)
+               m1
+               (-> m1
+                   (assoc-in [:primitives (:id boundary)] boundary)
+                   (lift-intent-and-clauses (:intent boundary))))]
+      m2)
+
+    :primitive/rule
+    (lift-intent-and-clauses model (:intent prim))
+
+    :primitive/operation
+    (lift-intent-and-clauses model (:intent prim))
+
+    :primitive/behaviour
+    (lift-intent-and-clauses model (:intent prim))
+
+    model))
+
+(defn- lift-inline-primitives
+  "Final post-pass: register inline Intent / Clause / Boundary primitives at
+   top-level `:primitives` so K15a first-class identity is queryable. Runs
+   after stub-unification so lifted ids reflect post-merge host coordinates."
+  [model]
+  (let [hosts (vec (vals (:primitives model)))]
+    (reduce lift-inline-primitives-for model hosts)))
+
+;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
@@ -331,7 +390,9 @@
     (loop [model initial
            files allium-files]
       (if (empty? files)
-        (resolve-cross-module-refs model)
+        (-> model
+            resolve-cross-module-refs
+            lift-inline-primitives)
         (let [f           (first files)
               coord       (coordinate-of source-root f)
               ast         (parser/parse-file f)
