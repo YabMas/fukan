@@ -4,8 +4,8 @@
 
 use "./spec.allium" as model
 
-fn build_model(src: FilePath, analyzers: Set<AnalyzerKey>) -> Model
-  -- Build complete model from a source path and analyzer keys.
+fn build_model(src: FilePath) -> Model
+  -- Build complete model from a source path.
 
 exports:
     AnalysisResult

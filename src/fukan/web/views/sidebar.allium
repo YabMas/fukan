@@ -5,7 +5,9 @@
 -- Includes: render_sidebar_html signature (in sidebar.boundary);
 --   sidebar layout / content invariants
 -- Excludes:
---   - Graph rendering (see graph.allium)
+--   - Other view rendering (see shell.allium, graph.allium,
+--     breadcrumb.allium)
+--   - Cytoscape value types (see cytoscape.allium)
 
 ------------------------------------------------------------
 -- Invariants

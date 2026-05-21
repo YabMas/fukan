@@ -832,6 +832,7 @@
    "src/fukan/web/views/sidebar.allium"
    "src/fukan/web/views/cytoscape.allium"
    "src/fukan/web/views/breadcrumb.allium"
+   "src/fukan/web/views/projection.allium"
    "src/fukan/model/spec.allium"
    "src/fukan/model/pipeline.allium"])
 

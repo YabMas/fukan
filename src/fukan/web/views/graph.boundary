@@ -3,8 +3,9 @@
 -- Graph rendering — transforms projection data into CytoscapeGraph.
 
 use "./projection.allium" as projection
+use "./cytoscape.allium" as cyto
 
-fn render_graph(projection: Projection, editor_state: EditorState) -> CytoscapeGraph
+fn render_graph(projection: Projection, editor_state: EditorState) -> cyto/CytoscapeGraph
   -- Transform projection data into CytoscapeGraph output.
 
 exports:

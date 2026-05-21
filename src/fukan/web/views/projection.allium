@@ -26,4 +26,5 @@ entity Edge {
     target: NodeId
 }
 
-external entity NodeId
+external entity NodeId {
+}

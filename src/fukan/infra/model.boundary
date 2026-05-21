@@ -4,7 +4,7 @@
 
 use "../model/spec.allium" as model
 
-fn load_model(src: FilePath, analyzers: Set<AnalyzerKey>) -> Model
+fn load_model(src: FilePath) -> Model
   -- Load and build the model from source.
 
 fn get_model() -> Model?
