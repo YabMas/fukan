@@ -106,10 +106,29 @@
        :location {:provides-edge pe :event-id event-id :module event-module}
        :message (str "Event " event-id " is provided by a Surface but has no external-stimulus triggers consumer in module " event-module)})))
 
+;; -- Rule 4: exposes: paths must resolve to a substrate endpoint -------------
+
+(defn- exposes-unresolved [model]
+  (for [issue (get-in model [:phase4-state :exposes-issues] [])]
+    (v/make-violation
+      {:severity :error :phase :phase4 :sub-phase :4b
+       :kind     :4b/exposes-unresolved
+       :location {:surface (:surface-id issue)
+                  :module  (:module issue)
+                  :path    (:path issue)
+                  :target  (:target-id issue)
+                  :field   (:field issue)
+                  :resolution (:resolution issue)}
+       :message  (str "exposes: path '" (:path issue) "' on surface "
+                      (:surface-id issue) " could not be added as an edge ("
+                      (name (:resolution issue)) "): "
+                      (:message issue))})))
+
 (defn check
   "Run all 4b event rules. Returns a vector of Violations."
   [model]
   (vec (concat
          (events-without-declaration-sites model)
          (shape-mismatches model)
-         (provides-without-external-stimulus model))))
+         (provides-without-external-stimulus model)
+         (exposes-unresolved model))))

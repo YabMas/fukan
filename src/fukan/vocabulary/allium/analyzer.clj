@@ -385,6 +385,41 @@
       (str (:ns contract-ref) "/" (:name contract-ref)))
     (qualify module-coord (:name contract-ref))))
 
+(defn- collect-context-roles
+  "Per-surface pass: build a map of context-role-name → resolved target
+   {:coord <module-coord> :name <container-name>} for every `context: name: TypeRef`
+   clause on this surface. `exposes:` paths whose leading segment matches a
+   context-role retarget to the resolved Container instead of treating the role
+   name as a same-module Container.
+
+   Simple type-refs (`context graph_data: T`) resolve to <this-module>::T.
+   Qualified type-refs (`context graph_data: alias/T`) resolve via use-aliases
+   to <imported-coord>::T; if the alias is unknown, the entry is skipped so the
+   exposes site falls through to the normal failure path."
+  [decl module-coord use-aliases]
+  (into {}
+        (keep (fn [field]
+                (when (= :context (:field-kind field))
+                  (let [tr        (:type-ref field)
+                        type-name (:name tr)
+                        type-ns   (:ns tr)
+                        coord     (if type-ns
+                                    (get use-aliases type-ns)
+                                    module-coord)]
+                    (when coord
+                      [(:role field)
+                       {:coord coord :name type-name}])))))
+        (:fields decl)))
+
+(defn- record-exposes-issue
+  "Append an exposes-resolution failure record into the model's
+   `:phase4-state.exposes-issues` slot. Phase 4b reads this and surfaces each
+   record as a Violation."
+  [model issue]
+  (update model :phase4-state
+          (fn [s] (update (or s {}) :exposes-issues
+                          (fnil conj []) issue))))
+
 (defn- analyze-surface
   [model decl module-coord _name-registry use-aliases]
   (let [container-id (qualify module-coord (:name decl))
@@ -435,32 +470,41 @@
                         (mapcat :entries)))
 
         ;; exposes: — emit exposes Container -> Field(substrate) edges + Allium::Exposes tag.
-        ;; Path may be `Container.field` (same-module) or `alias.Container.field`
-        ;; (cross-module via `use` alias). When the first segment is a known
-        ;; alias for the host file, retarget to <imported-coord>::Container.
-        ;; If the target Container is not yet in the Model, create a minimal
-        ;; stub (zero fields) so the edge can land; the field-key segment
-        ;; would still fail endpoint resolution under add-edge, so this
-        ;; remains best-effort with the existing try/catch — Plan 4 will
-        ;; tighten exposes endpoint resolution. The retargeting at least
-        ;; preserves the container coordinate for the projection.
+        ;; Path resolution order for `seg1.seg2[.seg3...]`:
+        ;;   1. `seg1` matches a context-role declared on this surface →
+        ;;      retarget to the context's resolved Container (same- or
+        ;;      cross-module via the role's type-ref alias). Field name is
+        ;;      the last segment.
+        ;;   2. seg1 matches a use-alias and there are ≥3 segments → cross
+        ;;      module `alias.Container.field`. Target = <imported>::Container.
+        ;;   3. Else → same-module `Container.field`. Target = <this>::Container.
+        ;; For (1) and (2) we may need to synthesise a stub Container at the
+        ;; target coordinate so add-edge's endpoint validation succeeds; the
+        ;; stub carries a single field matching the exposed name. Stub-
+        ;; unification (§3.6) merges with the real Container once it loads.
+        context-roles (collect-context-roles decl module-coord use-aliases)
         m2 (reduce (fn [m exposed-path]
-                     (let [segs (str/split exposed-path #"\.")
+                     (let [segs        (str/split exposed-path #"\.")
+                           seg1        (first segs)
+                           field-name  (last segs)
+                           ctx-target  (get context-roles seg1)
                            cross-module?
-                           (and (>= (count segs) 3)
-                                (contains? use-aliases (first segs)))
-                           [target-coord container-name field-name]
-                           (if cross-module?
-                             [(get use-aliases (first segs)) (second segs) (last segs)]
-                             [module-coord (first segs) (last segs)])
+                           (and (nil? ctx-target)
+                                (>= (count segs) 3)
+                                (contains? use-aliases seg1))
+                           [target-coord container-name]
+                           (cond
+                             ctx-target    [(:coord ctx-target) (:name ctx-target)]
+                             cross-module? [(get use-aliases seg1) (second segs)]
+                             :else         [module-coord seg1])
                            target-container-id (qualify target-coord container-name)
-                           ;; For cross-module references, create a minimal
-                           ;; stub Container at the target coordinate so the
-                           ;; edge survives add-edge's endpoint validation.
-                           ;; Stub-unification (§3.6) merges the stub with the
-                           ;; real Container if it is defined elsewhere.
-                           m' (if (or (not cross-module?)
-                                      (build/get-primitive m target-container-id))
+                           ;; For context-role and cross-module references,
+                           ;; pre-create a minimal stub Container (with the
+                           ;; field stubbed) so the edge survives add-edge's
+                           ;; endpoint validation.
+                           need-stub? (and (or ctx-target cross-module?)
+                                           (not (build/get-primitive m target-container-id)))
+                           m' (if-not need-stub?
                                 m
                                 (try
                                   (build/add-primitive
@@ -475,21 +519,44 @@
                                     (if (= "Duplicate primitive id" (.getMessage e))
                                       m
                                       (throw e)))))
+                           ;; If the target Container exists but is missing
+                           ;; the exposed field, add a stub field so the
+                           ;; substrate-address resolves. Real fields take
+                           ;; precedence; this only fills gaps.
+                           existing-c (build/get-primitive m' target-container-id)
+                           m' (if (and existing-c
+                                       (not (some #(= field-name (:name %))
+                                                  (:fields existing-c))))
+                                (assoc-in m'
+                                          [:primitives target-container-id :fields]
+                                          (conj (vec (:fields existing-c))
+                                                (p/make-field field-name
+                                                              (t/make-scalar "AlliumText")
+                                                              false)))
+                                m')
                            edge    (r/make-edge :relation/exposes
                                                 (r/primitive-ref container-id)
                                                 (r/substrate-address target-container-id
                                                                       [{:slot "field" :key field-name}]))
                            edge-id (r/edge-identity edge)]
-                       ;; Best-effort: skip silently if endpoint resolution
-                       ;; still fails (e.g. same-module reference to a
-                       ;; non-existent field).
                        (try (-> m'
                                 (build/add-edge edge)
                                 (build/add-tag-application
                                   (v/make-tag-application
                                     {:tag    {:namespace "Allium" :name "Exposes"}
                                      :target {:case :target/edge :edge-identity edge-id}})))
-                            (catch Exception _ m'))))
+                            (catch Exception e
+                              (record-exposes-issue
+                                m'
+                                {:surface-id  container-id
+                                 :module      module-coord
+                                 :path        exposed-path
+                                 :target-id   target-container-id
+                                 :field       field-name
+                                 :resolution  (cond ctx-target    :context-role
+                                                    cross-module? :cross-module
+                                                    :else         :same-module)
+                                 :message     (.getMessage e)})))))
                    m1
                    (->> fields
                         (filter #(= :exposes (:field-kind %)))
