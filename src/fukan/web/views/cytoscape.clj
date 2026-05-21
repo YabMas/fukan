@@ -1,16 +1,54 @@
 (ns fukan.web.views.cytoscape
   "Transforms internal graph-view format to Cytoscape-compatible JSON.
    This is the boundary layer between domain-focused view data and
-   the Cytoscape.js frontend library.")
+   the Cytoscape.js frontend library."
+  (:require [malli.core :as m]))
 
 ;; -----------------------------------------------------------------------------
-;; Cytoscape Output Schemas (informational — not enforced at runtime)
+;; Cytoscape Output Schemas
 ;;
-;; Node shape: {:id :kind :label :selected
-;;              :parent? :alliumKind? :sourceLocation?}
-;; Edge shape: {:id :source :target :edgeType :kind
-;;              :projectionKind? :drift?}
-;; Graph shape: {:nodes :edges :selectedId :highlightedEdges}
+;; Canonical materialisations of the value types declared in
+;; web/views/cytoscape.allium. Field names map mechanically from
+;; underscore (spec) to kebab-case (Clojure).
+
+(def CytoscapeNode
+  "Cytoscape.js node payload. Materialises value CytoscapeNode
+   from web/views/cytoscape.allium."
+  (m/schema
+   [:map
+    [:id                   :string]
+    [:kind                 :string]   ;; "module", "function", "schema"
+    [:label                :string]
+    [:parent               {:optional true} :string]
+    [:selected             :boolean]
+    [:expandable           :boolean]
+    [:has-private-children :boolean]
+    [:is-expanded          :boolean]
+    [:showing-private      :boolean]
+    [:child-count          :int]
+    [:private              {:optional true} :boolean]
+    [:schema-key           {:optional true} :string]]))
+
+(def CytoscapeEdge
+  "Cytoscape.js edge payload. Materialises value CytoscapeEdge
+   from web/views/cytoscape.allium."
+  (m/schema
+   [:map
+    [:id        :string]
+    [:source    :string]
+    [:target    :string]
+    [:edge-type :string]   ;; "code-flow" or "schema-reference"
+    [:kind      :string]]))  ;; "function-call", "dispatches", or "schema-reference"
+
+(def CytoscapeGraph
+  "Cytoscape.js graph payload. Materialises value CytoscapeGraph
+   from web/views/cytoscape.allium."
+  (m/schema
+   [:map
+    [:nodes             [:sequential CytoscapeNode]]
+    [:edges             [:sequential CytoscapeEdge]]
+    [:selected-id       {:optional true} :string]
+    [:highlighted-edges [:sequential :string]]]))
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
