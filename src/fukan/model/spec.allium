@@ -8,7 +8,7 @@
 -- Excludes:
 --   - Build pipeline and analysis (see model/pipeline.allium)
 --   - Language-specific analyzers (see model/languages specs)
---   - Infrastructure lifecycle (see infra/spec.allium)
+--   - Infrastructure lifecycle (see infra/model.allium and infra/server.allium)
 --   - Projection and filtering (see projection.allium)
 --   - View rendering and interaction (see views.allium)
 --

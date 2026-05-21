@@ -823,7 +823,8 @@
 ;; ---------------------------------------------------------------------------
 
 (def ^:private corpus-files
-  ["src/fukan/infra/spec.allium"
+  ["src/fukan/infra/model.allium"
+   "src/fukan/infra/server.allium"
    "src/fukan/web/spec.allium"
    "src/fukan/web/views/spec.allium"
    "src/fukan/model/spec.allium"

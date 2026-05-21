@@ -49,10 +49,10 @@
         (is (= 15 (count fn-tags))
             "all 15 corpus fn declarations produce Boundary::Function tags"))
       ;; Boundary::ModuleApi tags on modules with exports:
-      ;; Corpus has 2 files with exports: (model/pipeline.boundary, web/views/spec.boundary)
+      ;; Corpus has 3 files with exports: (infra/server.boundary, model/pipeline.boundary, web/views/spec.boundary)
       (let [api-tags (filter (fn [ta]
                                (and (= "Boundary" (-> ta :tag :namespace))
                                     (= "ModuleApi" (-> ta :tag :name))))
                              (:tag-apps model))]
-        (is (= 2 (count api-tags))
-            "exactly 2 Boundary::ModuleApi tags (model/pipeline, web/views)")))))
+        (is (= 3 (count api-tags))
+            "exactly 3 Boundary::ModuleApi tags (infra/server, model/pipeline, web/views)")))))

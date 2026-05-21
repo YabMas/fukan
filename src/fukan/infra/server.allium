@@ -1,0 +1,39 @@
+-- allium: 2
+-- infra/server.allium
+--
+-- Scope: HTTP server lifecycle — start, stop, port accessors
+-- Includes: SingleServerInstance guarantee; server-lifecycle failure
+--   modes; ServerOpts / ServerInfo value types
+-- Excludes:
+--   - Model lifecycle (see infra/model.allium)
+--   - HTTP routing and handlers (see web/handler.allium)
+--   - Public API signatures (see server.boundary)
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value ServerOpts {
+    -- HTTP server configuration.
+    port: Integer?
+}
+
+value ServerInfo {
+    -- Running server information.
+    port: Integer
+}
+
+------------------------------------------------------------
+-- Guarantees
+------------------------------------------------------------
+
+-- At most one server runs at a time.
+guarantee SingleServerInstance
+
+------------------------------------------------------------
+-- Failure Modes
+------------------------------------------------------------
+--
+-- Server lifecycle failures:
+--   port_in_use         -- requested port already bound
+--   not_running         -- stop called while no server active (no-op)

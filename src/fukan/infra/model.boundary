@@ -1,7 +1,6 @@
 -- boundary: 1
 
--- Infrastructure lifecycle — mutable state management for the
--- model and HTTP server.
+-- Model lifecycle — load, refresh, snapshot accessors.
 
 use "../model/spec.allium" as model
 
@@ -16,12 +15,3 @@ fn refresh_model() -> Model?
 
 fn get_src() -> FilePath?
   -- Return the configured source path.
-
-fn start_server(opts: ServerOpts) -> ServerInfo?
-  -- Start the HTTP server on a given port.
-
-fn stop_server() -> Unit
-  -- Stop the running HTTP server.
-
-fn get_port() -> Integer?
-  -- Return the port the server is listening on.

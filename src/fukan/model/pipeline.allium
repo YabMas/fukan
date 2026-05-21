@@ -8,7 +8,7 @@
 -- Excludes:
 --   - The Model itself (see model/spec.allium)
 --   - Language-specific analyzer internals (see analyzers/)
---   - Model state management (see infra/spec.allium)
+--   - Model state management (see infra/model.allium)
 
 use "./spec.allium" as model
 
