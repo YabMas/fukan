@@ -6,6 +6,14 @@ The system is generic and pluggable: language analyzers (currently Clojure, Alli
 
 The system follows a functional core / imperative shell architecture, enforced by Allium specs and Boundary definitions.
 
+## Querying the Model as an agent
+
+Fukan exposes its Model to coding agents through `bin/fukan`. When working on or with Fukan, prefer querying the spec graph over grepping the codebase.
+
+- **Primer:** [AGENTS.md](AGENTS.md) — read it before the first agent query. Covers the `fukan.agent.system` / `fukan.agent.api` surface, L0/L1/L2 query layering, the edit→refresh→query loop, `.fukan/agent-views.clj`, and sandbox limits.
+- **Quick reference:** `fukan status` (daemon health), `fukan eval '<expr>'` (run a query), `fukan primer` (print AGENTS.md). Requires a running daemon (`clj -M:run …`).
+- **Live catalog:** inside `fukan eval`, call `(help)` for the current fn surface — trust it over `AGENTS.md` if they disagree.
+
 ## Two Spec Languages
 
 Fukan uses two complementary specification languages with distinct responsibilities:

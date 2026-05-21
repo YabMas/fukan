@@ -41,6 +41,42 @@ Then open `http://localhost:8080` in a browser.
 
 The Clojure analyzer (and code-analysis machinery generally) will be retired during the next-chapter migration. Future releases will analyse `.allium` and `.boundary` files only, until implementation analysis re-joins in a subsequent chapter.
 
+## For coding agents
+
+Fukan exposes the same Model to coding agents (Claude Code, Cursor, Codex, etc.) through a small CLI. Once a daemon is running, agents query the spec graph instead of grepping the codebase.
+
+[AGENTS.md](AGENTS.md) is the primer — read it first. It covers the `fukan.agent.system` / `fukan.agent.api` surface, the L0 / L1 / L2 query layering, the edit→refresh→query loop, persisted views in `.fukan/agent-views.clj`, and the eval sandbox limits.
+
+### Install the CLI
+
+`bin/fukan` is a [babashka](https://babashka.org) script. Put it on `PATH`:
+
+```bash
+ln -s "$PWD/bin/fukan" /usr/local/bin/fukan      # or any dir on PATH
+export FUKAN_HOME="$PWD"                          # so `fukan primer` finds AGENTS.md
+```
+
+`FUKAN_URL` overrides the daemon address (default `http://127.0.0.1:8080`). `FUKAN_HOME` lets `fukan primer` print `AGENTS.md` from anywhere; without it, run `fukan primer` from the repo root.
+
+### Commands
+
+| Command | What it does |
+|---------|--------------|
+| `fukan status` | Daemon health + loaded-model summary |
+| `fukan eval '<expr>'` | Run an L0/L1/L2 query in the SCI sandbox |
+| `fukan primer` | Print `AGENTS.md` to stdout |
+| `fukan init` | Add a Fukan section to the current project's `AGENTS.md` (creates the file if missing), pointing other agents at `fukan primer` |
+
+The daemon must be running (`clj -M:run …`) for `status` and `eval`.
+
+### Quick check
+
+```bash
+fukan status
+fukan eval '(vocabulary)'
+fukan eval '(drift)'
+```
+
 ## Development
 
 Requires Clojure CLI (`clj`) and [clj-kondo](https://github.com/clj-kondo/clj-kondo) on PATH.
