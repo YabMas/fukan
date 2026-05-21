@@ -1,0 +1,13 @@
+-- boundary: 1
+
+-- Web composite subsystem — HTTP/SSE handler over the nested views subsystem.
+-- The external face is the handler's fn-declared create_handler (implicitly
+-- exposed). Views are internal to web and are not re-exported.
+
+subsystem web {
+    contains:
+        ./handler.allium
+        ./views/views.boundary
+
+    exports:
+}

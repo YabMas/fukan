@@ -27,28 +27,48 @@ When both exist for a module, `.allium` owns the behavioural semantics and `.bou
 
 ### Boundary files (module API definitions)
 
-| Boundary file | Scope |
-|---------------|-------|
-| `src/fukan/web/spec.boundary` | HTTP/SSE transport — public handler API |
-| `src/fukan/infra/spec.boundary` | Infrastructure lifecycle — model/server management API |
-| `src/fukan/projection/spec.boundary` | Projection — pure computation API |
-| `src/fukan/web/views/spec.boundary` | View rendering — HTML/Cytoscape output API |
-| `src/fukan/model/pipeline.boundary` | Build pipeline — model construction API |
-| `src/fukan/model/analyzers/implementation/spec.boundary` | Implementation analyzer API |
-| `src/fukan/model/analyzers/specification/spec.boundary` | Specification analyzer API |
+Specs live as sibling `.allium` / `.boundary` files at the module's directory (e.g. `infra/model.allium` + `infra/model.boundary`). Subsystem-bound `.boundary` files use the `<dir>/<dir>.boundary` convention inside the directory they group.
+
+#### Subsystem boundary files
+
+| File | Scope |
+|------|-------|
+| `src/fukan/model/model.boundary` | Subsystem `model` — substrate + build pipeline |
+| `src/fukan/infra/infra.boundary` | Subsystem `infra` — imperative-shell lifecycle |
+| `src/fukan/web/views/views.boundary` | Subsystem `views` — view rendering modules |
+| `src/fukan/web/web.boundary` | Composite subsystem `web` — handler + nested `views` |
+
+#### Module boundary files
+
+| File | Scope |
+|------|-------|
+| `src/fukan/model/pipeline.boundary` | Build pipeline — `build_model` API |
+| `src/fukan/infra/model.boundary` | Model lifecycle — load / refresh / get |
+| `src/fukan/infra/server.boundary` | Server lifecycle — start / stop / port |
+| `src/fukan/web/handler.boundary` | HTTP routing — `create_handler` |
+| `src/fukan/web/views/breadcrumb.boundary` | Breadcrumb rendering API |
+| `src/fukan/web/views/cytoscape.boundary` | Cytoscape transformer API |
+| `src/fukan/web/views/graph.boundary` | Graph view render + interaction surface |
+| `src/fukan/web/views/shell.boundary` | App shell rendering API |
+| `src/fukan/web/views/sidebar.boundary` | Sidebar rendering API |
 
 ### Allium files (behavioral specifications)
 
 | Allium file | Scope |
 |-------------|-------|
-| `src/fukan/model/spec.allium` | System model — node hierarchy, edge semantics, structural invariants |
-| `src/fukan/model/pipeline.allium` | Build pipeline — build rules, contract checking rules |
-| `src/fukan/model/analyzers/implementation/spec.allium` | Implementation analyzer boundary reference |
-| `src/fukan/model/analyzers/specification/spec.allium` | Specification analyzer boundary reference |
-| `src/fukan/infra/spec.allium` | Infrastructure lifecycle — external entity contracts |
-| `src/fukan/projection/spec.allium` | Projection — rules for graph computation, edge aggregation |
-| `src/fukan/web/spec.allium` | HTTP/SSE transport — external entity contracts |
-| `src/fukan/web/views/spec.allium` | View rendering — interaction model, component behavior |
+| `src/fukan/model/spec.allium` | Kernel substrate — primitives, types, expressions, effects, vocabulary mechanism, kernel relations |
+| `src/fukan/model/pipeline.allium` | Build pipeline — phase ordering, gate G2, defaults registration |
+| `src/fukan/infra/model.allium` | Model lifecycle — load/refresh guarantees |
+| `src/fukan/infra/server.allium` | Server lifecycle — start/stop guarantees |
+| `src/fukan/web/handler.allium` | HTTP/SSE transport — view transport surface, per-request model guarantees |
+| `src/fukan/web/views/breadcrumb.allium` | Breadcrumb render invariants |
+| `src/fukan/web/views/cytoscape.allium` | Cytoscape output value types |
+| `src/fukan/web/views/graph.allium` | Graph view interaction model — selection, navigation, expansion rules |
+| `src/fukan/web/views/projection.allium` | Projection stub (Plan 2b carry-forward) |
+| `src/fukan/web/views/shell.allium` | App shell scope |
+| `src/fukan/web/views/sidebar.allium` | Sidebar layout invariants |
+
+Several subtrees are currently unspecced and queued for distillation: `agent/`, `constraint/`, `libs/`, `project_layer/`, `target/`, `utils/`, `validation/`, `vocabulary/`, plus internals of `model/` (artifact, build, effect, expression, primitives, relations, type, vocabulary).
 
 Specs are the authoritative description of system structure and behavior. Implementation follows specs. Tests encode spec invariants. When spec and code disagree, the spec is right.
 

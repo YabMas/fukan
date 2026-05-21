@@ -1,0 +1,12 @@
+-- boundary: 1
+
+-- Model subsystem — system model + build pipeline.
+
+subsystem model {
+    contains:
+        ./spec.allium
+        ./pipeline.allium
+
+    exports:
+        spec/Model
+}

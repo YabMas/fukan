@@ -1,0 +1,13 @@
+-- boundary: 1
+
+-- Infra subsystem — model lifecycle + HTTP server lifecycle.
+
+subsystem infra {
+    contains:
+        ./server.allium
+        ./model.allium
+
+    exports:
+        server/ServerOpts
+        server/ServerInfo
+}
