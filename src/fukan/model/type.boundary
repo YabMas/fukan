@@ -1,0 +1,45 @@
+-- boundary: 1
+
+-- Type vocabulary constructors. Six Type cases (Scalar, Enum,
+-- Composite, Collection, Union, Ref) per §3.3, plus the FieldSpec
+-- helper for Composite-inline shapes and the Keyed collection-
+-- semantics constructor.
+
+use "./spec.allium" as spec
+
+fn make_field_spec(name: String, type_value: Any, optional: Boolean) -> Any
+    -- FieldSpec for a Composite-inline shape. Optionality is at
+    -- slot level (not a Type case).
+
+fn make_scalar(name: String) -> Any
+    -- Atomic Scalar with methodology-supplied opaque `name`.
+
+fn make_enum(values: List<String>) -> Any
+    -- Closed Enum of literal string values.
+
+fn make_composite_named(container_id: String) -> Any
+    -- Composite whose shape comes from a value-typed Container's
+    -- fields.
+
+fn make_composite_inline(field_specs: List<Any>) -> Any
+    -- Composite with anonymous inline fields.
+
+fn keyed(key_type: Any) -> Any
+    -- CollectionSemantics constructor for Keyed(K).
+
+fn make_collection(of: Any, semantics: Any) -> Any
+    -- Collection of `of` with Sequential | Unique | Keyed(K)
+    -- semantics. Pass the enum keyword for Sequential / Unique;
+    -- pass (keyed K) for Keyed.
+
+fn make_union(types: List<Any>) -> Any
+    -- Sum of distinct Types. Cases stay structurally distinct.
+
+fn make_ref_kernel_primitive(kinds: Set<String>, opts: Any) -> Any
+    -- Reference to a kernel primitive of one of `kinds`. `opts` may
+    -- carry a :where set of TagRefs filtering admissible targets.
+
+fn make_ref_substrate(within_kind: String, slot_kinds: Set<String>) -> Any
+    -- Reference to a sub-substrate slot on a primitive of
+    -- `within_kind`. v0 populates :field; :parameter is shape-
+    -- committed but deferred.

@@ -1,0 +1,51 @@
+-- boundary: 1
+
+-- Model construction API — pure constructors and lookup helpers over
+-- the top-level Model value. Other subsystems (analyzers, pipeline,
+-- agent views) call these to assemble and inspect Models.
+
+use "./spec.allium" as spec
+
+fn empty_model() -> spec.Model
+    -- The empty Model: no primitives, no edges, no vocabulary,
+    -- no artifacts. Suitable as the starting point for staged build.
+
+fn get_primitive(model: spec.Model, id: String) -> Any
+    -- Look up a primitive by id. Returns nil when absent.
+
+fn add_primitive(model: spec.Model, primitive: Any) -> spec.Model
+    -- Register a primitive under its :id. Raises on duplicate id.
+
+fn add_edge(model: spec.Model, edge: Any) -> spec.Model
+    -- Append a kernel edge. Validates that both endpoints resolve to
+    -- known primitives / artifacts / substrate addresses. Identity
+    -- collisions (per edge-identity) are no-ops.
+
+fn edges_by_kind(model: spec.Model, kind: String) -> List<Any>
+    -- All edges with the given relation kind.
+
+fn edges_from(model: spec.Model, endpoint: Any) -> List<Any>
+    -- All edges originating at endpoint.
+
+fn edges_to(model: spec.Model, endpoint: Any) -> List<Any>
+    -- All edges terminating at endpoint.
+
+fn add_tag_definition(model: spec.Model, tag_definition: Any) -> spec.Model
+    -- Append a TagDefinition to the vocabulary registry.
+
+fn add_tag_application(model: spec.Model, tag_application: Any) -> spec.Model
+    -- Append a TagApplication. Validates that primitive-targeted
+    -- applications point at a known primitive.
+
+fn add_predicate(model: spec.Model, predicate_registration: Any) -> spec.Model
+    -- Append a PredicateRegistration to the vocabulary registry.
+
+fn add_renderer(model: spec.Model, renderer_registration: Any) -> spec.Model
+    -- Append a RendererRegistration to the vocabulary registry.
+
+fn get_artifact(model: spec.Model, artifact_identity: Any) -> Any
+    -- Look up a registered artifact by its identity tuple.
+
+fn add_artifact(model: spec.Model, artifact: Any) -> spec.Model
+    -- Register an artifact under its identity tuple. Raises on
+    -- duplicate identity.

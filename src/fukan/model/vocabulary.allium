@@ -1,0 +1,41 @@
+-- allium: 2
+-- model/vocabulary.allium
+--
+-- Scope: Invariants over the vocabulary-mechanism constructors and the
+--   tag-presence implication predicate. Also surfaces the descriptive
+--   metadata (kind docs, face-role grouping) carried by this module
+--   for the agent (vocabulary) view.
+-- Includes: HasTagFollowsAncestors, PrimitiveKindDescriptiveSurface
+--   invariants.
+-- Excludes:
+--   - TagDefinition / TagApplication / PredicateRegistration /
+--     RendererRegistration value types (see model/spec.allium)
+--   - V9 inheritance guarantees (see spec.PayloadSchemaExtension,
+--     spec.TagPresenceImplication, spec.NoFieldOverride,
+--     spec.NoMultiParent)
+--   - Concrete predicate-language semantics (Plan 4 — deferred)
+--   - Methodology vocabulary content (lives in vocabulary/*)
+--   - Constructor signatures (see vocabulary.boundary)
+
+use "./spec.allium" as spec
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant HasTagFollowsAncestors {
+    -- has_tag_with_ancestors realises spec.TagPresenceImplication for
+    -- the :target/primitive case: a target carrying a child tag is
+    -- treated, for predicate purposes, as carrying every ancestor in
+    -- the parent_tag chain (transitively). Edge and substrate
+    -- targets are not matched in Plan 1.
+}
+
+invariant PrimitiveKindDescriptiveSurface {
+    -- This module carries the one-sentence substrate framing per
+    -- kernel primitive kind (primitive_kind_docs) and the
+    -- face-role grouping (primitive_kind_face_roles: face-host,
+    -- face-interface, face-component, face-peer). Every PrimitiveKind
+    -- value declared in model/spec.allium has both a doc and a
+    -- face-role; the agent (vocabulary) view assumes this coverage.
+}

@@ -1,0 +1,32 @@
+-- allium: 2
+-- model/type.allium
+--
+-- Scope: Invariants over the Type vocabulary constructors.
+-- Includes: ConstructorsProduceType, TargetLanguageNeutral invariants.
+-- Excludes:
+--   - The Type vocabulary value types themselves — six cases plus
+--     FieldSpec, CollectionSemantics, RefTarget (see model/spec.allium)
+--   - Per-target-language type translation (project-layer concern)
+--   - Constructor signatures (see type.boundary)
+
+use "./spec.allium" as spec
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ConstructorsProduceType {
+    -- Each constructor yields a Type value matching its corresponding
+    -- variant in model/spec.allium: make_scalar -> ScalarType,
+    -- make_enum -> EnumType, make_composite_named / make_composite_inline
+    -- -> CompositeType, make_collection -> CollectionType,
+    -- make_union -> UnionType, make_ref_kernel_primitive /
+    -- make_ref_substrate -> RefType.
+}
+
+invariant TargetLanguageNeutral {
+    -- Scalar `name` is methodology-supplied and opaque to the
+    -- substrate. Constructors commit to structural shape only — they
+    -- never decide which target-language type a Scalar maps to. That
+    -- translation lives in the project layer.
+}

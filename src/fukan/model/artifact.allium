@@ -1,0 +1,24 @@
+-- allium: 2
+-- model/artifact.allium
+--
+-- Scope: Invariants over the artifact constructors and identity helper.
+-- Includes: ArtifactIdentityIsTriple invariant.
+-- Excludes:
+--   - Artifact ontology and the ArtifactSubCase enum (see
+--     model/spec.allium)
+--   - SourceLocation value type (see model/spec.allium)
+--   - Constructor signatures (see artifact.boundary)
+
+use "./spec.allium" as spec
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ArtifactIdentityIsTriple {
+    -- artifact_identity returns the three-tuple
+    -- (sub_case, language, qualified_name) per §7.3. SourceLocation
+    -- and the `public?` flag are non-identifying: artifacts with
+    -- equal identity tuples are the same artifact regardless of
+    -- where they live on disk or whether they are public.
+}

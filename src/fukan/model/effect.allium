@@ -1,0 +1,41 @@
+-- allium: 2
+-- model/effect.allium
+--
+-- Scope: Invariants over the Effect sub-substrate constructor,
+--   identity helper, and canonicalisation seam.
+-- Includes: EffectKindIsClosed, EffectIdentityIsTriple,
+--   CanonicaliseIsMethodologyDelegated invariants.
+-- Excludes:
+--   - The Effect value type itself (see model/spec.allium)
+--   - EffectExpressionParity (kernel invariant — see
+--     model/spec.allium::EffectExpressionParity)
+--   - Methodology-specific canonicalisation patterns (live with the
+--     producing vocabulary — e.g. vocabulary/allium/effect_canonicalise)
+--   - Constructor signatures (see effect.boundary)
+
+use "./spec.allium" as spec
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant EffectKindIsClosed {
+    -- make_effect raises when `kind` is not one of create | write |
+    -- destroy | emit. The substrate commits to this closed
+    -- EffectKind set; methodology effects do not extend it.
+}
+
+invariant EffectIdentityIsTriple {
+    -- effect_identity returns (rule_id, kind, target). Two Effects
+    -- agreeing on this triple are the same Effect, regardless of
+    -- which originating Expression in Rule.intent.assertions they
+    -- materialised from. This stability is what lets §3.8 commit to
+    -- Effect identity surviving Expression rewrites.
+}
+
+invariant CanonicaliseIsMethodologyDelegated {
+    -- The substrate exposes canonicalise as a recognition seam but
+    -- ships no methodology-specific patterns. The active methodology
+    -- (e.g. Allium) supplies the patterns mapping recognised
+    -- Expression shapes onto Effects.
+}

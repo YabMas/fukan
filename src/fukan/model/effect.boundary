@@ -1,0 +1,22 @@
+-- boundary: 1
+
+-- Effect sub-substrate — constructor, identity helper, and the
+-- canonicalisation entry point that maps a recognised Expression
+-- shape onto its materialised Effect (per §3.8.4 patterns).
+
+use "./spec.allium" as spec
+
+fn make_effect(kind: String, target: Any, value: Any, source_expr_id: String) -> Any
+    -- Construct an Effect. `kind` ∈ create | write | destroy | emit.
+    -- `value` may be nil for Destroy. `source_expr_id` addresses the
+    -- originating Expression in Rule.intent.assertions.
+
+fn effect_identity(rule_id: String, effect: Any) -> Any
+    -- (rule_id, kind, target) per §3.8.7. Stable across semantically-
+    -- equivalent rewrites of the source Expression.
+
+fn canonicalise(expression: Any) -> Any
+    -- Map a recognised Expression shape onto its materialised Effect
+    -- per §3.8.4. Delegates to the active methodology's canonicaliser;
+    -- the substrate ships only the recognition seam, not the
+    -- methodology-specific patterns.

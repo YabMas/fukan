@@ -1,0 +1,48 @@
+-- allium: 2
+-- model/build.allium
+--
+-- Scope: Model construction API — invariants over the pure construction
+--   and registration helpers that other subsystems use to assemble
+--   Model values.
+-- Includes: PureConstruction, UniquePrimitiveIds, EndpointResolution,
+--   MultiEdgeIdentity, UniqueArtifactIdentity guarantees.
+-- Excludes:
+--   - The Model value shape itself (see model/spec.allium)
+--   - Build pipeline orchestration (see model/pipeline.allium)
+--   - Public fn signatures (see build.boundary)
+
+use "./spec.allium" as spec
+
+------------------------------------------------------------
+-- Guarantees
+------------------------------------------------------------
+
+guarantee PureConstruction
+-- All construction helpers are pure value updates over the supplied
+-- Model. They never read or mutate state outside the supplied
+-- arguments, and they produce a new Model value without side effects.
+
+guarantee UniquePrimitiveIds
+-- add_primitive raises if its primitive's id collides with an
+-- existing primitive. Two primitives never share an id within a
+-- single Model.
+
+guarantee EndpointResolution
+-- add_edge validates that the edge's :from and :to endpoints resolve
+-- against the current Model:
+--   PrimitiveRef     -> primitive must be present
+--   ArtifactRef      -> artifact must be registered
+--   SubstrateAddress -> container must be present; field-slot paths
+--                       must point at a real Field on that container
+-- Unresolved endpoints raise.
+
+guarantee MultiEdgeIdentity
+-- Two edges sharing the same identity (per §4.4: from, to, kind,
+-- per-relation identifying-metadata subset) collapse to one. add_edge
+-- is idempotent over edge identity: re-adding an existing edge
+-- returns the Model unchanged.
+
+guarantee UniqueArtifactIdentity
+-- add_artifact raises if its artifact's identity tuple collides with
+-- an already-registered artifact. The artifact registry is keyed by
+-- identity per §7.3.

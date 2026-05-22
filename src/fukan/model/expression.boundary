@@ -1,0 +1,70 @@
+-- boundary: 1
+
+-- Expression sub-substrate — form constructors, MatchArm helper,
+-- structural identity, and Environment constructors. One calculus
+-- across Rule bodies, Intent assertions, and constraint predicates;
+-- what differs across callsites is the Environment, not the form.
+
+use "./spec.allium" as spec
+
+-- ExpressionForm constructors ----------------------------------------
+
+fn make_var(name: String) -> Any
+    -- VarForm: reference to an Environment binding. Optional first
+    -- argument carries a label.
+
+fn make_ref(ref_target: Any) -> Any
+    -- RefForm: reference to a kernel target (per Type.Ref shape).
+    -- Optional first argument carries a label.
+
+fn make_lit(type_value: Any, value: Any) -> Any
+    -- LitForm: typed literal. Optional first argument carries a label.
+
+fn make_apply(op: String, args: List<Any>) -> Any
+    -- ApplyForm: operator / function application. Core operators in
+    -- `core_operators`; methodology operators register additively.
+    -- Optional first argument carries a label.
+
+fn make_let(name: String, source: Any, body: Any) -> Any
+    -- LetForm: local binding within an Expression. Optional first
+    -- argument carries a label.
+
+fn make_if(cond: Any, then: Any, else: Any) -> Any
+    -- IfForm. Optional first argument carries a label.
+
+fn make_forall(var_name: String, source: Any, body: Any) -> Any
+    -- ForallForm: universal quantification.
+
+fn make_exists(var_name: String, source: Any, body: Any) -> Any
+    -- ExistsForm: existential quantification.
+
+fn make_aggregate(kind: String, source: Any, projection: Any) -> Any
+    -- AggregateForm: aggregation over `source`, projecting via
+    -- `projection`. `kind` ∈ count | sum | min | max.
+
+fn make_match_arm(pattern: Any, body: Any) -> Any
+    -- MatchArm value: { pattern: TypePattern, body: Expression }.
+
+fn make_match(scrutinee: Any, arms: List<Any>) -> Any
+    -- MatchForm: pattern-match on a scrutinee.
+
+-- Structural identity ------------------------------------------------
+
+fn expression_identity(expression: Any) -> Any
+    -- Structural identity over :form, recursively stripped of :label.
+    -- Two Expressions with equal identity are the same Expression
+    -- value (parallels Clause's label per K15a — label is
+    -- addressability only, never identity).
+
+-- Environment constructors -------------------------------------------
+
+fn make_environment_onestate(bindings: Map<String, Any>) -> Any
+    -- OneState Environment for Container / Behaviour / Boundary /
+    -- Operation Intent assertions.
+
+fn make_environment_twostate(pre: Map<String, Any>, post: Map<String, Any>, params: Map<String, Any>) -> Any
+    -- TwoState Environment for Rule.intent.assertions and Rule.body.
+
+fn make_environment_model_introspection(bindings: Map<String, Any>) -> Any
+    -- ModelIntrospection Environment for constraint-language
+    -- predicate bodies.

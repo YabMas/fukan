@@ -1,0 +1,20 @@
+-- boundary: 1
+
+-- Artifact (projection-target) constructors and identity.
+-- V0 commits one category — Code — with two leaf cases: code/function
+-- and code/data_structure. Infra and Documentation cases arrive with
+-- their producing analyzers.
+
+use "./spec.allium" as spec
+
+fn make_code_function(language: String, qualified_name: String, source_location: Any, public: Boolean) -> Any
+    -- Construct a code/function artifact in the given target language.
+    -- `source_location` and `public` are optional (pass nil).
+
+fn make_code_data_structure(language: String, qualified_name: String, source_location: Any) -> Any
+    -- Construct a code/data_structure artifact in the given target
+    -- language. `source_location` is optional (pass nil).
+
+fn artifact_identity(artifact: Any) -> Any
+    -- (sub_case, language, qualified_name) per §7.3. source-location
+    -- is non-identifying.

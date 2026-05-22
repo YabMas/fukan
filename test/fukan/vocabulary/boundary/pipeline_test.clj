@@ -56,8 +56,8 @@
                               (and (= "Boundary" (-> ta :tag :namespace))
                                    (= "Function" (-> ta :tag :name))))
                             (:tag-apps model))]
-        (is (= 123 (count fn-tags))
-            "all 123 corpus fn declarations produce Boundary::Function tags"))
+        (is (= 194 (count fn-tags))
+            "all 194 corpus fn declarations produce Boundary::Function tags"))
       ;; Boundary::ModuleApi tags on modules with exports:
       ;; Corpus has 6 files with exports: (infra/server.boundary,
       ;; web/views/graph.boundary, project_layer/registry.boundary,

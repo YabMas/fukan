@@ -1,0 +1,64 @@
+-- boundary: 1
+
+-- Kernel primitive constructors and sub-substrate value records.
+-- Every primitive carries its :kind discriminator (per the
+-- primitive-kinds enum in model/spec.allium). Identity helpers
+-- produce the (parent-id, name) tuples per §3.2.
+
+use "./spec.allium" as spec
+
+-- Sub-substrate value records ----------------------------------------
+
+fn make_field(name: String, type_value: Any, optional: Boolean) -> Any
+    -- Field substrate: typed data member owned by a Container.
+
+fn field_identity(container_id: String, field: Any) -> Any
+    -- (container_id, field.name) per §3.2.
+
+fn make_parameter(name: String, type_value: Any, optional: Boolean, ordinal: Integer) -> Any
+    -- Parameter substrate: ordered typed parameter on Operation or Event.
+
+fn parameter_identity(parent_id: String, parameter: Any) -> Any
+    -- (parent_id, parameter.name) per §3.2.
+
+fn make_definition(name: String, expression: Any) -> Any
+    -- Definition substrate: typed local binding inside Rule.body.
+
+fn definition_identity(rule_id: String, definition: Any) -> Any
+    -- (rule_id, definition.name) per §3.2.
+
+fn make_rule_body(definitions: List<Any>, effects: List<Any>) -> Any
+    -- RuleBody bundles definitions + effects. No independent identity.
+
+-- Kernel primitive constructors --------------------------------------
+
+fn make_container(spec: Any) -> Any
+    -- Container with optional faces (intent, children, fields, events,
+    -- behaviour, boundary). Required: id, label.
+
+fn make_actor(spec: Any) -> Any
+    -- Actor primitive. Required: id, label. Optional: description.
+
+fn make_behaviour(spec: Any) -> Any
+    -- Behaviour aggregate. Required: id, label, rules. Optional: intent.
+
+fn make_rule(spec: Any) -> Any
+    -- Rule. Required: id, label. Optional: description, intent, body.
+
+fn make_boundary(spec: Any) -> Any
+    -- Boundary aggregate. Required: id, label, operations.
+    -- Optional: intent.
+
+fn make_operation(spec: Any) -> Any
+    -- Operation. Required: id, label, parameters.
+    -- Optional: description, return_type, intent.
+
+fn make_intent(spec: Any) -> Any
+    -- Intent aggregate. Required: id, clauses, assertions.
+    -- Optional: label.
+
+fn make_clause(spec: Any) -> Any
+    -- Clause. Required: id, body. Optional: label.
+
+fn make_event(spec: Any) -> Any
+    -- Event. Required: id, label, parameters. Optional: description.

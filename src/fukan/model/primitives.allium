@@ -1,0 +1,41 @@
+-- allium: 2
+-- model/primitives.allium
+--
+-- Scope: Invariants over the kernel-primitive constructors and
+--   sub-substrate value-record helpers.
+-- Includes: ConstructorsProduceSubstrate, IdentityIsDeterministic,
+--   KindIsAttached invariants.
+-- Excludes:
+--   - The substrate value types themselves (see model/spec.allium)
+--   - Constructor signatures (see primitives.boundary)
+--   - Validation of referenced ids (analyzer / pipeline concern)
+
+use "./spec.allium" as spec
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ConstructorsProduceSubstrate {
+    -- Each constructor produces a value matching its corresponding
+    -- substrate spec in model/spec.allium:
+    --   make_container -> Container, make_actor -> Actor,
+    --   make_behaviour -> Behaviour, make_rule -> Rule,
+    --   make_boundary -> Boundary, make_operation -> Operation,
+    --   make_intent -> Intent, make_clause -> Clause, make_event -> Event,
+    --   make_field -> Field, make_parameter -> Parameter,
+    --   make_definition -> Definition, make_rule_body -> RuleBody.
+}
+
+invariant KindIsAttached {
+    -- Every primitive constructor attaches a :kind discriminator
+    -- drawn from the PrimitiveKind enum (spec.PrimitiveKind). The
+    -- kind is the dispatch key for the closed Primitive sum.
+}
+
+invariant IdentityIsDeterministic {
+    -- The identity helpers (field_identity, parameter_identity,
+    -- definition_identity) are pure functions of their inputs and
+    -- return the (host_id, name) tuple committed by §3.2. Calling
+    -- the helper twice with equal inputs returns equal tuples.
+}

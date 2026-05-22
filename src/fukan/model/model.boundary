@@ -1,11 +1,21 @@
 -- boundary: 1
 
--- Model subsystem — system model + build pipeline.
+-- Model subsystem — kernel substrate spec, substrate-implementation
+-- modules (constructors, identity helpers, vocabulary mechanism), and
+-- the build pipeline that assembles a Model from analyzer outputs.
 
 subsystem model {
     contains:
         ./spec.allium
         ./pipeline.allium
+        ./build.allium
+        ./primitives.allium
+        ./relations.allium
+        ./artifact.allium
+        ./type.allium
+        ./expression.allium
+        ./effect.allium
+        ./vocabulary.allium
 
     exports:
         spec.Model

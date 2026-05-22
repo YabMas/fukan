@@ -1,0 +1,35 @@
+-- boundary: 1
+
+-- Kernel edge constructors, endpoint constructors, and edge identity.
+-- The thirteen kernel relations live in the RelationKind enum
+-- (spec.RelationKind); this module is their construction surface.
+
+use "./spec.allium" as spec
+
+-- Endpoint constructors ----------------------------------------------
+
+fn primitive_ref(id: String) -> Any
+    -- PrimitiveRef endpoint addressing a kernel primitive by id.
+
+fn substrate_address(container_id: String, path: List<Any>) -> Any
+    -- SubstrateAddress endpoint addressing a sub-substrate slot on a
+    -- Container (v0: field paths).
+
+fn artifact_ref(artifact_identity: Any) -> Any
+    -- ArtifactRef endpoint addressing a projection target by its
+    -- artifact-identity tuple.
+
+-- Edge construction and identity -------------------------------------
+
+fn make_edge(kind: String, from: Any, to: Any, metadata: Any) -> Any
+    -- Construct a kernel edge. `metadata` carries the per-relation
+    -- identifying-metadata slots (see identifying_slots) plus any
+    -- non-identifying methodology metadata.
+
+fn identifying_slots(relation_kind: String) -> Set<String>
+    -- The set of identifying-metadata slot names for the given
+    -- relation kind, per §4.4.
+
+fn edge_identity(edge: Any) -> Any
+    -- (from, to, kind, identifying-subset) per §4.4. Two edges are the
+    -- same edge iff their identities are equal.

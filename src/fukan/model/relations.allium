@@ -1,0 +1,33 @@
+-- allium: 2
+-- model/relations.allium
+--
+-- Scope: Invariants over edge construction and identity helpers.
+-- Includes: EdgeIdentityIsPerRelation, MakeEdgeValidatesRelationKind
+--   invariants.
+-- Excludes:
+--   - The thirteen relation kinds and their semantics (see
+--     model/spec.allium, per-relation guarantees)
+--   - Edge value type (see model/spec.allium::Edge)
+--   - Endpoint sum (see model/spec.allium::Endpoint)
+--   - Function signatures (see relations.boundary)
+
+use "./spec.allium" as spec
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant MakeEdgeValidatesRelationKind {
+    -- make_edge raises when `kind` is not one of the thirteen kernel
+    -- RelationKind values (spec.RelationKind). Construction never
+    -- yields an edge with an unknown kind.
+}
+
+invariant EdgeIdentityIsPerRelation {
+    -- edge_identity projects each edge onto (from, to, kind,
+    -- identifying-subset), where the identifying subset is the
+    -- per-relation slot set from §4.4 (see
+    -- spec.Edge::IdentifyingMetadataPerRelation). Non-identifying
+    -- slots are dropped. Two edges agreeing on this projection are
+    -- the same edge.
+}

@@ -1,0 +1,37 @@
+-- boundary: 1
+
+-- Vocabulary mechanism — constructors for TagDefinition,
+-- TagApplication, PredicateRegistration, RendererRegistration, plus
+-- the tag-presence implication predicate. Also exposes the descriptive
+-- surface (kind docs, face-role grouping) consumed by the agent
+-- (vocabulary) view.
+
+use "./spec.allium" as spec
+
+-- Vocabulary entry constructors -------------------------------------
+
+fn make_tag_definition(spec: Any) -> Any
+    -- Construct a TagDefinition. Required: namespace, name,
+    -- applies-to. Optional: payload-schema, parent-tag, relational.
+
+fn make_tag_application(spec: Any) -> Any
+    -- Construct a TagApplication. Required: tag, target.
+    -- Optional: payload (defaults to empty map).
+
+fn make_predicate_registration(spec: Any) -> Any
+    -- Construct a PredicateRegistration. Required: namespace, name,
+    -- severity, kind, predicate. Optional: scope (defaults to
+    -- :scope/model), message-template, applies-to.
+
+fn make_renderer_registration(spec: Any) -> Any
+    -- Construct a RendererRegistration. Required: tag.
+    -- Optional: treatments (defaults to empty map).
+
+-- Tag-presence implication (V9) --------------------------------------
+
+fn has_tag_with_ancestors(registry: Any, target_id: String, tag_ref: Any) -> Boolean
+    -- True iff `target_id` carries `tag_ref` or any descendant tag
+    -- whose ancestor chain includes `tag_ref`. Implements V9
+    -- tag-presence implication (see spec.TagPresenceImplication).
+    -- Plan-1 limitation: :target/primitive only; edge / substrate
+    -- targets are not matched.

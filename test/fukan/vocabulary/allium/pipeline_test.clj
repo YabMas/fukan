@@ -6,7 +6,7 @@
             [malli.core :as m]))
 
 (deftest pipeline-loads-fukan-corpus
-  (testing "loading src/ produces a validated Model covering all 54 fukan modules"
+  (testing "loading src/ produces a validated Model covering all 62 fukan modules"
     (let [model (pipeline/load-source "src")]
       (is (m/validate build/Model model)
           "loaded Model validates against fukan.model.build/Model schema")
@@ -35,9 +35,17 @@
           ;; vocabulary/allium/analyzer, vocabulary/allium/pipeline,
           ;; vocabulary/boundary/tags, vocabulary/boundary/analyzer,
           ;; vocabulary/boundary/pipeline.
-          (is (= 54 (count module-tag-apps))
+          (is (= 62 (count module-tag-apps))
               "Allium::Module tag applied to each .allium file in src/")
           (is (= #{"fukan/infra/model"
+                   "fukan/model/build"
+                   "fukan/model/primitives"
+                   "fukan/model/relations"
+                   "fukan/model/artifact"
+                   "fukan/model/type"
+                   "fukan/model/expression"
+                   "fukan/model/effect"
+                   "fukan/model/vocabulary"
                    "fukan/infra/server"
                    "fukan/web/handler"
                    "fukan/web/views/shell"

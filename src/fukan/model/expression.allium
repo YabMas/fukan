@@ -1,0 +1,49 @@
+-- allium: 2
+-- model/expression.allium
+--
+-- Scope: Invariants over the Expression sub-substrate constructors and
+--   structural-identity helper.
+-- Includes: CoreOperators set; LabelIsAddressabilityOnly,
+--   AggregateKindIsClosed, EnvironmentIsCallsiteTyped invariants.
+-- Excludes:
+--   - The Expression / ExpressionForm value types and Environment sum
+--     (see model/spec.allium)
+--   - Constraint-language semantics (Plan 4 — deferred)
+--   - Constructor signatures (see expression.boundary)
+
+use "./spec.allium" as spec
+
+------------------------------------------------------------
+-- Core operator vocabulary
+------------------------------------------------------------
+
+-- Kernel-committed core operators per §3.8.1: arithmetic ("+", "-",
+-- "*", "/"), comparison ("=", "!=", "<", "<=", ">", ">="), logical
+-- ("and", "or", "not"), set membership ("in", "contains"), presence
+-- ("is-present", "is-absent"). Methodology operators register
+-- additively in Plan 4.
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant LabelIsAddressabilityOnly {
+    -- expression_identity strips :label recursively from the form
+    -- tree before comparison. Two Expressions differing only in
+    -- :label have equal identity (parallels Clause's
+    -- ClausesAreFirstClass treatment of label per K15a).
+}
+
+invariant AggregateKindIsClosed {
+    -- make_aggregate raises when `kind` is not one of count | sum |
+    -- min | max. The substrate commits to this closed set of
+    -- aggregation shapes; methodology aggregates do not extend it.
+}
+
+invariant EnvironmentIsCallsiteTyped {
+    -- Per spec.EnvironmentIsCallsiteTyped: Environment is part of
+    -- the callsite type, not of the Expression. The Environment
+    -- constructors produce typed binding contexts (OneState,
+    -- TwoState, ModelIntrospection) consumed by the type-checker;
+    -- Expression values themselves carry no environment slot.
+}
