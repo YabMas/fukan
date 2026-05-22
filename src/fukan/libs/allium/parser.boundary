@@ -1,0 +1,12 @@
+-- boundary: 1
+
+-- Allium parser — converts Allium specification text into an AST map
+-- that the vocabulary/allium pipeline consumes.
+
+fn parse_allium(text: String) -> ParsedAllium
+  -- Parse an Allium specification string into an AST map. Returns a
+  -- ParsedAllium on success or a ParseFailure on grammar error.
+
+fn parse_file(path: String) -> ParsedAllium
+  -- Read the file at `path` and parse its contents as Allium.
+  -- Thin wrapper over parse_allium that handles file I/O.

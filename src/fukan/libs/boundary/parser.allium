@@ -1,0 +1,63 @@
+-- allium: 2
+-- libs/boundary/parser.allium
+--
+-- Scope: Boundary grammar parser — text-to-AST translation for
+--   .boundary specification files.
+-- Includes: ParsedBoundary / ParseFailure value types; parser
+--   behavioural invariants (purity, file-delegation).
+-- Excludes:
+--   - The grammar productions themselves (lives in the parser code)
+--   - AST consumption / model construction (see vocabulary/boundary)
+--   - The parallel Allium parser (see ../allium/parser.allium)
+--
+-- Structurally parallel to libs/allium/parser.allium: both parsers
+-- share the same lifecycle (text → AST or failure) and the same
+-- purity guarantees, but operate on distinct grammars and emit
+-- distinct AST shapes. Each declares its own value types — the
+-- duplication is intentional, because the two grammars are
+-- independently versioned and their decl trees do not converge.
+
+------------------------------------------------------------
+-- AST value types
+------------------------------------------------------------
+--
+-- As with ParsedAllium, the AST is intentionally specified as an open
+-- structure. The vocabulary/boundary analyzer walks specific keys
+-- (fn forms, exports, subsystem) it knows about; typing every node
+-- here would duplicate the grammar.
+
+value ParsedBoundary {
+    -- Successful parse output. `boundary_version` is the parsed header
+    -- version number (integer-typed in the boundary grammar);
+    -- `declarations` is an ordered list of declaration nodes —
+    -- use, fn (in declare-new / local-attach / foreign-attach forms),
+    -- exports, or subsystem.
+    boundary_version: Integer
+    declarations: List<Any>
+}
+
+value ParseFailure {
+    -- Instaparse failure object returned verbatim when the input does
+    -- not parse. Opaque from the spec's perspective.
+    reason: Any
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ParserPure {
+    -- parse_boundary is a pure function of its String input. Same
+    -- text in, same AST out — no global state, no side effects.
+}
+
+invariant ParseFileDelegates {
+    -- parse_file performs exactly one act of I/O — reading the file
+    -- at the given path — and delegates all parsing work to
+    -- parse_boundary on the file's contents.
+}
+
+invariant DeclarationOrderPreserved {
+    -- The order of declarations in the source text is preserved in
+    -- the `declarations` list of the resulting ParsedBoundary.
+}

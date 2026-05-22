@@ -1,0 +1,60 @@
+-- allium: 2
+-- libs/allium/parser.allium
+--
+-- Scope: Allium grammar parser — text-to-AST translation.
+-- Includes: ParsedAllium / ParseFailure value types; parser
+--   behavioural invariants (purity, file-delegation).
+-- Excludes:
+--   - The grammar productions themselves (lives in the parser code)
+--   - AST consumption / model construction (see vocabulary/allium)
+--   - The parallel Boundary parser (see ../boundary/parser.allium)
+
+------------------------------------------------------------
+-- AST value types
+------------------------------------------------------------
+--
+-- The AST is intentionally specified as an open structure: the parser
+-- emits a heterogenous tree shaped by the Allium grammar, and the
+-- vocabulary/allium analyzer walks specific keys it knows about. Fully
+-- typing every declaration node here would duplicate the grammar and
+-- create a second source of truth. The shape contract is: a map with
+-- :allium_version (String) and :declarations (List of Maps).
+
+value ParsedAllium {
+    -- Successful parse output. `allium_version` is the parsed header
+    -- version number; `declarations` is an ordered list of declaration
+    -- nodes, each a map shaped by its grammar production (use, entity,
+    -- value, variant, rule, surface, invariant, etc.).
+    allium_version: String
+    declarations: List<Any>
+}
+
+value ParseFailure {
+    -- Instaparse failure object returned verbatim when the input does
+    -- not parse. Opaque from the spec's perspective: the consumer
+    -- inspects it for diagnostics rather than driving behaviour from
+    -- its shape.
+    reason: Any
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ParserPure {
+    -- parse_allium is a pure function of its String input. Same text
+    -- in, same AST out — no global state, no caches, no side effects.
+}
+
+invariant ParseFileDelegates {
+    -- parse_file performs exactly one act of I/O — reading the file
+    -- at the given path — and delegates all parsing work to
+    -- parse_allium on the file's contents.
+}
+
+invariant DeclarationOrderPreserved {
+    -- The order of declarations in the source text is preserved in
+    -- the `declarations` list of the resulting ParsedAllium. Downstream
+    -- consumers may rely on source order for diagnostics and for
+    -- resolving forward references.
+}

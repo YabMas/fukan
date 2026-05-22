@@ -1,0 +1,16 @@
+-- boundary: 1
+
+-- Libs subsystem — shared utilities consumed by the vocabulary subsystem.
+-- Houses the two spec-language parsers (Allium, Boundary) plus the
+-- coordinate-canonicalisation helper used by both pipelines and the
+-- analyzers. Pure-function leaves: no lifecycle, no state, no events.
+-- All cross-wall callables are fn-declared and thus implicitly exposed.
+
+subsystem libs {
+    contains:
+        ./coordinate.allium
+        ./allium/parser.allium
+        ./boundary/parser.allium
+
+    exports:
+}

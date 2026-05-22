@@ -1,0 +1,39 @@
+-- allium: 2
+-- libs/coordinate.allium
+--
+-- Scope: Path canonicalisation for cross-file references in .allium
+--   and .boundary specs.
+-- Includes: canonicalise_path signature (in coordinate.boundary);
+--   canonicalisation invariants.
+-- Excludes:
+--   - Parser grammars (see allium/parser.allium, boundary/parser.allium)
+--   - File I/O and pipeline orchestration (see vocabulary subsystem)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant CanonicalisePathPure {
+    -- canonicalise_path is a pure function of its two String inputs:
+    -- the same (host_coord, raw_path) pair always yields the same
+    -- canonical coordinate. No file I/O, no global state.
+}
+
+invariant CanonicalisePathIdempotent {
+    -- Canonicalisation is idempotent: feeding an already-canonical
+    -- coordinate back through canonicalise_path (with any host) yields
+    -- the same coordinate. No extension to strip, no ./ or ../ prefix
+    -- to resolve.
+}
+
+invariant CanonicalisePathExtensionStripped {
+    -- The result never carries a .allium or .boundary suffix; both
+    -- extensions are mechanically removed before resolution.
+}
+
+invariant CanonicalisePathRelativeResolution {
+    -- ./ prefixes resolve against the host file's directory; each
+    -- leading ../ segment walks one level up from the host directory.
+    -- Bare paths (no ./ or ../ prefix) are treated as root-relative
+    -- and only have their extension stripped.
+}

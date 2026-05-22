@@ -1,0 +1,11 @@
+-- boundary: 1
+
+-- Coordinate canonicalisation — resolves use-path raw strings to
+-- root-relative module coordinates with the .allium / .boundary
+-- extension stripped.
+
+fn canonicalise_path(host_coord: String, raw_path: String) -> String
+  -- Resolve a raw use / contains: path against the host file's
+  -- coordinate. Strips the .allium / .boundary extension, expands
+  -- ./ relative to the host directory, and walks up one directory
+  -- per leading ../ segment (chained ../ supported).

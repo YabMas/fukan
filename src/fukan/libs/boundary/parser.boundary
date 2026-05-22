@@ -1,0 +1,12 @@
+-- boundary: 1
+
+-- Boundary parser — converts .boundary specification text into an AST
+-- map that the vocabulary/boundary pipeline consumes.
+
+fn parse_boundary(text: String) -> ParsedBoundary
+  -- Parse a .boundary specification string into an AST map. Returns a
+  -- ParsedBoundary on success or a ParseFailure on grammar error.
+
+fn parse_file(path: String) -> ParsedBoundary
+  -- Read the file at `path` and parse its contents as Boundary.
+  -- Thin wrapper over parse_boundary that handles file I/O.
