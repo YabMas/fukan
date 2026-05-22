@@ -1,0 +1,13 @@
+-- boundary: 1
+
+-- Boundary pipeline orchestrator — Phase 3 of the build pipeline.
+-- Takes the Allium-loaded Model as input, walks the source root for
+-- .boundary files, and enriches the Model with Boundary content.
+-- See pipeline.allium for the behavioural commitments.
+
+use "../../model/spec.allium" as model
+
+fn load_source(model: model.Model, source_root: String) -> model.Model
+    -- Enrich `model` with the Boundary content of every .boundary file
+    -- under source_root. The Boundary TagDefinition catalogue is seeded
+    -- first; per-file analysis runs in sorted load order.

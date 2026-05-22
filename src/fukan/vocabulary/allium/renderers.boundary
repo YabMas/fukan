@@ -1,0 +1,11 @@
+-- boundary: 1
+
+-- Default RendererRegistrations for the Allium vocabulary — registered
+-- onto the Model by the pipeline alongside the TagDefinitions. See
+-- renderers.allium for the catalogue and treatment-shape commitments.
+
+use "../../model/spec.allium" as model
+
+fn allium_renderer_registrations() -> List<model.RendererRegistration>
+    -- The full set of Allium RendererRegistrations to seed the Model
+    -- with. Pure value; no side effects.

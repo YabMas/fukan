@@ -6,7 +6,7 @@
             [malli.core :as m]))
 
 (deftest pipeline-loads-fukan-corpus
-  (testing "loading src/ produces a validated Model covering all 45 fukan modules"
+  (testing "loading src/ produces a validated Model covering all 54 fukan modules"
     (let [model (pipeline/load-source "src")]
       (is (m/validate build/Model model)
           "loaded Model validates against fukan.model.build/Model schema")
@@ -30,8 +30,12 @@
           ;; constraint/phase5, validation/violation, validation/phase4,
           ;; validation/rules_4a, validation/rules_4b, validation/rules_4c,
           ;; validation/rules_4d, validation/rules_4e, validation/rules_4f,
-          ;; validation/rules_4g.
-          (is (= 45 (count module-tag-apps))
+          ;; validation/rules_4g, vocabulary/allium/tags, vocabulary/allium/renderers,
+          ;; vocabulary/allium/expression, vocabulary/allium/effect_canonicalise,
+          ;; vocabulary/allium/analyzer, vocabulary/allium/pipeline,
+          ;; vocabulary/boundary/tags, vocabulary/boundary/analyzer,
+          ;; vocabulary/boundary/pipeline.
+          (is (= 54 (count module-tag-apps))
               "Allium::Module tag applied to each .allium file in src/")
           (is (= #{"fukan/infra/model"
                    "fukan/infra/server"
@@ -77,7 +81,16 @@
                    "fukan/validation/rules_4d"
                    "fukan/validation/rules_4e"
                    "fukan/validation/rules_4f"
-                   "fukan/validation/rules_4g"}
+                   "fukan/validation/rules_4g"
+                   "fukan/vocabulary/allium/tags"
+                   "fukan/vocabulary/allium/renderers"
+                   "fukan/vocabulary/allium/expression"
+                   "fukan/vocabulary/allium/effect_canonicalise"
+                   "fukan/vocabulary/allium/analyzer"
+                   "fukan/vocabulary/allium/pipeline"
+                   "fukan/vocabulary/boundary/tags"
+                   "fukan/vocabulary/boundary/analyzer"
+                   "fukan/vocabulary/boundary/pipeline"}
                  module-ids)
               "module-Container ids are the canonical root-relative coordinates")))
 

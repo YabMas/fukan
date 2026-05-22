@@ -1,0 +1,20 @@
+-- boundary: 1
+
+-- Vocabulary composite subsystem — the substrate's two extension
+-- vocabularies (Allium and Boundary), run in sequence by the build
+-- pipeline. Each nested subsystem contributes its own TagDefinitions,
+-- an analyzer (AST → kernel content), and a pipeline orchestrator that
+-- walks a source root and folds per-file analysis into a Model. The
+-- Allium vocabulary additionally ships RendererRegistrations.
+--
+-- The two vocabularies are not tightly coupled: Boundary takes the
+-- Allium-produced Model as input and enriches it, but shares no code
+-- paths with Allium. Each nested subsystem is independently usable.
+
+subsystem vocabulary {
+    contains:
+        ./allium/allium.boundary
+        ./boundary/boundary.boundary
+
+    exports:
+}

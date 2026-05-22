@@ -1,0 +1,110 @@
+-- allium: 2
+-- vocabulary/allium/pipeline.allium
+--
+-- Scope: Phase 1+2 of the build pipeline — Allium source-root walk,
+--   per-file analysis, cross-file stub-unification (§3.6), and the
+--   K15a inline-primitive lift.
+-- Includes: LoadSource rule; DeterministicFileOrder,
+--   PathCanonicalisation, StubUnification, AmbiguousStubsLeftAlone,
+--   InlineLiftIdempotence, DefaultsRegisteredBeforeAnalysis,
+--   PipelinePurity invariants.
+-- Excludes:
+--   - Public fn signatures (see pipeline.boundary)
+--   - Per-file analyzer behaviour (see analyzer.allium)
+--   - The Boundary pipeline that runs after this (see ../boundary/pipeline.allium)
+--   - Cross-pipeline ordering (see ../../model/pipeline.allium)
+
+use "../../model/spec.allium" as model
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule LoadSource {
+    -- Run Phase 1+2 of the build pipeline. Triggered once per build by
+    -- the top-level pipeline.
+    --
+    -- Steps:
+    --   1. Seed a fresh Model with the Allium TagDefinition catalogue
+    --      and the default RendererRegistrations.
+    --   2. Discover every .allium file under source_root in sorted
+    --      order (deterministic load).
+    --   3. For each file: derive its coordinate from the relative
+    --      path (minus extension), parse the AST, extract and
+    --      canonicalise its use-alias map, run the per-file analyzer.
+    --   4. After all files: run external-entity stub-unification
+    --      (§3.6) — every Container tagged Allium::ExternalEntity is
+    --      merged into the real same-local-name Container when
+    --      exactly one match exists across the analyzed corpus.
+    --   5. Run the inline-primitive lift — every Intent, Clause,
+    --      Boundary value referenced inline on a host primitive's
+    --      substrate is also registered at top-level :primitives so
+    --      K15a first-class identity is queryable.
+    --
+    -- Returns the validated Model. No Violations are produced — Phase
+    -- 4 owns that responsibility.
+
+    when: LoadSource(source_root: String)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant DeterministicFileOrder {
+    -- Files are loaded in sorted absolute-path order. Same source-root
+    -- contents always produce the same load sequence; the Model is a
+    -- pure function of the source tree.
+}
+
+invariant PathCanonicalisation {
+    -- Each file's raw use-alias paths (e.g. `./views/spec.allium`,
+    -- `../model/spec.allium`) are canonicalised relative to the host
+    -- file's coordinate before reaching the analyzer. The canonical
+    -- form is the root-relative path with the .allium extension
+    -- stripped, lining up with coordinate-of's output for the same
+    -- file. This is the analyzer's contract for cross-module
+    -- reference resolution.
+}
+
+invariant DefaultsRegisteredBeforeAnalysis {
+    -- The TagDefinition catalogue and RendererRegistration defaults
+    -- are seeded onto the Model before any file is analyzed. The
+    -- analyzer relies on every Allium::* tag being registered when
+    -- it constructs TagApplications; an unregistered tag would fail
+    -- payload-schema validation at application time.
+}
+
+invariant StubUnification {
+    -- After per-file analysis, every Container tagged Allium::
+    -- ExternalEntity is a candidate for merging into a real Container
+    -- with the same local-name. When exactly one real Container
+    -- matches across the analyzed corpus, the stub is removed and all
+    -- edges, tag applications, and inline Type references are
+    -- retargeted to the canonical id. The Allium::ExternalEntity tag
+    -- is stripped from the canonical — the stub's external-ness was a
+    -- use-site framing, not a property of the entity.
+}
+
+invariant AmbiguousStubsLeftAlone {
+    -- A stub with two or more candidate real Containers is left
+    -- unresolved with a warning to stderr — the methodology layer
+    -- must disambiguate. A stub with no candidates is left in place
+    -- as a legitimate opaque foreign reference.
+}
+
+invariant InlineLiftIdempotence {
+    -- The inline-primitive lift is safe to re-run: every host
+    -- primitive's inline Intent / Clause / Boundary value is
+    -- registered (or re-registered) at top-level :primitives under its
+    -- own id. A repeat invocation overwrites with the same value. The
+    -- lift runs after stub-unification so lifted ids reflect post-
+    -- merge host coordinates.
+}
+
+invariant PipelinePurity {
+    -- The pipeline is a pure function of the source tree (apart from
+    -- stderr warnings for ambiguous stubs and dotted-trigger fall-
+    -- throughs). No global state, no caches, no I/O outside the file
+    -- walk and parse calls.
+}

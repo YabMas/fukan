@@ -1,0 +1,25 @@
+-- boundary: 1
+
+-- Per-file Allium AST → kernel content (with Allium::* tag applications)
+-- analyzer. See analyzer.allium for the behavioural commitments —
+-- declaration-order discipline, cross-module reference resolution,
+-- event synthesis, stub creation.
+
+use "../../model/spec.allium" as model
+use "../../libs/allium/parser.allium" as parser
+
+fn analyze_file(model: model.Model,
+                ast: parser.ParsedAllium,
+                coordinate: String,
+                use_aliases: Map<String, String>?) -> model.Model
+    -- Add this file's kernel content and Allium::* tag applications to
+    -- `model`. The coordinate becomes the module-Container's id; an
+    -- Allium::Module tag is applied. The use_aliases map (alias →
+    -- imported-coord) drives cross-module reference resolution; when
+    -- omitted, it is extracted from the AST's own `use` declarations.
+
+fn extract_use_aliases(ast: parser.ParsedAllium) -> Map<String, String>
+    -- Collect the `use "<path>" as <alias>` declarations from an AST
+    -- into a map of alias → imported-module-coord. The pipeline
+    -- canonicalises the resulting paths before passing them to
+    -- analyze_file; the analyzer's own unit-test path uses the raw map.

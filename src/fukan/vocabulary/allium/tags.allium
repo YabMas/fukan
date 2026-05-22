@@ -1,0 +1,62 @@
+-- allium: 2
+-- vocabulary/allium/tags.allium
+--
+-- Scope: The catalogue of Allium::* TagDefinitions shipped with the
+--   vocabulary, plus payload-shape commitments and the registration
+--   invariant the pipeline relies on.
+-- Includes: AlliumTagCatalogue value type; payload-shape descriptions;
+--   CatalogueIsExhaustive, RegistrationIsIdempotent invariants.
+-- Excludes:
+--   - The TagDefinition substrate (see model/spec.allium)
+--   - The constructor signature (see tags.boundary)
+--   - The analyzer's tag application logic (see analyzer.allium)
+--   - Renderer registrations (see renderers.allium)
+
+use "../../model/spec.allium" as model
+
+------------------------------------------------------------
+-- Value types
+------------------------------------------------------------
+
+value AlliumTagCatalogue {
+    -- Documentation envelope for the Allium tag namespace. The catalogue
+    -- groups TagDefinitions by what they classify: primitive-role tags
+    -- (Module, Entity, Value, Variant, ExternalEntity, Actor, Rule,
+    -- Surface, Contract, Event, Call), edge-shading tags (Trigger,
+    -- Provides, Exposes, Fulfils, Demands), and source-clause tags on
+    -- substrate addresses (Invariant, Requires, Let, Ensures,
+    -- ContractInvariant, SurfaceGuarantee, Guidance).
+    --
+    -- Payload-bearing tags: Actor (identified_by, within), Surface
+    -- (facing, context, related, timeout), Trigger (kind enum).
+    -- All other tags are payload-free in the V0 catalogue.
+    primitive_role_tags: List<String>
+    edge_shading_tags: List<String>
+    source_clause_tags: List<String>
+    payload_bearing_tags: List<String>
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant CatalogueIsExhaustive {
+    -- Every Allium::* tag the analyzer applies must appear in the
+    -- catalogue returned by allium_tag_definitions. The analyzer never
+    -- applies an unregistered tag — a missing TagDefinition would fail
+    -- payload-schema validation at build/add-tag-application time.
+}
+
+invariant RegistrationIsIdempotent {
+    -- Registering the catalogue onto the same Model twice produces the
+    -- same Model. TagDefinition identity is (namespace, name); a repeat
+    -- registration with the same key is a no-op.
+}
+
+invariant TrustedTargetAssignment {
+    -- Each TagDefinition declares the kernel target kind it applies to
+    -- (primitive, container, edge, substrate, actor, rule, event,
+    -- clause, operation). The analyzer is trusted to apply tags only
+    -- to matching targets; the kernel enforces this at application
+    -- time and rejects mismatches.
+}

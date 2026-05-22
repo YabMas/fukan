@@ -1,0 +1,56 @@
+-- allium: 2
+-- vocabulary/allium/effect_canonicalise.allium
+--
+-- Scope: Match Bool Expressions in an Allium rule's ensures: block
+--   against the four §3.8.4 patterns and produce the corresponding
+--   kernel Effect.
+-- Includes: PatternEvaluationOrder, SilentNonMatch, SourceBackreference,
+--   PureMatching invariants.
+-- Excludes:
+--   - The kernel Effect substrate (see model/spec.allium §3.8.4)
+--   - The expression parser (see expression.allium)
+--   - The analyzer call site that drives canonicalisation (see analyzer.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant PatternEvaluationOrder {
+    -- Patterns are tried in fixed order:
+    --   1. not exists post.X         → :effect/destroy
+    --   2. emitted(E, args...)        → :effect/emit
+    --   3. post.X = T.created(...)    → :effect/create
+    --   4. post.X.f = rhs             → :effect/write
+    -- The first match wins. Order matters because pattern 3 (create) is
+    -- a more specific subcase of pattern 4 (write); the broader pattern
+    -- runs last.
+}
+
+invariant SilentNonMatch {
+    -- An Expression that matches no pattern produces null rather than
+    -- raising. Not every assertion in an ensures: block is a state
+    -- change — some are pure consistency assertions. The analyzer drops
+    -- nulls and emits no kernel edge for them.
+}
+
+invariant SourceBackreference {
+    -- Every produced Effect carries the source_expr_id of the
+    -- originating Expression. Projection uses this to backreference
+    -- the assertion that produced each kernel edge (writes, creates,
+    -- destroys, emits).
+}
+
+invariant PureMatching {
+    -- Canonicalisation is a pure function of (expr, source_expr_id).
+    -- Same expression, same id, same Effect or same null. No state,
+    -- no I/O.
+}
+
+invariant CompletenessForCanonicalShapes {
+    -- Every Bool Expression of one of the four canonical shapes
+    -- produces a matching Effect. The matcher is the authoritative
+    -- bridge from Allium ensures: clauses to kernel side-effect edges
+    -- (:relation/writes, :relation/creates, :relation/destroys,
+    -- :relation/emits); a canonical-shape expression that produced no
+    -- Effect would be a defect.
+}

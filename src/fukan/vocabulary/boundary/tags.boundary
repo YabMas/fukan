@@ -1,0 +1,11 @@
+-- boundary: 1
+
+-- Default TagDefinitions for the Boundary vocabulary — registered onto
+-- the Model by the pipeline before any .boundary file is analyzed.
+-- See tags.allium for the catalogue and payload-shape commitments.
+
+use "../../model/spec.allium" as model
+
+fn boundary_tag_definitions() -> List<model.TagDefinition>
+    -- The full set of Boundary::* TagDefinitions in registration order.
+    -- Pure value; no side effects.

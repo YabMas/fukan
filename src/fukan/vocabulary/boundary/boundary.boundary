@@ -1,0 +1,17 @@
+-- boundary: 1
+
+-- Boundary vocabulary — the substrate extension that contributes the
+-- Boundary::* tag namespace, the .boundary file analyzer (typed fn
+-- declarations, exports: clauses, subsystem composites), and the
+-- pipeline orchestrator that enriches an Allium-loaded Model with
+-- Boundary content. All cross-wall callables are fn-declared and thus
+-- implicitly exposed; no additional exports needed.
+
+subsystem boundary {
+    contains:
+        ./tags.allium
+        ./analyzer.allium
+        ./pipeline.allium
+
+    exports:
+}

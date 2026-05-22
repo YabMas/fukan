@@ -1,0 +1,19 @@
+-- boundary: 1
+
+-- Per-file .boundary AST → kernel content (with Boundary::* tag
+-- applications) analyzer. See analyzer.allium for the behavioural
+-- commitments — file-shape discipline, three fn forms, attach
+-- resolution, subsystem composition.
+
+use "../../model/spec.allium" as model
+use "../../libs/boundary/parser.allium" as parser
+
+fn analyze_file(model: model.Model,
+                ast: parser.ParsedBoundary,
+                coord: String,
+                use_aliases: Map<String, String>) -> model.Model
+    -- Apply a parsed .boundary AST to the model. Raises a
+    -- :boundary-shape-error on a mixed module/subsystem file, on
+    -- multiple exports: declarations in one file, on attach-form fn
+    -- declarations with empty bodies, and on unknown declaration types.
+    -- All other resolution failures are recorded into :phase4-state.

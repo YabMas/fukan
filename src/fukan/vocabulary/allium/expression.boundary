@@ -1,0 +1,14 @@
+-- boundary: 1
+
+-- Allium expression sub-substrate parser — converts Allium expression
+-- text (the bodies of invariant, requires:, let:, ensures: clauses)
+-- into a kernel Expression value. See expression.allium for the
+-- precedence model and fallback behaviour.
+
+use "../../model/spec.allium" as model
+
+fn parse(text: String) -> model.Expression
+    -- Parse Allium expression text into a kernel Expression. Falls back
+    -- to a Scalar("AlliumText") literal carrying the original text on
+    -- parse failure — the analyzer continues, the projection surfaces
+    -- the unparsed expression.

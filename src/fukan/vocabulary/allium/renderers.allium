@@ -1,0 +1,44 @@
+-- allium: 2
+-- vocabulary/allium/renderers.allium
+--
+-- Scope: Default visual treatments shipped with the Allium vocabulary —
+--   one node-icon registration per role-naming tag.
+-- Includes: NodeIconCoverage, IconNameLowercase, NonRoleTagsHaveNoNodeTreatment,
+--   RegistrationIsIdempotent invariants.
+-- Excludes:
+--   - The RendererRegistration substrate (see model/spec.allium)
+--   - The constructor signature (see renderers.boundary)
+--   - The tag catalogue itself (see tags.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant NodeIconCoverage {
+    -- Every role-naming Allium primitive tag has a corresponding node-
+    -- icon RendererRegistration: Module, Entity, Value, Variant,
+    -- ExternalEntity, Surface, Contract, Rule, Event, Actor, Call.
+    -- The projection layer walks these registrations to assemble the
+    -- per-primitive treatment map.
+}
+
+invariant IconNameLowercase {
+    -- The node treatment payload uses {"icon": "<lowercased-tag-name>"}.
+    -- Conversion is mechanical: lower-case the tag name verbatim. No
+    -- per-tag override or aliasing.
+}
+
+invariant NonRoleTagsHaveNoNodeTreatment {
+    -- Source-clause sub-substrate tags (Invariant, Requires, Ensures,
+    -- Let, ContractInvariant, SurfaceGuarantee, Guidance) and edge-
+    -- shading tags (Trigger, Provides, Exposes, Fulfils, Demands) do
+    -- not register a node treatment — they do not attach to a primitive
+    -- node in the projection. Adding a node treatment for them would
+    -- be a category error.
+}
+
+invariant RegistrationIsIdempotent {
+    -- Registering the catalogue onto the same Model twice produces the
+    -- same Model. RendererRegistration identity is (consumer, tag);
+    -- duplicates are skipped on the second pass.
+}

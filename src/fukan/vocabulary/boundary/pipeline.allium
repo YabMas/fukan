@@ -1,0 +1,78 @@
+-- allium: 2
+-- vocabulary/boundary/pipeline.allium
+--
+-- Scope: Phase 3 of the build pipeline — .boundary source-root walk
+--   and per-file analysis on top of the Allium-loaded Model.
+-- Includes: LoadSource rule; DeterministicFileOrder, PathCanonicalisation,
+--   DefaultsRegisteredBeforeAnalysis, ComposesOntoAllium, PipelinePurity
+--   invariants.
+-- Excludes:
+--   - Public fn signatures (see pipeline.boundary)
+--   - Per-file analyzer behaviour (see analyzer.allium)
+--   - The Allium pipeline that runs before this (see ../allium/pipeline.allium)
+--   - Cross-pipeline ordering (see ../../model/pipeline.allium)
+
+use "../../model/spec.allium" as model
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule LoadSource {
+    -- Run Phase 3 of the build pipeline. Triggered once per build by
+    -- the top-level pipeline, after the Allium pipeline has produced
+    -- the merged Model.
+    --
+    -- Steps:
+    --   1. Seed the input Model with the Boundary TagDefinition
+    --      catalogue.
+    --   2. Discover every .boundary file under source_root in sorted
+    --      order (deterministic load).
+    --   3. For each file: derive its coordinate from the relative
+    --      path (minus .boundary extension), parse the AST, extract
+    --      and canonicalise its use-alias map, run the per-file
+    --      analyzer.
+    --
+    -- Returns the enriched Model. No Violations are produced — Phase 4
+    -- owns that responsibility.
+
+    when: LoadSource(model: model.Model, source_root: String)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant DeterministicFileOrder {
+    -- Files are loaded in sorted absolute-path order. Same source-root
+    -- contents always produce the same load sequence.
+}
+
+invariant PathCanonicalisation {
+    -- Each file's raw use-alias paths are canonicalised relative to
+    -- the host file's coordinate before reaching the analyzer. The
+    -- canonical form is the root-relative path with the .boundary or
+    -- .allium extension stripped.
+}
+
+invariant DefaultsRegisteredBeforeAnalysis {
+    -- The Boundary TagDefinition catalogue is seeded onto the input
+    -- Model before any .boundary file is analyzed. An unregistered
+    -- tag would fail payload-schema validation at application time.
+}
+
+invariant ComposesOntoAllium {
+    -- The Boundary pipeline takes the Allium-loaded Model as input
+    -- and adds to it. It does not produce a fresh Model and does not
+    -- remove or rewrite Allium-produced primitives. Cross-extension
+    -- references — attach-form fns binding to Allium-declared
+    -- Operations, fn `triggers:` edges targeting Allium-declared
+    -- Rules — resolve against the Allium primitives already in
+    -- :primitives.
+}
+
+invariant PipelinePurity {
+    -- The pipeline is a pure function of (input Model, source tree).
+    -- No global state, no caches, no I/O outside the file walk and
+    -- parse calls.
+}

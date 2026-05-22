@@ -1,0 +1,21 @@
+-- boundary: 1
+
+-- Allium vocabulary — the substrate extension that contributes the
+-- Allium::* tag namespace, a per-file AST analyzer, the expression
+-- sub-substrate parser, the §3.8.4 effect canonicaliser, the default
+-- node-icon renderer registrations, and the pipeline orchestrator
+-- that walks a source root through Plan 2b. All cross-wall callables
+-- are fn-declared and thus implicitly exposed; no additional exports
+-- needed at the subsystem boundary.
+
+subsystem allium {
+    contains:
+        ./tags.allium
+        ./renderers.allium
+        ./expression.allium
+        ./effect_canonicalise.allium
+        ./analyzer.allium
+        ./pipeline.allium
+
+    exports:
+}

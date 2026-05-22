@@ -1,0 +1,14 @@
+-- boundary: 1
+
+-- §3.8.4 four-pattern matcher: recognises canonical-shape Bool
+-- Expressions in an ensures: clause body and produces matching kernel
+-- Effect records. See effect_canonicalise.allium for the patterns and
+-- evaluation order.
+
+use "../../model/spec.allium" as model
+
+fn canonicalise(expr: model.Expression, source_expr_id: String) -> model.Effect
+    -- Match `expr` against the §3.8.4 patterns and return an Effect on
+    -- success, or null if no pattern matches. The source_expr_id is
+    -- recorded on the Effect so projection can backreference the
+    -- originating clause.

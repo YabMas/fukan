@@ -1,0 +1,15 @@
+-- boundary: 1
+
+-- Allium pipeline orchestrator — Phase 1+2 of the build pipeline.
+-- Walks a source root, parses every .allium file, runs the per-file
+-- analyzer with each file's canonicalised use-alias map, then performs
+-- cross-file stub-unification (§3.6) and the K15a inline-primitive
+-- lift. See pipeline.allium for the behavioural commitments.
+
+use "../../model/spec.allium" as model
+
+fn load_source(source_root: String) -> model.Model
+    -- Build a fresh Model containing the Allium tag-definition
+    -- catalogue, the default renderer registrations, and the kernel
+    -- content of every .allium file under source_root. Stub-unification
+    -- and inline-primitive lift run after all files have been analyzed.

@@ -1,0 +1,11 @@
+-- boundary: 1
+
+-- Default TagDefinitions for the Allium vocabulary — registered onto
+-- the Model by the pipeline before any file is analyzed. See
+-- tags.allium for the catalogue and payload-shape commitments.
+
+use "../../model/spec.allium" as model
+
+fn allium_tag_definitions() -> List<model.TagDefinition>
+    -- The full set of Allium::* TagDefinitions in the order they should
+    -- be registered onto a fresh Model. Pure value; no side effects.

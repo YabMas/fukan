@@ -1,0 +1,156 @@
+-- allium: 2
+-- vocabulary/allium/analyzer.allium
+--
+-- Scope: The per-file Allium analyzer — its declaration-order
+--   discipline, cross-module reference resolution strategy, event
+--   synthesis post-pass, and the side-Model state it stashes for
+--   Phase 4 to consume.
+-- Includes: AnalyzeFile rule; DeclarationOrder, CrossModuleResolution,
+--   StubCreationOnUnknownRef, EventSynthesis, FacingRoleStripping,
+--   Phase4StateAccumulation, BestEffortEmission, PurelyAdditive
+--   invariants; ExposesIssue and EventShapeMismatch value types.
+-- Excludes:
+--   - Public fn signatures (see analyzer.boundary)
+--   - The tag catalogue (see tags.allium)
+--   - The expression parser (see expression.allium)
+--   - The §3.8.4 effect canonicaliser (see effect_canonicalise.allium)
+--   - Source-walk orchestration and stub-unification (see pipeline.allium)
+--   - The kernel substrate this analyzer produces (see model/spec.allium)
+--   - Phase 4 rules that consume :phase4-state (see validation/rules_4*)
+
+use "../../model/spec.allium" as model
+use "../../libs/allium/parser.allium" as parser
+
+------------------------------------------------------------
+-- Value types
+------------------------------------------------------------
+
+value ExposesIssue {
+    -- Diagnostic record stashed in :phase4-state.exposes-issues when an
+    -- `exposes:` path fails endpoint validation at edge-emission time.
+    -- Phase 4 (rules_4b) surfaces each record as a Violation.
+    surface_id: String
+    module: String
+    path: String
+    target_id: String
+    field: String
+    resolution: String
+    message: String
+}
+
+value EventShapeMismatch {
+    -- Diagnostic record stashed in :phase4-state.event-shape-mismatches
+    -- when the declaration sites for one event-name disagree on arity
+    -- or parameter types. Plan 3c §4b (rules_4b) consumes the slot.
+    event_id: String
+    event_name: String
+    module_coord: String
+    reason: String
+    shapes: List<Any>
+    arities: List<Integer>?
+    type_seqs: List<Any>?
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule AnalyzeFile {
+    -- Walk one file's declarations and fold its kernel content (plus
+    -- Allium::* tag applications) into the input Model. Triggered by
+    -- the pipeline once per .allium file in load order.
+    --
+    -- Declarations are processed in dependency order (entities and
+    -- values first, then external-entities and actors, then contracts,
+    -- then surfaces, then rules, then top-level invariants) so that
+    -- same-module references resolve against already-registered
+    -- primitives. A final synthesize-events post-pass walks all
+    -- declaration sites for each event-name (provides:, when:, emits
+    -- ensures), picks the canonical parameter shape, overwrites any
+    -- stub Event primitive, and applies the Allium::Event tag.
+    --
+    -- Cross-module references whose imported module has not yet been
+    -- analyzed get a minimal stub primitive at the imported coordinate;
+    -- pipeline-level stub-unification merges these once all files have
+    -- been processed.
+
+    when: AnalyzeFile(model: model.Model,
+                      ast: parser.ParsedAllium,
+                      coordinate: String,
+                      use_aliases: Map<String, String>?)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant DeclarationOrder {
+    -- Declarations within one file are processed in a fixed dependency
+    -- order, not source order: entities / values / variants → external-
+    -- entities / actors → contracts → surfaces → rules → top-level
+    -- invariants. Source order within one bucket is preserved. This
+    -- guarantees that same-module type references and contract
+    -- references resolve against already-registered primitives.
+}
+
+invariant CrossModuleResolution {
+    -- Cross-module references (qualified type-refs in fields, surface
+    -- exposes: paths whose leading segment is a use-alias, contract
+    -- refs like `alias/Contract`, when:/emits names like `alias.Event`)
+    -- resolve through the file's use-aliases map. An unknown alias
+    -- falls through to an opaque "<ns>/<name>" placeholder that the
+    -- projection surfaces verbatim — a never-silenced unresolved ref.
+}
+
+invariant StubCreationOnUnknownRef {
+    -- When a cross-module reference targets a coordinate that has not
+    -- yet been analyzed, the analyzer creates a minimal stub primitive
+    -- at that coordinate so kernel edge-validation succeeds. Stubs
+    -- carry only enough substrate to satisfy the reference (e.g. a
+    -- field with the exposed name). Pipeline stub-unification merges
+    -- the stub into the real Container once the imported module loads.
+}
+
+invariant FacingRoleStripping {
+    -- When a rule's when: clause or an emits ensures: clause uses a
+    -- dotted reference (`viewer.SelectNode`) whose leading segment is
+    -- a facing role declared on a surface in this module, the leading
+    -- segment is stripped: the event lives in this module and merges
+    -- with the surface's provides: declaration site.
+}
+
+invariant EventSynthesis {
+    -- After per-declaration analysis, a synthesize-events post-pass
+    -- harvests every event declaration site in this file (provides:,
+    -- when:call, emits ensures) and produces one canonical Event
+    -- primitive per event-name. The canonical parameter shape comes
+    -- from the first typed provides: site, falling back to the first
+    -- typed when: site, finally to any site with Scalar("AlliumText")
+    -- placeholder types. Cross-module references (alias.Event) are
+    -- excluded — they synthesize in the imported module's pass.
+}
+
+invariant Phase4StateAccumulation {
+    -- The analyzer never throws on unresolved or ambiguous references
+    -- or shape disagreements. Diagnostic records are appended to the
+    -- Model's :phase4-state slot — exposes-issues, event-shape-
+    -- mismatches, binding-issues — for Phase 4 rules to surface as
+    -- Violations downstream. Build-time gating is Phase 4's job, not
+    -- the analyzer's.
+}
+
+invariant BestEffortEmission {
+    -- Edge emission is best-effort: failures from build/add-edge (e.g.
+    -- unknown endpoint, type mismatch) are caught and either silently
+    -- dropped or recorded into :phase4-state. The analyzer continues
+    -- with the rest of the file rather than halting on the first
+    -- defect.
+}
+
+invariant PurelyAdditive {
+    -- analyze_file only adds to the input Model — primitives, edges,
+    -- tag applications, :phase4-state entries, :children sets, :events
+    -- sets. It never removes a primitive or rewrites a previously-
+    -- registered substrate. Stub-unification (the only removal step)
+    -- runs at pipeline scope.
+}

@@ -1,0 +1,156 @@
+-- allium: 2
+-- vocabulary/boundary/analyzer.allium
+--
+-- Scope: The per-file .boundary analyzer — file-shape discipline, the
+--   three `fn` forms, attach resolution, subsystem composition, and
+--   the Phase 4 prep state it accumulates for downstream sub-phases.
+-- Includes: AnalyzeFile rule; FileShapeDiscipline, ThreeFnForms,
+--   DeclareNewIntroducesOperation, AttachReusesOperation,
+--   ExportsClosesModule, SubsystemComposesChildren,
+--   BindingEdgeIsBestEffort, Phase4StateAccumulation invariants;
+--   BindingIssue value type.
+-- Excludes:
+--   - Public fn signatures (see analyzer.boundary)
+--   - The tag catalogue (see tags.allium)
+--   - Source-walk orchestration (see pipeline.allium)
+--   - The kernel substrate produced (see model/spec.allium)
+--   - Phase 4d (closure enforcement) sub-phase rules (see validation/rules_4d)
+
+use "../../model/spec.allium" as model
+use "../../libs/boundary/parser.allium" as parser
+
+------------------------------------------------------------
+-- Value types
+------------------------------------------------------------
+
+value BindingIssue {
+    -- Diagnostic record stashed in :phase4-state.binding-issues when an
+    -- attach-form fn cannot resolve its target Operation or its
+    -- triggers: Rule. Phase 4 (rules_4c) reads this slot and surfaces
+    -- each record as a Violation.
+    kind: String
+    coord: String?
+    op: String?
+    rule: String?
+    trigger: Any?
+    form: String?
+    contract: String?
+    alias: String?
+    reason: String?
+    ex: String?
+    use_aliases: List<String>?
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule AnalyzeFile {
+    -- Apply one parsed .boundary AST to the input Model. Triggered by
+    -- the pipeline once per .boundary file in load order.
+    --
+    -- The file's shape is detected from its declaration kinds:
+    --   - module-bound: declarations are a mix of use / fn / exports;
+    --     a module-Container at `coord` is ensured.
+    --   - subsystem-bound: declarations are use + exactly one
+    --     subsystem; a composite Container at `coord` is created.
+    -- A mixed file raises a :boundary-shape-error; the file owns one
+    -- altitude or the other, never both.
+    --
+    -- Each fn form contributes differently:
+    --   - declare-new (`fn name(...) -> R`): creates a new Operation
+    --     primitive on the module-Container's boundary.operations,
+    --     applies Boundary::Function, emits a triggers: Operation →
+    --     Rule edge with Boundary::Binding if the body has triggers:.
+    --   - local-attach (`fn Contract.op { ... }`): no new Operation —
+    --     attaches behaviour to an existing Allium-declared Operation,
+    --     emits the binding edge.
+    --   - foreign-attach (`fn alias/Contract.op { ... }`): same as
+    --     local-attach, but the Operation lives in the imported
+    --     module resolved through use-aliases.
+    --
+    -- An exports: clause applies Boundary::ModuleApi with the
+    -- :exported list as payload — Phase 4d enforces visibility from
+    -- this tag.
+    --
+    -- A subsystem declaration creates a composite Container whose
+    -- :children set carries the canonicalised contains: coordinates,
+    -- applies Boundary::Subsystem and Boundary::Exports, and
+    -- registers any rules: entries as PredicateRegistrations scoped
+    -- to the composite.
+
+    when: AnalyzeFile(model: model.Model,
+                      ast: parser.ParsedBoundary,
+                      coord: String,
+                      use_aliases: Map<String, String>)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant FileShapeDiscipline {
+    -- A .boundary file is module-bound or subsystem-bound, never both.
+    -- A mixed file raises :boundary-shape-error and the build halts.
+    -- More than one exports: declaration in a single module-bound file
+    -- is also a shape error.
+}
+
+invariant ThreeFnForms {
+    -- The fn declaration recognises three forms, distinguished by the
+    -- parser:
+    --   :declare-new    — introduces a fresh Operation primitive.
+    --   :local-attach   — binds an existing same-module Operation.
+    --   :foreign-attach — binds an existing imported Operation.
+    -- Both attach forms require a non-empty body (triggers: and/or
+    -- returns:); an empty-body attach raises :boundary-shape-error.
+}
+
+invariant DeclareNewIntroducesOperation {
+    -- A declare-new fn creates exactly one Operation primitive at
+    -- `<coord>::<fn-name>`, registers it on the module-Container's
+    -- boundary.operations, and applies a Boundary::Function tag. If
+    -- the body has triggers:, a Boundary::Binding-tagged triggers:
+    -- Operation → Rule edge is emitted with optional
+    -- :returns_expression payload.
+}
+
+invariant AttachReusesOperation {
+    -- An attach-form fn never creates a new Operation. The target id
+    -- is `<owner-coord>::<Contract>.<op>` — for local-attach, owner
+    -- is `coord`; for foreign-attach, it is resolved through
+    -- use-aliases. The binding edge is the same as for declare-new
+    -- with triggers:, but no Operation primitive is added.
+}
+
+invariant ExportsClosesModule {
+    -- An exports: clause applies the Boundary::ModuleApi tag to the
+    -- module-Container with the :exported payload listing the
+    -- closed-surface entries. Presence of the tag flips the module
+    -- to closed; absence leaves it open. Phase 4d consumes the
+    -- payload to enforce visibility.
+}
+
+invariant SubsystemComposesChildren {
+    -- A subsystem declaration creates a composite Container at the
+    -- file's coord with the :children set populated from the
+    -- contains: list. Each contains: path is canonicalised against
+    -- the host file's coord before storage. The composite carries
+    -- Boundary::Subsystem (with :name payload) and Boundary::Exports
+    -- (with the subsystem's :exported list).
+}
+
+invariant BindingEdgeIsBestEffort {
+    -- triggers: Operation → Rule edge emission catches all kernel
+    -- errors and records them as :phase4-state binding-issues rather
+    -- than halting. An unresolved Rule reference, an unknown alias,
+    -- or a kernel validation failure becomes a downstream Phase 4
+    -- Violation, not an analyzer crash.
+}
+
+invariant Phase4StateAccumulation {
+    -- All resolution failures (unresolved trigger rule, attach without
+    -- triggers, unresolved Operation target) accumulate into
+    -- :phase4-state.binding-issues. Phase 4 (rules_4c) reads the slot
+    -- and surfaces each entry as a Violation with structured context.
+}
