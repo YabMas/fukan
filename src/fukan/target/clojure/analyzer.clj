@@ -157,51 +157,6 @@
                         :projection-kind/schema
                         validity)))
 
-(defn- invariants
-  "Walk every Container's intent.assertions. Return seq of
-     {:container-id <id> :index <int> :label <string>}
-   for assertions whose source-clause tag includes Allium::Invariant
-   and whose :label is non-nil."
-  [model]
-  (let [inv-targets
-        (->> (:tag-apps model)
-             (filter (fn [ta]
-                       (and (= "Allium" (-> ta :tag :namespace))
-                            (= "Invariant" (-> ta :tag :name))
-                            (= :target/substrate (-> ta :target :case)))))
-             (map (fn [ta]
-                    (let [t (:target ta)
-                          path (:path t)
-                          idx-step (last path)]
-                      {:container-id (:container t)
-                       :index (when (string? (:key idx-step))
-                                (Long/parseLong (:key idx-step)))})))
-             (filter :index))]
-    (for [{:keys [container-id index]} inv-targets
-          :let [c (get-in model [:primitives container-id])
-                assertion (get-in c [:intent :assertions index])
-                label (:label assertion)]
-          :when (some? label)]
-      {:container-id container-id :index index :label label})))
-
-(defn- emit-invariant-projection
-  [model source-index reg inv]
-  (let [module-coord (module-coord-of-primitive (:container-id inv))
-        {:keys [ns name]} (addr/canonical reg :primitive/expression
-                                          :projection-kind/invariant
-                                          module-coord (:label inv))
-        artifact (a/make-code-function "clojure" (str ns "/" name))
-        aid (a/artifact-identity artifact)
-        found (find-symbol source-index ns name :function)
-        validity (if found :valid :absent)
-        m1 (ensure-artifact model artifact)  ;; ALWAYS materialize
-        from-endpoint (r/substrate-address
-                        (:container-id inv)
-                        [{:slot "intent"} {:slot "assertions" :key (str (:index inv))}])]
-    (-> m1
-        (emit-projects-edge from-endpoint aid :projection-kind/invariant validity)
-        (emit-projects-edge from-endpoint aid :projection-kind/test validity))))
-
 ;; ---------------------------------------------------------------------------
 ;; Unprojected artifact materialisation (Plan 6 Task 13)
 ;; ---------------------------------------------------------------------------
@@ -251,23 +206,15 @@
         source-index  (index-from-symbols symbols)
         dup-violations (detect-duplicate-addresses symbols)
         m1 (reduce (fn [m [op-id op]]
-                     (-> m
-                         (emit-function-projection
-                           source-index registry op-id :primitive/operation
-                           :projection-kind/operation (:label op))
-                         (emit-function-projection
-                           source-index registry op-id :primitive/operation
-                           :projection-kind/test (:label op))))
+                     (emit-function-projection
+                       m source-index registry op-id :primitive/operation
+                       :projection-kind/operation (:label op)))
                    model
                    (operations model))
         m2 (reduce (fn [m [rule-id rule]]
-                     (-> m
-                         (emit-function-projection
-                           source-index registry rule-id :primitive/rule
-                           :projection-kind/rule (:label rule))
-                         (emit-function-projection
-                           source-index registry rule-id :primitive/rule
-                           :projection-kind/test (:label rule))))
+                     (emit-function-projection
+                       m source-index registry rule-id :primitive/rule
+                       :projection-kind/rule (:label rule)))
                    m1
                    (rules model))
         m3 (reduce (fn [m [c-id c]]
@@ -278,9 +225,7 @@
                      (emit-data-structure-projection
                        m source-index registry ev-id :primitive/event (:label ev)))
                    m3 (events m3))
-        m5 (reduce (fn [m inv] (emit-invariant-projection m source-index registry inv))
-                   m4 (invariants m4))
-        m-final (-> m5
+        m-final (-> m4
                     (update :violations (fnil into []) dup-violations)
                     (materialize-unprojected symbols))]
     m-final))
