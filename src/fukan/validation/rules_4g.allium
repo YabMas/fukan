@@ -1,0 +1,58 @@
+-- allium: 2
+-- validation/rules_4g.allium
+--
+-- Scope: Phase 4g — cross-module reference-visibility rule. After
+--   4f's closure guarantee, every name reachable from outside a
+--   module is exported; this sub-phase enforces directly that every
+--   cross-module reference targets an externally-visible primitive.
+-- Includes: CrossModuleReferencesAreVisible, ContractsAreAlwaysVisible,
+--   ExternalEntityCountsAsVisible, IntraModuleReferencesIgnored,
+--   CheckIsPure invariants.
+-- Excludes:
+--   - Public fn signatures (see rules_4g.boundary)
+--   - Kernel Type walking (Composite / Collection / Union shape;
+--     shared with rules_4f)
+--   - Export-closure derivation (see rules_4f.allium — the upstream
+--     guarantee that closes the visibility set)
+--   - Module-level export validity (see rules_4d.allium)
+--   - Aggregation and gating (see phase4.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant CrossModuleReferencesAreVisible {
+    -- For every primitive whose :fields or :parameters reference a
+    -- Composite-named type, when the referent lives in a different
+    -- module than the referrer, the referent must be externally
+    -- visible. Hidden cross-module references emit
+    -- :4g/cross-module-private-reference (error), carrying the
+    -- referrer and target ids plus their owning modules.
+}
+
+invariant ContractsAreAlwaysVisible {
+    -- Containers tagged Allium::Contract are externally visible
+    -- across module walls regardless of their owning module's
+    -- closure state. A cross-module reference to a Contract is
+    -- always permitted.
+}
+
+invariant ExternalEntityCountsAsVisible {
+    -- Containers tagged Allium::ExternalEntity are externally
+    -- visible regardless of their owning module's closure state.
+    -- A cross-module reference to an ExternalEntity is always
+    -- permitted.
+}
+
+invariant IntraModuleReferencesIgnored {
+    -- References whose referrer and target live in the same module
+    -- are not checked — intra-module visibility is governed by
+    -- module-local rules, not the cross-module guarantee. Only
+    -- strictly cross-module references contribute to the 4g
+    -- Violation sequence.
+}
+
+invariant CheckIsPure {
+    -- The 4g check function is a pure derivation from the input
+    -- Model — it reads only :primitives and :tag-apps.
+}

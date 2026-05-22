@@ -1,0 +1,72 @@
+-- allium: 2
+-- validation/rules_4c.allium
+--
+-- Scope: Phase 4c — binding rules. Five structural rules over the
+--   bindings that wire Operations on Boundaries to Rules and
+--   Operations on Intents.
+-- Includes: BindingOperationResolves, BindingTriggerRuleResolves,
+--   AttachReturnsRequiresTriggers, ReturnDerivationMatchesOperation,
+--   SignatureMatchVerifiable, CheckIsPure invariants.
+-- Excludes:
+--   - Public fn signatures (see rules_4c.boundary)
+--   - The Operation and Rule primitive shapes (kernel)
+--   - The Boundary::Binding tag payload (Boundary analyzer)
+--   - The :phase4-state.binding-issues record shape (Boundary analyzer)
+--   - Aggregation and gating (see phase4.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant BindingOperationResolves {
+    -- Every fn binding of the form `fn Contract.op` or
+    -- `fn alias/Contract.op` references an Operation primitive whose
+    -- id resolves in the Model. Unresolved references are recorded
+    -- by the Boundary analyzer in :phase4-state.binding-issues with
+    -- :kind :unresolved-operation; each emits
+    -- :4c/unresolved-operation (error).
+}
+
+invariant BindingTriggerRuleResolves {
+    -- Every fn body of the form `{ triggers: Rule }` references a
+    -- Rule primitive whose id resolves in the Model. Unresolved
+    -- references are recorded by the Boundary analyzer in
+    -- :phase4-state.binding-issues with :kind
+    -- :unresolved-trigger-rule; each emits
+    -- :4c/unresolved-trigger-rule (error).
+}
+
+invariant AttachReturnsRequiresTriggers {
+    -- An attach-form fn that declares returns: must also declare
+    -- triggers: — without a triggers clause there is no edge to
+    -- carry the returns expression's tag. Disagreement is recorded
+    -- by the Boundary analyzer in :phase4-state.binding-issues with
+    -- :kind :attach-returns-without-triggers; each emits
+    -- :4c/attach-returns-without-triggers (warning).
+}
+
+invariant ReturnDerivationMatchesOperation {
+    -- For every :relation/triggers edge from an Operation, the
+    -- Operation has a :return-type if and only if the associated
+    -- Boundary::Binding tag carries a returns_expression payload.
+    -- Mismatch in either direction emits
+    -- :4c/return-derivation-mismatch (error), carrying the
+    -- Operation id and the edge identity.
+}
+
+invariant SignatureMatchVerifiable {
+    -- An Operation→Rule binding whose target Rule has no other
+    -- :relation/triggers edges cannot be verified for parameter-
+    -- signature equality at the current fidelity — the binding edge
+    -- is the only path to firing the Rule, so a shape mismatch
+    -- would be unrecoverable. Such bindings emit
+    -- :4c/signature-match-uncertain (warning) when the Operation
+    -- has at least one parameter. Full signature equality is
+    -- subsumed by the Phase 5 constraint engine.
+}
+
+invariant CheckIsPure {
+    -- The 4c check function is a pure derivation from the input
+    -- Model — it reads only :primitives, :edges, :tag-apps, and
+    -- :phase4-state.
+}

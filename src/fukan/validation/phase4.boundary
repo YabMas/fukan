@@ -1,0 +1,36 @@
+-- boundary: 1
+
+-- Phase 4 runner — walks 4a..4g, aggregates Violations, applies Gate
+-- G2. See phase4.allium for the runner Rule, the Phase4Result
+-- envelope, and the gating invariants.
+
+use "../model/spec.allium" as model
+use "../agent/api.allium" as agent
+
+-- Run the seven sub-phases in fixed order against the input Model.
+-- Returns a Phase4Result envelope on success (warnings only). Raises
+-- a Gate-G2 halt condition when the aggregate contains any
+-- :error-severity Violation.
+fn run(model: model.Model) -> Phase4Result {
+    triggers: RunPhase4
+    returns: post.result
+}
+
+-- Apply Gate G2 to an already-aggregated Violation sequence. Used by
+-- run/1 internally; exposed so callers that compute Violations
+-- themselves can share the same halting semantics. Returns a
+-- Phase4Result when there are no :error-severity Violations; raises
+-- otherwise.
+fn gate_g2(model: model.Model, violations: List<agent.Violation>) -> Phase4Result
+
+-- Per-sub-phase entry points. Each resolves the rules_4X module
+-- lazily; a missing module contributes the empty sequence. Exposed
+-- so partial pipelines (tests, REPL drives) can inspect a single
+-- sub-phase in isolation.
+fn rules_4a(model: model.Model) -> List<agent.Violation>
+fn rules_4b(model: model.Model) -> List<agent.Violation>
+fn rules_4c(model: model.Model) -> List<agent.Violation>
+fn rules_4d(model: model.Model) -> List<agent.Violation>
+fn rules_4e(model: model.Model) -> List<agent.Violation>
+fn rules_4f(model: model.Model) -> List<agent.Violation>
+fn rules_4g(model: model.Model) -> List<agent.Violation>

@@ -41,21 +41,23 @@
         (is (pos? (count allium-tag-defs))
             "Allium tag-definitions still registered"))
       ;; Boundary::Function tags applied to fn-declared Operations:
-      ;; Corpus has 92 fn declarations: 7 in infra, 1 in web, 1 in web/views/shell,
+      ;; Corpus has 113 fn declarations: 7 in infra, 1 in web, 1 in web/views/shell,
       ;; 1 in web/views/graph, 1 in web/views/sidebar, 1 in web/views/breadcrumb,
       ;; 1 in model/pipeline, 4 in project_layer/registry, 1 in project_layer/defaults,
       ;; 28 in the agent subsystem (13 api + 4 system + 3 sci + 2 query + 1 edb +
       ;; 5 views_loader), 5 in the libs subsystem (1 coordinate/canonicalise_path,
       ;; 2 allium/parser, 2 boundary/parser), 13 in the target/clojure subsystem
       ;; (3 address + 3 source + 1 types + 4 blueprint + 1 projector + 1 analyzer),
-      ;; and 28 in the constraint subsystem (10 ast + 4 builtins + 1 derivations +
-      ;; 1 derivations_extra + 2 evaluator + 4 sort + 5 well_known + 1 phase5).
+      ;; 28 in the constraint subsystem (10 ast + 4 builtins + 1 derivations +
+      ;; 1 derivations_extra + 2 evaluator + 4 sort + 5 well_known + 1 phase5),
+      ;; and 21 in the validation subsystem (5 violation + 9 phase4 + 1 per
+      ;; rules_4a..rules_4g).
       (let [fn-tags (filter (fn [ta]
                               (and (= "Boundary" (-> ta :tag :namespace))
                                    (= "Function" (-> ta :tag :name))))
                             (:tag-apps model))]
-        (is (= 92 (count fn-tags))
-            "all 92 corpus fn declarations produce Boundary::Function tags"))
+        (is (= 113 (count fn-tags))
+            "all 113 corpus fn declarations produce Boundary::Function tags"))
       ;; Boundary::ModuleApi tags on modules with exports:
       ;; Corpus has 6 files with exports: (infra/server.boundary,
       ;; web/views/graph.boundary, project_layer/registry.boundary,

@@ -1,0 +1,114 @@
+-- allium: 2
+-- validation/phase4.allium
+--
+-- Scope: Phase 4 of the build pipeline — the runner that walks the
+--   merged Model through the seven structural sub-phases (4a-4g),
+--   aggregates one Violation per defect, and applies Gate G2.
+-- Includes: RunPhase4 rule; SubPhaseOrdering, AggregateBeforeGate,
+--   GateG2HaltsOnError, GateG2IgnoresWarnings, MissingSubPhaseIsSilent,
+--   PurelyDerivedFromModel invariants; Phase4Result envelope.
+-- Excludes:
+--   - Public fn signatures (see phase4.boundary)
+--   - Per-sub-phase rule logic (see rules_4a..rules_4g.allium)
+--   - Violation construction (see violation.allium / .boundary)
+--   - The Violation value type (see agent/api.allium)
+--   - Pipeline-level ordering and gating contract (see
+--     model/pipeline.allium — the build-time guarantees PhaseOrdering
+--     and GateG2Halts; this module realises the Phase-4 half of
+--     GateG2Halts)
+
+use "../model/spec.allium" as model
+use "../agent/api.allium" as agent
+
+------------------------------------------------------------
+-- Value types
+------------------------------------------------------------
+
+value Phase4Result {
+    -- The non-throwing return shape of the runner. On halt, the
+    -- runner raises instead of returning this envelope. Carries the
+    -- input Model unchanged (Phase 4 does not mutate the Model — it
+    -- only inspects it and reports) alongside the aggregated
+    -- Violation sequence, which may include warnings.
+    model: model.Model
+    violations: List<agent.Violation>
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule RunPhase4 {
+    -- Phase 4 of the build pipeline. Triggered by the build pipeline
+    -- after the Allium/Boundary parsers (Phases 1-3) have produced a
+    -- merged Model. Walks the seven sub-phases in fixed order (4a, 4b,
+    -- 4c, 4d, 4e, 4f, 4g), concatenating their Violation sequences in
+    -- visitation order, then applies Gate G2.
+    --
+    -- Gate G2 inspects the aggregated Violation sequence:
+    --   - If any :error-severity Violation is present, raises a halt
+    --     condition carrying the full Violation sequence plus error
+    --     and warning counts. The build does not proceed to
+    --     defaults registration, Phase 5, or Phase 6.
+    --   - Otherwise returns a Phase4Result with the input Model and
+    --     the (warnings-only) Violation sequence.
+    --
+    -- Guarantees that apply: SubPhaseOrdering, AggregateBeforeGate,
+    -- GateG2HaltsOnError, GateG2IgnoresWarnings,
+    -- MissingSubPhaseIsSilent, PurelyDerivedFromModel.
+
+    when: RunPhase4(model: model.Model)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant SubPhaseOrdering {
+    -- The sub-phases are executed in fixed order: 4a → 4b → 4c → 4d
+    -- → 4e → 4f → 4g. The order is observable in the aggregated
+    -- Violation sequence: every :4a Violation precedes every :4b
+    -- Violation, and so on. Within a sub-phase the order is the
+    -- order produced by that sub-phase's check function.
+}
+
+invariant AggregateBeforeGate {
+    -- Every sub-phase runs and contributes its Violations to the
+    -- aggregate before Gate G2 is consulted. A halt-worthy Violation
+    -- in 4a does not short-circuit the execution of 4b through 4g;
+    -- the full structural picture is reported, not just the first
+    -- failure.
+}
+
+invariant GateG2HaltsOnError {
+    -- If the aggregated Violation sequence contains at least one
+    -- Violation whose :severity is :error, the runner raises rather
+    -- than returning a Phase4Result. The raised condition carries
+    -- the full aggregate, the error count, and the warning count so
+    -- downstream consumers can present every defect in a single
+    -- report.
+}
+
+invariant GateG2IgnoresWarnings {
+    -- Warnings never halt the build. A Phase 4 run that produces
+    -- only warnings returns a Phase4Result carrying those warnings;
+    -- the pipeline continues to defaults registration and Phase 5.
+}
+
+invariant MissingSubPhaseIsSilent {
+    -- A sub-phase whose rules_4X module is absent at runtime
+    -- contributes the empty Violation sequence — its absence is
+    -- not itself a defect. The runner discovers each sub-phase's
+    -- check function lazily; a missing namespace is treated as zero
+    -- Violations rather than a runtime error. This keeps the
+    -- pipeline robust during partial bring-up.
+}
+
+invariant PurelyDerivedFromModel {
+    -- The aggregated Violation sequence is a pure function of the
+    -- input Model and the registered sub-phase rule modules. The
+    -- runner reads no global mutable state, performs no I/O, and
+    -- does not modify the Model — Phase 4 is observation, not
+    -- mutation. Two runs over value-equal Models produce
+    -- value-equal Violation sequences.
+}

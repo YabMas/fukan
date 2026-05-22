@@ -1,0 +1,12 @@
+-- boundary: 1
+
+-- Phase 4a composition rules — pure check entry point. See
+-- rules_4a.allium for the five composition invariants.
+
+use "../model/spec.allium" as model
+use "../agent/api.allium" as agent
+
+fn check(model: model.Model) -> List<agent.Violation>
+    -- Run all five 4a composition rules against the Model and return
+    -- the aggregated Violation sequence. Returns the empty sequence
+    -- when the Model satisfies all five composition invariants.

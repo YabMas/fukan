@@ -1,0 +1,12 @@
+-- boundary: 1
+
+-- Phase 4g cross-module reference-visibility rule — pure check
+-- entry point. See rules_4g.allium for the cross-module invariants.
+
+use "../model/spec.allium" as model
+use "../agent/api.allium" as agent
+
+fn check(model: model.Model) -> List<agent.Violation>
+    -- Walk every primitive's :fields and :parameters for
+    -- Composite-named type references that cross module walls and
+    -- emit a Violation for each that is not externally visible.

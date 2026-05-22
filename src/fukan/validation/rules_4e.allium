@@ -1,0 +1,41 @@
+-- allium: 2
+-- validation/rules_4e.allium
+--
+-- Scope: Phase 4e — subsystem-visibility rules. Two structural
+--   rules over the Boundary::Exports tag application on a composite
+--   Container.
+-- Includes: SubsystemExportsAliasResolves,
+--   SubsystemExportsRespectClosedModule, CheckIsPure invariants.
+-- Excludes:
+--   - Public fn signatures (see rules_4e.boundary)
+--   - The Boundary::Exports tag payload (Boundary analyzer)
+--   - Composite-child alias mechanics (last /-segment of the child id)
+--   - Module-level closure (see rules_4d.allium)
+--   - Aggregation and gating (see phase4.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant SubsystemExportsAliasResolves {
+    -- Every entry of the form `alias.Item` (or bare `alias`) in a
+    -- composite's :exported list names a directly-contained child.
+    -- The alias is the last /-segment of the child id. Aliases that
+    -- do not name a direct child emit
+    -- :4e/subsystem-exports-unresolved (error), carrying the
+    -- composite id, the offending entry, and the alias.
+}
+
+invariant SubsystemExportsRespectClosedModule {
+    -- When a composite re-exports `alias.Item` from a closed child
+    -- module, the child module's own :exported list must contain
+    -- Item. A subsystem cannot widen a closed module's surface.
+    -- Violations emit :4e/subsystem-exports-private (error),
+    -- carrying the composite id, the entry, the child module id,
+    -- and the private item.
+}
+
+invariant CheckIsPure {
+    -- The 4e check function is a pure derivation from the input
+    -- Model — it reads only :primitives and :tag-apps.
+}

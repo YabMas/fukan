@@ -1,0 +1,58 @@
+-- allium: 2
+-- validation/rules_4f.allium
+--
+-- Scope: Phase 4f — export-closure rule. A closed module's
+--   :exported list must be self-coherent: every type referenced
+--   from an exported item's signature must itself be externally
+--   reachable.
+-- Includes: ExportedSignaturesAreClosed, VisibilityFromOpenModules,
+--   ExternalEntityCountsAsVisible, ClosureScopeIsMVP, CheckIsPure
+--   invariants.
+-- Excludes:
+--   - Public fn signatures (see rules_4f.boundary)
+--   - Kernel Type walking (Composite / Collection / Union shape)
+--   - The Boundary::ModuleApi and Allium::ExternalEntity tag
+--     payloads (their respective analyzers)
+--   - Cross-module reference-visibility derivation (see
+--     rules_4g.allium — uses the same visibility set on the
+--     reference side)
+--   - Aggregation and gating (see phase4.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ExportedSignaturesAreClosed {
+    -- For every entry in a closed module's :exported list, every
+    -- Composite-named type referenced from the entry's fields
+    -- (Entity) or parameters and return type (Operation) is itself
+    -- externally visible. Missing references emit
+    -- :4f/closure-violation (error), carrying the module id, the
+    -- exported entry, and the list of unreached type ids.
+}
+
+invariant VisibilityFromOpenModules {
+    -- The visibility set used to evaluate closure includes every
+    -- primitive owned by an open module (a module-Container with
+    -- no Boundary::ModuleApi tag). Open modules expose all
+    -- top-level declarations by default.
+}
+
+invariant ExternalEntityCountsAsVisible {
+    -- A Container tagged Allium::ExternalEntity is externally
+    -- visible regardless of its owning module's closure state. An
+    -- exported signature referencing such a Container does not emit
+    -- a closure violation.
+}
+
+invariant ClosureScopeIsMVP {
+    -- Current closure walks cover Entity fields and Operation
+    -- signatures (parameters plus return type). Surface, Variant,
+    -- and Actor closures will be added as the corpus surfaces them
+    -- as load-bearing.
+}
+
+invariant CheckIsPure {
+    -- The 4f check function is a pure derivation from the input
+    -- Model — it reads only :primitives and :tag-apps.
+}

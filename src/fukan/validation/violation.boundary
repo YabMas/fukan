@@ -1,0 +1,24 @@
+-- boundary: 1
+
+-- Violation construction and severity filters. See violation.allium
+-- for the Violation shape invariant and the totality / partition
+-- guarantees. The Violation value type itself lives in agent/api.allium.
+
+use "../agent/api.allium" as agent
+
+fn make_violation(fields: Map<String, Value>) -> agent.Violation
+    -- Construct a Violation from a fields map. Recognised keys:
+    -- :severity, :phase, :sub_phase, :kind, :location, :message.
+    -- :location defaults to the empty map when absent.
+
+fn error(v: agent.Violation) -> Bool
+    -- True iff v's :severity is :error.
+
+fn warning(v: agent.Violation) -> Bool
+    -- True iff v's :severity is :warning.
+
+fn errors(violations: List<agent.Violation>) -> List<agent.Violation>
+    -- The subsequence of violations whose :severity is :error.
+
+fn warnings(violations: List<agent.Violation>) -> List<agent.Violation>
+    -- The subsequence of violations whose :severity is :warning.

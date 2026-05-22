@@ -1,0 +1,11 @@
+-- boundary: 1
+
+-- Phase 4f export-closure rule — pure check entry point. See
+-- rules_4f.allium for the closure invariants.
+
+use "../model/spec.allium" as model
+use "../agent/api.allium" as agent
+
+fn check(model: model.Model) -> List<agent.Violation>
+    -- Run the 4f export-closure rule across every closed module in
+    -- the Model and return the aggregated Violation sequence.

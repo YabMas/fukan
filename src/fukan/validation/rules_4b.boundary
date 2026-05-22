@@ -1,0 +1,11 @@
+-- boundary: 1
+
+-- Phase 4b event rules — pure check entry point. See rules_4b.allium
+-- for the four event invariants.
+
+use "../model/spec.allium" as model
+use "../agent/api.allium" as agent
+
+fn check(model: model.Model) -> List<agent.Violation>
+    -- Run all four 4b event rules against the Model and return the
+    -- aggregated Violation sequence.

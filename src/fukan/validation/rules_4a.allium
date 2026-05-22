@@ -1,0 +1,60 @@
+-- allium: 2
+-- validation/rules_4a.allium
+--
+-- Scope: Phase 4a — composition rules. The five structural rules a
+--   merged Model must satisfy regarding subsystem composition.
+-- Includes: AtMostOneCompositeParent, TopLevelModulesAreWarning,
+--   NoSubsystemCompositionCycles, ContainsPathsResolve,
+--   SubsystemNamesAreUnique, CheckIsPure invariants.
+-- Excludes:
+--   - Public fn signatures (see rules_4a.boundary)
+--   - Module/subsystem identification mechanics (Allium::Module and
+--     Boundary::Subsystem tag application; see the analyzer specs)
+--   - Aggregation and gating (see phase4.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant AtMostOneCompositeParent {
+    -- A module-Container belongs to at most one composite parent.
+    -- A Violation of kind :4a/multiple-composite-parents (error) is
+    -- emitted for every module appearing in two or more composites'
+    -- :children sets, carrying the offending parents in its
+    -- :location.
+}
+
+invariant TopLevelModulesAreWarning {
+    -- A module-Container that no composite contains is top-level.
+    -- A Violation of kind :4a/top-level-module (warning) is emitted
+    -- per such module. Top-level is permitted (the warning is
+    -- advisory) but every module-Container is reported so the
+    -- composition graph is fully accounted for.
+}
+
+invariant NoSubsystemCompositionCycles {
+    -- The composition graph induced by composites' :children sets is
+    -- acyclic. A Violation of kind :4a/subsystem-cycle (error) is
+    -- emitted per cycle, carrying the cyclic path in its :location.
+}
+
+invariant ContainsPathsResolve {
+    -- Every entry in a composite's :children set names a known
+    -- module-Container or a known composite. Unknown entries emit
+    -- :4a/unresolved-contains (error), carrying the offending child
+    -- id and the parent composite id.
+}
+
+invariant SubsystemNamesAreUnique {
+    -- Composites' :label fields partition the composite population —
+    -- every composite has a unique name. Duplicates emit
+    -- :4a/duplicate-subsystem-name (error), carrying the shared name
+    -- and the colliding composite ids.
+}
+
+invariant CheckIsPure {
+    -- The 4a check function is a pure derivation from the input
+    -- Model — it reads only :primitives and :tag-apps, performs no
+    -- I/O, and returns a value-equal Violation sequence on
+    -- value-equal inputs.
+}

@@ -1,0 +1,27 @@
+-- boundary: 1
+
+-- Validation subsystem — Phase 4 structural validation. Walks the
+-- merged Model after the Allium/Boundary parsers (Phases 1-3) and
+-- before constraint evaluation (Phase 5), running seven sub-phases
+-- (4a-4g) that each enforce a single structural concern (composition,
+-- events, bindings, module visibility, subsystem visibility, export
+-- closure, cross-module references). Aggregates one Violation per
+-- structural defect and applies Gate G2: the build halts on any
+-- :error-severity violation. Parallel to the constraint subsystem,
+-- which runs the non-gating Phase 5 over the same Model substrate.
+
+subsystem validation {
+    contains:
+        ./violation.allium
+        ./phase4.allium
+        ./rules_4a.allium
+        ./rules_4b.allium
+        ./rules_4c.allium
+        ./rules_4d.allium
+        ./rules_4e.allium
+        ./rules_4f.allium
+        ./rules_4g.allium
+
+    exports:
+        phase4.Phase4Result
+}

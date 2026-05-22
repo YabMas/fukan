@@ -6,7 +6,7 @@
             [malli.core :as m]))
 
 (deftest pipeline-loads-fukan-corpus
-  (testing "loading src/ produces a validated Model covering all 36 fukan modules"
+  (testing "loading src/ produces a validated Model covering all 45 fukan modules"
     (let [model (pipeline/load-source "src")]
       (is (m/validate build/Model model)
           "loaded Model validates against fukan.model.build/Model schema")
@@ -17,7 +17,7 @@
                                            (:tag ta)))
                                       (:tag-apps model))
               module-ids       (set (map (comp :id :target) module-tag-apps))]
-          ;; The fukan corpus has 36 .allium files: infra/model, infra/server, web/handler,
+          ;; The fukan corpus has 45 .allium files: infra/model, infra/server, web/handler,
           ;; web/views/shell, web/views/graph, web/views/sidebar, web/views/cytoscape,
           ;; web/views/breadcrumb, web/views/projection (stub), model/spec, model/pipeline,
           ;; project_layer/registry, project_layer/defaults, agent/api, agent/system,
@@ -27,8 +27,11 @@
           ;; target/clojure/projector, target/clojure/analyzer, constraint/ast,
           ;; constraint/builtins, constraint/derivations, constraint/derivations_extra,
           ;; constraint/evaluator, constraint/sort, constraint/well_known,
-          ;; constraint/phase5.
-          (is (= 36 (count module-tag-apps))
+          ;; constraint/phase5, validation/violation, validation/phase4,
+          ;; validation/rules_4a, validation/rules_4b, validation/rules_4c,
+          ;; validation/rules_4d, validation/rules_4e, validation/rules_4f,
+          ;; validation/rules_4g.
+          (is (= 45 (count module-tag-apps))
               "Allium::Module tag applied to each .allium file in src/")
           (is (= #{"fukan/infra/model"
                    "fukan/infra/server"
@@ -65,7 +68,16 @@
                    "fukan/constraint/evaluator"
                    "fukan/constraint/sort"
                    "fukan/constraint/well_known"
-                   "fukan/constraint/phase5"}
+                   "fukan/constraint/phase5"
+                   "fukan/validation/violation"
+                   "fukan/validation/phase4"
+                   "fukan/validation/rules_4a"
+                   "fukan/validation/rules_4b"
+                   "fukan/validation/rules_4c"
+                   "fukan/validation/rules_4d"
+                   "fukan/validation/rules_4e"
+                   "fukan/validation/rules_4f"
+                   "fukan/validation/rules_4g"}
                  module-ids)
               "module-Container ids are the canonical root-relative coordinates")))
 

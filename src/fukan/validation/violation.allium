@@ -1,0 +1,51 @@
+-- allium: 2
+-- validation/violation.allium
+--
+-- Scope: Violation construction — the single fabrication point for
+--   Phase 4 / Phase 5 Violation values, plus severity-based filtering
+--   helpers used by Gate G2.
+-- Includes: ViolationShape, MakeViolationIsTotal, SeverityPartition,
+--   LocationDefaultsToEmpty invariants.
+-- Excludes:
+--   - Public fn signatures (see violation.boundary)
+--   - The Violation value type itself (see agent/api.allium; this
+--     module references rather than redeclares it — Violation is the
+--     shared report shape across Phase 4 and Phase 5)
+--   - Sub-phase rule logic (see rules_4a..rules_4g.allium)
+--   - The runner that aggregates Violations (see phase4.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ViolationShape {
+    -- Every Violation carries six attributes: :severity, :phase,
+    -- :sub_phase, :kind, :location, :message. :severity is one of
+    -- :error / :warning. :phase is one of :phase4 / :phase5.
+    -- :sub_phase is one of :4a :4b :4c :4d :4e :4f :4g :5 — Phase 5
+    -- uses :5 because it has no sub-phases. :kind is an open keyword
+    -- identifying the violation type. :location is a free-form
+    -- attribution map. :message is a human-readable string.
+}
+
+invariant MakeViolationIsTotal {
+    -- The make_violation factory accepts any combination of the six
+    -- fields and returns a fully-populated Violation map. No input
+    -- causes the factory to throw; missing :location is filled with
+    -- the empty map by LocationDefaultsToEmpty.
+}
+
+invariant SeverityPartition {
+    -- The error?/warning? predicates partition every well-formed
+    -- Violation: exactly one is true per Violation. The errors and
+    -- warnings selectors are their pointwise filters — composing
+    -- errors then warnings (or vice versa) over the same input
+    -- preserves order within each partition and the disjoint union
+    -- of their outputs equals the input.
+}
+
+invariant LocationDefaultsToEmpty {
+    -- A Violation constructed without an explicit :location carries
+    -- the empty map. Callers may safely assoc into :location without
+    -- guarding for nil.
+}

@@ -1,0 +1,61 @@
+-- allium: 2
+-- validation/rules_4b.allium
+--
+-- Scope: Phase 4b — event-related rules. Four structural rules over
+--   Events, their declaration sites, the parameter-shape agreement
+--   across sites, the provides/triggers wiring, and the exposes:
+--   substrate-endpoint resolution.
+-- Includes: EveryEventHasDeclarationSite,
+--   DeclarationSitesShareShape, ProvidesNeedsExternalStimulus,
+--   ExposesPathsResolve, CheckIsPure invariants.
+-- Excludes:
+--   - Public fn signatures (see rules_4b.boundary)
+--   - The Event primitive shape (kernel concept)
+--   - The Allium::Event :declaration-sites payload (Allium analyzer)
+--   - The Allium::Trigger :kind payload (Allium analyzer)
+--   - Aggregation and gating (see phase4.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant EveryEventHasDeclarationSite {
+    -- Every Event primitive carries an Allium::Event tag whose
+    -- payload :declaration-sites is non-empty. Events with no
+    -- declaration site emit :4b/event-no-declaration-site (error),
+    -- carrying the Event id.
+}
+
+invariant DeclarationSitesShareShape {
+    -- All declaration sites for the same Event within a single
+    -- module agree on parameter shape (arity plus typed-parameter
+    -- sequence). Disagreement is recorded by the Allium analyzer in
+    -- the Model's :phase4-state.event-shape-mismatches list; each
+    -- record emits :4b/event-shape-mismatch (error), carrying the
+    -- Event id, the owning module coord, and the conflicting shapes.
+}
+
+invariant ProvidesNeedsExternalStimulus {
+    -- For every :relation/provides edge from a Surface to an Event,
+    -- the Event must have at least one :relation/triggers edge to a
+    -- Rule in the same module where the Trigger tag's :kind payload
+    -- is "external_stimulus". Provides without such a consumer emit
+    -- :4b/provides-no-external-stimulus (error), carrying the
+    -- offending provides edge, the Event id, and the module coord.
+}
+
+invariant ExposesPathsResolve {
+    -- Every exposes: path declared on a Surface resolves to a known
+    -- substrate endpoint — a primitive id, a field within a known
+    -- Container, or another resolvable target. The Allium analyzer
+    -- records unresolved paths in :phase4-state.exposes-issues; each
+    -- record emits :4b/exposes-unresolved (error), carrying the
+    -- Surface id, the owning module, the unresolved path, and the
+    -- analyzer's resolution attempt.
+}
+
+invariant CheckIsPure {
+    -- The 4b check function is a pure derivation from the input
+    -- Model — it reads only :primitives, :edges, :tag-apps, and
+    -- :phase4-state.
+}

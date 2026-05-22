@@ -1,0 +1,50 @@
+-- allium: 2
+-- validation/rules_4d.allium
+--
+-- Scope: Phase 4d — module-visibility rules. Two structural rules
+--   over the Boundary::ModuleApi tag application that flips an
+--   Allium-open module closed.
+-- Includes: AtMostOneModuleApiTag, ExportsResolve,
+--   ExportsDisallowKinds, CheckIsPure invariants.
+-- Excludes:
+--   - Public fn signatures (see rules_4d.boundary)
+--   - The Boundary::ModuleApi tag payload (Boundary analyzer)
+--   - Subsystem-level visibility (see rules_4e.allium)
+--   - Export closure (see rules_4f.allium)
+--   - Cross-module reference visibility (see rules_4g.allium)
+--   - Aggregation and gating (see phase4.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant AtMostOneModuleApiTag {
+    -- A module-Container carries at most one Boundary::ModuleApi tag
+    -- application. Multiple applications on the same target emit
+    -- :4d/multiple-module-api-tags (error), carrying the module id
+    -- and the tag-application count.
+}
+
+invariant ExportsResolve {
+    -- Every entry in a closed module's :exported list resolves to a
+    -- primitive owned by that module. Resolution composes the
+    -- module id with the entry via the :: separator (Contract.op
+    -- entries preserve the dot). Unresolved entries emit
+    -- :4d/exports-unresolved (error), carrying the module id, the
+    -- entry, and the attempted resolution target.
+}
+
+invariant ExportsDisallowKinds {
+    -- Rules, Invariants, and Contracts are not individually
+    -- exportable — Rules and Invariants have no party-facing
+    -- callable shape, and Contracts are always type-visible across
+    -- module walls regardless of :exported membership. An :exported
+    -- entry resolving to a primitive of any of these kinds emits
+    -- :4d/exports-disallowed-kind (error), carrying the module id,
+    -- the entry, and the disallowed kind.
+}
+
+invariant CheckIsPure {
+    -- The 4d check function is a pure derivation from the input
+    -- Model — it reads only :primitives and :tag-apps.
+}
