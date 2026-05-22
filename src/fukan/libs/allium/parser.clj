@@ -244,7 +244,7 @@
 
   optional-type = (inline-obj / generic-type / qualified-name / simple-type) <'?'>
 
-  qualified-name = ident <'/'> ident
+  qualified-name = ident <#'[./]'> ident
 
   simple-type = ident
 

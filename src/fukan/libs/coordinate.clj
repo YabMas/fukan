@@ -18,6 +18,13 @@
   (let [idx (.lastIndexOf ^String host-coord "/")]
     (if (neg? idx) "" (subs host-coord 0 idx))))
 
+(defn- parent-dir
+  "Return the parent of `dir` (a slash-separated path with no trailing slash),
+   or \"\" if dir is empty or has no parent."
+  [dir]
+  (let [up-idx (.lastIndexOf ^String dir "/")]
+    (if (neg? up-idx) "" (subs dir 0 up-idx))))
+
 (defn canonicalise-path
   "Resolve a path (`use`/`contains:` raw value) to a root-relative coord
    (no extension). `host-coord` is the file's own coord (root-relative,
@@ -26,6 +33,7 @@
    - `foo.allium` / `foo.boundary` → `foo`
    - `./a.allium` from host `src/h` → `src/a`
    - `../a.allium` from host `src/sub/h` → `src/a`
+   - `../../a.allium` from host `src/x/y/h` → `src/a`  (chained `../`)
    - bare paths (no `./` or `../`): treated as root-relative; only the
      extension is stripped."
   [host-coord raw-path]
@@ -37,9 +45,11 @@
         (if (empty? hd) tail (str hd "/" tail)))
 
       (str/starts-with? no-ext "../")
-      (let [up-idx (.lastIndexOf ^String hd "/")
-            parent (if (neg? up-idx) "" (subs hd 0 up-idx))
-            tail   (subs no-ext 3)]
-        (if (empty? parent) tail (str parent "/" tail)))
+      ;; Consume each leading `../` by walking up one level on the host dir.
+      (loop [tail   no-ext
+             parent hd]
+        (if (str/starts-with? tail "../")
+          (recur (subs tail 3) (parent-dir parent))
+          (if (empty? parent) tail (str parent "/" tail))))
 
       :else no-ext)))

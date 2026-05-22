@@ -16,14 +16,7 @@
 -- emitted JSON uses camelCase (`sourceLocation`). The transform layer
 -- maps mechanically — spec stays language-agnostic.
 
-value SourceLocation {
-    -- Local mirror of fukan/model/spec::SourceLocation, included here
-    -- so CytoscapeNode.source_location has a typed shape without a
-    -- cross-module field reference (the current analyzer does not
-    -- resolve aliased type names in value field positions).
-    file: String
-    line: Integer?
-}
+use "../../model/spec.allium" as model
 
 value CytoscapeGraph {
     -- Output payload for the Cytoscape.js frontend.
@@ -33,14 +26,6 @@ value CytoscapeGraph {
     edges: List<CytoscapeEdge>
     selected_id: String?
     highlighted_edges: List<String>
-}
-
-value TagRef {
-    -- Vocabulary tag reference — namespace plus name. Mirrors the kernel
-    -- TagRef from fukan/model/spec; declared inline here so CytoscapeNode
-    -- can carry typed `tags` without a cross-module field reference.
-    namespace: String
-    name: String
 }
 
 value CytoscapeNode {
@@ -65,10 +50,10 @@ value CytoscapeNode {
     -- one entry per TagApplication. Surfaced for introspection (sidebar,
     -- agents). Absent when the primitive carries no tags, and on
     -- artifact nodes.
-    tags: List<TagRef>?
+    tags: List<model.TagRef>?
     -- Source location for artifact-backed nodes; absent for primitives
     -- that have no realised artifact.
-    source_location: SourceLocation?
+    source_location: model.SourceLocation?
     -- UI selection flag, set per render against the current editor state.
     selected: Boolean
 }

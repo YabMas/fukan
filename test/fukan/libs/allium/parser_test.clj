@@ -303,10 +303,21 @@
              (:type-ref f))))))
 
 (deftest qualified-type-test
-  (testing "qualified name"
+  (testing "qualified name (slash)"
     (let [f (-> (first-decl "value V { sig: model/FnSig }\n") :fields first)]
       (is (= :typed (:field-kind f)))
       (is (= {:kind :qualified :ns "model" :name "FnSig"}
+             (:type-ref f)))))
+  (testing "qualified name (dot) — mirrors trigger-call dotted-alias convention"
+    (let [f (-> (first-decl "value V { sig: model.FnSig }\n") :fields first)]
+      (is (= :typed (:field-kind f)))
+      (is (= {:kind :qualified :ns "model" :name "FnSig"}
+             (:type-ref f)))))
+  (testing "optional qualified name (dot) in field position — regression: silently dropped to :derived"
+    (let [f (-> (first-decl "value V { loc: model.SourceLocation? }\n") :fields first)]
+      (is (= :typed (:field-kind f)))
+      (is (= {:kind :optional
+              :inner {:kind :qualified :ns "model" :name "SourceLocation"}}
              (:type-ref f))))))
 
 (deftest union-type-test
