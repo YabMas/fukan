@@ -11,34 +11,49 @@
 ;; web/views/cytoscape.allium. Field names map mechanically from
 ;; underscore (spec) to kebab-case (Clojure).
 
-(def CytoscapeNode
-  "Cytoscape.js node payload. Materialises value CytoscapeNode
-   from web/views/cytoscape.allium."
+(def SourceLocation
+  "Source location payload. Materialises value SourceLocation from
+   fukan/model/spec.allium."
   (m/schema
    [:map
-    [:id                   :string]
-    [:kind                 :string]   ;; "module", "function", "schema"
-    [:label                :string]
-    [:parent               {:optional true} :string]
-    [:selected             :boolean]
-    [:expandable           :boolean]
-    [:has-private-children :boolean]
-    [:is-expanded          :boolean]
-    [:showing-private      :boolean]
-    [:child-count          :int]
-    [:private              {:optional true} :boolean]
-    [:schema-key           {:optional true} :string]]))
+    [:file :string]
+    [:line {:optional true} :int]]))
+
+(def CytoscapeNode
+  "Cytoscape.js node payload. Materialises value CytoscapeNode
+   from web/views/cytoscape.allium. Field names map mechanically
+   from underscore (spec) to kebab-case (Clojure); the wire JSON
+   uses camelCase, which Cheshire renders from these keys when
+   they are explicitly camelCased below."
+  (m/schema
+   [:map
+    [:id                              :string]
+    ;; kind is one of "primitive/*" or "artifact/*", rendered from the
+    ;; source keyword.
+    [:kind                            :string]
+    [:label                           :string]
+    [:selected                        :boolean]
+    [:parent          {:optional true} :string]
+    ;; camelCase keys: emitted directly by the transformer so the
+    ;; JSON output matches the spec's wire shape without re-keying.
+    [:alliumKind      {:optional true} :string]
+    [:sourceLocation  {:optional true} SourceLocation]]))
 
 (def CytoscapeEdge
   "Cytoscape.js edge payload. Materialises value CytoscapeEdge
-   from web/views/cytoscape.allium."
+   from web/views/cytoscape.allium. `edgeType` is a legacy alias of
+   `kind`; `projectionKind` and `drift` are emitted only for
+   `:relation/projects` edges."
   (m/schema
    [:map
     [:id        :string]
     [:source    :string]
     [:target    :string]
-    [:edge-type :string]   ;; "code-flow" or "schema-reference"
-    [:kind      :string]]))  ;; "function-call", "dispatches", or "schema-reference"
+    ;; kind is a "relation/*" keyword rendered as string.
+    [:kind      :string]
+    [:edgeType  :string]
+    [:projectionKind {:optional true} :string]
+    [:drift          {:optional true} :string]]))
 
 (def CytoscapeGraph
   "Cytoscape.js graph payload. Materialises value CytoscapeGraph
@@ -47,8 +62,8 @@
    [:map
     [:nodes             [:sequential CytoscapeNode]]
     [:edges             [:sequential CytoscapeEdge]]
-    [:selected-id       {:optional true} :string]
-    [:highlighted-edges [:sequential :string]]]))
+    [:selectedId        {:optional true} [:maybe :string]]
+    [:highlightedEdges  {:optional true} [:maybe [:sequential :string]]]]))
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers

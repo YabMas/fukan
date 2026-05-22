@@ -1,15 +1,29 @@
 -- allium: 2
 -- web/views/cytoscape.allium
 --
--- Scope: Cytoscape.js output value types — the wire shape
---   the frontend graph library consumes
+-- Scope: Cytoscape.js wire-format value types — what the frontend
+--   graph library actually consumes today.
 -- Includes: CytoscapeGraph, CytoscapeNode, CytoscapeEdge value types
 -- Excludes:
---   - Graph rendering (see graph.allium)
+--   - Graph rendering orchestration (see graph.allium)
+--   - Projection-layer node/edge shape (see projection.allium)
 --
 -- No boundary file: module is open by default. All three value types
 -- are externally visible (CytoscapeGraph is the render_graph return
 -- type; CytoscapeNode and CytoscapeEdge are its constituents).
+--
+-- Field-name convention: spec uses underscore (`source_location`); the
+-- emitted JSON uses camelCase (`sourceLocation`). The transform layer
+-- maps mechanically — spec stays language-agnostic.
+
+value SourceLocation {
+    -- Local mirror of fukan/model/spec::SourceLocation, included here
+    -- so CytoscapeNode.source_location has a typed shape without a
+    -- cross-module field reference (the current analyzer does not
+    -- resolve aliased type names in value field positions).
+    file: String
+    line: Integer?
+}
 
 value CytoscapeGraph {
     -- Output payload for the Cytoscape.js frontend.
@@ -22,24 +36,68 @@ value CytoscapeGraph {
 }
 
 value CytoscapeNode {
+    -- A renderable node in the Cytoscape graph. Materialises either a
+    -- kernel primitive or a code artifact.
     id: String
-    kind: String           -- "module", "function", "schema"
+    -- `kind` carries the source category as a namespaced keyword
+    -- rendered to a string. For primitives the value is one of the
+    -- kernel primitive kinds (e.g. "primitive/container",
+    -- "primitive/rule"); for artifacts it is an artifact case
+    -- (e.g. "artifact/code").
+    kind: String
     label: String
     parent: String?
+    -- `allium_kind` carries the Allium-namespace tag applied to the
+    -- primitive (e.g. "rule", "event", "surface"), lowercased. Absent
+    -- when the primitive has no Allium tag, and on artifact nodes.
+    allium_kind: String?
+    -- Source location for artifact-backed nodes; absent for primitives
+    -- that have no realised artifact.
+    source_location: SourceLocation?
+    -- UI selection flag, set per render against the current editor state.
     selected: Boolean
-    expandable: Boolean
-    has_private_children: Boolean
-    is_expanded: Boolean
-    showing_private: Boolean
-    child_count: Integer
-    private: Boolean?
-    schema_key: String?    -- present for schema nodes
 }
 
 value CytoscapeEdge {
+    -- A renderable edge in the Cytoscape graph. Materialises a kernel
+    -- relation edge between two endpoints, including `projects` edges
+    -- which carry projection metadata.
     id: String
     source: String
     target: String
-    edge_type: String      -- "code-flow" or "schema-reference"
-    kind: String           -- "function-call", "dispatches", or "schema-reference"
+    -- `kind` carries the relation kind as a namespaced keyword rendered
+    -- to a string, one of the kernel relation kinds (e.g.
+    -- "relation/triggers", "relation/projects", "relation/specialises").
+    kind: String
+    -- `edge_type` mirrors `kind` for legacy frontend code paths that
+    -- still read the older field name. Always equal to `kind`.
+    edge_type: String
+    -- Present only on `relation/projects` edges. Identifies which
+    -- projection slot the edge belongs to (e.g. "projection-kind/rule",
+    -- "projection-kind/operation").
+    projection_kind: String?
+    -- Drift marker. Present and equal to "absent" iff the projects edge
+    -- has validity `:absent` — the spec primitive has no realised
+    -- artifact at its canonical address. Absent otherwise.
+    drift: String?
+}
+
+-- Invariants ----------------------------------------------------------
+
+invariant CytoscapeIdentifiers {
+    -- Every node carries a non-empty stable id used as a Cytoscape
+    -- element id and as the source/target referent for edges; every
+    -- edge names both endpoints by such an id.
+}
+
+invariant CytoscapeEdgeTypeMirrorsKind {
+    -- `edge_type` is a legacy alias of `kind`; the two fields carry
+    -- the same value on every edge. New consumers should read `kind`.
+}
+
+invariant CytoscapeProjectionFieldsScope {
+    -- `projection_kind` and `drift` are emitted only on edges whose
+    -- `kind` is "relation/projects". `drift` is present iff the
+    -- underlying projects edge has validity `:absent`, in which case
+    -- its value is "absent".
 }
