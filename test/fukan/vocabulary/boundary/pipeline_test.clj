@@ -51,10 +51,13 @@
         (is (= 13 (count fn-tags))
             "all 13 corpus fn declarations produce Boundary::Function tags"))
       ;; Boundary::ModuleApi tags on modules with exports:
-      ;; Corpus has 3 files with exports: (infra/server.boundary, model/pipeline.boundary, web/views/graph.boundary)
+      ;; Corpus has 2 files with exports: (infra/server.boundary,
+      ;; web/views/graph.boundary). model/pipeline.boundary lost its
+      ;; exports: list when pipeline.allium was rewritten against the
+      ;; kernel substrate — its single fn build_model is signature-only.
       (let [api-tags (filter (fn [ta]
                                (and (= "Boundary" (-> ta :tag :namespace))
                                     (= "ModuleApi" (-> ta :tag :name))))
                              (:tag-apps model))]
-        (is (= 3 (count api-tags))
-            "exactly 3 Boundary::ModuleApi tags (infra/server, model/pipeline, web/views/graph)")))))
+        (is (= 2 (count api-tags))
+            "exactly 2 Boundary::ModuleApi tags (infra/server, web/views/graph)")))))

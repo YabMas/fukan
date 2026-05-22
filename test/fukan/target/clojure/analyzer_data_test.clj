@@ -43,27 +43,8 @@
                         (:edges m1))]
       (is (= 1 (count edges))))))
 
-(deftest invariant-with-label-projects-from-substrate-address
-  ;; Construct a Container with an invariant assertion (Bool Expression
-  ;; with non-nil :label) tagged Allium::Invariant.
-  (let [model (-> (build/empty-model)
-                  (build/add-primitive (p/make-container {:id "m" :label "m"}))
-                  (build/add-tag-application
-                    (v/make-tag-application
-                      {:tag {:namespace "Allium" :name "Module"}
-                       :target {:case :target/primitive :id "m"}}))
-                  ;; Add an intent.assertions[0] with label "NoNegativeBalance"
-                  (update-in [:primitives "m"]
-                             assoc-in [:intent :assertions]
-                             [{:label "NoNegativeBalance" :form {}}])
-                  (build/add-tag-application
-                    (v/make-tag-application
-                      {:tag {:namespace "Allium" :name "Invariant"}
-                       :target {:case :target/substrate :container "m"
-                                :path [{:slot "intent"} {:slot "assertions" :key "0"}]}})))
-        m1 (analyzer/run model (registry/make-registry) "test/fixtures/clojure-projects/empty")
-        edges (filter #(and (= :relation/projects (:kind %))
-                            (= :projection-kind/invariant (:projection-kind %)))
-                      (:edges m1))]
-    (is (= 1 (count edges)))
-    (is (= :absent (:validity (first edges))))))
+;; The analyzer no longer emits :projection-kind/invariant or
+;; :projection-kind/test edges (verification projections were removed —
+;; see feat(target-clojure): stop emitting verification projection
+;; expectations). A future verification story will reintroduce these
+;; with concrete consumers driving the design.

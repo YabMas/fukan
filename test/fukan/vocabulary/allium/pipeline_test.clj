@@ -36,22 +36,14 @@
                  module-ids)
               "module-Container ids are the canonical root-relative coordinates")))
 
-      (testing "cross-module refs resolve cleanly (path canonicalisation)"
-        ;; AnalysisResult lives in fukan/model/pipeline and references
-        ;; Node/Edge from fukan/model/spec via `use \"./spec.allium\" as model`.
-        ;; If path canonicalisation works, the fields resolve to
-        ;; Composite-named("fukan/model/spec::Node") and ::Edge respectively
-        ;; rather than `./spec.allium::Node`.
-        (let [ar    (build/get-primitive model "fukan/model/pipeline::AnalysisResult")
-              nodes (some #(when (= "nodes" (:name %)) %) (:fields ar))
-              edges (some #(when (= "edges" (:name %)) %) (:fields ar))]
-          (is (some? ar) "AnalysisResult Container exists in loaded corpus")
-          (is (= "fukan/model/spec::Node"
-                 (-> nodes :type-ref :of :shape :container))
-              "AnalysisResult.nodes resolves to fukan/model/spec::Node")
-          (is (= "fukan/model/spec::Edge"
-                 (-> edges :type-ref :of :shape :container))
-              "AnalysisResult.edges resolves to fukan/model/spec::Edge"))))))
+      ;; Cross-module path canonicalisation is exercised by the
+      ;; `corpus-cross-module-refs-resolve` test below, which walks the entire
+      ;; loaded model and asserts no composite-named ref carries a stale `./`,
+      ;; `../`, or `.allium` segment. The previous AnalysisResult-specific
+      ;; assertion targeted a legacy fukan/model/pipeline::AnalysisResult
+      ;; Container that was removed when pipeline.allium was rewritten against
+      ;; the kernel substrate.
+      )))
 
 (deftest corpus-cross-module-refs-resolve
   (testing "no Composite-named ref in the loaded src/ Model carries a raw `.allium` suffix or `./`/`../` prefix"

@@ -498,11 +498,15 @@
     (let [result (parser/parse-file "src/fukan/model/spec.allium")]
       (is (not (insta/failure? result)))
       (is (= "2" (:allium-version result)))
+      ;; Counts reflect the kernel-substrate spec.allium (post Plan-1 rewrite):
+      ;; values for fields/parameters/etc., entities for substrate value records
+      ;; and primitive entity-descriptions, variants for type/expression cases,
+      ;; invariants spanning the substrate.
       (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 6 (:value types)))            ;; MapEntry, FunctionSignature, BoundaryFn, Guarantee, Invariant, Boundary
-        (is (= 4 (:entity types)))           ;; Edge, Node, Model, TypeExpr
-        (is (= 17 (:variant types)))
-        (is (= 5 (:invariant types)))))))    ;; NoSelfEdge, LeafStrictness + 3 top-level
+        (is (= 15 (:value types)))
+        (is (= 26 (:entity types)))
+        (is (= 30 (:variant types)))
+        (is (= 8 (:invariant types)))))))
 
 
 (deftest views-allium-integration-test

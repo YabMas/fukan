@@ -58,6 +58,7 @@
                             (= "m::ProcessOrder" (-> % :from :id)))
                       (:edges m1))]
     (is (pos? (count edges)))
-    ;; Rules also project to a test artifact, so we expect 2 edges per rule
-    ;; (one for :rule, one for :test).
-    (is (= 2 (count edges)))))
+    ;; Rules project to a single realisation edge (:projection-kind/rule).
+    ;; Verification edges (:projection-kind/test) were removed — the
+    ;; analyzer no longer emits implicit test expectations.
+    (is (= 1 (count edges)))))
