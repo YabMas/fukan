@@ -1,0 +1,107 @@
+-- allium: 2
+-- target/clojure/analyzer.allium
+--
+-- Scope: Phase 6 of the build pipeline — the Clojure target
+--   analyzer's behavioural commitments to the Model it returns.
+-- Includes: RunClojureAnalyzer rule; NonGating, PurelyAdditive,
+--   ProjectsEdgeValidity, MaterialisesUnprojected,
+--   DuplicateAddressViolations, FunctionPrivacyDerivation
+--   invariants.
+-- Excludes:
+--   - The fn signature (see analyzer.boundary)
+--   - Address resolution (see address.allium)
+--   - Source walking (see source.allium)
+--   - Type translation (see types.allium)
+--   - On-demand Blueprint assembly (see projector.allium)
+--   - Phase ordering and gating (see model/pipeline.allium)
+
+use "../../model/spec.allium" as model
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule RunClojureAnalyzer {
+    -- Phase 6 of the build pipeline. Triggered by the analyzer
+    -- module's run fn. Walks the configured code root, projects
+    -- every Operation, Rule, Entity / Value / Variant Container,
+    -- and Event to a canonical Code.* artifact, and emits a
+    -- :relation/projects edge from the primitive to the artifact
+    -- with per-edge :validity.
+    --
+    -- For each projected primitive:
+    --   - the artifact is always materialised at the canonical
+    --     address, regardless of whether realising source exists
+    --   - :validity is :valid when a matching source symbol is
+    --     found at the canonical address, :absent otherwise
+    --
+    -- Source symbols that do not correspond to any spec primitive
+    -- are materialised as standalone Code.* artifacts with no
+    -- inbound :relation/projects edge — they surface as unbound
+    -- code per DESIGN.md "Couplings".
+    --
+    -- Multiple source symbols at the same canonical address emit
+    -- one duplicate-canonical-address violation per offending
+    -- group, appended to the Model's violations alongside any
+    -- earlier-phase violations.
+    --
+    -- Guarantees that apply: NonGating, PurelyAdditive,
+    -- ProjectsEdgeValidity, MaterialisesUnprojected,
+    -- DuplicateAddressViolations, FunctionPrivacyDerivation
+    -- (declared below).
+
+    when: RunClojureAnalyzer(model: model.Model, code_root: String?)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant NonGating {
+    -- Phase 6 never raises. A missing or unreadable code root
+    -- produces an empty source index and a Model with every
+    -- projects edge at :absent validity. Duplicate-address
+    -- conditions surface as Model violations rather than halting
+    -- the build.
+}
+
+invariant PurelyAdditive {
+    -- The analyzer never removes or mutates an existing primitive,
+    -- existing kernel edge, existing artifact, or existing
+    -- violation. Its output Model equals the input Model plus new
+    -- Code.* artifacts, new :relation/projects edges, and any new
+    -- duplicate-address violations.
+}
+
+invariant ProjectsEdgeValidity {
+    -- Every projects edge the analyzer emits carries a :validity
+    -- of :valid or :absent. :valid indicates a source symbol was
+    -- found at the canonical address; :absent indicates the
+    -- artifact identity was synthesised at the canonical address
+    -- with no realising source. :stale is reserved for future
+    -- signature-mismatch detection.
+}
+
+invariant MaterialisesUnprojected {
+    -- Every source symbol the walker discovers becomes a Code.*
+    -- artifact in the Model, even when no spec primitive projects
+    -- onto its canonical address. Unprojected artifacts carry no
+    -- inbound projects edge and are the drift surface for unbound
+    -- implementation code.
+}
+
+invariant DuplicateAddressViolations {
+    -- When more than one source symbol shares the same canonical
+    -- address (ns, name, kind), the analyzer emits exactly one
+    -- violation per offending group, listing every contributing
+    -- file. The violations are warnings on Phase 6, not errors:
+    -- the analyzer continues processing the remaining primitives.
+}
+
+invariant FunctionPrivacyDerivation {
+    -- For function-shaped projections, the resulting Code.* artifact
+    -- records publicity derived from the source symbol's kind:
+    -- public when the symbol was a public top-level function,
+    -- private when it was a private top-level function, and
+    -- unknown when no matching source symbol was found.
+}

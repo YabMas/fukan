@@ -1,0 +1,24 @@
+-- boundary: 1
+
+-- Implementation Blueprint — value shape plus construction and
+-- serialisation helpers. The Projector assembles a Blueprint per
+-- (primitive, projection-kind) pair; consumers (LLM generators,
+-- the Analyzer's verification path) read the resulting record.
+
+use "./blueprint.allium" as blueprint
+
+fn make(input: Any) -> blueprint.Blueprint
+    -- Construct a Blueprint v1 from a map of required and optional
+    -- fields. Missing optional fields default to empty.
+
+fn identity(blueprint: blueprint.Blueprint) -> List<Any>
+    -- Return the Blueprint's identity pair — (primitive_id,
+    -- projection_kind) — for inspection caching keys.
+
+fn to_edn(blueprint: blueprint.Blueprint) -> String
+    -- Serialise a Blueprint to canonical EDN. Used by the Analyzer's
+    -- verification path and by inspection tooling.
+
+fn to_markdown(blueprint: blueprint.Blueprint) -> String
+    -- Serialise a Blueprint to a markdown prompt. Used as the LLM
+    -- generation prompt and for human inspection.

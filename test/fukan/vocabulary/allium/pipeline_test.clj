@@ -6,7 +6,7 @@
             [malli.core :as m]))
 
 (deftest pipeline-loads-fukan-corpus
-  (testing "loading src/ produces a validated Model covering all 22 fukan modules"
+  (testing "loading src/ produces a validated Model covering all 28 fukan modules"
     (let [model (pipeline/load-source "src")]
       (is (m/validate build/Model model)
           "loaded Model validates against fukan.model.build/Model schema")
@@ -17,13 +17,15 @@
                                            (:tag ta)))
                                       (:tag-apps model))
               module-ids       (set (map (comp :id :target) module-tag-apps))]
-          ;; The fukan corpus has 22 .allium files: infra/model, infra/server, web/handler,
+          ;; The fukan corpus has 28 .allium files: infra/model, infra/server, web/handler,
           ;; web/views/shell, web/views/graph, web/views/sidebar, web/views/cytoscape,
           ;; web/views/breadcrumb, web/views/projection (stub), model/spec, model/pipeline,
           ;; project_layer/registry, project_layer/defaults, agent/api, agent/system,
           ;; agent/sci, agent/query, agent/edb, agent/views_loader, libs/coordinate,
-          ;; libs/allium/parser, libs/boundary/parser.
-          (is (= 22 (count module-tag-apps))
+          ;; libs/allium/parser, libs/boundary/parser, target/clojure/address,
+          ;; target/clojure/source, target/clojure/types, target/clojure/blueprint,
+          ;; target/clojure/projector, target/clojure/analyzer.
+          (is (= 28 (count module-tag-apps))
               "Allium::Module tag applied to each .allium file in src/")
           (is (= #{"fukan/infra/model"
                    "fukan/infra/server"
@@ -46,7 +48,13 @@
                    "fukan/agent/views_loader"
                    "fukan/libs/coordinate"
                    "fukan/libs/allium/parser"
-                   "fukan/libs/boundary/parser"}
+                   "fukan/libs/boundary/parser"
+                   "fukan/target/clojure/address"
+                   "fukan/target/clojure/source"
+                   "fukan/target/clojure/types"
+                   "fukan/target/clojure/blueprint"
+                   "fukan/target/clojure/projector"
+                   "fukan/target/clojure/analyzer"}
                  module-ids)
               "module-Container ids are the canonical root-relative coordinates")))
 

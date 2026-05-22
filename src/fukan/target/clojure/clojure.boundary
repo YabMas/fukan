@@ -1,0 +1,24 @@
+-- boundary: 1
+
+-- Clojure target subsystem — the target-language extension for
+-- Clojure per MODEL.md §7.7. Couples the Analyzer (Phase 6 of the
+-- build pipeline; emits Code.* artifacts and per-edge :validity
+-- projects edges) to the Projector (on-demand assembly of
+-- Implementation Blueprints from spec primitives), sharing
+-- canonical address resolution, source indexing, type translation,
+-- and Blueprint serialisation. Today this is the only target;
+-- additional targets would sit as siblings under target/.
+
+subsystem clojure {
+    contains:
+        ./address.allium
+        ./source.allium
+        ./types.allium
+        ./blueprint.allium
+        ./projector.allium
+        ./analyzer.allium
+
+    exports:
+        blueprint.Blueprint
+        source.SourceSymbol
+}

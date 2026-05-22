@@ -1,0 +1,22 @@
+-- boundary: 1
+
+-- Canonical address resolution for the Clojure target — mechanical
+-- mapping from (module-coord, primitive-label, projection-kind) to a
+-- target-language address consulted by the Analyzer and the Projector.
+
+use "../../project_layer/registry.allium" as registry
+use "./address.allium" as address
+
+fn module_ns(registry: registry.Registry, module_coord: String) -> String
+    -- Compute the target-language module namespace from a module coord
+    -- and the project registry's root_prefix. Mechanical concatenation.
+
+fn local_name(primitive_kind: String, projection_kind: String, primitive_label: String) -> String
+    -- Compute the local in-namespace name for a primitive given its
+    -- kind and the requested projection kind. DataStructure-shaped
+    -- projections preserve the primitive label; function-shaped
+    -- projections apply the project's identifier transliteration.
+
+fn canonical(registry: registry.Registry, primitive_kind: String, projection_kind: String, module_coord: String, primitive_label: String) -> address.CanonicalAddress
+    -- Build the full canonical address. Test projections append the
+    -- conventional test suffix to both the namespace and the name.

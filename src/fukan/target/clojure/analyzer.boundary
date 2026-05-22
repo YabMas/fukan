@@ -1,0 +1,22 @@
+-- boundary: 1
+
+-- Clojure target Analyzer — Phase 6 of the build pipeline. Walks a
+-- source root, indexes top-level definitions, and projects every
+-- relevant spec primitive to a Code.* artifact with per-edge
+-- :validity. Non-gating: outputs land on the Model alongside any
+-- existing violations.
+
+use "../../model/spec.allium" as model
+use "../../project_layer/registry.allium" as registry
+
+-- Run the Clojure target analyzer over the model. Emits Code.*
+-- artifacts and :relation/projects edges; appends any
+-- duplicate-canonical-address violations; materialises any
+-- otherwise-unprojected source artifacts. Returns the updated
+-- model. A nil or non-existent code_root produces an empty
+-- source index, so every projects edge lands with :absent
+-- validity.
+fn run(model: model.Model, registry: registry.Registry, code_root: String?) -> model.Model {
+    triggers: RunClojureAnalyzer
+    returns: post.model
+}

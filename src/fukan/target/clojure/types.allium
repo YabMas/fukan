@@ -1,0 +1,43 @@
+-- allium: 2
+-- target/clojure/types.allium
+--
+-- Scope: Substrate Type → target-language schema rendering.
+-- Includes: OverrideWinsOverBuiltin, BuiltinScalarMap,
+--   CompositeRefSentinel, UnknownIsAny invariants.
+-- Excludes:
+--   - Public fn signatures (see types.boundary)
+--   - Address resolution (see address.allium)
+--   - Blueprint assembly (see projector.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant OverrideWinsOverBuiltin {
+    -- For Scalar types, the renderer consults the project
+    -- registry's type_overrides first. A registered override for a
+    -- Scalar name replaces the built-in default; an unregistered
+    -- Scalar falls back to the built-in mapping.
+}
+
+invariant BuiltinScalarMap {
+    -- The renderer ships a small built-in mapping from common
+    -- Scalar names (String, Integer, Boolean, Number, Text) to
+    -- target-language primitives, so a fresh project registry
+    -- already renders ordinary types without requiring overrides.
+}
+
+invariant CompositeRefSentinel {
+    -- A named Composite type renders as a sentinel that carries
+    -- the referenced Container's identity. Resolution of that
+    -- sentinel to a concrete schema reference is the Projector's
+    -- responsibility — the type renderer never reads the Model.
+}
+
+invariant UnknownIsAny {
+    -- When the renderer encounters a Type shape it does not
+    -- recognise — an unmapped Scalar, an unhandled Type case — it
+    -- yields the target-language any-schema rather than raising.
+    -- Type translation is best-effort; an unrenderable type does
+    -- not block Blueprint assembly.
+}

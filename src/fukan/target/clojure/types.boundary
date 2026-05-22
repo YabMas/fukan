@@ -1,0 +1,12 @@
+-- boundary: 1
+
+-- Type renderer for the Clojure target — translates substrate Type
+-- expressions into target-language schema values. Consulted by the
+-- Projector when assembling Blueprint signatures.
+
+use "../../project_layer/registry.allium" as registry
+
+fn render(registry: registry.Registry, type: Any) -> Any
+    -- Render a kernel substrate Type expression as a target-language
+    -- schema value. The project registry's type_overrides win over
+    -- the built-in substrate-to-Malli defaults.

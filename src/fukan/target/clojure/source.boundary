@@ -1,0 +1,20 @@
+-- boundary: 1
+
+-- Source walker and top-level form reader for the Clojure target.
+-- Discovers source files under a root and extracts top-level
+-- definition records the Analyzer indexes by canonical address.
+
+use "./source.allium" as source
+
+fn find_clj_files(root: String) -> List<String>
+    -- Walk a root directory and return absolute paths to all
+    -- discoverable Clojure source files in a deterministic order.
+
+fn read_forms(path: String) -> List<Any>
+    -- Read every top-level form from a Clojure source file as data,
+    -- without evaluating any of them.
+
+fn extract_symbols(path: String) -> List<source.SourceSymbol>
+    -- Read a Clojure source file and return one SourceSymbol record
+    -- for every top-level public-function, private-function, or
+    -- data-structure definition discovered.

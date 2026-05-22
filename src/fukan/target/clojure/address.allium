@@ -1,0 +1,61 @@
+-- allium: 2
+-- target/clojure/address.allium
+--
+-- Scope: Canonical address resolution for the Clojure target —
+--   value shape and behavioural invariants for the (module-coord,
+--   primitive-label, projection-kind) → address mapping.
+-- Includes: CanonicalAddress value type; deterministic-resolution,
+--   projection-kind partition, and test-suffix invariants.
+-- Excludes:
+--   - Public fn signatures (see address.boundary)
+--   - Symbol indexing and source reading (see source.allium)
+--   - Type translation (see types.allium)
+--   - On-demand Blueprint assembly (see projector.allium)
+--   - Phase 6 pipeline integration (see analyzer.allium)
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value CanonicalAddress {
+    -- A resolved target-language address: a module namespace plus
+    -- the local name within that namespace. Consumed by the Analyzer
+    -- when emitting Code.* artifact identities and by the Projector
+    -- when assembling a Blueprint.
+    ns: String
+    name: String
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant DeterministicResolution {
+    -- Address resolution is a pure function of (project registry,
+    -- primitive kind, projection kind, module coord, primitive
+    -- label). The same inputs always yield the same address. No
+    -- file I/O, no model lookups, no global state.
+}
+
+invariant RootPrefixHonoured {
+    -- module_ns prefixes the dotted module coord with the project
+    -- registry's root_prefix when non-empty, and uses the dotted
+    -- coord verbatim when the prefix is empty (the fukan-on-fukan
+    -- self-referential case).
+}
+
+invariant ProjectionKindPartition {
+    -- local_name partitions projection kinds into two families.
+    -- DataStructure-shaped projections (schema) preserve the
+    -- primitive label verbatim. Function-shaped projections (rule,
+    -- operation, invariant, test) apply the project's mechanical
+    -- identifier transliteration. An unhandled projection kind
+    -- raises rather than guessing.
+}
+
+invariant TestProjectionSuffix {
+    -- Test projections append the conventional test suffix to both
+    -- the namespace and the local name, so a primitive's test
+    -- artifact lands at a sibling test namespace rather than
+    -- alongside its production projection.
+}

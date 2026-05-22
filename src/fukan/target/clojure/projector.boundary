@@ -1,0 +1,15 @@
+-- boundary: 1
+
+-- Projector — on-demand Blueprint assembly. Given a Model, a
+-- project registry, a primitive id, and a projection kind,
+-- assembles the six-component Blueprint that downstream consumers
+-- read.
+
+use "../../model/spec.allium" as model
+use "../../project_layer/registry.allium" as registry
+use "./blueprint.allium" as blueprint
+
+fn project(model: model.Model, registry: registry.Registry, primitive_id: String, projection_kind: String) -> blueprint.Blueprint
+    -- Assemble an Implementation Blueprint for the named primitive
+    -- at the given projection kind. Raises if no such primitive
+    -- exists in the Model.

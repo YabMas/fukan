@@ -1,0 +1,73 @@
+-- allium: 2
+-- target/clojure/blueprint.allium
+--
+-- Scope: Implementation Blueprint value type — the per-projection
+--   ephemeral record assembled by the Projector and consumed by
+--   downstream generators / verifiers.
+-- Includes: Blueprint value type; Ephemeral, IdentityIsKey,
+--   EdnRoundtripCanonical, DualSerialisation invariants.
+-- Excludes:
+--   - On-demand assembly (see projector.allium)
+--   - Public fn signatures (see blueprint.boundary)
+--   - Canonical address shape (see address.allium)
+
+use "./address.allium" as address
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value Blueprint {
+    -- A v1 Implementation Blueprint. Carries everything an LLM
+    -- generator needs to produce the code artifact for a spec
+    -- primitive at a given projection kind: the canonical address
+    -- to write to, the kind of artifact to produce, the expected
+    -- signature, surrounding model context, and any applicable
+    -- project idioms. The rendered field caches both the EDN and
+    -- markdown serialisations of the Blueprint itself.
+    --
+    -- case is the v1 discriminator; future Blueprint revisions
+    -- would introduce a new case value and a parallel value type.
+    case: String
+    primitive_id: String
+    projection_kind: String
+    address: address.CanonicalAddress
+    artifact_kind: String
+    signature: Any?
+    context: Any
+    idioms: List<Any>
+    rendered: Any?
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant Ephemeral {
+    -- Blueprints are never persisted in the Model. Each Projector
+    -- invocation regenerates the Blueprint from the current spec,
+    -- the current project registry, and the current Model state.
+    -- Stale Blueprints cannot exist because no caller is allowed
+    -- to hold one across edits.
+}
+
+invariant IdentityIsKey {
+    -- A Blueprint's identity is the pair (primitive_id,
+    -- projection_kind). Two Blueprints with the same identity
+    -- regenerated against the same spec / registry / model are
+    -- equal value-by-value.
+}
+
+invariant EdnRoundtripCanonical {
+    -- The EDN serialisation of a Blueprint roundtrips: parsing the
+    -- EDN form yields a value equal to the original Blueprint
+    -- record. EDN is the canonical wire form for inspection and
+    -- for the Analyzer's verification path.
+}
+
+invariant DualSerialisation {
+    -- Every assembled Blueprint carries both serialisations under
+    -- :rendered — :edn for machine consumers, :markdown for LLM
+    -- prompts and human inspection. The two views describe the
+    -- same Blueprint and never disagree.
+}

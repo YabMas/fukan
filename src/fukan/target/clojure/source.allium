@@ -1,0 +1,70 @@
+-- allium: 2
+-- target/clojure/source.allium
+--
+-- Scope: Clojure source walking and top-level symbol extraction —
+--   the read-only catalogue the Analyzer indexes by canonical address.
+-- Includes: SourceSymbol value type; read-only, no-eval, and
+--   deterministic-walk invariants.
+-- Excludes:
+--   - Address resolution (see address.allium)
+--   - Type translation (see types.allium)
+--   - Per-primitive projection emission (see analyzer.allium)
+--   - The public fn surface (see source.boundary)
+--
+-- Note: this module necessarily references Clojure-specific concepts
+-- (top-level forms, the public/private definition distinction) — it
+-- is the language-specific seam between the kernel-agnostic Model
+-- and the Clojure source tree. The remainder of the spec stays
+-- language-agnostic.
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value SourceSymbol {
+    -- One top-level definition discovered in a Clojure source file.
+    -- The Analyzer keys these by (ns, name, kind) when looking up
+    -- whether a spec primitive has a realising code artifact at its
+    -- canonical address.
+    --
+    -- kind is one of:
+    --   "function"          — top-level public callable
+    --   "function_private"  — top-level private callable
+    --   "data_structure"    — top-level value binding (def-shaped schema)
+    ns: String
+    name: String
+    kind: String
+    file: String
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ReadOnly {
+    -- Source walking never mutates the source tree, never writes
+    -- caches, and never evaluates the forms it reads. The walk is a
+    -- pure read over the filesystem at the time of invocation.
+}
+
+invariant DeterministicWalk {
+    -- find_clj_files returns paths in a stable order across
+    -- invocations on the same tree. Downstream symbol-extraction
+    -- order — and therefore duplicate-address-violation reporting
+    -- order — is reproducible.
+}
+
+invariant TopLevelOnly {
+    -- extract_symbols only emits records for top-level definitions
+    -- whose first element names a recognised definition form.
+    -- Macros that expand to definitions but appear as other forms
+    -- at the textual top level are out of scope: they surface as
+    -- absent projections rather than mis-attributed code, per
+    -- DESIGN.md "Couplings".
+}
+
+invariant NoEval {
+    -- Forms are read as data only. The reader is configured with
+    -- read-eval disabled, so a malicious or buggy source file can
+    -- never cause execution during analysis.
+}
