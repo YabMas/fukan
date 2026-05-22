@@ -1,0 +1,66 @@
+-- allium: 2
+-- project_layer/registry.allium
+--
+-- Scope: Project layer registry value — projection-input shape
+--   consulted by target-language analyzers and projectors.
+-- Includes: Registry / IdiomEntry / IdiomRoute value types;
+--   IdentityRegistry / PureRegistration invariants.
+-- Excludes:
+--   - Public fn signatures (see registry.boundary)
+--   - fukan-on-fukan instantiation (see defaults.allium)
+--   - Composition mechanics (severity overrides, profiles, bundles)
+--     deferred per DESIGN.md MVP commitments
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value IdiomRoute {
+    -- Predicate map selecting which primitives an idiom applies to.
+    -- All keys optional; an empty route matches every primitive.
+    primitive_kind: String?    -- e.g. "module", "operation"
+    projection_kind: String?   -- e.g. "clojure"
+    address_pattern: String?   -- regex matched against canonical address
+}
+
+value IdiomEntry {
+    -- One project-layer idiom: a route + a body payload. The
+    -- body shape is open and interpreted by the consuming
+    -- analyzer or projector.
+    route: IdiomRoute
+    body: Any
+}
+
+value Registry {
+    -- Per-project projection-input bundle. Consumed by the
+    -- target-language analyzers and projectors when assembling
+    -- canonical addresses, rendering types, and applying idioms.
+    --
+    -- root_prefix:     target-language namespace prefix relative
+    --                  to module coord (fukan-on-fukan uses "")
+    -- type_overrides:  Scalar name -> target-language type rendering;
+    --                  consulted before substrate defaults
+    -- idioms:          ordered list of idiom entries; consumers
+    --                  iterate to find applicable bodies
+    root_prefix: String
+    type_overrides: Map<String, Any>
+    idioms: List<IdiomEntry>
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant PureRegistration {
+    -- The with_* registrations are pure value updates over the
+    -- registry. They never read or mutate state outside the
+    -- supplied registry value, and produce a new registry value
+    -- without side effects.
+}
+
+invariant IdentityRegistry {
+    -- make_registry produces the identity registry: empty
+    -- root_prefix, empty type_overrides, empty idioms. Composing
+    -- zero registrations on top of the identity registry yields
+    -- the identity registry unchanged.
+}

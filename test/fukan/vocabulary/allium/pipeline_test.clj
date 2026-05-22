@@ -6,7 +6,7 @@
             [malli.core :as m]))
 
 (deftest pipeline-loads-fukan-corpus
-  (testing "loading src/ produces a validated Model covering all 11 fukan modules"
+  (testing "loading src/ produces a validated Model covering all 13 fukan modules"
     (let [model (pipeline/load-source "src")]
       (is (m/validate build/Model model)
           "loaded Model validates against fukan.model.build/Model schema")
@@ -17,10 +17,11 @@
                                            (:tag ta)))
                                       (:tag-apps model))
               module-ids       (set (map (comp :id :target) module-tag-apps))]
-          ;; The fukan corpus has 11 .allium files: infra/model, infra/server, web/handler,
+          ;; The fukan corpus has 13 .allium files: infra/model, infra/server, web/handler,
           ;; web/views/shell, web/views/graph, web/views/sidebar, web/views/cytoscape,
-          ;; web/views/breadcrumb, web/views/projection (stub), model/spec, model/pipeline.
-          (is (= 11 (count module-tag-apps))
+          ;; web/views/breadcrumb, web/views/projection (stub), model/spec, model/pipeline,
+          ;; project_layer/registry, project_layer/defaults.
+          (is (= 13 (count module-tag-apps))
               "Allium::Module tag applied to each .allium file in src/")
           (is (= #{"fukan/infra/model"
                    "fukan/infra/server"
@@ -32,7 +33,9 @@
                    "fukan/web/views/breadcrumb"
                    "fukan/web/views/projection"
                    "fukan/model/spec"
-                   "fukan/model/pipeline"}
+                   "fukan/model/pipeline"
+                   "fukan/project_layer/registry"
+                   "fukan/project_layer/defaults"}
                  module-ids)
               "module-Container ids are the canonical root-relative coordinates")))
 

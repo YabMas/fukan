@@ -1,0 +1,25 @@
+-- boundary: 1
+
+-- Project layer registry — construction and per-entry registration
+-- functions for the Registry value.
+
+fn make_registry() -> Registry
+  -- Construct the identity registry: empty root_prefix, empty
+  -- type_overrides, empty idioms. Suitable for the
+  -- fukan-on-fukan self-referential case.
+
+fn with_root_prefix(registry: Registry, prefix: String) -> Registry
+  -- Set the target-language namespace root prefix.
+
+fn with_type_override(registry: Registry, scalar_name: String, rendering: Any) -> Registry
+  -- Register a per-Scalar-name type rendering. The Analyzer's
+  -- type-translation consults the registry before falling back
+  -- to the substrate default.
+
+fn with_idiom(registry: Registry, entry: IdiomEntry) -> Registry
+  -- Append an idiom entry to the registry.
+
+exports:
+    Registry
+    IdiomEntry
+    IdiomRoute

@@ -1,0 +1,22 @@
+-- allium: 2
+-- project_layer/defaults.allium
+--
+-- Scope: fukan-on-fukan's project registry — the self-referential
+--   case where fukan analyzes itself.
+-- Includes: SelfReferentialIdentity invariant.
+-- Excludes:
+--   - Registry value type (see registry.allium)
+--   - Public fn signatures (see defaults.boundary)
+
+use "./registry.allium" as registry
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant SelfReferentialIdentity {
+    -- fukan_on_fukan returns the identity registry. fukan's source
+    -- lives at namespaces matching its Allium module coords
+    -- exactly (root_prefix is empty), with no custom type
+    -- overrides and no idioms in Plan 5's MVP scope.
+}

@@ -1,0 +1,16 @@
+-- boundary: 1
+
+-- Project layer subsystem — projection-input registrations per
+-- MODEL.md §10.3. Holds the per-project knobs (root prefix,
+-- type overrides, idioms) that target-language analyzers and
+-- projectors consult when materialising spec to code.
+
+subsystem project_layer {
+    contains:
+        ./registry.allium
+        ./defaults.allium
+
+    exports:
+        registry.Registry
+        registry.IdiomEntry
+}

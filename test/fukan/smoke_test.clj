@@ -11,16 +11,16 @@
   (testing "infra-model/load-model returns a validated Model with substantive content"
     (let [model (infra-model/load-model "src")]
       (is (m/validate b/Model model))
-      ;; The fukan corpus has 11 .allium files (infra/model, infra/server, web/handler,
+      ;; The fukan corpus has 13 .allium files (infra/model, infra/server, web/handler,
       ;; web/views/shell, web/views/graph, web/views/sidebar, web/views/cytoscape,
-      ;; web/views/breadcrumb, web/views/projection, model/spec, model/pipeline) —
-      ;; substantially more than the Plan-1 fixture's 2 primitives. A floor of 20
-      ;; catches a regression to the fixture while staying robust to incidental
-      ;; spec edits.
+      ;; web/views/breadcrumb, web/views/projection, model/spec, model/pipeline,
+      ;; project_layer/registry, project_layer/defaults) — substantially more than
+      ;; the Plan-1 fixture's 2 primitives. A floor of 20 catches a regression to
+      ;; the fixture while staying robust to incidental spec edits.
       (is (>= (count (:primitives model)) 20)
           "loaded Model contains real Allium content, not the Plan-1 fixture")
       ;; Each .allium file gets a module-Container with an Allium::Module tag.
       (let [module-tags (filter #(= {:namespace "Allium" :name "Module"} (:tag %))
                                 (:tag-apps model))]
-        (is (= 11 (count module-tags))
-            "Allium::Module tag applied to each of the 11 corpus files")))))
+        (is (= 13 (count module-tags))
+            "Allium::Module tag applied to each of the 13 corpus files")))))

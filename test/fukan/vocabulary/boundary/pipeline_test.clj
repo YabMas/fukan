@@ -41,23 +41,24 @@
         (is (pos? (count allium-tag-defs))
             "Allium tag-definitions still registered"))
       ;; Boundary::Function tags applied to fn-declared Operations:
-      ;; Corpus has 13 fn declarations (7 in infra, 1 in web, 1 in web/views/shell,
+      ;; Corpus has 18 fn declarations (7 in infra, 1 in web, 1 in web/views/shell,
       ;; 1 in web/views/graph, 1 in web/views/sidebar, 1 in web/views/breadcrumb,
-      ;; 1 in model/pipeline)
+      ;; 1 in model/pipeline, 4 in project_layer/registry, 1 in project_layer/defaults)
       (let [fn-tags (filter (fn [ta]
                               (and (= "Boundary" (-> ta :tag :namespace))
                                    (= "Function" (-> ta :tag :name))))
                             (:tag-apps model))]
-        (is (= 13 (count fn-tags))
-            "all 13 corpus fn declarations produce Boundary::Function tags"))
+        (is (= 18 (count fn-tags))
+            "all 18 corpus fn declarations produce Boundary::Function tags"))
       ;; Boundary::ModuleApi tags on modules with exports:
-      ;; Corpus has 2 files with exports: (infra/server.boundary,
-      ;; web/views/graph.boundary). model/pipeline.boundary lost its
-      ;; exports: list when pipeline.allium was rewritten against the
-      ;; kernel substrate — its single fn build_model is signature-only.
+      ;; Corpus has 3 files with exports: (infra/server.boundary,
+      ;; web/views/graph.boundary, project_layer/registry.boundary).
+      ;; model/pipeline.boundary lost its exports: list when pipeline.allium was
+      ;; rewritten against the kernel substrate — its single fn build_model is
+      ;; signature-only.
       (let [api-tags (filter (fn [ta]
                                (and (= "Boundary" (-> ta :tag :namespace))
                                     (= "ModuleApi" (-> ta :tag :name))))
                              (:tag-apps model))]
-        (is (= 2 (count api-tags))
-            "exactly 2 Boundary::ModuleApi tags (infra/server, web/views/graph)")))))
+        (is (= 3 (count api-tags))
+            "3 Boundary::ModuleApi tags (infra/server, web/views/graph, project_layer/registry)")))))
