@@ -35,6 +35,14 @@ value CytoscapeGraph {
     highlighted_edges: List<String>
 }
 
+value TagRef {
+    -- Vocabulary tag reference — namespace plus name. Mirrors the kernel
+    -- TagRef from fukan/model/spec; declared inline here so CytoscapeNode
+    -- can carry typed `tags` without a cross-module field reference.
+    namespace: String
+    name: String
+}
+
 value CytoscapeNode {
     -- A renderable node in the Cytoscape graph. Materialises either a
     -- kernel primitive or a code artifact.
@@ -47,10 +55,17 @@ value CytoscapeNode {
     kind: String
     label: String
     parent: String?
-    -- `allium_kind` carries the Allium-namespace tag applied to the
-    -- primitive (e.g. "rule", "event", "surface"), lowercased. Absent
-    -- when the primitive has no Allium tag, and on artifact nodes.
-    allium_kind: String?
+    -- `treatment` is the merged renderer-treatment payload for the
+    -- "node" consumer, assembled by the projection layer from every
+    -- RendererRegistration matching a tag applied to this primitive.
+    -- Open map — keys are vocabulary-defined Strings (e.g. "icon",
+    -- "shape", "badge"). Absent when no registration contributes.
+    treatment: Map<String, Value>?
+    -- `tags` is the raw vocabulary tag list for the underlying primitive,
+    -- one entry per TagApplication. Surfaced for introspection (sidebar,
+    -- agents). Absent when the primitive carries no tags, and on
+    -- artifact nodes.
+    tags: List<TagRef>?
     -- Source location for artifact-backed nodes; absent for primitives
     -- that have no realised artifact.
     source_location: SourceLocation?

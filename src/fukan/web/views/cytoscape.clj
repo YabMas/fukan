@@ -19,6 +19,14 @@
     [:file :string]
     [:line {:optional true} :int]]))
 
+(def TagRef
+  "Vocabulary tag reference payload — `{:namespace :name}`. Materialises
+   the namespace/name pair from the kernel TagRef value."
+  (m/schema
+   [:map
+    [:namespace :string]
+    [:name      :string]]))
+
 (def CytoscapeNode
   "Cytoscape.js node payload. Materialises value CytoscapeNode
    from web/views/cytoscape.allium. Field names map mechanically
@@ -36,7 +44,14 @@
     [:parent          {:optional true} :string]
     ;; camelCase keys: emitted directly by the transformer so the
     ;; JSON output matches the spec's wire shape without re-keying.
-    [:alliumKind      {:optional true} :string]
+    ;;
+    ;; `treatment` is the merged renderer-treatment map for the "node"
+    ;; consumer — open Map<String, Value>; payload keys are vocabulary-
+    ;; defined Strings (e.g. "icon", "shape", "badge"). Pass-through.
+    [:treatment       {:optional true} [:map-of :string :any]]
+    ;; `tags` is the raw vocabulary tag list for the underlying primitive,
+    ;; surfaced for introspection (sidebar, agents).
+    [:tags            {:optional true} [:sequential TagRef]]
     [:sourceLocation  {:optional true} SourceLocation]]))
 
 (def CytoscapeEdge
@@ -79,14 +94,17 @@
 (defn- node->cytoscape
   "Transform a projection node to Cytoscape format.
    Node :kind is a keyword (kernel primitive or :artifact/*).
-   Optional :allium-kind, :parent, :source-location, :selected? for UI state."
-  [{:keys [id kind label parent allium-kind selected? source-location]}]
+   Optional :treatment (open Map<String, Value>), :tags (raw vocabulary
+   tag list as `[{:namespace :name} ...]`), :parent, :source-location,
+   :selected? for UI state."
+  [{:keys [id kind label parent treatment tags selected? source-location]}]
   (cond-> {:id       id
            :kind     (kw->str kind)
            :label    (or label id)
            :selected (boolean selected?)}
     parent          (assoc :parent parent)
-    allium-kind     (assoc :alliumKind (kw->str allium-kind))
+    (seq treatment) (assoc :treatment treatment)
+    (seq tags)      (assoc :tags tags)
     source-location (assoc :sourceLocation source-location)))
 
 (defn- edge->cytoscape

@@ -783,17 +783,16 @@ Display contract per tag. Each methodology supplies visual treatment for its tag
 
 ```
 RendererRegistration {
-    tag:                  TagRef
-    node_treatment:       NodeRenderer?
-    sidebar_treatment:    SidebarRenderer?
-    edge_treatment:       EdgeRenderer?
-    layout_hint:          LayoutHint?
+    tag:        TagRef
+    treatments: Map<String, Value>   -- consumer-key → opaque payload
 }
 ```
 
+The `treatments` map is keyed by **consumer key** (a vocabulary-defined String identifying the rendering consumer — `"node"`, `"sidebar"`, `"edge"`, `"layout"`, or any future consumer). The payload `Value` is open at the per-consumer axis: vocabularies declare whatever treatment keys their consumers understand (`"icon"`, `"shape"`, `"colour"`, `"badge"`, etc.). The kernel takes no position on the payload schema; consumer-axis enumeration is also open so new consumers (agent surfaces, doc renderers) don't require kernel changes.
+
 Renderers consume the same introspection surface predicates consume. The difference is purpose, not access: predicates produce a boolean; renderers produce a visual treatment.
 
-**Scope:** seam committed; concrete shape arrives with the explorer rebuild. Renderers must be plugin-supplied (when plugin mechanics arrive), not explorer-hardcoded, so methodologies remain plug-and-play.
+**Scope:** seam committed; concrete shape arrives with the explorer rebuild. Renderers must be plugin-supplied (when plugin mechanics arrive), not explorer-hardcoded, so methodologies remain plug-and-play. The projection layer walks all `RendererRegistration`s matching a primitive's tag applications and merges their `treatments[<consumer>]` payloads into a single per-consumer treatment map for the projected node; collisions on a treatment key are surfaced for project-layer precedence resolution.
 
 **Kernel-relation rendering.** Each of the thirteen kernel relations gets a *default* explorer rendering owned by fukan (line style, colour family, arrowhead, label) so a kernel-only Model is fully navigable without any methodology renderer attached. Methodology edge tags (e.g., `Allium::Provides` on a `provides` edge, `DDD::CustomerSupplier` on a `uses` edge) layer additional visual treatment via the same `RendererRegistration` mechanism — the tag's renderer decorates the kernel default, never replaces it.
 

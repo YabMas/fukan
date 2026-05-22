@@ -118,12 +118,13 @@
 ;; -- RendererRegistration ----------------------------------------------------
 
 (defn make-renderer-registration
-  [{:keys [tag node-treatment sidebar-treatment edge-treatment layout-hint]}]
-  (cond-> {:tag tag}
-    node-treatment    (assoc :node-treatment node-treatment)
-    sidebar-treatment (assoc :sidebar-treatment sidebar-treatment)
-    edge-treatment    (assoc :edge-treatment edge-treatment)
-    layout-hint       (assoc :layout-hint layout-hint)))
+  "Build a RendererRegistration. `treatments` is an open Map<String, Value>
+   keyed by consumer identifier (e.g. \"node\", \"edge\", \"sidebar\",
+   \"layout\"). Consumer keys are project/vocabulary-defined Strings — the
+   substrate makes no commitment to a closed set."
+  [{:keys [tag treatments]}]
+  {:tag tag
+   :treatments (or treatments {})})
 
 ;; -- Malli schemas ------------------------------------------------------------
 
@@ -179,7 +180,4 @@
 (def RendererRegistration
   [:map
    [:tag TagRef]
-   [:node-treatment    {:optional true} :any]
-   [:sidebar-treatment {:optional true} :any]
-   [:edge-treatment    {:optional true} :any]
-   [:layout-hint       {:optional true} :any]])
+   [:treatments [:map-of :string :any]]])

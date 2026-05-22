@@ -24,6 +24,7 @@
             [fukan.libs.coordinate :as coord]
             [fukan.vocabulary.allium.analyzer :as analyzer]
             [fukan.vocabulary.allium.tags :as tags]
+            [fukan.vocabulary.allium.renderers :as renderers]
             [fukan.model.build :as build]))
 
 ;; ---------------------------------------------------------------------------
@@ -63,6 +64,9 @@
 
 (defn- register-allium-tags [model]
   (reduce build/add-tag-definition model tags/allium-tag-definitions))
+
+(defn- register-allium-renderers [model]
+  (reduce build/add-renderer model renderers/allium-renderer-registrations))
 
 ;; ---------------------------------------------------------------------------
 ;; External-entity stub unification (§3.6)
@@ -386,7 +390,9 @@
    (`fukan/web/views/spec`) that line up with `coordinate-of`'s output."
   [source-root]
   (let [allium-files (find-allium-files source-root)
-        initial      (register-allium-tags (build/empty-model))]
+        initial      (-> (build/empty-model)
+                         register-allium-tags
+                         register-allium-renderers)]
     (loop [model initial
            files allium-files]
       (if (empty? files)

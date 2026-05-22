@@ -9,24 +9,74 @@
      {:nodes [<node>...]
       :edges [<edge>...]}
    where node and edge keys are kebab-case Clojure data; the
-   web/views/cytoscape transformer handles camelCase + JSON output."
-  (:require [clojure.string :as str]))
+   web/views/cytoscape transformer handles camelCase + JSON output.")
 
-(defn- allium-kind-of
+(defn- tag-apps-for-primitive
+  "Returns the TagApplications targeting primitive `id`."
   [model id]
-  (let [tags (filter (fn [ta]
-                       (and (= "Allium" (-> ta :tag :namespace))
-                            (= :target/primitive (-> ta :target :case))
-                            (= id (-> ta :target :id))))
-                     (:tag-apps model))]
-    (some (comp keyword str/lower-case :name :tag) tags)))
+  (filter (fn [ta]
+            (let [tgt (:target ta)]
+              (and (= :target/primitive (:case tgt))
+                   (= id (:id tgt)))))
+          (:tag-apps model)))
+
+(defn- tags-for-primitive
+  "Tag list for primitive `id`, each `{:namespace :name}` — the raw tag
+   surface for introspection (sidebar, agents). Vocabulary-agnostic."
+  [model id]
+  (->> (tag-apps-for-primitive model id)
+       (mapv (fn [ta]
+               {:namespace (-> ta :tag :namespace)
+                :name      (-> ta :tag :name)}))))
+
+(defn- tag-ref= [a b]
+  (and (= (:namespace a) (:namespace b))
+       (= (:name a) (:name b))))
+
+(defn- renderers-for-tag
+  "RendererRegistrations matching `tag-ref`."
+  [model tag-ref]
+  (filter #(tag-ref= (:tag %) tag-ref) (:renderers model)))
+
+(defn- merge-treatments
+  "Merge two consumer-treatment maps. On collision (same key in both),
+   prints a warning and the second value wins. Project-layer constraint
+   discipline is to surface collisions as violations; the warning is the
+   v0 surfacing."
+  [tag-name a b]
+  (let [collisions (filter #(contains? a %) (keys b))]
+    (when (seq collisions)
+      (binding [*out* *err*]
+        (println "fukan.projection: renderer-treatment collision on tag"
+                 tag-name "keys:" (vec collisions))))
+    (merge a b)))
+
+(defn- treatments-for-primitive
+  "Walk tag-apps for primitive `id`, find matching RendererRegistrations,
+   merge their treatments for the given `consumer-key` (a String, e.g.
+   \"node\"). Returns the merged map, or nil when no contributor exists."
+  [model id consumer-key]
+  (let [contributions
+        (for [ta (tag-apps-for-primitive model id)
+              rr (renderers-for-tag model (:tag ta))
+              :let [payload (get-in rr [:treatments consumer-key])]
+              :when (some? payload)]
+          [(str (-> ta :tag :namespace) "::" (-> ta :tag :name)) payload])]
+    (when (seq contributions)
+      (reduce (fn [acc [tag-name payload]]
+                (merge-treatments tag-name acc payload))
+              {}
+              contributions))))
 
 (defn- primitive->node
   [model [id primitive]]
-  (cond-> {:id    id
-           :kind  (:kind primitive)
-           :label (:label primitive)}
-    (allium-kind-of model id) (assoc :allium-kind (allium-kind-of model id))))
+  (let [tags      (tags-for-primitive model id)
+        treatment (treatments-for-primitive model id "node")]
+    (cond-> {:id    id
+             :kind  (:kind primitive)
+             :label (:label primitive)}
+      (seq tags) (assoc :tags tags)
+      treatment  (assoc :treatment treatment))))
 
 (defn- artifact-node-id
   [aid]

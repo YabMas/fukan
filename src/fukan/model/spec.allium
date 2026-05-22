@@ -920,13 +920,19 @@ entity PredicateRegistration {
 }
 
 entity RendererRegistration {
-    -- Registration of a methodology renderer treatment. Concrete treatments
-    -- arrive with the explorer rebuild (Plan 6).
+    -- Registration of a methodology renderer treatment for a tag. The
+    -- consumer axis is open: `treatments` keys are project- and
+    -- vocabulary-defined String identifiers naming the rendering consumer
+    -- that owns the corresponding payload. Canonical consumer keys in V0:
+    --   "node"    — per-primitive node treatment (icon, badge, shape)
+    --   "edge"    — per-edge treatment
+    --   "sidebar" — per-primitive sidebar treatment
+    --   "layout"  — layout hints
+    -- New consumers register additively without a schema change here. Each
+    -- treatment payload is open (Value); per-consumer payload shapes belong
+    -- to the consumer.
     tag: TagRef
-    node_treatment: Value?
-    sidebar_treatment: Value?
-    edge_treatment: Value?
-    layout_hint: Value?
+    treatments: Map<String, Value>
 }
 
 ------------------------------------------------------------

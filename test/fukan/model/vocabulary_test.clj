@@ -116,10 +116,12 @@
     (is (= "integrity" (:kind pr)))
     (is (m/validate v/PredicateRegistration pr))))
 
-(deftest renderer-registration-seam
-  (testing "Plan 1 ships the seam shape only; treatments are opaque"
+(deftest renderer-registration-open-consumer-axis
+  (testing "treatments is an open Map<String, Value> keyed by consumer"
     (let [rr (v/make-renderer-registration
                {:tag {:namespace "Allium" :name "Surface"}
-                :node-treatment {:shape :pill :colour-family "blue"}
-                :sidebar-treatment {:component :allium/surface-sidebar}})]
-      (is (m/validate v/RendererRegistration rr)))))
+                :treatments {"node"    {"shape" :pill "colour-family" "blue"}
+                             "sidebar" {"component" :allium/surface-sidebar}}})]
+      (is (m/validate v/RendererRegistration rr))
+      (is (= {"shape" :pill "colour-family" "blue"}
+             (get-in rr [:treatments "node"]))))))
