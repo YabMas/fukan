@@ -1,0 +1,73 @@
+-- allium: 2
+-- constraint/well_known.allium
+--
+-- Scope: fukan-shipped well-known constraint factories — five
+--   PredicateRegistration constructors that the pipeline appends to
+--   the Model's predicate registry between Phase 4 and Phase 5 per
+--   model/pipeline.allium's DefaultsRegistrationIsIdempotent
+--   guarantee.
+-- Includes: SignalGapSemantics, ExternalMustHaveWrapperSemantics,
+--   NoDependencySemantics, NoCircularRefsSemantics,
+--   NamingConventionSemantics, FactoryPurity, IdempotentRegistration
+--   invariants.
+-- Excludes:
+--   - Public fn signatures (see well_known.boundary)
+--   - PredicateRegistration shape (see model/spec.allium)
+--   - The Phase 5 runner that consumes them (see phase5.allium)
+--   - Pipeline registration semantics (see model/pipeline.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant SignalGapSemantics {
+    -- signal_gap (warning) fires for every Event endpoint of a
+    -- :relation/provides edge that has no outgoing :relation/triggers
+    -- edge. A Surface that provides a signal must have at least one
+    -- Rule consumer wired to the Event.
+}
+
+invariant ExternalMustHaveWrapperSemantics {
+    -- external_must_have_wrapper (warning) fires for every Container
+    -- carrying the Allium::ExternalEntity tag that does not belong
+    -- to any module under the :in-module derivation. Every external
+    -- entity must live inside a wrapping module.
+}
+
+invariant NoDependencySemantics {
+    -- no_dependency (error) is parameterised over (from_tag,
+    -- to_tag). Fires for every pair of primitives where the from
+    -- primitive carries from_tag, the to primitive carries to_tag,
+    -- and from transitively depends on to via the :depends-on
+    -- derivation. The two tags define a forbidden cross-tag
+    -- dependency direction.
+}
+
+invariant NoCircularRefsSemantics {
+    -- no_circular_refs (error) fires for every primitive that
+    -- transitively depends on itself via the :depends-on
+    -- derivation — i.e. participates in a dependency cycle.
+}
+
+invariant NamingConventionSemantics {
+    -- naming_convention (warning) is parameterised over (kind,
+    -- regex). Fires for every primitive of the given kind whose
+    -- label does not match the supplied regex.
+}
+
+invariant FactoryPurity {
+    -- Each factory function returns a fresh PredicateRegistration
+    -- map. The returned value depends only on the function arguments
+    -- (or is constant for nullary factories). Calling a factory
+    -- twice produces value-equal registrations.
+}
+
+invariant IdempotentRegistration {
+    -- The well-known factories produce registrations with stable
+    -- (namespace, name) tuples — fixed for nullary constraints,
+    -- shared across calls with the same parameters for
+    -- parameterised ones. The pipeline's defaults-registration step
+    -- treats the (namespace, name) tuple as the registration key,
+    -- skipping duplicates so repeat loads do not multiply violation
+    -- counts.
+}

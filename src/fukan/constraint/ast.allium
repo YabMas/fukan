@@ -1,0 +1,108 @@
+-- allium: 2
+-- constraint/ast.allium
+--
+-- Scope: AST shapes for the constraint Datalog language — the value
+--   types every other constraint module produces and consumes.
+-- Includes: ConstraintRule / ConstraintAtom / Negation / Comparison /
+--   Aggregation / Term value types; PlainData and VariableConvention
+--   invariants.
+-- Excludes:
+--   - Public fn signatures (see ast.boundary)
+--   - Evaluation semantics (see evaluator.allium)
+--   - Built-in predicate set (see builtins.allium)
+--
+-- Naming:
+--   The constraint-language "rule" is NOT a kernel Rule primitive — kernel
+--   Rules are event-handlers on a Container's reactive interface, while a
+--   ConstraintRule is a Datalog clause registered into the Model's
+--   PredicateRegistration set. The Constraint prefix on ConstraintRule and
+--   ConstraintAtom makes the distinction explicit at every reference site.
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value Term {
+    -- A constraint-language term. Either a logic variable (a keyword
+    -- whose name starts with '?') or a constant (any other value
+    -- matched against EDB tuples by equality). Plain value with no
+    -- separate wrapper — the variable / constant distinction lives in
+    -- a runtime predicate, not in the data shape.
+}
+
+value ConstraintAtom {
+    -- A positive Datalog atom: one predicate applied to a positional
+    -- argument list. Each argument is a Term — variables introduce
+    -- bindings, constants narrow tuples by equality. The :kind
+    -- discriminator tags this as the positive case among
+    -- ConstraintAtom / Negation / Comparison / Aggregation body
+    -- elements.
+    kind: String
+    predicate: Keyword
+    args: List<Term>
+}
+
+value Negation {
+    -- Negation-as-failure over an inner ConstraintAtom. The rule body
+    -- succeeds for a binding when no EDB tuple unifies with the inner
+    -- atom under that binding. Stratification places the inner
+    -- predicate in a strictly earlier stratum so the negation
+    -- evaluates against a settled relation.
+    kind: String
+    inner: ConstraintAtom
+}
+
+value Comparison {
+    -- A built-in binary comparison atom. The evaluator applies op to
+    -- the substituted left and right terms and retains bindings for
+    -- which the comparison holds.
+    --
+    -- Supported ops: := :!= :< :<= :> :>= :matches-regex
+    --                :not-matches-regex
+    kind: String
+    op: Keyword
+    left: Term
+    right: Term
+}
+
+value Aggregation {
+    -- An aggregation atom: evaluate the inner body for each current
+    -- binding, collect the values of the input variable across the
+    -- resulting inner bindings, apply the aggregation op, and bind
+    -- the resulting scalar to the result variable.
+    --
+    -- Supported ops: :count :sum :min :max
+    kind: String
+    op: Keyword
+    var: Term
+    body: List<ConstraintAtom>
+    result: Term
+}
+
+value ConstraintRule {
+    -- A Datalog rule: head atom plus a body of atoms (positive,
+    -- negative, comparison, or aggregation). The rule asserts that
+    -- the head tuple holds for every variable binding that satisfies
+    -- every body atom. Multiple rules with the same head predicate
+    -- union their derived tuples.
+    head: ConstraintAtom
+    body: List<Value>
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant PlainData {
+    -- The AST is plain inert data. Constructors only assemble maps;
+    -- they perform no validation, no normalisation, and no
+    -- inter-node linking. Two AST values that print equal evaluate
+    -- identically.
+}
+
+invariant VariableConvention {
+    -- A term is a logic variable iff it is a keyword whose name
+    -- starts with the '?' character. Every other value is a constant.
+    -- This convention is enforced uniformly across constructors,
+    -- variable-collection helpers, unification, and substitution.
+}

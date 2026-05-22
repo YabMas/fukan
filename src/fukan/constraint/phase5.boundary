@@ -1,0 +1,16 @@
+-- boundary: 1
+
+-- Phase 5 runner — evaluates every PredicateRegistration on the
+-- Model and appends Violations. See phase5.allium for the
+-- behavioural rule and invariants.
+
+use "../model/spec.allium" as model
+
+-- Evaluate every PredicateRegistration in the input Model against the
+-- kernel-universal EDB extended with the depends-on derivation.
+-- Append one Violation per head tuple to the Model's :violations.
+-- Returns the updated Model.
+fn run(model: model.Model) -> model.Model {
+    triggers: RunPhase5
+    returns: post.model
+}

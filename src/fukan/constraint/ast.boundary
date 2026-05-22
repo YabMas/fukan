@@ -1,0 +1,51 @@
+-- boundary: 1
+
+-- Constraint AST — plain-data constructors and variable-collection
+-- helpers. Every other constraint module produces ASTs through these
+-- entry points and inspects them through the var? / vars-in-* probes.
+
+fn is_var(x: Any) -> Bool
+    -- True iff x is a logic variable (keyword whose name starts with '?').
+
+fn is_constant(x: Any) -> Bool
+    -- True iff x is a constant term (anything that is not a variable).
+
+fn make_atom(predicate: Keyword, args: List<Term>) -> ConstraintAtom
+    -- Construct a positive ConstraintAtom from a predicate and an
+    -- argument list.
+
+fn make_negation(inner: ConstraintAtom) -> Negation
+    -- Construct a Negation wrapping the inner positive atom.
+
+fn make_comparison(op: Keyword, left: Term, right: Term) -> Comparison
+    -- Construct a Comparison binding the supplied built-in op to its
+    -- left and right terms.
+
+fn make_aggregation(op: Keyword, input_var: Term,
+                    body: List<ConstraintAtom>,
+                    result_var: Term) -> Aggregation
+    -- Construct an Aggregation: op + input var + inner body + result
+    -- var. The evaluator iterates the body per outer binding, folds
+    -- the input-var values with op, and binds the scalar to result_var.
+
+fn make_rule(head: ConstraintAtom, body: List<Value>) -> ConstraintRule
+    -- Construct a ConstraintRule from a head atom and a body of body
+    -- elements (any of ConstraintAtom, Negation, Comparison, Aggregation).
+
+fn vars_in_term(t: Term) -> Set<Term>
+    -- Collect the variables appearing in a term — at most one element.
+
+fn vars_in_atom(atom: Any) -> Set<Term>
+    -- Collect the variables appearing in any body element
+    -- (ConstraintAtom, Negation, Comparison, Aggregation).
+
+fn vars_in_body(body: List<Value>) -> Set<Term>
+    -- Collect the variables appearing across an entire rule body.
+
+exports:
+    Term
+    ConstraintAtom
+    Negation
+    Comparison
+    Aggregation
+    ConstraintRule

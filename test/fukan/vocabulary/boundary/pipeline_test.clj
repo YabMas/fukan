@@ -41,22 +41,26 @@
         (is (pos? (count allium-tag-defs))
             "Allium tag-definitions still registered"))
       ;; Boundary::Function tags applied to fn-declared Operations:
-      ;; Corpus has 64 fn declarations: 7 in infra, 1 in web, 1 in web/views/shell,
+      ;; Corpus has 92 fn declarations: 7 in infra, 1 in web, 1 in web/views/shell,
       ;; 1 in web/views/graph, 1 in web/views/sidebar, 1 in web/views/breadcrumb,
       ;; 1 in model/pipeline, 4 in project_layer/registry, 1 in project_layer/defaults,
       ;; 28 in the agent subsystem (13 api + 4 system + 3 sci + 2 query + 1 edb +
       ;; 5 views_loader), 5 in the libs subsystem (1 coordinate/canonicalise_path,
-      ;; 2 allium/parser, 2 boundary/parser), and 13 in the target/clojure subsystem
-      ;; (3 address + 3 source + 1 types + 4 blueprint + 1 projector + 1 analyzer).
+      ;; 2 allium/parser, 2 boundary/parser), 13 in the target/clojure subsystem
+      ;; (3 address + 3 source + 1 types + 4 blueprint + 1 projector + 1 analyzer),
+      ;; and 28 in the constraint subsystem (10 ast + 4 builtins + 1 derivations +
+      ;; 1 derivations_extra + 2 evaluator + 4 sort + 5 well_known + 1 phase5).
       (let [fn-tags (filter (fn [ta]
                               (and (= "Boundary" (-> ta :tag :namespace))
                                    (= "Function" (-> ta :tag :name))))
                             (:tag-apps model))]
-        (is (= 64 (count fn-tags))
-            "all 64 corpus fn declarations produce Boundary::Function tags"))
+        (is (= 92 (count fn-tags))
+            "all 92 corpus fn declarations produce Boundary::Function tags"))
       ;; Boundary::ModuleApi tags on modules with exports:
-      ;; Corpus has 3 files with exports: (infra/server.boundary,
-      ;; web/views/graph.boundary, project_layer/registry.boundary).
+      ;; Corpus has 6 files with exports: (infra/server.boundary,
+      ;; web/views/graph.boundary, project_layer/registry.boundary,
+      ;; constraint/ast.boundary, constraint/derivations.boundary,
+      ;; constraint/evaluator.boundary).
       ;; model/pipeline.boundary lost its exports: list when pipeline.allium was
       ;; rewritten against the kernel substrate — its single fn build_model is
       ;; signature-only.
@@ -64,5 +68,5 @@
                                (and (= "Boundary" (-> ta :tag :namespace))
                                     (= "ModuleApi" (-> ta :tag :name))))
                              (:tag-apps model))]
-        (is (= 3 (count api-tags))
-            "3 Boundary::ModuleApi tags (infra/server, web/views/graph, project_layer/registry)")))))
+        (is (= 6 (count api-tags))
+            "6 Boundary::ModuleApi tags (infra/server, web/views/graph, project_layer/registry, constraint/ast, constraint/derivations, constraint/evaluator)")))))

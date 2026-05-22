@@ -1,0 +1,15 @@
+-- boundary: 1
+
+-- Kernel-universal Datalog derivations — projection of a Model into
+-- the EDB consumed by the constraint evaluator. See derivations.allium
+-- for the predicate catalogue.
+
+use "../model/spec.allium" as model
+
+fn model_to_edb(model: model.Model) -> EDB
+    -- Project a Model into the kernel-universal EDB: a map keyed by
+    -- predicate keyword to a set of tuples. The output covers exactly
+    -- the predicate set listed in the KernelUniversal invariant.
+
+exports:
+    EDB

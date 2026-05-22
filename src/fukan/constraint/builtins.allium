@@ -1,0 +1,28 @@
+-- allium: 2
+-- constraint/builtins.allium
+--
+-- Scope: Built-in non-comparison predicates available inside
+--   constraint rule bodies. Comparison ops (=, !=, <, etc.) live in
+--   the evaluator's Comparison-atom dispatch; this module covers the
+--   set membership, substring, and presence predicates per
+--   MODEL.md §6.5.
+-- Includes: BuiltinCatalogue invariant.
+-- Excludes:
+--   - Public fn signatures (see builtins.boundary)
+--   - Comparison operator semantics (see evaluator.allium)
+--   - Sort guards (see sort.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant BuiltinCatalogue {
+    -- The non-comparison built-ins this module exposes:
+    --   in?         set membership over a Set<Any>
+    --   contains?   substring test over two Strings
+    --   is_present? non-nil predicate
+    --   is_absent?  nil predicate
+    -- Adding a new built-in is a coordinated change with the
+    -- evaluator's body-element dispatch and with the constraint DSL
+    -- documentation in MODEL.md §6.5.
+}

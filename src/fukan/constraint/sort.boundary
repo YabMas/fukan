@@ -1,0 +1,17 @@
+-- boundary: 1
+
+-- Sort guards — unary type predicates for typed predicate arguments.
+-- See sort.allium for the catalogue invariant.
+
+fn is_string(x: Any) -> Bool
+    -- True iff x is a String.
+
+fn is_number(x: Any) -> Bool
+    -- True iff x is a Number.
+
+fn is_keyword(x: Any) -> Bool
+    -- True iff x is a Keyword.
+
+fn is_primitive_id(x: Any) -> Bool
+    -- True iff x is a String containing the '::' separator. Structural
+    -- shape only — does not verify Model membership.

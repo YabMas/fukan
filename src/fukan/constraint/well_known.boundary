@@ -1,0 +1,27 @@
+-- boundary: 1
+
+-- fukan-shipped well-known constraints. Each function returns a
+-- PredicateRegistration the build pipeline appends to the Model's
+-- predicate registry between Phase 4 and Phase 5. See
+-- well_known.allium for per-constraint semantics.
+
+use "../model/spec.allium" as model
+
+fn signal_gap() -> model.PredicateRegistration
+    -- Warning: every Surface→Event :relation/provides edge has at
+    -- least one Event→Rule :relation/triggers consumer.
+
+fn external_must_have_wrapper() -> model.PredicateRegistration
+    -- Warning: every Container tagged Allium::ExternalEntity
+    -- belongs to a known module under :in-module.
+
+fn no_dependency(from_tag: String, to_tag: String) -> model.PredicateRegistration
+    -- Error: Containers tagged from_tag must not have any
+    -- transitive dependency on Containers tagged to_tag.
+
+fn no_circular_refs() -> model.PredicateRegistration
+    -- Error: no primitive may transitively depend on itself.
+
+fn naming_convention(kind: Keyword, regex: String) -> model.PredicateRegistration
+    -- Warning: every primitive of the given kind has a label
+    -- matching the supplied regex.

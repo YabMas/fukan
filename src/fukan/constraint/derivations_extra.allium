@@ -1,0 +1,41 @@
+-- allium: 2
+-- constraint/derivations_extra.allium
+--
+-- Scope: Datalog-rule derivations that layer on top of the
+--   kernel-universal EDB. These produce additional predicates the
+--   constraint language can reference but that cannot be projected
+--   directly from the Model (transitive closures, derived joins).
+-- Includes: DependsOnSemantics, AppendsToBaseEDB,
+--   PureDerivationLayer invariants.
+-- Excludes:
+--   - Public fn signatures (see derivations_extra.boundary)
+--   - Base EDB projection (see derivations.allium)
+--   - Evaluator semantics (see evaluator.allium)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant DependsOnSemantics {
+    -- :depends-on is the transitive closure of :edge over its
+    -- from/to endpoints, ignoring the relation kind. Two rules
+    -- generate the relation:
+    --   depends-on(?x, ?y) :- edge(?x, ?_rel, ?y).
+    --   depends-on(?x, ?z) :- edge(?x, ?_rel, ?y), depends-on(?y, ?z).
+    -- A primitive transitively depends on itself iff it participates
+    -- in a dependency cycle.
+}
+
+invariant AppendsToBaseEDB {
+    -- depends_on_rules returns ConstraintRules to be evaluated
+    -- alongside the kernel-universal EDB; it never seeds tuples
+    -- directly. Composition rule: the caller threads the returned
+    -- rules into the evaluator together with any registration-level
+    -- rules.
+}
+
+invariant PureDerivationLayer {
+    -- The derivation-rule factories take no Model and no EDB. They
+    -- return the same ConstraintRules across invocations and never
+    -- mutate state.
+}

@@ -1,0 +1,91 @@
+-- allium: 2
+-- constraint/evaluator.allium
+--
+-- Scope: Stratified bottom-up Datalog evaluator — the engine that
+--   turns a set of ConstraintRules plus an EDB into a derived EDB.
+-- Includes: Stratum / Binding value types; StratifiedFixedPoint,
+--   StratificationSafeNegation, NaiveFixedPoint, UnificationSemantics,
+--   AggregationSemantics, ComparisonOperators, Determinism invariants.
+-- Excludes:
+--   - Public fn signatures (see evaluator.boundary)
+--   - AST shape (see ast.allium)
+--   - Built-in predicates (see builtins.allium)
+--   - EDB projection (see derivations.allium)
+--   - Phase 5 orchestration (see phase5.allium)
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value Stratum {
+    -- A group of ConstraintRules whose head predicate can be
+    -- evaluated together. The evaluator computes strata such that
+    -- every negated or aggregated body predicate of every rule in a
+    -- stratum is defined in a strictly earlier stratum or is an EDB
+    -- predicate. Strata are evaluated in order; within a stratum the
+    -- rules iterate to a naive fixed point.
+}
+
+value Binding {
+    -- A substitution map from logic-variable Term to bound value.
+    -- The evaluator threads sets of Bindings through a rule body;
+    -- each body element refines, filters, or extends the set.
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant StratifiedFixedPoint {
+    -- evaluate_rules partitions the input rules into Strata such
+    -- that negation / aggregation references resolve against
+    -- already-settled predicates. Strata are evaluated in order; for
+    -- each stratum the evaluator iterates a naive fixed point until
+    -- no new tuples are derived, then moves to the next.
+}
+
+invariant StratificationSafeNegation {
+    -- A negated atom in a rule body references a predicate from a
+    -- strictly earlier stratum (or the EDB). A rule set with a
+    -- negation cycle is unstratifiable; stratification raises
+    -- ex_info with :type :stratification-failed and the unplaced
+    -- predicates under :remaining.
+}
+
+invariant NaiveFixedPoint {
+    -- Within each stratum the evaluator runs full re-evaluation per
+    -- iteration — no semi-naive optimisation, no magic-set
+    -- transformation. The fixed point is reached when one full pass
+    -- adds no new tuples to any head predicate in the stratum.
+}
+
+invariant UnificationSemantics {
+    -- Atom evaluation unifies positional argument terms against EDB
+    -- tuples one element at a time. A variable matches anything but
+    -- must agree across re-occurrences; a constant matches by
+    -- equality. Tuple-arity mismatch rejects the row.
+}
+
+invariant AggregationSemantics {
+    -- An aggregation atom evaluates the inner body once per outer
+    -- binding, collects the input-var values across the resulting
+    -- inner bindings in iteration order, and applies the aggregation
+    -- op (:count, :sum, :min, :max) to the collected list. The
+    -- scalar result extends the outer binding under the result var.
+    -- :min and :max on an empty input bind nil.
+}
+
+invariant ComparisonOperators {
+    -- Supported comparison ops are :=, :!=, :<, :<=, :>, :>=,
+    -- :matches-regex, and :not-matches-regex. The evaluator
+    -- substitutes left and right terms under the current binding,
+    -- applies the op, and keeps bindings for which it returns truthy.
+}
+
+invariant Determinism {
+    -- evaluate_rules is a pure function of (rules, edb). The same
+    -- input pair always derives the same EDB. Stratification order,
+    -- iteration order, and aggregation collection order are
+    -- determined by the inputs and the implementation; no external
+    -- state participates.
+}

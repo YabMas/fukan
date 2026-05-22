@@ -1,0 +1,27 @@
+-- allium: 2
+-- constraint/sort.allium
+--
+-- Scope: Sort guards — unary type predicates a constraint author
+--   uses to filter argument values per MODEL.md §6.3.
+-- Includes: SortGuardCatalogue invariant.
+-- Excludes:
+--   - Public fn signatures (see sort.boundary)
+--   - Stratification (despite the file name, stratification lives in
+--     evaluator.allium / evaluator.boundary)
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant SortGuardCatalogue {
+    -- The sort guards this module exposes:
+    --   is_string?        true iff value is a String
+    --   is_number?        true iff value is a Number
+    --   is_keyword?       true iff value is a Keyword
+    --   is_primitive_id?  true iff value is a String containing the
+    --                     '::' separator — structural shape check,
+    --                     not membership in the Model
+    -- Sort guards run inside a rule body as host-callable predicates
+    -- routed through the same dispatch as the built-in non-comparison
+    -- predicates in builtins.allium.
+}

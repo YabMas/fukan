@@ -1,0 +1,26 @@
+-- boundary: 1
+
+-- Stratified bottom-up Datalog evaluator. See evaluator.allium for
+-- stratification, fixed-point, unification, aggregation, and
+-- determinism guarantees.
+
+use "./ast.allium" as ast
+use "./derivations.allium" as derivations
+
+fn evaluate_rules(rules: List<ast.ConstraintRule>,
+                  edb: derivations.EDB) -> derivations.EDB
+    -- Stratify the rules, evaluate each stratum to a naive fixed
+    -- point, and return the derived EDB extending the seed EDB.
+    -- Raises ex_info with :type :stratification-failed when the rule
+    -- set contains a negation cycle.
+
+fn query(rules: List<ast.ConstraintRule>,
+         edb: derivations.EDB,
+         query_atom: ast.ConstraintAtom) -> Set<Binding>
+    -- Run evaluate_rules, then unify the query atom against the
+    -- resulting predicate's tuples. Returns the set of variable
+    -- bindings under which the query atom holds.
+
+exports:
+    Stratum
+    Binding

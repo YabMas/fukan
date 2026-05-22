@@ -1,0 +1,34 @@
+-- boundary: 1
+
+-- Constraint subsystem — substrate-level Datalog evaluator and the
+-- Phase 5 runner that drives it. Provides the AST for constraint
+-- rules, the kernel-universal EDB projection plus an extra
+-- depends-on derivation layer, the stratified bottom-up evaluator,
+-- the fukan-shipped well-known constraints, and the Phase 5
+-- orchestration that walks the Model's PredicateRegistrations and
+-- emits Violations. Parallel to the agent subsystem in that both
+-- consume the same kernel substrate; constraint is the Model-time
+-- analysis side, agent is the query-time inspection side.
+
+subsystem constraint {
+    contains:
+        ./ast.allium
+        ./builtins.allium
+        ./derivations.allium
+        ./derivations_extra.allium
+        ./evaluator.allium
+        ./sort.allium
+        ./well_known.allium
+        ./phase5.allium
+
+    exports:
+        ast.ConstraintRule
+        ast.ConstraintAtom
+        ast.Negation
+        ast.Comparison
+        ast.Aggregation
+        ast.Term
+        derivations.EDB
+        evaluator.Stratum
+        evaluator.Binding
+}

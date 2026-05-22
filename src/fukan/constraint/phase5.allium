@@ -1,0 +1,95 @@
+-- allium: 2
+-- constraint/phase5.allium
+--
+-- Scope: Phase 5 of the build pipeline — the runner that walks the
+--   Model's PredicateRegistrations, evaluates each against the
+--   kernel-universal EDB extended with the depends-on derivation,
+--   and appends one Violation per head tuple.
+-- Includes: RunPhase5 rule; NonGating, PurelyAdditive,
+--   EvaluatesAllRegistrations, OneViolationPerHeadTuple,
+--   ViolationLocationBindsHead, DeterministicAcrossRebuilds
+--   invariants.
+-- Excludes:
+--   - Public fn signatures (see phase5.boundary)
+--   - PredicateRegistration shape (see model/spec.allium)
+--   - Evaluator semantics (see evaluator.allium)
+--   - Pipeline ordering and gating (see model/pipeline.allium)
+--   - Well-known constraint catalogue (see well_known.allium)
+
+use "../model/spec.allium" as model
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule RunPhase5 {
+    -- Phase 5 of the build pipeline. Triggered by the constraint
+    -- module's run fn after defaults registration. Reads every
+    -- PredicateRegistration from the Model's predicate registry,
+    -- evaluates the registration's predicate body against the
+    -- kernel-universal EDB (extended with depends_on_rules), and
+    -- appends one Violation per head tuple to the Model's
+    -- violations.
+    --
+    -- Each emitted Violation carries:
+    --   - severity from the registration
+    --   - phase :phase5, sub_phase :5
+    --   - kind = keyword(registration.namespace, registration.name)
+    --   - location = map from head-arg variable to bound tuple value
+    --   - message = registration.message_template, or a fallback
+    --     citing the namespace, name, and tuple
+    --
+    -- Guarantees that apply: NonGating, PurelyAdditive,
+    -- EvaluatesAllRegistrations, OneViolationPerHeadTuple,
+    -- ViolationLocationBindsHead, DeterministicAcrossRebuilds.
+
+    when: RunPhase5(model: model.Model)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant NonGating {
+    -- Phase 5 never raises on constraint violations. Violations are
+    -- outputs, not errors — they accumulate on the Model alongside
+    -- Phase 4's violations. The runner only raises when a
+    -- registration's predicate fails stratification, which is
+    -- treated as a registration bug rather than a Model condition.
+}
+
+invariant PurelyAdditive {
+    -- The output Model equals the input Model with new entries
+    -- appended to :violations. Primitives, edges, artifacts, tag
+    -- applications, predicate registrations, and existing violations
+    -- are preserved unchanged.
+}
+
+invariant EvaluatesAllRegistrations {
+    -- Every PredicateRegistration in the input Model's registry is
+    -- evaluated. No registration is filtered, deduplicated, or
+    -- skipped at the runner layer — idempotent registration is the
+    -- pipeline's responsibility per
+    -- model/pipeline.DefaultsRegistrationIsIdempotent.
+}
+
+invariant OneViolationPerHeadTuple {
+    -- For each registration, the runner emits exactly one Violation
+    -- per derived head tuple. A registration whose head never
+    -- derives contributes no Violations. A registration whose head
+    -- derives N tuples contributes N Violations.
+}
+
+invariant ViolationLocationBindsHead {
+    -- Each emitted Violation's :location is the map from the head
+    -- atom's argument variables to the corresponding tuple values.
+    -- Head args appearing as constants (rare) participate in the
+    -- map by their literal value as both key and value.
+}
+
+invariant DeterministicAcrossRebuilds {
+    -- Given the same Model and the same predicate registrations,
+    -- repeated runs produce value-equal violation sequences. The
+    -- evaluator's determinism plus the runner's pure-fold over
+    -- :predicates carry through to a stable output.
+}

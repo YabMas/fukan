@@ -1,0 +1,11 @@
+-- boundary: 1
+
+-- Extra Datalog derivations — ConstraintRules layered over the
+-- kernel-universal EDB. See derivations_extra.allium for the
+-- depends-on semantics.
+
+use "./ast.allium" as ast
+
+fn depends_on_rules() -> List<ast.ConstraintRule>
+    -- Return the two ConstraintRules defining :depends-on as the
+    -- transitive closure of :edge over its endpoints.

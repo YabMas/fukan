@@ -1,0 +1,63 @@
+-- allium: 2
+-- constraint/derivations.allium
+--
+-- Scope: Kernel-universal Datalog derivations — the EDB seed every
+--   constraint evaluation starts from. Translates the Model's
+--   primitives, edges, fields, labels, and tag applications into
+--   predicate-keyed sets of tuples per MODEL.md §6.6.
+-- Includes: EDB value type; KernelUniversal, ModuleDerivation,
+--   PureProjection invariants.
+-- Excludes:
+--   - Public fn signatures (see derivations.boundary)
+--   - Layered Datalog derivations over the EDB (see
+--     derivations_extra.allium)
+--   - Built-in predicates inside rule bodies (see builtins.allium)
+--   - Evaluator semantics (see evaluator.allium)
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value EDB {
+    -- A map from predicate keyword to a set of tuples. The Datalog
+    -- evaluator looks up tuples by predicate and unifies positional
+    -- arguments against tuple elements. The constraint subsystem's
+    -- EDB shape and the agent subsystem's EDB shape are independent
+    -- projections of the same Model — the predicate catalogues are
+    -- not interchangeable.
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant KernelUniversal {
+    -- The projection emits exactly these predicates, with the
+    -- indicated tuple shapes:
+    --   :primitive       [id]
+    --   :primitive-kind  [id kind]
+    --   :has-tag         [id tag-string]
+    --   :tag-payload     [id tag-string payload-map]
+    --   :in-module       [id module-id]
+    --   :edge            [from-id relation-kind to-id]
+    --   :has-field       [id field-name]
+    --   :has-label       [id label]
+    -- The set is kernel-universal: any Model produces these and only
+    -- these predicates at this layer. Additional predicates layer on
+    -- top via derivations_extra or via per-project registrations.
+}
+
+invariant ModuleDerivation {
+    -- :in-module is computed from primitives whose id has a module-id
+    -- prefix followed by the '::' separator. A primitive is a module
+    -- iff it carries the Allium::Module tag. The derivation walks
+    -- every primitive id and pairs it with every prefix-matching
+    -- module id.
+}
+
+invariant PureProjection {
+    -- model_to_edb is a pure function of the Model. It never reads
+    -- state outside the supplied Model value, never mutates the
+    -- Model, and is deterministic — the same Model yields tuple sets
+    -- that compare equal across invocations.
+}
