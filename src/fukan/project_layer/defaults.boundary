@@ -2,6 +2,8 @@
 
 -- fukan-on-fukan default project registry.
 
-fn fukan_on_fukan() -> Registry
+use "./registry.allium" as registry
+
+fn fukan_on_fukan() -> registry.Registry
   -- Project registry for fukan analyzing itself. Returns the
   -- identity registry.
