@@ -38,7 +38,7 @@
         closed-modules (module-api-exports model)]
     (mapcat
       (fn [entry]
-        (let [[alias item] (str/split entry #"/" 2)
+        (let [[alias item] (str/split entry #"\." 2)
               child-id (alias-map alias)]
           (cond
             (nil? child-id)

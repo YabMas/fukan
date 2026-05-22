@@ -41,8 +41,8 @@
       (is (= {:kind :simple :name "Model"}
              (-> d :bindings first :type-ref)))))
 
-  (testing "qualified type in binding"
-    (let [d (first-decl "given {\n    model: ns/Model\n}\n")]
+  (testing "qualified type in binding (dot)"
+    (let [d (first-decl "given {\n    model: ns.Model\n}\n")]
       (is (= {:kind :qualified :ns "ns" :name "Model"}
              (-> d :bindings first :type-ref))))))
 
@@ -183,8 +183,8 @@
       (is (= "actor" (:role facing)))
       (is (= {:kind :simple :name "User"} (:type-ref facing)))))
 
-  (testing "facing with qualified type"
-    (let [d (first-decl "surface S {\n    facing actor: auth/User\n}\n")
+  (testing "facing with qualified type (dot)"
+    (let [d (first-decl "surface S {\n    facing actor: auth.User\n}\n")
           facing (->> (:fields d)
                       (filter #(= :facing (:field-kind %)))
                       first)]
@@ -253,8 +253,8 @@
       (is (= {:kind :simple :name "User"} (:identified-by d)))
       (is (= {:kind :simple :name "Workspace"} (:within d)))))
 
-  (testing "actor with qualified type in identified_by"
-    (let [d (first-decl "actor Admin {\n    identified_by: auth/User\n}\n")]
+  (testing "actor with qualified type in identified_by (dot)"
+    (let [d (first-decl "actor Admin {\n    identified_by: auth.User\n}\n")]
       (is (= {:kind :qualified :ns "auth" :name "User"} (:identified-by d)))))
 
   (testing "actor identified_by with trailing where"
@@ -303,12 +303,7 @@
              (:type-ref f))))))
 
 (deftest qualified-type-test
-  (testing "qualified name (slash)"
-    (let [f (-> (first-decl "value V { sig: model/FnSig }\n") :fields first)]
-      (is (= :typed (:field-kind f)))
-      (is (= {:kind :qualified :ns "model" :name "FnSig"}
-             (:type-ref f)))))
-  (testing "qualified name (dot) — mirrors trigger-call dotted-alias convention"
+  (testing "qualified name (dot is the canonical cross-module ref syntax)"
     (let [f (-> (first-decl "value V { sig: model.FnSig }\n") :fields first)]
       (is (= :typed (:field-kind f)))
       (is (= {:kind :qualified :ns "model" :name "FnSig"}
@@ -318,7 +313,11 @@
       (is (= :typed (:field-kind f)))
       (is (= {:kind :optional
               :inner {:kind :qualified :ns "model" :name "SourceLocation"}}
-             (:type-ref f))))))
+             (:type-ref f)))))
+  (testing "slash separator is no longer a type-ref qualifier — falls through to :derived"
+    (let [f (-> (first-decl "value V { sig: model/FnSig }\n") :fields first)]
+      (is (= :derived (:field-kind f))
+          "slash-qualified type-ref reserved for .boundary foreign-attach"))))
 
 (deftest union-type-test
   (testing "union of simple types"

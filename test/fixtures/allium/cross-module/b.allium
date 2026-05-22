@@ -1,10 +1,10 @@
 -- allium: 2
 -- Fixture: cross-module type-ref source module
--- Uses `a` and references `a/Foo` as a field type.
+-- Uses `a` and references `a.Foo` as a field type.
 
 use "a" as a
 
 entity Bar {
     id: String
-    foo: a/Foo
+    foo: a.Foo
 }

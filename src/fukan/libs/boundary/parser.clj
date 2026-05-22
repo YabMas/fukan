@@ -79,7 +79,7 @@
 
   rule-ref = qualified-rule-ref / simple-rule-ref
   simple-rule-ref = ident
-  qualified-rule-ref = ident <'/'> ident
+  qualified-rule-ref = ident <'.'> ident
 
   (* returns-text: single-line capture — the rest of the line after
      'returns:' is the expression. Multi-line expressions can be added
@@ -106,7 +106,7 @@
   subsystem-exports-clause = <'exports:'> _ subsystem-export-entry*
   subsystem-export-entry = (qualified-subsystem-export / simple-subsystem-export) _
   simple-subsystem-export = ident
-  qualified-subsystem-export = ident <'/'> (qualified-export / simple-export)
+  qualified-subsystem-export = ident <'.'> (qualified-export / simple-export)
 
   subsystem-rules-clause = <'rules:'> _ rule-entry*
   rule-entry = ident _ <'('> _ rule-args? _ <')'> _
@@ -120,7 +120,7 @@
 
   generic-type = ident <'<'> _ type-ref-list _ <'>'>
   optional-type = (generic-type / qualified-type / simple-type) <'?'>
-  qualified-type = ident <'/'> ident
+  qualified-type = ident <'.'> ident
   simple-type = ident
   type-ref-list = type-ref (_ <','> _ type-ref)*
 
@@ -226,7 +226,7 @@
    :contains-entry             identity
    :contains-clause            (fn [& paths] [:contains (vec paths)])
    :simple-subsystem-export    identity
-   :qualified-subsystem-export (fn [alias rest] (str alias "/" rest))
+   :qualified-subsystem-export (fn [alias rest] (str alias "." rest))
    :subsystem-export-entry     identity
    :subsystem-exports-clause   (fn [& entries] [:exports (vec entries)])
    :rule-arg-value             (fn [v] (str/trim v))

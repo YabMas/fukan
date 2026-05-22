@@ -8,5 +8,5 @@ subsystem model {
         ./pipeline.allium
 
     exports:
-        spec/Model
+        spec.Model
 }

@@ -64,7 +64,7 @@ value NavigationState {
 surface GraphViewer {
     facing viewer: User
 
-    context graph_data: cyto/CytoscapeGraph
+    context graph_data: cyto.CytoscapeGraph
 
     -- Data in: the component renders whatever CytoscapeGraph it
     -- receives. The server pushes graph data via a Datastar signal;

@@ -104,10 +104,10 @@
              (-> result :declarations first :prose))))))
 
 (deftest fn-decl-qualified-param-type
-  (testing "param types can be alias-qualified (alias/Type)"
+  (testing "param types can be alias-qualified (alias.Type)"
     (let [result  (parse (str "-- boundary: 1\n"
                               "use \"../projection/spec.allium\" as projection\n"
-                              "fn render_graph(p: projection/Projection) -> CytoscapeGraph\n"))
+                              "fn render_graph(p: projection.Projection) -> CytoscapeGraph\n"))
           fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
       (is (= {:kind :qualified :ns "projection" :name "Projection"}
              (-> fn-decl :params first :type-ref))))))
@@ -165,11 +165,11 @@
       (is (= {:triggers nil :returns nil} (:body fn-decl))))))
 
 (deftest fn-body-triggers-qualified
-  (testing "triggers: can reference a foreign rule via alias"
+  (testing "triggers: can reference a foreign rule via alias (dot)"
     (let [result  (parse (str "-- boundary: 1\n"
                               "use \"../other.allium\" as other\n"
                               "fn local_fn(x: X) -> Y {\n"
-                              "    triggers: other/SomeRule\n"
+                              "    triggers: other.SomeRule\n"
                               "}\n"))
           fn-decl (->> (:declarations result) (filter #(= :fn (:type %))) first)]
       (is (= {:kind :qualified :ns "other" :name "SomeRule"}
@@ -253,13 +253,13 @@
                              "        ./password/spec.allium\n"
                              "\n"
                              "    exports:\n"
-                             "        oauth/OAuthLogin\n"
-                             "        password/PasswordLogin\n"
+                             "        oauth.OAuthLogin\n"
+                             "        password.PasswordLogin\n"
                              "}\n"))]
       (is (= [{:type :subsystem
                :name "Auth"
                :contains ["./oauth/spec.allium" "./password/spec.allium"]
-               :exports ["oauth/OAuthLogin" "password/PasswordLogin"]
+               :exports ["oauth.OAuthLogin" "password.PasswordLogin"]
                :rules []}]
              (:declarations result))))))
 
@@ -272,7 +272,7 @@
                              "        ./password/spec.allium\n"
                              "\n"
                              "    exports:\n"
-                             "        oauth/OAuthLogin\n"
+                             "        oauth.OAuthLogin\n"
                              "\n"
                              "    rules:\n"
                              "        no_dependency(from: oauth, to: password)\n"
@@ -293,11 +293,11 @@
                              "        ./oauth/spec.allium\n"
                              "\n"
                              "    exports:\n"
-                             "        oauth/OAuthLogin\n"
+                             "        oauth.OAuthLogin\n"
                              "}\n"))]
       ;; The parser doesn't resolve aliases — it just captures the string.
       ;; Plan 3b's analyzer resolves the stem alias.
-      (is (= ["oauth/OAuthLogin"] (-> result :declarations first :exports))))))
+      (is (= ["oauth.OAuthLogin"] (-> result :declarations first :exports))))))
 
 (deftest subsystem-nested-boundary-reference
   (testing "contains: can reference nested subsystem .boundary files"
@@ -307,12 +307,12 @@
                              "        ./inner.boundary\n"
                              "\n"
                              "    exports:\n"
-                             "        inner/InnerSurface\n"
+                             "        inner.InnerSurface\n"
                              "}\n"))]
       (is (= [{:type :subsystem
                :name "Outer"
                :contains ["./inner.boundary"]
-               :exports ["inner/InnerSurface"]
+               :exports ["inner.InnerSurface"]
                :rules []}]
              (:declarations result))))))
 

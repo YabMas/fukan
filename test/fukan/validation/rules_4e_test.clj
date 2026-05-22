@@ -51,8 +51,8 @@
   (let [model (-> (build/empty-model)
                   ;; Module m is CLOSED with exports ["PublicSurface"]:
                   (with-module "m" ["PublicSurface"])
-                  ;; Subsystem exports m/PrivateThing — NOT in m's API:
-                  (with-subsystem "sub/auth" "Auth" ["m"] ["m/PrivateThing"]))
+                  ;; Subsystem exports m.PrivateThing — NOT in m's API:
+                  (with-subsystem "sub/auth" "Auth" ["m"] ["m.PrivateThing"]))
         violations (r4e/check model)
         relevant (filter #(= :4e/subsystem-exports-private (:kind %)) violations)]
     (is (= 1 (count relevant)))
@@ -62,15 +62,15 @@
   ;; Module m is OPEN (no ModuleApi tag). Subsystem can export anything from it.
   (let [model (-> (build/empty-model)
                   (with-module "m" nil)
-                  (with-subsystem "sub/auth" "Auth" ["m"] ["m/SomethingFromOpenModule"]))
+                  (with-subsystem "sub/auth" "Auth" ["m"] ["m.SomethingFromOpenModule"]))
         violations (r4e/check model)
         relevant (filter #(= :4e/subsystem-exports-private (:kind %)) violations)]
     (is (zero? (count relevant)) "open module exports aren't restricted by 4e")))
 
 (deftest clean-subsystem-produces-no-4e-errors
-  ;; Module m is closed with PublicSurface exported; subsystem exports m/PublicSurface
+  ;; Module m is closed with PublicSurface exported; subsystem exports m.PublicSurface
   (let [model (-> (build/empty-model)
                   (with-module "m" ["PublicSurface"])
-                  (with-subsystem "sub/auth" "Auth" ["m"] ["m/PublicSurface"]))
+                  (with-subsystem "sub/auth" "Auth" ["m"] ["m.PublicSurface"]))
         errors (filter #(= :error (:severity %)) (r4e/check model))]
     (is (empty? errors))))

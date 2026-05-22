@@ -8,6 +8,6 @@ subsystem infra {
         ./model.allium
 
     exports:
-        server/ServerOpts
-        server/ServerInfo
+        server.ServerOpts
+        server.ServerInfo
 }
