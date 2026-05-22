@@ -22,5 +22,5 @@
       ;; Each .allium file gets a module-Container with an Allium::Module tag.
       (let [module-tags (filter #(= {:namespace "Allium" :name "Module"} (:tag %))
                                 (:tag-apps model))]
-        (is (= 13 (count module-tags))
-            "Allium::Module tag applied to each of the 13 corpus files")))))
+        (is (= 19 (count module-tags))
+            "Allium::Module tag applied to each of the 19 corpus files")))))

@@ -1,0 +1,10 @@
+-- boundary: 1
+
+-- Project a Model into an EDB suitable for the Datalog evaluator.
+-- Pure mechanical conversion — see edb.allium for the predicate
+-- catalogue and the projection invariants.
+
+use "../model/spec.allium" as model
+
+fn model_to_edb(model: model.Model) -> EDB
+    -- Project a Model value into an EDB map keyed by predicate.

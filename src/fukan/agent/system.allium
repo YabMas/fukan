@@ -1,0 +1,91 @@
+-- allium: 2
+-- agent/system.allium
+--
+-- Scope: Lifecycle and meta — the edit→refresh→query loop, status
+--   snapshot shape, and the help/source self-documentation surface.
+-- Includes: AgentStatus / HelpEntry / SourceEntry value types;
+--   EditRefreshQueryLoop, RefreshRebuildsViews, RefreshIdempotence,
+--   SelfDocumenting, StatusReflectsLoadedModel invariants.
+-- Excludes:
+--   - L0/L1/L2 query surface (see api.allium)
+--   - Sandbox eval semantics (see sci.allium)
+--   - Agent-view loading (see views_loader.allium)
+--   - Public signatures (see system.boundary)
+
+use "./views_loader.allium" as views_loader
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value AgentStatus {
+    -- Snapshot of the daemon and the currently loaded Model. The view
+    -- field carries the latest views-loader report so callers can see
+    -- which agent-defined views succeeded and which failed.
+    model_loaded: Boolean
+    target: String?
+    primitive_count: Integer
+    relation_count: Integer
+    artifact_count: Integer
+    violation_count: Integer
+    views: views_loader.LoadReport
+}
+
+value HelpEntry {
+    -- One catalogued entry of the agent surface. When help is called
+    -- without args, the response is a nested map of these grouped by
+    -- namespace and (for the api ns) by layer.
+    name: String
+    layer: String?
+    doc: String
+    example: String
+    origin: String?
+}
+
+value SourceEntry {
+    -- Source text of a single L1 or L2 fn, with its declaring namespace.
+    -- The top-level metadata map is stripped to leave a clean template.
+    name: String
+    ns: String
+    source: String
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant EditRefreshQueryLoop {
+    -- Canonical agent workflow. Spec and code on disk are the source
+    -- of truth; the loaded Model is a cached projection. An agent
+    -- (LLM or human) edits a .clj / .allium / .boundary file, then
+    -- calls refresh to rebuild the Model, then queries via L0/L1/L2
+    -- to verify the change landed. Skipping the refresh step leaves
+    -- the Model stale — every query after a disk edit must be preceded
+    -- by refresh, otherwise results reflect the pre-edit state.
+}
+
+invariant RefreshRebuildsViews {
+    -- Each refresh invocation also reloads the .fukan/agent-views.clj
+    -- file (when present), replacing the prior view set atomically.
+    -- Agents that change view definitions see them surface on the next
+    -- refresh without restarting the daemon.
+}
+
+invariant RefreshIdempotence {
+    -- Calling refresh twice in a row without intervening disk edits
+    -- produces the same loaded Model and the same status snapshot
+    -- (modulo counters that incidentally tick — none today).
+}
+
+invariant SelfDocumenting {
+    -- help and source draw exclusively from the live surface and its
+    -- :agent/doc / :agent/example / :agent/layer metadata. There is no
+    -- separate documentation registry that can drift from the code.
+}
+
+invariant StatusReflectsLoadedModel {
+    -- status fields (:model-loaded? :primitive-count :relation-count
+    -- :artifact-count :violation-count :views) describe the currently
+    -- loaded Model snapshot, not the on-disk source. To learn what
+    -- disk says, call refresh first.
+}

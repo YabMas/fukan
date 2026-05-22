@@ -1,0 +1,63 @@
+-- boundary: 1
+
+-- Layered Model interface for agents (LLMs and humans). L0 = raw Datalog,
+-- L1 = structured probes, L2 = pre-shaped views answering common questions.
+-- Every fn is read-only — they observe the currently loaded Model without
+-- mutating it. See api.allium for behavioural commitments and value types.
+
+use "../model/spec.allium" as model
+
+-- L0 Kernel ----------------------------------------------------------------
+
+fn q(form: QueryForm) -> List<QueryRow>
+    -- Evaluate a Datalog query against the loaded Model. Throws
+    -- :model-not-loaded when no model has been built.
+
+-- L1 Probes ----------------------------------------------------------------
+
+fn primitives(filters: Map<String, Value>?) -> Envelope
+    -- List Model primitive summaries. Optional :kind and :label filters,
+    -- plus :limit / :offset pagination. Returns the standard envelope.
+
+fn get_primitive(id: String) -> Primitive?
+    -- Return the full primitive map for an id, or null when absent.
+
+fn relations(filters: Map<String, Value>?) -> Envelope
+    -- List Model relations. Filters: :kind, :from, :to, :validity,
+    -- :projection-kind, plus :limit / :offset. Each row is a full edge map.
+
+fn vocabulary(filters: Map<String, Value>?) -> VocabularyEntry
+    -- Surface kernel-declared primitive-kinds and relation-kinds, each
+    -- tagged with :in-use? against the loaded Model. Optional :face-role
+    -- filter; when present, only primitive-kinds are returned.
+
+fn schema(filters: Map<String, Value>?) -> SchemaSummary
+    -- Empirically surface attribute keys and participating relation kinds
+    -- for primitives of a given :kind, read from the loaded Model.
+
+fn artifacts(filters: Map<String, Value>?) -> Envelope
+    -- List artifact summaries. Filters: :sub-case, :language, :public?,
+    -- plus :limit / :offset.
+
+fn idioms() -> List<Value>
+    -- Return the project-layer idiom entries from the loaded Model.
+
+fn constraints() -> List<Value>
+    -- Return the project-layer constraint definitions from the loaded Model.
+
+fn violations(filters: Map<String, Value>?) -> List<Violation>
+    -- Return current constraint violations. Optional :severity filter.
+
+-- L2 Views -----------------------------------------------------------------
+
+fn drift(filters: Map<String, Value>?) -> List<DriftRow>
+    -- Absent projections joined with their source primitive. Optional
+    -- :projection-kind filter. Returns a plain vector, not an envelope —
+    -- L2 views are pre-shaped for the question they answer.
+
+fn neighborhood(id: String) -> Neighborhood?
+    -- Primitive plus its one-hop outgoing and incoming edges plus
+    -- summaries of the directly-connected neighbors.
+
+fn coverage() -> CoverageReport
+    -- Spec→code projection coverage report for public functions only.

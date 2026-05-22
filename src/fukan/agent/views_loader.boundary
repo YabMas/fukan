@@ -1,0 +1,26 @@
+-- boundary: 1
+
+-- Load .fukan/agent-views.clj into the SCI agent surface. The loader
+-- reads forms, evaluates each in the shared SCI view-ctx, and captures
+-- per-form errors into a load report. The agent sees successful defns
+-- as if they were built-in L2 views. See views_loader.allium for the
+-- reload lifecycle and report shape.
+
+fn load_file(path: String) -> LoadReport
+    -- Reset the shared context and load forms from the given file.
+    -- Each form is evaluated independently; per-form failures land in
+    -- :errors and successful defns land in :loaded.
+
+fn auto_load(target_src: String?) -> LoadReport
+    -- Discover .fukan/agent-views.clj under target_src and load it,
+    -- or reset to an empty report when the file is absent.
+
+fn discover(target_src: String?) -> String?
+    -- Resolve the canonical path of .fukan/agent-views.clj under the
+    -- given source root, or nil when the file does not exist.
+
+fn last_report() -> LoadReport
+    -- Return the most recent load report without reloading.
+
+fn reset() -> Unit
+    -- Empty the load report and discard the shared SCI context.

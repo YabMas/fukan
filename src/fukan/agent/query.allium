@@ -1,0 +1,73 @@
+-- allium: 2
+-- agent/query.allium
+--
+-- Scope: Agent-facing Datalog DSL — query form, AST shape, evaluator
+--   semantics.
+-- Includes: QueryForm / ParsedQuery / QueryAtom / QueryRow value types;
+--   DSLShape, UnificationSemantics, ParseFailureModes invariants.
+-- Excludes:
+--   - Public signatures (see query.boundary)
+--   - Model→EDB projection (see edb.allium)
+--   - The L0 surface fn that wires this layer to api.q (see api.allium)
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value QueryForm {
+    -- The raw caller form: [:find <var-or-aggregation> ... :where <atom> ...]
+    -- Vectors only; variable names start with '?'. The keys :find and
+    -- :where are required; :in is optional.
+}
+
+value ParsedQuery {
+    -- The internal AST produced by parse. find carries variable
+    -- keywords (e.g. :?p); where carries QueryAtom records; in carries
+    -- the optional input bindings.
+    find: List<Value>
+    where: List<QueryAtom>
+    in: List<Keyword>
+}
+
+value QueryAtom {
+    -- One atom in the :where clause. predicate is the EDB predicate
+    -- keyword; args carry the subject and remaining positional values
+    -- with variables rewritten to keyword form.
+    predicate: Keyword
+    args: List<Value>
+}
+
+value QueryRow {
+    -- One result row: a map from :find variable keyword to bound value.
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant DSLShape {
+    -- A valid query form is a vector containing :find and :where
+    -- section markers. Each :where atom is a vector of at least two
+    -- elements: subject and predicate, optionally followed by more
+    -- positional arguments. Variables are symbols whose name starts
+    -- with '?'; everything else is a literal pattern matched against
+    -- EDB tuples.
+}
+
+invariant UnificationSemantics {
+    -- Atoms are matched against EDB tuples positionally. Variable
+    -- bindings established earlier in the :where clause must agree
+    -- with later occurrences — re-binding the same variable to a
+    -- different value rejects the row. Non-variable pattern arguments
+    -- match by equality with the tuple value at the same position.
+}
+
+invariant ParseFailureModes {
+    -- parse signals shape errors via ex-info with typed :type values:
+    --   :query-not-vector  -- top-level form is not a vector
+    --   :missing-find      -- no :find section
+    --   :missing-where     -- no :where section
+    --   :malformed-atom    -- a :where atom is not a vector of length >= 2
+    -- The sandbox surfaces these :type values through EvalResult's
+    -- :error/kind so agents can match against them.
+}

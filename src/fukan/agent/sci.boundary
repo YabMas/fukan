@@ -1,0 +1,21 @@
+-- boundary: 1
+
+-- Sandboxed evaluator for agent-supplied expressions. A single shared
+-- SCI context persists across calls so view definitions loaded via
+-- views_loader remain reachable from subsequent eval invocations.
+-- See sci.allium for sandbox guarantees and the shared-context rule.
+
+fn eval_string(s: String, opts: EvalOpts?) -> EvalResult
+    -- Evaluate an expression string in the agent sandbox. The result
+    -- carries :ok? and either :result or :error/kind+:error/message,
+    -- plus :elapsed-ms. Times out after :timeout-ms (default 5000).
+
+fn eval_string_as_view(s: String) -> EvalResult
+    -- Evaluate a form-string in the view-loading context. Defs land
+    -- in the shared SCI context and become reachable from subsequent
+    -- eval_string calls.
+
+fn reset_ctx() -> Unit
+    -- Discard the shared SCI context. The next eval call rebuilds it
+    -- with a fresh empty namespace. Used by views_loader before each
+    -- reload to drop stale view defs.

@@ -1,0 +1,54 @@
+-- allium: 2
+-- agent/edb.allium
+--
+-- Scope: Mechanical projection from Model into the EDB consumed by the
+--   Datalog evaluator.
+-- Includes: EDB value type; PredicateCatalogue and EndpointEncoding
+--   invariants.
+-- Excludes:
+--   - Parser and evaluator (see query.allium)
+--   - L0 surface fn (see api.allium)
+
+use "../model/spec.allium" as model
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value EDB {
+    -- A map from predicate keyword to a set of tuples. The Datalog
+    -- evaluator looks up tuples by predicate and matches positional
+    -- arguments by unification.
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant PredicateCatalogue {
+    -- The projection emits exactly these predicates, with the indicated
+    -- tuple shapes:
+    --   :primitive/kind             [id kind]
+    --   :primitive/label            [id label]
+    --   :primitive/owner            [id owner-id]   -- from :owns edges
+    --   :relation/kind              [edge-id kind from-id to-id]
+    --   :relation/validity          [edge-id validity]
+    --   :relation/projection-kind   [edge-id projection-kind]
+    --   :artifact/kind              [artifact-id kind]
+    -- Adding a new predicate is a coordinated change with the constraint
+    -- DSL that consumes the same EDB shape.
+}
+
+invariant EndpointEncoding {
+    -- Primitive endpoints carry their primitive id directly. Artifact
+    -- endpoints are encoded as "artifact:" prefixed onto the printed
+    -- form of the artifact id vector. The query layer treats the two
+    -- as opaque strings.
+}
+
+invariant EdgeIdSynthesis {
+    -- Edges have no intrinsic identity in the Model; the EDB projection
+    -- synthesises stable per-projection ids by indexing edges in
+    -- iteration order ("edge:0", "edge:1", ...). Ids are stable within
+    -- a single projection pass and meaningless across rebuilds.
+}

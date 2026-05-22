@@ -1,0 +1,21 @@
+-- boundary: 1
+
+-- Lifecycle and meta surface for agents. status reports daemon health;
+-- refresh rebuilds the loaded Model from disk; help and source are
+-- self-documentation entry points. See system.allium for the
+-- edit→refresh→query loop this surface anchors.
+
+fn status() -> AgentStatus
+    -- Snapshot of the daemon and the loaded Model.
+
+fn refresh() -> AgentStatus
+    -- Rebuild the loaded Model from disk and reload agent-views.
+    -- Blocks until the rebuild completes; returns the new status.
+
+fn help(fn_sym: Symbol?) -> HelpEntry
+    -- Without args: list the surface grouped by namespace and layer.
+    -- With a symbol: return doc, arglists, and example for that fn.
+
+fn source(fn_sym: Symbol) -> SourceEntry?
+    -- Return the source text of an L1 or L2 fn so the agent can read
+    -- built-in views as templates for its own definitions.

@@ -1,0 +1,44 @@
+-- boundary: 1
+
+-- Agent subsystem — the layered Model interface that other agents (LLMs and
+-- humans) query to understand the loaded Model. Composed of the L0/L1/L2
+-- query api, the lifecycle/meta system surface, the sandboxed evaluator,
+-- the Datalog DSL parser, the Model→EDB projection, and the agent-view
+-- file loader.
+
+subsystem agent {
+    contains:
+        ./api.allium
+        ./system.allium
+        ./sci.allium
+        ./query.allium
+        ./edb.allium
+        ./views_loader.allium
+
+    exports:
+        api.PrimitiveSummary
+        api.RelationRow
+        api.ArtifactSummary
+        api.Envelope
+        api.VocabularyEntry
+        api.SchemaSummary
+        api.DriftRow
+        api.Neighborhood
+        api.CoverageReport
+        api.Endpoint
+        api.Primitive
+        api.Violation
+        system.AgentStatus
+        system.HelpEntry
+        system.SourceEntry
+        sci.EvalResult
+        sci.EvalOpts
+        query.QueryForm
+        query.ParsedQuery
+        query.QueryRow
+        query.QueryAtom
+        query.QueryRow
+        views_loader.LoadReport
+        views_loader.LoadError
+        edb.EDB
+}

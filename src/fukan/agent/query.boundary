@@ -1,0 +1,17 @@
+-- boundary: 1
+
+-- Datalog DSL — parse agent-facing query forms into a small AST and
+-- evaluate them against an EDB. The api.q probe wires this layer to
+-- the loaded Model via the edb projection. See query.allium for the
+-- form shape, AST shape, and unification semantics.
+
+use "./edb.allium" as edb
+
+fn parse(form: QueryForm) -> ParsedQuery
+    -- Parse a [:find ... :where ...] form into the internal AST.
+    -- Throws typed ex-info on shape errors: :query-not-vector,
+    -- :missing-find, :missing-where, :malformed-atom.
+
+fn evaluate(parsed: ParsedQuery, edb: edb.EDB) -> List<QueryRow>
+    -- Evaluate a parsed query against an EDB. Returns a vector of
+    -- rows where each row maps :find var keywords to bound values.

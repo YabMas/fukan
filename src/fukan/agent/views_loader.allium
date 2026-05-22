@@ -1,0 +1,74 @@
+-- allium: 2
+-- agent/views_loader.allium
+--
+-- Scope: Lifecycle around .fukan/agent-views.clj — discovery, reload,
+--   error capture into a structured report.
+-- Includes: LoadReport / LoadError value types; LoadFileReplacesViews,
+--   ReportShape, PerFormIsolation, DiscoveryConvention, ResetClearsBoth
+--   invariants.
+-- Excludes:
+--   - Public signatures (see views_loader.boundary)
+--   - Sandbox eval semantics (see sci.allium)
+--   - Refresh-driven invocation (see system.allium)
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value LoadReport {
+    -- Summary of the most recent load attempt. loaded carries the
+    -- symbols of successful defns; errors carries one entry per failure
+    -- (parse error or per-form runtime error).
+    loaded: List<Symbol>
+    errors: List<LoadError>
+}
+
+value LoadError {
+    -- One failure entry — either a top-level syntax error from reading
+    -- the file or a per-form runtime error from the sandbox.
+    error_kind: String
+    error_message: String
+    error_path: String?
+    error_form: Value?
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant LoadFileReplacesViews {
+    -- Each load_file invocation resets the shared SCI context (dropping
+    -- every previously-loaded view def) and then evaluates the new file
+    -- form by form. Per-form failures do not stop the load — the loader
+    -- continues with the next form and captures the failure into the
+    -- report. Net effect: after load_file, only the defns that succeeded
+    -- in the current load are reachable from subsequent eval calls. Old
+    -- defns from prior loads are gone even when the new file fails to
+    -- add them — the reset happens unconditionally.
+}
+
+invariant ReportShape {
+    -- The load report always carries :loaded (a vector of symbols) and
+    -- :errors (a vector of LoadError maps), both possibly empty. status
+    -- includes this report under :views so callers can spot misbehaving
+    -- view files without a separate query.
+}
+
+invariant PerFormIsolation {
+    -- A failing form leaves the loader in a usable state: subsequent
+    -- forms in the same file still attempt to load, and the failure is
+    -- reported in :errors with the offending form attached. The shared
+    -- SCI context is not torn down by a per-form failure.
+}
+
+invariant DiscoveryConvention {
+    -- Auto-discovery looks for exactly one path:
+    -- <target_src>/.fukan/agent-views.clj. A missing file is not an
+    -- error — auto_load resets the report and returns it empty.
+}
+
+invariant ResetClearsBoth {
+    -- reset empties the load report and discards the shared SCI context
+    -- via sci.reset_ctx. Either operation in isolation would leave the
+    -- two stores inconsistent; the loader always pairs them.
+}

@@ -1,0 +1,185 @@
+-- allium: 2
+-- agent/api.allium
+--
+-- Scope: Layered Model interface for agents — value types for query
+--   results, invariants over the surface, and the read-only contract.
+-- Includes: PrimitiveSummary / RelationRow / ArtifactSummary / Envelope /
+--   VocabularyEntry / SchemaSummary / DriftRow / Neighborhood /
+--   CoverageReport value types; ReadOnlyQueries / EnvelopePagination /
+--   LayerDiscipline invariants.
+-- Excludes:
+--   - Public callable signatures (see api.boundary)
+--   - Lifecycle and meta surface (see system.allium)
+--   - Sandbox semantics (see sci.allium)
+--   - Datalog form and AST shape (see query.allium)
+--   - Model→EDB projection (see edb.allium)
+--   - Agent-view loading (see views_loader.allium)
+
+use "../model/spec.allium" as model
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value Envelope {
+    -- Standard listing envelope returned by L1 probes. Pagination is
+    -- always pre-applied; callers inspect :truncated? to learn whether
+    -- additional offsets remain. :rows carries the page contents whose
+    -- element type depends on which probe produced the envelope.
+    rows: List<Value>
+    truncated: Boolean
+    total: Integer
+    offset: Integer
+}
+
+value PrimitiveSummary {
+    -- The narrowed view of a primitive that L1 listings return. Full
+    -- primitive maps are reachable via get_primitive.
+    id: String
+    kind: String
+    label: String?
+}
+
+value RelationRow {
+    -- A relation edge as returned by the relations probe. Endpoints
+    -- mirror the kernel edge structure; :from and :to each carry a
+    -- :case and an :id whose shape depends on the endpoint case.
+    kind: String
+    from: Endpoint
+    to: Endpoint
+    validity: String?
+    projection_kind: String?
+}
+
+value ArtifactSummary {
+    -- Narrowed artifact projection for L1 listings.
+    id: String
+    case: String
+    sub_case: String
+    language: String
+    qualified_name: String
+    public: Boolean?
+    source_location: model.SourceLocation?
+}
+
+value VocabularyEntry {
+    -- The vocabulary probe response. Splits primitive-kinds (each with
+    -- doc, face-role, in-use tag) from relation-kinds (in-use tag only).
+    -- relation_kinds is omitted when a :face-role filter is supplied.
+    primitive_kinds: List<PrimitiveKindEntry>
+    relation_kinds: List<RelationKindEntry>?
+}
+
+value PrimitiveKindEntry {
+    kind: String
+    doc: String?
+    face_role: String?
+    in_use: Boolean
+}
+
+value RelationKindEntry {
+    kind: String
+    in_use: Boolean
+}
+
+value SchemaSummary {
+    -- Empirical attribute and relation surface for a given primitive kind.
+    kind: String
+    attributes: List<String>
+    relations: List<String>
+    count: Integer
+}
+
+value DriftRow {
+    -- An absent projection edge joined with its source primitive.
+    kind: String
+    from: Endpoint
+    to: Endpoint
+    validity: String
+    projection_kind: String
+    primitive: Primitive?
+}
+
+value Neighborhood {
+    -- One-hop view around a primitive — the primitive itself plus its
+    -- outgoing/incoming edges and summaries of every directly-connected
+    -- neighbor. Multi-hop is the caller's job at L0.
+    primitive: Primitive
+    outgoing: List<RelationRow>
+    incoming: List<RelationRow>
+    neighbors: List<PrimitiveSummary>
+}
+
+value CoverageReport {
+    -- Spec→code coverage rollup for public Clojure functions. Covered =
+    -- at least one inbound :projects edge is :valid; expected-not-realised
+    -- = edges exist but all are :absent/:stale; unprojected = no spec
+    -- primitive references the function.
+    total_public_functions: Integer
+    covered: Integer
+    expected_not_realised: Integer
+    unprojected: Integer
+    covered_ratio: Number
+    unprojected_ratio: Number
+    absent_edge_count: Integer
+}
+
+value Endpoint {
+    -- Either a primitive id or an artifact id, mirroring the kernel edge
+    -- endpoint shape. :case is "endpoint/primitive" or "endpoint/artifact";
+    -- :id is a string for primitives and a vector for artifacts.
+    case: String
+    id: Value
+}
+
+value Violation {
+    -- Constraint violation report.
+    severity: String
+    phase: String
+    sub_phase: String?
+    kind: String
+    message: String
+}
+
+value Primitive {
+    -- Full primitive map. Shape varies by :kind; callers consult schema
+    -- for the attribute surface.
+    id: String
+    kind: String
+    label: String?
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant ReadOnlyQueries {
+    -- Every fn in api.boundary observes the loaded Model without
+    -- mutating it. Agents that want to change the Model edit source
+    -- files and call system.refresh; api never writes.
+}
+
+invariant EnvelopePagination {
+    -- L1 listings (primitives, relations, artifacts) always return the
+    -- standard Envelope shape with :rows :truncated? :total :offset.
+    -- L2 views return pre-shaped values directly because they answer a
+    -- specific question and have no listing semantics.
+}
+
+invariant LayerDiscipline {
+    -- L0 (q) is the only entry point that runs arbitrary Datalog.
+    -- L1 probes wrap the loaded Model with structured filters but do
+    -- not invoke L0 for their work. L2 views may compose L1 calls.
+    -- Higher layers never reach below L0.
+}
+
+invariant ModelLoadedPrecondition {
+    -- Probes that require a loaded Model raise :model-not-loaded when
+    -- none is built. get_primitive, idioms, constraints, and violations
+    -- tolerate the unloaded state and return nil / empty.
+}
+
+invariant FilterRejection {
+    -- Unknown filter keys raise :unknown-filter rather than silently
+    -- ignoring them. The surface fails fast on caller typos.
+}

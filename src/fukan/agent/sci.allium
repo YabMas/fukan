@@ -1,0 +1,74 @@
+-- allium: 2
+-- agent/sci.allium
+--
+-- Scope: Sandboxed evaluator — safety boundary around agent-supplied
+--   expression strings.
+-- Includes: EvalResult / EvalOpts value types; SandboxSafety,
+--   SharedContextLifetime, EvalTimeout, SandboxFailureModes invariants.
+-- Excludes:
+--   - Public signatures (see sci.boundary)
+--   - View-loading lifecycle (see views_loader.allium)
+--   - L0/L1/L2 query surface that the sandbox exposes (see api.allium)
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value EvalResult {
+    -- The envelope every eval call returns. Success carries :result;
+    -- failure carries :error/kind and :error/message. :elapsed-ms is
+    -- always present on eval_string returns; eval_string_as_view omits
+    -- timing because it runs as part of the synchronous load pass.
+    ok: Boolean
+    result: Value?
+    error_kind: String?
+    error_message: String?
+    error_elapsed_ms: Integer?
+    elapsed_ms: Integer?
+}
+
+value EvalOpts {
+    -- Caller-supplied evaluation knobs.
+    timeout_ms: Integer?
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant SandboxSafety {
+    -- The sandbox exposes only the public bindings of api and system
+    -- under the 'user' namespace. alter-var-root, intern, binding,
+    -- and var are explicitly denied. No Java class is reachable. No
+    -- IO, no thread spawning, no namespace creation beyond the def/defn
+    -- needed by view loading. Agent-supplied code cannot escape the
+    -- query/view surface.
+}
+
+invariant SharedContextLifetime {
+    -- A single SCI context backs both eval_string and eval_string_as_view.
+    -- Defs added during view loading remain reachable from subsequent
+    -- eval calls within the same daemon process. reset_ctx is the only
+    -- supported way to drop accumulated defs; views_loader.reset invokes
+    -- it before each reload.
+}
+
+invariant EvalTimeout {
+    -- eval_string enforces a hard wall-clock timeout (default 5000ms).
+    -- On timeout the underlying future is cancelled and an EvalResult
+    -- with :error/kind :timeout is returned. eval_string_as_view does
+    -- not enforce a timeout — view forms are trusted to complete during
+    -- the load pass.
+}
+
+invariant SandboxFailureModes {
+    -- Eval failures surface as structured EvalResult values, never as
+    -- thrown exceptions:
+    --   :runtime  -- caught Throwable inside the sandbox
+    --   :timeout  -- :timeout-ms exceeded; future cancelled
+    -- ex-info instances thrown inside the sandbox propagate their
+    -- :type key through :error/kind, so callers can match against the
+    -- Datalog DSL parser's typed errors (:malformed-atom, :missing-find,
+    -- :missing-where, :query-not-vector) and the api filter errors
+    -- (:unknown-filter, :model-not-loaded).
+}
