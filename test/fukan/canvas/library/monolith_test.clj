@@ -47,3 +47,30 @@
           types (d/q '[:find ?n :where [?e :entity/type :Type] [?e :entity/name ?n]] db)]
       (is (= 2 (count types)))
       (is (= #{"Stratum" "Binding"} (set (map first types)))))))
+
+(deftest record-accepts-optional-fields
+  (testing "(field port (optional :Integer)) works"
+    (let [db (h/with-canvas
+               (h/within-module "infra.server"
+                 (record "ServerOpts" "Server config."
+                   (field port (optional :Integer))
+                   (field host :String))))]
+      ;; The Type is in the store
+      (is (= 1 (count (d/q '[:find ?n
+                             :where [?e :entity/type :Type]
+                                    [?e :entity/name "ServerOpts"]
+                                    [?e :entity/name ?n]]
+                           db)))))))
+
+(deftest function-accepts-list-takes
+  (testing "(takes [rules (list-of :ConstraintRule)]) works"
+    (let [db (h/with-canvas
+               (h/within-module "constraint.evaluator"
+                 (function "evaluate" "Evaluate constraint rules over EDB."
+                   (takes [rules (list-of :ConstraintRule)] [edb :EDB])
+                   (gives :Model))))]
+      (is (= 1 (count (d/q '[:find ?n
+                             :where [?e :entity/type :Affordance]
+                                    [?e :entity/name "evaluate"]
+                                    [?e :entity/name ?n]]
+                           db)))))))

@@ -3,6 +3,7 @@
    Captures the monolith architecture's vocabulary."
   (:require [fukan.canvas.defconstructor :refer [defconstructor]]
             [fukan.canvas.helpers :as h]
+            [fukan.canvas.shape :as shape]
             [fukan.canvas.substrate :as sub]
             [fukan.canvas.substrate.store :as store]))
 
@@ -15,14 +16,15 @@
 
   (produces [name doc forms]
     (let [takes-args  (first (:takes forms))        ; e.g. [email :String]
-          gives-arg   (first (:gives forms))        ; e.g. :Account
+          gives-arg   (first (:gives forms))        ; e.g. :Account or (optional :Account)
           field-pairs (if takes-args
-                        (vec (partition 2 takes-args))
+                        (vec (->> (partition 2 takes-args)
+                                  (mapv (fn [[n s]] [n (shape/parse s)]))))
                         [])
-          inputs      (h/record-of field-pairs)
-          outputs     gives-arg
+          inputs      {:kind :record :fields field-pairs}
+          outputs     (shape/parse gives-arg)
           aff         (h/declare-affordance name
-                        :shape (h/arrow inputs outputs)
+                        :shape {:kind :arrow :inputs inputs :outputs outputs}
                         :role :fukan.canvas.monolith/exposed-call)]
       (doseq [e-args (:effect forms)]
         (h/declare-relation (:id aff)
@@ -36,7 +38,7 @@
 
   (produces [name doc forms]
     (let [field-args  (:field forms)
-          field-pairs (mapv (fn [args] [(first args) (second args)]) field-args)
+          field-pairs (mapv (fn [args] [(first args) (shape/parse (second args))]) field-args)
           t (sub/type-record name field-pairs)]
       (swap! h/*store* store/transact! t))))
 
