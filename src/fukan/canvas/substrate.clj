@@ -41,6 +41,7 @@
 (defn module-of [e] (:module e))
 (defn role-of [e] (:role e))
 (defn shape-of [e] (:shape e))
+(defn formal-expression-of [e] (:formal-expression e))
 (defn from-of [r] (:from r))
 (defn kind-of [r] (:kind r))
 (defn to-of [r] (:to r))

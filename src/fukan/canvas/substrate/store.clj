@@ -34,7 +34,9 @@
      (sub/role-of a)
      (assoc :affordance/role (sub/role-of a))
      (sub/shape-of a)
-     (assoc :affordance/shape (pr-str (sub/shape-of a))))])
+     (assoc :affordance/shape (pr-str (sub/shape-of a)))
+     (sub/formal-expression-of a)
+     (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a))))])
 
 (defmethod ->datoms :State [s]
   [{:entity/id (sub/id-of s)
