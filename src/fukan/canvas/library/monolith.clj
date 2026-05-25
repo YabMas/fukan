@@ -39,3 +39,11 @@
           field-pairs (mapv (fn [args] [(first args) (second args)]) field-args)
           t (sub/type-record name field-pairs)]
       (swap! h/*store* store/transact! t))))
+
+(defconstructor value
+  "An opaque named type — a named concept whose internal structure is withheld.
+   Use for Allium-style value declarations with no exposed fields."
+
+  (produces [name doc forms]
+    (let [t (sub/type-primitive name)]
+      (swap! h/*store* store/transact! t))))
