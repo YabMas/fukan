@@ -78,6 +78,10 @@
         forms         (mapv parse-form-decl form-decls)
         [_ produces-args & produces-body] produces-decl
         impl-sym      (symbol (str lift-name "-impl__"))
+        ;; Qualify impl-sym with the current namespace so the generated macro
+        ;; emits a fully-qualified call — required when the lift is :refer-ed
+        ;; into another namespace.
+        qualified-impl (symbol (str *ns*) (str lift-name "-impl__"))
         name-arg      (first produces-args)
         doc-arg       (second produces-args)
         forms-arg     (nth produces-args 2)]
@@ -91,10 +95,12 @@
            (fukan.canvas.defconstructor/check-required! ~(str lift-name) allowed# ~forms-arg)
            ~@produces-body))
        ;; The macro quotes its body forms and delegates to the impl fn at runtime.
+       ;; Uses the fully-qualified impl symbol so the macro works when :refer-ed
+       ;; into a different namespace.
        (defmacro ~lift-name
          ~docstring
          [name# doc# & body-forms#]
-         (list '~impl-sym
+         (list '~qualified-impl
                name#
                doc#
                (list 'quote body-forms#)
