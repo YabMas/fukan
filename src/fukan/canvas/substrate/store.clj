@@ -10,7 +10,8 @@
    :state/module        {:db/valueType :db.type/ref}
    :module/child        {:db/cardinality :db.cardinality/many
                          :db/valueType :db.type/ref}
-   :entity/tag          {:db/cardinality :db.cardinality/many}})
+   :entity/tag          {:db/cardinality :db.cardinality/many}
+   :references          {:db/cardinality :db.cardinality/many}})
 
 (defn create []
   (d/empty-db schema))
@@ -50,7 +51,11 @@
     :entity/tag (vec (sub/tags-of t))}])
 
 (defmethod ->datoms :Relation [r]
-  [[:db/add [:entity/id (sub/from-of r)] (sub/kind-of r) [:entity/id (sub/to-of r)]]])
+  (let [to-val (sub/to-of r)
+        to-ref (if (keyword? to-val)
+                 to-val
+                 [:entity/id to-val])]
+    [[:db/add [:entity/id (sub/from-of r)] (sub/kind-of r) to-ref]]))
 
 (defn transact! [db entity]
   (d/db-with db (->datoms entity)))

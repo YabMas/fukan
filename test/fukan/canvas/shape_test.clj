@@ -37,6 +37,16 @@
          (shape/parse '(record-of [:email :String]
                                    [:age (optional :Integer)])))))
 
+(deftest namespaced-keyword-is-ref
+  (testing "a namespaced keyword parses as :ref"
+    (is (= {:kind :ref :target :ast/ConstraintRule}
+           (shape/parse :ast/ConstraintRule)))))
+
+(deftest plain-keyword-is-atomic
+  (testing "an unnamespaced keyword parses as :atomic"
+    (is (= {:kind :atomic :name :String}
+           (shape/parse :String)))))
+
 (deftest unknown-shape-throws
   (is (thrown? clojure.lang.ExceptionInfo
                (shape/parse '(weird-form :T)))))

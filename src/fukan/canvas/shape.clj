@@ -5,6 +5,9 @@
 
 (defn parse [expr]
   (cond
+    (and (keyword? expr) (namespace expr))
+    {:kind :ref :target expr}
+
     (keyword? expr)
     {:kind :atomic :name expr}
 

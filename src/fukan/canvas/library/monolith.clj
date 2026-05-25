@@ -7,6 +7,22 @@
             [fukan.canvas.substrate :as sub]
             [fukan.canvas.substrate.store :as store]))
 
+(defn- emit-refs!
+  "Walk a parsed shape; for each :ref encountered, transact a :references Relation
+   from from-id to the ref's target keyword."
+  [from-id shape]
+  (case (:kind shape)
+    :ref      (h/declare-relation from-id :references (:target shape))
+    :optional (emit-refs! from-id (:inner shape))
+    :list     (emit-refs! from-id (:elem shape))
+    :set      (emit-refs! from-id (:elem shape))
+    :sum      (run! #(emit-refs! from-id %) (:variants shape))
+    :record   (run! (fn [[_ s]] (emit-refs! from-id s)) (:fields shape))
+    :atomic   nil
+    :arrow    (do (emit-refs! from-id (:inputs shape))
+                  (emit-refs! from-id (:outputs shape)))
+    nil))
+
 (defconstructor function
   "A synchronous function call: takes inputs, gives output, may have effects."
 
@@ -15,7 +31,8 @@
   (form effect "An effect this performs." :shape :name-ref :repeatable true)
 
   (produces [name doc forms]
-    (let [takes-args  (first (:takes forms))        ; e.g. [email :String]
+    (let [takes-vecs  (:takes forms)                ; seq of param vectors
+          takes-args  (when takes-vecs (apply concat takes-vecs)) ; flatten all vectors
           gives-arg   (first (:gives forms))        ; e.g. :Account or (optional :Account)
           field-pairs (if takes-args
                         (vec (->> (partition 2 takes-args)
@@ -26,6 +43,7 @@
           aff         (h/declare-affordance name
                         :shape {:kind :arrow :inputs inputs :outputs outputs}
                         :role :fukan.canvas.monolith/exposed-call)]
+      (emit-refs! (:id aff) {:kind :arrow :inputs inputs :outputs outputs})
       (doseq [e-args (:effect forms)]
         (h/declare-relation (:id aff)
                             :fukan.canvas.monolith/performs
@@ -40,7 +58,9 @@
     (let [field-args  (:field forms)
           field-pairs (mapv (fn [args] [(first args) (shape/parse (second args))]) field-args)
           t (sub/type-record name field-pairs)]
-      (swap! h/*store* store/transact! t))))
+      (swap! h/*store* store/transact! t)
+      (doseq [[_ field-shape] field-pairs]
+        (emit-refs! (:id t) field-shape)))))
 
 (defconstructor value
   "An opaque named type — a named concept whose internal structure is withheld.

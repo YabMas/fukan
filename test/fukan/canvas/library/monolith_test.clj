@@ -74,3 +74,33 @@
                                     [?e :entity/name "evaluate"]
                                     [?e :entity/name ?n]]
                            db)))))))
+
+(deftest function-with-cross-module-takes-creates-references
+  (testing "(takes [rules (list-of :ast/ConstraintRule)]) creates a :references Relation"
+    (let [db (h/with-canvas
+               (h/within-module "constraint.evaluator"
+                 (function "evaluate_rules" "Evaluate rules over EDB."
+                   (takes [rules (list-of :ast/ConstraintRule)]
+                          [edb :derivations/EDB])
+                   (gives :Model))))
+          refs (d/q '[:find ?to
+                      :where [_ :references ?to]]
+                    db)]
+      (is (>= (count refs) 2))
+      (let [targets (set (map first refs))]
+        (is (contains? targets :ast/ConstraintRule))
+        (is (contains? targets :derivations/EDB))))))
+
+(deftest record-with-cross-module-field-creates-references
+  (testing "(field model :model/Model) creates a :references Relation"
+    (let [db (h/with-canvas
+               (h/within-module "validation.phase4"
+                 (record "Phase4Result" "Result of phase 4 validation."
+                   (field model :model/Model)
+                   (field violations (list-of :agent/Violation)))))
+          refs (d/q '[:find ?to
+                      :where [_ :references ?to]]
+                    db)
+          targets (set (map first refs))]
+      (is (contains? targets :model/Model))
+      (is (contains? targets :agent/Violation)))))
