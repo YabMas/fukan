@@ -1,7 +1,7 @@
-(ns fukan.canvas.store-test
+(ns fukan.canvas.core.store-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.substrate :as sub]
-            [fukan.canvas.substrate.store :as store]))
+            [fukan.canvas.core.substrate :as sub]
+            [fukan.canvas.core.substrate.store :as store]))
 
 (deftest store-creation
   (testing "creates an empty store"

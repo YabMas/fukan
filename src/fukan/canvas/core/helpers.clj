@@ -1,6 +1,6 @@
-(ns fukan.canvas.helpers
-  (:require [fukan.canvas.substrate :as sub]
-            [fukan.canvas.substrate.store :as store]))
+(ns fukan.canvas.core.helpers
+  (:require [fukan.canvas.core.substrate :as sub]
+            [fukan.canvas.core.substrate.store :as store]))
 
 (def ^:dynamic *store* nil)
 (def ^:dynamic *enclosing-module* nil)

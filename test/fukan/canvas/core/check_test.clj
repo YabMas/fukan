@@ -1,7 +1,7 @@
-(ns fukan.canvas.check-test
+(ns fukan.canvas.core.check-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.check :as check]
-            [fukan.canvas.helpers :as h]))
+            [fukan.canvas.core.check :as check]
+            [fukan.canvas.core.helpers :as h]))
 
 (deftest empty-canvas-no-violations
   (testing "fc/check on an empty store returns no violations"

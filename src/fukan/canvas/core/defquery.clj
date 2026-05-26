@@ -1,4 +1,4 @@
-(ns fukan.canvas.defquery)
+(ns fukan.canvas.core.defquery)
 
 (def registry (atom {}))
 

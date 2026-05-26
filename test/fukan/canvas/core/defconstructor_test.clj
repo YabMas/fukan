@@ -1,7 +1,7 @@
-(ns fukan.canvas.defconstructor-test
+(ns fukan.canvas.core.defconstructor-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.defconstructor :refer [defconstructor]]
-            [fukan.canvas.helpers :as h]))
+            [fukan.canvas.core.defconstructor :refer [defconstructor]]
+            [fukan.canvas.core.helpers :as h]))
 
 (defconstructor test-lift
   "A test lift with intent and target."

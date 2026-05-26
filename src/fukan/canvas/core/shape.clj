@@ -1,4 +1,4 @@
-(ns fukan.canvas.shape
+(ns fukan.canvas.core.shape
   "Shape expression grammar. Parses shape expressions like
    :String, (optional :T), (list-of :T), (set-of :T), (sum-of :A :B),
    (record-of [:n :T]+), (ref-to :module/Type) into edn maps.")

@@ -1,6 +1,6 @@
-(ns fukan.canvas.defquery-test
+(ns fukan.canvas.core.defquery-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.defquery :as dq]))
+            [fukan.canvas.core.defquery :as dq]))
 
 (deftest primitive-name-expansion
   (testing "(Module ?x) expands to [?x :entity/type :Module]"

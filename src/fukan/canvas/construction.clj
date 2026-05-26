@@ -1,11 +1,12 @@
-(ns fukan.canvas.library.monolith
-  "First lift library for fukan: function, record.
-   Captures the monolith architecture's vocabulary."
-  (:require [fukan.canvas.defconstructor :refer [defconstructor]]
-            [fukan.canvas.helpers :as h]
-            [fukan.canvas.shape :as shape]
-            [fukan.canvas.substrate :as sub]
-            [fukan.canvas.substrate.store :as store]))
+(ns fukan.canvas.construction
+  "Construction primitives for canvas — function, record, value lifts plus
+   exports/closure mechanism. Non-opt-out: every project uses these."
+  (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
+            [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.core.shape :as shape]
+            [fukan.canvas.core.substrate :as sub]
+            [fukan.canvas.core.substrate.store :as store]
+            [datascript.core :as d]))
 
 (defn- emit-refs!
   "Walk a parsed shape; for each :ref encountered, transact a :references Relation
@@ -69,3 +70,33 @@
   (produces [name doc forms]
     (let [t (sub/type-primitive name)]
       (swap! h/*store* store/transact! t))))
+
+;; ---------------------------------------------------------------------------
+;; Exports / closure mechanism
+;;
+;; `exports` is a Clojure macro rather than a `defconstructor`-built lift
+;; because its body consists of bare positional names rather than
+;; form-grammar clauses. This is a deliberate special case; future canvas
+;; vocabulary may follow the same pattern when form-grammar doesn't fit
+;; the natural syntax.
+;; ---------------------------------------------------------------------------
+
+(defn find-entity-by-name [db nm]
+  (-> (d/q '[:find ?e
+             :in $ ?n
+             :where [?e :entity/name ?n]]
+           db (str nm))
+      ffirst))
+
+(defmacro exports
+  "Tag the listed declarations as :exported. Must appear inside `within-module`
+   after the named declarations have been transacted.
+
+   Names that don't match any declaration in the current canvas are silently
+   ignored — exports is not a typecheck."
+  [& names]
+  `(let [db# @h/*store*]
+     (doseq [n# '~names]
+       (when-let [eid# (find-entity-by-name db# n#)]
+         (swap! h/*store*
+                #(d/db-with % [{:db/id eid# :entity/tag :exported}]))))))

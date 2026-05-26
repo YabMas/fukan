@@ -1,6 +1,6 @@
-(ns fukan.canvas.substrate-test
+(ns fukan.canvas.core.substrate-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.substrate :as sub]))
+            [fukan.canvas.core.substrate :as sub]))
 
 (deftest module-construction
   (testing "a Module has a name and an id"

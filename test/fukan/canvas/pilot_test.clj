@@ -4,7 +4,7 @@
    Verification depth is intentionally shallow — the goal is ergonomic
    stress-test, not functional coverage."
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.substrate.store :as store]
+            [fukan.canvas.core.substrate.store :as store]
             [fukan.canvas.pilot.server :as server]
             [fukan.canvas.pilot.constraint-evaluator :as evaluator]
             [fukan.canvas.pilot.vocabulary-analyzer :as vocab-analyzer]

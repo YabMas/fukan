@@ -22,8 +22,8 @@
      - rule RunPhase4 — no rule lift. Gap 15.
      - 6 invariants — no invariant lift. Gap 6/11.
      - 7 structurally-similar sub-phase functions — no iteration lift. Gap 14."
-  (:require [fukan.canvas.helpers :as h]
-            [fukan.canvas.library.monolith :refer [function]]))
+  (:require [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.construction :refer [function]]))
 
 (defn build-canvas []
   (h/with-canvas

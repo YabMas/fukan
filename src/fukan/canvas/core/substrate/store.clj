@@ -1,6 +1,6 @@
-(ns fukan.canvas.substrate.store
+(ns fukan.canvas.core.substrate.store
   (:require [datascript.core :as d]
-            [fukan.canvas.substrate :as sub]))
+            [fukan.canvas.core.substrate :as sub]))
 
 (def ^:private schema
   {:entity/id           {:db/unique :db.unique/identity}

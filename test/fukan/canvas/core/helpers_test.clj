@@ -1,7 +1,7 @@
-(ns fukan.canvas.helpers-test
+(ns fukan.canvas.core.helpers-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.helpers :as h]
-            [fukan.canvas.substrate.store :as store]))
+            [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.core.substrate.store :as store]))
 
 (deftest arrow-shape
   (testing "arrow combinator constructs a function-typed shape"

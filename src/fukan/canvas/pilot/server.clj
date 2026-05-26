@@ -14,8 +14,8 @@
      - exports: ServerOpts ServerInfo — no exports/closure mechanism
      - ServerOpts.port: Integer?      — optional field shape not expressible;
                                         approximated as :Integer"
-  (:require [fukan.canvas.helpers :as h]
-            [fukan.canvas.library.monolith :refer [function record]]))
+  (:require [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.construction :refer [function record]]))
 
 (defn build-canvas []
   (h/with-canvas

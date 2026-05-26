@@ -1,6 +1,6 @@
-(ns fukan.canvas.shape-test
+(ns fukan.canvas.core.shape-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.shape :as shape]))
+            [fukan.canvas.core.shape :as shape]))
 
 (deftest atomic-shape
   (is (= {:kind :atomic :name :String} (shape/parse :String))))

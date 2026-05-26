@@ -1,4 +1,4 @@
-(ns fukan.canvas.defconstructor
+(ns fukan.canvas.core.defconstructor
   (:require [clojure.string :as str]))
 
 (def ^:private universal-forms
@@ -90,9 +90,9 @@
        ;; and runs the produces body after parsing and validation.
        (defn ~impl-sym
          [~name-arg ~doc-arg raw-body# allowed#]
-         (let [~forms-arg (fukan.canvas.defconstructor/parse-instance-body
+         (let [~forms-arg (fukan.canvas.core.defconstructor/parse-instance-body
                             ~(str lift-name) allowed# raw-body#)]
-           (fukan.canvas.defconstructor/check-required! ~(str lift-name) allowed# ~forms-arg)
+           (fukan.canvas.core.defconstructor/check-required! ~(str lift-name) allowed# ~forms-arg)
            ~@produces-body))
        ;; The macro quotes its body forms and delegates to the impl fn at runtime.
        ;; Uses the fully-qualified impl symbol so the macro works when :refer-ed

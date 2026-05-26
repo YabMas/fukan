@@ -20,8 +20,8 @@
        no (field name (h/list-of :Any)) syntax. Gap 8.
      - arities: List<Integer>?, type_seqs: List<Any>? — optional list fields. Gap 10.
      - analyze_file takes model.Model, parser.ParsedAllium — cross-module refs. Gap 5."
-  (:require [fukan.canvas.helpers :as h]
-            [fukan.canvas.library.monolith :refer [function record]]))
+  (:require [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.construction :refer [function record]]))
 
 (defn build-canvas []
   (h/with-canvas

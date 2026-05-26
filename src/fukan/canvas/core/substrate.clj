@@ -1,4 +1,4 @@
-(ns fukan.canvas.substrate
+(ns fukan.canvas.core.substrate
   "Six substrate primitives: Module, Affordance, State, Type, Relation, Tag.
    Architecture-neutral; ships zero role/relation/tag vocabulary.")
 

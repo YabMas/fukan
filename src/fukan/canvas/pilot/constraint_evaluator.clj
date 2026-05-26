@@ -20,8 +20,8 @@
      - ComparisonOperators / AggregationSemantics carry enumerated op sets
        with no canvas expression. Gap 7.
      - exports: Stratum Binding — no closure mechanism. Gap 2."
-  (:require [fukan.canvas.helpers :as h]
-            [fukan.canvas.library.monolith :refer [function]]))
+  (:require [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.construction :refer [function]]))
 
 ;; NOTE: Stratum and Binding are intentionally structureless opaque types
 ;; in the spec — their internal shape is withheld. The record lift requires

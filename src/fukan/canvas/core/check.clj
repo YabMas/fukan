@@ -1,7 +1,7 @@
-(ns fukan.canvas.check
+(ns fukan.canvas.core.check
   (:require [datascript.core :as d]
-            [fukan.canvas.helpers :as h]
-            [fukan.canvas.defquery :as dq]))
+            [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.core.defquery :as dq]))
 
 (def ^:dynamic *constraints* nil)
 
