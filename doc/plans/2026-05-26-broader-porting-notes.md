@@ -673,3 +673,168 @@ feat(canvas): port target/clojure/blueprint spec  qnupokrk b92fe5f9
 feat(canvas): port target/clojure/analyzer spec   kkyszvxw 1a0695ff
 feat(canvas): port target/clojure/address spec    krovwqvt b199f9e9
 ```
+
+---
+
+# Sprint 2 Addendum — web/ subsystem (7 modules)
+
+Date: 2026-05-26
+Scope: web/handler + web/views/{breadcrumb, cytoscape, graph, projection, shell, sidebar}
+
+## Per-module status
+
+### web/handler — CLEAN
+Lifts: `invariant` (5), `function` (1).
+Shape grammar: `create_handler` returns `:model/Handler` — cross-module ref.
+The two top-level `guarantee` declarations (PureDelegation, PerRequestModel) map
+directly to `invariant`. The `surface ViewTransport` has three inline
+`@guarantee` annotations (ViewTransport contract, SignalDelivery, FailureModes)
+— each becomes its own `invariant`. Surface is a structural declaration, not a
+type, so no record needed.
+HTTP endpoints (full_navigation, sidebar_update) are explicitly deferred in the
+spec (Plan 6); correctly omitted here.
+TODO comments: none. No escalations.
+
+### web/views/breadcrumb — CLEAN
+Lifts: `invariant` (3), `function` (1).
+Shape grammar: `render_breadcrumb(path: EntityPath)` → `EntityPath` treated as
+`:model/EntityPath` cross-module ref. Returns `:Html`.
+Three layout invariants (ShortLabels, CurrentItem, ClickableItems) map to
+`invariant` cleanly.
+TODO comments: none. No escalations.
+
+### web/views/cytoscape — TWO FINDINGS
+Lifts: `record` (3), `invariant` (3).
+No boundary file (module open by default). Three value types with structural
+fields: CytoscapeGraph (4), CytoscapeNode (8), CytoscapeEdge (7).
+
+**Finding 1: `value` vs `record` for fielded Allium `value` declarations.**
+Allium's `value` keyword appears on types with exposed fields (CytoscapeGraph,
+CytoscapeNode, CytoscapeEdge). Canvas construction's `value` is opaque (no
+field forms). The correct lift for fielded value types is `record`. The dispatch
+doc says "value → construction/value" but the shape grammar only supports fields
+on `record`. Decision: use `record` for all fielded Allium value types. This
+matches the constraint/ast pattern (6 opaque `value` used there for structureless
+types). Finding noted for dispatch doc clarification.
+
+**Finding 2: `map-of` gap — third occurrence.**
+`CytoscapeNode.treatment: Map<String, Value>?` cannot be expressed with current
+shape grammar. Approximated as `(optional :Map)` with TODO comment.
+Sprint 2 cumulative `map-of` count: **3** (registry + violation + cytoscape).
+
+Cross-module refs: `:model/TagRef`, `:model/SourceLocation`.
+
+### web/views/graph — CLEAN (large spec, many TODOs)
+Lifts: `record` (2), `invariant` (8), `function` (1), `exports` (1).
+Shape grammar: ViewState uses `(set-of :String)` for three fields — clean.
+NavigationState uses `(optional :String)` for both fields — clean.
+`render_graph` takes `:projection/Projection` and `:EditorState`, returns
+`:cytoscape/CytoscapeGraph` — cross-module refs auto-emit Relations.
+`exports ViewState NavigationState` correctly closes the module.
+
+The GraphViewer surface has 5 `@guarantee` annotations — all become `invariant`:
+DataInEventsOut, ViewStateOwnership, RenderModeDetection, AnimatedTransition,
+NodeVisibility. Three file-level rendering invariants: RenderingPurity,
+AtomicUpdate, GraphSelectionDefault.
+
+**TODO comments: 8 rule declarations** (SelectNode, NavigateToNode,
+NavigateToAncestor, ExpandToggle, TogglePrivateVisibility, SelectEdgeMode,
+SelectEdge, Deselect). These are the interaction rules from graph.allium — the
+richest rule corpus in a single file across this sprint. All deferred.
+
+Sprint 2 cumulative rule-lift deferred count: **48** (+8).
+
+No escalations.
+
+### web/views/projection — STUB (by spec design)
+Lifts: `record` (4).
+This module is a Plan 2b stub — "Projection stub (Plan 2b carry-forward)" in the
+CLAUDE.md table. The allium file itself acknowledges it satisfies local alias
+resolution until the real projection spec is authored.
+Four entity types: NodeId (external stub, one field), Node (3 fields), Edge
+(2 fields), Projection (2 fields). All mapped to `record`.
+No invariants, no function signatures — stub only.
+TODO comments: none (stub design is complete by spec intent). No escalations.
+
+### web/views/shell — MINIMAL (scope-only allium)
+Lifts: `function` (1).
+shell.allium body is scope prose only (no behavioral declarations). Single
+boundary function: `render_app_shell() → Html`. Correctly omits invariants —
+there are none to add.
+TODO comments: none. No escalations.
+
+### web/views/sidebar — CLEAN
+Lifts: `invariant` (4), `function` (1).
+Shape grammar: `render_sidebar_html(detail: EntityDetails)` → `:model/EntityDetails`
+cross-module ref. Returns `:Html`.
+Four layout invariants: SidebarSectionOrder (multi-case dispatch description),
+ClickableSchemaRefs, EdgeRendererSections (two edge_type dispatch cases),
+SidebarEmptyState. All map to `invariant` cleanly.
+TODO comments: none. No escalations.
+
+## Structural observations
+
+1. **`value` vs `record` clarification surfaces.** The cytoscape module is the first
+   where Allium `value` declarations carry explicit field structure. Canvas construction
+   `value` is opaque — `record` is the correct lift for fielded types. The previous
+   convention "structureless allium `value` → canvas `value`, fielded allium `value`
+   → canvas `record`" is now confirmed by a counterexample that would have errored
+   at runtime.
+
+2. **`surface` declarations → `invariant` cluster pattern.** Handler's
+   `surface ViewTransport` and graph's `surface GraphViewer` both resolve as a cluster
+   of `invariant` declarations — one per `@guarantee` annotation. No dedicated `surface`
+   lift is needed; the guarantee body is the structural substance.
+
+3. **8 interaction rules in graph.allium — largest rule corpus in Sprint 2.** These
+   are state-machine rules (SelectNode, NavigateToNode, ExpandToggle, etc.) with
+   preconditions and `ensures:` clauses. Their deferred-lift form is fully captured
+   in inline TODO comments with structural intent (when/ensures/navigation semantics).
+
+4. **Projection stub is explicitly incomplete by spec design.** The file's own header
+   acknowledges it will be superseded by a future `src/fukan/projection/spec.allium`.
+   The canvas port faithfully represents the stub without embellishment.
+
+5. **`map-of` gap reaches 3 instances.** The pattern `Map<String, Value>` / `Map<K,V>`
+   recurs in three modules now. The approximation `:Map` is lossless for structural
+   purposes but loses key/value type information. Sufficient signal to prioritise the
+   `map-of` combinator in a future substrate sprint.
+
+6. **Shell is the leanest port in Sprint 2.** One function, no invariants — mirrors
+   a spec that explicitly says its scope is limited to the initial page skeleton.
+
+## Gaps to escalate (Sprint 2 cumulative, web addendum)
+
+1. **`map-of` combinator** — **3** instances total (registry, violation, cytoscape).
+   Recurring gap. All approximated as `:Map`.
+2. **`rule` lift** — **48** total across all ports (35 validation + 1 constraint +
+   3 vocabulary + 0 agent + 1 target/clojure + 8 web/graph).
+3. **Dispatch doc clarification wanted:** when Allium `value` has exposed fields,
+   the correct canvas lift is `record`, not `value`. The dispatch doc should
+   explicitly state: "Allium `value` with fields → `record`; Allium `value` without
+   fields → `value`."
+
+## Test counts
+
+| State | Tests | Assertions |
+|---|---|---|
+| Before Sprint 2 (all) | 67 | 119 |
+| After Sprint 2 infra+proj+libs | 79 | 172 |
+| After Sprint 2 validation/ | 95 | 229 |
+| After Sprint 2 constraint/ | 109 | 301 |
+| After Sprint 2 agent/ (full suite) | 137 | 464 |
+| After Sprint 2 target/clojure/ (full suite) | 149 | 525 |
+| After Sprint 2 web/ (full suite) | 163 | 581 |
+| Delta (web sprint) | +14 | +56 |
+
+## jj log (Sprint 2 web)
+
+```
+feat(canvas): port web/views/sidebar spec    tmtzrlul f9f61c48
+feat(canvas): port web/views/shell spec      mqslxtny 204132cb
+feat(canvas): port web/views/projection spec wztllyqz 5c8eb4f1
+feat(canvas): port web/views/graph spec      pzmspntl e9228683
+feat(canvas): port web/views/cytoscape spec  sokqmnwr b736a864
+feat(canvas): port web/views/breadcrumb spec mwrsqony 1ad3c214
+feat(canvas): port web/handler spec          ztpympvp 194a3668
+```
