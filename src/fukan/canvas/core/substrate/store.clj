@@ -16,7 +16,10 @@
    :affordance/input-types  {:db/cardinality :db.cardinality/many}
    :affordance/output-types {:db/cardinality :db.cardinality/many}
    :type/doc                {:db/index true}
-   :type/field-types        {:db/cardinality :db.cardinality/many}})
+   :type/field-types        {:db/cardinality :db.cardinality/many}
+   :affordance/returns-label {:db/index true}
+   :triggers                {:db/cardinality :db.cardinality/many
+                              :db/valueType   :db.type/ref}})
 
 (defn create []
   (d/empty-db schema))
@@ -43,6 +46,7 @@
        shape                        (assoc :affordance/shape (pr-str shape))
        (sub/formal-expression-of a) (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a)))
        (sub/doc-of a)               (assoc :affordance/doc (sub/doc-of a))
+       (sub/returns-label-of a)     (assoc :affordance/returns-label (sub/returns-label-of a))
        (seq inputs-set)             (assoc :affordance/input-types inputs-set)
        (seq outputs-set)            (assoc :affordance/output-types outputs-set))]))
 

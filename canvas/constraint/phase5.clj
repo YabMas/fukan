@@ -4,8 +4,8 @@
    Coverage:
      - rule RunPhase5 → vocab.behavioral/rule
      - 6 invariants  → vocab.behavioral/invariant each
-     - fn run        → construction/function with cross-module type ref :model/Model
-                       (triggers: RunPhase5 and returns: post.model noted in docstring)
+     - fn run        → construction/function (triggers RunPhase5) (returns post.model)
+                       with cross-module type ref :model/Model
 
    Notes:
      - No exports: in phase5.boundary."
@@ -66,11 +66,12 @@
         (holds-that "deterministic-given-same-model-and-registrations"))
 
       ;; Public function from phase5.boundary.
-      ;; triggers: RunPhase5; returns: post.model — no anchor syntax; noted in docstring.
       (function "run"
         "Evaluate every PredicateRegistration in the input Model against the
          kernel-universal EDB extended with the depends-on derivation. Append one
-         Violation per head tuple to the Model's :violations. Returns the updated Model.
-         (Triggers: RunPhase5; returns: post.model)"
+         Violation per head tuple to the Model's :violations. Returns the updated Model."
         (takes [model :model/Model])
-        (gives :model/Model)))))
+        (gives :model/Model)
+        (triggers RunPhase5)
+        (returns "post.model")))))
+

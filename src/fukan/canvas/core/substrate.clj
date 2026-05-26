@@ -5,7 +5,7 @@
 (defn- gen-id [] (random-uuid))
 
 (defrecord Module       [id name tags])
-(defrecord Affordance   [id name shape role formal-expression doc tags])
+(defrecord Affordance   [id name shape role formal-expression doc returns-label tags])
 (defrecord State        [id name shape tags])
 (defrecord Type         [id name kind fields doc tags])
 (defrecord Relation     [from kind to tags])
@@ -13,8 +13,8 @@
 (defn module [name]
   (->Module (gen-id) name #{}))
 
-(defn affordance [name & {:keys [shape role formal-expression doc]}]
-  (->Affordance (gen-id) name shape role formal-expression doc #{}))
+(defn affordance [name & {:keys [shape role formal-expression doc returns-label]}]
+  (->Affordance (gen-id) name shape role formal-expression doc returns-label #{}))
 
 (defn state [name & {:keys [shape]}]
   (when-not shape
@@ -42,6 +42,7 @@
 (defn shape-of [e] (:shape e))
 (defn formal-expression-of [e] (:formal-expression e))
 (defn doc-of [e] (:doc e))
+(defn returns-label-of [e] (:returns-label e))
 (defn from-of [r] (:from r))
 (defn kind-of [r] (:kind r))
 (defn to-of [r] (:to r))

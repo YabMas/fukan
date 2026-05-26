@@ -7,7 +7,7 @@
      - value Phase4Result    → construction/record with cross-module field refs
                                :model/Model and (list-of :agent/Violation)
      - rule RunPhase4        → vocab.behavioral/rule
-     - fn run                → construction/function (triggers: RunPhase4)
+     - fn run                → construction/function (triggers RunPhase4) (returns post.result)
      - fn gate_g2            → construction/function
      - fn rules_4a..rules_4g → vocab.validation/checker each (7 checkers)
      - 6 invariants          → vocab.behavioral/invariant each
@@ -74,13 +74,14 @@
         (holds-that "purely-derived-from-model"))
 
       ;; Public functions from phase4.boundary.
-      ;; run has triggers: RunPhase4 — no anchor syntax; noted in docstring.
       (function "run"
         "Run the seven sub-phases in fixed order. Returns Phase4Result on
          success (warnings only). Raises Gate-G2 halt on any :error-severity
-         Violation. (Triggers: RunPhase4; returns: post.result)"
+         Violation."
         (takes [model :model/Model])
-        (gives :Phase4Result))
+        (gives :Phase4Result)
+        (triggers RunPhase4)
+        (returns "post.result"))
 
       (function "gate_g2"
         "Apply Gate G2 to an already-aggregated Violation sequence. Returns

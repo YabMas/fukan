@@ -3,6 +3,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function record value exports]]
+            [fukan.canvas.vocab.behavioral :refer [rule]]
             [fukan.canvas.core.substrate.store :as store]))
 
 (deftest function-lift-produces-affordance
@@ -15,16 +16,16 @@
                    (gives :Account))))]
       (is (= 1 (count (store/all-modules db)))))))
 
-(deftest function-lift-rejects-unknown-form
-  (testing "unknown form raises diagnostic"
+(deftest function-lift-rejects-truly-unknown-form
+  (testing "a truly unknown form name raises diagnostic"
     (is (thrown-with-msg?
           clojure.lang.ExceptionInfo
-          #"`returns` is not a body form of `function`"
+          #"`bogus` is not a body form of `function`"
           (h/with-canvas
             (h/within-module "x"
               (function "f" "doc."
                 (takes [a :String])
-                (returns :Bool))))))))
+                (bogus :something))))))))
 
 (deftest record-lift-produces-type
   (testing "(record …) produces a Type owned by the enclosing module"
@@ -165,3 +166,36 @@
                              [?e :type/doc ?doc]]
                     db)]
       (is (= [["Account" "An account record."]] (vec rows))))))
+
+(deftest function-with-triggers-creates-relation
+  (testing "(triggers RuleName) emits a :triggers Relation from function to rule"
+    (let [db (h/with-canvas
+               (h/within-module "validation.phase4"
+                 (rule "RunPhase4"
+                   "Phase 4 entry point."
+                   (when RunPhase4 (model :model/Model)))
+                 (function "run" "Run the sub-phases."
+                   (takes [model :model/Model])
+                   (gives :Phase4Result)
+                   (triggers RunPhase4))))
+          relations (d/q '[:find ?from-name ?to-name
+                            :where [?from :affordance/role :fukan.canvas.monolith/exposed-call]
+                                   [?from :entity/name ?from-name]
+                                   [?from :triggers ?to]
+                                   [?to :entity/name ?to-name]]
+                          db)]
+      (is (= [["run" "RunPhase4"]] (vec relations))))))
+
+(deftest function-with-returns-label-is-queryable
+  (testing "(returns \"post.result\") populates :affordance/returns-label"
+    (let [db (h/with-canvas
+               (h/within-module "validation.phase4"
+                 (function "run" "Run the sub-phases."
+                   (takes [model :model/Model])
+                   (gives :Phase4Result)
+                   (returns "post.result"))))]
+      (is (= [["run" "post.result"]]
+             (vec (d/q '[:find ?n ?label
+                          :where [?a :entity/name ?n]
+                                 [?a :affordance/returns-label ?label]]
+                        db)))))))

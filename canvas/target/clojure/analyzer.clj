@@ -3,8 +3,8 @@
 
    Coverage:
      - rule RunClojureAnalyzer          → vocab.behavioral/rule
-     - fn run                           → construction/function (cross-module refs,
-                                          triggers: RunClojureAnalyzer)
+     - fn run                           → construction/function (triggers RunClojureAnalyzer)
+                                          (returns post.model) + cross-module refs
      - 6 invariants                     → vocab.behavioral/invariant each
 
    Notes:
@@ -77,16 +77,17 @@
 
       ;; ── Public Functions ─────────────────────────────────────────────────
 
-      ;; triggers: RunClojureAnalyzer; returns: post.model
       (function "run"
         "Run the Clojure target analyzer over the model. Emits Code.*
          artifacts and :relation/projects edges; appends any
          duplicate-canonical-address violations; materialises any
          otherwise-unprojected source artifacts. Returns the updated model.
          A nil or non-existent code_root produces an empty source index, so
-         every projects edge lands with :absent validity.
-         Triggers: RunClojureAnalyzer."
+         every projects edge lands with :absent validity."
         (takes [model     :model/Model
                 registry  :registry/Registry
                 code_root (optional :String)])
-        (gives :model/Model)))))
+        (gives :model/Model)
+        (triggers RunClojureAnalyzer)
+        (returns "post.model")))))
+

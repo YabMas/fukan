@@ -25,29 +25,51 @@
 (defconstructor function
   "A synchronous function call: takes inputs, gives output, may have effects."
 
-  (form takes  "Input parameters."        :shape :field+)
-  (form gives  "Return value shape."      :shape :type-ref :required true)
-  (form effect "An effect this performs." :shape :name-ref :repeatable true)
+  (form takes     "Input parameters."                                    :shape :field+)
+  (form gives     "Return value shape."                                  :shape :type-ref :required true)
+  (form effect    "An effect this performs."                             :shape :name-ref :repeatable true)
+  (form triggers  "Trigger pattern for an associated rule."              :shape :name-ref)
+  (form returns   "Returns-label binding for post-condition refs."       :shape :prose)
 
   (produces [name doc forms]
-    (let [takes-vecs  (:takes forms)                ; seq of param vectors
-          takes-args  (when takes-vecs (apply concat takes-vecs)) ; flatten all vectors
-          gives-arg   (first (:gives forms))        ; e.g. :Account or (optional :Account)
-          field-pairs (if takes-args
-                        (vec (->> (partition 2 takes-args)
-                                  (mapv (fn [[n s]] [n (shape/parse s)]))))
-                        [])
-          inputs      {:kind :record :fields field-pairs}
-          outputs     (shape/parse gives-arg)
-          aff         (h/declare-affordance name
-                        :shape {:kind :arrow :inputs inputs :outputs outputs}
-                        :role :fukan.canvas.monolith/exposed-call
-                        :doc doc)]
+    (let [takes-vecs     (:takes forms)                ; seq of param vectors
+          takes-args     (when takes-vecs (apply concat takes-vecs)) ; flatten all vectors
+          gives-arg      (first (:gives forms))        ; e.g. :Account or (optional :Account)
+          returns-label  (when-let [r (:returns forms)] (first r))
+          field-pairs    (if takes-args
+                           (vec (->> (partition 2 takes-args)
+                                     (mapv (fn [[n s]] [n (shape/parse s)]))))
+                           [])
+          inputs         {:kind :record :fields field-pairs}
+          outputs        (shape/parse gives-arg)
+          aff            (h/declare-affordance name
+                           :shape {:kind :arrow :inputs inputs :outputs outputs}
+                           :role :fukan.canvas.monolith/exposed-call
+                           :doc doc
+                           :returns-label (when returns-label (str returns-label)))]
       (emit-refs! (:id aff) {:kind :arrow :inputs inputs :outputs outputs})
       (doseq [e-args (:effect forms)]
         (h/declare-relation (:id aff)
                             :fukan.canvas.monolith/performs
-                            (first e-args))))))
+                            (first e-args)))
+      (when-let [trigger-args (:triggers forms)]
+        (let [rule-name    (str (first trigger-args))
+              db           @h/*store*
+              module-id    h/*enclosing-module*
+              rule-uuid    (when module-id
+                             (ffirst (d/q '[:find ?rid
+                                            :in $ ?mid ?rn
+                                            :where [?m :entity/id ?mid]
+                                                   [?m :module/child ?a]
+                                                   [?a :entity/name ?rn]
+                                                   [?a :entity/id ?rid]]
+                                          db module-id rule-name)))]
+          (if rule-uuid
+            (h/declare-relation (:id aff) :triggers rule-uuid)
+            (binding [*out* *err*]
+              (println (str "canvas/construction: (triggers " rule-name ") in function \""
+                            name "\" — rule not found in enclosing module, skipping Relation"))))))
+      aff)))
 
 (defconstructor record
   "An owned data type with named typed fields."

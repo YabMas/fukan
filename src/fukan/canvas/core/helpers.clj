@@ -48,7 +48,8 @@
             :shape (:shape opts)
             :role (:role opts)
             :formal-expression (:formal-expression opts)
-            :doc (:doc opts))]
+            :doc (:doc opts)
+            :returns-label (:returns-label opts))]
     (swap! *store* store/transact! a)
     (register-child! a)
     a))
