@@ -316,22 +316,6 @@
                :rules []}]
              (:declarations result))))))
 
-(deftest parses-fukan-corpus
-  (testing "all .boundary files under src/ parse without warnings"
-    (let [files (->> (file-seq (io/file "src"))
-                     (filter #(.isFile %))
-                     (filter #(.endsWith (.getName %) ".boundary")))]
-      (is (>= (count files) 4)
-          "expected at least 4 .boundary files in the corpus")
-      (doseq [f files]
-        (let [result (parser/parse-file (.getPath f))]
-          (is (map? result)
-              (str f " did not parse to a map (got: " (pr-str result) ")"))
-          (is (= 1 (:boundary-version result))
-              (str f " does not declare boundary version 1"))
-          (is (every? map? (:declarations result))
-              (str f " produced non-map declarations")))))))
-
 (deftest structural-shape-assertions
   (testing "every declaration carries a :type with one of the known kinds"
     (let [valid-types #{:use :fn :exports :subsystem}

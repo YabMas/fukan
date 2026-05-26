@@ -8,9 +8,7 @@
      - source ExprId addressing the originating Expression in
               `Rule.intent.assertions` (per the §3.8 kernel invariant)
 
-   Identity is (rule-id, kind, target). Plan 1 ships the data shape and
-   identity. Canonicalisation (Expression → Effect, per §3.8.4 patterns) is
-   deferred to Plan 2 where the Allium analyzer drives it."
+   Identity is (rule-id, kind, target)."
   (:require [fukan.model.expression :as e]))
 
 (def effect-kinds
@@ -29,21 +27,6 @@
   [rule-id effect]
   [rule-id (:kind effect) (:target effect)])
 
-(defn canonicalise
-  "Per §3.8.4. Delegates to the Allium analyzer's canonicaliser via
-   requiring-resolve to avoid a circular load (this kernel module can't
-   statically depend on fukan.vocabulary.allium.*). Future Vocabulary
-   extensions (Boundary, DDD, Hex) would register their own canonicalisers
-   via a methodology-operator extension seam (deferred — see §3.8 TBDs).
-
-   The single-arg form uses an anonymous source-expr-id; analyzers calling
-   from within a Rule context should call
-   fukan.vocabulary.allium.effect-canonicalise/canonicalise directly with
-   the actual source ExprId."
-  [expression]
-  ((requiring-resolve 'fukan.vocabulary.allium.effect-canonicalise/canonicalise)
-   expression
-   "anonymous-source"))
 
 ;; -- Malli schema -------------------------------------------------------------
 

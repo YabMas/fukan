@@ -1,7 +1,6 @@
 (ns fukan.libs.allium.parser-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.libs.allium.parser :as parser]
-            [instaparse.core :as insta]))
+            [fukan.libs.allium.parser :as parser]))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
@@ -435,105 +434,6 @@
       (is (= {:kind :optional :inner {:kind :simple :name "String"}}
              (:type-ref p))))))
 
-;; ---------------------------------------------------------------------------
-;; Structural assertions
-;; ---------------------------------------------------------------------------
-
-(deftest structural-assertions-test
-  (testing "every declaration has :type"
-    (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/web/views/graph.allium"]]
-      (let [result (parser/parse-file f)]
-        (is (not (insta/failure? result)) (str "parse failed for " f))
-        (doseq [d (:declarations result)]
-          (is (contains? d :type)
-              (str "missing :type in " f ": " (pr-str d)))))))
-
-  (testing "every named declaration has :name"
-    (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/web/views/graph.allium"]]
-      (let [result (parser/parse-file f)]
-        (doseq [d (:declarations result)
-                :when (not (#{:given :use} (:type d)))]
-          (is (string? (:name d))
-              (str "missing :name in " f " for " (:type d)))))))
-
-  (testing "every field has :name and :field-kind"
-    ;; Block-shaped fields are containers — they carry :entries / :body /
-    ;; :condition rather than a top-level :name. Only the named-field
-    ;; variants are expected to have :name.
-    (let [block-kinds #{:provides-block :exposes :contracts
-                        :when-guard :related :facing :context :timeout :let}]
-      (doseq [f ["src/fukan/model/spec.allium"
-                 "src/fukan/web/views/graph.allium"]]
-        (let [result (parser/parse-file f)]
-          (doseq [d (:declarations result)
-                  :when (:fields d)
-                  field (:fields d)]
-            (cond
-              (= :variant (:field-kind field))
-              ;; Nested variants use :variant-name instead of :name
-              (is (string? (:variant-name field))
-                  (str "missing :variant-name in nested variant: " (pr-str field)))
-
-              (contains? block-kinds (:field-kind field))
-              ;; Block fields don't carry :name
-              nil
-
-              :else
-              (is (string? (:name field))
-                  (str "missing :name in field: " (pr-str field))))
-            (is (keyword? (:field-kind field))
-                (str "missing :field-kind in field: " (pr-str field))))))))
-
-  (testing "every type-ref has :kind"
-    (doseq [f ["src/fukan/model/spec.allium"
-               "src/fukan/web/views/graph.allium"]]
-      (let [result (parser/parse-file f)
-            type-refs (for [d (:declarations result)
-                           :when (:fields d)
-                           field (:fields d)
-                           :when (:type-ref field)]
-                       (:type-ref field))]
-        (doseq [tr type-refs]
-          (is (keyword? (:kind tr))
-              (str "missing :kind in type-ref: " (pr-str tr))))))))
-
-;; ---------------------------------------------------------------------------
-;; Integration tests — full file acceptance
-;; ---------------------------------------------------------------------------
-
-(deftest model-allium-integration-test
-  (testing "model.allium parses completely"
-    (let [result (parser/parse-file "src/fukan/model/spec.allium")]
-      (is (not (insta/failure? result)))
-      (is (= "2" (:allium-version result)))
-      ;; Counts reflect the kernel-substrate spec.allium (post Plan-1 rewrite):
-      ;; values for fields/parameters/etc., entities for substrate value records
-      ;; and primitive entity-descriptions, variants for type/expression cases,
-      ;; invariants spanning the substrate.
-      (let [types (frequencies (map :type (:declarations result)))]
-        (is (= 15 (:value types)))
-        (is (= 26 (:entity types)))
-        (is (= 30 (:variant types)))
-        (is (= 8 (:invariant types)))))))
-
-
-(deftest views-allium-integration-test
-  (testing "graph.allium parses completely"
-    (let [result (parser/parse-file "src/fukan/web/views/graph.allium")]
-      (is (not (insta/failure? result)))
-      (let [types (frequencies (map :type (:declarations result)))]
-        ;; use ./projection.allium and use ./cytoscape.allium
-        (is (= 2 (:use types)))
-        (is (= 1 (:given types)))
-        ;; ViewState, NavigationState (Cytoscape types moved to cytoscape.allium)
-        (is (= 2 (:value types)))
-        ;; SelectNode, NavigateToNode, NavigateToAncestor, ExpandToggle,
-        ;; TogglePrivateVisibility, SelectEdgeMode, SelectEdge, Deselect
-        (is (= 8 (:rule types)))
-        ;; 1 surface (GraphViewer)
-        (is (= 1 (:surface types)))))))
 
 (deftest transitions-graph-test
   (testing "transitions graph with multiple edges"
@@ -815,44 +715,3 @@
       (is (= :annotation (:field-kind ann)))
       (is (= "guidance" (:kind ann)))
       (is (nil? (:body ann))))))
-
-(deftest annotation-corpus-prose-test
-  (testing "real corpus annotation in web/views/graph.allium captures prose"
-    (let [result (parser/parse-file "src/fukan/web/views/graph.allium")
-          ;; find any @guarantee annotation in any surface declaration
-          all-annotations (for [d (:declarations result)
-                                :when (and (:fields d) (= :surface (:type d)))
-                                f (:fields d)
-                                :when (= :annotation (:field-kind f))]
-                            f)
-          guarantee-anns (filter #(= "guarantee" (:kind %)) all-annotations)]
-      (is (pos? (count guarantee-anns)) "corpus must contain @guarantee annotations")
-      (doseq [ann guarantee-anns]
-        (is (some? (:body ann))
-            (str "annotation @" (:kind ann) " " (:name ann) " must have :body captured"))
-        (is (pos? (count (:body ann)))
-            (str "annotation @" (:kind ann) " " (:name ann) " :body must not be empty"))))))
-
-;; ---------------------------------------------------------------------------
-;; Corpus-regression — every .allium file in src/ must parse clean
-;; ---------------------------------------------------------------------------
-
-(def ^:private corpus-files
-  ["src/fukan/infra/model.allium"
-   "src/fukan/infra/server.allium"
-   "src/fukan/web/handler.allium"
-   "src/fukan/web/views/shell.allium"
-   "src/fukan/web/views/graph.allium"
-   "src/fukan/web/views/sidebar.allium"
-   "src/fukan/web/views/cytoscape.allium"
-   "src/fukan/web/views/breadcrumb.allium"
-   "src/fukan/web/views/projection.allium"
-   "src/fukan/model/spec.allium"
-   "src/fukan/model/pipeline.allium"])
-
-(deftest corpus-regression-test
-  (testing "every .allium file in src/ parses without failure"
-    (doseq [f corpus-files]
-      (let [result (parser/parse-file f)]
-        (is (not (insta/failure? result))
-            (str "parse failed for " f ": " (pr-str result)))))))

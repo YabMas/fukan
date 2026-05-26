@@ -67,7 +67,3 @@
             {:case :endpoint/substrate :container "order" :path [{:slot "field" :key "status"}]}
             (e/make-var "x") "e1")]
     (is (not= (fx/effect-identity "rule-1" a) (fx/effect-identity "rule-1" b)))))
-
-(deftest canonicalise-is-deferred-to-plan-2
-  (testing "Plan 1 ships only the data shape; canonicalisation lives in Plan 2"
-    (is (nil? (fx/canonicalise (e/make-var "post.X.f"))))))

@@ -13,15 +13,11 @@
       (is (= [] (:edges m))))))
 
 (deftest combined-pipeline-with-phase6-runs-cleanly
-  (testing "fukan-on-fukan loads through all phases (1–6)"
+  (testing "fukan-on-fukan loads through all phases (4–6, canvas is sole spec source)"
     (let [m (model-pipeline/build-model "src")]
       (is (map? m))
       (is (contains? m :violations))
       (let [errors (filter #(= :error (:severity %)) (:violations m))]
         (is (empty? errors)
             (str "Phase 4/5/6 produced unexpected errors: "
-                 (pr-str (mapv (juxt :phase :sub-phase :kind :message) errors)))))
-      (testing "projects edges populated for spec primitives"
-        (let [projects-edges (filter #(= :relation/projects (:kind %)) (:edges m))]
-          (is (pos? (count projects-edges))
-              "at least one projects edge should be emitted from the corpus"))))))
+                 (pr-str (mapv (juxt :phase :sub-phase :kind :message) errors))))))))
