@@ -88,7 +88,7 @@
          Phase4Result when there are no :error-severity Violations; raises
          otherwise."
         (takes [model      :model/Model
-                violations :agent/Violation])
+                violations (list-of :agent/Violation)])
         (gives :Phase4Result))
 
       ;; Sub-phase entry points 4a–4g.

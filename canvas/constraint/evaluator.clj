@@ -85,19 +85,17 @@
       (function "evaluate_rules"
         "Stratify the rules, evaluate each stratum to a naive fixed point,
          and return the derived EDB extending the seed EDB."
-        (takes [rules :ast/ConstraintRule
+        (takes [rules (list-of :ast/ConstraintRule)
                 edb   :derivations/EDB])
         (gives :derivations/EDB))
 
-      ;; query(rules: List<ast.ConstraintRule>, edb: derivations.EDB,
-      ;;       query_atom: ast.ConstraintAtom) -> Set<Binding>
       (function "query"
         "Run evaluate_rules then unify the query atom against the resulting
          predicate tuples. Returns variable bindings under which the atom holds."
-        (takes [rules      :ast/ConstraintRule
+        (takes [rules      (list-of :ast/ConstraintRule)
                 edb        :derivations/EDB
                 query_atom :ast/ConstraintAtom])
-        (gives :Binding))
+        (gives (set-of :Binding)))
 
       ;; Exports closure from evaluator.boundary
       (exports Stratum Binding))))
