@@ -125,6 +125,36 @@
     (get index id-str)))
 
 ;; ---------------------------------------------------------------------------
+;; stable-id-for-eid — pure function (given a db and a Datascript eid)
+;; ---------------------------------------------------------------------------
+
+(defn stable-id-for-eid
+  "Return the canonical stable id string for the entity identified by the
+   given Datascript integer eid.
+
+   Returns nil if the eid is not an integer, has no :entity/id attribute,
+   or does not appear in the id index (e.g. a synthetic relation target)."
+  [db eid]
+  (when (integer? eid)
+    (let [mod-rows   (d/q '[:find ?name
+                             :in $ ?e
+                             :where [?e :entity/type :Module]
+                                    [?e :entity/name ?name]]
+                           db eid)
+          child-rows (d/q '[:find ?ct ?cn ?mn
+                             :in $ ?e
+                             :where [?e :entity/type ?ct]
+                                    [?e :entity/name ?cn]
+                                    [?m :module/child ?e]
+                                    [?m :entity/name ?mn]]
+                           db eid)]
+      (cond
+        (seq mod-rows)   (stable-id :Module (ffirst mod-rows) (ffirst mod-rows))
+        (seq child-rows) (let [[ct cn mn] (first child-rows)]
+                           (stable-id ct mn cn))
+        :else            nil))))
+
+;; ---------------------------------------------------------------------------
 ;; alias — within-module side-effecting form
 ;; ---------------------------------------------------------------------------
 
