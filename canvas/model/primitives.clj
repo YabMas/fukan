@@ -63,7 +63,7 @@
         "Returns (container_id, field.name) per §3.2."
         (takes [container_id :String
                 field        :Any])
-        (gives :Any))
+        (gives (tuple-of :String :String)))
 
       (function "make_parameter"
         "Parameter substrate: ordered typed parameter on Operation or Event."
@@ -77,7 +77,7 @@
         "Returns (parent_id, parameter.name) per §3.2."
         (takes [parent_id :String
                 parameter :Any])
-        (gives :Any))
+        (gives (tuple-of :String :String)))
 
       (function "make_definition"
         "Definition substrate: typed local binding inside Rule.body."
@@ -89,7 +89,7 @@
         "Returns (rule_id, definition.name) per §3.2."
         (takes [rule_id    :String
                 definition :Any])
-        (gives :Any))
+        (gives (tuple-of :String :String)))
 
       (function "make_rule_body"
         "RuleBody bundles definitions + effects. No independent identity."

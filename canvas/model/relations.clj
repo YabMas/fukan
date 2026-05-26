@@ -80,4 +80,4 @@
         "Returns (from, to, kind, identifying-subset) per §4.4. Two edges are
          the same edge iff their identities are equal."
         (takes [edge :Any])
-        (gives :Any)))))
+        (gives (tuple-of :Any :Any :String :Any))))))

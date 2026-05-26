@@ -16,6 +16,7 @@
     :list     (emit-refs! from-id (:elem shape))
     :set      (emit-refs! from-id (:elem shape))
     :sum      (run! #(emit-refs! from-id %) (:variants shape))
+    :tuple    (run! #(emit-refs! from-id %) (:elems shape))
     :record   (run! (fn [[_ s]] (emit-refs! from-id s)) (:fields shape))
     :atomic   nil
     :arrow    (do (emit-refs! from-id (:inputs shape))

@@ -53,4 +53,4 @@
         "Returns the (sub_case, language, qualified_name) triple per §7.3.
          source_location is non-identifying."
         (takes [artifact :Any])
-        (gives :Any)))))
+        (gives (tuple-of :model/ArtifactSubCase :String :String))))))

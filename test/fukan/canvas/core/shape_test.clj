@@ -110,3 +110,21 @@
          (shape/type-names {:kind :map
                             :key {:kind :atomic :name :String}
                             :val {:kind :ref :target :model/Value}}))))
+
+(deftest tuple-shape
+  (testing "(tuple-of :String :String) parses to a :tuple shape"
+    (is (= {:kind :tuple :elems [{:kind :atomic :name :String}
+                                  {:kind :atomic :name :String}]}
+           (shape/parse '(tuple-of :String :String))))))
+
+(deftest tuple-shape-with-cross-module-ref
+  (testing "(tuple-of :ArtifactSubCase :String :String) handles refs and atomics"
+    (is (= {:kind :tuple :elems [{:kind :ref :target :model/ArtifactSubCase}
+                                  {:kind :atomic :name :String}
+                                  {:kind :atomic :name :String}]}
+           (shape/parse '(tuple-of :model/ArtifactSubCase :String :String))))))
+
+(deftest type-names-tuple
+  (testing "(tuple-of :String :model/Foo) collects both element type names"
+    (is (= #{:String :model/Foo}
+           (shape/type-names (shape/parse '(tuple-of :String :model/Foo)))))))

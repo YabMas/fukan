@@ -36,6 +36,9 @@
                      [(first pair) (parse (second pair))])
                    (rest expr))}
 
+    (and (seq? expr) (= 'tuple-of (first expr)))
+    {:kind :tuple :elems (mapv parse (rest expr))}
+
     :else
     (throw (ex-info "unknown shape expression" {:expr expr}))))
 
@@ -50,6 +53,7 @@
     :list     (type-names (:elem shape))
     :set      (type-names (:elem shape))
     :sum      (apply set/union (map type-names (:variants shape)))
+    :tuple    (apply set/union (map type-names (:elems shape)))
     :map      (set/union (type-names (:key shape)) (type-names (:val shape)))
     :record   (apply set/union (map (fn [[_ s]] (type-names s)) (:fields shape)))
     :arrow    (set/union (type-names (:inputs shape)) (type-names (:outputs shape)))
