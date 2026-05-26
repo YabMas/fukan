@@ -8,35 +8,40 @@
 
    Coverage:
      - fn check  → vocab.validation/checker (Model) -> [Violation]
-     - 5 invariants → vocab.behavioral/invariant each
-
-   Notes:
-     - rule CrossModuleReferencesAreVisible, ContractsAreAlwaysVisible,
-       ExternalEntityCountsAsVisible, IntraModuleReferencesIgnored,
-       CheckIsPure: no rule lift (deferred). Left as TODO comments below."
+     - 4 rules   → vocab.behavioral/rule each
+     - 5 invariants → vocab.behavioral/invariant each"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "validation.rules-4g"
 
-      ;; TODO: rule CrossModuleReferencesAreVisible — no rule lift (deferred).
-      ;; Structural intent: every cross-module reference targets an externally
-      ;; visible primitive. Violation kind :4g/cross-module-private-reference (error).
+      (rule "CrossModuleReferencesAreVisible"
+        "Check that every cross-module reference targets an externally
+         visible primitive. Hidden cross-module references emit
+         :4g/cross-module-private-reference (error)."
+        (when CrossModuleReferencesAreVisible (model :model/Model)))
 
-      ;; TODO: rule ContractsAreAlwaysVisible — no rule lift (deferred).
-      ;; Structural intent: Allium::Contract tagged Containers are always
-      ;; externally visible across module walls.
+      (rule "ContractsAreAlwaysVisible"
+        "Define that Containers tagged Allium::Contract are externally
+         visible across module walls regardless of their owning module's
+         closure state. A cross-module reference to a Contract is always
+         permitted."
+        (when ContractsAreAlwaysVisible (model :model/Model)))
 
-      ;; TODO: rule ExternalEntityCountsAsVisible — no rule lift (deferred).
-      ;; Structural intent: Allium::ExternalEntity tagged Containers are
-      ;; always externally visible.
+      (rule "ExternalEntityCountsAsVisible"
+        "Define that Containers tagged Allium::ExternalEntity are externally
+         visible regardless of their owning module's closure state. A
+         cross-module reference to an ExternalEntity is always permitted."
+        (when ExternalEntityCountsAsVisible (model :model/Model)))
 
-      ;; TODO: rule IntraModuleReferencesIgnored — no rule lift (deferred).
-      ;; Structural intent: only strictly cross-module references contribute
-      ;; to the 4g Violation sequence.
+      (rule "IntraModuleReferencesIgnored"
+        "Define that references whose referrer and target live in the same
+         module are not checked. Only strictly cross-module references
+         contribute to the 4g Violation sequence."
+        (when IntraModuleReferencesIgnored (model :model/Model)))
 
       (invariant "CrossModuleReferencesAreVisible"
         "For every primitive whose :fields or :parameters reference a

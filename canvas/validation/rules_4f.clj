@@ -7,36 +7,43 @@
 
    Coverage:
      - fn check  → vocab.validation/checker (Model) -> [Violation]
-     - 5 invariants → vocab.behavioral/invariant each
-
-   Notes:
-     - rule ExportedSignaturesAreClosed, VisibilityFromOpenModules,
-       ExternalEntityCountsAsVisible, ClosureScopeIsMVP, CheckIsPure:
-       no rule lift (deferred). Left as TODO comments below."
+     - 4 rules   → vocab.behavioral/rule each
+     - 5 invariants → vocab.behavioral/invariant each"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "validation.rules-4f"
 
-      ;; TODO: rule ExportedSignaturesAreClosed — no rule lift (deferred).
-      ;; Structural intent: every Composite-named type referenced from an
-      ;; exported item's fields or signatures is itself externally visible.
-      ;; Violation kind :4f/closure-violation (error).
+      (rule "ExportedSignaturesAreClosed"
+        "Check that for every entry in a closed module's :exported list,
+         every Composite-named type referenced from the entry's fields
+         (Entity) or parameters and return type (Operation) is itself
+         externally visible. Missing references emit
+         :4f/closure-violation (error)."
+        (when ExportedSignaturesAreClosed (model :model/Model)))
 
-      ;; TODO: rule VisibilityFromOpenModules — no rule lift (deferred).
-      ;; Structural intent: primitives owned by open modules are unconditionally
-      ;; visible when evaluating closure.
+      (rule "VisibilityFromOpenModules"
+        "Define the visibility set used to evaluate closure: every primitive
+         owned by an open module (a module-Container with no
+         Boundary::ModuleApi tag) is unconditionally visible."
+        (when VisibilityFromOpenModules (model :model/Model)))
 
-      ;; TODO: rule ExternalEntityCountsAsVisible — no rule lift (deferred).
-      ;; Structural intent: Allium::ExternalEntity tagged Containers are
-      ;; visible regardless of owning module closure state.
+      (rule "ExternalEntityCountsAsVisible"
+        "Define that a Container tagged Allium::ExternalEntity is externally
+         visible regardless of its owning module's closure state. An exported
+         signature referencing such a Container does not emit a closure
+         violation."
+        (when ExternalEntityCountsAsVisible (model :model/Model)))
 
-      ;; TODO: rule ClosureScopeIsMVP — no rule lift (deferred).
-      ;; Structural intent: current closure walks cover Entity fields and
-      ;; Operation signatures; Surface/Variant/Actor closures are deferred.
+      (rule "ClosureScopeIsMVP"
+        "Define current closure scope: walks cover Entity fields and
+         Operation signatures (parameters plus return type). Surface,
+         Variant, and Actor closures are deferred until the corpus surfaces
+         them as load-bearing."
+        (when ClosureScopeIsMVP (model :model/Model)))
 
       (invariant "ExportedSignaturesAreClosed"
         "For every entry in a closed module's :exported list, every

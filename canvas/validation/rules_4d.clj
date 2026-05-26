@@ -7,31 +7,33 @@
 
    Coverage:
      - fn check  → vocab.validation/checker (Model) -> [Violation]
-     - 4 invariants → vocab.behavioral/invariant each
-
-   Notes:
-     - rule AtMostOneModuleApiTag, ExportsResolve, ExportsDisallowKinds,
-       CheckIsPure: no rule lift (deferred). Left as TODO comments below."
+     - 3 rules   → vocab.behavioral/rule each
+     - 4 invariants → vocab.behavioral/invariant each"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "validation.rules-4d"
 
-      ;; TODO: rule AtMostOneModuleApiTag — no rule lift (deferred).
-      ;; Structural intent: a module-Container carries at most one
-      ;; Boundary::ModuleApi tag. Violation kind :4d/multiple-module-api-tags (error).
+      (rule "AtMostOneModuleApiTag"
+        "Check that a module-Container carries at most one
+         Boundary::ModuleApi tag application. Multiple applications emit
+         :4d/multiple-module-api-tags (error)."
+        (when AtMostOneModuleApiTag (model :model/Model)))
 
-      ;; TODO: rule ExportsResolve — no rule lift (deferred).
-      ;; Structural intent: every entry in a closed module's :exported list
-      ;; resolves to a primitive owned by that module. Violation kind
-      ;; :4d/exports-unresolved (error).
+      (rule "ExportsResolve"
+        "Check that every entry in a closed module's :exported list resolves
+         to a primitive owned by that module. Unresolved entries emit
+         :4d/exports-unresolved (error)."
+        (when ExportsResolve (model :model/Model)))
 
-      ;; TODO: rule ExportsDisallowKinds — no rule lift (deferred).
-      ;; Structural intent: Rules, Invariants, and Contracts are not
-      ;; individually exportable. Violation kind :4d/exports-disallowed-kind (error).
+      (rule "ExportsDisallowKinds"
+        "Check that Rules, Invariants, and Contracts are not individually
+         exportable. An :exported entry resolving to a primitive of any of
+         these kinds emits :4d/exports-disallowed-kind (error)."
+        (when ExportsDisallowKinds (model :model/Model)))
 
       (invariant "AtMostOneModuleApiTag"
         "A module-Container carries at most one Boundary::ModuleApi tag

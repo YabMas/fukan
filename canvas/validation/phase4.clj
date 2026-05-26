@@ -6,21 +6,19 @@
    Coverage:
      - value Phase4Result    → construction/record with cross-module field refs
                                :model/Model and (list-of :agent/Violation)
-     - fn run                → construction/function (triggers: note in docstring)
+     - rule RunPhase4        → vocab.behavioral/rule
+     - fn run                → construction/function (triggers: RunPhase4)
      - fn gate_g2            → construction/function
      - fn rules_4a..rules_4g → vocab.validation/checker each (7 checkers)
      - 6 invariants          → vocab.behavioral/invariant each
 
    Notes:
-     - rule RunPhase4: no rule lift (deferred to Sprint 2). Left as TODO comment.
-     - fn run has triggers: RunPhase4 and returns: post.result — the function
-       lift has no trigger-anchor syntax; intent noted in docstring.
      - checker shape is baked in as (Model) -> [Violation] via vocab.validation;
        the :references Relations to :model/Model and :agent/Violation are emitted
        automatically by the checker lift."
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function record]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
 (defn build-canvas []
@@ -36,11 +34,12 @@
         (field model      :model/Model)
         (field violations (list-of :agent/Violation)))
 
-      ;; TODO: rule RunPhase4 — no rule lift (deferred to Sprint 2).
-      ;; Structural intent:
-      ;;   when: RunPhase4(model: model.Model)
-      ;; Triggered by the build pipeline after Phases 1-3. Walks 4a..4g,
-      ;; aggregates Violations, applies Gate G2.
+      (rule "RunPhase4"
+        "Phase 4 entry point — fired by the build pipeline after Phases 1-3.
+         Walks sub-phases 4a through 4g in fixed order, aggregates Violations,
+         and applies Gate G2. Returns Phase4Result on success (warnings only);
+         raises on any :error-severity Violation."
+        (when RunPhase4 (model :model/Model)))
 
       ;; Invariants from phase4.allium
       (invariant "SubPhaseOrdering"

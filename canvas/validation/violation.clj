@@ -11,35 +11,45 @@
      - fn warning        → construction/function predicate
      - fn errors         → construction/function filter
      - fn warnings       → construction/function filter
+     - 4 rules           → vocab.behavioral/rule each
      - 4 invariants      → vocab.behavioral/invariant each
 
    Notes:
      - The Violation value type itself lives in agent/api.allium; this module
-       references it via :agent/Violation.
-     - rule ViolationShape, MakeViolationIsTotal, SeverityPartition,
-       LocationDefaultsToEmpty: no rule lift (deferred). Left as TODO comments."
+       references it via :agent/Violation."
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function exports]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "validation.violation"
 
-      ;; TODO: rule ViolationShape — no rule lift (deferred).
-      ;; Structural intent: every Violation carries :severity, :phase,
-      ;; :sub_phase, :kind, :location, :message.
+      (rule "ViolationShape"
+        "Define the required shape of a Violation: every Violation carries
+         :severity (:error or :warning), :phase (:phase4 or :phase5),
+         :sub_phase, :kind (open keyword), :location (attribution map),
+         and :message (human-readable string)."
+        (when ViolationShape (violation :agent/Violation)))
 
-      ;; TODO: rule MakeViolationIsTotal — no rule lift (deferred).
-      ;; Structural intent: make_violation never throws; missing :location
-      ;; defaults to empty map.
+      (rule "MakeViolationIsTotal"
+        "Define that make_violation never throws for any combination of the
+         six fields. Missing :location is filled with the empty map. No input
+         causes the factory to raise."
+        (when MakeViolationIsTotal (fields (map-of :String :Value))))
 
-      ;; TODO: rule SeverityPartition — no rule lift (deferred).
-      ;; Structural intent: error?/warning? predicates partition every
-      ;; well-formed Violation; their outputs are disjoint.
+      (rule "SeverityPartition"
+        "Define that error? and warning? partition every well-formed
+         Violation: exactly one is true per Violation. The errors and
+         warnings selectors are their pointwise filters — the disjoint union
+         of their outputs equals the input sequence."
+        (when SeverityPartition (violations (list-of :agent/Violation))))
 
-      ;; TODO: rule LocationDefaultsToEmpty — no rule lift (deferred).
-      ;; Structural intent: absent :location is filled with the empty map.
+      (rule "LocationDefaultsToEmpty"
+        "Define that a Violation constructed without an explicit :location
+         carries the empty map. Callers may safely assoc into :location
+         without guarding for nil."
+        (when LocationDefaultsToEmpty (fields (map-of :String :Value))))
 
       (invariant "ViolationShape"
         "Every Violation carries six attributes: :severity, :phase,

@@ -8,38 +8,39 @@
 
    Coverage:
      - fn check  → vocab.validation/checker (Model) -> [Violation]
-     - 5 invariants → vocab.behavioral/invariant each
-
-   Notes:
-     - rule EveryEventHasDeclarationSite, DeclarationSitesShareShape,
-       ProvidesNeedsExternalStimulus, ExposesPathsResolve, CheckIsPure:
-       no rule lift (deferred). Left as TODO comments below."
+     - 4 rules   → vocab.behavioral/rule each
+     - 5 invariants → vocab.behavioral/invariant each"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "validation.rules-4b"
 
-      ;; TODO: rule EveryEventHasDeclarationSite — no rule lift (deferred).
-      ;; Structural intent: every Event primitive carries a non-empty
-      ;; :declaration-sites payload. Violation kind
-      ;; :4b/event-no-declaration-site (error).
+      (rule "EveryEventHasDeclarationSite"
+        "Check that every Event primitive carries a non-empty
+         :declaration-sites payload. Events with no declaration site
+         emit :4b/event-no-declaration-site (error)."
+        (when EveryEventHasDeclarationSite (model :model/Model)))
 
-      ;; TODO: rule DeclarationSitesShareShape — no rule lift (deferred).
-      ;; Structural intent: all declaration sites for the same Event within
-      ;; a module agree on parameter shape. Violation kind
-      ;; :4b/event-shape-mismatch (error).
+      (rule "DeclarationSitesShareShape"
+        "Check that all declaration sites for the same Event within a
+         module agree on parameter shape (arity and typed-parameter
+         sequence). Disagreement emits :4b/event-shape-mismatch (error)."
+        (when DeclarationSitesShareShape (model :model/Model)))
 
-      ;; TODO: rule ProvidesNeedsExternalStimulus — no rule lift (deferred).
-      ;; Structural intent: every :relation/provides edge from a Surface to
-      ;; an Event requires at least one external_stimulus Trigger.
-      ;; Violation kind :4b/provides-no-external-stimulus (error).
+      (rule "ProvidesNeedsExternalStimulus"
+        "Check that every :relation/provides edge from a Surface to an
+         Event has at least one external_stimulus Trigger. Provides without
+         such a consumer emit :4b/provides-no-external-stimulus (error)."
+        (when ProvidesNeedsExternalStimulus (model :model/Model)))
 
-      ;; TODO: rule ExposesPathsResolve — no rule lift (deferred).
-      ;; Structural intent: every exposes: path on a Surface resolves to a
-      ;; known substrate endpoint. Violation kind :4b/exposes-unresolved (error).
+      (rule "ExposesPathsResolve"
+        "Check that every exposes: path declared on a Surface resolves to a
+         known substrate endpoint. Unresolved paths emit
+         :4b/exposes-unresolved (error)."
+        (when ExposesPathsResolve (model :model/Model)))
 
       (invariant "EveryEventHasDeclarationSite"
         "Every Event primitive carries an Allium::Event tag whose payload

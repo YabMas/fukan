@@ -7,43 +7,47 @@
 
    Coverage:
      - fn check  → vocab.validation/checker (Model) -> [Violation]
-     - 6 invariants → vocab.behavioral/invariant each
-
-   Notes:
-     - rule BindingOperationResolves, BindingTriggerRuleResolves,
-       AttachReturnsRequiresTriggers, ReturnDerivationMatchesOperation,
-       SignatureMatchVerifiable, CheckIsPure: no rule lift (deferred).
-       Left as TODO comments below."
+     - 5 rules   → vocab.behavioral/rule each
+     - 6 invariants → vocab.behavioral/invariant each"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "validation.rules-4c"
 
-      ;; TODO: rule BindingOperationResolves — no rule lift (deferred).
-      ;; Structural intent: every fn binding references an Operation whose
-      ;; id resolves in the Model. Violation kind :4c/unresolved-operation (error).
+      (rule "BindingOperationResolves"
+        "Check that every fn binding references an Operation whose id
+         resolves in the Model. Unresolved references emit
+         :4c/unresolved-operation (error)."
+        (when BindingOperationResolves (model :model/Model)))
 
-      ;; TODO: rule BindingTriggerRuleResolves — no rule lift (deferred).
-      ;; Structural intent: every fn body triggers: clause references a Rule
-      ;; whose id resolves in the Model. Violation kind
-      ;; :4c/unresolved-trigger-rule (error).
+      (rule "BindingTriggerRuleResolves"
+        "Check that every fn body triggers: clause references a Rule whose
+         id resolves in the Model. Unresolved references emit
+         :4c/unresolved-trigger-rule (error)."
+        (when BindingTriggerRuleResolves (model :model/Model)))
 
-      ;; TODO: rule AttachReturnsRequiresTriggers — no rule lift (deferred).
-      ;; Structural intent: an attach-form fn with returns: must also have
-      ;; triggers:. Violation kind :4c/attach-returns-without-triggers (warning).
+      (rule "AttachReturnsRequiresTriggers"
+        "Check that an attach-form fn with returns: also declares triggers:.
+         Without a triggers: clause there is no edge to carry the returns
+         expression's tag. Emits :4c/attach-returns-without-triggers (warning)."
+        (when AttachReturnsRequiresTriggers (model :model/Model)))
 
-      ;; TODO: rule ReturnDerivationMatchesOperation — no rule lift (deferred).
-      ;; Structural intent: return-type presence on Operation matches
-      ;; returns_expression presence on Boundary::Binding tag. Violation kind
-      ;; :4c/return-derivation-mismatch (error).
+      (rule "ReturnDerivationMatchesOperation"
+        "Check that for every :relation/triggers edge from an Operation, the
+         Operation has a :return-type iff the Boundary::Binding tag carries a
+         returns_expression payload. Mismatch emits
+         :4c/return-derivation-mismatch (error)."
+        (when ReturnDerivationMatchesOperation (model :model/Model)))
 
-      ;; TODO: rule SignatureMatchVerifiable — no rule lift (deferred).
-      ;; Structural intent: Operation→Rule bindings where the Rule has no
-      ;; other triggers and the Operation has parameters emit
-      ;; :4c/signature-match-uncertain (warning).
+      (rule "SignatureMatchVerifiable"
+        "Check that Operation→Rule bindings where the Rule has no other
+         :relation/triggers edges and the Operation has parameters emit
+         :4c/signature-match-uncertain (warning), flagging that the binding
+         cannot be fully verified at current fidelity."
+        (when SignatureMatchVerifiable (model :model/Model)))
 
       (invariant "BindingOperationResolves"
         "Every fn binding of the form `fn Contract.op` or

@@ -6,28 +6,27 @@
 
    Coverage:
      - fn check  → vocab.validation/checker (Model) -> [Violation]
-     - 3 invariants → vocab.behavioral/invariant each
-
-   Notes:
-     - rule SubsystemExportsAliasResolves, SubsystemExportsRespectClosedModule,
-       CheckIsPure: no rule lift (deferred). Left as TODO comments below."
+     - 2 rules   → vocab.behavioral/rule each
+     - 3 invariants → vocab.behavioral/invariant each"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "validation.rules-4e"
 
-      ;; TODO: rule SubsystemExportsAliasResolves — no rule lift (deferred).
-      ;; Structural intent: every alias.Item entry in a composite's :exported
-      ;; list names a directly-contained child. Violation kind
-      ;; :4e/subsystem-exports-unresolved (error).
+      (rule "SubsystemExportsAliasResolves"
+        "Check that every alias.Item entry in a composite's :exported list
+         names a directly-contained child. Aliases that do not name a direct
+         child emit :4e/subsystem-exports-unresolved (error)."
+        (when SubsystemExportsAliasResolves (model :model/Model)))
 
-      ;; TODO: rule SubsystemExportsRespectClosedModule — no rule lift (deferred).
-      ;; Structural intent: a composite cannot re-export Item from a closed
-      ;; child module unless Item is in that child's own :exported list.
-      ;; Violation kind :4e/subsystem-exports-private (error).
+      (rule "SubsystemExportsRespectClosedModule"
+        "Check that a composite cannot re-export alias.Item from a closed
+         child module unless Item is in that child's own :exported list.
+         Violations emit :4e/subsystem-exports-private (error)."
+        (when SubsystemExportsRespectClosedModule (model :model/Model)))
 
       (invariant "SubsystemExportsAliasResolves"
         "Every entry of the form `alias.Item` (or bare `alias`) in a

@@ -6,41 +6,44 @@
 
    Coverage:
      - fn check  → vocab.validation/checker (Model) -> [Violation]
-     - 6 invariants → vocab.behavioral/invariant each
-
-   Notes:
-     - rule AtMostOneCompositeParent, TopLevelModulesAreWarning,
-       NoSubsystemCompositionCycles, ContainsPathsResolve,
-       SubsystemNamesAreUnique, CheckIsPure: no rule lift (deferred).
-       Left as TODO comments below."
+     - 5 rules   → vocab.behavioral/rule each
+     - 6 invariants → vocab.behavioral/invariant each"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "validation.rules-4a"
 
-      ;; TODO: rule AtMostOneCompositeParent — no rule lift (deferred).
-      ;; Structural intent: a module-Container belongs to at most one composite
-      ;; parent. Violation kind :4a/multiple-composite-parents (error).
+      (rule "AtMostOneCompositeParent"
+        "Check that every module-Container belongs to at most one composite
+         parent. Emits :4a/multiple-composite-parents (error) for each module
+         appearing in two or more composites' :children sets."
+        (when AtMostOneCompositeParent (model :model/Model)))
 
-      ;; TODO: rule TopLevelModulesAreWarning — no rule lift (deferred).
-      ;; Structural intent: a module-Container that no composite contains is
-      ;; top-level. Violation kind :4a/top-level-module (warning).
+      (rule "TopLevelModulesAreWarning"
+        "Check that every module-Container that no composite contains is
+         flagged as top-level. Emits :4a/top-level-module (warning) per
+         such module. Top-level is permitted but advisory."
+        (when TopLevelModulesAreWarning (model :model/Model)))
 
-      ;; TODO: rule NoSubsystemCompositionCycles — no rule lift (deferred).
-      ;; Structural intent: the composition graph is acyclic.
-      ;; Violation kind :4a/subsystem-cycle (error).
+      (rule "NoSubsystemCompositionCycles"
+        "Check that the composition graph induced by composites' :children
+         sets is acyclic. Emits :4a/subsystem-cycle (error) per cycle,
+         carrying the cyclic path in the Violation's :location."
+        (when NoSubsystemCompositionCycles (model :model/Model)))
 
-      ;; TODO: rule ContainsPathsResolve — no rule lift (deferred).
-      ;; Structural intent: every entry in a composite's :children names a
-      ;; known module-Container or composite. Violation kind
-      ;; :4a/unresolved-contains (error).
+      (rule "ContainsPathsResolve"
+        "Check that every entry in a composite's :children set names a known
+         module-Container or a known composite. Unknown entries emit
+         :4a/unresolved-contains (error)."
+        (when ContainsPathsResolve (model :model/Model)))
 
-      ;; TODO: rule SubsystemNamesAreUnique — no rule lift (deferred).
-      ;; Structural intent: composites' :label fields are unique.
-      ;; Violation kind :4a/duplicate-subsystem-name (error).
+      (rule "SubsystemNamesAreUnique"
+        "Check that composites' :label fields are unique across the Model.
+         Duplicates emit :4a/duplicate-subsystem-name (error)."
+        (when SubsystemNamesAreUnique (model :model/Model)))
 
       (invariant "AtMostOneCompositeParent"
         "A module-Container belongs to at most one composite parent. A
