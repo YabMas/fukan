@@ -556,3 +556,120 @@ feat(canvas): port agent/query spec          mwqvrkqu
 feat(canvas): port agent/edb spec            vxxwoowp
 feat(canvas): port agent/api spec            xtwxmnov
 ```
+
+---
+
+# Sprint 2 Addendum — target/clojure/ subsystem (6 modules)
+
+Date: 2026-05-26
+Scope: target/clojure/{address, analyzer, blueprint, projector, source, types}
+
+## Per-module status
+
+### target/clojure/address — CLEAN
+Lifts: `record` (1), `invariant` (4), `function` (3).
+Shape grammar: `CanonicalAddress` has two plain String fields — clean.
+`canonical` returns `:address/CanonicalAddress` cross-module ref.
+`canonical` also takes `:registry/Registry` cross-module ref.
+Both refs auto-emit `:references` Relations.
+TODO comments: none. No escalations.
+
+### target/clojure/analyzer — ONE TODO (deferred rule lift)
+Lifts: `invariant` (6), `function` (1).
+Shape grammar: `run` takes `(optional :String)` for nullable `code_root`. Returns
+`:model/Model`. Cross-module refs: `:model/Model`, `:registry/Registry`.
+`triggers: RunClojureAnalyzer` / `returns: post.model` captured in docstring.
+TODO comments: 1 rule declaration (RunClojureAnalyzer — deferred). Structural
+intent captured: Phase 6 build pipeline, Code.* artifact emission, :validity
+field semantics. No escalations.
+
+### target/clojure/blueprint — CLEAN
+Lifts: `record` (1), `invariant` (4), `function` (4).
+Shape grammar: `Blueprint.signature: Any?` → `(optional :Any)`, `Blueprint.rendered:
+Any?` → `(optional :Any)`, `Blueprint.idioms: List<Any>` → `(list-of :Any)`.
+`Blueprint.address: address.CanonicalAddress` → `:address/CanonicalAddress` cross-module
+ref auto-emits Relation. `fn identity` returns `List<Any>` → `(list-of :Any)`.
+Blueprint.context is bare `:Any` (always present, unstructured).
+TODO comments: none. No escalations.
+
+### target/clojure/projector — CLEAN
+Lifts: `invariant` (5), `function` (1).
+Shape grammar: `project` takes `:model/Model`, `:registry/Registry`, returns
+`:blueprint/Blueprint` — three cross-module refs, all auto-emit Relations.
+projector.allium contains only invariants (no value types) — the function surface
+lives entirely in projector.boundary.
+TODO comments: none. No escalations.
+
+### target/clojure/source — CLEAN
+Lifts: `record` (1), `invariant` (4), `function` (3).
+Shape grammar: `SourceSymbol` has four String fields — clean.
+`find_clj_files` returns `(list-of :String)`. `read_forms` returns `(list-of :Any)`
+(opaque EDN forms). `extract_symbols` returns `(list-of :source/SourceSymbol)` —
+self-module namespaced ref.
+TODO comments: none. No escalations.
+
+### target/clojure/types — CLEAN
+Lifts: `invariant` (4), `function` (1).
+Shape grammar: `render` takes `:registry/Registry` and `:Any`; returns `:Any`.
+types.allium contains only invariants (no value types) — consistent with projector.
+`UnknownIsAny` invariant makes `:Any` the correct return shape (best-effort renderer).
+TODO comments: none. No escalations.
+
+## Structural observations
+
+1. **Subsystem is split into two patterns.** Three modules own value types (address,
+   blueprint, source); three are pure behaviour files (analyzer, projector, types).
+   The pure-behaviour modules (only invariants + function surface) port as the
+   lightest possible canvas files.
+
+2. **Only one rule declaration across all six files.** RunClojureAnalyzer in
+   analyzer.allium. Left as TODO inline comment. This is the analyzer's Phase 6
+   dispatch point. Sprint 2 cumulative rule-lift deferred count: 40.
+
+3. **Cross-module refs are dense and correct.** Five of six modules reference at
+   least one cross-module type. The pattern `:module/Type` → auto-emits `:references`
+   Relation is now well-established. No ambiguity about which namespace to use for
+   same-subsystem refs (`:address/CanonicalAddress`, `:blueprint/Blueprint`,
+   `:source/SourceSymbol`) vs outer refs (`:model/Model`, `:registry/Registry`).
+
+4. **`map-of` gap: NOT triggered.** Zero instances. Sprint 2 cumulative count
+   remains 2 (registry + violation only).
+
+5. **No `exports:` clauses in source boundary files.** None of the six modules
+   declare exports — the subsystem boundary (`clojure.boundary`) carries those.
+   The `exports` macro is not needed in any of these six ports.
+
+6. **`(optional :Any)` for nullable Any fields works cleanly.** Blueprint has two
+   such fields (`signature`, `rendered`). `:Any` and `(optional :Any)` are both
+   expressible without a dedicated combinator.
+
+## Gaps to escalate (Sprint 2 cumulative, target/clojure addendum)
+
+No new gaps. Existing gaps unchanged:
+1. **`map-of` combinator** — 2 instances total. target/clojure adds 0.
+2. **`rule` lift** — 40 total across all ports (35 validation + 1 constraint +
+   3 vocabulary + 0 agent + 1 target/clojure).
+
+## Test counts
+
+| State | Tests | Assertions |
+|---|---|---|
+| Before Sprint 2 (all) | 67 | 119 |
+| After Sprint 2 infra+proj+libs | 79 | 172 |
+| After Sprint 2 validation/ | 95 | 229 |
+| After Sprint 2 constraint/ | 109 | 301 |
+| Before Sprint 2 agent/ (full suite) | 66 | 280 |
+| After Sprint 2 agent/ (full suite)  | 137 | 464 |
+| After Sprint 2 target/clojure/ (full suite) | 149 | 525 |
+| Delta (target/clojure sprint) | +12 | +61 |
+
+## jj log (Sprint 2 target/clojure)
+
+```
+feat(canvas): port target/clojure/types spec      syzryqtv f4118753
+feat(canvas): port target/clojure/source spec     mtmonvyn 25202795
+feat(canvas): port target/clojure/projector spec  wrpwmtmv 8b16d77d
+feat(canvas): port target/clojure/blueprint spec  qnupokrk b92fe5f9
+feat(canvas): port target/clojure/analyzer spec   kkyszvxw 1a0695ff
+feat(canvas): port target/clojure/address spec    krovwqvt b199f9e9
+```
