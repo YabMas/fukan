@@ -9,8 +9,8 @@ isolated from fukan's own canvas tree.
 
 | Directory | Paradigm | Purpose |
 |-----------|----------|---------|
-| `event-driven/` | Event-driven service (5 modules) | Upper-bound stress: Event/Handler/Topic vocabulary, reactive firing, payload shapes |
-| `static-lib/` | Pure static library (5 modules) | Lower-bound sanity: types + pure functions, no behavioral content |
+| `event_driven/` | Event-driven service (5 modules) | Upper-bound stress: Event/Handler vocabulary, reactive firing, payload shapes |
+| `static_lib/` | Pure static library (5 modules) | Lower-bound sanity: types + pure functions, no behavioral content |
 
 ## How to load demos
 
