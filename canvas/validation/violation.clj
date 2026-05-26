@@ -74,14 +74,11 @@
       ;; Public functions from violation.boundary.
       ;; Violation type lives in agent/api.allium — referenced as :agent/Violation.
 
-      ;; make_violation takes Map<String, Value> — no map-of combinator exists.
-      ;; Approximated as :Map with inline comment.
       (function "make_violation"
         "Construct a Violation from a fields map. Recognised keys:
          :severity, :phase, :sub_phase, :kind, :location, :message.
-         :location defaults to the empty map when absent.
-         (fields is Map<String, Value> — approximated as :Map)"
-        (takes [fields :Map])
+         :location defaults to the empty map when absent."
+        (takes [fields (map-of :String :Value)])
         (gives :agent/Violation))
 
       (function "error"

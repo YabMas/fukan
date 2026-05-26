@@ -113,16 +113,15 @@
 
       ;; Public functions from analyzer.boundary.
       ;; Cross-module types approximated as namespaced keywords.
-      ;; use_aliases is Map<String, String>? — approximated as :Map.
       (function "analyze_file"
         "Add this file's kernel content and Allium::* tag applications to model."
         (takes [model       :model/Model
                 ast         :parser/ParsedAllium
                 coordinate  :String
-                use_aliases :Map])
+                use_aliases (optional (map-of :String :String))])
         (gives :model/Model))
 
       (function "extract_use_aliases"
         "Collect use declarations from an AST into alias → imported-coord map."
         (takes [ast :parser/ParsedAllium])
-        (gives :Map)))))
+        (gives (map-of :String :String))))))

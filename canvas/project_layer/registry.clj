@@ -13,9 +13,6 @@
      - fn with_idiom           → construction/function
      - exports IdiomRoute IdiomEntry Registry → construction/exports
 
-   TODO: Registry.type_overrides is Map<String, Any> — no map-of combinator
-         exists. Approximated as :Map with inline comment.
-
    Shape grammar discipline:
      - IdiomRoute fields: all String? → (optional :String)
      - Registry.idioms: List<IdiomEntry> → (list-of :IdiomEntry)"
@@ -47,9 +44,7 @@
          analyzers and projectors when assembling canonical addresses, rendering
          types, and applying idioms."
         (field root_prefix    :String)
-        ;; TODO: map-of :String :Any — no map-of combinator exists yet.
-        ;;       type_overrides is Map<String, Any>; approximated as :Map.
-        (field type_overrides :Map)
+        (field type_overrides (optional (map-of :String :Any)))
         (field idioms         (list-of :IdiomEntry)))
 
       ;; Invariants from registry.allium

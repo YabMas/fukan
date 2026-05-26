@@ -198,7 +198,7 @@
       (function "primitives"
         "List Model primitive summaries. Optional :kind and :label filters,
          plus :limit / :offset pagination. Returns the standard envelope."
-        (takes [filters (optional :Map)])
+        (takes [filters (optional (map-of :String :Value))])
         (gives :Envelope))
 
       (function "get_primitive"
@@ -209,25 +209,25 @@
       (function "relations"
         "List Model relations. Filters: :kind, :from, :to, :validity,
          :projection-kind, plus :limit / :offset."
-        (takes [filters (optional :Map)])
+        (takes [filters (optional (map-of :String :Value))])
         (gives :Envelope))
 
       (function "vocabulary"
         "Surface kernel-declared primitive-kinds and relation-kinds, each
          tagged with :in-use? against the loaded Model."
-        (takes [filters (optional :Map)])
+        (takes [filters (optional (map-of :String :Value))])
         (gives :VocabularyEntry))
 
       (function "schema"
         "Empirically surface attribute keys and participating relation kinds
          for primitives of a given :kind."
-        (takes [filters (optional :Map)])
+        (takes [filters (optional (map-of :String :Value))])
         (gives :SchemaSummary))
 
       (function "artifacts"
         "List artifact summaries. Filters: :sub-case, :language, :public?,
          plus :limit / :offset."
-        (takes [filters (optional :Map)])
+        (takes [filters (optional (map-of :String :Value))])
         (gives :Envelope))
 
       (function "idioms"
@@ -242,7 +242,7 @@
 
       (function "violations"
         "Return current constraint violations. Optional :severity filter."
-        (takes [filters (optional :Map)])
+        (takes [filters (optional (map-of :String :Value))])
         (gives (list-of :Violation)))
 
       ;; ── L2 Views ──────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@
       (function "drift"
         "Absent projections joined with their source primitive. Optional
          :projection-kind filter. Returns a plain vector, not an envelope."
-        (takes [filters (optional :Map)])
+        (takes [filters (optional (map-of :String :Value))])
         (gives (list-of :DriftRow)))
 
       (function "neighborhood"

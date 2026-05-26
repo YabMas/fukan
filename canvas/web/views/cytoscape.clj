@@ -14,8 +14,6 @@
        would suppress all field structure; `record` is the correct lift here).
      - model.TagRef         → :model/TagRef   (cross-module ref)
      - model.SourceLocation → :model/SourceLocation (cross-module ref)
-     - treatment: Map<String,Value> — no map-of combinator; approximated as :Map.
-       TODO: map-of :String :Value (cumulative count: 3)
      - All three record types are externally visible (module open by default)."
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [record]]
@@ -43,9 +41,7 @@
         (field kind            :String)
         (field label           :String)
         (field parent          (optional :String))
-        ;; treatment: open map — keys are vocabulary-defined strings
-        ;; TODO: map-of :String :Value — approximated as :Map (no map-of combinator yet)
-        (field treatment       (optional :Map))
+        (field treatment       (optional (map-of :String :Value)))
         (field tags            (optional (list-of :model/TagRef)))
         (field source_location (optional :model/SourceLocation))
         (field selected        :Boolean))
