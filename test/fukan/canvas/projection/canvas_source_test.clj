@@ -1,7 +1,9 @@
 (ns fukan.canvas.projection.canvas-source-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
+            [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.substrate.store :as store]
+            [fukan.canvas.construction :refer [function value]]
             [fukan.canvas.projection.canvas-source :as canvas-source]
             canvas.infra.server
             canvas.infra.model))
@@ -48,13 +50,18 @@
       (is (pos? (count refs))
           "At least some :references relations must be present"))))
 
-(deftest build-canvas-db-duplicate-name-detection
-  (testing "duplicate entity names are detected and reported (non-throwing)"
-    ;; The check warns to stderr but does not throw — we verify it completes
-    ;; and returns a db even when duplicates exist in fukan's corpus.
-    (let [db (canvas-source/build-canvas-db)]
-      ;; If we got here without exception, the behavior is correct
-      (is (some? db)))))
+(deftest build-canvas-db-no-cross-module-duplicate-warning
+  (testing "build-canvas-db does not warn about cross-module duplicate names"
+    ;; The fukan canvas has many cross-module name duplicates (e.g. CheckIsPure
+    ;; in 7 validation.rules-4* modules). These are no longer flagged because
+    ;; the module-qualified resolution disambiguates them via keyword namespace.
+    ;; Only intra-module duplicates (authoring bugs) produce a warning now.
+    (let [err-output (java.io.StringWriter.)
+          db         (binding [*err* err-output]
+                       (canvas-source/build-canvas-db))]
+      (is (some? db))
+      (is (not (.contains (.toString err-output) "first-match resolution will be used"))
+          "old cross-module first-match warning must not appear in stderr"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Commit 2 tests: project + build
@@ -164,3 +171,91 @@
       ;; The target should be model.spec/type/Model
       (is (some #(= "model.spec/type/Model" (get-in % [:to :id])) relevant)
           "load_model edge should point to model.spec/type/Model"))))
+
+;; ---------------------------------------------------------------------------
+;; Phase 4 Sprint 1: module-qualified reference resolution
+;; ---------------------------------------------------------------------------
+
+(defn- build-dual-module-canvas
+  "Build a canvas db with two modules that each declare an entity named 'Foo'.
+   A third module 'consumer' has a function that references :modA/Foo,
+   which should resolve to mod.modA's Foo and not mod.modB's Foo."
+  []
+  (let [modA-db     (h/with-canvas
+                      (h/within-module "mod.modA"
+                        (value "Foo" "Foo in modA")))
+        modB-db     (h/with-canvas
+                      (h/within-module "mod.modB"
+                        (value "Foo" "Foo in modB")))
+        consumer-db (h/with-canvas
+                      (h/within-module "mod.consumer"
+                        (function "useIt"
+                          "Function that references Foo from modA only."
+                          (takes [x :String])
+                          (gives :modA/Foo))))]
+    (canvas-source/merge-for-test [modA-db modB-db consumer-db])))
+
+(deftest module-qualified-resolution-finds-correct-module
+  (testing "when two modules both declare Foo, :modA/Foo resolves to modA's entity"
+    (let [db         (build-dual-module-canvas)
+          model      (canvas-source/project db)
+          edges      (:edges model)
+          from-edges (filter #(= "mod.consumer/useIt" (get-in % [:from :id])) edges)]
+      (is (seq from-edges)
+          "useIt must emit a :references edge")
+      (is (some #(= "mod.modA/type/Foo" (get-in % [:to :id])) from-edges)
+          "edge should target mod.modA/type/Foo")
+      (is (not (some #(= "mod.modB/type/Foo" (get-in % [:to :id])) from-edges))
+          "edge must NOT target mod.modB/type/Foo"))))
+
+(deftest module-qualified-resolution-unknown-namespace
+  (testing "reference to an unknown module namespace emits no edge (does not throw)"
+    (let [db    (h/with-canvas
+                  (h/within-module "some.module"
+                    (function "f"
+                      "References a non-existent module."
+                      (takes [x :String])
+                      (gives :nonexistent/Thing))))
+          model (canvas-source/project db)
+          edges (:edges model)]
+      (is (empty? (filter #(= "some.module/f" (get-in % [:from :id])) edges))
+          "unresolvable reference namespace should produce no edge"))))
+
+(deftest module-qualified-resolution-unknown-entity-in-known-module
+  (testing "reference to a known module namespace but absent entity name emits no edge"
+    (let [modA-db  (h/with-canvas
+                     (h/within-module "mod.modA"
+                       (value "ActualThing" "a type")))
+          consumer (h/with-canvas
+                     (h/within-module "mod.consumer"
+                       (function "f"
+                         "References a missing entity in modA."
+                         (takes [x :String])
+                         (gives :modA/MissingThing))))
+          db    (canvas-source/merge-for-test [modA-db consumer])
+          model (canvas-source/project db)
+          edges (:edges model)]
+      (is (empty? (filter #(= "mod.consumer/f" (get-in % [:from :id])) edges))
+          "reference to missing entity in known module should produce no edge"))))
+
+(deftest intra-module-duplicate-throws
+  (testing "a single module declaring two entities with the same name causes an error"
+    ;; Build a db manually: one module, two children with identical :entity/name
+    (let [mod-uuid (random-uuid)
+          ent-uuid-1 (random-uuid)
+          ent-uuid-2 (random-uuid)
+          db (-> (store/create)
+                 (d/db-with [{:entity/id   mod-uuid
+                               :entity/type :Module
+                               :entity/name "bad.module"}
+                              {:entity/id   ent-uuid-1
+                               :entity/type :Type
+                               :entity/name "DuplicateName"}
+                              {:entity/id   ent-uuid-2
+                               :entity/type :Type
+                               :entity/name "DuplicateName"}])
+                 (d/db-with [[:db/add [:entity/id mod-uuid] :module/child [:entity/id ent-uuid-1]]
+                              [:db/add [:entity/id mod-uuid] :module/child [:entity/id ent-uuid-2]]]))]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (canvas-source/detect-intra-module-duplicates-for-test db))
+          "intra-module duplicate entity names must throw ExceptionInfo"))))

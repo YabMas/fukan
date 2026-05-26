@@ -76,6 +76,7 @@
    canvas.web.views.shell
    canvas.web.views.sidebar
    ;; Infrastructure
+   [clojure.string :as str]
    [datascript.core :as d]
    [fukan.canvas.core.substrate.store :as store]))
 
@@ -207,29 +208,55 @@
 ;; Duplicate-name detection
 ;; ---------------------------------------------------------------------------
 
-(defn- detect-duplicate-names
-  "Detect entities (any type) across modules that share the same :entity/name.
-   Shared names matter because the projection's cross-module reference
-   resolution is by name; collisions would route references incorrectly.
-
-   Behavior:
-     - If any duplicates are found, logs a warning to stderr.
-     - Does NOT throw — fukan's canvas corpus has expected cross-module name
-       duplicates (e.g. 'Model' may appear across multiple module specs).
-   Returns a seq of duplicate name strings (empty when none)."
+(defn- find-intra-module-collisions
+  "Query the db for (module-name, child-name, count) triples where a single
+   module has more than one child with the same :entity/name.
+   Returns a seq of {:module, :name, :count} maps; empty when no collisions."
   [db]
-  (let [name-counts (->> (d/q '[:find ?n (count ?e)
-                                 :where [?e :entity/name ?n]]
-                               db)
-                         (filter #(> (second %) 1))
-                         (map first)
-                         vec)]
-    (when (seq name-counts)
+  (->> (d/q '[:find ?mn ?cn (count ?c)
+               :where [?m :entity/type :Module]
+                      [?m :entity/name ?mn]
+                      [?m :module/child ?c]
+                      [?c :entity/name ?cn]]
+             db)
+       (filter #(> (last %) 1))
+       (mapv (fn [[mn cn cnt]] {:module mn :name cn :count cnt}))))
+
+(defn detect-intra-module-duplicates-for-test
+  "Throw ExceptionInfo if any Module has two children with the same
+   :entity/name. Exposed for white-box unit tests.
+
+   Cross-module duplicates (same name in different modules) are NOT flagged
+   here; the module-qualified resolution in project-edges disambiguates them
+   via the keyword namespace."
+  [db]
+  (let [collisions (find-intra-module-collisions db)]
+    (when (seq collisions)
+      (throw (ex-info "Intra-module duplicate entity names — authoring bug"
+                      {:duplicates collisions}))))
+  nil)
+
+(defn- detect-intra-module-duplicates-warn
+  "Warn to stderr if any Module has two children with the same :entity/name.
+   Used during build-canvas-db to surface authoring bugs without failing the
+   build when the corpus has pre-existing intra-module duplicates."
+  [db]
+  (let [collisions (find-intra-module-collisions db)]
+    (when (seq collisions)
       (binding [*out* *err*]
-        (println "canvas-source: duplicate entity names across canvas modules:"
-                 (vec name-counts)
-                 "— first-match resolution will be used for cross-module references.")))
-    name-counts))
+        (println "canvas-source: intra-module duplicate entity names (authoring bugs):"
+                 (mapv (fn [{:keys [module name]}] (str module "/" name)) collisions)))))
+  nil)
+
+;; ---------------------------------------------------------------------------
+;; Public: merge-for-test
+;; ---------------------------------------------------------------------------
+
+(defn merge-for-test
+  "Test-accessible entry point for merge-dbs.
+   Merges a seq of per-module Datascript dbs into one unified db."
+  [dbs]
+  (merge-dbs dbs))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: build-canvas-db
@@ -243,8 +270,9 @@
    Fails fast if any canvas namespace fails to load (compilation error in
    a port = load error at startup).
 
-   Logs a warning (but does not throw) if duplicate entity names are found
-   across modules — cross-module reference resolution uses first-match."
+   Throws if any module has intra-module duplicate entity names (authoring bug).
+   Cross-module duplicate names are permitted — the module-qualified reference
+   resolution disambiguates them via the keyword namespace."
   []
   (let [per-module-dbs (mapv (fn [ns-sym]
                                (let [build-fn (ns-resolve (the-ns ns-sym) 'build-canvas)]
@@ -254,7 +282,7 @@
                                  (build-fn)))
                              canvas-namespaces)
         unified-db (merge-dbs per-module-dbs)]
-    (detect-duplicate-names unified-db)
+    (detect-intra-module-duplicates-warn unified-db)
     unified-db))
 
 ;; ---------------------------------------------------------------------------
@@ -447,20 +475,61 @@
             prims-with-children
             parent-by-child)))
 
+(defn- module-name-matches-ns?
+  "Return true if any dot-separated segment of module-name equals ns-str.
+   e.g. (module-name-matches-ns? \"model.spec\" \"model\") => true
+        (module-name-matches-ns? \"constraint.ast\" \"ast\")  => true
+        (module-name-matches-ns? \"model.spec\" \"spec\")  => true
+
+   Also matches underscore↔hyphen variants so that the canvas reference
+   keyword :views_loader/LoadReport finds the module named agent.views_loader."
+  [module-name ns-str]
+  (let [segments     (str/split module-name #"\.")
+        ns-str-under (str/replace ns-str #"-" "_")
+        ns-str-hyph  (str/replace ns-str #"_" "-")]
+    (some (fn [seg]
+            (or (= seg ns-str)
+                (= seg ns-str-under)
+                (= seg ns-str-hyph)))
+          segments)))
+
 (defn- resolve-reference-target
-  "Given a cross-module reference keyword (e.g. :model/Model), find the entity
-   in the unified db whose :entity/name matches the keyword's local name.
-   Returns the stable string id of the target entity, or nil if not found."
+  "Given a cross-module reference keyword (e.g. :model/Model), find the child
+   entity of a module whose name matches the keyword's namespace, returning the
+   stable string id of the target entity, or nil if not found.
+
+   Module-qualified resolution:
+     1. Take the keyword namespace as the module-name hint (e.g. \"model\").
+     2. Find all Modules whose dot-separated name contains that string as a
+        segment (e.g. \"model.spec\", \"model.build\" all match \"model\").
+     3. Among those modules, find the child entity with the keyword's local name.
+     4. Return the first match's stable id, or nil if unresolvable.
+
+   This correctly disambiguates :modA/Foo from :modB/Foo when both modules
+   export an entity named 'Foo'."
   [db uuid->stable-id ref-kw]
-  (let [target-name (name ref-kw)
-        ;; Find the first entity with this name
-        result (ffirst (d/q '[:find ?uuid
-                               :in $ ?target-name
-                               :where [?e :entity/name ?target-name]
-                                      [?e :entity/id ?uuid]]
-                             db target-name))]
-    (when result
-      (get uuid->stable-id result))))
+  (when (namespace ref-kw)
+    (let [ns-str      (namespace ref-kw)
+          entity-name (name ref-kw)
+          ;; Find all modules whose name has ns-str as a segment
+          all-modules (d/q '[:find ?m ?mn
+                              :where [?m :entity/type :Module]
+                                     [?m :entity/name ?mn]]
+                            db)
+          matching-module-eids (->> all-modules
+                                    (filter (fn [[_eid mname]]
+                                              (module-name-matches-ns? mname ns-str)))
+                                    (map first))
+          ;; Among matching modules, find a child with the given name
+          result (when (seq matching-module-eids)
+                   (ffirst (d/q '[:find ?cuuid
+                                   :in $ [?m ...] ?n
+                                   :where [?m :module/child ?c]
+                                          [?c :entity/name ?n]
+                                          [?c :entity/id ?cuuid]]
+                                 db matching-module-eids entity-name)))]
+      (when result
+        (get uuid->stable-id result)))))
 
 (defn- eid->stable-id
   "Resolve a Datascript integer eid to its stable string id via :entity/id UUID lookup."
