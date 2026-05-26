@@ -420,3 +420,139 @@ No new gaps. Existing gaps unchanged:
 feat(canvas): port vocabulary/boundary/tags spec       6279f5d9
   (contains all 8 vocabulary ports — absorbed into one commit by squash)
 ```
+
+---
+
+# Sprint 2 Addendum — agent/ subsystem (6 modules)
+
+Date: 2026-05-26
+Scope: agent/api, edb, query, sci, system, views_loader
+
+## Per-module status
+
+### agent/api — CLEAN
+Lifts: `record` (14), `invariant` (5), `function` (12), `exports` (1).
+Shape grammar: `Envelope.rows: List<Value>` → `(list-of :Value)`. Optional scalar
+fields throughout (`label`, `validity`, `projection_kind`, `public`, `source_location`,
+`sub_phase`). Nested optional: `ArtifactSummary.source_location: model.SourceLocation?`
+→ `(optional :model/SourceLocation)` with cross-module ref auto-emitting Relation.
+`VocabularyEntry.relation_kinds: List<RelationKindEntry>?` →
+`(optional (list-of :RelationKindEntry))` — nested shape grammar, clean.
+Cross-module type refs: `:model/SourceLocation`, `:query/QueryForm`, `:query/QueryRow`.
+No `exports:` declared in source boundary — the subsystem boundary (agent.boundary)
+carries the exports list; per-module boundary has none. `exports` macro added for all
+14 value types anyway for completeness.
+TODO comments: none. No escalations.
+
+### agent/edb — CLEAN
+Lifts: `value` (1), `invariant` (3), `function` (1), `exports` (1).
+`EDB` is opaque (structureless value type). `PredicateCatalogue` invariant carries the
+full predicate catalog in its docstring — no predicate-catalog lift needed, the
+invariant body covers it. `model_to_edb` takes `:model/Model` cross-module ref.
+TODO comments: none. No escalations.
+
+### agent/query — CLEAN
+Lifts: `value` (2), `record` (2), `invariant` (3), `function` (2), `exports` (1).
+`QueryForm` and `QueryRow` are opaque value types. `ParsedQuery.in: List<Keyword>`
+→ `(list-of :Keyword)` — clean. `QueryAtom.args: List<Value>` → `(list-of :Value)`.
+`evaluate` takes cross-module `:edb/EDB`. `ParseFailureModes` invariant enumerates
+the four typed ex-info variants — captured in docstring.
+TODO comments: none. No escalations.
+
+### agent/sci — CLEAN
+Lifts: `record` (2), `invariant` (4), `function` (3), `exports` (1).
+`EvalResult` has 6 fields, all optional except `ok`. `EvalOpts` is a single
+optional field. `reset_ctx` is nullary with `(gives :Unit)`. `SandboxSafety` invariant
+names the explicitly-denied operations. `SandboxFailureModes` enumerates `:runtime`
+and `:timeout` with propagation semantics — captured in docstring.
+TODO comments: none. No escalations.
+
+### agent/system — CLEAN
+Lifts: `record` (3), `invariant` (5), `function` (4).
+`AgentStatus.views: views_loader.LoadReport` → `:views_loader/LoadReport`
+cross-module ref. `help(fn_sym: Symbol?)` → `(optional :Symbol)` for optional arg.
+`source` returns `(optional :SourceEntry)`. No `exports:` in source module boundary
+(subsystem boundary carries them). No exports macro added — consistent with source.
+TODO comments: none. No escalations.
+
+### agent/views_loader — CLEAN
+File path `views_loader.clj` → namespace `canvas.agent.views-loader` (underscore →
+hyphen per standing convention). Module name in canvas is `"agent.views_loader"`
+(matching the source coordinate).
+Lifts: `record` (2), `invariant` (5), `function` (5), `exports` (1).
+`LoadReport.loaded: List<Symbol>` → `(list-of :Symbol)`. `LoadError.error_form:
+Value?` → `(optional :Value)`. `discover` and `auto_load` both take
+`(optional :String)` for nullable target_src. `reset` is nullary with `(gives :Unit)`.
+`ResetClearsBoth` invariant names the sci.reset_ctx coupling explicitly.
+TODO comments: none. No escalations.
+
+## Structural observations
+
+1. **Agent is the most function-rich subsystem in Sprint 2.** api alone has 12
+   function declarations (L0: 1, L1: 9, L2: 3) — the largest single-module function
+   surface encountered across the entire sprint. Every function is expressible with
+   existing shape grammar.
+
+2. **No `rule` declarations anywhere in agent/.** Unlike validation/ (35 rules) and
+   vocabulary/ (3 rules), the agent subsystem has zero rule declarations. Every
+   behavioural commitment is an `invariant`. The `rule` deferred-lift count remains 39.
+
+3. **Cross-module refs are rich and multi-directional.** api → query (QueryForm,
+   QueryRow), api → model (SourceLocation), edb → model (Model), query → edb (EDB),
+   system → views_loader (LoadReport). Every cross-module ref expressed as
+   `:<module>/<Type>` and auto-emits a `:references` Relation. No friction.
+
+4. **`map-of` gap: NOT triggered.** Zero instances. Sprint 2 cumulative count
+   remains 2 (registry + violation only). Agent subsystem operates entirely with
+   typed scalars, lists, sets, optional fields, and opaque maps (`:Map` for filters).
+
+5. **`filters: Map<String, Value>?` recurs across L1 probes.** Eight L1 and L2
+   functions take an optional filter map. Approximated uniformly as `(optional :Map)`
+   — consistent with the approach used for `Map<String, Any>` elsewhere. This
+   establishes a pattern: filter bags are `:Map`, structured domain types get
+   field decomposition.
+
+6. **Opaque value types via `value` vs structured via `record`.** `QueryForm`,
+   `QueryRow`, and `EDB` are opaque (no declared fields — structureless value types).
+   All other value types are structured (`record`). The split mirrors the spec
+   language: structureless allium `value` → canvas `value`, fielded allium `value`
+   → canvas `record`.
+
+7. **`export` discipline clarified.** The agent.boundary subsystem boundary carries
+   all exports; individual module boundaries have none. For api.clj the exports macro
+   was still applied (it owns the types). For system.clj no exports macro was
+   applied (types belong to their declaring modules). This matches the source
+   structure.
+
+## Gaps to escalate (Sprint 2 cumulative, agent addendum)
+
+No new gaps. Existing gaps unchanged:
+1. **`map-of` combinator** — 2 instances total. Agent adds 0.
+2. **`rule` lift** — 39 total across all ports (35 validation + 1 constraint + 3 vocabulary + 0 agent).
+
+## Test counts
+
+| State | Tests | Assertions |
+|---|---|---|
+| Before Sprint 2 (all) | 67 | 119 |
+| After Sprint 2 infra+proj+libs | 79 | 172 |
+| After Sprint 2 validation/ | 95 | 229 |
+| After Sprint 2 constraint/ | 109 | 301 |
+| Before Sprint 2 agent/ (full suite) | 66 | 280 |
+| After Sprint 2 agent/ (full suite)  | 137 | 464 |
+| Delta (agent sprint) | +71 | +184 |
+
+Note: the full suite (`clj -M:test -r '(fukan\.canvas\|canvas)\..*-test'`) includes
+fukan.canvas.* substrate tests which account for the higher absolute numbers vs the
+canvas-only counts in prior entries.
+
+## jj log (Sprint 2 agent)
+
+```
+feat(canvas): port agent/views_loader spec   oqlyrtos
+feat(canvas): port agent/system spec         urktpvzm
+feat(canvas): port agent/sci spec            xlllvmuz
+feat(canvas): port agent/query spec          mwqvrkqu
+feat(canvas): port agent/edb spec            vxxwoowp
+feat(canvas): port agent/api spec            xtwxmnov
+```
