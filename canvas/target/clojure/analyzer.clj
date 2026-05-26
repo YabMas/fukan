@@ -2,31 +2,31 @@
   "Canvas port of target/clojure/analyzer.allium + analyzer.boundary.
 
    Coverage:
+     - rule RunClojureAnalyzer          → vocab.behavioral/rule
      - fn run                           → construction/function (cross-module refs,
                                           triggers: RunClojureAnalyzer)
      - 6 invariants                     → vocab.behavioral/invariant each
 
    Notes:
-     - rule RunClojureAnalyzer: no rule lift exists (deferred). Left as
-       TODO comment below with structural intent noted.
-     - fn run triggers: RunClojureAnalyzer — captured as docstring.
      - Cross-module type refs: :model/Model, :registry/Registry."
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "target.clojure.analyzer"
 
-      ;; TODO: rule RunClojureAnalyzer — no rule lift (deferred).
-      ;; Structural intent:
-      ;;   when: RunClojureAnalyzer(model: model.Model, code_root: String?)
-      ;; Phase 6 of the build pipeline. Walks the configured code root,
-      ;; projects every Operation, Rule, Entity/Value/Variant Container,
-      ;; and Event to a canonical Code.* artifact, and emits a
-      ;; :relation/projects edge with per-edge :validity. Source symbols
-      ;; with no matching primitive become standalone unprojected artifacts.
+      (rule "RunClojureAnalyzer"
+        "Phase 6 of the build pipeline. Walk the configured code root,
+         project every Operation, Rule, Entity/Value/Variant Container,
+         and Event to a canonical Code.* artifact, and emit a
+         :relation/projects edge with per-edge :validity. Source symbols
+         with no matching primitive become standalone unprojected artifacts.
+         Non-gating: failures accumulate as violations, the build continues."
+        (when RunClojureAnalyzer
+          (model     :model/Model)
+          (code_root (optional :String))))
 
       ;; ── Invariants ───────────────────────────────────────────────────────
 
