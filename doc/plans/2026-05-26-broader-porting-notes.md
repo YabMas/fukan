@@ -838,3 +838,217 @@ feat(canvas): port web/views/cytoscape spec  sokqmnwr b736a864
 feat(canvas): port web/views/breadcrumb spec mwrsqony 1ad3c214
 feat(canvas): port web/handler spec          ztpympvp 194a3668
 ```
+
+---
+
+# Sprint 2 Final Dispatch — model/ subsystem (10 modules)
+
+Date: 2026-05-26
+Scope: model/{artifact, build, effect, expression, pipeline, primitives,
+              relations, spec, type, vocabulary}
+
+## Per-module status
+
+### model/artifact — CLEAN
+Lifts: `invariant` (1), `function` (3).
+Shape grammar: `source_location` and `public` are optional → `(optional :Any)`,
+`(optional :Boolean)`. `artifact_identity` returns `:Any` (tuple — no lift for
+tuple return types).
+The `ArtifactIdentityIsTriple` invariant is the only behavioural commitment in
+artifact.allium; it cross-refs §7.3 which lives in the projection vocabulary.
+TODO comments: none. No escalations.
+
+### model/build — CLEAN
+Lifts: `invariant` (5), `function` (13).
+Shape grammar: all functions take/return `:model/Model` (cross-module self-ref),
+`:Any` for untyped primitives. `edges_by_kind`, `edges_from`, `edges_to` return
+`(list-of :Any)` — clean.
+Five guarantees from build.allium (PureConstruction, UniquePrimitiveIds,
+EndpointResolution, MultiEdgeIdentity, UniqueArtifactIdentity) all map to
+`invariant`. These are the construction API's safety contracts.
+TODO comments: none. No escalations.
+
+### model/effect — CLEAN
+Lifts: `invariant` (3), `function` (3).
+Shape grammar: `value` parameter is `(optional :Any)` (absent for Destroy) —
+clean. `canonicalise` returns `(optional :Any)` — when no recognised pattern,
+returns nil.
+`CanonicaliseIsMethodologyDelegated` is the key architectural invariant: the
+substrate ships a recognition seam, not methodology patterns.
+TODO comments: none. No escalations.
+
+### model/expression — CLEAN (rich function surface)
+Lifts: `invariant` (3), `function` (15).
+Shape grammar: `make_apply` takes `(list-of :Any)` for args — clean. Environment
+constructors take `(map-of :String :Any)` — **`map-of` combinator used** (shipped
+in Sprint 2.5). Three environments: onestate (1 map), twostate (3 maps: pre/post/params),
+model_introspection (1 map). `make_match` takes `(list-of :Any)` for arms — clean.
+Core operator vocabulary captured in docstring comment (arithmetic, comparison,
+logical, set membership, presence — 13 operators).
+`map-of` combinator now cleanly handles `Map<String, Type>` environment bindings —
+first use in this sprint, confirming the combinator is working correctly.
+TODO comments: none. No escalations.
+
+### model/pipeline — ONE TODO (deferred rule lift)
+Lifts: `invariant` (4), `function` (1).
+Shape grammar: `build_model` takes `:String` (FilePath) and returns `:model/Model` —
+cross-module self-ref. The `FilePath` type from the boundary is rendered as `:String`
+(no FilePath lift in canvas).
+Four guarantees from pipeline.allium (PhaseOrdering, GateG2Halts, NonGatingPhases,
+DefaultsRegistrationIsIdempotent) — all `invariant`. These are the orchestration
+contracts.
+**TODO: rule BuildModel — deferred.** Structural intent captured inline: phase
+sequence 1-3 → G2 → defaults → 5 → 6; input FilePath, output Model.
+Sprint 2 cumulative rule-lift count: **49** (+1).
+No escalations.
+
+### model/primitives — CLEAN (large constructor surface)
+Lifts: `invariant` (3), `function` (16).
+Shape grammar: all sub-substrate constructors take typed scalars + `:Any` for
+type_value (no Type lift in canvas — Type is an Any in the construction surface).
+Identity helpers return `:Any` (two-tuples — no tuple lift).
+Kernel primitive constructors (`make_container` through `make_event`) all take
+unstructured spec map (`:Any`) — mirrors the source boundary which uses a single
+`spec: Any` parameter for each.
+Three invariants from primitives.allium (ConstructorsProduceSubstrate, KindIsAttached,
+IdentityIsDeterministic) cleanly capture the substrate conformance contract.
+TODO comments: none. No escalations.
+
+### model/relations — CLEAN
+Lifts: `invariant` (2), `function` (6).
+Shape grammar: `substrate_address` takes `(list-of :Any)` for path — clean.
+`identifying_slots` returns `(set-of :String)` — first use of `set-of` for a
+String set return type, works cleanly. `edge_identity` returns `:Any` (tuple).
+Two invariants: MakeEdgeValidatesRelationKind and EdgeIdentityIsPerRelation.
+The closed-set invariant (13 kernel RelationKinds) is the key guard.
+TODO comments: none. No escalations.
+
+### model/spec — RICH (kernel substrate; no boundary file)
+Lifts: `value` (7), `record` (14), `invariant` (33).
+Shape grammar: `Model.primitives: Map<Identifier, Primitive>` →
+`(map-of :String :Any)` — **`map-of` combinator used** (second use in this sprint).
+`RefType.where: Set<TagRef>?` → `(optional (set-of :TagRef))` — nested shape
+grammar, clean. Most list-typed fields → `(list-of :Any)` or `(list-of :String)`.
+`RelationalSpec.endpoints: List<String>` → `(list-of :String)` — clean.
+
+**No boundary file.** model/spec.allium has no sibling spec.boundary — it is the
+substrate itself, not a module with a wall. All declarations are implicitly exported
+(open module). The canvas port captures the full substrate surface via records and
+values, with no `exports:` macro needed.
+
+This is the largest single spec file ported in Sprint 2 — 33 invariants across:
+kernel invariants (SubstratePrinciple, ChildrenOnParent, EffectExpressionParity,
+StubResolutionIsUnconditional, etc.), 13 kernel relation semantics (Triggers
+through Projects), 4 V9 inheritance guarantees (PayloadSchemaExtension, etc.),
+2 edge direction guarantees, 1 type-system floor guarantee.
+
+**Conceptual distinction maintained:** `value` lift used for sum-type entity
+declarations (Type, ExpressionForm, Environment, Endpoint, CollectionSemantics,
+RefTarget, ArtifactSub) — these are closed sums with no field structure in the
+canvas port. `record` used for all fielded types.
+
+TODO comments: none. No escalations.
+
+### model/type — CLEAN
+Lifts: `invariant` (2), `function` (10).
+Shape grammar: `make_collection` takes `:Any` for semantics (keyword or keyed
+constructor). `make_ref_kernel_primitive` takes `(set-of :String)` for kinds —
+set-of String, clean. `make_ref_substrate` takes `(set-of :String)` for slot_kinds.
+Two invariants (ConstructorsProduceType, TargetLanguageNeutral) capture the
+constructor-conformance and neutrality contracts.
+TODO comments: none. No escalations.
+
+### model/vocabulary — CLEAN
+Lifts: `invariant` (2), `function` (5).
+Shape grammar: all constructors take unstructured spec map (`:Any`) — consistent
+with primitives.boundary's design. `has_tag_with_ancestors` takes `:Any` for
+registry and tag_ref, returns `:Boolean`.
+`PrimitiveKindDescriptiveSurface` invariant is architecturally notable: it
+commits that every PrimitiveKind has BOTH a doc string AND a face-role assignment
+(face-host, face-interface, face-component, face-peer) — the agent vocabulary view
+depends on this coverage.
+TODO comments: none. No escalations.
+
+## Structural observations
+
+1. **model/ is the most invariant-dense subsystem across all of Sprint 2.**
+   33 invariants in spec alone; 49 total across 10 modules. No other subsystem
+   (validation 35 rules, constraint 17 invariants, web 32 invariants) approaches
+   this density. The kernel's job is commitments — and the spec shows it.
+
+2. **spec.allium has no boundary file — and that's correct.** The spec is the
+   substrate itself; there's no "module wall" to cross. This is the first such
+   file in the entire porting effort. Handled correctly by producing a canvas port
+   with implicit export (no `exports:` macro) and using `value`/`record` as the
+   only lifts alongside invariants.
+
+3. **`map-of` combinator used twice in this sprint.** expression.clj (environment
+   bindings: `Map<String, Type>`) and spec.clj (model primitives map:
+   `Map<Identifier, Primitive>`) both use `(map-of :String :Any)`. The combinator
+   shipped in Sprint 2.5 proves its worth immediately in the most structurally
+   dense subsystem.
+
+4. **`value` vs `record` discipline is firm.** Spec.allium has seven closed-sum
+   entity declarations (Type, ExpressionForm, Environment, etc.) — all opaque at
+   canvas level (no fields declared for the sum itself). These become canvas
+   `value`. All 14 fielded shapes become canvas `record`. The distinction from
+   web/cytoscape is cleanly applied here.
+
+5. **Only 1 rule declaration in this entire subsystem.** The BuildModel rule in
+   pipeline.allium. This is surprising for the kernel — but correct: the model/
+   subsystem describes substrate types and construction invariants, not reactive
+   behaviour. Rules live in infra/ (lifecycle) and vocabulary/ (analysis).
+
+6. **FilePath type is approximated as :String.** The pipeline.boundary declares
+   `build_model(source_root: FilePath)` — FilePath is a domain type not yet lifted
+   to canvas. Rendered as `:String`. This is the correct approximation (no loss
+   of structural information at canvas level).
+
+7. **Thirteen kernel relation semantics captured as invariants.** Each of the 13
+   `guarantee` declarations in spec.allium (Triggers through Projects) becomes an
+   `invariant` in spec.clj. These are not validation rules — they are substrate
+   commitments about what each edge kind means. The invariant lift handles them
+   correctly.
+
+## Gaps to escalate (Sprint 2 cumulative, model/ final)
+
+No new gaps. Existing gaps at Sprint 2 close:
+1. **`map-of` combinator** — RESOLVED. Shipped in Sprint 2.5. Used twice in this
+   sprint without friction. The 3 prior `:Map` approximations (registry, violation,
+   cytoscape) should be backfilled in a future cleanup pass.
+2. **`rule` lift** — **49** total across all ports:
+   35 validation + 1 constraint + 3 vocabulary + 0 agent + 1 target/clojure +
+   8 web/graph + 1 model/pipeline.
+3. **FilePath type not lifted.** Only 1 instance (pipeline.boundary). Low priority.
+4. **`(tuple-of ...)` combinator not available.** Identity helpers (artifact_identity,
+   edge_identity, field_identity, etc.) return two- or three-tuples. All approximated
+   as `:Any`. The canvas substrate has no tuple shape — these are opaque return types.
+
+## Test counts
+
+| State | Tests | Assertions |
+|---|---|---|
+| Before Sprint 2 (all) | 67 | 119 |
+| After Sprint 2 infra+proj+libs | 79 | 172 |
+| After Sprint 2 validation/ | 95 | 229 |
+| After Sprint 2 constraint/ | 109 | 301 |
+| After Sprint 2 agent/ (full suite) | 137 | 464 |
+| After Sprint 2 target/clojure/ (full suite) | 149 | 525 |
+| After Sprint 2 web/ (full suite) | 163 | 581 |
+| After Sprint 2 model/ (full suite) | **187** | **694** |
+| Delta (model/ sprint) | +24 | +113 |
+
+## jj log (Sprint 2 model/)
+
+```
+feat(canvas): port model/vocabulary spec   mlpmrmlu c6d5f73d
+feat(canvas): port model/type spec         wswmyorl e7d5d206
+feat(canvas): port model/spec spec         qnzvzonn 28e85902
+feat(canvas): port model/relations spec    ztpknsop a3893325
+feat(canvas): port model/primitives spec   lopyvsnv 57734466
+feat(canvas): port model/pipeline spec     usnynpxs da0141db
+feat(canvas): port model/expression spec   zyzwxooy 04cfc996
+feat(canvas): port model/effect spec       oltsqtor 862ad290
+feat(canvas): port model/build spec        onrwnxvq 826569d6
+feat(canvas): port model/artifact spec     nsxuxyzq 0463bf38
+```
