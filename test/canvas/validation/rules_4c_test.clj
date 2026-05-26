@@ -1,6 +1,6 @@
-(ns canvas.project-layer.defaults-test
+(ns canvas.validation.rules-4c-test
   (:require [clojure.test :refer [deftest is]]
-            [canvas.project-layer.defaults :as port]
+            [canvas.validation.rules-4c :as port]
             [fukan.canvas.core.substrate.store :as store]
             [datascript.core :as d]))
 
@@ -14,6 +14,8 @@
         names (->> (d/q '[:find ?n :where [?e :entity/name ?n]] db)
                    (map first)
                    set)]
-    (is (contains? names "project_layer.defaults") "module name present")
-    (is (contains? names "SelfReferentialIdentity") "SelfReferentialIdentity invariant present")
-    (is (contains? names "fukan_on_fukan") "fukan_on_fukan function present")))
+    (is (contains? names "validation.rules-4c") "module name present")
+    (is (contains? names "check") "checker present")
+    (is (contains? names "BindingOperationResolves") "invariant present")
+    (is (contains? names "AttachReturnsRequiresTriggers") "attach invariant present")
+    (is (contains? names "CheckIsPure") "purity invariant present")))

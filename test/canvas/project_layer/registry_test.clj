@@ -1,6 +1,6 @@
-(ns canvas.project_layer.registry-test
+(ns canvas.project-layer.registry-test
   (:require [clojure.test :refer [deftest is]]
-            [canvas.project_layer.registry :as port]
+            [canvas.project-layer.registry :as port]
             [fukan.canvas.core.substrate.store :as store]
             [datascript.core :as d]))
 

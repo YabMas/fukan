@@ -1,4 +1,4 @@
-(ns canvas.project_layer.defaults
+(ns canvas.project-layer.defaults
   "Canvas port of project_layer/defaults.allium + defaults.boundary.
 
    Coverage:

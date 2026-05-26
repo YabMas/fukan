@@ -1,4 +1,4 @@
-(ns canvas.project_layer.registry
+(ns canvas.project-layer.registry
   "Canvas port of project_layer/registry.allium + registry.boundary.
 
    Coverage:
