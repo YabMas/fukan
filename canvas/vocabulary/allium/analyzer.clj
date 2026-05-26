@@ -7,18 +7,17 @@
      - value ExposesIssue        → construction/record (7 String fields)
      - value EventShapeMismatch  → construction/record using shape grammar
                                    (list-of :Any), (optional (list-of :Integer))
+     - rule AnalyzeFile          → vocab.behavioral/rule
      - fn analyze_file           → construction/function
      - fn extract_use_aliases    → construction/function
      - 8 invariants              → vocab.behavioral/invariant each
 
    Notes:
-     - rule AnalyzeFile: no rule lift exists (deferred to Sprint 2). Left as
-       TODO comment below with structural intent noted.
      - EventShapeMismatch.arities: List<Integer>? and type_seqs: List<Any>?
        are now expressible via shape grammar (optional (list-of :Integer)) etc."
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function record]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
@@ -54,13 +53,18 @@
         ;; type_seqs: List<Any>?
         (field type_seqs    (optional (list-of :Any))))
 
-      ;; TODO: rule AnalyzeFile — no rule lift (deferred to Sprint 2).
-      ;; Structural intent:
-      ;;   when: AnalyzeFile(model: model.Model, ast: parser.ParsedAllium,
-      ;;                     coordinate: String,
-      ;;                     use_aliases: Map<String, String>?)
-      ;; Walks one file's declarations and folds kernel content (plus
-      ;; Allium::* tag applications) into the input Model.
+      (rule "AnalyzeFile"
+        "Walk one .allium file's declarations and fold kernel content (plus
+         Allium::* tag applications) into the input Model. Processes
+         declarations in dependency order: entities/values/variants →
+         external-entities/actors → contracts → surfaces → rules →
+         top-level invariants. Stashes diagnostics in :phase4-state rather
+         than throwing."
+        (when AnalyzeFile
+          (model      :model/Model)
+          (ast        :parser/ParsedAllium)
+          (coordinate :String)
+          (use_aliases (optional (map-of :String :String)))))
 
       ;; Invariants from analyzer.allium
       (invariant "DeclarationOrder"

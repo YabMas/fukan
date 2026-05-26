@@ -6,31 +6,25 @@
    K15a inline-primitive lift.
 
    Coverage:
+     - rule LoadSource → vocab.behavioral/rule
      - 7 invariants: DeterministicFileOrder, PathCanonicalisation,
        DefaultsRegisteredBeforeAnalysis, StubUnification,
-       AmbiguousStubsLeftAlone, InlineLiftIdempotence, PipelinePurity
-
-   TODO: rule LoadSource — no rule lift (deferred).
-     Structural intent:
-       when: LoadSource(source_root: String)
-     Steps: seed Model with Allium tag catalogue + default RendererRegistrations;
-     discover .allium files (sorted); per-file parse + analyze; stub-unification;
-     inline-primitive lift. Returns validated Model. No Violations produced."
+       AmbiguousStubsLeftAlone, InlineLiftIdempotence, PipelinePurity"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "vocabulary.allium.pipeline"
 
-      ;; TODO: rule LoadSource — no rule lift (deferred to Sprint 2).
-      ;; Structural intent:
-      ;;   when: LoadSource(source_root: String)
-      ;; Steps: seed fresh Model with Allium TagDefinition catalogue and default
-      ;; RendererRegistrations; discover every .allium file under source_root in
-      ;; sorted order; per-file: derive coordinate, parse AST, extract use-alias
-      ;; map, run analyzer; stub-unification (§3.6); inline-primitive lift.
-      ;; Returns validated Model; no Violations produced.
+      (rule "LoadSource"
+        "Phase 1+2 of the build pipeline. Seed a fresh Model with the Allium
+         TagDefinition catalogue and default RendererRegistrations; discover
+         every .allium file under source_root in sorted order; per-file:
+         derive coordinate, parse AST, extract use-alias map, run analyzer;
+         stub-unification (§3.6); inline-primitive lift. Returns a validated
+         Model. No Violations produced."
+        (when LoadSource (source_root :String)))
 
       (invariant "DeterministicFileOrder"
         "Files are loaded in sorted absolute-path order. Same source-root

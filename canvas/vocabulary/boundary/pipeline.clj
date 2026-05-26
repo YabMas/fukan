@@ -5,32 +5,26 @@
    and per-file analysis on top of the Allium-loaded Model.
 
    Coverage:
+     - rule LoadSource → vocab.behavioral/rule
      - 5 invariants: DeterministicFileOrder, PathCanonicalisation,
        DefaultsRegisteredBeforeAnalysis, ComposesOntoAllium,
-       PipelinePurity
-
-   TODO: rule LoadSource — no rule lift (deferred).
-     Structural intent:
-       when: LoadSource(model: model.Model, source_root: String)
-     Steps: seed input Model with Boundary tag catalogue; discover
-     .boundary files (sorted); per-file derive coordinate, parse AST,
-     extract + canonicalise use-alias map, run analyzer.
-     Returns enriched Model. No Violations produced."
+       PipelinePurity"
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "vocabulary.boundary.pipeline"
 
-      ;; TODO: rule LoadSource — no rule lift (deferred to Sprint 2).
-      ;; Structural intent:
-      ;;   when: LoadSource(model: model.Model, source_root: String)
-      ;; Steps: seed input Model with Boundary TagDefinition catalogue;
-      ;; discover every .boundary file under source_root in sorted order;
-      ;; per-file: derive coordinate from relative path (minus .boundary),
-      ;; parse AST, extract + canonicalise use-alias map, run per-file analyzer.
-      ;; Returns enriched Model. No Violations produced.
+      (rule "LoadSource"
+        "Phase 3 of the build pipeline. Seed the input Model with the
+         Boundary TagDefinition catalogue; discover every .boundary file
+         under source_root in sorted order; per-file: derive coordinate,
+         parse AST, extract and canonicalise use-alias map, run per-file
+         analyzer. Returns enriched Model. No Violations produced."
+        (when LoadSource
+          (model       :model/Model)
+          (source_root :String)))
 
       (invariant "DeterministicFileOrder"
         "Files are loaded in sorted absolute-path order. Same source-root

@@ -7,21 +7,14 @@
 
    Coverage:
      - record BindingIssue        (10 fields, several optional)
+     - rule AnalyzeFile           → vocab.behavioral/rule
      - 8 invariants: FileShapeDiscipline, ThreeFnForms,
        DeclareNewIntroducesOperation, AttachReusesOperation,
        ExportsClosesModule, SubsystemComposesChildren,
-       BindingEdgeIsBestEffort, Phase4StateAccumulation
-
-   TODO: rule AnalyzeFile — no rule lift (deferred).
-     Structural intent:
-       when: AnalyzeFile(model: model.Model, ast: parser.ParsedBoundary,
-                         coord: String, use_aliases: Map<String, String>)
-     Detects file shape (module-bound vs subsystem-bound); processes fn
-     forms (declare-new / local-attach / foreign-attach); applies exports:;
-     handles subsystem declarations. Returns enriched Model."
+       BindingEdgeIsBestEffort, Phase4StateAccumulation"
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [record]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
@@ -47,13 +40,18 @@
         ;; use_aliases: List<String>?
         (field use_aliases  (optional (list-of :String))))
 
-      ;; TODO: rule AnalyzeFile — no rule lift (deferred to Sprint 2).
-      ;; Structural intent:
-      ;;   when: AnalyzeFile(model: model.Model, ast: parser.ParsedBoundary,
-      ;;                     coord: String, use_aliases: Map<String, String>)
-      ;; Detects file shape from declaration kinds; processes fn forms
-      ;; (declare-new / local-attach / foreign-attach); applies exports:;
-      ;; handles subsystem declarations with contains: canonicalisation.
+      (rule "AnalyzeFile"
+        "Walk one .boundary file's declarations and enrich the input Model.
+         Detects file shape (module-bound vs subsystem-bound); processes fn
+         forms (declare-new / local-attach / foreign-attach); applies
+         exports: to close modules; handles subsystem declarations with
+         contains: canonicalisation. Accumulates binding failures in
+         :phase4-state rather than throwing."
+        (when AnalyzeFile
+          (model      :model/Model)
+          (ast        :parser/ParsedBoundary)
+          (coord      :String)
+          (use_aliases (map-of :String :String))))
 
       (invariant "FileShapeDiscipline"
         "A .boundary file is module-bound or subsystem-bound, never both.
