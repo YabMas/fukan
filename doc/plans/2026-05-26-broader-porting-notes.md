@@ -84,3 +84,113 @@ feat(canvas): port project_layer/registry spec wzrnzmlu d6bc88bf
 feat(canvas): port project_layer/defaults spec ysxtpuuu fd3bc351
 feat(canvas): port infra/model spec            tnuplomz 5335dc76
 ```
+
+---
+
+# Sprint 2 Addendum — validation/ subsystem (8 modules)
+
+Date: 2026-05-26
+Scope: validation/rules_4a through rules_4g + validation/violation
+
+## Per-module status
+
+### validation/rules_4a — CLEAN
+Lifts: `checker` (1), `invariant` (6).
+All six structural invariants from the allium spec captured. The `checker` lift
+bakes in `(Model) -> [Violation]` — one-liner per sub-phase entry point.
+TODO comments: 5 rule declarations (deferred, no rule lift).
+No escalations.
+
+### validation/rules_4b — CLEAN
+Lifts: `checker` (1), `invariant` (5).
+Four event invariants + purity invariant. Structurally identical to 4a.
+TODO comments: 4 rule declarations.
+No escalations.
+
+### validation/rules_4c — CLEAN
+Lifts: `checker` (1), `invariant` (6).
+Five binding invariants + purity. The `SignatureMatchVerifiable` invariant
+captures the nuanced "uncertain at current fidelity" language.
+TODO comments: 5 rule declarations.
+No escalations.
+
+### validation/rules_4d — CLEAN
+Lifts: `checker` (1), `invariant` (4).
+Three module-visibility invariants + purity.
+TODO comments: 3 rule declarations.
+No escalations.
+
+### validation/rules_4e — CLEAN
+Lifts: `checker` (1), `invariant` (3).
+Two subsystem-visibility invariants + purity. The spec scope is tighter than
+4a-4d; only 3 invariants total.
+TODO comments: 2 rule declarations.
+No escalations.
+
+### validation/rules_4f — CLEAN
+Lifts: `checker` (1), `invariant` (5).
+Four closure invariants + purity. `ClosureScopeIsMVP` is explicitly scoped to
+current coverage — captured faithfully.
+TODO comments: 4 rule declarations.
+No escalations.
+
+### validation/rules_4g — CLEAN
+Lifts: `checker` (1), `invariant` (5).
+Four cross-module reference invariants + purity. Two shared-concept invariants
+(`ContractsAreAlwaysVisible`, `ExternalEntityCountsAsVisible`) also appear in
+4f — each module declares them independently, which is correct.
+TODO comments: 4 rule declarations.
+No escalations.
+
+### validation/violation — ONE GAP (same as registry)
+Lifts: `function` (5), `invariant` (4), `exports` (1).
+Shape grammar: `(list-of :agent/Violation)` for filter functions — clean.
+Cross-module `:agent/Violation` references handled by namespaced keyword.
+
+**GAP: `map-of` combinator wanted (same as registry).**
+`make_violation` takes `Map<String, Value>` — no `map-of` combinator exists.
+Approximated as `:Map` with inline comment. This is the second occurrence of
+this gap across Sprint 2.
+No other escalations.
+
+## Structural observations
+
+1. **rules_4a–4g are maximally mechanical.** Every file is the same pattern:
+   N invariants + 1 `checker`. The `checker` lift was purpose-built for this
+   pattern and works perfectly. Zero friction.
+
+2. **`rule` declarations are the only structural concept without a lift.**
+   All 7 sub-phase files have between 3–5 rule declarations each (35 total
+   across 4a–4g). All left as TODO comments. The inline comment format is
+   consistent and captures: name, structural intent, violation kind + severity.
+
+3. **`violation` is the one module with substantive function signatures.**
+   The predicates and filters are all expressible in shape grammar. Only
+   `make_violation`'s `Map<String, Value>` parameter hits the `map-of` gap.
+
+4. **No `triggers:` / `returns:` annotations in these modules.** Unlike
+   phase4.clj, none of the sub-phase boundary files use attach-form syntax —
+   all functions are plain signature declarations.
+
+## Gaps to escalate (Sprint 2 cumulative)
+
+1. **`map-of` combinator** — second occurrence (`violation.make_violation`).
+   Both instances are `Map<String, Value>` or `Map<String, Any>`. The gap is
+   real but low-priority; approximating as `:Map` is lossless for structural
+   purposes.
+2. **`rule` lift** — 35 rule declarations across 7 files, all deferred.
+
+## Test counts
+
+| State | Tests | Assertions |
+|---|---|---|
+| Before Sprint 2 (all) | 67 | 119 |
+| After Sprint 2 infra+proj+libs | 79 | 172 |
+| After Sprint 2 validation/ | 95 | 229 |
+| Delta (validation sprint) | +16 | +57 |
+
+## jj log (Sprint 2 validation)
+
+```
+feat(canvas): port validation/rules_4a–4g + violation specs   vztqzvom 4fd5cc39
+```
