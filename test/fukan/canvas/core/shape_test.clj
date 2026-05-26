@@ -63,3 +63,50 @@
 (deftest unknown-shape-throws
   (is (thrown? clojure.lang.ExceptionInfo
                (shape/parse '(weird-form :T)))))
+
+(deftest type-names-atomic
+  (is (= #{:String} (shape/type-names (shape/parse :String)))))
+
+(deftest type-names-ref
+  (is (= #{:model/Model} (shape/type-names (shape/parse :model/Model)))))
+
+(deftest type-names-optional
+  (is (= #{:Integer}
+         (shape/type-names (shape/parse '(optional :Integer))))))
+
+(deftest type-names-list
+  (is (= #{:String}
+         (shape/type-names (shape/parse '(list-of :String))))))
+
+(deftest type-names-nested
+  (testing "(optional (list-of :T)) collects :T"
+    (is (= #{:Integer}
+           (shape/type-names (shape/parse '(optional (list-of :Integer))))))))
+
+(deftest type-names-record-with-cross-module-refs
+  (testing "(record-of [m :model/Model] [v (list-of :agent/Violation)]) collects both refs"
+    (is (= #{:model/Model :agent/Violation}
+           (shape/type-names (shape/parse '(record-of
+                                             [:m :model/Model]
+                                             [:v (list-of :agent/Violation)])))))))
+
+(deftest type-names-arrow
+  (testing "an arrow shape collects both inputs and outputs"
+    (is (= #{:String :Integer}
+           (shape/type-names
+             {:kind :arrow
+              :inputs {:kind :record :fields [["x" {:kind :atomic :name :String}]]}
+              :outputs {:kind :atomic :name :Integer}})))))
+
+(deftest type-names-sum
+  (is (= #{:A :B :C}
+         (shape/type-names {:kind :sum
+                            :variants [{:kind :atomic :name :A}
+                                       {:kind :atomic :name :B}
+                                       {:kind :atomic :name :C}]}))))
+
+(deftest type-names-map
+  (is (= #{:String :model/Value}
+         (shape/type-names {:kind :map
+                            :key {:kind :atomic :name :String}
+                            :val {:kind :ref :target :model/Value}}))))

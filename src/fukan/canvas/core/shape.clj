@@ -1,7 +1,8 @@
 (ns fukan.canvas.core.shape
   "Shape expression grammar. Parses shape expressions like
    :String, (optional :T), (list-of :T), (set-of :T), (sum-of :A :B),
-   (map-of :K :V), (record-of [:n :T]+), (ref-to :module/Type) into edn maps.")
+   (map-of :K :V), (record-of [:n :T]+), (ref-to :module/Type) into edn maps."
+  (:require [clojure.set :as set]))
 
 (defn parse [expr]
   (cond
@@ -37,3 +38,19 @@
 
     :else
     (throw (ex-info "unknown shape expression" {:expr expr}))))
+
+(defn type-names
+  "Walk a parsed shape; collect the set of all atomic type names and ref
+   targets it mentions. Returns a set of keywords."
+  [shape]
+  (case (:kind shape)
+    :atomic   #{(:name shape)}
+    :ref      #{(:target shape)}
+    :optional (type-names (:inner shape))
+    :list     (type-names (:elem shape))
+    :set      (type-names (:elem shape))
+    :sum      (apply set/union (map type-names (:variants shape)))
+    :map      (set/union (type-names (:key shape)) (type-names (:val shape)))
+    :record   (apply set/union (map (fn [[_ s]] (type-names s)) (:fields shape)))
+    :arrow    (set/union (type-names (:inputs shape)) (type-names (:outputs shape)))
+    #{}))

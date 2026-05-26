@@ -70,3 +70,42 @@
                                [:db/add [:entity/id mid] :module/child [:entity/id (sub/id-of t)]]]))]
       (is (= #{[:Affordance "create"] [:Type "Account"]}
              (set (store/children-of-module s mid)))))))
+
+(deftest affordance-input-types-are-queryable
+  (testing "an affordance with cross-module-typed inputs has those types as queryable datoms"
+    (let [m (sub/module "evaluator")
+          a (sub/affordance "evaluate_rules"
+              :shape {:kind :arrow
+                      :inputs {:kind :record
+                               :fields [["rules" {:kind :list :elem {:kind :ref :target :ast/ConstraintRule}}]
+                                        ["edb" {:kind :ref :target :derivations/EDB}]]}
+                      :outputs {:kind :ref :target :derivations/EDB}})
+          db (-> (store/create) (store/transact! m) (store/transact! a))]
+      (is (= #{:ast/ConstraintRule :derivations/EDB}
+             (set (map first (d/q '[:find ?t :where [?a :affordance/input-types ?t]] db)))))
+      (is (= #{:derivations/EDB}
+             (set (map first (d/q '[:find ?t :where [?a :affordance/output-types ?t]] db))))))))
+
+(deftest affordance-without-shape-has-no-type-attrs
+  (testing "a no-shape Affordance (invariant/rule) does NOT get input/output type datoms"
+    (let [m (sub/module "constraint.evaluator")
+          a (sub/affordance "StratifiedFixedPoint"
+              :formal-expression "Always converges.")
+          db (-> (store/create) (store/transact! m) (store/transact! a))]
+      (is (empty? (d/q '[:find ?t :where [?a :affordance/input-types ?t]] db)))
+      (is (empty? (d/q '[:find ?t :where [?a :affordance/output-types ?t]] db))))))
+
+(deftest type-field-types-are-queryable
+  (testing "a record Type with cross-module-typed fields has those types as queryable datoms"
+    (let [t (sub/type-record "Phase4Result"
+              [["model" {:kind :ref :target :model/Model}]
+               ["violations" {:kind :list :elem {:kind :ref :target :agent/Violation}}]])
+          db (-> (store/create) (store/transact! t))]
+      (is (= #{:model/Model :agent/Violation}
+             (set (map first (d/q '[:find ?ft :where [?ty :type/field-types ?ft]] db))))))))
+
+(deftest atomic-type-has-no-field-types
+  (testing "a Type with :kind :atomic has no :type/field-types"
+    (let [t (sub/type-primitive "Stratum")
+          db (-> (store/create) (store/transact! t))]
+      (is (empty? (d/q '[:find ?ft :where [?ty :type/field-types ?ft]] db))))))
