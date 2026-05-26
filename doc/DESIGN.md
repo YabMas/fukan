@@ -1,8 +1,8 @@
-# Fukan — Next Chapter Design
+# Fukan — Design
 
-**Status:** Application-design specification — the *what* of the next chapter, sitting between framing and substrate.
+**Status:** Application-design specification — design principles, build pipeline, canvas layering.
 
-**Reading order:** Read [VISION.md](./VISION.md) first if you're new (motivation and the spec-graph-of-the-system framing). This document covers boundary protocols, altitudes, build pipeline, project layer, and the Clojure Target language extension (Analyzer + Projector). [MODEL.md](./MODEL.md) is the authoritative substrate spec (kernel primitives, vocabulary mechanism, constraint language, projection mechanic). [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace (K\*/R\*/V\*/C\*/P\* identifiers cited throughout).
+**Reading order:** Read [VISION.md](./VISION.md) first if you're new (motivation and framing). This document covers the canvas three-tier layering principle, the ownership-on-owner substrate principle, the build pipeline, the constraint language, and the project layer. [MODEL.md](./MODEL.md) is the authoritative substrate spec (kernel primitives, vocabulary mechanism, constraint language, projection mechanic). [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace.
 
 ---
 
@@ -10,14 +10,177 @@
 
 This document specifies the application-level design — the choices that sit *between* the substrate and the implementation:
 
-- The three Allium boundary protocols — View, Signal, Call — and their connection to behavioural content
-- The three spec altitudes — Behaviour, Structure, Infra — and the files (`.allium`, `.boundary`, `.infra`) that produce content at each
-- The build pipeline shape and what filesystem-inferred structure stops being authoritative
-- The project layer mechanics (projection inputs + constraints)
-- The Clojure Target language extension — both Analyzer and Projector, the Implementation Blueprint, the generation flow
-- What changes in the projection and view layers
+- The **three-tier canvas layering** (`core` / `construction` / `vocab.*`) and per-tier inclusion rules
+- The **ownership-on-owner substrate principle** — how Module ownership flows through `:module/child` Relations
+- The **build pipeline** (Phase 0 canvas ingestion through Phase 6 Clojure analysis)
+- The **constraint language** and how it sits over the substrate
+- The **project layer mechanics** (projection inputs + constraints)
+- The **Clojure Target language extension** — Analyzer + Projector, Implementation Blueprint, generation flow
 
-Substrate-level content (kernel primitives, kernel relations, edge identity, vocabulary mechanism, constraint language, Allium→kernel mapping, the projection vocabulary, the projection mechanic and Blueprint protocol) lives in [MODEL.md](./MODEL.md). A concrete phase-by-phase implementation plan will be written separately once the design is finalised.
+Substrate-level content (kernel primitives, kernel relations, edge identity, vocabulary mechanism, constraint language, projection vocabulary, projection mechanic) lives in [MODEL.md](./MODEL.md).
+
+---
+
+## Canvas — three-tier layering
+
+The canvas machinery lives in `src/fukan/canvas/` and is structured in three tiers with distinct inclusion rules. The rule of three governed each lift addition to `vocab.*`: every lift was justified by three or more corpus instances before shipping.
+
+### Tier 1 — `core/`
+
+The substrate machinery. Every canvas consumer depends on this tier.
+
+| File | Contents |
+|------|----------|
+| `core/substrate.clj` | Six substrate primitives as Clojure records: `Module`, `Affordance`, `State`, `Type`, `Relation`, `Tag`. Zero architectural vocabulary. |
+| `core/substrate/store.clj` | Datascript-backed store: schema, `->datoms` wiring, public query API. |
+| `core/helpers.clj` | Construction helpers: `with-canvas`, `within-module`, `declare-affordance`, `declare-type`, `declare-relation`. |
+| `core/defconstructor.clj` | `defconstructor` macro — form grammar + `produces` block DSL for defining vocabulary lifts. |
+| `core/shape.clj` | Shape expression grammar: `parse` turns shape expressions into edn maps. |
+| `core/check.clj` | `fc/check` — constraint runner + structured violation output. |
+| `core/defquery.clj` | `defquery` — Datalog name-resolution extension mechanism. |
+
+### Tier 2 — `construction.clj`
+
+Non-opt-out construction primitives. Every canvas port uses at least some of these.
+
+| Constructor | What it produces | When to use |
+|-------------|-----------------|-------------|
+| `function` | Affordance with arrow shape, role `:fukan.canvas.monolith/exposed-call` | Any synchronous cross-module callable |
+| `record` | Type with `:record` kind and field pairs | Structured data types with named fields |
+| `value` | Type with `:atomic` kind | Opaque named types (no exposed fields) |
+| `exports` | Tags named declarations as `:exported` in the current module | Module API closure |
+
+`exports` is a macro rather than a `defconstructor`-built lift because its body consists of bare positional names rather than form-grammar clauses — a deliberate special case for the closure mechanism.
+
+### Tier 3 — `vocab/`
+
+Opt-in methodology vocabularies. Require only the namespaces whose lifts your module uses.
+
+| Namespace | Lifts | What it models |
+|-----------|-------|----------------|
+| `vocab.behavioral` | `invariant` | Named timeless behavioral commitments (produces Affordance with role `:canvas/invariant`, formal-expression carrying the `holds-that` clause) |
+| `vocab.behavioral` | `rule` | Reactive declarations with trigger signatures (produces Affordance with role `:canvas/rule`, formal-expression carrying `{:when [...]}`) |
+| `vocab.lifecycle` | `getter` | Zero-arg `Optional<T>` read accessors (baked-in arrow shape; produces Affordance with role `:canvas/getter`) |
+| `vocab.validation` | `checker` | Validation entry points with the standard signature `(Model) -> [Violation]` (fully baked-in shape; produces Affordance with role `:canvas/checker`) |
+
+**The rule of three was satisfied for every tier-3 lift before it shipped:**
+- `invariant` — 13+ instances in Phase 1 pilots; well past threshold.
+- `rule` — 49 deferred instances surfaced across broader porting in Sprint 2; shipped 2026-05-26.
+- `getter` — appeared in every stateful module (`get_model`, `get_src`, `get_port`, etc.); shipped in Phase 2.
+- `checker` — 7 instances in `validation/phase4` alone; shipped in Phase 2.
+
+### Per-tier inclusion rules
+
+| Tier | Who depends on it | What it may depend on |
+|------|------------------|-----------------------|
+| `core/` | Everyone | Nothing inside `canvas/` |
+| `construction.clj` | All canvas ports | `core/` only |
+| `vocab/*` | Canvas ports that opt in | `core/` only; never `construction.clj`, never each other |
+
+Vocabularies are independent of each other by design. A canvas port that needs both `invariant` and `checker` requires both namespaces directly; neither needs the other.
+
+---
+
+## Shape expression grammar
+
+Canvas construction forms (`function`, `record`, `getter`) accept shape expressions in their type positions. The grammar lives in `core/shape.clj`.
+
+| Expression | Parsed kind | Example |
+|-----------|-------------|---------|
+| `:Keyword` (no namespace) | `:atomic` | `:String`, `:Integer`, `:Unit` |
+| `:ns/Name` (namespaced) | `:ref` to a cross-module type | `:model/Model`, `:agent/Violation` |
+| `(optional :T)` | `:optional` wrapping `:T` | `(optional :Integer)` |
+| `(list-of :T)` | `:list` of `:T` | `(list-of :agent/Violation)` |
+| `(set-of :T)` | `:set` of `:T` | `(set-of :String)` |
+| `(sum-of :A :B ...)` | `:sum` of variants | `(sum-of :ParsedAllium :ParseFailure)` |
+| `(map-of :K :V)` | `:map` with key and value types | `(map-of :String :Any)` |
+| `(ref-to :ns/Name)` | `:ref` (explicit form) | `(ref-to :model/Model)` |
+| `(record-of [:n :T]+)` | `:record` with inline fields | `(record-of [:id :String] [:name :String])` |
+
+Cross-module references use the `:<module-name>/<TypeName>` convention. The module-name is the last path segment of the canvas module's ns (e.g. `canvas.model.spec` → `:model/...`). The projection layer resolves these by entity-name lookup in the unified Datascript db after all canvas modules have been built.
+
+---
+
+## Ownership-on-owner substrate principle
+
+**Module ownership flows via `:module/child` Relations on the owner.** Owned entities — Affordance, State, Type — carry no back-reference to their owning Module. This principle was established in Phase 3 Sprint 3 and applies uniformly to all three entity kinds.
+
+Rationale:
+- Ownership is a property of the owner-child relationship, not a property of the owned entity itself. Storing it on the child creates two authoritative sources (the child's `:module` field and the parent's children collection), which can drift.
+- The `within-module` helper in `core/helpers.clj` emits `:module/child` datoms automatically when any `declare-*` helper is called inside it. Canvas ports do not need to track parentage explicitly.
+- The projection layer queries `:module/child` uniformly for all child kinds — one query instead of three per-kind queries.
+
+Concrete implication: there are no `:affordance/module`, `:state/module`, or `:type/module` schema attributes in the Datascript store. To find which module owns an affordance, query the module that has it as a `:module/child`.
+
+---
+
+## Build pipeline
+
+The pipeline runs six phases. Phase 0 (canvas ingestion) produces the initial model; Phases 4–6 validate, constrain, and project it.
+
+```
+Phase 0 — Canvas ingestion
+  canvas-source/build-canvas-db: require all 62 canvas namespaces; call their
+                                  build-canvas fns; merge per-module Datascript
+                                  dbs into one unified db
+  canvas-source/project:         project unified db to model map
+                                  (Modules → :primitive/container nodes;
+                                   Affordances → role-dispatched :primitive/rule
+                                   or :primitive/operation;
+                                   States, Types → :primitive/container;
+                                   Relations → :edges vector)
+
+  ── Initial model established ──
+  Primitives keyed by stable string ids (module-name/entity-name convention).
+  Legacy Allium/Boundary parse phases (1-3) are retired.
+
+Phase 4 — Structural validation
+  Sub-phases 4a–4g run sequentially; each aggregates violations.
+  Gate G2: halt if any :error-severity violation exists.
+  Reports aggregated violations in model :violations key.
+
+Phase 5 — Constraint evaluation
+  Methodology-shipped well-known constraints (signal_gap,
+  external_must_have_wrapper) registered via defaults.
+  Project-side constraints registered via project layer.
+  All run; violations are non-gating outputs surfaced by explorer.
+
+Phase 6 — Clojure Target Analyzer
+  Walks source .clj files; projects spec primitives to Code.* Artifacts
+  with per-edge :validity. Non-gating; missing projections appear as
+  :absent drift edges.
+```
+
+**REPL workflow:** Edit a canvas file → `(refresh)` in the REPL → browser refresh. clj-reload detects the timestamp change, reloads the canvas namespace, and the next `(infra-model/refresh-model)` call re-runs Phase 0–6, picking up the new content automatically.
+
+**New canvas file:** add a `require` entry in `canvas-source/canvas-builders` and call `(reset)` (not `(refresh)`) to pick up the new namespace.
+
+### Canvas entity type → kernel primitive kind mapping
+
+| Canvas `:entity/type` | `:affordance/role` | Projected `:kind` |
+|----------------------|-------------------|-------------------|
+| `:Module` | — | `:primitive/container` |
+| `:Affordance` | `:canvas/invariant` | `:primitive/rule` |
+| `:Affordance` | `:canvas/rule` | `:primitive/rule` |
+| `:Affordance` | `:canvas/getter` | `:primitive/operation` |
+| `:Affordance` | `:canvas/checker` | `:primitive/operation` |
+| `:Affordance` | `:fukan.canvas.monolith/exposed-call` | `:primitive/operation` |
+| `:Affordance` | nil / other | `:primitive/operation` |
+| `:State` | — | `:primitive/container` |
+| `:Type` (`:record`) | — | `:primitive/container` |
+| `:Type` (`:atomic`) | — | `:primitive/container` |
+
+---
+
+## Core constraints
+
+Every design choice in this chapter is derived from three constraints:
+
+1. **Every concept a human would choose to inspect must be addressable.** If you cannot click on it, you cannot reason about it as a unit. This determines what is a kernel primitive.
+2. **Every relationship a human would choose to follow must be traversable.** If a connection only exists in one party's prose, the model has no leverage. This determines what is a kernel relation or a relational tag.
+3. **The artefact must reveal where intent and reality diverge.** If you cannot see drift, the workbench is a viewer, not an instrument. This determines what bridges layers.
+
+---
 
 ---
 
@@ -33,9 +196,13 @@ The Allium grammar provides the vocabulary of intent. The Clojure Target languag
 
 ---
 
-## The three Allium boundary protocols
+## The three boundary protocols (substrate-level design)
 
-Allium gives the boundary three structurally distinct clauses (`exposes`, `provides`, `contracts: demands/fulfils`). Each represents a different *protocol* by which information crosses the wall. They are not variations of the same thing; each connects to the behavioural core differently.
+The following sections describe the kernel-level protocol semantics that the canvas substrate encodes. These protocol distinctions — View, Signal, Call — live in the substrate design (kernel relations, edge kinds) and are relevant to anyone extending the canvas vocabulary or writing constraints over the model. They are not the canvas authoring vocabulary — canvas ports use `function`, `invariant`, `rule`, `getter`, `checker` from the construction and vocab layers.
+
+---
+
+The boundary has three structurally distinct protocols. Each represents a different *protocol* by which information crosses the wall. They are not variations of the same thing; each connects to the behavioural core differently.
 
 For the substrate landing of each clause (which kernel primitive, which kernel relation, which Allium-namespace tag), see [MODEL.md §8.1 — Allium → kernel mapping](./MODEL.md#81-allium--kernel-mapping). This section covers the *protocol semantics* layered over that mapping.
 
@@ -110,7 +277,9 @@ The asymmetry: **mutations are event-shaped (Signal); reads are passive (View) o
 
 ---
 
-## The three spec altitudes
+## The three spec altitudes (substrate design context)
+
+This section describes the altitude model that shaped the substrate design. In the canvas-first architecture, canvas specs produce content at these altitudes via the canvas vocabulary lifts. The `.allium`/`.boundary` spec languages that originally authored content at these altitudes are retired; this framing remains relevant as substrate context.
 
 Three spec altitudes, committed in [MODEL.md §11](./MODEL.md#11-substrate-commitments): **Behaviour** (highest, most abstract — what happens), **Structure** (the scaffolding behaviour enfolds over — Operations, Boundary, composition), **Infra** (deployment commitments). Implementation isn't a fourth altitude — it's the projection across all three (Code | Infra-Artifact | Documentation flavours).
 
@@ -128,9 +297,9 @@ Each spec file pattern produces content at one or more altitudes.
 
 **Allium covers Behaviour and partial Structure.** Allium produces both Rules (Behaviour) and Operations-in-contracts / Surfaces (Structure). What Allium *cannot* produce is the binding between them — the awkward middle ground that motivated `.boundary`. `.boundary` is the Structure-altitude binding layer that fills the gap. See [MODEL.md §8.2](./MODEL.md#82-boundary--kernel-mapping).
 
-For MVP, `.allium` and `.boundary` are both implemented, plus the Clojure Target language extension — both Analyzer (producing `projects` edges from spec primitives to `Code.*` artifacts; substrate-level shape per [MODEL.md §7.6](./MODEL.md#76-producing-projections--substrate-level-commitments)) and Projector (producing Implementation Blueprints on demand for LLM-driven code generation; [MODEL.md §7.7](./MODEL.md#77-the-target-language-extension--analyzer-and-projector)). Mechanics in the Implementation linkage section below. Only `.infra` remains architecturally seamed — see [MODEL.md §10 Architectural seams](./MODEL.md#10-architectural-seams).
+**Phase 3 state:** The `.allium` and `.boundary` spec parsers are retired. Canvas specs in `canvas/<subsystem>/<module>.clj` produce content at these altitudes using the canvas vocabulary lifts. The `function` and `exports` lifts in `construction.clj` cover what `.boundary` previously handled; `invariant`, `rule`, `record`, `value` cover Allium's vocabulary. The historical responsibilities documented below are preserved as substrate design context.
 
-### `.allium` responsibilities
+### `.allium` responsibilities (historical — now covered by canvas)
 
 Allium is the source of truth for behaviour. Each `.allium` file declares one module's worth of:
 
@@ -146,9 +315,7 @@ Rule body parsing follows MODEL.md §8.1: `requires:` / `where:` / `ensures:` pr
 
 Cross-module references continue via `use "..." as alias` and qualified names (`alias.TypeName`). External entities mark types managed by other modules.
 
-### `.boundary` responsibilities
-
-`.boundary` is the Structure-altitude language. It exists because Allium's structural coverage is partial: Allium's primitives (Contract Operations, Surfaces, Rules) all carry behavioural framing, and a lot of what *actually crosses a module wall* — getters, setters, renders, lifecycle calls, pure transforms — is structurally mundane and doesn't deserve Rule weight. Forcing such things into Rules bloats Allium specs and obscures which Rules represent genuine behavioural commitment. `.boundary` fills the gap with **one primitive** (`fn`) carrying no behavioural framing, and adds two adjacent capabilities at the same altitude: **module-API closure** and **subsystem composition**.
+### `.boundary` responsibilities (historical — now covered by canvas `exports` + `function`) It exists because Allium's structural coverage is partial: Allium's primitives (Contract Operations, Surfaces, Rules) all carry behavioural framing, and a lot of what *actually crosses a module wall* — getters, setters, renders, lifecycle calls, pure transforms — is structurally mundane and doesn't deserve Rule weight. Forcing such things into Rules bloats Allium specs and obscures which Rules represent genuine behavioural commitment. `.boundary` fills the gap with **one primitive** (`fn`) carrying no behavioural framing, and adds two adjacent capabilities at the same altitude: **module-API closure** and **subsystem composition**.
 
 The three capabilities:
 
@@ -282,28 +449,23 @@ The architectural seam is open; no Model substrate changes are needed today to a
 
 ---
 
-## Build pipeline
+## Build pipeline (design context)
 
-Filesystem-inferred structure is dropped. `.boundary` is the sole source of truth for module composition. The MVP pipeline has three analyzers — Allium, Boundary, and Clojure — all producing kernel content into one Model.
+**Phase 3 state:** The Allium and Boundary parsers (Phases 1–3 in the original design) are retired. The current pipeline runs Phase 0 (canvas ingestion) + Phases 4–6, documented at the top of this document under [Build pipeline](#build-pipeline). The historical Allium-era pipeline shape below is preserved as substrate design context for the validation and constraint phases.
 
-### Pipeline shape
+The phase-ordering rationale, gate semantics, and sub-phase rules (4a–4g) described below remain accurate — only the Phase 1–3 parsers that produced input to Phase 4 have changed. Canvas ingestion (Phase 0) produces the same model map shape; Phases 4–6 run unchanged.
+
+### Historical pipeline shape (Phases 1–3 retired)
+
+The original three-parser pipeline:
 
 ```
   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
   │ *.allium files   │  │ *.boundary files │  │  Clojure source  │
+  │ (RETIRED)        │  │ (RETIRED)        │  │                  │
   └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
-           │                     │                     │
-           ▼                     ▼                     ▼
-  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-  │ Allium parser    │  │ Boundary parser  │  │ Clojure Analyzer │
-  │ (leaf Container  │  │ (composite       │  │ (Code.* Artifacts│
-  │  + Allium tags + │  │  Container +     │  │  + projects      │
-  │  kernel edges)   │  │  Operation↔Rule  │  │  edges via       │
-  │                  │  │  bindings +      │  │  projection-     │
-  │                  │  │  External::*)    │  │  input rules)    │
-  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
-           │                     │                     │
-           └─────────────────────┼─────────────────────┘
+           │ (replaced by canvas ingestion)             │
+           └─────────────────────┬───────────────────────┘
                                  ▼
                   ┌────────────────────────────┐
                   │   Merge + wire             │
@@ -313,14 +475,11 @@ Filesystem-inferred structure is dropped. `.boundary` is the sole source of trut
                   ┌────────────────────────────┐
                   │   Constraint evaluation    │
                   │   (Vocabulary-shipped +    │
-                  │    project-shipped +       │
-                  │    .boundary-scoped)       │
+                  │    project-shipped)        │
                   └────────────┬───────────────┘
                                ▼
                   ┌────────────────────────────┐
-                  │   Explorer / on-demand     │
-                  │   Projection (Blueprint    │
-                  │    generation per click)   │
+                  │   Explorer                 │
                   └────────────────────────────┘
 ```
 

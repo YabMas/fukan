@@ -7,57 +7,84 @@
 
 ## 1. What Fukan is
 
-Fukan is a spec graph that knows about code. Its primitives are
-behavioural rules, surfaces, contracts, types, modules, and subsystems —
-not functions and call edges. You write `.allium` files to describe what
-the system is meant to do; you write `.boundary` files to declare what
-crosses each module wall. Fukan reads both, builds a unified structural
-model, and makes that model queryable. Code joins as a projection layer:
-every spec primitive that should have a Clojure realisation gets a
-`projects` edge carrying a `:validity` value — `:valid`, `:stale`,
-`:absent`, or `:unknown`. Drift between intent and reality shows up as
-`:absent` projections. The graph is rebuilt on every `(refresh)`. The
-browser renders the same model the agent queries; humans use the browser,
+Fukan is a canvas-driven structural exploration tool. Its primitives are
+modules, affordances, states, types, relations, and tags — not functions
+and call edges. You write canvas specs to describe what a system is
+meant to do; fukan reads them, builds a unified structural model, and
+makes that model queryable. Code joins as a projection layer: every
+spec primitive that should have a Clojure realisation gets a `projects`
+edge carrying a `:validity` value — `:valid`, `:stale`, `:absent`, or
+`:unknown`. Drift between intent and reality shows up as `:absent`
+projections. The graph is rebuilt on every `(refresh)`. The browser
+renders the same model the agent queries; humans use the browser,
 agents use this surface.
 
-## 2. The Model in one minute
+**Canvas specs are in `canvas/<subsystem>/<module>.clj`.** Do not reach
+for `.allium` or `.boundary` files — those are archived in
+`.legacy-allium/` and no longer loaded by the build pipeline. If you
+need to find where a concept is specified, look in `canvas/`.
 
-The Model has three spec altitudes and a projection layer underneath.
+## 2. The canvas vocabulary
 
-**Three altitudes, top to bottom:**
+Canvas specs use these construction forms. All are Clojure macros/fns
+defined in `src/fukan/canvas/`.
 
-| Altitude | Files | What lives here |
-|----------|-------|-----------------|
-| Behaviour (highest) | `*.allium` | Rules, events, invariants — what happens and under what constraints |
-| Structure | `*.allium` (partial) + `*.boundary` | Types, operations, surfaces, contracts; module walls; composition into subsystems |
-| Infra (lowest spec altitude) | `*.infra` (deferred) | Endpoints, wire formats, deployment topology |
+**Always available (`construction.clj`):**
 
-**Implementation is not a fourth altitude.** Code, tests, and docs are
-*projections* of the three spec altitudes — chosen materialisations that
-lose information from the spec source. A projection that no longer
-matches its spec source is `:stale` or `:absent`. The kernel relation
-that carries this is `projects`.
+| Form | What it declares |
+|------|-----------------|
+| `(function name doc (takes ...) (gives ...))` | A synchronous callable |
+| `(record name doc (field name type) ...)` | A named record type |
+| `(value name doc)` | An opaque named type |
+| `(exports Name1 Name2 ...)` | Module API closure — marks listed declarations as exported |
 
-**Kernel primitives:** `Container`, `Actor`, `Behaviour`, `Rule`,
-`Boundary`, `Operation`, `Intent`, `Clause`, `Event`. Nine primitives.
-Each has an addressable id. Container is the universal structural unit —
-modules, entities, surfaces, contracts, and aggregates are all Containers
-with different vocabulary tags.
+**Opt-in vocabularies:**
 
-**Kernel relations:** thirteen directed edges —
-`triggers`, `observes`, `reads`, `writes`, `creates`, `destroys`,
-`emits`, `realises`, `specialises`, `uses`, `exposes`, `provides`,
-`projects`. The `projects` relation is how code joins the model.
+| Namespace | Form | What it declares |
+|-----------|------|-----------------|
+| `vocab.behavioral` | `(invariant name doc (holds-that "..."))` | A named timeless behavioral commitment |
+| `vocab.behavioral` | `(rule name doc (when TriggerName (param :Type) ...))` | A reactive declaration with trigger |
+| `vocab.lifecycle` | `(getter name doc :ReturnType)` | A zero-arg `Optional<T>` accessor |
+| `vocab.validation` | `(checker name doc)` | A `(Model) -> [Violation]` validation entry point |
 
-**Project layer:** two sub-loci — *projection inputs* (address-resolution
-knobs for the Clojure target, type-translation overrides, idioms) and
-*constraints* (architectural laws, naming preferences, with severity).
-Exposed via `(idioms)`, `(constraints)`, `(violations)`.
+**Shape expression grammar (type positions):**
 
-Full detail: `doc/MODEL.md` (kernel substrate), `doc/DESIGN.md` (protocols,
-pipeline, project-layer mechanics), `doc/VISION.md` (why).
+| Expression | Meaning |
+|-----------|---------|
+| `:Keyword` | Atomic type |
+| `:ns/Name` | Cross-module type reference |
+| `(optional :T)` | Optional value |
+| `(list-of :T)` | Ordered list |
+| `(set-of :T)` | Unordered set |
+| `(sum-of :A :B)` | One-of sum type |
+| `(map-of :K :V)` | Key-value map |
 
-## 3. The two namespaces
+## 3. The Model in one minute
+
+The Model has six substrate primitives and a projection layer.
+
+**Six primitives (architecture-neutral):**
+
+| Primitive | What it represents |
+|-----------|-------------------|
+| Module | A containment unit — the design boundary |
+| Affordance | A named capability or behavioral declaration on a Module |
+| State | A named data slot on a Module |
+| Type | A data shape (record or atomic) |
+| Relation | A typed directed edge between entities |
+| Tag | An extensible classification label |
+
+**Affordances** carry the design vocabulary: the `function` lift produces
+an Affordance with role `:fukan.canvas.monolith/exposed-call`; `invariant`
+produces one with role `:canvas/invariant`; `rule` with `:canvas/rule`;
+`getter` with `:canvas/getter`; `checker` with `:canvas/checker`.
+
+**Implementation is not a fourth altitude.** Code is a *projection* of
+the canvas — a materialisation that loses information from the spec
+source. A projection that no longer matches is `:stale` or `:absent`.
+The kernel relation that carries this is `projects`.
+
+## 4. The two namespaces
 
 Both referred-in by default — no ns/fn prefix needed in `fukan eval`:
 
@@ -68,7 +95,7 @@ Both referred-in by default — no ns/fn prefix needed in `fukan eval`:
 - **`fukan.agent.api`** — querying the Model: layered interface (L0 /
   L1 / L2) described in the next section.
 
-## 4. The L0 / L1 / L2 layering of `fukan.agent.api`
+## 5. The L0 / L1 / L2 layering of `fukan.agent.api`
 
 | Layer | What lives here | Used for |
 |-------|-----------------|----------|
@@ -122,9 +149,9 @@ full source primitive).
 incoming edges + summary maps for the directly-connected neighbors.
 Multi-hop traversal is the caller's job at L0.
 
-## 5. Three worked examples
+## 6. Three worked examples
 
-### (a) Orientation: what is module `fukan/model`?
+### (a) Orientation: what is module `infra.server`?
 
 ```clojure
 ;; What kinds of primitives are in the model?
@@ -133,16 +160,12 @@ Multi-hop traversal is the caller's job at L0.
 
 ;; Find container primitives
 (primitives :kind :primitive/container)
-;; => {:rows [{:id "container:fukan/model" :kind :primitive/container :label "..."} ...]
-;;     :truncated? false :total N}
 
 ;; Inspect one in full
-(get-primitive "container:fukan/model")
-;; => {:id "..." :kind :primitive/container :label "..." :description "..." ...}
+(get-primitive "infra.server")
 
-;; What does this container connect to?
-(neighborhood "container:fukan/model")
-;; => {:primitive {...} :outgoing [...] :incoming [...] :neighbors [...]}
+;; What does this module connect to?
+(neighborhood "infra.server")
 ```
 
 Start with `(vocabulary)` to see what's in the model. Use
@@ -150,56 +173,30 @@ Start with `(vocabulary)` to see what's in the model. Use
 Use `(neighborhood id)` to see what a node connects to without
 writing a query.
 
-### (b) Derivation: what rules have no Clojure realisation yet?
+### (b) Derivation: what affordances have no Clojure realisation yet?
 
 ```clojure
 ;; L2 shorthand — already does the join for you:
 (drift)
-;; => [{:from {:case :endpoint/primitive :id "rule:fukan/model/r-merge"}
-;;      :to nil
-;;      :kind :relation/projects
-;;      :validity :absent
-;;      :primitive {:id "rule:..." :kind :primitive/rule :label "..."}}
-;;     ...]
 
 ;; Filter to a specific projection kind:
 (drift :projection-kind :clojure)
-
-;; If you want only rules, compose at L1:
-(->> (:rows (relations :kind :relation/projects :validity :absent))
-     (map #(-> % :from :id))
-     (map get-primitive)
-     (filter #(= :primitive/rule (:kind %))))
-
-;; Or with full aggregation at L0:
-(q '[:find ?m (count ?p)
-     :where
-       [?r :relation/kind :relation/projects]
-       [?r :relation/validity :absent]
-       [?r :relation/from ?p]
-       [?p :primitive/owner ?m]])
 ```
-
-Both L1 and L0 forms produce the same data. Use `(drift)` for the
-common case; drop to L1 when you need to filter or transform before
-acting; use L0 when the question needs joins or aggregations that L1
-filters can't express.
 
 ### (c) The edit-and-refresh loop
 
 1. Call `(drift)` to find what spec primitives have no realisation.
-2. Open the relevant spec file on disk — `src/.../*.allium` or
-   `src/.../*.boundary` — and edit it to add, change, or remove
-   a declaration.
+2. Open the relevant canvas spec file on disk — `canvas/<subsystem>/<module>.clj`
+   — and edit it to add, change, or remove a declaration.
 3. Call `(refresh)` to rebuild the model. It blocks and returns the
    new status.
 4. Re-query with `(drift)` or the same L1/L0 form. Iterate.
 
-Edits always happen on disk. The loop is: **edit → refresh → query**.
+Edits always happen on disk. The loop is: **edit canvas file → `(refresh)` → query**.
 There is no mutation surface inside `fukan eval`; all spec changes
 land in source files.
 
-## 6. Persisted views — `.fukan/agent-views.clj`
+## 7. Persisted views — `.fukan/agent-views.clj`
 
 When a query recurs across sessions, name it and commit it to the
 project-local views file. For a project analysed by Fukan, this
@@ -242,7 +239,7 @@ shared between agents and humans.
   wins; `(status)` reports the shadowing.
 - Attempting to shadow an L1 or system fn is refused with `:forbidden`.
 
-## 7. The reference catalog is live
+## 8. The reference catalog is live
 
 ```clojure
 ;; Full surface, grouped by namespace and layer:
@@ -260,7 +257,7 @@ Use these aggressively. The primer you're reading now is static; the
 `(help)` output is current. If a signature here and in `(help)` disagree,
 `(help)` is right.
 
-## 8. Constraints on what eval can do
+## 9. Constraints on what eval can do
 
 The eval sandbox is SCI (Small Clojure Interpreter) with a frozen ns
 map. It cannot reach beyond `fukan.agent.api` and `fukan.agent.system`.
@@ -309,19 +306,13 @@ or:
 Call `(refresh)` to build one. `:unbound` includes what *is* in scope
 so you can see what names are available.
 
-## 9. Pointers
+## 10. Pointers
 
-- `doc/VISION.md` — why Fukan exists; the spec-graph-knows-about-code
-  inversion; what this chapter commits to
-- `doc/DESIGN.md` — system design: protocols, pipeline, project-layer
-  mechanics, Implementation Blueprint (code gen from spec)
-- `doc/MODEL.md` — Model substrate: nine primitives, thirteen
-  relations, vocabulary mechanism, constraint language
-- `doc/specs/2026-05-20-llm-agent-surface-design.md` — design spec
-  for this agent surface: layering rationale, safeguards, deferred
-  items
-- `doc/plans/2026-05-20-llm-agent-surface.md` — implementation plan
-  for this surface
+- `doc/VISION.md` — why Fukan exists; the canvas-first direction; what this chapter commits to
+- `doc/DESIGN.md` — system design: three-tier canvas layering, ownership-on-owner principle, build pipeline, project layer
+- `doc/MODEL.md` — Model substrate: six primitives, thirteen relations, vocabulary mechanism, constraint language
+- `canvas/` — the canvas spec tree (62 modules); the design surface for fukan-itself
+- `src/fukan/canvas/` — canvas machinery (core, construction, vocab libraries)
 
 When working on Fukan itself, `src/fukan/agent/api.clj` and
 `src/fukan/agent/system.clj` are the source of truth for what the

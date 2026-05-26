@@ -2,11 +2,11 @@
 
 **Status:** Authoritative substrate specification — the *how* foundation underlying everything else.
 
-**Reading order:** Read [VISION.md](./VISION.md) first for motivation if you're new, then [DESIGN.md](./DESIGN.md) for protocol semantics, pipeline, and project-layer mechanics. This document is the substrate kernel itself — primitives, relations, vocabulary mechanism, constraint language, projection vocabulary, methodology contributions. [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace; K\*/R\*/V\*/C\*/P\* identifiers cited throughout this document resolve there.
+**Reading order:** Read [VISION.md](./VISION.md) first for motivation if you're new, then [DESIGN.md](./DESIGN.md) for the three-tier canvas layering principle, the ownership-on-owner substrate principle, and the build pipeline. This document is the substrate kernel itself — primitives, relations, vocabulary mechanism, constraint language, projection vocabulary. [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace; K\*/R\*/V\*/C\*/P\* identifiers cited throughout this document resolve there.
 
-Supersedes the previous working drafts (former MODEL.md draft, RELATIONS.md, VOCABULARY.md, CONSTRAINTS.md).
+This document defines the substrate on which canvas specs and code analysis project their content. It is the authoritative description of what the Model is, what neutralities it commits to, what vocabulary content it permits, what constraints can be expressed against it, and what its projection targets are.
 
-This document defines the substrate on which spec languages (`.allium` and `.boundary` in MVP; eventually `.infra`) and code analysis project their content. It is the authoritative description of what the Model is, what neutralities it commits to, what vocabulary content it permits, what constraints can be expressed against it, and what its projection targets are.
+**Current state (Phase 3 canvas-first):** The Model is built from canvas specs — Clojure data files in `canvas/<subsystem>/<module>.clj` — projected via Phase 0 (canvas ingestion) into the model map the graph viewer consumes. The spec languages described in the design-phase documents (`.allium`, `.boundary`) are retired to `.legacy-allium/` and no longer loaded by the build pipeline. The substrate kernel described below is unchanged; what changed is the *source* of content that populates it. Canvas ports project their datoms into kernel-shaped primitives and edges via `src/fukan/canvas/projection/canvas_source.clj`. See [DESIGN.md §Build pipeline](./DESIGN.md#build-pipeline) for the Phase 0–6 pipeline shape.
 
 ---
 
@@ -19,6 +19,8 @@ Two commitments fall out:
 1. **The Model is *of the system*, not *of a spec language*.** A spec language contributes evidence about the Model; the Model is not a graph rendition of any one grammar. The same Model is contributable-to by `.allium`, by `.boundary`, by future `.infra`, and by code analysis when it returns.
 
 2. **The Model is methodology-neutral at vocabulary level; explicitly committed at substrate level.** Any methodology contributes typed vocabulary that refines the substrate's primitives. The substrate itself takes positions on a few unavoidable questions (see [§11 Substrate commitments](#11-substrate-commitments)).
+
+Currently, canvas vocabulary lifts (`function`, `invariant`, `rule`, `record`, `value`, `getter`, `checker`, `exports`) are the primary contributors. Code analysis contributes via the Clojure Target language extension. Future vocabularies (additional methodology libraries, `.infra` when it arrives) contribute additively without substrate change.
 
 **Substrate-defaults choice (Path A).** Where the kernel's substrate must take a position on type-system shape (named vs anonymous shapes, closed vs open, predicate-typed vs not), it commits to Allium-aligned defaults: shapes are named, closed, composed by inclusion. Methodologies that want different semantics (Clojure-spec-style openness, predicate-typed fields, schemas-as-first-class-values) supply them via vocabulary overlay. This is a commitment, not neutrality — explicitly named and to be revisited before any major substrate change. **The position is also the floor, not the midpoint.** Named-closed-included is the most restrictive of the common type-shape choices, so methodologies can selectively relax it (opening, adding predicates, anonymising) and the substrate sees the relaxed view through the vocabulary overlay; the inverse — tightening what a permissive substrate already allows — is unreachable from above without breaking earlier vocabulary content. The floor choice keeps the kernel a checkable, conservative baseline; loosenings live where they belong, in the methodology that needs them.
 
@@ -41,26 +43,30 @@ The criterion appears at four altitudes in this document:
 
 ---
 
-## 2. MVP scope
+## 2. Implemented scope
 
-The spec described in this document is the substrate. The **MVP** is the slice of the spec that is implemented first.
+The spec described in this document is the substrate. This section reflects what is currently implemented (Phase 3 canvas-first state).
 
-**In MVP:**
-- The kernel substrate (primitives, value records, V14 Type vocabulary, the thirteen relations, edge identity)
+**Implemented:**
+- The kernel substrate (primitives, value records, Type vocabulary, the thirteen relations, edge identity)
 - The vocabulary mechanism (TagDefinition / TagApplication / PredicateRegistration / renderer seam)
 - The constraint language (stratified Datalog substrate + path sugar + type-sum sugar, kernel-universal derivations)
 - The projection vocabulary as an active target — `Code(Function | DataStructure)` Artifact cases and the five V0 `projection_kind` values (§7.2, §7.4)
-- The **Allium** Vocabulary extension (§5.0): TagDefinitions, predicates, renderers, plus the Allium spec parser producing kernel content + tag applications
-- The **Boundary** Vocabulary extension: TagDefinitions (`Boundary::Function`, `Boundary::ModuleApi`, `Boundary::Binding`, `Boundary::Subsystem`, `Boundary::Exports`), predicates, plus the `.boundary` spec parser producing Operations on module-Container Boundaries, R4 binding edges, and composite Container content (§8.2)
-- The **Clojure Target language extension** (§7.7) — both operations: the Analyzer producing `projects` edges from spec primitives to `Code.*` artifacts via convention-driven name resolution, and the Projector producing Implementation Blueprints on demand for LLM-driven code generation (mechanics in [DESIGN.md](./DESIGN.md))
-- The **project layer** in two sub-loci (§10.3) — projection inputs (consumed by the projection mechanic) and constraints (in the constraint language); projection inputs declarative in V0, constraints authored in language AST until surface tokenisation lands (§13)
+- **Canvas spec ingestion (Phase 0)** — the primary source of model content. Canvas specs in `canvas/<subsystem>/<module>.clj` build Datascript stores via the canvas vocabulary libraries; `canvas-source/build` projects those stores into kernel-shaped primitives and edges. Replaces the retired Allium and Boundary spec parsers.
+- The **Clojure Target language extension** (§7.7) — the Analyzer producing `projects` edges from spec primitives to `Code.*` artifacts via convention-driven name resolution (Phase 6). The Projector (on-demand Implementation Blueprint generation) is architecturally seamed.
+- The **project layer** in two sub-loci (§10.3) — projection inputs and constraints.
+- Phase 4 structural validation (sub-phases 4a–4g) and Phase 5 constraint evaluation.
 
-**Out of MVP, architecturally seamed:**
+**Retired (Phase 3 Sprint 4):**
+- The Allium spec parser and Allium Vocabulary extension — replaced by canvas specs. Legacy `.allium` files are archived in `.legacy-allium/`.
+- The Boundary spec parser and Boundary Vocabulary extension — replaced by canvas exports mechanism. Legacy `.boundary` files are archived in `.legacy-allium/`.
+
+**Architecturally seamed (deferred):**
 - `.infra` layer entirely (§10.1)
-- The `Infra(...)` and `Documentation(...)` cases of the Artifact ontology, and the `endpoint`, `resource`, `documentation`, `diagram` projection_kind values — come back with `.infra` and a future documentation analyzer (§10.1, §10.5)
-- Extension registry mechanics (§10.2) — Vocabulary and Target language extensions are integrated directly in V0; no manifest format, no namespace registry
+- The `Infra(...)` and `Documentation(...)` Artifact cases, and the `endpoint`, `resource`, `documentation`, `diagram` projection_kind values
+- Extension registry mechanics (§10.2) — extensions are integrated directly; no manifest format
 - Renderer plug-in mechanism (concrete shape arrives with explorer rebuild)
-- *Composition mechanics* of project-layer entries (severity overrides, profiles, bundles, transitive imports, versioning) — the registration shapes are committed; layered composition over Vocabulary-shipped + Target-language-shipped defaults waits for forcing examples (§10.3)
+- Composition mechanics of project-layer entries (severity overrides, profiles, bundles, transitive imports, versioning)
 - Cross-methodology stress-test vocabularies (DDD / Hex / C4) — they validated the substrate at design time; they are **not** committed support targets
 
 **Architectural commitments preserved through the cuts:**
@@ -1305,11 +1311,13 @@ The seam to other Target language extensions (future TypeScript, Java) is fully 
 
 ---
 
-## 8. Methodology contributions
+## 8. Methodology contributions (historical — Allium/Boundary retired)
+
+**Phase 3 state:** The Allium and Boundary spec parsers described in §8.1 and §8.2 are retired. Canvas specs now populate the kernel substrate directly via the canvas vocabulary lifts (`function`, `invariant`, `rule`, `record`, `value`, `getter`, `checker`, `exports`). The canvas vocabulary's substrate mapping is straightforward: `function`/`getter`/`checker` → `:primitive/operation`-role Affordances; `invariant`/`rule` → `:primitive/rule`-role Affordances; `record`/`value` → Types; `exports` → `:exported` tag on the named entity. The detailed kernel-mapping documentation below is preserved as historical substrate context — it describes the substrate design commitments that the canvas vocabulary builds on.
 
 Per K1–K3, the Model is contributable-to by multiple vocabularies — each producing kernel content (primitives, relations, sub-substrate) plus its own namespaced tag applications via the §5 vocabulary mechanism. The Model itself is uniform; methodologies plug into it as overlays.
 
-The MVP carries two input-vocabulary methodologies: **Allium** (§8.1), the behavioural-and-partial-structural source vocabulary, and **Boundary** (§8.2), the Structure-altitude binding vocabulary that fills Allium's Operation↔Rule gap and adds subsystem composition. Each section maps its source-language constructs onto the kernel substrate; the application-design framing (file responsibilities, altitude rules, build pipeline) lives in [DESIGN.md](./DESIGN.md).
+The original MVP carried two input-vocabulary methodologies: **Allium** (§8.1), the behavioural-and-partial-structural source vocabulary, and **Boundary** (§8.2), the Structure-altitude binding vocabulary. Each section maps its source-language constructs onto the kernel substrate; the application-design framing lives in [DESIGN.md](./DESIGN.md).
 
 ### 8.1 Allium → kernel mapping
 
