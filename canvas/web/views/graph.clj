@@ -6,7 +6,7 @@
      - value NavigationState    → construction/record (2 fields)
      - surface GraphViewer      → 5 invariants (DataInEventsOut, ViewStateOwnership,
                                    RenderModeDetection, AnimatedTransition, NodeVisibility)
-     - 8 interaction rules      → inline TODO comments (rule lift deferred)
+     - 8 interaction rules      → vocab.behavioral/rule each
      - invariant RenderingPurity  → vocab.behavioral/invariant
      - invariant AtomicUpdate     → vocab.behavioral/invariant
      - invariant GraphSelectionDefault → vocab.behavioral/invariant
@@ -14,13 +14,11 @@
      - exports: ViewState, NavigationState
 
    Notes:
-     - rules SelectNode/NavigateToNode/NavigateToAncestor/ExpandToggle/
-       TogglePrivateVisibility/SelectEdgeMode/SelectEdge/Deselect → TODO inline.
      - Cross-module refs: :cytoscape/CytoscapeGraph, :projection/Projection.
      - EditorState is an opaque local type."
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [record function exports]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
@@ -79,40 +77,56 @@
          Module nodes are always visible. The sidebar is unaffected."
         (holds-that "edge-mode-controls-node-visibility"))
 
-      ;; ── Interaction Rules (TODO — rule lift deferred) ─────────────────────
+      ;; ── Interaction Rules ─────────────────────────────────────────────────
 
-      ;; TODO rule SelectNode:
-      ;;   Single click on graph node or sidebar link.
-      ;;   ensures: nav.selected_id = effective_selected (node_id ?? view_id ?? first-root)
-      ;;   Sidebar shows details; edges involving selection are highlighted.
+      (rule "SelectNode"
+        "Single click on graph node or sidebar link. Sets nav.selected_id
+         to the effective selection: node_id ?? nav.view_id ?? first root
+         node in projection. Sidebar shows details; edges involving the
+         selection are highlighted."
+        (when SelectNode (node_id :String)))
 
-      ;; TODO rule NavigateToNode:
-      ;;   Double click on graph node. Only expandable nodes navigate.
-      ;;   ensures: nav.view_id = node_id, nav.selected_id = null
-      ;;   GraphViewer resets expanded and show_private.
+      (rule "NavigateToNode"
+        "Double click on an expandable graph node. Only nodes with children
+         navigate. Sets nav.view_id = node_id and clears nav.selected_id.
+         GraphViewer resets its expanded and show_private sets to empty."
+        (when NavigateToNode (node_id :String)))
 
-      ;; TODO rule NavigateToAncestor:
-      ;;   Breadcrumb click. Navigates to an ancestor module.
-      ;;   ensures: nav.view_id = ancestor_id, nav.selected_id = null
+      (rule "NavigateToAncestor"
+        "Breadcrumb click. Navigates to an ancestor module, setting
+         nav.view_id = ancestor_id and clearing nav.selected_id."
+        (when NavigateToAncestor (ancestor_id (optional :String))))
 
-      ;; TODO rule ExpandToggle:
-      ;;   Right click on module. Component toggles expanded before emitting.
-      ;;   Server re-projects with updated expanded set.
+      (rule "ExpandToggle"
+        "Right click on a module node. The GraphViewer component toggles the
+         module in its expanded set before emitting. The server re-projects
+         with the updated expanded set."
+        (when ExpandToggle (module_id :String)))
 
-      ;; TODO rule TogglePrivateVisibility:
-      ;;   Shift+right click on expanded module. Component toggles show_private.
-      ;;   Server re-projects with updated show_private set.
+      (rule "TogglePrivateVisibility"
+        "Shift+right click on an expanded module. The component toggles the
+         module in its show_private set. The server re-projects with the
+         updated show_private set."
+        (when TogglePrivateVisibility (module_id :String)))
 
-      ;; TODO rule SelectEdgeMode:
-      ;;   Edge mode selector click. Single-select: visible_edge_types = {edge_type}.
-      ;;   Server re-projects with filtered node set.
+      (rule "SelectEdgeMode"
+        "Edge mode selector click. Single-select: sets visible_edge_types to
+         {edge_type}, replacing the previous mode. The server re-projects
+         with the filtered node set."
+        (when SelectEdgeMode (edge_type :String)))
 
-      ;; TODO rule SelectEdge:
-      ;;   Click on edge. Sidebar shows edge details. Edge is highlighted.
+      (rule "SelectEdge"
+        "Click on an edge. The sidebar shows edge details; the edge is
+         highlighted. Edge identity is derived from source, target, and type."
+        (when SelectEdge
+          (source    :String)
+          (target    :String)
+          (edge_type :String)))
 
-      ;; TODO rule Deselect:
-      ;;   Click on background. nav.selected_id = null.
-      ;;   Sidebar empty; no edges highlighted.
+      (rule "Deselect"
+        "Click on background. Clears nav.selected_id. Sidebar returns to
+         empty state; no edges are highlighted."
+        (when Deselect))
 
       ;; ── Rendering Invariants ──────────────────────────────────────────────
 
