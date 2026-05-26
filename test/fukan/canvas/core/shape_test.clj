@@ -22,6 +22,19 @@
                                 {:kind :atomic :name :String}]}
          (shape/parse '(sum-of :Integer :String)))))
 
+(deftest map-shape
+  (is (= {:kind :map
+          :key {:kind :atomic :name :String}
+          :val {:kind :atomic :name :Any}}
+         (shape/parse '(map-of :String :Any)))))
+
+(deftest nested-map-shape
+  (testing "map-of with cross-module ref values"
+    (is (= {:kind :map
+            :key {:kind :atomic :name :String}
+            :val {:kind :ref :target :model/Value}}
+           (shape/parse '(map-of :String :model/Value))))))
+
 (deftest nested-shape
   (is (= {:kind :optional
           :inner {:kind :list :elem {:kind :atomic :name :Integer}}}

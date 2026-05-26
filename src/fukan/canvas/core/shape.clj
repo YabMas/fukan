@@ -1,7 +1,7 @@
 (ns fukan.canvas.core.shape
   "Shape expression grammar. Parses shape expressions like
    :String, (optional :T), (list-of :T), (set-of :T), (sum-of :A :B),
-   (record-of [:n :T]+), (ref-to :module/Type) into edn maps.")
+   (map-of :K :V), (record-of [:n :T]+), (ref-to :module/Type) into edn maps.")
 
 (defn parse [expr]
   (cond
@@ -22,6 +22,9 @@
 
     (and (seq? expr) (= 'sum-of (first expr)))
     {:kind :sum :variants (mapv parse (rest expr))}
+
+    (and (seq? expr) (= 'map-of (first expr)))
+    {:kind :map :key (parse (second expr)) :val (parse (nth expr 2))}
 
     (and (seq? expr) (= 'ref-to (first expr)))
     {:kind :ref :target (second expr)}

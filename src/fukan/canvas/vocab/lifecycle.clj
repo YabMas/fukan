@@ -18,6 +18,8 @@
     :list     (emit-refs! from-id (:elem parsed-shape))
     :set      (emit-refs! from-id (:elem parsed-shape))
     :sum      (run! #(emit-refs! from-id %) (:variants parsed-shape))
+    :map      (do (emit-refs! from-id (:key parsed-shape))
+                  (emit-refs! from-id (:val parsed-shape)))
     :record   (run! (fn [[_ s]] (emit-refs! from-id s)) (:fields parsed-shape))
     nil))
 
