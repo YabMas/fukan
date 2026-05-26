@@ -1,4 +1,4 @@
-(ns static-lib.transform-test
+(ns demo.static-lib.transform-test
   "Smoke tests for the transform canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.static-lib.transform :as transform]

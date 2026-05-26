@@ -1,4 +1,4 @@
-(ns event-driven.order-test
+(ns demo.event-driven.order-test
   "Smoke tests for the order canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.event-driven.order :as order]

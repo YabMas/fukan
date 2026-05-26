@@ -1,4 +1,4 @@
-(ns event-driven.shipping-test
+(ns demo.event-driven.shipping-test
   "Smoke tests for the shipping canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.event-driven.shipping :as shipping]

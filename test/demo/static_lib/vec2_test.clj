@@ -1,4 +1,4 @@
-(ns static-lib.vec2-test
+(ns demo.static-lib.vec2-test
   "Smoke tests for the vec2 canvas port.
    Load + structural non-empty checks only."
   (:require [clojure.test :refer [deftest is testing]]

@@ -1,4 +1,4 @@
-(ns event-driven.cart-test
+(ns demo.event-driven.cart-test
   "Smoke tests for the cart canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.event-driven.cart :as cart]

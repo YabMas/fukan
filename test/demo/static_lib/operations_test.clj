@@ -1,4 +1,4 @@
-(ns static-lib.operations-test
+(ns demo.static-lib.operations-test
   "Smoke tests for the operations canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.static-lib.operations :as ops]

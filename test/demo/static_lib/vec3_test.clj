@@ -1,4 +1,4 @@
-(ns static-lib.vec3-test
+(ns demo.static-lib.vec3-test
   "Smoke tests for the vec3 canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.static-lib.vec3 :as vec3]

@@ -1,4 +1,4 @@
-(ns event-driven.payment-test
+(ns demo.event-driven.payment-test
   "Smoke tests for the payment canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.event-driven.payment :as payment]

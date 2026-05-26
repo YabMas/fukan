@@ -1,4 +1,4 @@
-(ns static-lib.matrix-test
+(ns demo.static-lib.matrix-test
   "Smoke tests for the matrix canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.static-lib.matrix :as matrix]
