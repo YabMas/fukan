@@ -2,30 +2,29 @@
   "Canvas port of constraint/phase5.allium + phase5.boundary.
 
    Coverage:
+     - rule RunPhase5 → vocab.behavioral/rule
      - 6 invariants  → vocab.behavioral/invariant each
      - fn run        → construction/function with cross-module type ref :model/Model
                        (triggers: RunPhase5 and returns: post.model noted in docstring)
 
    Notes:
-     - rule RunPhase5: no rule lift (deferred). Left as TODO comment.
-     - run has triggers: RunPhase5 / returns: post.model — no anchor syntax in function lift;
-       intent noted in docstring.
      - No exports: in phase5.boundary."
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
     (h/within-module "constraint.phase5"
 
-      ;; TODO: rule RunPhase5 — no rule lift (deferred).
-      ;; Structural intent:
-      ;;   when: RunPhase5(model: model.Model)
-      ;; Phase 5 of the build pipeline. Triggered after defaults registration.
-      ;; Reads every PredicateRegistration from the Model's predicate registry,
-      ;; evaluates against the kernel-universal EDB (extended with depends_on_rules),
-      ;; and appends one Violation per head tuple to the Model's violations.
+      (rule "RunPhase5"
+        "Phase 5 of the build pipeline — fired after defaults registration.
+         Reads every PredicateRegistration from the Model's predicate registry,
+         evaluates each against the kernel-universal EDB (extended with
+         depends_on_rules), and appends one Violation per derived head tuple
+         to the Model's :violations. Non-gating: violations are outputs, not
+         errors."
+        (when RunPhase5 (model :model/Model)))
 
       ;; Invariants from phase5.allium.
       (invariant "NonGating"
