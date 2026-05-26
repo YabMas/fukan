@@ -45,3 +45,14 @@
                              [?a :entity/name ?n]]
                     db)]
       (is (= ["MentionedButUnspecified"] (mapv first rows))))))
+
+(deftest invariant-persists-doc
+  (let [db (h/with-canvas
+             (h/within-module "constraint.evaluator"
+               (invariant "FixedPoint" "Evaluation reaches a fixed point.")))
+        rows (d/q '[:find ?n ?doc
+                    :where [?e :affordance/role :canvas/invariant]
+                           [?e :entity/name ?n]
+                           [?e :affordance/doc ?doc]]
+                  db)]
+    (is (= [["FixedPoint" "Evaluation reaches a fixed point."]] (vec rows)))))

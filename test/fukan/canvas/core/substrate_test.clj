@@ -44,3 +44,16 @@
     (let [m (sub/module "accounts")
           t (sub/apply-tag m :Deprecated)]
       (is (contains? (sub/tags-of t) :Deprecated)))))
+
+(deftest affordance-doc-persists
+  (testing "an affordance constructed with :doc has its doc persisted"
+    (let [a (sub/affordance "find-by-email"
+              :module (random-uuid)
+              :doc "Look up an account by email address.")]
+      (is (= "Look up an account by email address." (sub/doc-of a))))))
+
+(deftest type-doc-persists
+  (testing "a type constructed with :doc has its doc persisted"
+    (let [t (sub/type-record "Account" [["email" {:kind :atomic :name :String}]]
+              :doc "An owned account record.")]
+      (is (= "An owned account record." (sub/doc-of t))))))

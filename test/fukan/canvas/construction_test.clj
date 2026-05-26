@@ -133,3 +133,33 @@
                       db)]
       ;; Only ServerOpts should be tagged
       (is (= #{"ServerOpts"} (set (map first tagged)))))))
+
+(deftest function-persists-doc
+  (testing "(function …) stores the docstring in :affordance/doc"
+    (let [db (h/with-canvas
+               (h/within-module "accounts"
+                 (function "find-by-email"
+                   "Look up an account by email."
+                   (takes [email :String])
+                   (gives :Account))))
+          rows (d/q '[:find ?n ?doc
+                      :where [?e :entity/type :Affordance]
+                             [?e :entity/name ?n]
+                             [?e :affordance/doc ?doc]]
+                    db)]
+      (is (= [["find-by-email" "Look up an account by email."]] (vec rows))))))
+
+(deftest record-persists-doc
+  (testing "(record …) stores the docstring in :type/doc"
+    (let [db (h/with-canvas
+               (h/within-module "accounts"
+                 (record "Account"
+                   "An account record."
+                   (field email :String)
+                   (field name :String))))
+          rows (d/q '[:find ?n ?doc
+                      :where [?e :entity/type :Type]
+                             [?e :entity/name ?n]
+                             [?e :type/doc ?doc]]
+                    db)]
+      (is (= [["Account" "An account record."]] (vec rows))))))

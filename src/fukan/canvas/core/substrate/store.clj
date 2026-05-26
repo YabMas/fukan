@@ -11,7 +11,9 @@
    :module/child        {:db/cardinality :db.cardinality/many
                          :db/valueType :db.type/ref}
    :entity/tag          {:db/cardinality :db.cardinality/many}
-   :references          {:db/cardinality :db.cardinality/many}})
+   :references          {:db/cardinality :db.cardinality/many}
+   :affordance/doc      {:db/index true}
+   :type/doc            {:db/index true}})
 
 (defn create []
   (d/empty-db schema))
@@ -36,7 +38,9 @@
      (sub/shape-of a)
      (assoc :affordance/shape (pr-str (sub/shape-of a)))
      (sub/formal-expression-of a)
-     (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a))))])
+     (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a)))
+     (sub/doc-of a)
+     (assoc :affordance/doc (sub/doc-of a)))])
 
 (defmethod ->datoms :State [s]
   [{:entity/id (sub/id-of s)
@@ -47,10 +51,12 @@
     :entity/tag (vec (sub/tags-of s))}])
 
 (defmethod ->datoms :Type [t]
-  [{:entity/id (sub/id-of t)
-    :entity/type :Type
-    :entity/name (sub/name-of t)
-    :entity/tag (vec (sub/tags-of t))}])
+  [(cond-> {:entity/id (sub/id-of t)
+            :entity/type :Type
+            :entity/name (sub/name-of t)
+            :entity/tag (vec (sub/tags-of t))}
+     (sub/doc-of t)
+     (assoc :type/doc (sub/doc-of t)))])
 
 (defmethod ->datoms :Relation [r]
   (let [to-val (sub/to-of r)

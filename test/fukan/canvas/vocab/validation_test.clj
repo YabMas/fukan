@@ -52,3 +52,15 @@
                              [?a :entity/name ?n]]
                     db)]
       (is (= #{"rules_4a" "rules_4b" "rules_4c"} (set (map first rows)))))))
+
+(deftest checker-persists-doc
+  (testing "(checker …) stores the docstring in :affordance/doc"
+    (let [db (h/with-canvas
+               (h/within-module "validation.rules_4a"
+                 (checker "check" "Run phase-4a structural checks.")))
+          rows (d/q '[:find ?n ?doc
+                      :where [?a :affordance/role :canvas/checker]
+                             [?a :entity/name ?n]
+                             [?a :affordance/doc ?doc]]
+                    db)]
+      (is (= [["check" "Run phase-4a structural checks."]] (vec rows))))))

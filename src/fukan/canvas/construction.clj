@@ -43,7 +43,8 @@
           outputs     (shape/parse gives-arg)
           aff         (h/declare-affordance name
                         :shape {:kind :arrow :inputs inputs :outputs outputs}
-                        :role :fukan.canvas.monolith/exposed-call)]
+                        :role :fukan.canvas.monolith/exposed-call
+                        :doc doc)]
       (emit-refs! (:id aff) {:kind :arrow :inputs inputs :outputs outputs})
       (doseq [e-args (:effect forms)]
         (h/declare-relation (:id aff)
@@ -58,7 +59,7 @@
   (produces [name doc forms]
     (let [field-args  (:field forms)
           field-pairs (mapv (fn [args] [(first args) (shape/parse (second args))]) field-args)
-          t (sub/type-record name field-pairs)]
+          t (sub/type-record name field-pairs :doc doc)]
       (swap! h/*store* store/transact! t)
       (doseq [[_ field-shape] field-pairs]
         (emit-refs! (:id t) field-shape)))))
@@ -68,7 +69,7 @@
    Use for Allium-style value declarations with no exposed fields."
 
   (produces [name doc forms]
-    (let [t (sub/type-primitive name)]
+    (let [t (sub/type-primitive name :doc doc)]
       (swap! h/*store* store/transact! t))))
 
 ;; ---------------------------------------------------------------------------

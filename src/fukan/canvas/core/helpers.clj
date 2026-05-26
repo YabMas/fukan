@@ -39,7 +39,8 @@
             :module *enclosing-module*
             :shape (:shape opts)
             :role (:role opts)
-            :formal-expression (:formal-expression opts))]
+            :formal-expression (:formal-expression opts)
+            :doc (:doc opts))]
     (swap! *store* store/transact! a)
     a))
 

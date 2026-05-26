@@ -17,4 +17,5 @@
   (produces [name doc forms]
     (h/declare-affordance name
       :role :canvas/invariant
-      :formal-expression (first (:holds-that forms)))))
+      :formal-expression (first (:holds-that forms))
+      :doc doc)))

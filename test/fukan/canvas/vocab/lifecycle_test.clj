@@ -48,3 +48,15 @@
                              [?a :entity/name ?n]]
                     db)]
       (is (= #{"get_model" "refresh_model" "get_src"} (set (map first rows)))))))
+
+(deftest getter-persists-doc
+  (testing "(getter …) stores the docstring in :affordance/doc"
+    (let [db (h/with-canvas
+               (h/within-module "infra.server"
+                 (getter "get_port" "Current port if running." :Integer)))
+          rows (d/q '[:find ?n ?doc
+                      :where [?a :affordance/role :canvas/getter]
+                             [?a :entity/name ?n]
+                             [?a :affordance/doc ?doc]]
+                    db)]
+      (is (= [["get_port" "Current port if running."]] (vec rows))))))

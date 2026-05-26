@@ -22,6 +22,7 @@
   (produces [name doc forms]
     (let [aff (h/declare-affordance name
                 :role :canvas/checker
-                :shape checker-shape)]
+                :shape checker-shape
+                :doc doc)]
       (h/declare-relation (:id aff) :references :model/Model)
       (h/declare-relation (:id aff) :references :agent/Violation))))

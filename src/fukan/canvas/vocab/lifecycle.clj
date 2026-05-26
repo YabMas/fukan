@@ -24,7 +24,7 @@
 (defn getter
   "Declare a zero-arg Optional<T> accessor on the enclosing module.
    Example: (getter \"get_port\" \"Current bound port, if running.\" :Integer)"
-  [name _doc return-type-expr]
+  [name doc return-type-expr]
   (let [inner-shape  (shape/parse return-type-expr)
         output-shape {:kind :optional :inner inner-shape}
         full-shape   {:kind :arrow
@@ -32,6 +32,7 @@
                       :outputs output-shape}
         aff (h/declare-affordance name
               :role  :canvas/getter
-              :shape full-shape)]
+              :shape full-shape
+              :doc   doc)]
     (emit-refs! (:id aff) output-shape)
     aff))
