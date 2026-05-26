@@ -45,26 +45,34 @@ A human or LLM authoring canvas content should, while they work, receive these k
 
 Phase 5 ships infrastructure for these signals + integrates them into a workflow the LLM can invoke. Not all six become first-class — Sprint 1's design conversation picks which to prioritize.
 
-### Two tiers: canvas-level helpers vs LLM-side tools
+### Two tiers: trust vs weigh
 
 A second axis cuts across the six signals: **does the signal produce facts that can be acted on by code, or observations that require interpretation?**
 
 | Signal | Output | Tier | Lives |
 |---|---|---|---|
-| Structural integrity | "this reference doesn't resolve" — broken refs are errors | **canvas-level helper** | `src/fukan/canvas/inspect/` |
-| Behavioral coverage | "this entity has no incoming refs; this rule has no trigger" — severity varies | **canvas-level helper** | `src/fukan/canvas/inspect/` |
-| Delta awareness | "X removed since snapshot; these refs now break" — mechanical impact | **canvas-level helper** | `src/fukan/canvas/inspect/` |
-| Pattern recurrence | "these 5 affordances share a shape" — interpretation needed | **LLM-side tool** | `src/fukan/canvas/architect/` |
-| Consistency | "naming style varies in this module" — intentional? worth normalizing? | **LLM-side tool** | `src/fukan/canvas/architect/` |
-| Methodology coherence | "vocabulary fingerprint doesn't match the dominant paradigm" — drift? mixed methodology by design? | **LLM-side tool** | `src/fukan/canvas/architect/` |
+| Structural integrity | "this reference doesn't resolve" — broken refs are errors | **trust** | `src/fukan/canvas/inspect/` |
+| Behavioral coverage | "this entity has no incoming refs; this rule has no trigger" — severity varies | **trust** | `src/fukan/canvas/inspect/` |
+| Delta awareness | "X removed since snapshot; these refs now break" — mechanical impact | **trust** | `src/fukan/canvas/inspect/` |
+| Pattern recurrence | "these 5 affordances share a shape" — interpretation needed | **weigh** | `src/fukan/canvas/architect/` |
+| Consistency | "naming style varies in this module" — intentional? worth normalizing? | **weigh** | `src/fukan/canvas/architect/` |
+| Methodology coherence | "vocabulary fingerprint doesn't match the dominant paradigm" — drift? mixed methodology by design? | **weigh** | `src/fukan/canvas/architect/` |
 
-**Canvas-level helpers** are pure functions over the canvas db. Decision-ready output. Callable from REPL, from constraints (`fc/check`), from CLI, from the LLM workflow — same fn, multiple consumers. They strengthen the **integrity** of the substrate.
+**Both tiers are plain Clojure fns under `src/fukan/canvas/`.** The tier distinction is the *kind of signal each produces*, not where it's exposed. There are no new CLI subcommands and no new MCP-style tools — the existing `bin/fukan eval '<expr>'` agent invocation surface is sufficient.
 
-**LLM-side tools** wrap interpretive logic. Output is structured for an LLM to read and reason about, not for code to act on directly. Invoked via `bin/fukan architect <signal>`. They strengthen the **design judgment** the LLM brings.
+**Trust tier (`inspect/*`):** pure functions over the canvas db; output is decision-ready. If `inspect/integrity` says a reference is broken, the reference is broken — no interpretation required. The LLM treats these as authoritative.
 
-Phase 5 ships both tiers but keeps them architecturally separate.
+**Weigh tier (`architect/*`):** pure functions over the canvas db; output is observational. If `architect/patterns` surfaces a cluster of 3 similar affordances, the cluster is real — but whether to extract a lift is a judgment call the LLM has to make.
 
-**Constraint integration deferred.** Canvas-level helpers COULD be wired as built-in `fc/check` constraints (every `:references` Relation must resolve, etc.) but Phase 5 ships them as plain pure fns. Constraint wiring is a follow-on if use evidence demands automatic enforcement — requires `fc/check` to grow severity-awareness, which today's binary model doesn't have.
+**Discovery surface:** the agent API's `(help)` fn (in `fukan.agent.api`) lists both groups separately so the LLM sees the trust distinction at discovery time. `AGENTS.md` gets a short section explaining the partition.
+
+**Invocation surface:** both tiers go through `bin/fukan eval`. Example:
+- Trust: `bin/fukan eval '(canvas.inspect.integrity/check (model))'` → structured violations report
+- Weigh: `bin/fukan eval '(canvas.architect.patterns/cluster (model))'` → annotated cluster list for LLM consumption
+
+**Subagent surface (orchestrated weighing):** the `weigh` tier's interpretive load makes sense to bundle into a subagent mode rather than direct fn calls. Phase 5 extends the existing `fukan-architect` agent with a `survey design improvements` capability that invokes the `architect/*` fns and synthesizes a unified survey. See Sprint 4 Task 10.
+
+**Constraint integration deferred.** Trust-tier helpers COULD be wired as built-in `fc/check` constraints (every `:references` Relation must resolve, etc.) but Phase 5 ships them as plain pure fns. Constraint wiring is a follow-on if use evidence demands automatic enforcement — requires `fc/check` to grow severity-awareness, which today's binary model doesn't have.
 
 ---
 
@@ -73,16 +81,15 @@ Phase 5 ships both tiers but keeps them architecturally separate.
 **Likely new namespaces:**
 
 ```
-src/fukan/canvas/inspect/             ; tier 1 — canvas-level helpers (pure fns over the canvas db)
+src/fukan/canvas/inspect/             ; trust tier — decision-ready output
   integrity.clj                  ; cross-reference resolution + trigger/emit coherence
   coverage.clj                   ; orphans, unreachable entities, dead exports, invariant target checks
   delta.clj                      ; canvas-to-canvas diff + impact analysis
 
-src/fukan/canvas/architect/           ; tier 2 — LLM-side tools (interpretive output)
+src/fukan/canvas/architect/           ; weigh tier — interpretive output
   patterns.clj                   ; recurring-shape detection; lift candidates
   consistency.clj                ; naming + structural consistency observations
-  methodology.clj                ; vocabulary fingerprint + drift signal
-  workflow.clj                   ; the architect-explorer pattern as a reusable workflow
+  ; methodology.clj              ; deferred to Phase 6+; corpus too uniformly fukan-shaped to design against
 
 doc/plans/
   2026-05-26-feedback-signals-design.md   ; Sprint 1 output
@@ -93,12 +100,15 @@ doc/plans/
 **Likely modified files:**
 
 ```
-bin/fukan                              ; new sub-commands for feedback signals
-dev/user.clj                           ; REPL convenience for invoking signals
+src/fukan/agent/api.clj                ; expose new fns through (help); group by tier
 src/fukan/canvas/construction.clj      ; Sprint 2 — emits form
 src/fukan/canvas/projection/canvas_source.clj  ; Sprint 2 — duplicate-name fix (TBD)
-CLAUDE.md, AGENTS.md                   ; Sprint 5 — authoring workflow guidance
+.claude/agents/fukan-architect.md      ; Sprint 4 — extend with survey-improvements capability (or equivalent path)
+dev/user.clj                           ; REPL convenience for invoking signals (optional)
+CLAUDE.md, AGENTS.md                   ; Sprint 5 — authoring workflow guidance + tier explanation
 ```
+
+**`bin/fukan` is NOT modified.** Phase 5 adds no CLI subcommands. Both tiers are invoked through `bin/fukan eval`.
 
 **Files NOT touched:**
 
@@ -285,24 +295,25 @@ The substantive sprint. Each task implements one of Sprint 1 Task 1's selected s
 
 Sprint 3 splits into two groups corresponding to the two tiers:
 
-- **Tier 1 (canvas-level helpers)** — Tasks 5–7. Land under `src/fukan/canvas/inspect/`. Pure fns over the canvas db. Decision-ready output. `bin/fukan inspect <signal>` invokes them; REPL helpers expose them; constraints can wrap them.
-- **Tier 2 (LLM-side tools)** — Tasks 8–9. Land under `src/fukan/canvas/architect/`. Output formatted for an LLM to reason about. `bin/fukan architect <signal>` invokes them.
+- **Trust tier** — Tasks 5–7. Land under `src/fukan/canvas/inspect/`. Pure fns; decision-ready output; the LLM treats them as authoritative.
+- **Weigh tier** — Tasks 8–9. Land under `src/fukan/canvas/architect/`. Pure fns; observational output; the LLM interprets and decides.
 
 Each signal lands as:
 - One namespace under the tier's directory
 - Tests
-- A `bin/fukan` subcommand invoking it (under the tier's subcommand)
-- A REPL helper in `dev/user.clj` for canvas-level helpers
+- Registration in the agent API's `(help)` surface, grouped by tier
 - A short EXAMPLES.md showing typical use
+
+**No new `bin/fukan` subcommands.** All fns are invoked through `bin/fukan eval`. The agent API surface (and AGENTS.md) is responsible for telling the LLM these fns exist and what tier each one belongs to.
 
 ---
 
-## Phase 5, Task 5: Cross-reference integrity — canvas-level helper
+## Phase 5, Task 5: Cross-reference integrity — trust tier
 
 **Files:**
 - Create: `src/fukan/canvas/inspect/integrity.clj`
 - Test: `test/fukan/canvas/inspect/integrity_test.clj`
-- Update: `bin/fukan` + `dev/user.clj`
+- Update: `src/fukan/agent/api.clj` (register in `(help)`)
 
 What it computes:
 - For every `:references` Relation: does the `:to` target resolve to an actual entity in the canvas db?
@@ -322,14 +333,13 @@ What it returns: a structured report of unresolved references with source-locati
 
 - [ ] **Step 1: Test the failure cases first.** Construct a canvas with deliberately broken references; assert the signal catches them.
 - [ ] **Step 2: Implement** using Datascript queries against `(canvas-source/build-canvas-db)`.
-- [ ] **Step 3: bin/fukan subcommand** — `bin/fukan inspect integrity` produces the report.
-- [ ] **Step 4: REPL helper** — `(dev/inspect-integrity)` returns structured data; pretty-prints by default.
-- [ ] **Step 5: Run against fukan-itself.** What does the live canvas surface? Document findings in the test or notes.
-- [ ] **Step 6: Commit.**
+- [ ] **Step 3: Register in `(help)`** under a `Trust` group with a one-line summary.
+- [ ] **Step 4: Run against fukan-itself.** What does the live canvas surface? Document findings in the test or notes.
+- [ ] **Step 5: Commit.**
 
 ---
 
-## Phase 5, Task 6: Coverage analysis — canvas-level helper
+## Phase 5, Task 6: Coverage analysis — trust tier
 
 **Files:**
 - Create: `src/fukan/canvas/inspect/coverage.clj`
@@ -347,13 +357,13 @@ Each finding has a severity (error / warning / info) callers can filter on. Outp
 
 - [ ] **Step 1: Define each coverage check** as a Datalog query.
 - [ ] **Step 2: Tests.**
-- [ ] **Step 3: Run against fukan-itself.** Expect to find some real issues (dead exports, etc.).
-- [ ] **Step 4: bin/fukan subcommand** — `bin/fukan inspect coverage`.
+- [ ] **Step 3: Register in `(help)`** under the `Trust` group.
+- [ ] **Step 4: Run against fukan-itself.** Expect to find some real issues (dead exports, etc.).
 - [ ] **Step 5: Commit.**
 
 ---
 
-## Phase 5, Task 7: Delta inspection — canvas-level helper
+## Phase 5, Task 7: Delta inspection — trust tier
 
 **Files:**
 - Create: `src/fukan/canvas/inspect/delta.clj`
@@ -370,13 +380,12 @@ Usage pattern: a snapshot is taken (manually or automatically on `(refresh)`); s
 - [ ] **Step 1: Snapshot representation.** Probably: serialize the canvas db to edn at a known location (e.g. `.fukan/canvas-snapshot.edn`).
 - [ ] **Step 2: Diff algorithm.** Walk both dbs; compare by `:entity/id`.
 - [ ] **Step 3: Format output** to highlight impact.
-- [ ] **Step 4: REPL helper** — `(dev/canvas-delta)` shows changes since last snapshot.
-- [ ] **Step 5: bin/fukan subcommand** — `bin/fukan inspect delta`.
-- [ ] **Step 6: Commit.**
+- [ ] **Step 4: Register in `(help)`** under the `Trust` group.
+- [ ] **Step 5: Commit.**
 
 ---
 
-## Phase 5, Task 8: Pattern recurrence — LLM-side tool
+## Phase 5, Task 8: Pattern recurrence — weigh tier
 
 **Files:**
 - Create: `src/fukan/canvas/architect/patterns.clj`
@@ -392,13 +401,13 @@ This is potentially the highest-value LLM-side signal — the rule-of-three disc
 - [ ] **Step 1: Define "structural similarity"** rigorously. Probably: same `:affordance/role`; same set-of-type-names in input + output; same presence of formal-expression.
 - [ ] **Step 2: Implement clustering.** Group entities by their similarity signature; emit clusters >= 3.
 - [ ] **Step 3: Format the output** so it's actionable to an LLM. E.g. "Three Affordances with shape `(Model) -> [Violation]`: rules_4a/check, rules_4b/check, rules_4c/check. Consider `vocab.validation/checker` (already exists). Apply at: …"
-- [ ] **Step 4: bin/fukan subcommand** — `bin/fukan architect patterns`.
+- [ ] **Step 4: Register in `(help)`** under a `Weigh` group with a one-line summary.
 - [ ] **Step 5: Run against fukan-itself.** The existing `checker` lift should surface for the validation rules. If new patterns surface, document them as Phase 6 vocab candidates.
 - [ ] **Step 6: Commit.**
 
 ---
 
-## Phase 5, Task 9: Consistency analysis — LLM-side tool
+## Phase 5, Task 9: Consistency analysis — weigh tier
 
 **Files:**
 - Create: `src/fukan/canvas/architect/consistency.clj`
@@ -414,7 +423,7 @@ Output is **observational** — the LLM (or human) interprets whether each incon
 - [ ] **Step 1: Define each consistency check.**
 - [ ] **Step 2: Make checks optional / configurable** so authoring projects can opt in/out of specific style rules.
 - [ ] **Step 3: Format output** as annotated suggestions (interpretive framing, not error framing).
-- [ ] **Step 4: bin/fukan subcommand** — `bin/fukan architect consistency`.
+- [ ] **Step 4: Register in `(help)`** under the `Weigh` group.
 - [ ] **Step 5: Run against fukan-itself.** Expect surprises.
 - [ ] **Step 6: Commit.**
 
@@ -430,26 +439,31 @@ The signals from Sprint 3 are useful in isolation. Sprint 4 integrates them into
 
 ---
 
-## Phase 5, Task 10: Promote architect-explorer pattern to reusable workflow
+## Phase 5, Task 10: Extend the `fukan-architect` agent with feedback-signal awareness + `survey design improvements` capability
 
 **Files:**
-- Create: `src/fukan/canvas/architect/workflow.clj` — the architect workflow
-- Create: `doc/canvas-authoring-system-prompt.md` — the permanent system prompt
-- Update: `bin/fukan` — `bin/fukan architect <task>` invocation
+- Update: `.claude/agents/fukan-architect.md` (or equivalent agent-definition path)
+- Create: `doc/canvas-authoring-system-prompt.md` — extracted system-prompt content the agent reuses
+- Update: `AGENTS.md` — explain the trust/weigh tier model so the LLM understands what to invoke when
 
-The Phase 2 architect-explorer system prompt activated layered-language thinking. Phase 5 promotes it from one-shot to permanent. Key additions vs the original:
+The Phase 2 architect-explorer system prompt activated layered-language thinking. Phase 5 promotes it from one-shot artifact to permanent reusable subagent behavior, expressed through the existing `fukan-architect` agent.
 
-- References the now-existing vocab libraries (behavioral, validation, lifecycle, event)
-- References the now-existing EXAMPLES.md files
-- Integrates both tiers from Sprint 3:
-  - Canvas-level helpers (`inspect/*`) as **trusted** signals — if integrity says X is broken, X is broken
-  - LLM-side tools (`architect/*`) as **interpretive** signals — pattern clusters and consistency observations the LLM weighs and decides on
-- The architect-explorer pattern's principles (compose first, vocabulary justified by use, etc.) carry forward
+**Why extend rather than create a new agent:** `fukan-architect` is already described as "High-altitude design partner... reviews existing structure and explores improvements/expansions." That description already encompasses the survey capability. Keeping it unified keeps the agent surface compact and discoverable. If `survey design improvements` becomes a workload distinct enough from generalist design-partner work to warrant its own agent, split in Phase 6.
 
-- [ ] **Step 1: Reread the original prompt.** Identify generalizable principles vs experiment-specific framing.
-- [ ] **Step 2: Draft the canvas-authoring system prompt.** Permanent artifact. Versioned. Includes explicit framing of the two-tier signal model (trust canvas-level helpers; weigh LLM-side tools).
-- [ ] **Step 3: Implement `bin/fukan architect <task>`** that wraps the workflow: takes a task description; loads canvas; invokes integrity + coverage first (trusted baseline); produces a structured prompt + context for an LLM to author against; offers `architect/*` tool subcommands as in-loop reasoning aids.
-- [ ] **Step 4: Commit.**
+**Survey is monolithic in Phase 5.** A single dispatch produces a unified survey covering pattern recurrence + consistency. Rule of three: split into separate verbs only if the survey grows long enough to lose coherence.
+
+Key additions to the agent definition:
+
+- **Tier awareness.** Agent instructions explicitly distinguish trust vs weigh. Trust-tier helpers (`inspect/*`) are invoked first to establish a structural baseline; their findings are stated as facts. Weigh-tier helpers (`architect/*`) are invoked when surveying improvements; their findings are framed as observations + judgments.
+- **References to the existing vocab libraries** (behavioral, validation, lifecycle, event) and EXAMPLES.md files.
+- **The `survey design improvements` mode.** When dispatched with a survey-shaped task, the agent invokes `architect/patterns` + `architect/consistency` via `bin/fukan eval`, then synthesizes the findings into a structured survey.
+- **The original architect-explorer principles** (compose first, vocabulary justified by use, etc.) carry forward as the agent's reasoning posture.
+
+- [ ] **Step 1: Reread the Phase 2 architect-explorer system prompt.** Identify generalizable principles vs experiment-specific framing.
+- [ ] **Step 2: Draft `doc/canvas-authoring-system-prompt.md`** as the permanent versioned prompt content. Includes explicit trust/weigh tier framing.
+- [ ] **Step 3: Update the `fukan-architect` agent definition.** Reference the prompt; add the survey-improvements mode; ensure agent tool surface includes `bin/fukan eval` so it can invoke the helpers.
+- [ ] **Step 4: Update AGENTS.md** with the tier explanation so any LLM (not just the dispatched subagent) understands the model.
+- [ ] **Step 5: Commit.**
 
 ---
 
@@ -523,7 +537,7 @@ These don't block dispatch but help shape Sprint 1's design docs:
 
 3. **31 duplicate names — preference?** Phase 4 deferred this; Phase 5 needs to settle it.
 
-4. **`bin/fukan` shape.** Current sketch follows the two-tier split: `bin/fukan inspect <integrity|coverage|delta>` for the canvas-level helpers, `bin/fukan architect <patterns|consistency|<task>>` for the LLM-side tools and the architect workflow. The tier-as-top-level-verb makes the trust distinction visible at the CLI surface itself. Any preference to push back?
+4. **Agent organization for the survey.** Phase 5 currently plans to extend the existing `fukan-architect` agent with a `survey design improvements` capability rather than create a new `fukan-design-surveyor` agent. Survey is monolithic for Phase 5 (one dispatch produces a unified report). Preference to push back? Options: (a) extend `fukan-architect` as planned; (b) create a separate `fukan-design-surveyor` agent; (c) keep survey monolithic but split into `patterns` + `consistency` survey verbs later if it grows.
 
 ---
 
