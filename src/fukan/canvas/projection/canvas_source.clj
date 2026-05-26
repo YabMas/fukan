@@ -78,7 +78,8 @@
    ;; Infrastructure
    [clojure.string :as str]
    [datascript.core :as d]
-   [fukan.canvas.core.substrate.store :as store]))
+   [fukan.canvas.core.substrate.store :as store]
+   [fukan.canvas.identity :as identity]))
 
 ;; ---------------------------------------------------------------------------
 ;; Registry — one entry per canvas port namespace
@@ -153,6 +154,12 @@
 ;; Merge helpers
 ;; ---------------------------------------------------------------------------
 
+;; Scalar cardinality-many attributes that need to be accumulated as sets
+;; during entity-map extraction (as opposed to ref-typed :module/child which
+;; is handled separately in child-txs).
+(def ^:private scalar-card-many-attrs
+  #{:entity/tag :entity/alias :references})
+
 (defn- db->entity-maps
   "Extract all entities from a per-module Datascript db as transactable data.
 
@@ -162,7 +169,10 @@
 
    Two-pass approach: entity-maps are transacted first (establishing identity
    via :entity/id unique attr), then child-txs are transacted to wire refs.
-   This avoids Datascript lookup-ref failures when entities haven't been added yet."
+   This avoids Datascript lookup-ref failures when entities haven't been added yet.
+
+   Cardinality-many scalar attributes (entity/tag, entity/alias, references) are
+   accumulated as sets so that all values survive the extraction."
   [db]
   (let [eids (d/q '[:find [?e ...] :where [?e :entity/id _]] db)
         eid->uuid (into {} (map (fn [eid]
@@ -172,8 +182,14 @@
                             (reduce (fn [m datom]
                                       (let [attr (.-a datom)
                                             val  (.-v datom)]
-                                        (if (= attr :module/child)
+                                        (cond
+                                          (= attr :module/child)
                                           m ; skip ref attrs in first pass
+
+                                          (contains? scalar-card-many-attrs attr)
+                                          (update m attr (fnil conj #{}) val)
+
+                                          :else
                                           (assoc m attr val))))
                                     {}
                                     (d/datoms db :eavt eid)))
@@ -290,24 +306,24 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- stable-module-id
-  "Stable string id for a Module: its name (e.g. 'infra.server')."
+  "Stable string id for a Module: delegates to identity/stable-id."
   [module-name]
-  module-name)
+  (identity/stable-id :Module module-name module-name))
 
 (defn- stable-affordance-id
-  "Stable string id for an Affordance: 'module-name/entity-name'."
+  "Stable string id for an Affordance: delegates to identity/stable-id."
   [module-name entity-name]
-  (str module-name "/" entity-name))
+  (identity/stable-id :Affordance module-name entity-name))
 
 (defn- stable-type-id
-  "Stable string id for a Type: 'module-name/type/entity-name'."
+  "Stable string id for a Type: delegates to identity/stable-id."
   [module-name entity-name]
-  (str module-name "/type/" entity-name))
+  (identity/stable-id :Type module-name entity-name))
 
 (defn- stable-state-id
-  "Stable string id for a State: 'module-name/state/entity-name'."
+  "Stable string id for a State: delegates to identity/stable-id."
   [module-name entity-name]
-  (str module-name "/state/" entity-name))
+  (identity/stable-id :State module-name entity-name))
 
 (defn- affordance-kind
   "Map canvas affordance role to kernel primitive kind."

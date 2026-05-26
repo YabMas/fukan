@@ -9,6 +9,7 @@
    :module/child        {:db/cardinality :db.cardinality/many
                          :db/valueType :db.type/ref}
    :entity/tag          {:db/cardinality :db.cardinality/many}
+   :entity/alias        {:db/cardinality :db.cardinality/many}
    :references          {:db/cardinality :db.cardinality/many}
    :affordance/doc      {:db/index true}
    :type/doc            {:db/index true}})

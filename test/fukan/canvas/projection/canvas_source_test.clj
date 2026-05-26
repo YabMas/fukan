@@ -4,6 +4,7 @@
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.substrate.store :as store]
             [fukan.canvas.construction :refer [function value]]
+            [fukan.canvas.identity :as identity]
             [fukan.canvas.projection.canvas-source :as canvas-source]
             canvas.infra.server
             canvas.infra.model))
@@ -259,3 +260,24 @@
       (is (thrown? clojure.lang.ExceptionInfo
                    (canvas-source/detect-intra-module-duplicates-for-test db))
           "intra-module duplicate entity names must throw ExceptionInfo"))))
+
+;; ---------------------------------------------------------------------------
+;; Phase 4 Sprint 1 Task 2: stable-id alias — end-to-end via canvas port
+;; ---------------------------------------------------------------------------
+
+(deftest infra-server-alias-resolves-via-build-canvas-db
+  (testing "the sample alias in canvas.infra.server resolves via the full unified db"
+    ;; canvas.infra.server declares (alias \"infra.server/start\" \"start_server\")
+    ;; After building the full canvas db, resolving that old id should return
+    ;; the canonical id of start_server.
+    (let [db (canvas-source/build-canvas-db)]
+      (is (= "infra.server/start_server"
+             (identity/resolve-id db "infra.server/start"))
+          "old alias 'infra.server/start' must resolve to 'infra.server/start_server' in the unified db"))))
+
+(deftest infra-server-alias-single-port
+  (testing "the sample alias resolves when projecting only the infra.server port"
+    (let [db (canvas.infra.server/build-canvas)]
+      (is (= "infra.server/start_server"
+             (identity/resolve-id db "infra.server/start"))
+          "single-port alias must resolve"))))

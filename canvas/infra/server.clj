@@ -1,7 +1,9 @@
 (ns canvas.infra.server
   "Canvas port of infra/server.allium + server.boundary."
+  (:refer-clojure :exclude [alias])
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function record exports]]
+            [fukan.canvas.identity :refer [alias]]
             [fukan.canvas.vocab.behavioral :refer [invariant]]
             [fukan.canvas.vocab.lifecycle :refer [getter]]))
 
@@ -34,5 +36,10 @@
       (getter "get_port"
         "Return the port the server is listening on."
         :Integer)
+
+      ;; Historical alias: the function was once referenced as "start" before
+      ;; being renamed to "start_server". Declared here so old persisted ids
+      ;; (bookmarks, external references) continue to resolve.
+      (alias "infra.server/start" "start_server")
 
       (exports ServerOpts ServerInfo))))
