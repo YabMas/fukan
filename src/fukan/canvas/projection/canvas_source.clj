@@ -274,6 +274,14 @@
   [dbs]
   (merge-dbs dbs))
 
+(defn merge-module-dbs
+  "Public entry point for merging arbitrary per-module Datascript dbs.
+   Intended for demo loaders and external tooling that build their own
+   set of per-module dbs outside the canvas registry.
+   Merges a seq of Datascript dbs into one unified db."
+  [dbs]
+  (merge-dbs dbs))
+
 ;; ---------------------------------------------------------------------------
 ;; Public: build-canvas-db
 ;; ---------------------------------------------------------------------------
