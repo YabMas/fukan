@@ -4,8 +4,6 @@
   (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.shape :as shape]
-            [fukan.canvas.core.substrate :as sub]
-            [fukan.canvas.core.substrate.store :as store]
             [datascript.core :as d]))
 
 (defn- emit-refs!
@@ -59,8 +57,7 @@
   (produces [name doc forms]
     (let [field-args  (:field forms)
           field-pairs (mapv (fn [args] [(first args) (shape/parse (second args))]) field-args)
-          t (sub/type-record name field-pairs :doc doc)]
-      (swap! h/*store* store/transact! t)
+          t (h/declare-type name :kind :record :fields field-pairs :doc doc)]
       (doseq [[_ field-shape] field-pairs]
         (emit-refs! (:id t) field-shape)))))
 
@@ -69,8 +66,7 @@
    Use for Allium-style value declarations with no exposed fields."
 
   (produces [name doc forms]
-    (let [t (sub/type-primitive name :doc doc)]
-      (swap! h/*store* store/transact! t))))
+    (h/declare-type name :kind :atomic :doc doc)))
 
 ;; ---------------------------------------------------------------------------
 ;; Exports / closure mechanism

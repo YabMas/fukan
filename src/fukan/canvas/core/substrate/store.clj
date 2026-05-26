@@ -6,8 +6,6 @@
   {:entity/id           {:db/unique :db.unique/identity}
    :entity/type         {:db/index true}
    :entity/name         {:db/index true}
-   :affordance/module   {:db/valueType :db.type/ref}
-   :state/module        {:db/valueType :db.type/ref}
    :module/child        {:db/cardinality :db.cardinality/many
                          :db/valueType :db.type/ref}
    :entity/tag          {:db/cardinality :db.cardinality/many}
@@ -31,8 +29,6 @@
             :entity/type :Affordance
             :entity/name (sub/name-of a)
             :entity/tag (vec (sub/tags-of a))}
-     (sub/module-of a)
-     (assoc :affordance/module [:entity/id (sub/module-of a)])
      (sub/role-of a)
      (assoc :affordance/role (sub/role-of a))
      (sub/shape-of a)
@@ -43,12 +39,12 @@
      (assoc :affordance/doc (sub/doc-of a)))])
 
 (defmethod ->datoms :State [s]
-  [{:entity/id (sub/id-of s)
-    :entity/type :State
-    :entity/name (sub/name-of s)
-    :state/module [:entity/id (sub/module-of s)]
-    :state/shape (sub/shape-of s)
-    :entity/tag (vec (sub/tags-of s))}])
+  [(cond-> {:entity/id (sub/id-of s)
+            :entity/type :State
+            :entity/name (sub/name-of s)
+            :entity/tag (vec (sub/tags-of s))}
+     (sub/shape-of s)
+     (assoc :state/shape (sub/shape-of s)))])
 
 (defmethod ->datoms :Type [t]
   [(cond-> {:entity/id (sub/id-of t)
@@ -76,6 +72,18 @@
   (d/q '[:find ?n
          :in $ ?mid
          :where [?m :entity/id ?mid]
-                [?a :affordance/module ?m]
+                [?m :module/child ?a]
+                [?a :entity/type :Affordance]
                 [?a :entity/name ?n]]
+       db module-id))
+
+(defn children-of-module
+  "Return [type name] pairs for all entities directly owned by module."
+  [db module-id]
+  (d/q '[:find ?t ?n
+         :in $ ?mid
+         :where [?m :entity/id ?mid]
+                [?m :module/child ?c]
+                [?c :entity/type ?t]
+                [?c :entity/name ?n]]
        db module-id))

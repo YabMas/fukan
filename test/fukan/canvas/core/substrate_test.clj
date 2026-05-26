@@ -10,30 +10,25 @@
       (is (= :Module (sub/primitive-kind m))))))
 
 (deftest affordance-construction
-  (testing "an Affordance has name, module-id, optional shape/role/formal-expression"
-    (let [m (sub/module "accounts")
-          a (sub/affordance "create-account"
-                            :module (sub/id-of m)
+  (testing "an Affordance has name, optional shape/role/formal-expression; no :module field"
+    (let [a (sub/affordance "create-account"
                             :shape {:inputs :unit :outputs :unit}
                             :role :exposed-call)]
       (is (= "create-account" (sub/name-of a)))
-      (is (= (sub/id-of m) (sub/module-of a)))
       (is (= :exposed-call (sub/role-of a)))
       (is (= :Affordance (sub/primitive-kind a))))))
 
 (deftest state-construction
-  (testing "a State has name, module-id, required shape (type-ref)"
-    (let [m (sub/module "accounts")
-          ty (sub/type-primitive :String)
-          s (sub/state "config" :module (sub/id-of m) :shape (sub/id-of ty))]
+  (testing "a State has name and required shape; no :module field"
+    (let [ty (sub/type-primitive :String)
+          s (sub/state "config" :shape (sub/id-of ty))]
       (is (= "config" (sub/name-of s)))
       (is (= :State (sub/primitive-kind s))))))
 
 (deftest relation-construction
   (testing "a Relation is a directed triple with optional tags"
-    (let [m (sub/module "accounts")
-          a (sub/affordance "x" :module (sub/id-of m))
-          b (sub/affordance "y" :module (sub/id-of m))
+    (let [a (sub/affordance "x")
+          b (sub/affordance "y")
           r (sub/relation (sub/id-of a) :fukan.canvas.monolith/calls (sub/id-of b))]
       (is (= (sub/id-of a) (sub/from-of r)))
       (is (= :fukan.canvas.monolith/calls (sub/kind-of r)))
@@ -48,7 +43,6 @@
 (deftest affordance-doc-persists
   (testing "an affordance constructed with :doc has its doc persisted"
     (let [a (sub/affordance "find-by-email"
-              :module (random-uuid)
               :doc "Look up an account by email address.")]
       (is (= "Look up an account by email address." (sub/doc-of a))))))
 

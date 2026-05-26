@@ -1,5 +1,6 @@
 (ns fukan.canvas.core.helpers
-  (:require [fukan.canvas.core.substrate :as sub]
+  (:require [datascript.core :as d]
+            [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.substrate.store :as store]))
 
 (def ^:dynamic *store* nil)
@@ -34,22 +35,40 @@
        ~@body
        m#)))
 
+(defn- register-child! [entity]
+  (when *enclosing-module*
+    (swap! *store*
+           #(d/db-with % [[:db/add [:entity/id *enclosing-module*]
+                                   :module/child
+                                   [:entity/id (sub/id-of entity)]]])))
+  entity)
+
 (defn declare-affordance [name & {:as opts}]
   (let [a (sub/affordance name
-            :module *enclosing-module*
             :shape (:shape opts)
             :role (:role opts)
             :formal-expression (:formal-expression opts)
             :doc (:doc opts))]
     (swap! *store* store/transact! a)
+    (register-child! a)
     a))
 
 (defn declare-state [name & {:as opts}]
   (let [s (sub/state name
-            :module *enclosing-module*
             :shape (:shape opts))]
     (swap! *store* store/transact! s)
+    (register-child! s)
     s))
+
+(defn declare-type
+  "Construct a Type and register it as a child of the enclosing module."
+  [name & {:keys [kind fields doc]}]
+  (let [t (case kind
+            :atomic (sub/type-primitive name :doc doc)
+            :record (sub/type-record name fields :doc doc))]
+    (swap! *store* store/transact! t)
+    (register-child! t)
+    t))
 
 (defn declare-relation [from kind to]
   (swap! *store* store/transact! (sub/relation from kind to))

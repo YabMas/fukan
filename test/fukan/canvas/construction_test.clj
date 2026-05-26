@@ -27,26 +27,28 @@
                 (returns :Bool))))))))
 
 (deftest record-lift-produces-type
-  (testing "(record …) produces a Type"
+  (testing "(record …) produces a Type owned by the enclosing module"
     (let [db (h/with-canvas
                (h/within-module "accounts"
                  (record "Account"
                    "An account record."
                    (field email :String)
-                   (field name :String))))]
-      ;; The record adds a Type to the store; we can't easily query types yet,
-      ;; but the build should not throw and should leave the module in place.
-      (is (= 1 (count (store/all-modules db)))))))
+                   (field name :String))))
+          mid (ffirst (d/q '[:find ?id :where [?e :entity/type :Module] [?e :entity/id ?id]] db))]
+      (is (= 1 (count (store/all-modules db))))
+      (is (= #{[:Type "Account"]} (set (store/children-of-module db mid)))))))
 
 (deftest value-lift-creates-opaque-type
-  (testing "(value …) produces an atomic Type with no fields"
+  (testing "(value …) produces atomic Types owned by the enclosing module"
     (let [db (h/with-canvas
                (h/within-module "constraint.evaluator"
                  (value "Stratum" "An opaque stratification level.")
                  (value "Binding" "A logical-variable binding.")))
-          types (d/q '[:find ?n :where [?e :entity/type :Type] [?e :entity/name ?n]] db)]
+          types (d/q '[:find ?n :where [?e :entity/type :Type] [?e :entity/name ?n]] db)
+          mid   (ffirst (d/q '[:find ?id :where [?e :entity/type :Module] [?e :entity/id ?id]] db))]
       (is (= 2 (count types)))
-      (is (= #{"Stratum" "Binding"} (set (map first types)))))))
+      (is (= #{"Stratum" "Binding"} (set (map first types))))
+      (is (= #{[:Type "Stratum"] [:Type "Binding"]} (set (store/children-of-module db mid)))))))
 
 (deftest record-accepts-optional-fields
   (testing "(field port (optional :Integer)) works"

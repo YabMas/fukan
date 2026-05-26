@@ -4,22 +4,22 @@
 
 (defn- gen-id [] (random-uuid))
 
-(defrecord Module       [id name children tags])
-(defrecord Affordance   [id name module shape role formal-expression doc tags])
-(defrecord State        [id name module shape tags])
+(defrecord Module       [id name tags])
+(defrecord Affordance   [id name shape role formal-expression doc tags])
+(defrecord State        [id name shape tags])
 (defrecord Type         [id name kind fields doc tags])
 (defrecord Relation     [from kind to tags])
 
 (defn module [name]
-  (->Module (gen-id) name #{} #{}))
+  (->Module (gen-id) name #{}))
 
-(defn affordance [name & {:keys [module shape role formal-expression doc]}]
-  (->Affordance (gen-id) name module shape role formal-expression doc #{}))
+(defn affordance [name & {:keys [shape role formal-expression doc]}]
+  (->Affordance (gen-id) name shape role formal-expression doc #{}))
 
-(defn state [name & {:keys [module shape]}]
+(defn state [name & {:keys [shape]}]
   (when-not shape
     (throw (ex-info "State requires :shape" {:name name})))
-  (->State (gen-id) name module shape #{}))
+  (->State (gen-id) name shape #{}))
 
 (defn type-primitive [name & {:keys [doc]}]
   (->Type (gen-id) name :atomic nil doc #{}))
@@ -38,7 +38,6 @@
 ;; Accessors
 (defn id-of [e] (or (:id e) (when (instance? Relation e) [(:from e) (:kind e) (:to e)])))
 (defn name-of [e] (:name e))
-(defn module-of [e] (:module e))
 (defn role-of [e] (:role e))
 (defn shape-of [e] (:shape e))
 (defn formal-expression-of [e] (:formal-expression e))
