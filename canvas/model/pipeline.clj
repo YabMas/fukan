@@ -5,9 +5,8 @@
      - 4 guarantees from pipeline.allium → vocab.behavioral/invariant each:
          PhaseOrdering, GateG2Halts, NonGatingPhases,
          DefaultsRegistrationIsIdempotent
-     - 1 rule from pipeline.allium → TODO comment (rule lift deferred):
-         BuildModel
-     - fn build_model → construction/function
+     - rule BuildModel → vocab.behavioral/rule
+     - fn build_model  → construction/function
 
    Notes:
      - The pipeline is a thin orchestrator: Phase 1-3 (Allium parser ->
@@ -19,7 +18,7 @@
          fukan/external_must_have_wrapper (warning)"
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]))
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
 (defn build-canvas []
   (h/with-canvas
@@ -65,17 +64,15 @@
          fukan/external_must_have_wrapper (warning)."
         (holds-that "defaults-registration-is-idempotent-on-namespace-name"))
 
-      ;; TODO: rule BuildModel — no rule lift (deferred).
-      ;; Structural intent:
-      ;;   when: BuildModel(source_root: FilePath)
-      ;; Top-level build orchestration: run Phase 1-3 (Allium then Boundary
-      ;; loaders, merged by identity), then Phase 4 (structural validation;
-      ;; gate G2). On Phase 4 success, append fukan-shipped well-known
-      ;; constraint defaults to the predicate registry (idempotent on
-      ;; (namespace, name)), then run Phase 5 (constraint evaluation) and
-      ;; Phase 6 (Clojure target analyzer).
-      ;; Guarantees that apply: PhaseOrdering, GateG2Halts, NonGatingPhases,
-      ;; DefaultsRegistrationIsIdempotent.
+      (rule "BuildModel"
+        "Top-level build orchestration. Run Phase 1-3 (Allium then Boundary
+         loaders, merged by identity), then Phase 4 (structural validation;
+         gate G2). On Phase 4 success, append fukan-shipped well-known
+         constraint defaults to the predicate registry (idempotent on
+         (namespace, name)), then run Phase 5 (constraint evaluation) and
+         Phase 6 (Clojure target analyzer). Governed by PhaseOrdering,
+         GateG2Halts, NonGatingPhases, and DefaultsRegistrationIsIdempotent."
+        (when BuildModel (source_root :String)))
 
       ;; Public function from pipeline.boundary
 
