@@ -1,7 +1,11 @@
 (ns fukan.canvas.vocab.behavioral
   "Methodology vocabulary for systems that reason about named behavioral
    commitments. Opt-in: require this namespace only if your project models
-   invariants explicitly. Ships one lift: `invariant`."
+   invariants and reactive rules explicitly.
+
+   Ships two lifts: `invariant` (timeless commitments) and `rule` (reactive
+   declarations fired by triggers). Both produce no-shape Affordances with
+   distinct roles."
   (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
             [fukan.canvas.core.helpers :as h]))
 
@@ -18,4 +22,21 @@
     (h/declare-affordance name
       :role :canvas/invariant
       :formal-expression (first (:holds-that forms))
+      :doc doc)))
+
+(defconstructor rule
+  "A reactive behavioral declaration: fires when its trigger pattern matches.
+   Allium's `rule X { when: X(params) }` declaration ports here. The `when`
+   form carries the trigger signature — typically the rule's own name followed
+   by parameter pairs, captured as edn data in the formal-expression.
+
+   Phase 2 deferred this lift; Phase 3 Sprint 2 surfaced 49 deferred instances
+   across the codebase, well past the rule of three. Shipped 2026-05-26."
+
+  (form when "Trigger pattern: typically (TriggerName (param :Type) ...)." :required true)
+
+  (produces [name doc forms]
+    (h/declare-affordance name
+      :role :canvas/rule
+      :formal-expression {:when (vec (:when forms))}
       :doc doc)))
