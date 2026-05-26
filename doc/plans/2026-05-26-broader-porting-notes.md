@@ -194,3 +194,229 @@ No other escalations.
 ```
 feat(canvas): port validation/rules_4a–4g + violation specs   vztqzvom 4fd5cc39
 ```
+
+---
+
+# Sprint 2 Addendum — constraint/ subsystem (7 modules)
+
+Date: 2026-05-26
+Scope: constraint/ast, builtins, derivations, derivations_extra, phase5, sort, well_known
+
+## Per-module status
+
+### constraint/ast — CLEAN
+Lifts: `value` (6), `invariant` (2), `function` (9), `exports` (1).
+Shape grammar: intra-module cross-refs use `:ast/Term`, `:ast/ConstraintAtom`, etc.
+Bool-returning `is_var` / `is_constant` are plain `function` with `(gives :Bool)`.
+`vars_in_term` → `(set-of :ast/Term)`, `make_aggregation` body →
+`(list-of :ast/ConstraintAtom)` — shape grammar handles all.
+All six value types are opaque (PlainData invariant); no field declarations.
+TODO comments: none. No escalations.
+
+### constraint/builtins — CLEAN
+Lifts: `invariant` (1), `function` (4).
+`BuiltinCatalogue` invariant names the closed set; no predicate-catalog lift.
+Bool-returning functions expressed as plain `function` with `(gives :Bool)`.
+No `exports:` in source boundary.
+TODO comments: none. No escalations.
+
+### constraint/derivations — CLEAN
+Lifts: `value` (1), `invariant` (3), `function` (1), `exports` (1).
+`EDB` is opaque. `model_to_edb` takes `:model/Model` — cross-module ref auto-emits Relation.
+`gives :derivations/EDB` — self-module namespaced return ref works correctly.
+TODO comments: none. No escalations.
+
+### constraint/derivations_extra — CLEAN
+Lifts: `invariant` (3), `function` (1).
+`depends_on_rules` is nullary — `(takes [])` — returns `(list-of :ast/ConstraintRule)`.
+No exports in source boundary.
+TODO comments: none. No escalations.
+
+### constraint/phase5 — ONE TODO (deferred rule lift)
+Lifts: `invariant` (6), `function` (1).
+`run` has `triggers: RunPhase5` / `returns: post.model` — no anchor syntax in function lift;
+noted in docstring. Cross-module `:model/Model` ref clean.
+TODO comments: 1 rule declaration (RunPhase5 — deferred).
+No escalations.
+
+### constraint/sort — CLEAN
+Lifts: `invariant` (1), `function` (4).
+`SortGuardCatalogue` invariant names the closed set; no sort-guard-catalog lift.
+Bool-returning guards expressed as plain `function` with `(gives :Bool)`.
+No exports in source boundary.
+TODO comments: none. No escalations.
+
+### constraint/well-known — CLEAN
+Lifts: `invariant` (7), `function` (5).
+Nullary factories (`signal_gap`, `no_circular_refs`, `external_must_have_wrapper`)
+use `(takes [])`. Parameterised factories take `:String`/`:Keyword` args.
+All five functions return `:model/PredicateRegistration` — cross-module ref clean.
+No exports in source boundary.
+TODO comments: none. No escalations.
+
+## Structural observations
+
+1. **AST module is the richest single file in this sprint.** Six opaque value types
+   + 9 functions + 2 invariants. All expressible: shape grammar handles intra-module
+   namespaced refs (`:ast/Term` etc.) cleanly.
+
+2. **`map-of` gap: NOT triggered.** Zero instances in constraint/. The constraint
+   subsystem works entirely with typed scalars, sets, and lists — no map-shaped
+   fields. Sprint 2 cumulative `map-of` count remains 2 (registry + violation).
+
+3. **`rule` declarations.** Only 1 rule across all 7 constraint files (RunPhase5 in
+   phase5.allium). Left as TODO comment. The constraint subsystem is
+   behaviour-heavy via invariants, not rule-heavy.
+
+4. **Bool-returning predicate-shaped functions are pervasive and clean.** `ast`,
+   `builtins`, and `sort` all have multiple Bool-returning functions. The
+   plain-`function`-with-`(gives :Bool)` decision from Sprint 2a is validated at
+   scale — no friction, no ambiguity.
+
+5. **Nullary functions (`(takes [])`) work cleanly** for factory functions and
+   rule-constructors like `depends_on_rules`, `signal_gap`, `no_circular_refs`,
+   `external_must_have_wrapper`.
+
+## Gaps to escalate (Sprint 2 cumulative, constraint addendum)
+
+No new gaps. Existing gaps from prior sprint sessions unchanged:
+1. **`map-of` combinator** — 2 instances total (registry, violation). Constraint adds 0.
+2. **`rule` lift** — 36 total across all ports (35 validation + 1 constraint).
+
+## Test counts
+
+| State | Tests | Assertions |
+|---|---|---|
+| Before Sprint 2 (all) | 67 | 119 |
+| After Sprint 2 infra+proj+libs | 79 | 172 |
+| After Sprint 2 validation/ | 95 | 229 |
+| After Sprint 2 constraint/ | 109 | 301 |
+| Delta (constraint sprint) | +14 | +72 |
+
+## jj log (Sprint 2 constraint)
+
+```
+feat(canvas): port constraint/well-known spec      0a4c63b7
+feat(canvas): port constraint/sort spec            062c24ce
+feat(canvas): port constraint/phase5 spec          323208fc
+feat(canvas): port constraint/derivations-extra spec  116971d1
+feat(canvas): port constraint/derivations spec     4e0e27f7
+feat(canvas): port constraint/builtins spec        85196db3
+feat(canvas): port constraint/ast spec             480266a2
+```
+
+---
+
+# Sprint 2 Addendum — vocabulary/ subsystem (8 modules)
+
+Date: 2026-05-26
+Scope: vocabulary/allium/{effect_canonicalise,expression,pipeline,renderers,tags},
+       vocabulary/boundary/{analyzer,pipeline,tags}
+
+## Per-module status
+
+### vocabulary/allium/effect_canonicalise — CLEAN
+Lifts: `invariant` (5).
+Shape grammar: no value types, no function signatures. Pure invariant file.
+TODO comments: none. No escalations.
+
+### vocabulary/allium/expression — CLEAN
+Lifts: `invariant` (5).
+Shape grammar: no value types, no function signatures. Pure invariant file.
+TODO comments: none. No escalations.
+
+### vocabulary/allium/pipeline — ONE TODO (deferred rule lift)
+Lifts: `invariant` (7).
+Shape grammar: no value types, no exported functions.
+TODO comments: 1 rule declaration (LoadSource — deferred).
+Structural intent captured in inline comment: LoadSource(source_root: String),
+5-step pipeline including stub-unification and inline-primitive lift.
+No escalations.
+
+### vocabulary/allium/renderers — CLEAN
+Lifts: `invariant` (4).
+Shape grammar: no value types, no function signatures. Pure invariant file.
+TODO comments: none. No escalations.
+
+### vocabulary/allium/tags — CLEAN
+Lifts: `record` (1), `invariant` (3).
+Shape grammar: `AlliumTagCatalogue` — four `List<String>` fields →
+`(list-of :String)` — clean. No `map-of` gap.
+TODO comments: none. No escalations.
+
+### vocabulary/boundary/analyzer — ONE TODO (deferred rule lift)
+Lifts: `record` (1), `invariant` (8).
+Shape grammar: `BindingIssue` has 10 fields, 9 optional. `use_aliases:
+List<String>?` → `(optional (list-of :String))` — nested shape grammar
+works correctly. All optional scalar fields → `(optional :String)` /
+`(optional :Any)` — clean.
+TODO comments: 1 rule declaration (AnalyzeFile — deferred). Structural intent
+captured: detects file shape (module-bound vs subsystem-bound), processes
+declare-new / local-attach / foreign-attach fn forms, applies exports:.
+No escalations.
+
+### vocabulary/boundary/pipeline — ONE TODO (deferred rule lift)
+Lifts: `invariant` (5).
+Shape grammar: no value types, no exported functions.
+TODO comments: 1 rule declaration (LoadSource — deferred).
+Structural intent captured: LoadSource(model: model.Model, source_root: String).
+No escalations.
+
+### vocabulary/boundary/tags — CLEAN
+Lifts: `record` (1), `invariant` (2).
+Shape grammar: `BoundaryTagCatalogue` — two `List<String>` fields →
+`(list-of :String)` — clean. No `map-of` gap.
+TODO comments: none. No escalations.
+
+## Structural observations
+
+1. **Vocabulary is mostly invariant-heavy, record-light.** Six of eight files
+   have no function signatures and no exported types. The dominant lift is
+   `invariant`. This is the most invariant-dense subsystem across Sprint 2.
+
+2. **`rule` declarations appear in pipeline files only.** Three of the eight
+   files (allium/pipeline, boundary/pipeline, boundary/analyzer) have one
+   `rule` declaration each. All left as TODO inline comments. Unlike validation/
+   (35 rules) or constraint/ (1 rule), the vocabulary subsystem has exactly 3
+   rule declarations total — all LoadSource/AnalyzeFile dispatch points.
+
+3. **`map-of` gap: NOT triggered.** Zero instances. List-typed fields use
+   `(list-of :String)` cleanly. Sprint 2 cumulative count remains 2.
+
+4. **Nested shape grammar works for `BindingIssue.use_aliases`.** The field is
+   `List<String>?` — `(optional (list-of :String))` is the correct form. This
+   is the first occurrence of a nullable list-of in Sprint 2. No friction.
+
+5. **`(optional :Any)` covers trigger/ex fields.** The `BindingIssue.trigger`
+   and `.ex` fields have type `Any?` — expressed as `(optional :Any)`. Clean.
+
+6. **No cross-module type references in vocabulary ports.** Unlike analyzer.clj
+   (`:model/Model`, `:parser/ParsedAllium`), these files have no exported
+   functions — no function signatures needed, so no namespaced type refs appear.
+   The allium/pipeline.allium has a `use "../../model/spec.allium" as model`
+   import but only for the rule's `when:` clause, which is deferred.
+
+## Gaps to escalate (Sprint 2 cumulative, vocabulary addendum)
+
+No new gaps. Existing gaps unchanged:
+1. **`map-of` combinator** — 2 instances total. Vocabulary adds 0.
+2. **`rule` lift** — 39 total across all ports (35 validation + 1 constraint + 3 vocabulary).
+
+## Test counts
+
+| State | Tests | Assertions |
+|---|---|---|
+| Before Sprint 2 (all) | 67 | 119 |
+| After Sprint 2 infra+proj+libs | 79 | 172 |
+| After Sprint 2 validation/ | 95 | 229 |
+| After Sprint 2 constraint/ | 109 | 301 |
+| Before Sprint 2 vocabulary/ | 591 | 3062 |
+| After Sprint 2 vocabulary/  | 607 | 3128 |
+| Delta (vocabulary sprint)   | +16 | +66 |
+
+## jj log (Sprint 2 vocabulary)
+
+```
+feat(canvas): port vocabulary/boundary/tags spec       6279f5d9
+  (contains all 8 vocabulary ports — absorbed into one commit by squash)
+```
