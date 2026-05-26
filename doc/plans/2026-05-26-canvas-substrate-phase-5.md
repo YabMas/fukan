@@ -45,6 +45,27 @@ A human or LLM authoring canvas content should, while they work, receive these k
 
 Phase 5 ships infrastructure for these signals + integrates them into a workflow the LLM can invoke. Not all six become first-class — Sprint 1's design conversation picks which to prioritize.
 
+### Two tiers: canvas-level helpers vs LLM-side tools
+
+A second axis cuts across the six signals: **does the signal produce facts that can be acted on by code, or observations that require interpretation?**
+
+| Signal | Output | Tier | Lives |
+|---|---|---|---|
+| Structural integrity | "this reference doesn't resolve" — broken refs are errors | **canvas-level helper** | `src/fukan/canvas/inspect/` |
+| Behavioral coverage | "this entity has no incoming refs; this rule has no trigger" — severity varies | **canvas-level helper** | `src/fukan/canvas/inspect/` |
+| Delta awareness | "X removed since snapshot; these refs now break" — mechanical impact | **canvas-level helper** | `src/fukan/canvas/inspect/` |
+| Pattern recurrence | "these 5 affordances share a shape" — interpretation needed | **LLM-side tool** | `src/fukan/canvas/architect/` |
+| Consistency | "naming style varies in this module" — intentional? worth normalizing? | **LLM-side tool** | `src/fukan/canvas/architect/` |
+| Methodology coherence | "vocabulary fingerprint doesn't match the dominant paradigm" — drift? mixed methodology by design? | **LLM-side tool** | `src/fukan/canvas/architect/` |
+
+**Canvas-level helpers** are pure functions over the canvas db. Decision-ready output. Callable from REPL, from constraints (`fc/check`), from CLI, from the LLM workflow — same fn, multiple consumers. They strengthen the **integrity** of the substrate.
+
+**LLM-side tools** wrap interpretive logic. Output is structured for an LLM to read and reason about, not for code to act on directly. Invoked via `bin/fukan architect <signal>`. They strengthen the **design judgment** the LLM brings.
+
+Phase 5 ships both tiers but keeps them architecturally separate.
+
+**Constraint integration deferred.** Canvas-level helpers COULD be wired as built-in `fc/check` constraints (every `:references` Relation must resolve, etc.) but Phase 5 ships them as plain pure fns. Constraint wiring is a follow-on if use evidence demands automatic enforcement — requires `fc/check` to grow severity-awareness, which today's binary model doesn't have.
+
 ---
 
 ## File structure (Phase 5)
@@ -52,16 +73,16 @@ Phase 5 ships infrastructure for these signals + integrates them into a workflow
 **Likely new namespaces:**
 
 ```
-src/fukan/canvas/feedback/
-  integrity.clj                  ; cross-reference resolution + orphan detection
-  patterns.clj                   ; recurring-shape detection
-  coverage.clj                   ; export/import coverage; invariant coverage; etc.
-  consistency.clj                ; naming + structural consistency
-  delta.clj                      ; canvas-to-canvas diff
-  reports.clj                    ; aggregator — runs all signals, formats output
+src/fukan/canvas/inspect/             ; tier 1 — canvas-level helpers (pure fns over the canvas db)
+  integrity.clj                  ; cross-reference resolution + trigger/emit coherence
+  coverage.clj                   ; orphans, unreachable entities, dead exports, invariant target checks
+  delta.clj                      ; canvas-to-canvas diff + impact analysis
 
-src/fukan/canvas/workflow/
-  architect.clj                  ; the architect-explorer pattern as a reusable workflow
+src/fukan/canvas/architect/           ; tier 2 — LLM-side tools (interpretive output)
+  patterns.clj                   ; recurring-shape detection; lift candidates
+  consistency.clj                ; naming + structural consistency observations
+  methodology.clj                ; vocabulary fingerprint + drift signal
+  workflow.clj                   ; the architect-explorer pattern as a reusable workflow
 
 doc/plans/
   2026-05-26-feedback-signals-design.md   ; Sprint 1 output
@@ -106,6 +127,7 @@ For each of the six signal categories listed in the "thinking-enhancing tool" se
 
 - **What it computes.** Concretely. Datalog query, walk over the canvas db, set comparison, etc.
 - **What it surfaces.** A list of findings, structured for both LLM and human consumption.
+- **Tier.** Canvas-level helper (decision-ready output, pure fn under `inspect/`) or LLM-side tool (interpretive output under `architect/`). Verify the partition holds — surface anything that resists the split.
 - **How it integrates with workflow.** REPL fn? `bin/fukan` subcommand? Both?
 - **Priority for Phase 5.** Ship in Phase 5 vs defer to Phase 6 or beyond.
 
@@ -261,20 +283,25 @@ jj new
 
 The substantive sprint. Each task implements one of Sprint 1 Task 1's selected signals. The exact list depends on Sprint 1's prioritization; the placeholders below are the most likely picks based on the design space described above.
 
+Sprint 3 splits into two groups corresponding to the two tiers:
+
+- **Tier 1 (canvas-level helpers)** — Tasks 5–7. Land under `src/fukan/canvas/inspect/`. Pure fns over the canvas db. Decision-ready output. `bin/fukan inspect <signal>` invokes them; REPL helpers expose them; constraints can wrap them.
+- **Tier 2 (LLM-side tools)** — Tasks 8–9. Land under `src/fukan/canvas/architect/`. Output formatted for an LLM to reason about. `bin/fukan architect <signal>` invokes them.
+
 Each signal lands as:
-- One namespace under `src/fukan/canvas/feedback/`
+- One namespace under the tier's directory
 - Tests
-- A `bin/fukan` subcommand invoking it
-- A REPL helper in `dev/user.clj`
+- A `bin/fukan` subcommand invoking it (under the tier's subcommand)
+- A REPL helper in `dev/user.clj` for canvas-level helpers
 - A short EXAMPLES.md showing typical use
 
 ---
 
-## Phase 5, Task 5: Cross-reference integrity (signal 1)
+## Phase 5, Task 5: Cross-reference integrity — canvas-level helper
 
 **Files:**
-- Create: `src/fukan/canvas/feedback/integrity.clj`
-- Test: `test/fukan/canvas/feedback/integrity_test.clj`
+- Create: `src/fukan/canvas/inspect/integrity.clj`
+- Test: `test/fukan/canvas/inspect/integrity_test.clj`
 - Update: `bin/fukan` + `dev/user.clj`
 
 What it computes:
@@ -285,79 +312,52 @@ What it computes:
 
 What it returns: a structured report of unresolved references with source-locations and entity stable-ids.
 
+What it computes:
+- For every `:references` Relation: does the `:to` target resolve to an actual entity in the canvas db?
+- For every `:triggers` Relation: does the rule named in the trigger exist?
+- For every `:emits` Relation: does the event named exist?
+- For every cross-module reference keyword in a shape: does the target module + entity exist?
+
+What it returns: a structured report of unresolved references with source-locations and entity stable-ids. **Decision-ready** — a broken reference is an error.
+
 - [ ] **Step 1: Test the failure cases first.** Construct a canvas with deliberately broken references; assert the signal catches them.
 - [ ] **Step 2: Implement** using Datascript queries against `(canvas-source/build-canvas-db)`.
-- [ ] **Step 3: bin/fukan subcommand** — `bin/fukan check integrity` produces the report.
-- [ ] **Step 4: REPL helper** — `(dev/check-integrity)` returns structured data; pretty-prints by default.
+- [ ] **Step 3: bin/fukan subcommand** — `bin/fukan inspect integrity` produces the report.
+- [ ] **Step 4: REPL helper** — `(dev/inspect-integrity)` returns structured data; pretty-prints by default.
 - [ ] **Step 5: Run against fukan-itself.** What does the live canvas surface? Document findings in the test or notes.
 - [ ] **Step 6: Commit.**
 
 ---
 
-## Phase 5, Task 6: Pattern recurrence detection (signal 2)
+## Phase 5, Task 6: Coverage analysis — canvas-level helper
 
 **Files:**
-- Create: `src/fukan/canvas/feedback/patterns.clj`
-- Test: `test/fukan/canvas/feedback/patterns_test.clj`
-
-What it computes:
-- Cluster Affordances by structural shape similarity (input/output type sets, role, presence/absence of formal-expression)
-- Flag clusters of 3+ as candidate lift patterns
-- For each cluster: show the entities, the shared structure, the suggestion ("consider extracting a lift named X")
-
-This is potentially the highest-value signal — the rule-of-three discipline Phase 2 used can be automated here. When canvas authoring surfaces a 3rd instance of a recurring pattern, the LLM gets told.
-
-- [ ] **Step 1: Define "structural similarity"** rigorously. Probably: same `:affordance/role`; same set-of-type-names in input + output; same presence of formal-expression.
-- [ ] **Step 2: Implement clustering.** Group entities by their similarity signature; emit clusters >= 3.
-- [ ] **Step 3: Format the output** so it's actionable. E.g. "Three Affordances with shape `(Model) -> [Violation]`: rules_4a/check, rules_4b/check, rules_4c/check. Consider `vocab.validation/checker` (already exists). Apply at: …"
-- [ ] **Step 4: Run against fukan-itself.** The existing `checker` lift should surface for the validation rules. If new patterns surface, document them as Phase 6 vocab candidates.
-- [ ] **Step 5: Commit.**
-
----
-
-## Phase 5, Task 7: Coverage analysis (signal 3)
-
-**Files:**
-- Create: `src/fukan/canvas/feedback/coverage.clj`
-- Test: `test/fukan/canvas/feedback/coverage_test.clj`
+- Create: `src/fukan/canvas/inspect/coverage.clj`
+- Test: `test/fukan/canvas/inspect/coverage_test.clj`
 
 What it computes:
 - Orphan entities (no incoming references; possibly dead)
 - Unreached entities (not reachable from any Module's `:module/child` graph; substrate-floating)
 - Exported entities never referenced externally
 - Modules without `(exports …)` declarations
-- Affordances of role `:canvas/invariant` whose formal-expression mentions an entity that doesn't exist
+- Rules with a `when:` clause and no function triggering them (behavioral coverage gap)
+- Events with no handler anywhere in the corpus
+
+Each finding has a severity (error / warning / info) callers can filter on. Output is **decision-ready** — the call to act is structural, not interpretive.
 
 - [ ] **Step 1: Define each coverage check** as a Datalog query.
 - [ ] **Step 2: Tests.**
 - [ ] **Step 3: Run against fukan-itself.** Expect to find some real issues (dead exports, etc.).
-- [ ] **Step 4: Commit.**
+- [ ] **Step 4: bin/fukan subcommand** — `bin/fukan inspect coverage`.
+- [ ] **Step 5: Commit.**
 
 ---
 
-## Phase 5, Task 8: Consistency analysis (signal 4)
+## Phase 5, Task 7: Delta inspection — canvas-level helper
 
 **Files:**
-- Create: `src/fukan/canvas/feedback/consistency.clj`
-- Test: `test/fukan/canvas/feedback/consistency_test.clj`
-
-What it computes:
-- Naming-style consistency within a module (entities named `snake_case` vs `camelCase` vs `PascalCase`)
-- Field-name consistency across records (e.g. all records with `:id` — is it always `:String`?)
-- Sister-module structural symmetry (e.g. `rules_4a..g` should all look alike)
-
-- [ ] **Step 1: Define each consistency rule.**
-- [ ] **Step 2: Make rules optional / configurable** so authoring projects can opt in/out of specific style rules.
-- [ ] **Step 3: Run against fukan-itself.** Expect surprises (places where we're inconsistent).
-- [ ] **Step 4: Commit.**
-
----
-
-## Phase 5, Task 9: Delta inspection (signal 5)
-
-**Files:**
-- Create: `src/fukan/canvas/feedback/delta.clj`
-- Test: `test/fukan/canvas/feedback/delta_test.clj`
+- Create: `src/fukan/canvas/inspect/delta.clj`
+- Test: `test/fukan/canvas/inspect/delta_test.clj`
 
 What it computes (given two canvas db states):
 - Entities added
@@ -365,13 +365,62 @@ What it computes (given two canvas db states):
 - Entities whose attributes changed (e.g. docstring updated, shape changed)
 - Cross-reference impact: when you remove entity X, which references now break?
 
-Usage pattern: a snapshot is taken (manually or automatically on `(refresh)`); subsequent changes are compared against the snapshot.
+Usage pattern: a snapshot is taken (manually or automatically on `(refresh)`); subsequent changes are compared against the snapshot. Output is **decision-ready** — impact is structural.
 
 - [ ] **Step 1: Snapshot representation.** Probably: serialize the canvas db to edn at a known location (e.g. `.fukan/canvas-snapshot.edn`).
 - [ ] **Step 2: Diff algorithm.** Walk both dbs; compare by `:entity/id`.
 - [ ] **Step 3: Format output** to highlight impact.
 - [ ] **Step 4: REPL helper** — `(dev/canvas-delta)` shows changes since last snapshot.
-- [ ] **Step 5: Commit.**
+- [ ] **Step 5: bin/fukan subcommand** — `bin/fukan inspect delta`.
+- [ ] **Step 6: Commit.**
+
+---
+
+## Phase 5, Task 8: Pattern recurrence — LLM-side tool
+
+**Files:**
+- Create: `src/fukan/canvas/architect/patterns.clj`
+- Test: `test/fukan/canvas/architect/patterns_test.clj`
+
+What it computes:
+- Cluster Affordances by structural shape similarity (input/output type sets, role, presence/absence of formal-expression)
+- Flag clusters of 3+ as candidate lift patterns
+- For each cluster: show the entities, the shared structure, the suggestion ("consider extracting a lift named X")
+
+This is potentially the highest-value LLM-side signal — the rule-of-three discipline Phase 2 used can be automated here. When canvas authoring surfaces a 3rd instance of a recurring pattern, the LLM gets told. **Interpretation lives with the LLM** — the tool surfaces the cluster; the LLM decides whether a lift is warranted.
+
+- [ ] **Step 1: Define "structural similarity"** rigorously. Probably: same `:affordance/role`; same set-of-type-names in input + output; same presence of formal-expression.
+- [ ] **Step 2: Implement clustering.** Group entities by their similarity signature; emit clusters >= 3.
+- [ ] **Step 3: Format the output** so it's actionable to an LLM. E.g. "Three Affordances with shape `(Model) -> [Violation]`: rules_4a/check, rules_4b/check, rules_4c/check. Consider `vocab.validation/checker` (already exists). Apply at: …"
+- [ ] **Step 4: bin/fukan subcommand** — `bin/fukan architect patterns`.
+- [ ] **Step 5: Run against fukan-itself.** The existing `checker` lift should surface for the validation rules. If new patterns surface, document them as Phase 6 vocab candidates.
+- [ ] **Step 6: Commit.**
+
+---
+
+## Phase 5, Task 9: Consistency analysis — LLM-side tool
+
+**Files:**
+- Create: `src/fukan/canvas/architect/consistency.clj`
+- Test: `test/fukan/canvas/architect/consistency_test.clj`
+
+What it computes:
+- Naming-style consistency within a module (entities named `snake_case` vs `camelCase` vs `PascalCase`)
+- Field-name consistency across records (e.g. all records with `:id` — is it always `:String`?)
+- Sister-module structural symmetry (e.g. `rules_4a..g` should all look alike)
+
+Output is **observational** — the LLM (or human) interprets whether each inconsistency is intentional or worth normalizing.
+
+- [ ] **Step 1: Define each consistency check.**
+- [ ] **Step 2: Make checks optional / configurable** so authoring projects can opt in/out of specific style rules.
+- [ ] **Step 3: Format output** as annotated suggestions (interpretive framing, not error framing).
+- [ ] **Step 4: bin/fukan subcommand** — `bin/fukan architect consistency`.
+- [ ] **Step 5: Run against fukan-itself.** Expect surprises.
+- [ ] **Step 6: Commit.**
+
+---
+
+**Note on methodology coherence (signal 3 from the six-category list).** It was a candidate LLM-side tool, but Phase 5 defers it. Methodology fingerprint computation is genuinely hard to design without a corpus of multi-paradigm projects to test against — fukan's canvas is too uniformly fukan-shaped. Revisit in Phase 6+ once more demos exist.
 
 ---
 
@@ -384,7 +433,7 @@ The signals from Sprint 3 are useful in isolation. Sprint 4 integrates them into
 ## Phase 5, Task 10: Promote architect-explorer pattern to reusable workflow
 
 **Files:**
-- Create: `src/fukan/canvas/workflow/architect.clj` — the architect workflow
+- Create: `src/fukan/canvas/architect/workflow.clj` — the architect workflow
 - Create: `doc/canvas-authoring-system-prompt.md` — the permanent system prompt
 - Update: `bin/fukan` — `bin/fukan architect <task>` invocation
 
@@ -392,12 +441,14 @@ The Phase 2 architect-explorer system prompt activated layered-language thinking
 
 - References the now-existing vocab libraries (behavioral, validation, lifecycle, event)
 - References the now-existing EXAMPLES.md files
-- Integrates the feedback signals (Sprint 3 outputs) as tools the LLM can invoke per turn
+- Integrates both tiers from Sprint 3:
+  - Canvas-level helpers (`inspect/*`) as **trusted** signals — if integrity says X is broken, X is broken
+  - LLM-side tools (`architect/*`) as **interpretive** signals — pattern clusters and consistency observations the LLM weighs and decides on
 - The architect-explorer pattern's principles (compose first, vocabulary justified by use, etc.) carry forward
 
 - [ ] **Step 1: Reread the original prompt.** Identify generalizable principles vs experiment-specific framing.
-- [ ] **Step 2: Draft the canvas-authoring system prompt.** Permanent artifact. Versioned.
-- [ ] **Step 3: Implement `bin/fukan architect`** that wraps the workflow: takes a task description; loads canvas; invokes feedback signals; produces a structured prompt + context for an LLM to author against.
+- [ ] **Step 2: Draft the canvas-authoring system prompt.** Permanent artifact. Versioned. Includes explicit framing of the two-tier signal model (trust canvas-level helpers; weigh LLM-side tools).
+- [ ] **Step 3: Implement `bin/fukan architect <task>`** that wraps the workflow: takes a task description; loads canvas; invokes integrity + coverage first (trusted baseline); produces a structured prompt + context for an LLM to author against; offers `architect/*` tool subcommands as in-loop reasoning aids.
 - [ ] **Step 4: Commit.**
 
 ---
@@ -472,7 +523,7 @@ These don't block dispatch but help shape Sprint 1's design docs:
 
 3. **31 duplicate names — preference?** Phase 4 deferred this; Phase 5 needs to settle it.
 
-4. **`bin/fukan` shape.** The CLI already exists. Phase 5 extends it. Are there shape preferences (subcommands like `check integrity` / `find patterns` / `coverage` — or one mega-command `check` with flags)?
+4. **`bin/fukan` shape.** Current sketch follows the two-tier split: `bin/fukan inspect <integrity|coverage|delta>` for the canvas-level helpers, `bin/fukan architect <patterns|consistency|<task>>` for the LLM-side tools and the architect workflow. The tier-as-top-level-verb makes the trust distinction visible at the CLI surface itself. Any preference to push back?
 
 ---
 
