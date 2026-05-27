@@ -54,7 +54,7 @@ defined in `src/fukan/canvas/`.
 | Expression | Meaning |
 |-----------|---------|
 | `:Keyword` | Atomic type |
-| `:ns/Name` | Cross-module type reference |
+| `:ns/Name` | Cross-module type reference (both short `:cluster/Foo` and fully-qualified `:distributed.cluster/Foo` resolve; exact match wins over segment match) |
 | `(optional :T)` | Optional value |
 | `(list-of :T)` | Ordered list |
 | `(set-of :T)` | Unordered set |

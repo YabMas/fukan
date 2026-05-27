@@ -627,15 +627,20 @@
    entity of a module whose name matches the keyword's namespace, returning the
    :entity/id UUID of the target entity, or nil if not found.
 
-   Module-qualified resolution:
-     1. Take the keyword namespace as the module-name hint (e.g. \"model\").
-     2. Find all Modules whose dot-separated name contains that string as a
-        segment (e.g. \"model.spec\", \"model.build\" all match \"model\").
-     3. Among those modules, find the child entity with the keyword's local name.
-     4. Return the first match's UUID, or nil if unresolvable.
+   Two-step module match:
+     1. EXACT match: a module whose :entity/name equals the keyword's namespace
+        string (e.g. :mod.sub.module/Foo → module \"mod.sub.module\"). This
+        lets authors pin a ref unambiguously when segments collide
+        (\"accounts.users\" vs \"users.accounts\").
+     2. SEGMENT match (fallback): the keyword namespace appears as a
+        dot-separated segment of a module name (e.g. :model/Model matches
+        modules \"model.spec\", \"model.build\", etc.). Convenient when
+        segments are unique across the canvas.
 
-   This correctly disambiguates :modA/Foo from :modB/Foo when both modules
-   export an entity named 'Foo'.
+   Within the matched module(s), find the child entity whose :entity/name
+   equals the keyword's local name and return its UUID. Both forms are
+   first-class; the resolver tries exact first so a fully-qualified author
+   intent never loses to an accidental segment collision.
 
    Exposed as a public helper so trust-tier integrity checks can ask
    'does this reference resolve?' without needing a uuid→stable-id map."
@@ -643,15 +648,20 @@
   (when (namespace ref-kw)
     (let [ns-str      (namespace ref-kw)
           entity-name (name ref-kw)
-          ;; Find all modules whose name has ns-str as a segment
           all-modules (d/q '[:find ?m ?mn
                               :where [?m :entity/type :Module]
                                      [?m :entity/name ?mn]]
                             db)
-          matching-module-eids (->> all-modules
-                                    (filter (fn [[_eid mname]]
-                                              (module-name-matches-ns? mname ns-str)))
-                                    (map first))]
+          exact-module-eids (->> all-modules
+                                 (filter (fn [[_eid mname]] (= mname ns-str)))
+                                 (map first))
+          matching-module-eids
+          (if (seq exact-module-eids)
+            exact-module-eids
+            (->> all-modules
+                 (filter (fn [[_eid mname]]
+                           (module-name-matches-ns? mname ns-str)))
+                 (map first)))]
       (when (seq matching-module-eids)
         (ffirst (d/q '[:find ?cuuid
                        :in $ [?m ...] ?n

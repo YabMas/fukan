@@ -85,6 +85,8 @@ Shape expressions appear in `takes`/`gives`/`field`/`getter` positions:
 
 **Cross-module ref convention:** `:model/Model` refers to an entity named `"Model"` in a module whose path contains `"model"`. The namespace portion is the last path segment of the canvas module that owns the type.
 
+**Short form vs. fully-qualified form.** The resolver accepts both `:cluster/NodeId` (short, last-segment match) and `:distributed.cluster/NodeId` (fully-qualified, exact module-name match). It tries exact match first, then falls back to segment match — so a fully-qualified ref is never accidentally shadowed by a segment collision. Prefer the fully-qualified form when a canvas has modules that share segments (e.g. `accounts.users` vs `users.accounts`); the short form remains the convenient default when segments are unique.
+
 ## Three-tier inclusion rules
 
 | Tier | Module | May depend on |

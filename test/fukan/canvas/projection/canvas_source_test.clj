@@ -241,6 +241,46 @@
       (is (empty? (filter #(= "mod.consumer/f" (get-in % [:from :id])) edges))
           "reference to missing entity in known module should produce no edge"))))
 
+(deftest fully-qualified-reference-resolves-to-dotted-module
+  (testing "a fully-qualified ref like :mod.sub.module/Foo resolves to module 'mod.sub.module'"
+    (let [owner-db    (h/with-canvas
+                        (h/within-module "mod.sub.module"
+                          (value "Foo" "Foo in the dotted module")))
+          consumer-db (h/with-canvas
+                        (h/within-module "consumer"
+                          (function "useIt"
+                            "References Foo via the fully-qualified module path."
+                            (takes [x :String])
+                            (gives :mod.sub.module/Foo))))
+          db          (canvas-source/merge-for-test [owner-db consumer-db])
+          model       (canvas-source/project db)
+          edges       (:edges model)
+          from-edges  (filter #(= "consumer/useIt" (get-in % [:from :id])) edges)]
+      (is (seq from-edges)
+          "useIt must emit a :references edge for the fully-qualified ref")
+      (is (some #(= "mod.sub.module/type/Foo" (get-in % [:to :id])) from-edges)
+          "edge should target the entity in the fully-qualified module"))))
+
+(deftest short-form-reference-still-resolves-via-segment-match
+  (testing "the short form :module/Foo continues to resolve to module 'mod.sub.module' via segment-match"
+    (let [owner-db    (h/with-canvas
+                        (h/within-module "mod.sub.module"
+                          (value "Foo" "Foo in the dotted module")))
+          consumer-db (h/with-canvas
+                        (h/within-module "consumer"
+                          (function "useIt"
+                            "References Foo via the short last-segment form."
+                            (takes [x :String])
+                            (gives :module/Foo))))
+          db          (canvas-source/merge-for-test [owner-db consumer-db])
+          model       (canvas-source/project db)
+          edges       (:edges model)
+          from-edges  (filter #(= "consumer/useIt" (get-in % [:from :id])) edges)]
+      (is (seq from-edges)
+          "useIt must emit a :references edge for the short-form ref")
+      (is (some #(= "mod.sub.module/type/Foo" (get-in % [:to :id])) from-edges)
+          "short-form ref should still target the entity via segment-matching"))))
+
 (deftest intra-module-duplicate-throws
   (testing "a single module declaring two entities with the same name causes an error"
     ;; Build a db manually: one module, two children with identical :entity/name
