@@ -20,6 +20,9 @@
   fukan.test.fixture.def-with-doc
   {:linters {:namespace-name-mismatch {:level :off}
              :unused-public-var      {:level :off}}}
+  fukan.test.fixture.optional-field
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}
   m
   {:linters {:namespace-name-mismatch {:level :off}
              :unused-public-var      {:level :off}}}
