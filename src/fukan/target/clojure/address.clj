@@ -51,29 +51,58 @@
   [s]
   (str/replace s #"_" "-"))
 
+(defn- blank-label?
+  "True when the primitive-label is missing or whitespace-only — the
+   signal that drives `:projection-kind/invariant`'s fallback to
+   `kebab(invariant-name)` (Phase 7 Task 4 gap 2)."
+  [s]
+  (or (nil? s)
+      (and (string? s) (str/blank? s))))
+
 (defn local-name
   "Compute the local Clojure name (within the module ns) for a primitive
-   given its kind + projection-kind."
-  [primitive-kind projection-kind primitive-label]
-  (cond
-    (contains? datastructure-kinds projection-kind)
-    primitive-label  ;; PascalCase preserved
-    (contains? function-kinds projection-kind)
-    (-> primitive-label
-        snake->kebab-lower
-        pascal->kebab-lower)
-    :else
-    (throw (ex-info "unknown projection-kind for address resolution"
-                    {:projection-kind projection-kind
-                     :primitive-kind primitive-kind
-                     :label primitive-label}))))
+   given its kind + projection-kind.
+
+   `opts` (optional) supports:
+   - `:invariant-name` — fallback name used when `:projection-kind/invariant`
+     is requested and `primitive-label` is blank/nil (e.g. the canvas
+     declaration omitted its `holds-that` clause). The fallback is
+     kebab-cased the same way as a present holds-that clause."
+  ([primitive-kind projection-kind primitive-label]
+   (local-name primitive-kind projection-kind primitive-label nil))
+  ([primitive-kind projection-kind primitive-label opts]
+   (let [label (if (and (= :projection-kind/invariant projection-kind)
+                        (blank-label? primitive-label)
+                        (some? (:invariant-name opts)))
+                 (:invariant-name opts)
+                 primitive-label)]
+     (cond
+       (contains? datastructure-kinds projection-kind)
+       label  ;; PascalCase preserved
+
+       (contains? function-kinds projection-kind)
+       (-> label
+           snake->kebab-lower
+           pascal->kebab-lower)
+
+       :else
+       (throw (ex-info "unknown projection-kind for address resolution"
+                       {:projection-kind projection-kind
+                        :primitive-kind primitive-kind
+                        :label primitive-label}))))))
 
 (defn canonical
   "Build the full canonical address {:ns <string> :name <string>}.
-   Test projections append '-test' to both ns and name."
-  [registry primitive-kind projection-kind module-coord primitive-label]
-  (let [base-ns (module-ns registry module-coord)
-        base-name (local-name primitive-kind projection-kind primitive-label)]
-    (if (= :projection-kind/test projection-kind)
-      {:ns (str base-ns "-test") :name (str base-name "-test")}
-      {:ns base-ns :name base-name})))
+   Test projections append '-test' to both ns and name.
+
+   `opts` (optional) is forwarded to `local-name` — see its docstring for
+   the supported keys (notably `:invariant-name` for the Phase 7 gap-2
+   holds-that-absent fallback)."
+  ([registry primitive-kind projection-kind module-coord primitive-label]
+   (canonical registry primitive-kind projection-kind module-coord primitive-label nil))
+  ([registry primitive-kind projection-kind module-coord primitive-label opts]
+   (let [base-ns (module-ns registry module-coord)
+         base-name (local-name primitive-kind projection-kind primitive-label opts)]
+     (if (= :projection-kind/test projection-kind)
+       {:ns (str base-ns "-test") :name (str base-name "-test")}
+       {:ns base-ns :name base-name}))))
