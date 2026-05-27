@@ -10,6 +10,12 @@
   (:require [clojure.string :as str]))
 
 (def ^:private datastructure-kinds
+  ;; Both `:primitive/container` (record types) and `:primitive/event`
+  ;; route through `:projection-kind/schema` for the data-structure
+  ;; lane. Address derivation is therefore symmetric between the two
+  ;; primitive kinds — Phase 7 Task 4 gap 3 locks this in a test so
+  ;; Layer A's `event-to-schema` projection reuses the existing
+  ;; machinery without divergence.
   #{:projection-kind/schema})
 
 (def ^:private function-kinds

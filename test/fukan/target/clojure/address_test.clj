@@ -39,6 +39,24 @@
          (addr/canonical (r/make-registry) :primitive/container :projection-kind/schema
                          "fukan/model/spec" "Order"))))
 
+(deftest canonical-event-schema-is-symmetric-with-container
+  ;; Phase 7 Task 4 gap 3 — verify `:primitive/event` produces a canonical
+  ;; address consistent with `:primitive/container` under
+  ;; `:projection-kind/schema`. Layer A's `event-to-schema` projection
+  ;; reuses the same machinery as `type-to-malli`, so both kinds must
+  ;; resolve to identically-shaped {:ns :name} maps with PascalCase
+  ;; preservation. This locks the behavior down so future address-machinery
+  ;; refactors don't silently diverge.
+  (let [reg     (r/with-root-prefix (r/make-registry) "fukan")
+        ev-addr (addr/canonical reg :primitive/event :projection-kind/schema
+                                "distributed.cluster" "OrderPlaced")
+        ty-addr (addr/canonical reg :primitive/container :projection-kind/schema
+                                "distributed.cluster" "OrderPlaced")]
+    (is (= ev-addr ty-addr)
+        "an event and a container of the same name + module produce identical addresses")
+    (is (= {:ns "fukan.distributed.cluster" :name "OrderPlaced"} ev-addr)
+        "event address preserves PascalCase symbol and dots/kebabs the module coord")))
+
 (deftest canonical-rule
   (is (= {:ns "fukan.web.views.spec" :name "select-node"}
          (addr/canonical (r/make-registry) :primitive/rule :projection-kind/rule
