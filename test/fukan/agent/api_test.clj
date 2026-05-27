@@ -3,6 +3,7 @@
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.set :as set]
+            [clojure.string :as str]
             [fukan.agent.api :as api]
             [fukan.infra.model :as infra-model]))
 
@@ -220,15 +221,15 @@
       (is (= :Type                 (:model-element-kind p)))
       (is (= "distributed.cluster/type/NodeId" (:model-element-id p)))
       (is (= "NodeId"              (-> p :target :symbol)))
-      (is (clojure.string/includes? (:template p) "(def ^:schema NodeId")))))
+      (is (str/includes? (:template p) "(def ^:schema NodeId")))))
 
 (deftest spec-projects-record-type-from-stable-id
   (testing "(spec \"<record stable-id>\") routes to type-to-malli"
     (let [p (api/spec "distributed.cluster/type/Node")]
       (is (= :clojure/type-to-malli (:projection-kind p)))
       (is (= :Type                  (:model-element-kind p)))
-      (is (clojure.string/includes? (:template p) "(def ^:schema Node"))
-      (is (clojure.string/includes? (:template p) ":map")))))
+      (is (str/includes? (:template p) "(def ^:schema Node"))
+      (is (str/includes? (:template p) ":map")))))
 
 (deftest spec-projects-function-affordance-from-stable-id
   (testing "(spec \"<affordance stable-id>\") routes to function-to-defn"
@@ -236,7 +237,7 @@
       (is (= :clojure/function-to-defn (:projection-kind p)))
       (is (= :Affordance               (:model-element-kind p)))
       (is (= "get-node"                (-> p :target :symbol)))
-      (is (clojure.string/includes? (:template p) "(defn get-node")))))
+      (is (str/includes? (:template p) "(defn get-node")))))
 
 (deftest spec-passes-through-pre-built-element-map
   (testing "spec round-trips an existing element map without canvas-db lookup"
@@ -272,7 +273,7 @@
       (is (= :clojure/value-to-def  (-> i :code-spec :projection-kind)))
       (is (map? (:scenario-context i)))
       (is (string? (:rendered i)))
-      (is (clojure.string/includes? (:rendered i) "drift-close")))))
+      (is (str/includes? (:rendered i) "drift-close")))))
 
 (deftest instruct-from-drift-finding-carries-finding-context
   (testing "instruct propagates a drift finding into the scenario context"
