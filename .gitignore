@@ -1,4 +1,6 @@
 .lsp/.cache
 .cpcache
-.clj-kondo
+.clj-kondo/.cache
+.clj-kondo/imports
+.clj-kondo/.lock
 .vsdd

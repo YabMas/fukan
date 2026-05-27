@@ -1,0 +1,54 @@
+{:config-in-ns
+ {fukan.test.fixture.sample
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}
+  m
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}
+  dup
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}}
+
+ :linters
+ {:unresolved-symbol
+  {:exclude [;; fukan.canvas.construction — non-opt-out lifts
+             (fukan.canvas.construction/function)
+             (fukan.canvas.construction/record)
+             (fukan.canvas.construction/value)
+             (fukan.canvas.construction/exports)
+
+             ;; fukan.canvas.vocab.behavioral
+             (fukan.canvas.vocab.behavioral/invariant)
+             (fukan.canvas.vocab.behavioral/rule)
+
+             ;; fukan.canvas.vocab.lifecycle
+             (fukan.canvas.vocab.lifecycle/getter)
+
+             ;; fukan.canvas.vocab.validation
+             (fukan.canvas.vocab.validation/checker)
+
+             ;; fukan.canvas.vocab.event
+             (fukan.canvas.vocab.event/event)
+             (fukan.canvas.vocab.event/handler)
+
+             ;; fukan.canvas.core.helpers — module scoping
+             (fukan.canvas.core.helpers/within-module)
+             (fukan.canvas.core.helpers/with-canvas)
+
+             ;; fukan.canvas.core — substrate macros (used to define the lifts above)
+             (fukan.canvas.core.defconstructor/defconstructor)
+             (fukan.canvas.core.defquery/defquery)]}
+
+  :unresolved-var
+  {:exclude [fukan.canvas.construction/function
+             fukan.canvas.construction/record
+             fukan.canvas.construction/value
+             fukan.canvas.construction/exports
+             fukan.canvas.vocab.behavioral/invariant
+             fukan.canvas.vocab.behavioral/rule
+             fukan.canvas.vocab.lifecycle/getter
+             fukan.canvas.vocab.validation/checker
+             fukan.canvas.vocab.event/event
+             fukan.canvas.vocab.event/handler
+             fukan.canvas.core.helpers/within-module
+             fukan.canvas.core.helpers/with-canvas]}}}
