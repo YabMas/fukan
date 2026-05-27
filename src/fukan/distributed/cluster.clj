@@ -101,3 +101,23 @@
                   {:context :phase6-trial
                    :fn 'members
                    :received {:cluster cluster}})))
+
+;; --------------------------------------------------------------------------
+;; Invariant predicates — property-style checks. Canvas declares these as
+;; behavioural commitments; the code-side counterpart is a predicate over
+;; the model that returns true iff the invariant holds.
+;;
+;; NB: the rendered Layer-A template named the predicate after the
+;; `holds-that` prose string verbatim ("leader holds majority for its term"),
+;; which is not a legal Clojure symbol. Sanitized to a kebab-case symbol
+;; derived from the invariant id.
+;; --------------------------------------------------------------------------
+
+(defn leader-holds-majority-for-its-term
+  "A node may not become Leader for a Term unless it has received vote
+   grants from a strict majority of cluster members for that Term."
+  [model]
+  (throw (ex-info "leader holds majority for its term: not yet implemented"
+                  {:canvas-id "distributed.cluster/MajorityRequiredForLeadership"
+                   :invariant-name "MajorityRequiredForLeadership"
+                   :holds-that "leader holds majority for its term"})))
