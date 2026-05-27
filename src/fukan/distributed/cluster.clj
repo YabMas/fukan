@@ -116,7 +116,7 @@
 (defn leader-holds-majority-for-its-term
   "A node may not become Leader for a Term unless it has received vote
    grants from a strict majority of cluster members for that Term."
-  [model]
+  [_model]
   (throw (ex-info "leader holds majority for its term: not yet implemented"
                   {:canvas-id "distributed.cluster/MajorityRequiredForLeadership"
                    :invariant-name "MajorityRequiredForLeadership"

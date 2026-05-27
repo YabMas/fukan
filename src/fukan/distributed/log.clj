@@ -80,6 +80,6 @@
   "Retrieve a log entry by index, if one has been appended at that
    position."
   {:malli/schema [:=> [:cat :LogIndex] [:maybe :LogEntry]]}
-  [index]
+  [_index]
   (throw (ex-info "get-entry: not yet implemented"
                   {:canvas-id "distributed.log/get_entry"})))
