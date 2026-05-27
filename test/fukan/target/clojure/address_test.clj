@@ -55,6 +55,20 @@
                            "validation.rules-4a"
                            "module-has-at-most-one-composite-parent")))))
 
+(deftest module-ns-converts-underscores-to-hyphens
+  ;; Phase 6 Sprint 2 Task 4 sub-task E: canvas module names use underscores
+  ;; in some places (e.g. agent.views_loader, project_layer.registry) while
+  ;; real Clojure namespaces use hyphens (agent.views-loader,
+  ;; project-layer.registry). module-ns must convert underscores to hyphens
+  ;; for each dot-separated segment, otherwise drift derives addresses that
+  ;; can never match the actual ns and emits false :absent findings.
+  (is (= "fukan.agent.views-loader"
+         (addr/module-ns (r/with-root-prefix (r/make-registry) "fukan")
+                         "agent.views_loader")))
+  (is (= "fukan.project-layer.registry"
+         (addr/module-ns (r/with-root-prefix (r/make-registry) "fukan")
+                         "project_layer.registry"))))
+
 (deftest canonical-rule-pascal-name-via-canvas
   ;; Phase 6 Sprint 2 Task 4 sub-task C: canvas rules carry their own
   ;; :entity/name as the primitive label (e.g. "AtMostOneCompositeParent").

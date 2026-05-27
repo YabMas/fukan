@@ -20,13 +20,24 @@
 
 (defn module-ns
   "Compute the Clojure namespace from a module coord.
-   '{root-prefix}.{coord-with-/-as-.}', with root-prefix omitted when empty."
+   '{root-prefix}.{coord-with-/-as-.}', with root-prefix omitted when empty.
+
+   Per-segment underscore→hyphen conversion: canvas module names use
+   underscores in some places (e.g. agent.views_loader,
+   project_layer.registry) while real Clojure namespaces use hyphens
+   (agent.views-loader, project-layer.registry). Each dot-separated
+   segment of the resulting module ns is normalised to kebab-case so
+   drift derives addresses that match the actual ns instead of emitting
+   false :absent findings."
   [registry module-coord]
   (let [pfx (:root-prefix registry "")
-        dotted (str/replace module-coord #"/" ".")]
+        dotted (str/replace module-coord #"/" ".")
+        kebabbed (->> (str/split dotted #"\.")
+                      (map #(str/replace % #"_" "-"))
+                      (str/join "."))]
     (if (str/blank? pfx)
-      dotted
-      (str pfx "." dotted))))
+      kebabbed
+      (str pfx "." kebabbed))))
 
 (defn- pascal->kebab-lower
   "ProcessSubmission → process-submission."
