@@ -151,6 +151,57 @@ full source primitive).
 incoming edges + summary maps for the directly-connected neighbors.
 Multi-hop traversal is the caller's job at L0.
 
+## 5b. Canvas feedback — trust and weigh tiers
+
+Beyond the layered query interface, `fukan.agent.api` exposes canvas-specific
+feedback signals partitioned into two tiers. The partition is load-bearing:
+trust and weigh have different epistemic status and should never be
+collapsed.
+
+**Trust tier — decision-ready.** Every finding is an error under any
+methodology; no interpretive judgment required. Surface trust-tier output
+as facts and either fix the issue or escalate.
+
+| Fn | What it returns |
+|----|-----------------|
+| `(integrity)` | Cross-reference integrity — unresolved refs, trigger/emit role mismatches, broken cross-module shape targets. Returns `[]` when clean; every finding is `:severity :error`. |
+| `(canvas-coverage)` | Structural coverage gaps — orphan entities, modules without `(exports …)`, rules with no trigger, events with no handler. Findings carry `:severity` in `{:error :warning :info}`. |
+
+**Weigh tier — interpretive.** Output is input to judgment, not a verdict.
+Findings are framed as candidates / likely-intentional / open judgments.
+The author reads, weighs, and decides whether to act.
+
+| Fn | What it returns |
+|----|-----------------|
+| `(survey)` | Run every registered lens. Default set is `[:patterns :consistency :tar-pit]`. |
+| `(survey [<lens-ids>])` | Run a specific lens subset. Unknown ids produce warning entries, not errors. |
+| `(canvas-lenses)` | List registered lenses with `:id`, `:description`, `:prompt-fragment`. |
+
+**The lens substrate** (`src/fukan/canvas/lens/`) is pluggable. Each lens is
+a single namespace declaring a `lens` var with `:id`, `:description`,
+`:prompt-fragment`, optional `:compute`, and `:render`. Adding a thinking
+mode means dropping a file and registering its var in
+`fukan.canvas.lens.registry`. Three lenses ship:
+
+- `:patterns` — structural. Clusters of 3+ structurally-similar Affordances
+  surfaced as rule-of-three lift candidates.
+- `:consistency` — structural. Naming-style + field-types + sister-module
+  symmetry; flags methodology drift.
+- `:tar-pit` — theoretical. Frames the canvas through Moseley & Marks
+  *Out of the Tar Pit*: essential vs accidental complexity.
+
+**Discipline.** Run `(integrity)` and `(canvas-coverage)` first — trust
+tier before weigh tier. A survey on top of structurally broken canvas is
+noise; fix the trust findings, then weigh.
+
+**The `fukan-architect` subagent** is the canonical surface for the
+`survey design improvements` workflow: dispatch with a scope and a survey
+intent, the agent runs trust then weigh and synthesizes a unified report.
+The behavioural charter for canvas authoring (including this tier model,
+the named failure modes, and the layered-language lineage) lives at
+`doc/canvas-authoring-system-prompt.md` — pull it when authoring canvas
+content directly.
+
 ## 6. Three worked examples
 
 ### (a) Orientation: what is module `infra.server`?
@@ -313,8 +364,11 @@ so you can see what names are available.
 - `doc/VISION.md` — why Fukan exists; the canvas-first direction; what this chapter commits to
 - `doc/DESIGN.md` — system design: three-tier canvas layering, ownership-on-owner principle, build pipeline, project layer
 - `doc/MODEL.md` — Model substrate: six primitives, thirteen relations, vocabulary mechanism, constraint language
+- `doc/canvas-authoring-system-prompt.md` — permanent activation surface for canvas authoring (layered-language lineage, trust/weigh model, named failure modes, EXAMPLES pointers)
 - `canvas/` — the canvas spec tree (62 modules); the design surface for fukan-itself
-- `src/fukan/canvas/` — canvas machinery (core, construction, vocab libraries)
+- `src/fukan/canvas/` — canvas machinery (core, construction, vocab libraries, inspect, lens)
+- `src/fukan/canvas/inspect/` — trust-tier checks (`integrity`, `coverage`)
+- `src/fukan/canvas/lens/` — weigh-tier lenses (`patterns`, `consistency`, `tar-pit`) + the survey/registry substrate
 
 When working on Fukan itself, `src/fukan/agent/api.clj` and
 `src/fukan/agent/system.clj` are the source of truth for what the
