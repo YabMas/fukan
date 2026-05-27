@@ -72,6 +72,12 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.project.clojure.rule-to-predicate
   {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.instruct.core
+  {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.instruct.registry
+  {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.instruct.render
+  {:linters {:unused-public-var {:level :off}}}
 
   ;; Per-projection tests require the `clojure` lens loader namespace purely
   ;; for its side effects (each projection's defmethod registration runs on
