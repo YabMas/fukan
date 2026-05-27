@@ -68,6 +68,8 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.project.clojure.function-to-defn
   {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.project.clojure.invariant-to-predicate
+  {:linters {:unused-public-var {:level :off}}}
   fukan.agent.api
   {:linters {:unused-public-var {:level :off}}}
   fukan.agent.system
