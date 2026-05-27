@@ -158,7 +158,7 @@
 ;; during entity-map extraction (as opposed to ref-typed :module/child which
 ;; is handled separately in child-txs).
 (def ^:private scalar-card-many-attrs
-  #{:entity/tag :entity/alias :references})
+  #{:entity/tag :entity/alias :references :type/fields})
 
 (defn- db->entity-maps
   "Extract all entities from a per-module Datascript db as transactable data.

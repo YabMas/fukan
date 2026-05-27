@@ -17,6 +17,7 @@
    :affordance/output-types {:db/cardinality :db.cardinality/many}
    :type/doc                {:db/index true}
    :type/field-types        {:db/cardinality :db.cardinality/many}
+   :type/fields             {:db/cardinality :db.cardinality/many}
    :affordance/returns-label {:db/index true}
    :triggers                {:db/cardinality :db.cardinality/many
                               :db/valueType   :db.type/ref}
@@ -60,15 +61,39 @@
      (sub/shape-of s)
      (assoc :state/shape (sub/shape-of s)))])
 
+(defn- field-name->keyword
+  "Normalize a record field-name to a keyword. Field-names arrive as strings
+   (substrate-level usage) or symbols (via the `record` construction macro)."
+  [n]
+  (cond
+    (keyword? n) n
+    (symbol? n)  (keyword (name n))
+    (string? n)  (keyword n)
+    :else        (keyword (str n))))
+
+(defn- field-tuples
+  "For each [field-name parsed-shape] pair, emit one [field-name-kw type-name]
+   tuple per distinct type-name appearing in the shape. Used to derive the
+   :type/fields cardinality-many attribute for record-shaped Types."
+  [fields]
+  (into #{}
+        (for [[fname fshape] fields
+              tname (shape/type-names fshape)]
+          [(field-name->keyword fname) tname])))
+
 (defmethod ->datoms :Type [t]
-  (let [field-types-set (when (= :record (:kind t))
-                          (shape/type-names {:kind :record :fields (:fields t)}))]
+  (let [record? (= :record (:kind t))
+        field-types-set (when record?
+                          (shape/type-names {:kind :record :fields (:fields t)}))
+        field-tuples-set (when record?
+                           (field-tuples (:fields t)))]
     [(cond-> {:entity/id (sub/id-of t)
               :entity/type :Type
               :entity/name (sub/name-of t)
               :entity/tag (vec (sub/tags-of t))}
        (sub/doc-of t)         (assoc :type/doc (sub/doc-of t))
-       (seq field-types-set)  (assoc :type/field-types field-types-set))]))
+       (seq field-types-set)  (assoc :type/field-types field-types-set)
+       (seq field-tuples-set) (assoc :type/fields field-tuples-set))]))
 
 (defmethod ->datoms :Relation [r]
   (let [to-val (sub/to-of r)

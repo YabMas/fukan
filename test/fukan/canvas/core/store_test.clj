@@ -109,3 +109,49 @@
     (let [t (sub/type-primitive "Stratum")
           db (-> (store/create) (store/transact! t))]
       (is (empty? (d/q '[:find ?ft :where [?ty :type/field-types ?ft]] db))))))
+
+(deftest type-fields-tuples-atomic-and-optional
+  (testing "a record Type produces :type/fields [field-name type-name] datoms"
+    (let [t (sub/type-record "User"
+              [["email" {:kind :atomic :name :String}]
+               ["age" {:kind :optional :inner {:kind :atomic :name :Integer}}]])
+          db (-> (store/create) (store/transact! t))]
+      (is (= #{[:email :String] [:age :Integer]}
+             (set (map first (d/q '[:find ?p :where [?ty :type/fields ?p]] db))))))))
+
+(deftest type-fields-tuples-composite
+  (testing "composite-shape fields emit one :type/fields datom per type-name in shape"
+    (let [t (sub/type-record "Order"
+              [["items" {:kind :list :elem {:kind :ref :target :Item}}]
+               ["total" {:kind :atomic :name :Decimal}]
+               ["meta"  {:kind :map
+                         :key {:kind :atomic :name :String}
+                         :val {:kind :ref :target :Bar}}]])
+          db (-> (store/create) (store/transact! t))]
+      (is (= #{[:items :Item]
+               [:total :Decimal]
+               [:meta :String]
+               [:meta :Bar]}
+             (set (map first (d/q '[:find ?p :where [?ty :type/fields ?p]] db))))))))
+
+(deftest type-fields-query-distinguishes-by-field-and-type
+  (testing "query 'all records with a :status field of type :String' returns only the matching record"
+    (let [r1 (sub/type-record "WithStringStatus"
+               [["status" {:kind :atomic :name :String}]])
+          r2 (sub/type-record "WithEnumStatus"
+               [["status" {:kind :ref :target :OrderStatus}]])
+          db (-> (store/create)
+                 (store/transact! r1)
+                 (store/transact! r2))]
+      (is (= #{"WithStringStatus"}
+             (set (map first
+                       (d/q '[:find ?n
+                              :where [?ty :type/fields [:status :String]]
+                                     [?ty :entity/name ?n]]
+                            db))))))))
+
+(deftest atomic-type-has-no-fields-tuples
+  (testing "a Type with :kind :atomic has no :type/fields datoms"
+    (let [t (sub/type-primitive "Stratum")
+          db (-> (store/create) (store/transact! t))]
+      (is (empty? (d/q '[:find ?p :where [?ty :type/fields ?p]] db))))))
