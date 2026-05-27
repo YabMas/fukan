@@ -1,0 +1,12 @@
+{;; clojure-lsp configuration.
+ ;;
+ ;; clj-kondo handles syntax and most linters; clojure-lsp adds a few of its
+ ;; own — most notably unused-public-var. Configure those here.
+
+ :linters
+ {:clojure-lsp/unused-public-var
+  {;; Vars marked with these metadata keys are intentionally exported for
+   ;; dynamic invocation (SCI sandbox, canvas registry lookup, agent api
+   ;; metadata discovery). clojure-lsp's static analysis can't see those
+   ;; call sites, so the unused-public-var lint is a false positive on them.
+   :exclude-when-meta #{:export}}}}
