@@ -248,6 +248,42 @@
         (field predicate        :Any)
         (field applies_to       (optional :TagRef)))
 
+      ;; ── View-Side Reference Types ────────────────────────────────────────
+      ;;
+      ;; These types are surface contracts between the model and the web view
+      ;; layer. They are declared here because canvas-side cross-module
+      ;; references segment-match on "model"; web modules consume them as
+      ;; :model/Handler, :model/EntityPath, :model/EntityDetails. Their
+      ;; conceptual home is the web subsystem — the declarations here are
+      ;; canvas-altitude opaque types only.
+
+      (value "Handler"
+        "Opaque Ring-style request handler value. Substrate commits to the
+         existence of a callable transport entry point; the request/response
+         signature is implementation-level and outside canvas altitude.")
+
+      (record "EntityPathItem"
+        "One step in a navigation path from the smart-root to a current
+         entity. id identifies the entity; label is an optional human-facing
+         label (namespace-like labels may be short-formed at render time)."
+        (field id    :String)
+        (field label (optional :String)))
+
+      (value "EntityPath"
+        "Ordered sequence of EntityPathItem values, root-first. The final
+         item represents the current view; preceding items are clickable
+         ancestors. Consumed by breadcrumb rendering.")
+
+      (record "EntityDetails"
+        "Renderable bundle of an entity's identifying and descriptive
+         attributes. Carries id, label, kind, and an optional description.
+         Consumed by sidebar rendering. Edge-detail variants are handled by
+         the renderer dispatching on edge_type, not by extending this record."
+        (field id          :String)
+        (field label       (optional :String))
+        (field kind        :String)
+        (field description (optional :String)))
+
       ;; ── Model Top-Level Record ────────────────────────────────────────────
 
       (record "Model"
