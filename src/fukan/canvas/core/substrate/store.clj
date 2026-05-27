@@ -19,6 +19,8 @@
    :type/field-types        {:db/cardinality :db.cardinality/many}
    :affordance/returns-label {:db/index true}
    :triggers                {:db/cardinality :db.cardinality/many
+                              :db/valueType   :db.type/ref}
+   :emits                   {:db/cardinality :db.cardinality/many
                               :db/valueType   :db.type/ref}})
 
 (defn create []

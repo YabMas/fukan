@@ -44,12 +44,14 @@
       (function "dispatch_shipment"
         "Hand a shipment off to a carrier. Emits ShipmentDispatched."
         (takes [shipment :Shipment] [tracking_code :String])
-        (gives :Shipment))
+        (gives :Shipment)
+        (emits ShipmentDispatched))
 
       (function "mark_delivered"
         "Record delivery of a shipment. Emits ShipmentDelivered."
         (takes [shipment :Shipment])
-        (gives :Shipment))
+        (gives :Shipment)
+        (emits ShipmentDelivered))
 
       (function "get_shipment"
         "Retrieve a shipment by id."

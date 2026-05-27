@@ -45,7 +45,9 @@
       (function "process_payment"
         "Attempt to process a payment. Emits PaymentSucceeded or PaymentFailed."
         (takes [payment :Payment])
-        (gives :Payment))
+        (gives :Payment)
+        (emits PaymentSucceeded)
+        (emits PaymentFailed))
 
       (function "get_payment"
         "Retrieve a payment by id."

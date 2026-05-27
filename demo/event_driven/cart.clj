@@ -46,7 +46,8 @@
       (function "create_cart"
         "Open a new cart for a user. Emits CartCreated."
         (takes [user_id :String])
-        (gives :Cart))
+        (gives :Cart)
+        (emits CartCreated))
 
       (function "add_item"
         "Add a product to the cart. Emits ItemAdded."
@@ -54,12 +55,14 @@
                [item_id :String]
                [qty :Integer]
                [price :Double])
-        (gives :Cart))
+        (gives :Cart)
+        (emits ItemAdded))
 
       (function "checkout"
         "Submit the cart for checkout. Emits CartCheckedOut."
         (takes [cart :Cart])
-        (gives :CartCheckedOut))
+        (gives :CartCheckedOut)
+        (emits CartCheckedOut))
 
       (function "get_cart"
         "Retrieve the current cart state by id."

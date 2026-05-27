@@ -4,6 +4,7 @@
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function record value exports]]
             [fukan.canvas.vocab.behavioral :refer [rule]]
+            [fukan.canvas.vocab.event :refer [event]]
             [fukan.canvas.core.substrate.store :as store]))
 
 (deftest function-lift-produces-affordance
@@ -185,6 +186,51 @@
                                    [?to :entity/name ?to-name]]
                           db)]
       (is (= [["run" "RunPhase4"]] (vec relations))))))
+
+(deftest function-with-emits-creates-relation
+  (testing "(emits EventName) emits an :emits Relation from function to event"
+    (let [db (h/with-canvas
+               (h/within-module "event-driven.payment"
+                 (event "PaymentSucceeded"
+                   "The payment was successfully processed."
+                   (payload [payment_id :String]
+                            [order_id   :String]))
+                 (function "process_payment" "Attempt to process a payment."
+                   (takes [payment :Payment])
+                   (gives :Payment)
+                   (emits PaymentSucceeded))))
+          relations (d/q '[:find ?from-name ?to-name
+                            :where [?from :affordance/role :fukan.canvas.monolith/exposed-call]
+                                   [?from :entity/name ?from-name]
+                                   [?from :emits ?to]
+                                   [?to :entity/name ?to-name]]
+                          db)]
+      (is (= [["process_payment" "PaymentSucceeded"]] (vec relations))))))
+
+(deftest function-with-multiple-emits-creates-multiple-relations
+  (testing "(emits …) is repeatable — one Relation per emitted event"
+    (let [db (h/with-canvas
+               (h/within-module "event-driven.payment"
+                 (event "PaymentSucceeded"
+                   "The payment was successfully processed."
+                   (payload [payment_id :String]))
+                 (event "PaymentFailed"
+                   "The payment was declined or failed."
+                   (payload [payment_id :String]
+                            [reason     :String]))
+                 (function "process_payment" "Attempt to process a payment."
+                   (takes [payment :Payment])
+                   (gives :Payment)
+                   (emits PaymentSucceeded)
+                   (emits PaymentFailed))))
+          relations (d/q '[:find ?from-name ?to-name
+                           :where [?from :entity/name ?from-name]
+                                  [?from :emits ?to]
+                                  [?to :entity/name ?to-name]]
+                         db)]
+      (is (= #{["process_payment" "PaymentSucceeded"]
+               ["process_payment" "PaymentFailed"]}
+             (set relations))))))
 
 (deftest function-with-returns-label-is-queryable
   (testing "(returns \"post.result\") populates :affordance/returns-label"

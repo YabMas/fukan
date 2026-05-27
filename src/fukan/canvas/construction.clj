@@ -30,6 +30,7 @@
   (form gives     "Return value shape."                                  :shape :type-ref :required true)
   (form effect    "An effect this performs."                             :shape :name-ref :repeatable true)
   (form triggers  "Trigger pattern for an associated rule."              :shape :name-ref)
+  (form emits     "An event this function emits."                        :shape :name-ref :repeatable true)
   (form returns   "Returns-label binding for post-condition refs."       :shape :prose)
 
   (produces [name doc forms]
@@ -70,6 +71,24 @@
             (binding [*out* *err*]
               (println (str "canvas/construction: (triggers " rule-name ") in function \""
                             name "\" — rule not found in enclosing module, skipping Relation"))))))
+      (doseq [emit-args (:emits forms)]
+        (let [event-name (str (first emit-args))
+              db         @h/*store*
+              module-id  h/*enclosing-module*
+              event-uuid (when module-id
+                           (ffirst (d/q '[:find ?eid
+                                          :in $ ?mid ?en
+                                          :where [?m :entity/id ?mid]
+                                                 [?m :module/child ?a]
+                                                 [?a :entity/name ?en]
+                                                 [?a :affordance/role :canvas/event]
+                                                 [?a :entity/id ?eid]]
+                                        db module-id event-name)))]
+          (if event-uuid
+            (h/declare-relation (:id aff) :emits event-uuid)
+            (binding [*out* *err*]
+              (println (str "canvas/construction: (emits " event-name ") in function \""
+                            name "\" — event not found in enclosing module, skipping Relation"))))))
       aff)))
 
 (defconstructor record
