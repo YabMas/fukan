@@ -72,6 +72,23 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.project.clojure.rule-to-predicate
   {:linters {:unused-public-var {:level :off}}}
+
+  ;; Per-projection tests require the `clojure` lens loader namespace purely
+  ;; for its side effects (each projection's defmethod registration runs on
+  ;; load). clj-kondo doesn't recognize the `:as _foo` underscore-prefix
+  ;; convention as a side-effect marker.
+  fukan.canvas.project.clojure.value-to-def-test
+  {:linters {:unused-namespace {:level :off}}}
+  fukan.canvas.project.clojure.type-to-malli-test
+  {:linters {:unused-namespace {:level :off}}}
+  fukan.canvas.project.clojure.event-to-schema-test
+  {:linters {:unused-namespace {:level :off}}}
+  fukan.canvas.project.clojure.function-to-defn-test
+  {:linters {:unused-namespace {:level :off}}}
+  fukan.canvas.project.clojure.invariant-to-predicate-test
+  {:linters {:unused-namespace {:level :off}}}
+  fukan.canvas.project.clojure.rule-to-predicate-test
+  {:linters {:unused-namespace {:level :off}}}
   fukan.agent.api
   {:linters {:unused-public-var {:level :off}}}
   fukan.agent.system
