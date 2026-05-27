@@ -16,8 +16,8 @@
             [fukan.canvas.lens.core :as core]
             ;; Lens namespaces — each must declare a `lens` var. Add a require
             ;; here and conj the var into `known-lenses` below.
+            [fukan.canvas.lens.patterns :as patterns]
             ;; future:
-            ;;   [fukan.canvas.lens.patterns    :as patterns]
             ;;   [fukan.canvas.lens.consistency :as consistency]
             ;;   [fukan.canvas.lens.tar-pit    :as tar-pit]
             ))
@@ -26,7 +26,7 @@
   "Vector of registered lens vars. To register a new lens:
      1. require the lens namespace above
      2. conj its `lens` var here."
-  [])
+  [#'patterns/lens])
 
 (defn- warn-invalid!
   [lens-var issues]
