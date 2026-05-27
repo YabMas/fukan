@@ -6,6 +6,8 @@
             [fukan.agent.query :as query]
             [fukan.canvas.inspect.coverage :as inspect-coverage]
             [fukan.canvas.inspect.integrity :as inspect-integrity]
+            [fukan.canvas.lens.registry :as lens-registry]
+            [fukan.canvas.lens.survey :as lens-survey]
             [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.infra.model :as infra-model]
             [fukan.model.primitives :as primitives]
@@ -356,3 +358,46 @@
   canvas-coverage
   []
   (inspect-coverage/check (canvas-source/build-canvas-db)))
+
+;; -- Weigh tier ---------------------------------------------------------------
+;;
+;; Weigh-tier helpers dispatch one or more lenses against the canvas db and
+;; produce interpretive output the caller weighs against context. Lenses are
+;; registered in `fukan.canvas.lens.registry` — adding a lens makes it
+;; immediately available through (survey).
+
+(defn ^{:agent/layer :weigh
+        :agent/origin :built-in
+        :agent/doc "Run a survey of canvas lenses. Without args, runs every
+                    registered lens. With a vector of lens ids, runs only
+                    those (unknown ids produce a warning entry, not an
+                    error). Returns {:survey/lenses … :survey/results …
+                    :survey/rendered <markdown>}. Output is interpretive —
+                    findings are observations the caller weighs, not facts
+                    to act on directly. See (canvas-lenses) for the
+                    registered surface."
+        :agent/example "(survey) (survey [:patterns])"}
+  survey
+  ([] (survey nil))
+  ([lens-ids-or-nil]
+   (let [db  (canvas-source/build-canvas-db)
+         ids (or lens-ids-or-nil
+                 (mapv :id (lens-registry/all-lenses)))]
+     (lens-survey/run db ids))))
+
+(defn ^{:agent/layer :weigh
+        :agent/origin :built-in
+        :agent/doc "List the registered lenses. Returns a vector of
+                    {:id :description :prompt-fragment :has-compute?}
+                    entries — the prompt-fragment is included so the LLM
+                    sees how each lens primes interpretation at
+                    discovery time."
+        :agent/example "(canvas-lenses)"}
+  canvas-lenses
+  []
+  (mapv (fn [lens]
+          {:id              (:id lens)
+           :description     (:description lens)
+           :prompt-fragment (:prompt-fragment lens)
+           :has-compute?    (some? (:compute lens))})
+        (lens-registry/all-lenses)))

@@ -48,7 +48,13 @@
         (is (some #(= 'integrity (:name %)) (:trust api))
             "Trust-tier integrity helper must be discoverable via (help)")
         (is (some #(= 'canvas-coverage (:name %)) (:trust api))
-            "Trust-tier canvas-coverage helper must be discoverable via (help)")))))
+            "Trust-tier canvas-coverage helper must be discoverable via (help)")
+        (is (contains? api :weigh)
+            "Weigh-tier group must be a top-level help bucket")
+        (is (some #(= 'survey (:name %)) (:weigh api))
+            "Weigh-tier survey helper must be discoverable via (help)")
+        (is (some #(= 'canvas-lenses (:name %)) (:weigh api))
+            "Weigh-tier canvas-lenses helper must be discoverable via (help)")))))
 
 (deftest help-for-single-fn
   (testing "(help 'primitives) returns docstring + signatures + examples"

@@ -54,7 +54,7 @@
       (reduce (fn [acc {:keys [layer] :as m}]
                 (let [k (or layer :other)]
                   (update acc k (fnil conj []) (dissoc m :var))))
-              {:L0 [] :L1 [] :L2 [] :trust []}
+              {:L0 [] :L1 [] :L2 [] :trust [] :weigh []}
               api-meta)
       'fukan.agent.system
       (mapv #(dissoc % :var) sys-meta)}))
