@@ -17,8 +17,7 @@
                 on-vote-granted, on-heartbeat-received
                 intentionally absent)
      Invariants — none implemented; property-test material."
-  (:require [malli.core :as m]
-            [fukan.distributed.cluster :as cluster]))
+  (:require [fukan.distributed.cluster :as cluster]))
 
 ;; --------------------------------------------------------------------------
 ;; Protocol-level records

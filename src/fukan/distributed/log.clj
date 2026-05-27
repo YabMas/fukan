@@ -24,8 +24,7 @@
    modest progress, large remaining gap. That is the *honest*
    appearance of canvas-ahead-of-code work, which is the normal
    condition in LLM-driven development."
-  (:require [malli.core :as m]
-            [fukan.distributed.cluster :as cluster]))
+  (:require [fukan.distributed.cluster :as cluster]))
 
 ;; --------------------------------------------------------------------------
 ;; Atomic / record types implemented (2 of 4)

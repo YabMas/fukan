@@ -17,8 +17,7 @@
    this trial — they are behavioural commitments better realised in
    property-tests than in callable code. Drift will surface them and
    the loop's job is to *weigh* whether that is canvas-side over-
-   declaration or code-side under-realisation. (See findings doc.)"
-  (:require [malli.core :as m]))
+   declaration or code-side under-realisation. (See findings doc.)")
 
 ;; --------------------------------------------------------------------------
 ;; Atomic value types — canvas declares as opaque. Represent as Malli specs
