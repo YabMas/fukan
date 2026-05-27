@@ -14,14 +14,14 @@
                       (v/make-tag-application
                         {:tag {:namespace "Allium" :name "Module"}
                          :target {:case :target/primitive :id "m"}}))
-                    (build/add-primitive (p/make-container {:id "m::Order" :label "Order"}))
+                    (build/add-primitive (p/make-container {:id "m/Order" :label "Order"}))
                     (build/add-tag-application
                       (v/make-tag-application
                         {:tag {:namespace "Allium" :name "Entity"}
-                         :target {:case :target/primitive :id "m::Order"}})))
+                         :target {:case :target/primitive :id "m/Order"}})))
           m1 (analyzer/run model (registry/make-registry) "test/fixtures/clojure-projects/empty")
           edges (filter #(and (= :relation/projects (:kind %))
-                              (= "m::Order" (-> % :from :id)))
+                              (= "m/Order" (-> % :from :id)))
                         (:edges m1))]
       (is (= 1 (count edges))
           "exactly one schema edge per entity")
@@ -35,11 +35,11 @@
                       (v/make-tag-application
                         {:tag {:namespace "Allium" :name "Module"}
                          :target {:case :target/primitive :id "m"}}))
-                    (build/add-primitive (p/make-event {:id "m::events::OrderPlaced"
+                    (build/add-primitive (p/make-event {:id "m/events/OrderPlaced"
                                                         :label "OrderPlaced"})))
           m1 (analyzer/run model (registry/make-registry) "test/fixtures/clojure-projects/empty")
           edges (filter #(and (= :relation/projects (:kind %))
-                              (= "m::events::OrderPlaced" (-> % :from :id)))
+                              (= "m/events/OrderPlaced" (-> % :from :id)))
                         (:edges m1))]
       (is (= 1 (count edges))))))
 

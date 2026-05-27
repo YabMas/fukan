@@ -14,7 +14,7 @@
           {:tag {:namespace "Allium" :name "Module"}
            :target {:case :target/primitive :id "m"}}))
       (build/add-primitive
-        (p/make-operation {:id (str "m::Contract." op-name) :label op-name
+        (p/make-operation {:id (str "m/" op-name) :label op-name
                            :parameters []}))))
 
 (deftest operation-with-matching-source-emits-valid-projects-edge
@@ -26,7 +26,7 @@
           m1 (analyzer/run model reg "test/fixtures/clojure-projects/m-with-submit")
           edges (filter #(= :relation/projects (:kind %)) (:edges m1))]
       (is (>= (count edges) 1) "at least one projects edge for the operation")
-      (let [op-edge (first (filter #(= "m::Contract.submit" (-> % :from :id)) edges))]
+      (let [op-edge (first (filter #(= "m/submit" (-> % :from :id)) edges))]
         (is (= :valid (:validity op-edge)))))))
 
 (deftest operation-without-source-emits-absent-projects-edge
@@ -35,7 +35,7 @@
           reg (registry/make-registry)
           m1 (analyzer/run model reg "test/fixtures/clojure-projects/empty")
           edges (filter #(and (= :relation/projects (:kind %))
-                              (= "m::Contract.ghost" (-> % :from :id)))
+                              (= "m/ghost" (-> % :from :id)))
                         (:edges m1))]
       (is (>= (count edges) 1))
       (is (some #(= :absent (:validity %)) edges)))))
@@ -47,15 +47,15 @@
                     (v/make-tag-application
                       {:tag {:namespace "Allium" :name "Module"}
                        :target {:case :target/primitive :id "m"}}))
-                  (build/add-primitive (p/make-rule {:id "m::ProcessOrder" :label "ProcessOrder"}))
+                  (build/add-primitive (p/make-rule {:id "m/ProcessOrder" :label "ProcessOrder"}))
                   (build/add-tag-application
                     (v/make-tag-application
                       {:tag {:namespace "Allium" :name "Rule"}
-                       :target {:case :target/primitive :id "m::ProcessOrder"}})))
+                       :target {:case :target/primitive :id "m/ProcessOrder"}})))
         reg (registry/make-registry)
         m1 (analyzer/run model reg "test/fixtures/clojure-projects/empty")
         edges (filter #(and (= :relation/projects (:kind %))
-                            (= "m::ProcessOrder" (-> % :from :id)))
+                            (= "m/ProcessOrder" (-> % :from :id)))
                       (:edges m1))]
     (is (pos? (count edges)))
     ;; Rules project to a single realisation edge (:projection-kind/rule).

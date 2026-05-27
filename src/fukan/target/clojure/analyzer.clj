@@ -81,12 +81,15 @@
 
 (defn- module-coord-of-primitive
   "Extract the module coord from a primitive id.
-   'module::sub::Name' → 'module'.
-   'module' (no :: separator, id IS the module coord) → 'module'."
+   Canvas stable-id format uses '/' as separator:
+     'module.sub/name'         (Affordance)         → 'module.sub'
+     'module.sub/type/Name'    (Type)               → 'module.sub'
+     'module.sub/state/name'   (State)              → 'module.sub'
+     'module.sub'              (Module — no '/')    → 'module.sub'."
   [primitive-id]
   (when (string? primitive-id)
-    (if (str/includes? primitive-id "::")
-      (first (str/split primitive-id #"::" 2))
+    (if (str/includes? primitive-id "/")
+      (first (str/split primitive-id #"/" 2))
       primitive-id)))
 
 (defn- emit-function-projection
