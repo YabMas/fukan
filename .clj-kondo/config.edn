@@ -7,7 +7,18 @@
              :unused-public-var      {:level :off}}}
   dup
   {:linters {:namespace-name-mismatch {:level :off}
-             :unused-public-var      {:level :off}}}}
+             :unused-public-var      {:level :off}}}
+
+  ;; Agent-surface namespaces. Public vars in these namespaces are invoked
+  ;; dynamically via the SCI sandbox (`bin/fukan eval`) and by the agent api's
+  ;; metadata-driven discovery — neither call path is visible to clj-kondo's
+  ;; static analysis, so unused-public-var fires as a false positive.
+  fukan.canvas.inspect.integrity
+  {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.inspect.coverage
+  {:linters {:unused-public-var {:level :off}}}
+  fukan.agent.api
+  {:linters {:unused-public-var {:level :off}}}}
 
  :linters
  {;; The canvas DSL's `rule` lift body uses (when TriggerName ...) as

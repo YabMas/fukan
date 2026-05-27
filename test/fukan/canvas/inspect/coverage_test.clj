@@ -1,7 +1,7 @@
 (ns fukan.canvas.inspect.coverage-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [fukan.canvas.construction :refer [function record value exports]]
+            [fukan.canvas.construction :refer [function value exports]]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.inspect.coverage :as coverage]
             [fukan.canvas.vocab.behavioral :refer [rule]]
