@@ -54,7 +54,15 @@
         (is (some #(= 'survey (:name %)) (:weigh api))
             "Weigh-tier survey helper must be discoverable via (help)")
         (is (some #(= 'canvas-lenses (:name %)) (:weigh api))
-            "Weigh-tier canvas-lenses helper must be discoverable via (help)")))))
+            "Weigh-tier canvas-lenses helper must be discoverable via (help)")
+        (is (some #(= 'spec (:name %)) (:trust api))
+            "Trust-tier spec (Layer A) helper must be discoverable via (help)")
+        (is (some #(= 'instruct (:name %)) (:trust api))
+            "Trust-tier instruct (Layer B) helper must be discoverable via (help)")
+        (is (some #(= 'canvas-projections (:name %)) (:trust api))
+            "Trust-tier canvas-projections helper must be discoverable via (help)")
+        (is (some #(= 'canvas-scenarios (:name %)) (:trust api))
+            "Trust-tier canvas-scenarios helper must be discoverable via (help)")))))
 
 (deftest help-for-single-fn
   (testing "(help 'primitives) returns docstring + signatures + examples"

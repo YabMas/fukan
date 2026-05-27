@@ -2,18 +2,26 @@
   "The agent's layered Model interface. The ONLY namespace the SCI sandbox
    exposes alongside fukan.agent.system. See AGENTS.md for orientation;
    call (help) for the live catalog."
-  (:require [fukan.agent.edb :as edb]
+  (:require [clojure.edn :as edn]
+            [clojure.string :as str]
+            [datascript.core :as d]
+            [fukan.agent.edb :as edb]
             [fukan.agent.query :as query]
             [fukan.canvas.inspect.coverage :as inspect-coverage]
             [fukan.canvas.inspect.drift :as inspect-drift]
             [fukan.canvas.inspect.integrity :as inspect-integrity]
+            [fukan.canvas.instruct.registry :as instruct-registry]
             [fukan.canvas.lens.registry :as lens-registry]
             [fukan.canvas.lens.survey :as lens-survey]
+            [fukan.canvas.project.clojure]
+            [fukan.canvas.project.core :as project-core]
+            [fukan.canvas.project.registry :as project-registry]
             [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.infra.model :as infra-model]
             [fukan.model.primitives :as primitives]
             [fukan.model.relations :as relations]
-            [fukan.model.vocabulary :as vocab]))
+            [fukan.model.vocabulary :as vocab]
+            [fukan.project-layer.defaults :as defaults]))
 
 ;; -- Helpers ------------------------------------------------------------------
 
@@ -450,3 +458,291 @@
            :prompt-fragment (:prompt-fragment lens)
            :has-compute?    (some? (:compute lens))})
         (lens-registry/all-lenses)))
+
+;; -- Trust tier: project-lens + scenario surfaces ----------------------------
+;;
+;; Phase 7 Sprint 3 Task N — expose Layer A (project lens) and Layer B
+;; (scenarios) through the agent api so the canvas-author LLM can consume
+;; them via `bin/fukan eval`.
+;;
+;; Layer A's project mm dispatches on a structured element map; canvas-db
+;; carries the raw datoms. The `resolve-element` helper bridges the two:
+;; given a canvas stable-id, walk the canvas-db and reconstruct the element
+;; map the project lens expects (`stable-id`, `entity-name`, `module-coord`,
+;; `doc`, plus kind-specific carriers — `fields`, `inputs`/`outputs`,
+;; `holds-that`, `when-vec`, `payload`).
+;;
+;; Stable-id grammar (per `fukan.canvas.identity/stable-id`):
+;;   `<module>`                  — Module
+;;   `<module>/<name>`           — Affordance
+;;   `<module>/type/<Name>`      — Type
+;;   `<module>/state/<name>`     — State
+
+(defn- parse-stable-id
+  "Return [:Module|:Affordance|:Type|:State module-name entity-name] from a
+   stable-id string, or nil if the shape is unrecognised."
+  [id]
+  (when (string? id)
+    (let [parts (str/split id #"/" 3)]
+      (cond
+        (= 1 (count parts))         [:Module (first parts) (first parts)]
+        (= 2 (count parts))         [:Affordance (first parts) (second parts)]
+        (and (= 3 (count parts))
+             (= "type" (second parts)))   [:Type (first parts) (nth parts 2)]
+        (and (= 3 (count parts))
+             (= "state" (second parts)))  [:State (first parts) (nth parts 2)]
+        :else nil))))
+
+(defn- read-shape
+  "pr-str'd canvas shape map → parsed shape map. Returns nil on read failure."
+  [s]
+  (when (string? s)
+    (try (edn/read-string s)
+         (catch Exception _ nil))))
+
+(defn- canvas-db-entity-for
+  "Query canvas-db for the entity matching (entity-type, module-name,
+   entity-name). Returns the entity id (eid) or nil. Module entities have no
+   parent module — entity-name = module-name is sufficient."
+  [db entity-type module-name entity-name]
+  (case entity-type
+    :Module
+    (ffirst (d/q '[:find ?e
+                   :in $ ?n
+                   :where [?e :entity/type :Module]
+                          [?e :entity/name ?n]]
+                 db module-name))
+    ;; Owned entities: child of a Module
+    (ffirst (d/q '[:find ?c
+                   :in $ ?mod-name ?ctype ?cname
+                   :where [?m :entity/type :Module]
+                          [?m :entity/name ?mod-name]
+                          [?m :module/child ?c]
+                          [?c :entity/type ?ctype]
+                          [?c :entity/name ?cname]]
+                 db module-name entity-type entity-name))))
+
+(defn- type-element
+  "Build the Layer-A element map for a canvas Type. Discriminates atomic vs
+   record via the presence of `:type/field-shapes` (records only)."
+  [db eid stable-id module-name entity-name]
+  (let [ent          (d/entity db eid)
+        doc          (:type/doc ent)
+        field-shapes (some->> (:type/field-shapes ent)
+                              (map (fn [[fname pr-shape]]
+                                     [fname (read-shape pr-shape)]))
+                              (vec))]
+    (cond-> {:model-element-kind :Type
+             :stable-id          stable-id
+             :entity-name        entity-name
+             :module-coord       module-name}
+      doc           (assoc :doc doc)
+      (seq field-shapes)
+      (assoc :type-kind :record :fields field-shapes)
+      (empty? field-shapes)
+      (assoc :type-kind :atomic))))
+
+(defn- arrow-shape->inputs-outputs
+  "Split an arrow shape `{:kind :arrow :inputs {:kind :record :fields …}
+   :outputs <parsed-shape>}` into the [[name parsed-shape] …] form that
+   function-to-defn expects, plus the bare outputs parsed-shape."
+  [arrow-shape]
+  (let [inputs  (vec (-> arrow-shape :inputs :fields))
+        outputs (:outputs arrow-shape)]
+    [inputs outputs]))
+
+(defn- affordance-element
+  "Build the Layer-A element map for a canvas Affordance. The shape carrier
+   (`inputs`/`outputs`, `holds-that`, `when-vec`, `payload`) depends on
+   `:affordance/role`."
+  [db eid stable-id module-name entity-name]
+  (let [ent     (d/entity db eid)
+        role    (:affordance/role ent)
+        doc     (:affordance/doc ent)
+        shape   (read-shape (:affordance/shape ent))
+        fe      (read-shape (:affordance/formal-expression ent))
+        base    (cond-> {:model-element-kind :Affordance
+                         :canvas-role        role
+                         :stable-id          stable-id
+                         :entity-name        entity-name
+                         :module-coord       module-name}
+                  doc (assoc :doc doc))]
+    (case role
+      :canvas/invariant
+      (assoc base :holds-that (when (string? fe) fe))
+
+      :canvas/rule
+      (assoc base :when-vec (when (vector? (:when fe)) (:when fe)))
+
+      :canvas/event
+      (let [payload (when (and shape (= :arrow (:kind shape)))
+                      (first (arrow-shape->inputs-outputs shape)))]
+        (assoc base :payload (or payload [])))
+
+      ;; default: function-shaped affordance (exposed-call, operation,
+      ;; getter, checker, handler)
+      (if (and shape (= :arrow (:kind shape)))
+        (let [[inputs outputs] (arrow-shape->inputs-outputs shape)]
+          (assoc base :inputs inputs :outputs outputs))
+        base))))
+
+(defn- canvas-db
+  "Live canvas-db. Carved out so tests can stub via `with-redefs`."
+  []
+  (canvas-source/build-canvas-db))
+
+(defn- resolve-element
+  "Resolve a Layer-A element from one of: a stable-id string, an existing
+   element map (passed through), or a drift-finding map (the kind
+   `canvas-drift` emits — offenders carry `:stable-id`).
+
+   Throws `:element-not-found` ex-info when no canvas-db entity matches the
+   parsed stable-id."
+  [id-or-element]
+  (cond
+    (and (map? id-or-element) (contains? id-or-element :model-element-kind))
+    id-or-element
+
+    ;; Drift-finding shape: pull the first offender's stable-id.
+    (and (map? id-or-element) (seq (:offenders id-or-element)))
+    (recur (-> id-or-element :offenders first :stable-id))
+
+    ;; Bare offender map (e.g. caller plucked one out of a finding).
+    (and (map? id-or-element) (:stable-id id-or-element))
+    (recur (:stable-id id-or-element))
+
+    (string? id-or-element)
+    (let [db          (canvas-db)
+          parsed      (parse-stable-id id-or-element)
+          [etype mod ename] parsed
+          eid         (when parsed (canvas-db-entity-for db etype mod ename))]
+      (when-not eid
+        (throw (ex-info (str "no canvas entity for stable-id: " id-or-element)
+                        {:type :element-not-found :stable-id id-or-element})))
+      (case etype
+        :Type       (type-element db eid id-or-element mod ename)
+        :Affordance (affordance-element db eid id-or-element mod ename)
+        :Module     {:model-element-kind :Module
+                     :stable-id          id-or-element
+                     :entity-name        ename
+                     :module-coord       mod}
+        :State      {:model-element-kind :State
+                     :stable-id          id-or-element
+                     :entity-name        ename
+                     :module-coord       mod}))
+
+    :else
+    (throw (ex-info "spec: expected stable-id string, element map, or drift finding"
+                    {:type :bad-argument :value id-or-element}))))
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :severity     :info
+        :agent/doc "Project a Model element through the active Clojure lens
+                    (Layer A). Accepts a canvas stable-id string
+                    (\"distributed.cluster/type/NodeId\"), a Layer-A element
+                    map (round-trip), or a drift finding (uses the first
+                    offender's :stable-id). Returns the structured
+                    projection map: :projection-kind / :lens-id /
+                    :model-element-kind / :model-element-id / :target /
+                    :template / :prose / :context. The :template field is
+                    the deterministic code spec the implementing LLM
+                    consumes; the :prose carries semantic intent.
+
+                    Layer A is opinionated but mechanical — every
+                    projection follows the lens contract documented in
+                    fukan.canvas.project.core. See (canvas-projections)
+                    for the registered dispatch keys."
+        :agent/example "(spec \"distributed.cluster/type/NodeId\")"}
+  spec
+  ([id-or-element] (spec id-or-element {}))
+  ([id-or-element opts]
+   (let [element  (resolve-element id-or-element)
+         lens-id  (or (:lens-id opts) :clojure)
+         registry (or (:registry opts) (defaults/fukan-on-fukan))]
+     (project-core/project lens-id element (assoc opts :registry registry)))))
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :severity     :info
+        :agent/doc "Compose a Layer-A projection with a Layer-B scenario.
+                    The implementing LLM consumes the result — a full
+                    instruction map with the rendered markdown body, the
+                    underlying code spec, and the scenario context.
+
+                    Arguments:
+                      finding-or-id  — a canvas stable-id, an element map,
+                                       or a drift finding (the kind
+                                       canvas-drift emits). When a drift
+                                       finding is passed, it is also
+                                       carried through to the scenario as
+                                       `:drift-finding` so the rendered
+                                       output names both sides of the gap.
+                      scenario-id    — registered scenario id
+                                       (:code-side/drift-close or
+                                       :code-side/cold-write).
+                      opts           — optional map merged into the
+                                       scenario's build-context call
+                                       (e.g. :include-entity-ids,
+                                       :projections, :target-file-reader,
+                                       :module-id).
+
+                    Returns {:scenario-id :code-spec :scenario-context
+                    :rendered}."
+        :agent/example "(instruct \"infra.server/start_server\" :code-side/drift-close)"}
+  instruct
+  ([finding-or-id scenario-id]
+   (instruct finding-or-id scenario-id {}))
+  ([finding-or-id scenario-id opts]
+   (let [scenario  (instruct-registry/scenario-by-id scenario-id)
+         _         (when-not scenario
+                     (throw (ex-info (str "no scenario registered for id: " scenario-id)
+                                     {:type :scenario-not-found
+                                      :scenario-id scenario-id})))
+         ;; If caller passed a full drift finding, surface it to the
+         ;; scenario unless they explicitly overrode :drift-finding.
+         drift-finding (when (and (map? finding-or-id)
+                                  (seq (:offenders finding-or-id)))
+                         (-> finding-or-id :offenders first
+                             (assoc :check (:check finding-or-id)
+                                    :message (:message finding-or-id))))
+         build-opts    (cond-> opts
+                         (and drift-finding
+                              (not (contains? opts :drift-finding)))
+                         (assoc :drift-finding drift-finding))
+         code-spec (spec finding-or-id)
+         context   ((:build-context scenario) code-spec build-opts)
+         rendered  ((:render scenario) code-spec context build-opts)]
+     rendered)))
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :agent/doc "List the registered project-lens projections. Returns a
+                    vector of {:lens-id :dispatch-key} entries — one per
+                    [lens-id dispatch-key] pair currently `defmethod`'d on
+                    the project multimethod. Mirrors (canvas-lenses) for
+                    Layer-A discoverability."
+        :agent/example "(canvas-projections)"}
+  canvas-projections
+  []
+  (mapv (fn [[lens-id dispatch-key]]
+          {:lens-id       lens-id
+           :dispatch-key  dispatch-key})
+        (project-registry/all-projections)))
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :agent/doc "List the registered Layer-B scenarios. Returns a vector
+                    of {:scenario-id :description :prompt-fragment} entries
+                    — the prompt-fragment is included so the LLM sees how
+                    each scenario primes the rendered instruction at
+                    discovery time. Mirrors (canvas-lenses) for Layer-B
+                    discoverability."
+        :agent/example "(canvas-scenarios)"}
+  canvas-scenarios
+  []
+  (mapv (fn [s]
+          {:scenario-id     (:scenario-id s)
+           :description     (:description s)
+           :prompt-fragment (:prompt-fragment s)})
+        (instruct-registry/all-scenarios)))

@@ -204,3 +204,118 @@
 
 (deftest neighborhood-missing-returns-nil
   (is (nil? (api/neighborhood "behaviour:does-not-exist"))))
+
+;; -- Phase 7 Sprint 3 Task N: project-lens + scenario surfaces ----------------
+;;
+;; These tests touch the live canvas db (`canvas-source/build-canvas-db`) — no
+;; small_model fixture stand-in is possible because the canvas db is a separate
+;; substrate from the loaded Model. Ground-truth references come from
+;; canvas/distributed/cluster.clj (NodeId value, Node record, get_node fn).
+
+(deftest spec-projects-atomic-type-from-stable-id
+  (testing "(spec \"<stable-id>\") returns a valid value-to-def projection"
+    (let [p (api/spec "distributed.cluster/type/NodeId")]
+      (is (= :clojure/value-to-def (:projection-kind p)))
+      (is (= :clojure              (:lens-id p)))
+      (is (= :Type                 (:model-element-kind p)))
+      (is (= "distributed.cluster/type/NodeId" (:model-element-id p)))
+      (is (= "NodeId"              (-> p :target :symbol)))
+      (is (clojure.string/includes? (:template p) "(def ^:schema NodeId")))))
+
+(deftest spec-projects-record-type-from-stable-id
+  (testing "(spec \"<record stable-id>\") routes to type-to-malli"
+    (let [p (api/spec "distributed.cluster/type/Node")]
+      (is (= :clojure/type-to-malli (:projection-kind p)))
+      (is (= :Type                  (:model-element-kind p)))
+      (is (clojure.string/includes? (:template p) "(def ^:schema Node"))
+      (is (clojure.string/includes? (:template p) ":map")))))
+
+(deftest spec-projects-function-affordance-from-stable-id
+  (testing "(spec \"<affordance stable-id>\") routes to function-to-defn"
+    (let [p (api/spec "distributed.cluster/get_node")]
+      (is (= :clojure/function-to-defn (:projection-kind p)))
+      (is (= :Affordance               (:model-element-kind p)))
+      (is (= "get-node"                (-> p :target :symbol)))
+      (is (clojure.string/includes? (:template p) "(defn get-node")))))
+
+(deftest spec-passes-through-pre-built-element-map
+  (testing "spec round-trips an existing element map without canvas-db lookup"
+    (let [el {:model-element-kind :Type
+              :type-kind          :atomic
+              :stable-id          "synthetic/type/Foo"
+              :entity-name        "Foo"
+              :module-coord       "synthetic"
+              :doc                "Inline test element."}
+          p  (api/spec el)]
+      (is (= :clojure/value-to-def (:projection-kind p)))
+      (is (= "synthetic/type/Foo"  (:model-element-id p))))))
+
+(deftest spec-from-drift-finding-uses-first-offender
+  (testing "spec accepts a canvas-drift finding and pulls its first offender's stable-id"
+    (let [finding {:check     :inspect.drift/missing-implementation
+                   :severity  :warning
+                   :offenders [{:stable-id "distributed.cluster/type/NodeId"
+                                :expected-symbol "NodeId"}]}
+          p       (api/spec finding)]
+      (is (= :clojure/value-to-def (:projection-kind p))))))
+
+(deftest spec-unknown-stable-id-throws
+  (testing "spec on an absent stable-id throws :element-not-found"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"no canvas entity"
+                          (api/spec "no.such.module/type/Nope")))))
+
+(deftest instruct-composes-drift-close
+  (testing "(instruct id :code-side/drift-close) returns a full instruction"
+    (let [i (api/instruct "distributed.cluster/type/NodeId" :code-side/drift-close)]
+      (is (= :code-side/drift-close (:scenario-id i)))
+      (is (= :clojure/value-to-def  (-> i :code-spec :projection-kind)))
+      (is (map? (:scenario-context i)))
+      (is (string? (:rendered i)))
+      (is (clojure.string/includes? (:rendered i) "drift-close")))))
+
+(deftest instruct-from-drift-finding-carries-finding-context
+  (testing "instruct propagates a drift finding into the scenario context"
+    (let [finding {:check     :inspect.drift/missing-implementation
+                   :severity  :warning
+                   :offenders [{:stable-id          "distributed.cluster/type/NodeId"
+                                :expected-code-path "src/fukan/distributed/cluster.clj"
+                                :expected-symbol    "NodeId"
+                                :canvas-kind        :type}]}
+          i (api/instruct finding :code-side/drift-close)]
+      (is (= :code-side/drift-close (:scenario-id i)))
+      (is (= "distributed.cluster/type/NodeId"
+             (-> i :scenario-context :drift-finding :stable-id))))))
+
+(deftest instruct-unknown-scenario-throws
+  (testing "instruct on an unregistered scenario id throws :scenario-not-found"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"no scenario registered"
+                          (api/instruct "distributed.cluster/type/NodeId"
+                                        :code-side/never-registered)))))
+
+(deftest canvas-projections-lists-registered-dispatch-keys
+  (testing "(canvas-projections) surfaces every registered [lens dispatch-key] pair"
+    (let [ps      (api/canvas-projections)
+          keys-of (set (map (juxt :lens-id :dispatch-key) ps))]
+      (is (>= (count ps) 6) "Phase 7 Sprint 3 ships >= 6 Clojure-lens projections")
+      (is (every? #(contains? % :lens-id) ps))
+      (is (every? #(contains? % :dispatch-key) ps))
+      ;; Sanity: a few known projections must be present.
+      (is (contains? keys-of [:clojure :Type/atomic]))
+      (is (contains? keys-of [:clojure :Type/record]))
+      (is (contains? keys-of [:clojure :fukan.canvas.monolith/exposed-call]))
+      (is (contains? keys-of [:clojure :canvas/invariant]))
+      (is (contains? keys-of [:clojure :canvas/rule]))
+      (is (contains? keys-of [:clojure :canvas/event])))))
+
+(deftest canvas-scenarios-lists-registered-scenarios
+  (testing "(canvas-scenarios) surfaces every registered Layer-B scenario"
+    (let [ss     (api/canvas-scenarios)
+          ids-of (set (map :scenario-id ss))]
+      (is (>= (count ss) 2) "Phase 7 Sprint 3 ships >= 2 scenarios")
+      (is (every? #(contains? % :scenario-id) ss))
+      (is (every? #(contains? % :description) ss))
+      (is (every? #(contains? % :prompt-fragment) ss))
+      (is (contains? ids-of :code-side/drift-close))
+      (is (contains? ids-of :code-side/cold-write)))))
