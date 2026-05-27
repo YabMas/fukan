@@ -49,13 +49,13 @@
    [:id NodeId]
    [:role NodeRole]])
 
-(def Cluster
+(def ^:schema Cluster
   "One node's view of the cluster."
-  [:map
-   [:self NodeId]
-   [:members [:set NodeId]]
-   [:current_term Term]
-   [:current_leader [:maybe NodeId]]])
+  [:map {:description "The cluster's view from one node. The set of members it knows about, the current term it has observed, and — when known — the id of the leader for that term."}
+   [:self :NodeId]
+   [:current_leader {:optional true} :NodeId]
+   [:current_term :Term]
+   [:members [:set :NodeId]]])
 
 ;; --------------------------------------------------------------------------
 ;; Getters — zero-arg accessors over an externally-held Cluster value.
