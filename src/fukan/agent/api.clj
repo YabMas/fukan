@@ -5,6 +5,7 @@
   (:require [fukan.agent.edb :as edb]
             [fukan.agent.query :as query]
             [fukan.canvas.inspect.coverage :as inspect-coverage]
+            [fukan.canvas.inspect.drift :as inspect-drift]
             [fukan.canvas.inspect.integrity :as inspect-integrity]
             [fukan.canvas.lens.registry :as lens-registry]
             [fukan.canvas.lens.survey :as lens-survey]
@@ -358,6 +359,33 @@
   canvas-coverage
   []
   (inspect-coverage/check (canvas-source/build-canvas-db)))
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :export       true
+        :agent/doc "Drift detection across canvas ↔ code. Reads the loaded
+                    Model's `:relation/projects` edges and surfaces every
+                    canvas declaration whose code-side counterpart is
+                    missing — uniformly across functions, events,
+                    invariants, rules, getters, and checkers (the
+                    umbrella check). Every finding is :severity
+                    :warning (drift is fact-of-discrepancy; resolution
+                    is judgment). Each offender names BOTH sides —
+                    canvas stable-id + expected code path + expected
+                    symbol — so the LLM can weigh whether canvas or
+                    code (or both) should move. Returns [] when every
+                    canvas declaration has a matching code-side
+                    artifact.
+
+                    Contrast with the L2 `(drift)` view, which returns
+                    raw absent edges joined with their source primitive
+                    for free-form exploration; `canvas-drift` returns
+                    decision-ready finding maps mirroring the integrity
+                    and canvas-coverage shape."
+        :agent/example "(canvas-drift)"}
+  canvas-drift
+  []
+  (inspect-drift/check (ensure-model)))
 
 ;; -- Weigh tier ---------------------------------------------------------------
 ;;

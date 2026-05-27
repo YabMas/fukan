@@ -17,6 +17,8 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.inspect.coverage
   {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.inspect.drift
+  {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.lens.core
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.lens.registry
