@@ -79,28 +79,55 @@
     :else        (keyword (str n))))
 
 (defn- malli-entry-type
-  "Pull the type-name keyword out of one Malli :map entry vector.
+  "Pull the type expression out of one Malli :map entry vector.
    An entry is one of:
      [:field :type]                       → :type
      [:field {opts} :type]                → :type (skip options map)
    The :type slot may be:
      :keyword                             → returned as-is
      [:keyword …]                         → first keyword of the inner vector
-     symbol/other                         → :any (non-keyword types not handled)"
+     symbol/other                         → :any (non-keyword types not handled)
+
+   When the per-entry options map carries `{:optional true}`, the
+   returned type is wrapped as `[:maybe T]` so the drift comparator's
+   canonical-shape normalisation sees the optional intent (Phase 7
+   Task 4 gap 4 — previously the modifier was silently dropped, which
+   surfaced every canvas-side `(optional :T)` field as shape-drift
+   against its apparent non-optional code counterpart)."
   [entry]
   (let [tail (rest entry)
-        ;; Skip an options map immediately following the field-name
-        type-slot (if (and (seq tail) (map? (first tail)))
-                    (second tail)
-                    (first tail))]
+        opts (when (and (seq tail) (map? (first tail))) (first tail))
+        type-slot (if opts (second tail) (first tail))
+        optional? (true? (:optional opts))
+        ;; When `{:optional true}` carries the optional intent, preserve
+        ;; the full compound type-slot rather than collapsing it to its
+        ;; head keyword — otherwise wrapping with `[:maybe …]` produces
+        ;; nonsense like `[:maybe :maybe]` for an already-`[:maybe T]`
+        ;; type-slot, or `[:maybe :sequential]` for `[:sequential T]`.
+        ;; The canonical-shape comparator recurses into compound vectors,
+        ;; so passing the whole compound preserves both the optional
+        ;; intent and the inner type information.
+        bare-type (cond
+                    (keyword? type-slot)
+                    type-slot
+
+                    (and (vector? type-slot) (keyword? (first type-slot)))
+                    (if optional? type-slot (first type-slot))
+
+                    :else :any)]
     (cond
-      (keyword? type-slot)
-      type-slot
+      ;; Already `[:maybe T]` — `{:optional true}` is redundant; don't
+      ;; double-wrap. Either way the shape is "optional T".
+      (and optional?
+           (vector? bare-type)
+           (= :maybe (first bare-type)))
+      bare-type
 
-      (and (vector? type-slot) (keyword? (first type-slot)))
-      (first type-slot)
+      optional?
+      [:maybe bare-type]
 
-      :else :any)))
+      :else
+      bare-type)))
 
 (defn- parse-malli-map-fields
   "Given the body of a (def Name [:map …]) form (the [:map …] vector),

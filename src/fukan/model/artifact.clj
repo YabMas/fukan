@@ -58,8 +58,11 @@
         [:map [:case [:= :code/data-structure]]
          [:qualified-name :string]
          [:source-location {:optional true} SourceLocation]
-         ;; :fields is an optional vector of [field-name-kw type-name-kw] pairs
+         ;; :fields is an optional vector of [field-name-kw type] pairs
          ;; extracted by the Clojure analyzer from Malli `[:map …]` schemas or
          ;; defrecord field lists. Used by drift's shape-drift check.
+         ;; The type slot may be a bare type keyword (`:int`, `:string`, …)
+         ;; or a Malli compound vector (e.g. `[:maybe :int]` for fields
+         ;; carrying `{:optional true}` — Phase 7 Task 4 gap 4).
          [:fields {:optional true}
-          [:vector [:tuple :keyword :keyword]]]]]]]]]])
+          [:vector [:tuple :keyword [:or :keyword [:fn vector?]]]]]]]]]]]])

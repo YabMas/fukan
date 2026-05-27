@@ -37,12 +37,35 @@
 
 (deftest extract-fields-from-malli-map-with-options
   (testing "a Malli :map with an options map after :map is parsed (skips options)"
-    ;; (def ServerOpts [:map {:description "..."} [:port :int]])
-    ;; → fields [[:port :int]]
+    ;; (def ServerOpts [:map {:description "..."} [:port {:optional true} :int]])
+    ;; → fields [[:port [:maybe :int]] [:host :string]]
+    ;; The leading map after :map carries schema-level metadata and is
+    ;; skipped. Per-entry option maps are also skipped EXCEPT for
+    ;; `{:optional true}`, which is preserved as a `[:maybe T]` wrapper
+    ;; so the drift comparator's canonical-shape normalisation sees the
+    ;; optional intent (Phase 7 Task 4 gap 4).
     (let [syms    (source/extract-symbols "test/fixtures/clojure/malli_options.clj")
           ds     (->> syms (filter #(= :data-structure (:kind %))) first)]
-      (is (= [[:port :int] [:host :string]] (:fields ds))
-          "options map after :map is skipped; field options-maps inside an entry are also skipped"))))
+      (is (= [[:port [:maybe :int]] [:host :string]] (:fields ds))
+          "schema options map skipped; {:optional true} entry option preserved as [:maybe T]"))))
+
+(deftest extract-fields-preserves-optional-modifier
+  (testing "{:optional true} on a Malli :map entry wraps the type as [:maybe T]"
+    ;; Phase 7 Task 4 gap 4 — Phase 6's def-body parser dropped this
+    ;; modifier, so every canvas-side `(optional :T)` field surfaced as
+    ;; shape-drift against its (apparent) non-optional code counterpart.
+    ;; Preserving the modifier as a Malli `[:maybe T]` lets drift's
+    ;; canonical-shape comparator normalise both sides to
+    ;; `{:kind :optional :inner ...}` and compare structurally.
+    (let [syms (source/extract-symbols "test/fixtures/clojure/optional_field.clj")
+          ds   (->> syms (filter #(= :data-structure (:kind %))) first)]
+      (is (= "Thing" (:name ds)))
+      (is (= [[:a :int]
+              [:b [:maybe :string]]
+              [:c [:maybe :keyword]]
+              [:d :boolean]]
+             (:fields ds))
+          "optional entries wrap their type as [:maybe T]; non-optional entries pass through bare"))))
 
 (deftest extract-fields-from-defrecord
   (testing "a defrecord yields :fields with :any types"
