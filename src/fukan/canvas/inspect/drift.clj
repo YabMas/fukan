@@ -620,6 +620,44 @@
          vec)))
 
 ;; ---------------------------------------------------------------------------
+;; Scoped filtering via :module-coord (Phase 7 Sprint 2 Task 5)
+;;
+;; Prefix-matching is dot-segment-aware: `:module-coord "mod-a"` matches
+;; offenders whose module-coord is `mod-a` or `mod-a.<anything>`, but not
+;; `mod-ab`. This mirrors how Clojure-style module names compose — a parent
+;; module is a proper dot-prefix of its children. String-prefix would
+;; over-match (mod-a → mod-ab) and erode the filter's value as a verification
+;; tool after dispatching a fix to a single module.
+
+(defn- finding-module-coord
+  "Pull the offender :stable-id from a finding and return its leading
+   module-coord segment (everything before the first '/'). Returns nil if
+   the finding has no offenders or no stable-id — such findings are kept
+   under any scope (better to over-report than to silently drop)."
+  [finding]
+  (when-let [stable-id (-> finding :offenders first :stable-id)]
+    (module-coord-from-stable-id stable-id)))
+
+(defn- in-scope?
+  "True when `coord` is `scope` exactly, or descends from it via a dot
+   segment boundary. nil scope ⇒ everything in scope. nil coord ⇒ in scope
+   (orphan findings without a stable-id are preserved)."
+  [coord scope]
+  (or (nil? scope)
+      (nil? coord)
+      (= coord scope)
+      (str/starts-with? coord (str scope "."))))
+
+(defn- apply-scope
+  "Narrow a finding vector to those whose offender module-coord matches
+   `scope`. Pure post-walk on the structured finding output; no schema or
+   substrate dependency. nil scope is a no-op."
+  [findings scope]
+  (if (nil? scope)
+    findings
+    (filterv #(in-scope? (finding-module-coord %) scope) findings)))
+
+;; ---------------------------------------------------------------------------
 ;; Public entry point
 ;; ---------------------------------------------------------------------------
 
@@ -629,11 +667,34 @@
    counterpart. Each finding carries :severity :warning — drift is
    fact-of-discrepancy but resolution is judgment.
 
-   One-arg form runs the missing-implementation check only. Two-arg form
-   additionally runs shape-drift comparing canvas-declared record field
-   shapes against the analyzer-extracted code-side field shapes."
-  ([model]
-   (vec (check-missing-implementation model)))
-  ([model canvas-db]
-   (into (vec (check-missing-implementation model))
-         (check-shape-drift model canvas-db))))
+   Arities:
+     (check model)
+     (check model opts)
+     (check model canvas-db)
+     (check model canvas-db opts)
+
+   `opts` is a map; supported keys:
+     :module-coord <string>  Narrow findings to a module subtree. Matching
+                              is dot-segment-aware: \"mod-a\" matches
+                              `mod-a` and `mod-a.sub.*` but NOT `mod-ab`.
+                              Filtering is a post-walk on offender
+                              :stable-id and never touches the analyzer or
+                              substrate.
+
+   The one-arg / model-only forms run the missing-implementation check
+   only. The forms passing `canvas-db` additionally run shape-drift on
+   records, comparing canvas-declared field shapes against the
+   analyzer-extracted code-side fields."
+  ([model] (check model nil nil))
+  ([model canvas-db-or-opts]
+   ;; Discriminate canvas-db vs opts-map. A Datascript db carries :eavt /
+   ;; :aevt / :avet indexes; an opts map does not. Either may be nil.
+   (if (and (map? canvas-db-or-opts)
+            (contains? canvas-db-or-opts :eavt))
+     (check model canvas-db-or-opts nil)
+     (check model nil canvas-db-or-opts)))
+  ([model canvas-db opts]
+   (let [{:keys [module-coord]} opts
+         findings (cond-> (vec (check-missing-implementation model))
+                    canvas-db (into (check-shape-drift model canvas-db)))]
+     (apply-scope findings module-coord))))

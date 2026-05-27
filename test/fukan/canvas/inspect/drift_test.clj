@@ -481,6 +481,123 @@
       (is (= 1 (count findings))
           "outer kind disagreement (:list canonical vs :set) is real even with unknown inner"))))
 
+;; ---------------------------------------------------------------------------
+;; Scoped check via :module-coord (Phase 7 Sprint 2 Task 5)
+;;
+;; Filtering happens post-walk on the structured findings. Prefix-matching is
+;; dot-segment-aware: `:module-coord "mod-a"` matches `mod-a` and `mod-a.sub`
+;; but NOT `mod-ab`. Compare against the module-coord extracted from each
+;; finding's offender :stable-id (the leading segment before `/`).
+
+(defn- model-with-named-operation
+  "Synthetic single-operation model with full control over the canvas-side
+   stable-id (i.e. the module coord), used to drive scope-filter tests
+   without depending on global canvas-source state."
+  [prim-id qname]
+  (let [artifact (a/make-code-function "clojure" qname nil true)
+        aid      (a/artifact-identity artifact)
+        prim     (assoc (p/make-operation
+                          {:id prim-id :label prim-id :parameters []})
+                        :canvas-role :canvas/operation)
+        edge     (-> (r/make-edge :relation/projects
+                                  (r/primitive-ref prim-id)
+                                  (r/artifact-ref aid)
+                                  {:projection-kind :projection-kind/operation})
+                     (assoc :validity :absent))]
+    (-> (build/empty-model)
+        (build/add-primitive prim)
+        (assoc-in [:artifacts aid] artifact)
+        (build/add-edge edge))))
+
+(defn- merge-models
+  "Stitch two synthetic models into one — concat their primitives, artifacts,
+   and edges. Suitable for scope-filter fixtures that need findings spanning
+   multiple modules."
+  [& models]
+  (reduce (fn [acc m]
+            (-> acc
+                (update :primitives merge (:primitives m))
+                (update :artifacts  merge (:artifacts m))
+                (update :edges      into (:edges m))))
+          (build/empty-model)
+          models))
+
+(deftest scope-filter-narrows-to-single-module
+  (testing "(check m {:module-coord \"mod-a\"}) returns only findings from mod-a"
+    (let [m (merge-models
+              (model-with-named-operation "mod-a/foo" "mod-a/foo")
+              (model-with-named-operation "mod-a/bar" "mod-a/bar")
+              (model-with-named-operation "mod-b/baz" "mod-b/baz"))]
+      (is (= 3 (count (drift/check m)))
+          "unfiltered → all three findings")
+      (is (= 2 (count (drift/check m {:module-coord "mod-a"})))
+          "scope :module-coord mod-a → only mod-a/* findings")
+      (is (= 1 (count (drift/check m {:module-coord "mod-b"}))))
+      (is (= 0 (count (drift/check m {:module-coord "nonexistent"})))
+          "no matching module → empty"))))
+
+(deftest scope-filter-respects-dot-segment-boundary
+  (testing "prefix-match is dot-segment-aware: mod-a does NOT match mod-ab"
+    (let [m (merge-models
+              (model-with-named-operation "mod-a/foo" "mod-a/foo")
+              (model-with-named-operation "mod-ab/foo" "mod-ab/foo"))]
+      (is (= 2 (count (drift/check m))))
+      (is (= 1 (count (drift/check m {:module-coord "mod-a"})))
+          "string-prefix would erroneously match mod-ab; segment-aware doesn't")
+      (is (= 1 (count (drift/check m {:module-coord "mod-ab"})))
+          "exact module-coord still matches"))))
+
+(deftest scope-filter-includes-deeper-segments
+  (testing "submodule findings are included by a parent-module scope"
+    (let [m (merge-models
+              (model-with-named-operation "mod-a/foo" "mod-a/foo")
+              (model-with-named-operation "mod-a.sub/foo" "mod-a/sub/foo")
+              (model-with-named-operation "mod-a.sub.deep/foo" "mod-a/sub/deep/foo"))]
+      (is (= 3 (count (drift/check m {:module-coord "mod-a"})))
+          "mod-a scope includes mod-a, mod-a.sub, mod-a.sub.deep")
+      (is (= 2 (count (drift/check m {:module-coord "mod-a.sub"})))
+          "mod-a.sub scope includes mod-a.sub and mod-a.sub.deep, not mod-a")
+      (is (= 1 (count (drift/check m {:module-coord "mod-a.sub.deep"})))
+          "fully-qualified scope matches exactly one"))))
+
+(deftest scope-filter-applies-to-shape-drift-findings-too
+  (testing "shape-drift findings filter on stable-id module-coord just like missing-impl"
+    (let [prim-a "demo.a/type/User"
+          prim-b "demo.b/type/Order"
+          m  (merge-models
+               (model-with-record-projection prim-a "demo.a/User" [[:id :string]])
+               (model-with-record-projection prim-b "demo.b/Order" [[:id :string]]))
+          db (-> (canvas-db-with-type-fields prim-a "User"
+                                             [[:id :String] [:email :String]]))
+          ;; The fixture only supports a single Type per db; for the
+          ;; shape-drift portion we only assert that the filter narrows
+          ;; when a single-module db is supplied.
+          findings-a (drift/check m db {:module-coord "demo.a"})
+          findings-other (drift/check m db {:module-coord "demo.b"})]
+      (is (every? #(str/starts-with?
+                     (-> % :offenders first :stable-id) "demo.a")
+                  findings-a)
+          "every retained finding lies under the scoped module")
+      (is (every? #(str/starts-with?
+                     (-> % :offenders first :stable-id) "demo.b")
+                  findings-other)))))
+
+(deftest scope-filter-noop-on-nil
+  (testing "(check m nil) and (check m {}) are equivalent to no-arg form"
+    (let [m (model-with-named-operation "mod-x/foo" "mod-x/foo")]
+      (is (= (drift/check m) (drift/check m {})))
+      (is (= (drift/check m) (drift/check m {:module-coord nil}))))))
+
+(deftest agent-api-canvas-drift-accepts-module-coord
+  (testing "(canvas-drift :module-coord …) is callable via the agent api"
+    (require 'fukan.agent.api)
+    (let [v (ns-resolve (find-ns 'fukan.agent.api) 'canvas-drift)
+          m (meta v)]
+      (is (some? v))
+      ;; arglist must accept a varargs kwarg form
+      (is (some #(some #{'&} %) (:arglists m))
+          (str ":arglists must include a varargs form; saw " (pr-str (:arglists m)))))))
+
 (deftest check-aggregates-missing-impl-and-shape-drift
   (testing "drift/check returns both missing-implementation and shape-drift findings"
     (let [;; A clean missing-impl pair

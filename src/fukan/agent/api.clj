@@ -389,11 +389,24 @@
                     PascalCase↔lowercase alias normalisation). Each
                     shape-drift finding's offender carries `:canvas-fields`,
                     `:code-fields`, and a `:delta` of `:only-in-canvas`,
-                    `:only-in-code`, `:type-mismatch`."
-        :agent/example "(canvas-drift)"}
+                    `:only-in-code`, `:type-mismatch`.
+
+                    Optional :module-coord <string> narrows findings to a
+                    canvas module subtree. Matching is dot-segment-aware —
+                    \"distributed\" matches `distributed` and
+                    `distributed.cluster.*` but NOT `distributed-foo`. Use
+                    this to verify a single-module fix without re-walking
+                    the whole codebase's drift output."
+        :agent/example "(canvas-drift) (canvas-drift :module-coord \"distributed.cluster\")"}
   canvas-drift
-  []
-  (inspect-drift/check (ensure-model) (canvas-source/build-canvas-db)))
+  [& {:keys [module-coord] :as opts}]
+  (let [unknown (seq (remove #{:module-coord} (keys opts)))]
+    (when unknown
+      (throw (ex-info (str "unknown canvas-drift filter: " (first unknown))
+                      {:type :unknown-filter :filter (first unknown)}))))
+  (inspect-drift/check (ensure-model)
+                       (canvas-source/build-canvas-db)
+                       {:module-coord module-coord}))
 
 ;; -- Weigh tier ---------------------------------------------------------------
 ;;
