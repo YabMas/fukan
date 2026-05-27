@@ -29,6 +29,7 @@
    canvas.constraint.well-known
    canvas.distributed.cluster
    canvas.distributed.election
+   canvas.distributed.log
    canvas.infra.model
    canvas.infra.server
    canvas.libs.allium.parser
@@ -105,6 +106,7 @@
     canvas.constraint.well-known
     canvas.distributed.cluster
     canvas.distributed.election
+    canvas.distributed.log
     canvas.infra.model
     canvas.infra.server
     canvas.libs.allium.parser
