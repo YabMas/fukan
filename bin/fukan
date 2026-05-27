@@ -26,6 +26,21 @@
     (die (str "fukan daemon not reachable at " daemon-url
               ". Start it with `clj -M:run` from the fukan repo."))))
 
+(defn cmd-reset [_args]
+  (when-not (get-status)
+    (die (str "fukan daemon not reachable at " daemon-url
+              ". Start it with `clj -M:run` from the fukan repo.")))
+  ;; reset reloads all canvas namespaces + rebuilds the model. Slower than
+  ;; refresh; allow ~30s for the in-process :reload-all sweep on cold caches.
+  (let [resp (http/post (str daemon-url "/agent/eval")
+                        {:headers {"Content-Type" "application/json"}
+                         :body (json/generate-string {:expr "(reset)"})
+                         :throw false
+                         :timeout 60000})]
+    (println (:body resp))
+    (let [parsed (json/parse-string (:body resp) true)]
+      (when-not (:ok? parsed) (System/exit 2)))))
+
 (defn cmd-eval [args]
   (when (empty? args)
     (die "usage: fukan eval '<expression>'"))
@@ -89,6 +104,7 @@
       "eval"   (cmd-eval args)
       "primer" (cmd-primer args)
       "init"   (cmd-init args)
-      (die (str "usage: fukan {status|eval|primer|init} …")))))
+      "reset"  (cmd-reset args)
+      (die (str "usage: fukan {status|eval|primer|init|reset} …")))))
 
 (apply -main *command-line-args*)

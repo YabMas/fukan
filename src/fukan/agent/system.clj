@@ -27,6 +27,44 @@
   (views-loader/auto-load! (infra-model/get-src))
   (status))
 
+(defn- canvas-ns-symbols
+  "Return all currently-loaded namespace symbols under the `canvas.*` root."
+  []
+  (->> (all-ns)
+       (map ns-name)
+       (filter (fn [sym] (str/starts-with? (str sym) "canvas.")))))
+
+(defn ^{:agent/doc "Reload all canvas namespaces (incl. newly-added files) + rebuild
+                    the Model. Use this after adding a new canvas/<...>.clj file and
+                    its registry entry in canvas-source/canvas-namespaces. Blocks;
+                    returns the new status. Heavier than `refresh` — equivalent to
+                    `clj -M:run` restart minus the server bounce."
+        :agent/example "(reset)"}
+  reset
+  []
+  ;; Strategy: reload only the canvas surface — the canvas.* port namespaces
+  ;; AND the canvas-source projection — never library deps (datascript and
+  ;; friends register multimethods that break on reload).
+  ;;
+  ;; Step 1: reload each already-loaded canvas.* namespace so source edits
+  ;; inside existing canvas files are picked up. If a previously-loaded
+  ;; canvas namespace's file has been deleted, remove the dangling ns and
+  ;; carry on — the canvas-source reload in Step 2 will detect any stale
+  ;; registry entries.
+  (doseq [ns-sym (canvas-ns-symbols)]
+    (try
+      (require ns-sym :reload)
+      (catch java.io.FileNotFoundException _
+        (remove-ns ns-sym))))
+  ;; Step 2: reload the canvas-source projection so its top-level
+  ;; (:require ...) form is re-evaluated. This loads any newly-added canvas
+  ;; namespace that the author added to the registry since startup.
+  (require 'fukan.canvas.projection.canvas-source :reload)
+  ;; Step 3: rebuild the model from scratch.
+  (infra-model/refresh-model)
+  (views-loader/auto-load! (infra-model/get-src))
+  (status))
+
 (def ^:private surface-namespaces ['fukan.agent.api 'fukan.agent.system])
 
 (defn- collect-var-meta [ns-sym]
