@@ -166,7 +166,33 @@ as facts and either fix the issue or escalate.
 |----|-----------------|
 | `(integrity)` | Cross-reference integrity — unresolved refs, trigger/emit role mismatches, broken cross-module shape targets. Returns `[]` when clean; every finding is `:severity :error`. |
 | `(canvas-coverage)` | Structural coverage gaps — orphan entities, modules without `(exports …)`, rules with no trigger, events with no handler. Findings carry `:severity` in `{:error :warning :info}`. |
-| `(canvas-drift)` | Canvas ↔ code drift — canvas declarations whose code-side counterpart is missing (functions, events, invariants, rules, getters, checkers) plus shape drift on records (canvas-declared fields vs code-side defrecord/Malli schema fields). Every finding is `:severity :warning`. Each offender names BOTH sides — canvas stable-id and expected code path — so the caller weighs which side should move. Returns `[]` when canvas and code align. |
+| `(canvas-drift)` | Canvas ↔ code drift — canvas declarations whose code-side counterpart is missing (functions, events, invariants, rules, getters, checkers) plus shape drift on records (canvas-declared fields vs code-side defrecord/Malli schema fields). Every finding is `:severity :warning`. Each offender names BOTH sides — canvas stable-id and expected code path — so the caller weighs which side should move. Returns `[]` when canvas and code align. Scope with `(canvas-drift :module-coord <prefix>)` to one subsystem. |
+| `(spec stable-id-or-finding)` | Layer A — projects one Model element through the active project lens (the Clojure lens for fukan-on-fukan) and returns the deterministic low-level code spec: `:projection-kind`, `:target` (path/namespace/symbol), `:template`, `:prose`, `:context`. Accepts a canvas stable-id, an element map, or a drift finding. `:severity :info`. |
+| `(instruct stable-id-or-finding scenario-id)` | Layer B — composes a Layer-A spec with a registered scenario wrapper to produce the full instruction the implementing LLM consumes. Returns `{:scenario-id :code-spec :scenario-context :rendered}`. Two scenarios ship: `:code-side/drift-close` and `:code-side/cold-write`. |
+| `(canvas-projections)` | List the registered Layer-A projections — one entry per `[lens-id dispatch-key]` pair. Mirrors `(canvas-lenses)` for Layer-A discoverability. |
+| `(canvas-scenarios)` | List the registered Layer-B scenarios with `:scenario-id`, `:description`, `:prompt-fragment`. Mirrors `(canvas-lenses)` for Layer-B discoverability. |
+
+**Two-layer instruction surface** (`spec` / `instruct` / `canvas-projections` /
+`canvas-scenarios`). Phase 7 turns drift findings into actionable
+implementation instructions for a downstream implementing LLM:
+
+- **Layer A — code spec.** `(spec …)` projects a generic Model element
+  through a project-configured language lens to produce a deterministic
+  low-level code specification (target path, namespace, symbol, structural
+  template, prose envelope for semantic intent). The Clojure lens ships as
+  the fukan-on-fukan reference implementation; the lens is pluggable per
+  project.
+- **Layer B — scenario-aware instruction.** `(instruct …)` wraps the
+  Layer-A spec with situational framing for the implementing LLM. Two
+  scenarios ship in Phase 7: `:code-side/drift-close` (closing a known
+  gap; preserve neighbors) and `:code-side/cold-write` (writing canvas
+  content from scratch; reference matching neighbors for style). Refactor
+  is deferred to Phase 8.
+
+The full Phase D dispatch discipline (when to invoke, how to review the
+generated instruction before handing it to the implementing-LLM subagent,
+verification via scoped drift, the two-iteration retry cap) lives in
+`doc/canvas-authoring-system-prompt.md` § Phase D.
 
 **Weigh tier — interpretive.** Output is input to judgment, not a verdict.
 Findings are framed as candidates / likely-intentional / open judgments.
