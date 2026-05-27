@@ -2,6 +2,24 @@
  {fukan.test.fixture.sample
   {:linters {:namespace-name-mismatch {:level :off}
              :unused-public-var      {:level :off}}}
+  ;; Phase 6 Task 7 test fixtures — Malli/defrecord samples under
+  ;; test/fixtures/clojure/ used as input to source.clj's def-body parser tests.
+  ;; Non-canonical path; vars are intentionally inert sample content.
+  fukan.test.fixture.malli-options
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}
+  fukan.test.fixture.defrecord-sample
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}
+  fukan.test.fixture.non-record-defs
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}
+  fukan.test.fixture.m-schema-wrapped
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}
+  fukan.test.fixture.def-with-doc
+  {:linters {:namespace-name-mismatch {:level :off}
+             :unused-public-var      {:level :off}}}
   m
   {:linters {:namespace-name-mismatch {:level :off}
              :unused-public-var      {:level :off}}}

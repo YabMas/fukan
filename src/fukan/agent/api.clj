@@ -381,11 +381,19 @@
                     raw absent edges joined with their source primitive
                     for free-form exploration; `canvas-drift` returns
                     decision-ready finding maps mirroring the integrity
-                    and canvas-coverage shape."
+                    and canvas-coverage shape.
+
+                    Also runs shape-drift on records: compares each
+                    canvas record's `:type/fields` against the matching
+                    code-side defrecord/Malli schema fields (after
+                    PascalCase↔lowercase alias normalisation). Each
+                    shape-drift finding's offender carries `:canvas-fields`,
+                    `:code-fields`, and a `:delta` of `:only-in-canvas`,
+                    `:only-in-code`, `:type-mismatch`."
         :agent/example "(canvas-drift)"}
   canvas-drift
   []
-  (inspect-drift/check (ensure-model)))
+  (inspect-drift/check (ensure-model) (canvas-source/build-canvas-db)))
 
 ;; -- Weigh tier ---------------------------------------------------------------
 ;;
