@@ -78,6 +78,8 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.instruct.render
   {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.instruct.drift-close
+  {:linters {:unused-public-var {:level :off}}}
 
   ;; Per-projection tests require the `clojure` lens loader namespace purely
   ;; for its side effects (each projection's defmethod registration runs on

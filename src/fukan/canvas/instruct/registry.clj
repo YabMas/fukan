@@ -14,13 +14,13 @@
             [fukan.canvas.instruct.core :as core]
             ;; Scenario namespaces — each declares a `scenario` var. Add a
             ;; require here and conj its var into `known-scenarios` below.
-            ))
+            [fukan.canvas.instruct.drift-close :as drift-close]))
 
 (def known-scenarios
   "Vector of registered scenario vars. To register a new scenario:
      1. require the scenario namespace above
      2. conj its `scenario` var here."
-  [])
+  [#'drift-close/scenario])
 
 (defn- warn-invalid!
   [scenario-var issues]
