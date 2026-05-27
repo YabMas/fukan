@@ -180,128 +180,155 @@ jj new
 
 ---
 
-# Sprint 2 — Pre-implementation hardening (Tasks 3–4)
+# Sprint 2 — Pre-implementation hardening (Tasks 3–5)
 
-Two items needed before Sprint 3 drift work begins. Both are mechanical; both unblock specific parts of the drift detection.
+> **Amended 2026-05-27 after Sprint 1 design review.** Sprint 2 grew from 2 tasks to 3 to absorb the wiring gaps Sprint 1 Task 2's design surfaced. The projection layer is "structured correctly but wired incorrectly" today — gaps 1-7 below must land before Sprint 3's drift helper can produce trustworthy output.
 
 ---
 
-## Phase 6, Task 3: Auto-discover canvas files (Phase 5.5 carryover)
+## Phase 6, Task 3: Projection-layer wiring fixes (gaps 1-4 from Sprint 1 Task 2)
+
+**Files:**
+- Modify: `src/fukan/target/clojure/analyzer.clj` (gap 1: `module-coord-of-primitive` `::` → `/`)
+- Modify: `src/fukan/project_layer/defaults.clj` (gap 2: `fukan-on-fukan` `:root-prefix` `""` → `"fukan"`)
+- Modify: `src/fukan/target/clojure/analyzer.clj` selectors (gap 3: type selector tag-based → kind-based)
+- Modify: `src/fukan/canvas/projection/canvas_source.clj` `affordance-kind` (gap 4: add `:canvas/event` routing)
+- Tests for each gap fix
+
+Each fix is ~one-liner to ~10 LoC; per-commit hygiene means one commit per gap (4 commits total in this task) so the wiring change → behavioral change correspondence stays clean.
+
+The Sprint 1 Task 2 design doc named these gaps as the load-bearing issues. Today: against fukan-itself, almost every function projects as `:absent` (false negative); every record/event is silent. After Task 4: projection edges accurately reflect canvas↔code reality.
+
+- [ ] **Step 1: Gap 1 — `::` → `/` in `module-coord-of-primitive`.** TDD against a synthetic canvas-derived primitive; assert the module-coord is the dot-separated module name, not the polluted full id.
+- [ ] **Step 2: Gap 2 — `:root-prefix` fix.** Update `fukan-on-fukan` registry; verify against the live canvas.
+- [ ] **Step 3: Gap 3 — Type selector kind-based.** Loosen the selector to read `:primitive/container` kinds directly rather than filtering on the absent `Allium::Entity` tag.
+- [ ] **Step 4: Gap 4 — Event routing.** Add the `:canvas/event` case to `affordance-kind`'s dispatch.
+- [ ] **Step 5: Verify against fukan-itself.** Build canvas + run analyzer; expect `:valid` edges across functions/records/events that previously silenced or false-negatived.
+
+---
+
+## Phase 6, Task 4: Invariant + rule projection (gaps 5-7 from Sprint 1 Task 2)
+
+**Files:**
+- Modify: `src/fukan/canvas/projection/canvas_source.clj` — emit a `:primitive/rule` (or a new dedicated kind) per `(invariant X (holds-that "Y"))` and per `(rule X (when X …))`
+- Modify: `src/fukan/target/clojure/address.clj` — canonical-address derivation for invariants/rules
+- Modify (canvas content): `canvas/validation/rules_4a.clj` through `rules_4g.clj` — rename labels `check_4X` → `check` to align with code (gap 7)
+- Tests covering invariant projection + rule projection + rules-4* alignment
+
+The user resolved this question during Sprint 1 review: **canvas invariants and rules ARE projected into code**, with canonical names taken from `(holds-that "Y")` for invariants and from the rule's own name (kebab-cased) for rules. This is "option (a)" in the conversation — symmetric, mechanical, simple.
+
+- [ ] **Step 1: TDD against synthetic canvas + src/.** Construct a canvas with one invariant `(invariant "A" (holds-that "b"))` and one rule `(rule "C" ...)`; assert the projection emits primitives whose addresses are `<module>/b` and `<module>/c` respectively.
+- [ ] **Step 2: Implement projection-layer emission** for invariants + rules.
+- [ ] **Step 3: Implement address derivation** for the new kinds.
+- [ ] **Step 4: Rename canvas labels in rules-4*** from `check_4X` to `check` so canvas + code align. ~7 files. Run integrity after to confirm no broken refs.
+- [ ] **Step 5: Verify against fukan-itself.** Expect new `:valid` edges for the ~270 invariants + ~47 rules that previously had no projection.
+
+---
+
+## Phase 6, Task 5: Auto-discover canvas files (Phase 5.5 carryover)
 
 **Files:**
 - Modify: `src/fukan/canvas/projection/canvas_source.clj` — replace the explicit `canvas-namespaces` registry with classpath scanning of `canvas/**/*.clj`
 - Test: `test/fukan/canvas/projection/canvas_source_test.clj` — assert all canvas modules are picked up
 - Update: `CLAUDE.md` — remove the "add a require entry" step from the REPL workflow section
 
-The trial run's #3-ranked friction item. Each new canvas file currently requires two manual edits (`:require` form + registry vector); auto-discovery from `canvas/**/*.clj` eliminates both.
+The trial-run findings' #3-ranked friction item. Each new canvas file currently requires two manual edits; auto-discovery from `canvas/**/*.clj` eliminates both.
 
-Why this lives in Sprint 2: the drift helper in Sprint 3 will iterate over canvas content; reducing the registration ceremony makes adding test fixtures and trial-run content less painful.
+Sequenced after Task 4 because the projection layer is the same file; landing the wiring fixes first lets Task 5 focus purely on the discovery mechanism.
 
 - [ ] **Step 1: Implement classpath scanning** that finds all `canvas/**/*.clj` namespaces and harvests their `build-canvas` fns.
 - [ ] **Step 2: Tests.**
-- [ ] **Step 3: Document the change** in CLAUDE.md (the old "add a require entry" instruction is no longer accurate).
-- [ ] **Step 4: Update `bin/fukan reset`** — the reset command currently does `:reload` per namespace; with auto-discovery, it also picks up new files via the scanner.
+- [ ] **Step 3: Document** in CLAUDE.md.
+- [ ] **Step 4: Update `bin/fukan reset`** if needed so the reset command picks up new files via the scanner.
 - [ ] **Step 5: Commit.**
 
-```bash
-jj desc -m "feat(canvas/projection): auto-discover canvas/**/*.clj — no registry edits per new file"
-jj new
-```
-
 ---
 
-## Phase 6, Task 4: Other prereqs (surfaced in Sprint 1)
+# Sprint 3 — Build drift detection (Tasks 6–7)
 
-**Files:** TBD per Sprint 1 findings.
-
-Sprint 1's design conversations may surface additional small prerequisites — substrate additions, helper extractions, schema tweaks. Keep them small and additive. If anything substantive surfaces (a new substrate primitive, a deep analyzer rewrite), surface and defer rather than swelling Sprint 2.
-
-Likely Sprint 1 surface items:
-- Tagging code-side Artifacts with the canvas entity they were projected from (so drift findings can name both sides)
-- Helper in `agent.api` for reading drift findings (mirrors how `integrity` was exposed)
-
-- [ ] **Step 1: Implement the surface items Sprint 1 named.**
-- [ ] **Step 2: Tests + per-commit hygiene.**
-
----
-
-# Sprint 3 — Build drift detection (Tasks 5–8)
-
-The substantive sprint. Implements the canvas→code projection adaptation + the drift helper. Each finding category from Sprint 1's selected set gets a task.
+> **Amended 2026-05-27 after Sprint 1 design review.** Sprint 3 contracted from 4-5 task slots to 2 after the design conversation collapsed drift "categories" into "presence vs shape" — broader projection coverage (Sprint 2's gaps 5-7) means the missing-implementation signal uniformly catches functions, events, invariants, and rules. Shape-drift on records is the only structurally distinct signal.
 
 Each task lands as:
-- Code in `src/fukan/target/clojure/` (analyzer adaptation) or `src/fukan/canvas/inspect/drift.clj` (helper) as appropriate
+- Code in `src/fukan/canvas/inspect/drift.clj` (helper) and `src/fukan/target/clojure/` (analyzer extension for Task 7)
 - Tests
-- Registration in agent API `(help)` under `:trust` (and possibly `:weigh`)
+- Registration in agent API `(help)` under `:trust`
 - A short EXAMPLES.md showing the finding shape
 
 ---
 
-## Phase 6, Task 5: Canvas-as-projection-input adaptation
-
-**Files:**
-- Modify: `src/fukan/target/clojure/analyzer.clj` and `projector.clj` per Sprint 1 Task 2's chosen option
-- Test: `test/fukan/target/clojure/*_test.clj` extended
-
-The first substantive code change. Wires canvas content as the source of expected-side projection inputs. Replaces (or supplements) the older MODEL/spec primitive path.
-
-- [ ] **Step 1: TDD against synthetic canvas + synthetic code.** Construct a small canvas with one function declaration; construct a matching src/ tree; assert the projector emits a `:valid` edge. Then break the code side (rename the fn); assert the edge becomes `:absent`.
-- [ ] **Step 2: Implement** per Sprint 1 Task 2's decision (option a or b).
-- [ ] **Step 3: Run against fukan-itself.** The canvas already covers most of fukan's src/; the projection should produce real `:valid` and `:absent` edges. Document the count and a sample of each.
-- [ ] **Step 4: Commit.**
-
----
-
-## Phase 6, Task 6: Drift helper — trust tier (the first drift category)
+## Phase 6, Task 6: Missing-implementation drift helper (umbrella across all projected entity types)
 
 **Files:**
 - Create: `src/fukan/canvas/inspect/drift.clj`
 - Test: `test/fukan/canvas/inspect/drift_test.clj`
 - Update: `src/fukan/agent/api.clj` — register `drift` under `:trust`
 
-Ship the **first** drift category from Sprint 1's selected set (most likely: missing-implementation — canvas function with no code counterpart). Helper namespace mirrors `inspect/integrity` and `inspect/coverage` from Phase 5.
+The umbrella signal — uniformly catches "canvas X declared, no code counterpart for X" across all projected entity types (functions, events, invariants, rules, getters, checkers). Reads `:validity :absent` directly from the analyzer's output; no per-category branching needed.
 
-- [ ] **Step 1: Tests first.** Synthetic canvas + src/ pair with one missing fn → 1 finding. Clean pair → `[]`.
-- [ ] **Step 2: Implement.** Walk canvas affordances; query the analyzer's output for the matching code-side artifact; emit a finding when `:validity :absent`.
-- [ ] **Step 3: Register in `(help)`** under `:trust`. Mark with `^:export`.
-- [ ] **Step 4: Run against fukan-itself.** Document the count of missing-implementation findings against the live canvas.
+Helper namespace mirrors `inspect/integrity` and `inspect/coverage` from Phase 5. Every finding is `:severity :warning` (drift is fact-of-discrepancy; resolution is judgment).
+
+The canonical finding shape:
+
+```clojure
+{:check     :inspect.drift/missing-implementation
+ :severity  :warning
+ :message   "Canvas declares X at <module>; no matching code-side artifact at <expected-path>"
+ :offenders [{:stable-id "<module>/<entity-name>"
+              :expected-code-path "<src/fukan/.../<file>.clj>"
+              :expected-symbol "<symbol-name>"
+              :canvas-kind :function|:event|:invariant|:rule|...}]
+ :detail    {:canvas-side-id "<stable-id>"
+             :code-side-expected "<full address>"}}
+```
+
+The detail.canvas-side-id + offenders[].expected-code-path name both sides per the user-confirmed bidirectional framing — the LLM weighs whether canvas or code (or both) should move.
+
+- [ ] **Step 1: Tests first.** Synthetic canvas + src/ pair with one missing fn → 1 finding. Same for one missing invariant (canvas declares `(invariant "A" (holds-that "b"))` but code has no fn `b`). Clean pair → `[]`.
+- [ ] **Step 2: Implement.** Walk the analyzer's projection edges; filter by `:validity :absent`; emit a finding per `:absent` edge, naming both sides via the projection metadata.
+- [ ] **Step 3: Register in `(help)`** under `:trust`. Mark fn with `^:export`.
+- [ ] **Step 4: Run against fukan-itself.** Document the count by canvas-kind (fns missing vs invariants missing vs rules missing). Surface a sample of each.
 - [ ] **Step 5: Commit.**
 
 ---
 
-## Phase 6, Task 7: Additional drift categories
+## Phase 6, Task 7: Shape-drift on records + analyzer extension
 
 **Files:**
-- Modify: `src/fukan/canvas/inspect/drift.clj` — extend with the additional categories Sprint 1 selected
-- Tests for each category
+- Modify: `src/fukan/target/clojure/source.clj` — extend symbol extraction to capture `def` body shapes (Malli `[:map …]`, defrecord field-list, etc.)
+- Modify: `src/fukan/target/clojure/analyzer.clj` — attach parsed `:fields` to `Code.DataStructure` artifacts
+- Modify: `src/fukan/canvas/inspect/drift.clj` — add `check-shape-drift` per-check fn
+- Test: extended `drift_test.clj` + `source_test.clj`
 
-Each additional category lands as a per-check fn (`check-shape-drift`, `check-invariant-without-enforcement`, etc.) following the integrity/coverage shape. The top-level `check` fn aggregates.
+The half-session analyzer extension Sprint 1 Task 1's design doc estimated: ~30-50 LOC reading `def` bodies + a small (~10-15 entry) `:Integer ↔ :int` alias table for Clojure-vs-canvas type-name mapping (likely already lives in `canvas.model.vocabulary`).
 
-Per-commit hygiene: **one commit per category**, not one bundled commit for all categories. Each category should have its own TDD round and its own evidence against fukan-itself.
+The drift check compares each canvas record's `:type/fields` (already populated by Phase 5 Sprint 2 Task 5) against the matching code-side `Code.DataStructure` artifact's `:fields`. Finding shape:
 
-- [ ] **Step 1-N: Each category** — tests first, implement, run against fukan, commit.
+```clojure
+{:check     :inspect.drift/shape-drift-on-record
+ :severity  :warning
+ :message   "Canvas record X has field set <A>; code-side record at <path> has <B>"
+ :offenders [{:stable-id "<module>/<record>"
+              :code-side-path "<path>"
+              :canvas-fields {<name> <type> ...}
+              :code-fields    {<name> <type> ...}
+              :delta {:only-in-canvas {...} :only-in-code {...} :type-mismatch {...}}}]}
+```
+
+- [ ] **Step 1: TDD against the analyzer extension first.** Synthetic src/ file with one `(defrecord Order [id customer])`; assert `source/extract-symbols` returns a symbol with `:fields [[:id :Any] [:customer :Any]]` (or however field shapes land).
+- [ ] **Step 2: TDD the drift check.** Canvas record `(record "Order" (field id :String) (field customer :Customer))` + code `(defrecord Order [id customer total])` → 1 finding with `:only-in-code #{:total}` in the delta.
+- [ ] **Step 3: Implement the analyzer extension** + the `check-shape-drift` per-check fn.
+- [ ] **Step 4: Run against fukan-itself.** Expect interesting evidence on the Model record types (ServerOpts, ServerInfo, etc.) — surface any real drift.
+- [ ] **Step 5: Commit.**
 
 ---
 
-## Phase 6, Task 8: Drift lens — weigh tier (optional, per Sprint 1)
-
-**Files:**
-- Create: `src/fukan/canvas/lens/drift.clj` (only if Sprint 1 Task 1's design conversation determined drift also has a weigh-tier expression)
-- Test: `test/fukan/canvas/lens/drift_test.clj`
-
-If drift produces patterns the LLM should weigh (e.g. "module X has 12 drift findings clustered around field-name mismatch — is this a renaming-in-progress signal?"), a lens captures that. **Skip this task if Sprint 1 determined trust-tier alone is sufficient.**
-
-- [ ] (conditional) Steps mirror Phase 5 lens additions (Task 9 consistency lens shape).
-
----
-
-# Sprint 4 — Workflow integration + trial run (Tasks 9–10)
+# Sprint 4 — Workflow integration + trial run (Tasks 8–9)
 
 Same shape as Phase 5 Sprint 4. The drift helper from Sprint 3 plugs into the architect agent's authoring loop.
 
 ---
 
-## Phase 6, Task 9: Extend the canvas-authoring system prompt + `fukan-architect` for drift
+## Phase 6, Task 8: Extend the canvas-authoring system prompt + `fukan-architect` for drift
 
 **Files:**
 - Update: `doc/canvas-authoring-system-prompt.md` — add drift to the tier model section; add a discipline point about when to invoke drift
@@ -317,7 +344,7 @@ When does the LLM invoke drift? Probably less often than integrity/coverage — 
 
 ---
 
-## Phase 6, Task 10: Trial run — author canvas content + matching code + verify drift catches the gap
+## Phase 6, Task 9: Trial run — author canvas content + matching code + verify drift catches the gap
 
 **Files:**
 - Create: a small canvas content + matching src/ implementation (subject TBD; chosen during the trial run)
@@ -342,9 +369,9 @@ Subjective evidence shape mirrors Phase 5's trial run.
 
 ---
 
-# Sprint 5 — Verification (Task 11)
+# Sprint 5 — Verification (Task 10)
 
-## Phase 6, Task 11: Phase 6 verification report
+## Phase 6, Task 10: Phase 6 verification report
 
 **Files:**
 - Create: `doc/plans/2026-05-27-phase-6-verification.md`
@@ -389,13 +416,19 @@ jj new
 
 ---
 
-## Open questions for the user (before Sprint 1 begins)
+## Open-question status (settled 2026-05-27 unless noted)
 
-1. **Drift direction.** Recommended default: option (3) — both directions; LLM decides per-finding. Push back if you prefer canvas-as-intent (option 1) or code-as-reality (option 2).
-2. **Drift categories priority.** Of the seven categories listed in "What drift detection means concretely," which 3-4 matter most for early evidence? Default: missing-implementation, shape-drift-on-records, invariant-without-enforcement, event-without-handler-in-code.
-3. **Canvas-as-projection-input adaptation path.** Sprint 1 Task 2 picks between options (a) new code path reading canvas datoms directly and (b) project canvas content into the analyzer's existing input shape. Push back if you have a preference here; otherwise Sprint 1 picks based on what's least invasive.
-4. **Demos in scope?** Drift detection runs over `src/`. Should it also cover `/demo/event-driven/`, `/demo/static-lib/` against THEIR matching implementations? Default: no — demos are stress-test artifacts; treating them as drift-checkable adds noise. Phase 6 stays focused on `src/` vs `canvas/`.
-5. **Trial-run target shape.** Phase 5's trial run authored a canvas subsystem. Phase 6's trial run needs canvas + matching code. Suggested: extend the `demo/distributed/` work from Phase 5's trial run with a few real Clojure functions implementing it — i.e. build the implementation side of leader-election in `src/demo/distributed/` (or similar) and let drift watch the gap close. Push back if you want a different target.
+The user resolved most open questions during Sprint 1 review. Recorded here for reference.
+
+1. **Drift direction** — Settled: option (3) — both directions; LLM decides per-finding. Each finding names both sides (canvas-side stable-id + code-side expected address).
+2. **Drift categories priority** — Reframed: the original 7-category enumeration collapsed into **2 signals** (missing-implementation umbrella + shape-drift-on-records). Broader projection coverage (Sprint 2's gaps 5-7 — invariants + rules) means missing-implementation uniformly catches functions, events, invariants, and rules. Event-without-handler-in-code stays deferred.
+3. **Canvas-as-projection-input adaptation path** — Settled by Sprint 1 Task 2's design: option (b) — canvas content already projects into the analyzer's existing `:primitives` input shape via the model pipeline; **no architectural rework needed**, only the 7 wiring gaps in Sprint 2.
+4. **Demos in scope** — Settled: no. Drift checks `src/` against `canvas/`. Demos remain stress-test artifacts.
+5. **Trial-run target** — Settled: `canvas/distributed/*` (exists from Phase 5's trial run) paired with new `src/fukan/distributed/*` (to be authored). The asymmetry is a ready-made test corpus.
+6. **Invariant + rule projection** (raised during Sprint 1 review) — Settled: yes. Invariants project to predicate fn named by their `holds-that "Y"` clause; rules project to predicate fn named after the rule itself (kebab-cased). Sprint 2 Task 4 implements.
+7. **Rules-4* naming convention** (raised by Sprint 1 Task 2's design) — Settled: rename canvas labels (`check_4a` → `check`) so canvas + code align. Sprint 2 Task 4 includes the rename.
+
+All Sprint 1 questions are resolved. Sprint 2 begins with settled design.
 
 ---
 
@@ -403,10 +436,10 @@ jj new
 
 | Sprint | Tasks | Outcome |
 |--------|-------|---------|
-| 1 | 1–2 | Drift signals design + canvas→code projection design (two pause points) |
-| 2 | 3–4 | Pre-implementation hardening: auto-discover canvas files + Sprint-1-surfaced prereqs |
-| 3 | 5–8 | Canvas-as-projection-input + drift helper (per-category) + optional drift lens |
-| 4 | 9–10 | Architect agent extension + trial run (canvas↔code loop) |
-| 5 | 11 | Phase 6 verification + Phase 7 brief |
+| 1 | 1–2 | ✅ Drift signals design + canvas→code projection design (both committed; both produced substantive pushback that reshaped Sprint 2/3) |
+| 2 | 3–5 | Projection-layer wiring fixes (gaps 1-4) + invariant/rule projection + rules-4* rename (gaps 5-7) + auto-discover canvas files |
+| 3 | 6–7 | Missing-implementation drift helper (umbrella) + shape-drift-on-records + analyzer `def`-body extension |
+| 4 | 8–9 | Architect agent extension + trial run (canvas↔code loop on canvas/distributed/* + new src/fukan/distributed/*) |
+| 5 | 10 | Phase 6 verification + Phase 7 brief |
 
-**Estimated calendar:** Sprint 1 ≈ 2 sessions (design + 2 pauses). Sprint 2 ≈ 1 session. Sprint 3 ≈ 4-5 sessions (analyzer adaptation is the heaviest; per-category drift checks are lighter). Sprint 4 ≈ 2 sessions. Sprint 5 ≈ 1 session. **Total: 10-12 working sessions.**
+**Estimated calendar:** Sprint 1 ≈ done. Sprint 2 ≈ 2-3 sessions (7 wiring fixes + new projection + auto-discover; per-commit hygiene per gap). Sprint 3 ≈ 2 sessions (umbrella signal is mechanical reading of existing output; shape-drift wants the half-session extension). Sprint 4 ≈ 2 sessions. Sprint 5 ≈ 1 session. **Total remaining: 7-9 working sessions.**
