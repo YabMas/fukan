@@ -43,3 +43,24 @@
   (is (= {:ns "fukan.web.views.spec" :name "select-node"}
          (addr/canonical (r/make-registry) :primitive/rule :projection-kind/rule
                          "fukan/web/views/spec" "SelectNode"))))
+
+(deftest canonical-invariant-via-holds-that-label
+  ;; Phase 6 Sprint 2 Task 4 sub-task C: invariants project as :primitive/rule
+  ;; with the holds-that string as label. The address machinery must accept
+  ;; the label verbatim when it's already kebab-case (the convention for
+  ;; holds-that strings) and pass through unchanged.
+  (let [reg (r/with-root-prefix (r/make-registry) "fukan")]
+    (is (= {:ns "fukan.validation.rules-4a" :name "module-has-at-most-one-composite-parent"}
+           (addr/canonical reg :primitive/rule :projection-kind/rule
+                           "validation.rules-4a"
+                           "module-has-at-most-one-composite-parent")))))
+
+(deftest canonical-rule-pascal-name-via-canvas
+  ;; Phase 6 Sprint 2 Task 4 sub-task C: canvas rules carry their own
+  ;; :entity/name as the primitive label (e.g. "AtMostOneCompositeParent").
+  ;; Address derivation must kebab-case it to the expected code-side
+  ;; predicate fn name.
+  (let [reg (r/with-root-prefix (r/make-registry) "fukan")]
+    (is (= {:ns "fukan.validation.rules-4a" :name "at-most-one-composite-parent"}
+           (addr/canonical reg :primitive/rule :projection-kind/rule
+                           "validation.rules-4a" "AtMostOneCompositeParent")))))
