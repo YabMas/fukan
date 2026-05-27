@@ -74,5 +74,12 @@
 ;;   - Event AppendEntriesRequested, AppendEntriesAcknowledged, EntryCommitted
 ;;   - Handler on-append-entries-requested, on-append-entries-acknowledged
 ;;   - Getter get-commit-index
-;;   - Function get-entry
 ;;   - All 4 invariants
+
+(defn get-entry
+  "Retrieve a log entry by index, if one has been appended at that
+   position."
+  {:malli/schema [:=> [:cat :LogIndex] [:maybe :LogEntry]]}
+  [index]
+  (throw (ex-info "get-entry: not yet implemented"
+                  {:canvas-id "distributed.log/get_entry"})))
