@@ -35,7 +35,16 @@
   {:linters {:unused-public-var {:level :off}}}}
 
  :linters
- {;; The canvas DSL's `rule` lift body uses (when TriggerName ...) as
+ {;; Primary mechanism for scaling exemptions of intentionally-exported,
+  ;; dynamically-invoked vars (SCI sandbox surface, canvas registry lookup):
+  ;; mark a var `^:export` and clj-kondo skips the unused-public-var check.
+  ;; The per-namespace :config-in-ns entries above remain as a belt-and-
+  ;; suspenders fallback for agent-surface namespaces whose every public var
+  ;; would otherwise need individual marking; new conventions should prefer
+  ;; ^:export at the var level.
+  :unused-public-var {:exclude-when-meta [:export]}
+
+  ;; The canvas DSL's `rule` lift body uses (when TriggerName ...) as
   ;; structural trigger syntax, which clj-kondo confuses for Clojure's
   ;; `when` macro and complains is missing a body. Off project-wide because
   ;; the canvas DSL is more pervasive than the Clojure `when`-bug-catch is

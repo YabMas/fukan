@@ -20,7 +20,7 @@
             [fukan.canvas.construction :refer [record function exports]]
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "web.views.graph"
 

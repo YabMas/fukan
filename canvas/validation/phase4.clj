@@ -21,7 +21,7 @@
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.validation :refer [checker]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "validation.phase4"
 

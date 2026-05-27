@@ -13,7 +13,7 @@
             [fukan.canvas.construction :refer [function]]
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "constraint.phase5"
 

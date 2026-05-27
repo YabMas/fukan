@@ -15,7 +15,7 @@
             [fukan.canvas.construction :refer [function value exports]]
             [fukan.canvas.vocab.behavioral :refer [invariant]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "agent.edb"
 

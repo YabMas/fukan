@@ -15,7 +15,7 @@
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [record]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "web.views.projection"
 

@@ -11,7 +11,7 @@
             [fukan.canvas.construction :refer [function]]
             [fukan.canvas.vocab.behavioral :refer [invariant]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "project_layer.defaults"
 

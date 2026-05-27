@@ -19,7 +19,7 @@
             [fukan.canvas.construction :refer [function record]]
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "vocabulary.allium.analyzer"
 

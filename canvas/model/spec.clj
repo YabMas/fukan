@@ -64,7 +64,7 @@
             [fukan.canvas.construction :refer [record value]]
             [fukan.canvas.vocab.behavioral :refer [invariant]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "model.spec"
 

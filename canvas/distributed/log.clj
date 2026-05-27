@@ -17,7 +17,7 @@
             [fukan.canvas.vocab.event :refer [event handler]]
             [fukan.canvas.vocab.lifecycle :refer [getter]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "distributed.log"
 

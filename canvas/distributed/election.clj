@@ -17,7 +17,7 @@
             [fukan.canvas.vocab.behavioral :refer [invariant]]
             [fukan.canvas.vocab.event :refer [event handler]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "distributed.election"
 

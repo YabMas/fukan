@@ -10,7 +10,7 @@
   (:require [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.behavioral :refer [invariant]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "vocabulary.allium.expression"
 

@@ -11,7 +11,7 @@
             [fukan.canvas.vocab.behavioral :refer [invariant]]
             [fukan.canvas.vocab.lifecycle :refer [getter]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "distributed.cluster"
 

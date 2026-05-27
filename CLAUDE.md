@@ -105,6 +105,8 @@ Module ownership flows via `:module/child` Relations on the owner, not via back-
 
 **Name+role disambiguation.** A canvas module may declare multiple entities with the same `:entity/name` provided they have distinct `:affordance/role` values. The canonical example is the rule + invariant pair in `canvas/validation/*` — a single behavioral commitment expressed from two angles: a reactive `(rule "X" ...)` (role `:canvas/rule`) and a timeless `(invariant "X" ...)` (role `:canvas/invariant`). Reference resolution disambiguates such pairs via the `(name, role)` tuple, where role is unambiguous from context (a `when`-trigger position resolves to the rule, a `holds-that` position to the invariant). `canvas-source/build-canvas-db` emits an informational stderr warning for each collision so the author can confirm the distinct roles are intentional; it never throws.
 
+**`^:export` for dynamically-invoked vars.** Vars that are reachable only through dynamic dispatch — the SCI sandbox surface (`fukan.agent.api`, `fukan.agent.system`) or registry-style discovery (every canvas module's `build-canvas`) — should carry `^:export` metadata. The `.clj-kondo/config.edn` `:exclude-when-meta [:export]` rule then skips `unused-public-var` for them without growing an ever-expanding `:config-in-ns` exemption list. New conventions for "exported, dynamically-invoked" vars should prefer `^:export` over per-namespace config entries.
+
 ## REPL workflow
 
 - **After editing a canvas spec**: use `(refresh)` — reloads changed code + rebuilds model (Phase 0–6).

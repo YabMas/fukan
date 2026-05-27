@@ -21,7 +21,7 @@
             [fukan.canvas.construction :refer [function exports]]
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "validation.violation"
 

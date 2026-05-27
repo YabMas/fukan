@@ -40,7 +40,7 @@
             [fukan.canvas.construction :refer [function record value exports]]
             [fukan.canvas.vocab.behavioral :refer [invariant]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "agent.api"
 

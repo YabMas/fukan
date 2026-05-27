@@ -16,7 +16,7 @@
             [fukan.canvas.construction :refer [record]]
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]))
 
-(defn build-canvas []
+(defn ^:export build-canvas []
   (h/with-canvas
     (h/within-module "vocabulary.boundary.analyzer"
 
