@@ -1,5 +1,7 @@
 (ns fukan.canvas.projection.canvas-source-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.substrate.store :as store]
@@ -10,6 +12,43 @@
             [fukan.canvas.vocab.event :refer [event]]
             canvas.infra.server
             canvas.infra.model))
+
+;; ---------------------------------------------------------------------------
+;; Phase 6 Sprint 2 Task 5: auto-discovery of canvas namespaces
+;; ---------------------------------------------------------------------------
+
+(defn- count-canvas-files-on-disk
+  "Count `canvas/**/*.clj` files on disk. Used to assert that auto-discovery
+   picks up every file rather than relying on a hand-maintained registry."
+  []
+  (let [root (io/file "canvas")]
+    (->> (file-seq root)
+         (filter (fn [^java.io.File f]
+                   (and (.isFile f) (str/ends-with? (.getName f) ".clj"))))
+         count)))
+
+(deftest auto-discovery-finds-every-canvas-file
+  (testing "canvas-namespaces returns one symbol per canvas/**/*.clj file"
+    (let [discovered (canvas-source/canvas-namespaces)
+          on-disk    (count-canvas-files-on-disk)]
+      (is (= on-disk (count discovered))
+          (str "auto-discovery count (" (count discovered)
+               ") must match filesystem count (" on-disk ")")))))
+
+(deftest auto-discovery-includes-known-namespaces
+  (testing "well-known canvas namespaces appear in the discovered set"
+    (let [discovered (set (canvas-source/canvas-namespaces))]
+      ;; underscore→hyphen conversion exercised by project_layer + rules_4a
+      (is (contains? discovered 'canvas.infra.server))
+      (is (contains? discovered 'canvas.project-layer.registry))
+      (is (contains? discovered 'canvas.validation.rules-4a))
+      (is (contains? discovered 'canvas.web.views.sidebar)))))
+
+(deftest auto-discovery-returns-sorted-output
+  (testing "discovery output is deterministic — sorted by namespace name"
+    (let [discovered (canvas-source/canvas-namespaces)]
+      (is (= (sort discovered) (vec discovered))
+          "discovered namespaces must be returned in sorted order"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Commit 1 tests: build-canvas-db

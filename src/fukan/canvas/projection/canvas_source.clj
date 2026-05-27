@@ -2,159 +2,129 @@
   "Canvas-source projection pipeline.
 
    Provides three public functions:
-     build-canvas-db — require all canvas namespaces, call their build-canvas fns,
-                       merge the resulting per-module Datascript dbs into one unified db.
+     build-canvas-db — discover all canvas namespaces on the classpath, require
+                       them, call their build-canvas fns, merge the resulting
+                       per-module Datascript dbs into one unified db.
      project         — transform the unified Datascript db into the model map shape
                        the graph viewer expects.
      build           — convenience: build-canvas-db + project in one call.
 
-   Registry of all 62 canvas namespaces is maintained explicitly here.
-   Adding a new canvas port requires adding one line to canvas-namespaces."
+   Canvas namespaces are auto-discovered: any `canvas/**/*.clj` file on the
+   classpath is treated as a canvas port and expected to define a
+   `build-canvas` fn. Adding a new canvas port is now a single file drop;
+   `(reset)` picks it up without any registry edit."
   (:require
-   ;; Canvas port namespaces — authoritative registry (62 entries)
-   ;; Note: namespace identifiers use hyphens per Clojure convention
-   canvas.agent.api
-   canvas.agent.edb
-   canvas.agent.query
-   canvas.agent.sci
-   canvas.agent.system
-   canvas.agent.views-loader
-   canvas.constraint.ast
-   canvas.constraint.builtins
-   canvas.constraint.derivations
-   canvas.constraint.derivations-extra
-   canvas.constraint.evaluator
-   canvas.constraint.phase5
-   canvas.constraint.sort
-   canvas.constraint.well-known
-   canvas.distributed.cluster
-   canvas.distributed.election
-   canvas.distributed.log
-   canvas.infra.model
-   canvas.infra.server
-   canvas.libs.allium.parser
-   canvas.libs.boundary.parser
-   canvas.libs.coordinate
-   canvas.model.artifact
-   canvas.model.build
-   canvas.model.effect
-   canvas.model.expression
-   canvas.model.pipeline
-   canvas.model.primitives
-   canvas.model.relations
-   canvas.model.spec
-   canvas.model.type
-   canvas.model.vocabulary
-   canvas.project-layer.defaults
-   canvas.project-layer.registry
-   canvas.target.clojure.address
-   canvas.target.clojure.analyzer
-   canvas.target.clojure.blueprint
-   canvas.target.clojure.projector
-   canvas.target.clojure.source
-   canvas.target.clojure.types
-   canvas.validation.phase4
-   canvas.validation.rules-4a
-   canvas.validation.rules-4b
-   canvas.validation.rules-4c
-   canvas.validation.rules-4d
-   canvas.validation.rules-4e
-   canvas.validation.rules-4f
-   canvas.validation.rules-4g
-   canvas.validation.violation
-   canvas.vocabulary.allium.analyzer
-   canvas.vocabulary.allium.effect-canonicalise
-   canvas.vocabulary.allium.expression
-   canvas.vocabulary.allium.pipeline
-   canvas.vocabulary.allium.renderers
-   canvas.vocabulary.allium.tags
-   canvas.vocabulary.boundary.analyzer
-   canvas.vocabulary.boundary.pipeline
-   canvas.vocabulary.boundary.tags
-   canvas.web.handler
-   canvas.web.views.breadcrumb
-   canvas.web.views.cytoscape
-   canvas.web.views.graph
-   canvas.web.views.projection
-   canvas.web.views.shell
-   canvas.web.views.sidebar
-   ;; Infrastructure
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [datascript.core :as d]
    [fukan.canvas.core.substrate.store :as store]
    [fukan.canvas.identity :as identity]))
 
 ;; ---------------------------------------------------------------------------
-;; Registry — one entry per canvas port namespace
+;; Discovery — scan canvas/ for *.clj and derive namespace symbols
 ;; ---------------------------------------------------------------------------
 
-(def ^:private canvas-namespaces
-  "Explicit registry of all canvas port namespaces. Each must export build-canvas."
-  '[canvas.agent.api
-    canvas.agent.edb
-    canvas.agent.query
-    canvas.agent.sci
-    canvas.agent.system
-    canvas.agent.views-loader
-    canvas.constraint.ast
-    canvas.constraint.builtins
-    canvas.constraint.derivations
-    canvas.constraint.derivations-extra
-    canvas.constraint.evaluator
-    canvas.constraint.phase5
-    canvas.constraint.sort
-    canvas.constraint.well-known
-    canvas.distributed.cluster
-    canvas.distributed.election
-    canvas.distributed.log
-    canvas.infra.model
-    canvas.infra.server
-    canvas.libs.allium.parser
-    canvas.libs.boundary.parser
-    canvas.libs.coordinate
-    canvas.model.artifact
-    canvas.model.build
-    canvas.model.effect
-    canvas.model.expression
-    canvas.model.pipeline
-    canvas.model.primitives
-    canvas.model.relations
-    canvas.model.spec
-    canvas.model.type
-    canvas.model.vocabulary
-    canvas.project-layer.defaults
-    canvas.project-layer.registry
-    canvas.target.clojure.address
-    canvas.target.clojure.analyzer
-    canvas.target.clojure.blueprint
-    canvas.target.clojure.projector
-    canvas.target.clojure.source
-    canvas.target.clojure.types
-    canvas.validation.phase4
-    canvas.validation.rules-4a
-    canvas.validation.rules-4b
-    canvas.validation.rules-4c
-    canvas.validation.rules-4d
-    canvas.validation.rules-4e
-    canvas.validation.rules-4f
-    canvas.validation.rules-4g
-    canvas.validation.violation
-    canvas.vocabulary.allium.analyzer
-    canvas.vocabulary.allium.effect-canonicalise
-    canvas.vocabulary.allium.expression
-    canvas.vocabulary.allium.pipeline
-    canvas.vocabulary.allium.renderers
-    canvas.vocabulary.allium.tags
-    canvas.vocabulary.boundary.analyzer
-    canvas.vocabulary.boundary.pipeline
-    canvas.vocabulary.boundary.tags
-    canvas.web.handler
-    canvas.web.views.breadcrumb
-    canvas.web.views.cytoscape
-    canvas.web.views.graph
-    canvas.web.views.projection
-    canvas.web.views.shell
-    canvas.web.views.sidebar])
+(defn- file->ns-segment
+  "Convert a single path segment from filename form to namespace form:
+   strip trailing .clj if present, then turn underscores into hyphens
+   (the standard Clojure file-to-ns convention)."
+  [seg]
+  (-> seg
+      (str/replace #"\.clj$" "")
+      (str/replace #"_" "-")))
+
+(defn- file->ns-symbol
+  "Convert a file path relative to the canvas root into a namespace symbol.
+   Example: \"infra/server.clj\"           → 'canvas.infra.server
+            \"project_layer/registry.clj\" → 'canvas.project-layer.registry
+            \"validation/rules_4a.clj\"    → 'canvas.validation.rules-4a"
+  [^String rel-path]
+  (let [segments (str/split rel-path #"/")
+        ns-segments (mapv file->ns-segment segments)]
+    (symbol (str "canvas." (str/join "." ns-segments)))))
+
+(defn- canvas-root-dirs
+  "Return every `canvas/` directory accessible on the classpath as a
+   java.io.File. Enumerates classpath entries via the context ClassLoader's
+   `getResources`, so both the project-root `canvas/` (the spec garden) and
+   any test-classpath `canvas/` (test fixtures, demo canvases) are included.
+
+   Falls back to a relative-path `canvas/` lookup when the classpath search
+   yields nothing — handy under harnesses that change cwd or override the
+   loader. Returns nil when no canvas/ directory is locatable at all."
+  []
+  (let [cl       (.getContextClassLoader (Thread/currentThread))
+        urls     (when cl (enumeration-seq (.getResources cl "canvas")))
+        from-cp  (->> urls
+                      (keep (fn [^java.net.URL u]
+                              (try (io/as-file u)
+                                   (catch Exception _ nil))))
+                      (filter #(and (some? %) (.isDirectory ^java.io.File %)))
+                      vec)
+        from-cwd (io/file "canvas")
+        roots    (cond-> from-cp
+                   (and (empty? from-cp) (.isDirectory from-cwd))
+                   (conj from-cwd))]
+    (when (seq roots) roots)))
+
+(defn- discover-canvas-files-in
+  "Yield {:root <file> :rel-path <str>} for every non-test `*.clj` file
+   under one canvas root directory. Test files (`*_test.clj`) are skipped:
+   they live alongside canvas content in `test/canvas/**` and don't carry
+   build-canvas fns."
+  [^java.io.File root]
+  (let [root-path (.getCanonicalPath root)]
+    (->> (file-seq root)
+         (filter (fn [^java.io.File f]
+                   (let [n (.getName f)]
+                     (and (.isFile f)
+                          (str/ends-with? n ".clj")
+                          (not (str/ends-with? n "_test.clj"))))))
+         (map (fn [^java.io.File f]
+                (let [abs (.getCanonicalPath f)
+                      rel (subs abs (inc (count root-path)))]
+                  {:root root :rel-path rel}))))))
+
+(defn- discover-canvas-namespaces
+  "Walk every canvas/ directory on the classpath and return a sorted vector
+   of distinct namespace symbols (one per `*.clj` file, excluding
+   `*_test.clj`). Sorted so build order is deterministic across runs.
+
+   Fails fast with a clear error if no canvas/ root can be located — at
+   that point fukan has nothing to project and continuing would silently
+   produce an empty model."
+  []
+  (if-let [roots (canvas-root-dirs)]
+    (->> roots
+         (mapcat discover-canvas-files-in)
+         (map (fn [{:keys [rel-path]}] (file->ns-symbol rel-path)))
+         distinct
+         sort
+         vec)
+    (throw (ex-info "canvas-source: canvas/ root not found on classpath or working directory"
+                    {:cwd (System/getProperty "user.dir")}))))
+
+(defn- require-and-resolve-build-canvas
+  "Require a canvas namespace and resolve its build-canvas var. Throws if
+   the namespace fails to load or does not define build-canvas."
+  [ns-sym]
+  (try
+    (require ns-sym)
+    (catch Exception e
+      (throw (ex-info (str "canvas-source: failed to load canvas namespace " ns-sym)
+                      {:namespace ns-sym}
+                      e))))
+  (let [build-fn (ns-resolve (the-ns ns-sym) 'build-canvas)]
+    (when-not build-fn
+      (throw (ex-info (str "canvas-source: no build-canvas fn in " ns-sym)
+                      {:namespace ns-sym})))
+    build-fn))
+
+(defn canvas-namespaces
+  "Return the vector of auto-discovered canvas namespace symbols. Public so
+   tests and external tooling can inspect the discovered surface."
+  []
+  (discover-canvas-namespaces))
 
 ;; ---------------------------------------------------------------------------
 ;; Merge helpers
@@ -403,14 +373,12 @@
    Cross-module duplicate names are permitted — the module-qualified
    reference resolution disambiguates them via the keyword namespace."
   []
-  (let [per-module-dbs (mapv (fn [ns-sym]
-                               (let [build-fn (ns-resolve (the-ns ns-sym) 'build-canvas)]
-                                 (when-not build-fn
-                                   (throw (ex-info (str "No build-canvas fn in " ns-sym)
-                                                   {:namespace ns-sym})))
+  (let [ns-syms        (discover-canvas-namespaces)
+        per-module-dbs (mapv (fn [ns-sym]
+                               (let [build-fn (require-and-resolve-build-canvas ns-sym)]
                                  (build-fn)))
-                             canvas-namespaces)
-        unified-db (merge-dbs per-module-dbs)]
+                             ns-syms)
+        unified-db     (merge-dbs per-module-dbs)]
     (detect-intra-module-duplicates-warn unified-db)
     unified-db))
 

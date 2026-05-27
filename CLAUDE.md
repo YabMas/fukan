@@ -111,7 +111,7 @@ Module ownership flows via `:module/child` Relations on the owner, not via back-
 
 - **After editing a canvas spec**: use `(refresh)` — reloads changed code + rebuilds model (Phase 0–6).
 - **After editing handler/routes/infra**: use `(reset)` — full server restart (recreates handler).
-- **After adding a new canvas file**: add a `require` entry in `src/fukan/canvas/projection/canvas_source.clj`'s `canvas-builders` registry, then use `(reset)`.
+- **After adding a new canvas file**: use `(reset)` (or `bin/fukan reset`). Canvas files under `canvas/**/*.clj` are auto-discovered — no registry edit required.
 - **Never** use `remove-ns`, `require :reload`, or `(reload/reload)` directly.
 - `(status)` shows server/model state.
 - nREPL runs on port 7889, web UI on port 8080.

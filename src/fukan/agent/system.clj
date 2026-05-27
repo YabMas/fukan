@@ -35,10 +35,10 @@
        (filter (fn [sym] (str/starts-with? (str sym) "canvas.")))))
 
 (defn ^{:agent/doc "Reload all canvas namespaces (incl. newly-added files) + rebuild
-                    the Model. Use this after adding a new canvas/<...>.clj file and
-                    its registry entry in canvas-source/canvas-namespaces. Blocks;
-                    returns the new status. Heavier than `refresh` — equivalent to
-                    `clj -M:run` restart minus the server bounce."
+                    the Model. Use this after adding a new canvas/<...>.clj file —
+                    canvas files are auto-discovered, no registry edit required.
+                    Blocks; returns the new status. Heavier than `refresh` —
+                    equivalent to `clj -M:run` restart minus the server bounce."
         :agent/example "(reset)"}
   reset
   []
@@ -49,18 +49,15 @@
   ;; Step 1: reload each already-loaded canvas.* namespace so source edits
   ;; inside existing canvas files are picked up. If a previously-loaded
   ;; canvas namespace's file has been deleted, remove the dangling ns and
-  ;; carry on — the canvas-source reload in Step 2 will detect any stale
-  ;; registry entries.
+  ;; carry on — the next build will simply not re-discover it.
   (doseq [ns-sym (canvas-ns-symbols)]
     (try
       (require ns-sym :reload)
       (catch java.io.FileNotFoundException _
         (remove-ns ns-sym))))
-  ;; Step 2: reload the canvas-source projection so its top-level
-  ;; (:require ...) form is re-evaluated. This loads any newly-added canvas
-  ;; namespace that the author added to the registry since startup.
-  (require 'fukan.canvas.projection.canvas-source :reload)
-  ;; Step 3: rebuild the model from scratch.
+  ;; Step 2: rebuild the model. canvas-source/build-canvas-db walks
+  ;; canvas/**/*.clj at each build, so newly-added files are picked up
+  ;; here without any additional reload step.
   (infra-model/refresh-model)
   (views-loader/auto-load! (infra-model/get-src))
   (status))
