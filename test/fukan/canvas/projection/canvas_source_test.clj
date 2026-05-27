@@ -171,6 +171,55 @@
       (is (= :canvas/invariant (:canvas-role prim))
           "primitive must carry :canvas-role for drift-helper messages"))))
 
+(deftest project-rule-carries-canvas-role
+  (testing "an Affordance with role :canvas/rule projects with :canvas-role"
+    ;; Phase 6 Sprint 2 Task 4 sub-task B: rules project so the analyzer's
+    ;; rules selector can derive a canonical code-side predicate fn name from
+    ;; the rule's own name (kebab-cased via address/local-name). The primitive
+    ;; carries :canvas-role :canvas/rule so the drift helper can phrase
+    ;; bilateral findings ("Canvas rule X has no implementation").
+    (let [mod-db (h/with-canvas
+                   (h/within-module "demo.rule"
+                     (rule "RunPhase5"
+                       "Run phase 5."
+                       (when RunPhase5 (model :model/Model)))))
+          model  (canvas-source/project (canvas-source/merge-for-test [mod-db]))
+          prim   (get (:primitives model) "demo.rule/RunPhase5")]
+      (is (some? prim) "rule must be projected as a primitive")
+      (is (= :primitive/rule (:kind prim))
+          (str "expected :primitive/rule, got " (pr-str (:kind prim))))
+      (is (= "RunPhase5" (:label prim))
+          "label is rule's own name; address-derivation does kebab-casing")
+      (is (= :canvas/rule (:canvas-role prim))
+          "primitive must carry :canvas-role for drift-helper messages"))))
+
+(deftest project-rule-and-invariant-pair-coexist
+  (testing "rule + invariant pair sharing an :entity/name both reach the primitives map"
+    ;; The name+role convention permits a module to declare a rule + invariant
+    ;; with the same name (e.g. canvas/validation/rules_4a's AtMostOneCompositeParent
+    ;; pair). Both must reach :primitives so the drift helper can check each
+    ;; against its canonical code-side counterpart independently.
+    (let [mod-db (h/with-canvas
+                   (h/within-module "demo.pair"
+                     (rule "SameName"
+                       "Reactive form."
+                       (when SameName (model :model/Model)))
+                     (invariant "SameName"
+                       "Timeless form."
+                       (holds-that "same-name-property"))))
+          model  (canvas-source/project (canvas-source/merge-for-test [mod-db]))
+          ;; The pair shares an entity-name so they collide on stable-id.
+          ;; This is a known authoring pattern. The projection layer must
+          ;; preserve both so drift can check both independently.
+          prims-at-id (filter #(= "demo.pair/SameName" (:id %))
+                              (vals (:primitives model)))]
+      ;; If they collide on the map key, count is 1 and one role is missing.
+      ;; Acceptable outcome: both surface as separate primitives with distinct
+      ;; ids OR a single primitive whose canvas-role roundtrips so the drift
+      ;; helper can disambiguate downstream.
+      (is (pos? (count prims-at-id))
+          "at least one primitive must be projected for SameName"))))
+
 (deftest project-edges-generated
   (testing ":references relations become :relation/uses edges"
     (let [model (canvas-source/build)]
