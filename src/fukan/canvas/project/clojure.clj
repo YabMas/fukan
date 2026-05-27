@@ -9,4 +9,5 @@
    the multimethod for the registered set — this loader's only job is
    to ensure those defmethods are run by the time a consumer asks."
   (:require [fukan.canvas.project.clojure.value-to-def]
-            [fukan.canvas.project.clojure.type-to-malli]))
+            [fukan.canvas.project.clojure.type-to-malli]
+            [fukan.canvas.project.clojure.event-to-schema]))
