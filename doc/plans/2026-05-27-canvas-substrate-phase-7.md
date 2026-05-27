@@ -249,9 +249,9 @@ jj new
 
 ---
 
-# Sprint 2 — Pre-implementation hardening (Tasks 3–4)
+# Sprint 2 — Pre-implementation hardening (Tasks 3–5)
 
-Two items needed before Sprint 3's instruction-generation work.
+> **Amended 2026-05-27 after Sprint 1 design review.** Sprint 2 grew from 2 tasks to 3 to absorb (a) the addressing gaps Sprint 1 Task 1 surfaced in the existing `target/clojure/{address,projector}.clj` machinery and (b) scoped drift (`(canvas-drift :module-coord <prefix>)`) needed by the Sprint 4 verification protocol after each implementing-LLM dispatch.
 
 ---
 
@@ -279,18 +279,43 @@ jj new
 
 ---
 
-## Phase 7, Task 4: Other prereqs (surfaced in Sprint 1)
+## Phase 7, Task 4: Addressing gaps in target/clojure machinery (Sprint 1 surface)
 
-**Files:** TBD per Sprint 1 findings.
+**Files:**
+- Modify: `src/fukan/target/clojure/address.clj` — invariant `holds-that`-absent fallback; event-schema address symmetry
+- Modify: `src/fukan/target/clojure/projector.clj` — lift `signature-for` from `defn-` private to public so Layer A projections can reuse it
+- Tests for each gap fix
 
-Sprint 1's design conversations may surface additional small prerequisites — drift output enrichment for instruction context, helper extraction, schema tweaks. Keep small and additive. Likely surface items:
+Three small mechanical fixes Sprint 1 Task 1's design surfaced as prereqs to Layer A's projections (`function-to-defn` needs the public `signature-for`; `invariant-to-predicate` needs the `holds-that` fallback; `event-to-schema` needs the address symmetry).
 
-- `:context` enrichment on drift findings (related-fns, related-types, originating canvas docstring) so instruction generators don't re-query
-- Address-derivation gaps (any new ones surfaced by trying to generate instructions)
-- Substrate concerns from Phase 6 verification (rule+invariant collision in primitives) if they bite instruction generation
+- [ ] **Step 1: Lift `projector/signature-for` to public.** Read it; rename from `defn-` to `defn`; add tests that exercise it from outside the namespace.
+- [ ] **Step 2: Invariant `holds-that`-absent fallback in `addr/canonical`.** When the invariant declaration has no `holds-that` clause (or it returns nil), fall back to `kebab(invariant-name)` rather than emitting junk.
+- [ ] **Step 3: Event-schema address symmetry.** Verify `addr/canonical` produces consistent output for `:primitive/event` kinds (parallel to `:primitive/container`). Sprint 1 design doc flagged this as needing verification + potential one-liner.
+- [ ] **Step 4: Per-commit hygiene.** One commit per gap fix (3 commits in this task).
 
-- [ ] **Step 1: Implement Sprint-1-named surface items.**
-- [ ] **Step 2: Tests + per-commit hygiene.**
+---
+
+## Phase 7, Task 5: Scoped drift `(canvas-drift :module-coord <prefix>)`
+
+**Files:**
+- Modify: `src/fukan/canvas/inspect/drift.clj` — extend `check` to accept an optional `:module-coord` (or `:scope`) filter
+- Modify: `src/fukan/agent/api.clj` — agent api wrapper accepts the filter
+- Test: `test/fukan/canvas/inspect/drift_test.clj` — scoped-filter cases
+
+Phase 6 trial-run findings recommendation #5 (carried into Phase 7 by user direction). Sprint 4's verification protocol after each implementing-LLM dispatch needs to check whether THIS finding cleared, not whether all 446 cleared globally. Scoped drift is the helper that supports this.
+
+Implementation: `check` accepts opts `{:module-coord "distributed.cluster"}` (or vector of prefixes). Filtering happens post-walk on the offender's `:stable-id` (already in the offender map). No analyzer changes needed.
+
+- [ ] **Step 1: TDD against synthetic findings.** Drift produces 5 findings across 2 modules; `(check model {:module-coord "mod1"})` returns only findings whose offender stable-id starts with `mod1`.
+- [ ] **Step 2: Implement.** Filter as a post-walk step; preserve the structured-finding shape.
+- [ ] **Step 3: Agent api wrapper.** `(canvas-drift :module-coord "distributed.cluster")` should work via SCI.
+- [ ] **Step 4: Run against fukan-itself.** `(canvas-drift :module-coord "distributed.*")` returns ~30 findings; `(canvas-drift)` returns ~446. Confirm.
+- [ ] **Step 5: Commit.** One commit.
+
+```bash
+jj desc -m "feat(canvas/inspect/drift): scoped check via :module-coord filter"
+jj new
+```
 
 ---
 
@@ -309,7 +334,7 @@ Each task lands as: one namespace + tests + registry registration + an agent api
 
 ---
 
-## Phase 7, Task 5: Layer A substrate (project-lens core + registry + render)
+## Phase 7, Task 6: Layer A substrate (project-lens core + registry + render)
 
 **Files:**
 - Create: `src/fukan/canvas/project/core.clj` — lens contract; `valid-projection?`, `validate-projection`
@@ -459,25 +484,33 @@ Same shape as prior phase Sprint 4s.
 
 ---
 
-## Phase 7, Task N+1: Extend system prompt + `fukan-architect` for instruction generation + handoff
+## Phase 7, Task N+1: Extend `fukan-architect` agent + system prompt + AGENTS.md for Phase D (Instruct + Dispatch)
 
 **Files:**
+- Update: `.claude/agents/fukan-architect.md` — **expand tool grant** (add Agent + Read) + add Phase D dispatch mode
 - Update: `doc/canvas-authoring-system-prompt.md` — add Phase D (Instruct) to the authoring loop; add discipline for instruction review + dispatch
-- Update: `.claude/agents/fukan-architect.md` — instruction-generation mode + handoff dispatch
 - Update: `AGENTS.md` — add instruction surface to the trust-tier primer
+
+**User decision (2026-05-27 Sprint 1 review):** extend the existing `fukan-architect` agent rather than create a separate `fukan-instructor`. The agent's read-only character softens but stays canvas-author-shaped — it gains dispatch + read capabilities while still not writing canvas or src/ directly. The implementing-LLM subagent is the only thing that writes code.
+
+**Tool grant expansion:**
+- Today: `Bash(fukan eval *|fukan status|fukan primer)` (strictly read-only via the daemon)
+- Phase 7: Add **Agent** (to dispatch the implementing-LLM subagent for Phase D step 4) + **Read** (to fetch target-file neighbor context for the drift-close scenario)
+- `fukan-architect` still doesn't get Edit/Write/Bash beyond the daemon — code synthesis stays in the implementing-LLM subagent
 
 **Phase D — Instruct + Dispatch** (new authoring-loop phase added after Phase C Reflect):
 
 1. Read drift findings (Phase C output).
-2. For each finding the LLM decides to close in code, invoke `(generate-instruction finding)`.
+2. For each finding the LLM decides to close in code, invoke `(spec finding)` (Layer A) then wrap with `(instruct finding :code-side/drift-close)` (Layer B).
 3. Review the instruction's structured + rendered output. Catch obvious issues (wrong target path, missing context, oddly-shaped signature).
 4. Dispatch the implementing LLM with the rendered instruction + targeted context.
-5. After the implementing LLM commits, re-run drift. Confirm closure.
+5. After the implementing LLM commits, re-run `(canvas-drift :module-coord <scope>)` (scoped from Sprint 2 Task 5). Confirm closure.
+6. If finding persists, dispatch the implementing LLM ONCE MORE with new drift output as feedback. Max 2 iterations.
 
-The system prompt's failure-mode list grows: e.g. "treating instructions as gospel" (the canvas-author should still review; the generator is mechanical, not omniscient).
+The system prompt's failure-mode list grows: "treating instructions as gospel" (the canvas-author should still review; the generator is mechanical, not omniscient).
 
-- [ ] **Step 1: Draft the Phase D additions.**
-- [ ] **Step 2: Update the agent definition.**
+- [ ] **Step 1: Update the agent definition** — expand tool grant + add Phase D dispatch mode. Preserve the "read-only via daemon for canvas reasoning" character.
+- [ ] **Step 2: Draft the Phase D additions in the system prompt.**
 - [ ] **Step 3: Update AGENTS.md.**
 - [ ] **Step 4: Commit per artifact.**
 
@@ -578,10 +611,10 @@ jj new
 
 | Sprint | Tasks | Outcome |
 |--------|-------|---------|
-| 1 | 1–2 | Project-lens design (Layer A) + scenario-handoff design (Layer B) — two pause points |
-| 2 | 3–4 | Compound-shape comparator + Sprint-1-surfaced prereqs |
-| 3 | 5–N | Layer A substrate + 5-7 Clojure-lens projections + Layer B substrate + 2 scenarios + agent api integration |
-| 4 | N+1 to N+2 | Architect agent extension + close-the-loop trial run |
+| 1 | 1–2 | ✅ Project-lens design (Layer A) + scenario-handoff design (Layer B); both docs landed 2026-05-27 |
+| 2 | 3–5 | Compound-shape comparator + target/clojure addressing gaps (3 fixes) + scoped drift `:module-coord` filter |
+| 3 | 6–N | Layer A substrate + 5-7 Clojure-lens projections + Layer B substrate + 2 scenarios (drift-close + cold-write) + agent api integration |
+| 4 | N+1 to N+2 | Extend `fukan-architect` (tool grant + Phase D mode) + close-the-loop trial run |
 | 5 | Final | Phase 7 verification + Phase 8 brief |
 
 **Estimated calendar:** Sprint 1 ≈ 2 sessions (design + 2 pauses). Sprint 2 ≈ 1-2 sessions (compound-shape comparator is the meaningful piece). Sprint 3 ≈ 5-7 sessions (two substrates + 5-7 projections + 2 scenarios + agent api). Sprint 4 ≈ 2 sessions (integration + trial). Sprint 5 ≈ 1 session. **Total: 11-14 working sessions.**
