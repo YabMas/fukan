@@ -17,7 +17,15 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.inspect.coverage
   {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.lens.core
+  {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.lens.registry
+  {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.lens.survey
+  {:linters {:unused-public-var {:level :off}}}
   fukan.agent.api
+  {:linters {:unused-public-var {:level :off}}}
+  fukan.agent.system
   {:linters {:unused-public-var {:level :off}}}}
 
  :linters
