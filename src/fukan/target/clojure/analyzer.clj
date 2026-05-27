@@ -132,14 +132,28 @@
           (:primitives model)))
 
 (defn- entities-values-variants [model]
-  ;; A Container that carries an Allium::Entity OR Value OR Variant tag.
+  ;; Two recognition paths so both legacy Allium-tagged Containers AND modern
+  ;; canvas-projected Type primitives are seen:
+  ;;   (a) Legacy: a :primitive/container that carries an Allium::Entity|Value|Variant
+  ;;       tag-application (Allium analyzer output).
+  ;;   (b) Canvas: a :primitive/container whose stable-id includes the canvas
+  ;;       '/type/' segment (canvas-source's stable-id format for Type entities).
+  ;;
+  ;; The id-shape probe is what unblocks canvas records/values reaching schema
+  ;; projection without depending on the retired Allium tag vocabulary.
   (let [kind-tag? (fn [ta]
                     (and (= "Allium" (-> ta :tag :namespace))
                          (#{"Entity" "Value" "Variant"} (-> ta :tag :name))
                          (= :target/primitive (-> ta :target :case))))
-        ids (set (map (comp :id :target)
-                      (filter kind-tag? (:tag-apps model))))]
-    (filter (fn [[id _]] (contains? ids id)) (:primitives model))))
+        tagged-ids (set (map (comp :id :target)
+                             (filter kind-tag? (:tag-apps model))))
+        canvas-type-id? (fn [id]
+                          (and (string? id) (str/includes? id "/type/")))]
+    (filter (fn [[id p]]
+              (and (= :primitive/container (:kind p))
+                   (or (contains? tagged-ids id)
+                       (canvas-type-id? id))))
+            (:primitives model))))
 
 (defn- events [model]
   (filter (fn [[_ p]] (= :primitive/event (:kind p))) (:primitives model)))

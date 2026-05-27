@@ -27,6 +27,24 @@
           "exactly one schema edge per entity")
       (is (= :absent (:validity (first edges)))))))
 
+(deftest canvas-style-container-projects-to-data-structure
+  (testing "container with canvas-style /type/ id projects without Allium::Entity tag"
+    ;; Gap 3: canvas-source emits records/values as :primitive/container
+    ;; WITHOUT the legacy Allium::Entity tag. The analyzer's selector must
+    ;; recognise them via primitive kind + id shape rather than the tag.
+    (let [model (-> (build/empty-model)
+                    (build/add-primitive (p/make-container {:id "m" :label "m"}))
+                    (build/add-primitive (p/make-container {:id "m/type/ServerOpts"
+                                                            :label "ServerOpts"})))
+          m1 (analyzer/run model (registry/make-registry)
+                           "test/fixtures/clojure-projects/empty")
+          edges (filter #(and (= :relation/projects (:kind %))
+                              (= "m/type/ServerOpts" (-> % :from :id)))
+                        (:edges m1))]
+      (is (= 1 (count edges))
+          "exactly one schema edge per canvas-style type primitive")
+      (is (some? (first edges))))))
+
 (deftest event-projects-to-data-structure
   (testing "event → Code.DataStructure with schema projection-kind"
     (let [model (-> (build/empty-model)
