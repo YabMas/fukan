@@ -196,6 +196,12 @@
         (field slot :String)
         (field key  (optional :String)))
 
+      (value "ArtifactSubCase"
+        "Closed sum discriminator for an Artifact's sub variant. V0 commits
+         two cases under :artifact/code: code/function and code/data-structure.
+         Additional sub-cases (infra, documentation) arrive with their
+         producing analyzers per §10.1 / §10.5.")
+
       (record "ArtifactIdentity"
         "Tuple identity for an Artifact: (case, language, qualified_name).
          Per the projection vocabulary §7.3."
