@@ -503,7 +503,14 @@
 
 (defn- project-affordances
   "Project all Affordance entities into primitive map entries.
-   Returns {stable-id → primitive-map}."
+   Returns {stable-id → primitive-map}.
+
+   For affordances with role :canvas/invariant, the primitive's :label
+   is taken from :formal-expression (the holds-that string). This is the
+   canonical name the analyzer's rules selector uses to derive the
+   expected code-side predicate fn address. The stable-id still uses
+   the affordance's :entity/name (the canvas-side declaration name) so
+   primitive identity in the model map is unaffected."
   [db uuid->stable-id]
   (let [affordances-full (d/q '[:find ?uuid ?name ?role
                                  :where [?e :entity/type :Affordance]
@@ -515,13 +522,32 @@
                               :where [?e :entity/type :Affordance]
                                      [?e :entity/id ?uuid]
                                      [?e :affordance/doc ?doc]]
-                            db))]
+                            db))
+        formal-exprs (into {} (d/q '[:find ?uuid ?fe
+                                      :where [?e :entity/type :Affordance]
+                                             [?e :entity/id ?uuid]
+                                             [?e :affordance/formal-expression ?fe]]
+                                    db))]
     (into {} (keep (fn [[uuid name role]]
                      (when-let [id (get uuid->stable-id uuid)]
                        (let [kind  (affordance-kind role)
-                             prim  (cond-> {:kind  kind
-                                            :id    id
-                                            :label name}
+                             ;; For invariants, the :holds-that string lives in
+                             ;; :formal-expression (pr-str'd in the canvas db)
+                             ;; and serves as the canonical code-side predicate
+                             ;; name. read-string round-trips back to the bare
+                             ;; string.
+                             fe-raw (get formal-exprs uuid)
+                             fe-val (when (string? fe-raw)
+                                      (try (read-string fe-raw)
+                                           (catch Exception _ nil)))
+                             label (if (and (= role :canvas/invariant)
+                                            (string? fe-val))
+                                     fe-val
+                                     name)
+                             prim  (cond-> {:kind        kind
+                                            :id          id
+                                            :label       label
+                                            :canvas-role role}
                                      (get docs uuid)               (assoc :description (get docs uuid))
                                      ;; Both :primitive/operation and :primitive/event require
                                      ;; :parameters in the Malli schema; canvas-source does not
