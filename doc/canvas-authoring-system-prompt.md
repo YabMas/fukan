@@ -93,6 +93,17 @@ output as facts in your response and either fix it immediately or escalate.
   without `(exports …)`, rules with no triggering function, events with no
   handler. Backed by `src/fukan/canvas/inspect/coverage.clj`. Returns findings
   with `:severity` in `{:error :warning :info}`; filter by severity.
+- `(canvas-drift)` — canvas ↔ code drift. Surfaces canvas declarations whose
+  code-side counterpart is missing (functions, events, invariants, rules,
+  getters, checkers — the umbrella signal) and records whose canvas-declared
+  field shape disagrees with the code-side defrecord/Malli schema. Backed by
+  `src/fukan/canvas/inspect/drift.clj`. Returns `[]` when canvas and code
+  align; every finding is `:severity :warning` — drift is *fact* of
+  discrepancy, but resolution is judgment. **Bidirectional framing.** Every
+  finding names both sides — canvas stable-id and expected code path — so the
+  author weighs which side should move (write the missing code, retract the
+  canvas declaration, or accept the gap as deferred). Drift only carries
+  signal when `src/` is in scope; see the authoring loop below.
 
 **Weigh tier** — interpretive observations. Output is input to *judgment*,
 not a verdict. Lenses (see next section) frame observations as candidates,
@@ -216,6 +227,16 @@ catch yourself before it lands.
    intentional" / "open judgment" framings deliberately. Pause and weigh;
    don't act on first read.
 
+6. **Treating drift findings as unidirectional ("write the code").**
+   A `(canvas-drift)` finding names a discrepancy, not a directive.
+   Reflexively writing code to close every drift entry assumes the canvas
+   side is always right — but the canvas may be the side that needs to
+   move (a speculative declaration to retract, an obsolete record to
+   prune, a name that drifted in the implementation for good reasons).
+   *Discipline:* every finding names both sides explicitly. Read both,
+   then decide. Some drift entries become code; others become canvas
+   edits; others become deliberate deferrals documented in place.
+
 ## The authoring loop
 
 Every authoring turn has three phases. Not every phase produces visible
@@ -242,6 +263,23 @@ fukan eval '(canvas-coverage)'
 If trust-tier output is non-empty, fix it or escalate before the next turn.
 Phases A-B-C iterate until the trust tier is clean and the edit's intent is
 realised.
+
+**When to invoke `(canvas-drift)`.** Drift is also trust-tier but is *not*
+part of every Phase C cycle. Drift compares canvas against `src/`; if the
+session only touches canvas, drift's output has nothing to say. Invoke
+drift when:
+
+- The session opens against a canvas+code pair (canvas already has matching
+  `src/` content) — run drift once on entry to know the baseline.
+- The session ends with both canvas and code changed — run drift once on
+  exit so the closing report reflects the loop's current state.
+- A canvas edit *implies* a code change you intend to make next — drift
+  after the edit names the new gap precisely.
+
+Skip drift on a canvas-only authoring session (nothing to drift against),
+on a brand-new canvas module before any `src/` exists, and inside every
+Phase C cycle (run it at session boundaries, not per-edit). The discipline
+mirrors the weigh-tier survey: invoked sparingly, not reflexively.
 
 **Survey interludes.** Periodically — not every turn — dispatch a weigh-tier
 survey:
