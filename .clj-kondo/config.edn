@@ -62,6 +62,8 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.project.clojure.value-to-def
   {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.project.clojure.type-to-malli
+  {:linters {:unused-public-var {:level :off}}}
   fukan.agent.api
   {:linters {:unused-public-var {:level :off}}}
   fukan.agent.system
