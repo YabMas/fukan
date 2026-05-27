@@ -103,7 +103,25 @@ output as facts in your response and either fix it immediately or escalate.
   finding names both sides — canvas stable-id and expected code path — so the
   author weighs which side should move (write the missing code, retract the
   canvas declaration, or accept the gap as deferred). Drift only carries
-  signal when `src/` is in scope; see the authoring loop below.
+  signal when `src/` is in scope; see the authoring loop below. Scope the
+  query with `(canvas-drift :module-coord <prefix>)` rather than the global
+  firehose when working on one subsystem.
+- `(spec stable-id-or-finding)` — Layer A. Projects one generic Model element
+  through the active project lens (the Clojure lens for fukan-on-fukan) and
+  returns the deterministic low-level code spec: target path, namespace,
+  symbol name, structural template, and prose envelope for semantic intent
+  the structure can't carry. The projection is a fact, not a judgment;
+  `:severity :info`. Pluggable per project — the Clojure lens is the
+  reference implementation.
+- `(instruct stable-id-or-finding :code-side/drift-close)` — Layer B. Composes
+  a Layer-A spec with a scenario wrapper to produce the full instruction the
+  implementing LLM consumes. Two scenarios ship: `:code-side/drift-close`
+  (closing a known gap; preserve neighbors) and `:code-side/cold-write`
+  (writing canvas content from scratch; reference matching neighbors for
+  style). Refactor is deferred to Phase 8.
+- `(canvas-projections)` / `(canvas-scenarios)` — discovery. List the
+  registered Layer-A projections and Layer-B scenarios; mirror
+  `(canvas-lenses)` for Layer-A/B discoverability.
 
 **Weigh tier** — interpretive observations. Output is input to *judgment*,
 not a verdict. Lenses (see next section) frame observations as candidates,
@@ -237,6 +255,14 @@ catch yourself before it lands.
    then decide. Some drift entries become code; others become canvas
    edits; others become deliberate deferrals documented in place.
 
+7. **Treating instructions as gospel.** Layer A's projection is
+   deterministic; Layer B's scenario wrapping adds situational context.
+   Neither is omniscient. Review every generated instruction before
+   dispatch — target paths can be subtly wrong, signatures can miss
+   canvas-side intent the projection couldn't infer, neighbor context
+   may be misleading. The implementing LLM trusts what you hand it; if
+   the instruction is wrong, the code will be wrong.
+
 ## The authoring loop
 
 Every authoring turn has three phases. Not every phase produces visible
@@ -302,6 +328,29 @@ When *not* to invoke the survey:
 - On a brand-new empty module. Nothing to cluster against.
 - Faster than ~3 minutes between dispatches. Surveys are expensive and
   benefit from accumulated state between dispatches.
+
+**Phase D — Instruct + Dispatch (when `src/` is in scope).**
+
+After Phase C surfaces drift findings the canvas-author decides to close in
+code, Phase D produces structured implementation instructions and hands them
+to an implementing-LLM subagent:
+
+- Run `(instruct <stable-id-or-drift-finding> :code-side/drift-close)` to
+  compose Layer A's projection with the drift-close scenario; use
+  `:code-side/cold-write` when writing canvas content from scratch.
+- Review the rendered output. Catch wrong target paths, missing context,
+  oddly-shaped signatures — the generator is mechanical, not omniscient.
+- Dispatch the implementing-LLM subagent (general-purpose) with the
+  rendered instruction. Don't dump the canvas db — minimum sufficient
+  context.
+- Verify closure via `(canvas-drift :module-coord <scope>)`. If the
+  finding persists, dispatch once more with the new drift output as
+  feedback. Max 2 iterations per instruction.
+
+Phase D's cadence is **per-targeted-gap**, not per-edit. The canvas-author
+chooses WHICH findings to close (not all); the implementing LLM handles
+the writing. Phase D never lands canvas or `src/` edits from this seat —
+the implementing-LLM subagent is the only thing that writes code.
 
 **Escalation.** When trust-tier output names a problem you can't fix locally
 (a broken reference into a sister module you don't own; a coverage gap that
