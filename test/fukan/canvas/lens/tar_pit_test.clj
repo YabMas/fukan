@@ -1,5 +1,6 @@
 (ns fukan.canvas.lens.tar-pit-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [fukan.canvas.construction :refer [function record value]]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.lens.core :as core]
@@ -30,7 +31,7 @@
 (deftest prompt-fragment-substantive
   (testing "the prompt-fragment is the load-bearing artifact — must be substantial"
     (let [pf (:prompt-fragment tar-pit/lens)
-          words (count (clojure.string/split pf #"\s+"))]
+          words (count (str/split pf #"\s+"))]
       (is (>= words 200)
           (str "prompt-fragment too thin: " words " words"))
       (is (re-find #"(?i)essential" pf))
