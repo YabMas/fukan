@@ -6,6 +6,13 @@
 
 **Phase 7's strategic frame:** Phase 6's drift output is decision-ready about *what's missing*; Phase 7 makes it actionable about *what to write*. The split matters — Phase 6's bidirectional framing leaves the "which side moves" judgment to the canvas-author LLM. When that LLM decides "close in code," Phase 7 produces the precise instruction: target path, symbol name, expected signature, semantic intent, structural template. Then a separate **implementing LLM** (general-purpose, given the instruction) writes the actual code body. The architectural separation respects each LLM's strength — fukan's canvas reasoning stays in fukan; Clojure code synthesis delegates to a capable coding LLM.
 
+**Two-layer architecture (the load-bearing distinction this plan respects):**
+
+- **Layer A — Project-lens projection.** The generic Model element (from canvas) projects through a project-configured language lens to produce a deterministic low-level code specification: target path, namespace, symbol name, structural template, prose where structure leaves semantic intent. The Model substrate is language-agnostic; each project (fukan-on-fukan, or any external project using fukan) registers its own lens defining how `Type → schema`, `Function → fn-shape`, `Invariant → predicate`, etc. The fukan-on-fukan Clojure lens is the reference implementation; the registry mechanism is pluggable.
+- **Layer B — Scenario-aware instruction.** Wraps a raw projection from Layer A with situation-specific framing: drift-close ("you're closing a gap; don't disturb neighbors"), cold-write ("you're writing from scratch; here are the conventions + matching neighbors"), refactor (Phase 8 candidate). Same projection, different prose envelope.
+
+The original draft of this plan conflated the two layers into per-instruction-type generators. The amendment section at the bottom of this doc captures the reframe; the forward-reading sections below have been edited to reflect it.
+
 **Architecture inheritance from Phase 6:**
 
 - `canvas/inspect/drift.clj` — produces structured drift findings (446 today against fukan-itself)
@@ -36,57 +43,78 @@
 
 ---
 
-## What "implementation instruction" means concretely
+## What "code specification" and "implementation instruction" mean concretely
 
-A structured, LLM-consumable description of *what code to write at what location*. Sprint 1 Task 1 settles which instruction types ship vs which defer. Candidates derived from Phase 6's drift output shape:
+Per the two-layer architecture, these are two distinct things that Sprint 1 + 3 build:
 
-**From `missing-implementation` findings (the umbrella):**
+### The code specification (Layer A output — project-lens projection)
 
-1. **Add function.** Canvas declared a function with `takes`/`gives`/`triggers`/`emits`/`effects`; code has no corresponding fn. Instruction: target path, fn name, arglist, return-type hint, semantic intent (rendered from canvas declaration's docstring + structural surroundings), stub-template.
-2. **Add record (Malli schema).** Canvas declared a record with named fields + types; code has no corresponding `def`. Instruction: target path, schema name, `[:map ...]` body derived from canvas fields, alias-normalized.
-3. **Add value (opaque type).** Canvas declared a value with no fields. Instruction: target path, def name, opaque-marker comment, possibly a `(def Foo :tag/foo)` or schema-shaped fallback.
-4. **Add event.** Canvas declared an event with payload shape. Instruction: target path, event-schema def, payload `[:map ...]`.
-5. **Add invariant predicate.** Canvas declared `(invariant X (holds-that "Y"))`; code has no fn `Y`. Instruction: target path, predicate fn name `Y` (from `holds-that`), `[model]` arglist, return-type `Boolean`, semantic intent rendered from invariant docstring + property name.
-6. **Add rule predicate.** Canvas declared `(rule X (when X (params)))`; code has no fn `kebab(X)`. Symmetric with invariants.
-7. **Add getter.** Canvas declared `(getter X :T)`; code has no fn `kebab(X)`. Instruction: zero-arg fn returning Optional<T>.
-8. **Add handler.** Canvas declared `(handler X (on Event) (emits …))`; code has no fn `kebab(X)`. Instruction: handler signature, event-payload arg, emits-target list.
+A **deterministic low-level code spec** produced by projecting one generic Model element through the project's registered language lens. For fukan-on-fukan (Clojure lens), one projection per Model element kind:
 
-**From `shape-drift-on-records` findings:**
+| Model element kind | Clojure-lens projection produces |
+|---|---|
+| `Type` (record-shaped) | Malli `[:map [:field-name :field-type] ...]` schema; alias-normalized; target path + def name + namespace |
+| `Type` (value/opaque) | `(def Name :tag/<name>)` or equivalent opaque marker; target path + def name |
+| `Affordance` (function role) | `(defn name [args] body)`; arglist derived from canvas `takes`; return-type hint from `gives`; body is `(throw (ex-info "Not implemented" {…}))` stub; docstring from canvas |
+| `Affordance` (getter role) | Zero-arg `(defn get-name [] (Optional<T>))`; structure baked in |
+| `Affordance` (checker role) | `(defn check [model] [Violation...])`; structure baked in |
+| `Affordance` (invariant role) | Predicate fn `(defn <holds-that> [model] …)`; body is prose-only (semantic intent from canvas docstring) |
+| `Affordance` (rule role) | Predicate fn `(defn <kebab-rule-name> [model] …)`; symmetric with invariant |
+| `Affordance` (event role) | Event-schema `(def Name [:map [:payload-field :type] ...])` |
+| `Affordance` (handler role) | `(defn on-<event-name> [payload] …)`; emits-target list as prose context |
 
-9. **Update record fields.** Canvas record's field set differs from code's `[:map …]`. Instruction: target path, schema name, structured delta — fields to add (with types), fields to remove, fields whose type to change.
-10. **Update record fields (canvas-side).** Symmetric direction: when the LLM decides code is correct, regenerate canvas to mirror. (May or may not ship in Phase 7 — Sprint 1 Task 1 decides.)
+The spec is **structured data plus rendered template**. Where structure is determinate (signatures, schemas, named fns), the template renders unambiguous Clojure. Where structure leaves semantic intent (fn bodies, invariant property logic), the spec carries prose from the canvas declaration's docstring + structural surroundings.
 
-Each instruction is **structured data** plus **rendered prose** for the implementing LLM. The LLM doesn't reverse-engineer from prose alone; it reads the structure for unambiguous fields and the prose for semantic intent.
+A given Model element projects through the lens to the **same code spec** regardless of scenario — the spec is intrinsic to the Model element + the lens config, not to whether the canvas-author is closing a drift gap or writing from scratch.
 
-The trust/weigh discipline carries forward: drift findings are facts (trust); instructions derived from facts are still facts (trust). The interpretive judgment is "should I close this gap?" — which Phase 6 already framed via bidirectional `:offenders` shape. Phase 7 doesn't add interpretation; it adds *actionability* on findings the canvas-author already chose to act on.
+### The implementation instruction (Layer B output — scenario-aware wrapper)
+
+A code spec rendered through a scenario context, producing the **full prompt the implementing LLM consumes**. Same code spec, different prose envelope per scenario:
+
+- **drift-close scenario.** The LLM is closing a known gap. Wraps the code spec with: "Canvas declared X at <path>. Code has no matching artifact. Here's the spec. Here's what's already in the file (neighbor fns + imports). Don't disturb unrelated content."
+- **cold-write scenario.** The LLM is writing from scratch (no existing src/ for this canvas module). Wraps with: "Canvas declares this module + these elements. Here are the specs for each. Here are matching-pattern neighbors in other modules to reference for style. Here are the canvas vocabulary conventions you should know."
+- **refactor scenario** (Phase 8 candidate). Code exists but its shape diverges. Wraps with the delta + neighbor-preservation guidance.
+
+Each instruction is **structured data plus rendered prose** — the structured data carries the spec; the prose carries the scenario context. The implementing LLM consumes both.
+
+The trust/weigh discipline carries forward: drift findings are facts (trust); code specs derived from Model elements through the lens are facts (trust); instructions wrapping specs with scenario context are facts (trust). The interpretive judgment is "should I close this gap?" — which Phase 6 already framed via bidirectional `:offenders` shape. Phase 7 doesn't add interpretation; it adds *actionability* on findings the canvas-author already chose to act on.
 
 ---
 
 ## File structure (Phase 7)
 
-**Likely new namespaces:**
+**Likely new namespaces** (per the two-layer architecture):
 
 ```
-src/fukan/canvas/instruct/
-  core.clj                       ; instruction-shape contract (spec/schema)
-  registry.clj                   ; per-drift-kind generator registry; mirrors lens registry pattern
-  render.clj                     ; structured-instruction → markdown rendering for LLM consumption
+src/fukan/canvas/project/             ; LAYER A — project-lens projections (Model element → code spec)
+  core.clj                            ; the lens contract (per-Model-element projection contract)
+  registry.clj                        ; project-lens registry; fukan-on-fukan Clojure lens registers here
+  render.clj                          ; structured projection → markdown spec rendering
 
-  add_function.clj               ; one file per instruction type
-  add_record.clj
-  add_value.clj
-  add_event.clj
-  add_predicate.clj              ; covers add-invariant-predicate + add-rule-predicate
-  add_getter.clj
-  add_handler.clj
-  update_record_fields.clj
+  clojure/                            ; the Clojure lens (fukan-on-fukan's reference projection set)
+    type_to_malli.clj                 ; Type (record-shaped) → Malli :map schema
+    value_to_def.clj                  ; Type (value/opaque) → def
+    function_to_defn.clj              ; Affordance (function/getter/checker) → defn
+    invariant_to_predicate.clj        ; Affordance (invariant) → predicate fn
+    rule_to_predicate.clj             ; Affordance (rule) → predicate fn
+    event_to_schema.clj               ; Affordance (event) → schema def
+    handler_to_defn.clj               ; Affordance (handler) → defn
+
+src/fukan/canvas/instruct/            ; LAYER B — scenario-aware instructions (spec + situation context)
+  core.clj                            ; the scenario contract
+  registry.clj                        ; scenario registry
+  render.clj                          ; structured instruction → markdown rendering for the implementing LLM
+
+  drift_close.clj                     ; scenario: closing a drift gap
+  cold_write.clj                      ; scenario: writing canvas content from scratch
+  ; refactor.clj                      ; (deferred to Phase 8) scenario: code exists but shape diverges
 
 src/fukan/canvas/architect/
-  handoff.clj                    ; dispatch protocol for handing instructions to implementing LLM
+  handoff.clj                         ; dispatch protocol for handing instructions to implementing LLM
 
 doc/plans/
-  2026-05-27-instruction-design.md          ; Sprint 1 output
-  2026-05-27-handoff-protocol-design.md     ; Sprint 1 output
+  2026-05-27-project-lens-design.md         ; Sprint 1 Task 1 output (Layer A design)
+  2026-05-27-scenario-handoff-design.md     ; Sprint 1 Task 2 output (Layer B + handoff design)
   2026-05-27-phase-7-verification.md        ; Sprint 5 output
 ```
 
@@ -110,77 +138,112 @@ AGENTS.md                                     ; add instruction surface
 
 ---
 
-# Sprint 1 — Instruction shape + handoff design (Tasks 1–2)
+# Sprint 1 — Project-lens + scenario-handoff design (Tasks 1–2)
 
-Two design docs before any code. Mirrors Phase 5 + 6 Sprint 1 shape.
+Two design docs before any code. Mirrors Phase 5 + 6 Sprint 1 shape. Task 1 designs Layer A (the project-lens); Task 2 designs Layer B + the handoff protocol.
 
 ---
 
-## Phase 7, Task 1: Instruction-shape design doc
+## Phase 7, Task 1: Project-lens design (Layer A)
 
 **Files:**
-- Create: `doc/plans/2026-05-27-instruction-design.md`
+- Create: `doc/plans/2026-05-27-project-lens-design.md`
 
 ### What the design doc must cover
 
-For each of the 10 candidate instruction types listed above:
+For each Model element kind that needs a Clojure projection (function/getter/checker/invariant/rule/event/handler — affordances; record + value — types):
 
-1. **What it generates.** Concrete sample of the structured-instruction map for one drift finding. What fields are always present; what's optional.
-2. **Inputs.** What drift-finding fields feed in; what canvas-db queries the generator needs (e.g. to fetch the originating canvas declaration's docstring + structural surroundings); what analyzer-output it reads for the canonical address.
-3. **Rendered prose shape.** The markdown the implementing LLM reads. Same finding's prose rendering. Should be self-contained — implementing LLM doesn't need to query fukan to write the code.
-4. **Stub template.** When the generator produces a structural template (e.g. `(defn get-self-role [] ...)`), what's the template shape? When the body is too constrained to template usefully (e.g. invariant predicates that need actual logic), the instruction skips the template and emits prose-only.
-5. **Phase 7 priority.** Ship vs defer.
+1. **What the projection produces.** Concrete sample of the structured code-spec map for one Model element. What fields are always present; what's optional.
+2. **Inputs.** What canvas-db queries the projection needs (the originating declaration's name, role, docstring, takes/gives/holds-that/etc.); what address-mapping output it reuses from `target/clojure/address.clj`.
+3. **Structural template.** Where the structure is determinate, what does the rendered Clojure look like? E.g. for `record → Malli :map`, show the literal `(def Name [:map [...] ...])` rendering. For `invariant → predicate`, the bare `(defn name [model] ...)` with body left as prose.
+4. **Prose envelope.** Where structure leaves semantic intent (fn bodies, invariant property logic), what prose travels with the spec? Pulled from canvas docstring + structural surroundings; should be self-contained.
+5. **Alias normalization.** Canvas type-name keywords (`:Integer`, `:String`, …) translate to Malli keywords (`:int`, `:string`, …) via the alias table from Phase 6 Sprint 3. This task documents the canonical mapping; extends the table if Phase 7 needs more entries.
 
 ### Critical design questions to settle
 
-- **Is this trust tier or a new tier?** Drift findings are trust-tier. Instructions derived FROM drift findings — are they still decision-ready facts? Or is the LLM's stub-template a recommendation (weigh-tier)? **Default proposal: trust-tier with `:severity :info`** (informational; the action is take-it-or-modify, never "this is an error"). But this is a partition question worth examining.
-- **Stub-template ambition level.** Bare signatures + an exception body? Or richer scaffolding (related fns referenced; tests outline; common patterns)? The trade-off: richer templates risk being wrong; bare templates leave more work for the implementing LLM but stay safe. **Default proposal: bare signature + exception body + structured `:context` field naming related canvas entities.**
-- **Symmetric (canvas-side) instructions?** When drift's bidirectional framing says "canvas may be the side to move," does Phase 7 generate canvas-edit instructions too? **Default proposal: defer to Phase 8.** Phase 7 handles only `:code-side/*` instructions; symmetric canvas-side instructions are a follow-on.
+- **Lens-registry shape.** How does fukan-on-fukan's Clojure lens register its per-Model-element projections? How would an external project (TypeScript, Python, …) register an alternative lens? **Default proposal: a multimethod keyed on `[lens-id Model-element-kind]` plus a per-project registry entry. The Clojure lens registers in `src/fukan/canvas/project/clojure/registry.clj`; an external project would ship its own analogue.**
+- **Per-projection contract.** What's the consistent map shape every projection returns? E.g.:
+  ```clojure
+  {:projection-kind :clojure/type-to-malli
+   :model-element-id "<canvas stable-id>"
+   :target {:path "src/fukan/<...>.clj" :namespace "fukan.<...>" :symbol "<name>"}
+   :template "<rendered Clojure string or nil>"
+   :prose "<semantic intent>"
+   :context {:related-elements [...] :canvas-source-ref "..."}}
+  ```
+- **Trust tier?** Code specs derived from generic Model elements through a deterministic lens are facts (trust). Confirm `:severity :info` (informational, never "error").
+- **Address-mapping reuse.** `target/clojure/address.clj` already maps canvas module + entity name → file path + symbol. The Clojure projections should call its existing fns rather than re-deriving. Document the reuse path.
+
+### Which projections ship in Phase 7
+
+Default: ship 6 of the 9 Clojure-lens projections in Phase 7. Sprint 1 picks; suggested:
+- Ship: `type → malli`, `value → def`, `function → defn`, `invariant → predicate`, `event → schema`, `record → schema` (alias for type→malli when shape is record)
+- Defer: `getter → defn` (special-case of function; ship if trivial), `handler → defn` (semantics overlap function), `rule → predicate` (symmetric with invariant)
 
 ### Steps
 
-- [ ] **Step 1: For each candidate instruction type, sketch the structured + rendered shape against a real drift finding from fukan-itself.** Pick representative findings from each category (function, invariant, record, event, etc.) — use real `:stable-id`s as the source material.
-- [ ] **Step 2: Settle the tier question.** Confirm or push back on "trust-tier with `:info` severity."
-- [ ] **Step 3: Settle stub-template ambition.** Confirm or refine the "bare signature + exception body" default.
-- [ ] **Step 4: Settle symmetric instructions** (defer vs ship).
-- [ ] **Step 5: Pick 4-6 instruction types for Phase 7 priority.** Defer the rest.
-- [ ] **Step 6: Pause for user review.** Load-bearing design conversation.
-- [ ] **Step 7: Commit.**
+- [ ] **Step 1: For each candidate projection, sketch the structured + rendered shape** against a real canvas declaration in fukan-itself. Use the matching `src/` file as the target the projection points at.
+- [ ] **Step 2: Settle the lens-registry shape.** Confirm multimethod-keyed-on-[lens-id, element-kind], or propose alternative.
+- [ ] **Step 3: Settle the per-projection contract.** Lock the map shape.
+- [ ] **Step 4: Pick 5-7 projections to ship in Phase 7.** Defer the rest.
+- [ ] **Step 5: Pause for user review.** Load-bearing design conversation.
+- [ ] **Step 6: Commit.**
 
 ```bash
-jj desc -m "doc(canvas): Phase 7 instruction-shape design"
+jj desc -m "doc(canvas): Phase 7 project-lens design (Layer A)"
 jj new
 ```
 
 ---
 
-## Phase 7, Task 2: Handoff protocol design
+## Phase 7, Task 2: Scenario + handoff design (Layer B)
 
 **Files:**
-- Create: `doc/plans/2026-05-27-handoff-protocol-design.md`
+- Create: `doc/plans/2026-05-27-scenario-handoff-design.md`
 
-### Context
+### What the design doc must cover
 
-Phase 7's product surface separates fukan from the implementing LLM. fukan reasons about canvas + drift + instructions. The implementing LLM writes the code. The handoff is the structured instruction + enough context for the LLM to act without further fukan queries.
+Layer B wraps Layer A's code specs with scenario context, then defines the handoff to the implementing LLM. Three sub-designs:
 
-The handoff design settles:
+1. **Scenario contract.** What's the consistent shape every scenario produces? Suggested:
+   ```clojure
+   {:scenario-id :drift-close
+    :code-spec <Layer-A projection map>
+    :scenario-context {:what-exists-in-target-file "..." :neighbor-patterns [...] ...}
+    :rendered "<full markdown the implementing LLM reads>"}
+   ```
+2. **Which scenarios ship.** Default: **drift-close + cold-write** in Phase 7. Refactor (shape-drift handling) defers to Phase 8 because it depends on compound-shape comparator + delta logic.
+3. **Handoff protocol.**
+   - **Dispatch shape.** Default: Agent-tool dispatch from `fukan-architect` to a general-purpose implementing LLM subagent. Keeps the loop closed; implementing LLM is a child subagent.
+   - **Implementing-LLM brief.** What goes in the dispatched prompt: the scenario's rendered output (the full instruction) + targeted context (neighbor fns from the target file, related canvas declarations, project conventions). **Don't dump the canvas db.**
+   - **Verification protocol.** After the implementing LLM commits, re-run drift; confirm the finding cleared. If not closed, dispatch a second iteration with the new drift output as feedback. **Default: max 2 iterations per instruction.**
+   - **Multi-instruction batching.** Default: one instruction per dispatch in Phase 7. Phase 8 candidate.
 
-- **Dispatch shape.** Does the canvas-author LLM (running as `fukan-architect`) dispatch the implementing LLM via the Agent tool? Or does fukan emit the instruction structure for an external workflow (the human, an editor agent, a CI system) to pick up? **Default proposal: Agent-tool dispatch from `fukan-architect`** — keeps the loop closed; implementing LLM is a child subagent.
-- **Implementing-LLM brief.** What goes in the dispatched prompt? The structured instruction + the rendered prose + pointers to: relevant existing code (matching neighbor fns, related records), the canvas docstring source, possibly a few lines of context from `src/`. **Don't dump the canvas db.** The implementing LLM needs targeted context.
-- **Verification protocol.** After the implementing LLM lands its commit, how does fukan verify the gap closed? Re-run drift; confirm the finding is gone. If drift still shows the finding (or new findings appeared), what's the loop? **Default proposal: one re-run; if not closed, the implementing LLM is dispatched a second time with the new drift output as feedback.**
-- **Multi-instruction batching.** Should fukan generate one instruction per dispatch, or batch (e.g. "implement all missing fns in `distributed.cluster`")? **Default proposal: one instruction per dispatch in Phase 7.** Batching is a Phase 8 candidate once single-instruction loops are evidenced.
+### Per-scenario design
+
+**drift-close scenario.** Input: one drift finding + the Layer-A spec derived from it. Output: instruction prompt framed as "you are closing a known gap." Includes:
+- The code spec (template + prose envelope)
+- Neighbor context (what's already in the target file; imports; sibling defs)
+- The drift finding itself (so the LLM understands why this is being asked)
+- Discipline: don't disturb unrelated content; preserve existing imports/aliases
+
+**cold-write scenario.** Input: a canvas module declaration (or a chosen subset of its entities) + the Layer-A specs. Output: instruction prompt framed as "you are writing this canvas module's implementation from scratch." Includes:
+- The Layer-A specs for each entity
+- Project conventions (from CLAUDE.md + canvas vocab docs)
+- Matching-pattern neighbors from elsewhere in `src/` (e.g. "look at `src/fukan/infra/server.clj` for how a module of this shape is typically organized")
+- Discipline: follow the project conventions even where the spec is silent
 
 ### Steps
 
-- [ ] **Step 1: Sketch the dispatch protocol.** Per-turn structure (canvas-author asks for instruction → fukan produces it → canvas-author reviews → canvas-author dispatches implementing LLM → implementing LLM commits → drift re-run → confirm).
-- [ ] **Step 2: Specify the implementing-LLM brief.** What context to pass; what NOT to pass (don't bloat).
-- [ ] **Step 3: Specify the verification protocol.** Re-run drift; closed-vs-not-closed determination; retry loop.
-- [ ] **Step 4: Pick trial-run target shape.** Phase 6's `canvas/distributed/*` + partial `src/fukan/distributed/*` is the natural continuation — many drift findings remain there from Phase 6's deliberate omissions, ready material for the closing loop.
+- [ ] **Step 1: Lock the scenario contract.** Map shape.
+- [ ] **Step 2: Specify drift-close + cold-write scenarios** concretely (sample instructions for each, derived from real fukan-on-fukan situations).
+- [ ] **Step 3: Specify the handoff protocol** (dispatch, brief shape, verification, retry).
+- [ ] **Step 4: Pick the trial-run target.** Default: `canvas/distributed/*` + partial `src/fukan/distributed/*` from Phase 6. Many drift findings remain there from Phase 6's deliberate omissions — ready material for the closing loop.
 - [ ] **Step 5: Pause for user review.**
 - [ ] **Step 6: Commit.**
 
 ```bash
-jj desc -m "doc(canvas): Phase 7 handoff protocol design"
+jj desc -m "doc(canvas): Phase 7 scenario + handoff design (Layer B)"
 jj new
 ```
 
@@ -231,94 +294,162 @@ Sprint 1's design conversations may surface additional small prerequisites — d
 
 ---
 
-# Sprint 3 — Build instruction generation (Tasks 5–N)
+# Sprint 3 — Build the two layers (Tasks 5–N)
 
-The substantive sprint. Implements the instruction substrate (`core`/`registry`/`render`) + one generator per Sprint-1-selected instruction type.
+The substantive sprint. Two substrates + their occupants. Mirrors Phase 5's lens-substrate sprint shape but builds **two** substrates (project-lens + scenario) since Phase 7's architecture is two-layered.
 
-Mirrors Phase 5's lens-substrate sprint shape:
+Sprint 3 structure:
 
-- **Substrate** (Task 5): core + registry + render namespaces. ~3 small namespaces.
-- **Generators** (Tasks 6 through N): one per instruction type. Each is a `(generate finding) → instruction-map` fn registered in the registry.
+- **Task 5 — Layer A substrate**: `src/fukan/canvas/project/{core,registry,render}.clj`. ~3 small namespaces.
+- **Tasks 6 to M — Clojure-lens projections**: one task per Model-element projection Sprint 1 Task 1 selected. Each is a `(def projection …)` in `src/fukan/canvas/project/clojure/<name>.clj`. ~5-7 tasks.
+- **Task M+1 — Layer B substrate**: `src/fukan/canvas/instruct/{core,registry,render}.clj`. ~3 small namespaces.
+- **Tasks M+2 to N — Scenario wrappers**: one task per scenario Sprint 1 Task 2 selected. Each is a `(def scenario …)` in `src/fukan/canvas/instruct/<name>.clj`. Default 2 (drift-close, cold-write).
 
-Each generator task lands as:
-- One namespace under `src/fukan/canvas/instruct/`
-- Tests covering: positive case (finding → expected instruction), edge cases (missing context, unusual shapes), rendered-prose snapshot
-- Registry registration
-- Agent api `(help)` surface entry under the appropriate tier
+Each task lands as: one namespace + tests + registry registration + an agent api `(help)` surface entry under `:trust` (with `:severity :info`).
 
 ---
 
-## Phase 7, Task 5: Instruction substrate (core + registry + render)
+## Phase 7, Task 5: Layer A substrate (project-lens core + registry + render)
 
 **Files:**
-- Create: `src/fukan/canvas/instruct/core.clj` — instruction-shape contract; `validate-instruction`
-- Create: `src/fukan/canvas/instruct/registry.clj` — per-drift-kind generator registration; `all-generators`, `generator-for`
-- Create: `src/fukan/canvas/instruct/render.clj` — structured → markdown rendering
+- Create: `src/fukan/canvas/project/core.clj` — lens contract; `valid-projection?`, `validate-projection`
+- Create: `src/fukan/canvas/project/registry.clj` — per-`[lens-id, model-element-kind]` projection registration; `all-projections`, `projection-for`
+- Create: `src/fukan/canvas/project/render.clj` — structured projection → markdown spec rendering
 - Tests for each
 
 Mirrors the Phase 5 lens substrate pattern: small (~30-50 LOC per namespace), explicit, mechanical.
 
-**Instruction contract:**
+**Projection contract** (per Sprint 1 Task 1's settled shape; placeholder here):
 
 ```clojure
-{:instruction-kind  :code-side/add-function     ; required
- :severity          :info                       ; trust-tier default
- :drift-finding     {<original drift-finding-map>}    ; provenance
- :target            {:path "src/fukan/<...>.clj"
-                     :namespace "fukan.<...>"
-                     :symbol "<symbol-name>"}
- :signature         {<kind-specific structured signature>}
- :rationale         "<one-paragraph prose>"
- :stub-template     "<rendered Clojure template string, or nil>"
- :context           {:related-fns    [<stable-id> ...]
-                     :related-types  [<stable-id> ...]
-                     :canvas-source  "<canvas/.../file.clj:line>"}
- :rendered          "<full markdown the implementing LLM reads>"}
+{:projection-kind  :clojure/type-to-malli         ; required; namespaced keyword
+ :lens-id          :clojure                       ; required; which lens produced this
+ :model-element-kind :Type                        ; required
+ :model-element-id "<canvas stable-id>"           ; required
+ :target           {:path "src/fukan/<...>.clj"
+                    :namespace "fukan.<...>"
+                    :symbol "<name>"}
+ :template         "<rendered Clojure string or nil>"
+ :prose            "<semantic intent>"
+ :context          {:related-elements [<stable-id> ...]
+                    :canvas-source-ref "<canvas/.../file.clj:line>"}}
 ```
 
-The registry is keyed by drift `:check` value (`:inspect.drift/missing-implementation` + `:canvas-kind`) so the dispatch is mechanical:
+**Registry shape**: multimethod-keyed on `[lens-id model-element-kind]` (or whatever Sprint 1 Task 1 settled). Auto-discovery from `fukan.canvas.project.<lens>.*` namespaces; explicit `require` + `defmethod` registration per projection.
 
-```clojure
-(generate-instruction finding)
-  => (apply-generator (lookup-generator-for finding) finding)
-```
-
-- [ ] **Step 1: Lens-substrate-style contract.** Spec + `validate-instruction`.
-- [ ] **Step 2: Registry.** Auto-discovery from `fukan.canvas.instruct.*` namespaces (mirror lens registry — explicit `require` + `conj`).
-- [ ] **Step 3: Render.** Structured-instruction → markdown.
+- [ ] **Step 1: Lens contract.** Spec + validators.
+- [ ] **Step 2: Registry.** Multimethod + per-lens namespace discovery.
+- [ ] **Step 3: Render.** Structured → markdown.
 - [ ] **Step 4: Tests for each.**
 - [ ] **Step 5: Commit.**
 
 ```bash
-jj desc -m "feat(canvas/instruct): instruction substrate (core + registry + render)"
+jj desc -m "feat(canvas/project): project-lens substrate (Layer A core + registry + render)"
 jj new
 ```
 
 ---
 
-## Phase 7, Tasks 6 through N: Per-instruction-type generators
+## Phase 7, Tasks 6 to M: Clojure-lens projections
 
-One task per instruction type Sprint 1 Task 1 selected. Each task:
+One task per Sprint-1-selected projection. Default 5-7 tasks; suggested order (cheapest to hardest):
 
-- Implements `(def generator …)` in `src/fukan/canvas/instruct/<instruction_name>.clj`
-- Registers with the registry
-- Adds tests with synthetic drift findings + snapshot tests for rendered prose
-- Runs against real findings against fukan-itself; documents a sample
+- Task 6: `value-to-def` (canvas `value` → `(def Name :tag/<name>)` or equivalent opaque marker)
+- Task 7: `type-to-malli` (canvas record-shaped Type → Malli `[:map ...]` schema; uses the alias table from Phase 6)
+- Task 8: `event-to-schema` (canvas event → schema def; mirrors type-to-malli for payload)
+- Task 9: `function-to-defn` (canvas function → defn; arglist from takes, return-hint from gives, body as exception stub)
+- Task 10: `invariant-to-predicate` (canvas invariant → predicate fn; semantic intent in prose is the only non-trivial bit)
+- Task 11: `rule-to-predicate` (symmetric with invariant; defer if rule-of-three pressure)
+- Task 12: `handler-to-defn` / `getter-to-defn` (special cases of function; defer if scope pressure)
 
-Suggested order (cheapest to hardest):
+Each task:
 
-- Task 6: `add-record` (simplest — canvas record fields map directly to `[:map ...]`)
-- Task 7: `add-value` (very simple — opaque type def)
-- Task 8: `add-event` (similar to record)
-- Task 9: `add-function` (signature derivation from canvas takes/gives; semantic intent from docstring)
-- Task 10: `add-getter` (special case of function)
-- Task 11: `add-invariant-predicate` (signature is `(fn [model] ...)`; semantic intent is the only non-trivial bit)
-- Task 12: `add-rule-predicate` (symmetric)
-- Task 13: `update-record-fields` (depends on compound-shape comparator from Sprint 2 Task 3)
+- Implements `(def projection …)` plus the `defmethod` registration in `src/fukan/canvas/project/clojure/<name>.clj`
+- Tests cover: positive case (model element → expected projection), edge cases (missing context, unusual shapes), rendered-template snapshot
+- Runs against real canvas declarations from fukan-itself; documents a sample projection
+- One commit per projection (per-commit hygiene)
 
-Sprint 1 settles which to ship vs defer. **Default: ship 5-6, defer 2-3.**
+---
 
-Per-commit hygiene: **one commit per generator.** Each generator is one logical change.
+## Phase 7, Task M+1: Layer B substrate (scenario core + registry + render)
+
+**Files:**
+- Create: `src/fukan/canvas/instruct/core.clj` — scenario contract; `valid-scenario?`, `validate-scenario`
+- Create: `src/fukan/canvas/instruct/registry.clj` — scenario registration; `all-scenarios`, `scenario-by-id`
+- Create: `src/fukan/canvas/instruct/render.clj` — structured instruction → markdown rendering for the implementing LLM
+- Tests for each
+
+Mirrors the Layer A substrate, just shorter — scenarios are fewer than projections in Phase 7.
+
+**Scenario contract:**
+
+```clojure
+{:scenario-id      :drift-close              ; required
+ :description      "..."                     ; required; one-line summary
+ :prompt-fragment  "..."                     ; required; situation-framing prose for the implementing LLM
+ :build-context    (fn [code-spec opts] ...) ; required; takes Layer-A projection + opts → scenario-context map
+ :render           (fn [code-spec scenario-context opts] ...)} ; required; produces the full rendered instruction
+```
+
+The instruction this layer produces (registered through the registry):
+
+```clojure
+{:scenario-id     :drift-close
+ :code-spec       <Layer-A projection map>
+ :scenario-context {:what-exists-in-target-file "..." :neighbor-patterns [...] ...}
+ :rendered        "<full markdown the implementing LLM reads>"}
+```
+
+- [ ] **Step 1: Scenario contract.** Validators.
+- [ ] **Step 2: Registry.**
+- [ ] **Step 3: Render.**
+- [ ] **Step 4: Tests.**
+- [ ] **Step 5: Commit.**
+
+```bash
+jj desc -m "feat(canvas/instruct): scenario substrate (Layer B core + registry + render)"
+jj new
+```
+
+---
+
+## Phase 7, Tasks M+2 and M+3: drift-close + cold-write scenarios
+
+Two tasks. Each ships one scenario:
+
+- Task M+2: `drift-close` — input is a drift finding + the projection derived from it; output is the full instruction prompt framed as "closing a known gap"
+- Task M+3: `cold-write` — input is a canvas module (or subset of entities) + their projections; output is the full instruction prompt framed as "writing this module's implementation from scratch"
+
+Each task:
+
+- Implements `(def scenario …)` in `src/fukan/canvas/instruct/<name>.clj`
+- Tests cover: input → expected rendered output; scenario-context derivation correctness; integration with at least one Layer-A projection
+- Runs against a real fukan-on-fukan situation (e.g. drift-close against one of the 443 missing-implementation findings; cold-write against `canvas/distributed/*`)
+- One commit per scenario
+
+---
+
+## Phase 7, Task N: Agent api integration
+
+**Files:**
+- Modify: `src/fukan/agent/api.clj` — expose `(spec model-element-id)` (Layer A) and `(instruct drift-finding scenario)` (Layer B) under `:trust` with `:severity :info`
+- Tests for the agent surface
+
+The agent api gains two new fns:
+
+- `(spec model-element-id)` — invokes the Clojure lens projection for the named Model element; returns the structured code spec
+- `(instruct drift-finding scenario-id)` — invokes the scenario wrapper; returns the full instruction (structured + rendered)
+
+Both fns appear in `(help)` under `:trust`. Marked `^:export`.
+
+- [ ] **Step 1: Implement the wrappers.**
+- [ ] **Step 2: Help-surface tests.**
+- [ ] **Step 3: Commit.**
+
+```bash
+jj desc -m "feat(agent/api): expose project-lens specs + scenario instructions under :trust"
+jj new
+```
 
 ---
 
@@ -423,13 +554,23 @@ jj new
 
 ## Open questions for the user (before Sprint 1 begins)
 
-1. **Tier verdict for instructions.** Recommended default: trust-tier with `:severity :info` (no error; here's how to close). Push back if a new tier (e.g. `:act`) reads more naturally.
-2. **Stub-template ambition level.** Recommended default: bare signature + exception body + structured `:context` field. Richer templates risk being wrong; bare templates leave more work for the implementing LLM but stay safe. Preference?
-3. **Symmetric (canvas-side) instructions.** Recommended default: defer to Phase 8. Phase 7 ships only `:code-side/*`. Push back if you want both directions in Phase 7.
-4. **Instruction-type priority.** Of the 10 candidates, which 5-6 ship first? Default: add-record, add-value, add-event, add-function, add-invariant-predicate, update-record-fields. (Excludes: add-getter as special-case of function; add-handler; add-rule-predicate as symmetric with invariant; symmetric canvas-side instructions.)
-5. **Dispatch shape.** Recommended default: Agent-tool dispatch from `fukan-architect` to a general-purpose implementing LLM. Push back if you want a different shape (e.g. external workflow, CI agent).
-6. **Multi-instruction batching.** Recommended default: one instruction per dispatch in Phase 7. Phase 8 candidate. Push back if you want batching in Phase 7.
-7. **Trial-run target.** Recommended default: continue `canvas/distributed/*` work — Phase 6's deliberate omissions are ready material. Push back if you want a different target.
+**Layer A (project-lens) questions:**
+
+1. **Lens-registry shape.** Default: multimethod keyed on `[lens-id model-element-kind]`, plus a per-project registry of `defmethod` entries. The Clojure lens registers in `src/fukan/canvas/project/clojure/registry.clj`; external projects register their own. Push back if a different mechanism reads better.
+2. **Clojure-lens projection priority.** Of the 9 candidate Model-element projections, which 5-7 ship in Phase 7? Default: `value-to-def`, `type-to-malli`, `event-to-schema`, `function-to-defn`, `invariant-to-predicate`, `rule-to-predicate`. (Defer: `handler-to-defn`, `getter-to-defn` as special-cases of function; `update-record-fields` shape-drift handling waits on Sprint 2's compound-shape comparator.)
+3. **Tier verdict.** Recommended default: trust-tier with `:severity :info` (informational; the LLM acts or doesn't act). Push back if a new tier (e.g. `:act`) reads more naturally.
+4. **Stub-template ambition.** Default: bare signature + exception body + prose envelope. Richer templates risk being wrong; bare templates leave more work for the implementing LLM but stay safe. Preference?
+
+**Layer B (scenario + handoff) questions:**
+
+5. **Scenario priority.** Default: ship `drift-close` + `cold-write` in Phase 7. Defer `refactor` (shape-drift handling) to Phase 8 because it needs Sprint 2's compound-shape comparator AND new delta-instruction shape. Push back if you want a different starter set.
+6. **Symmetric (canvas-side) scenarios.** When drift's bidirectional framing says "canvas may be the side to move," does Phase 7 generate canvas-edit instructions too? Default: defer to Phase 8. Push back if you want canvas-edit scenarios in Phase 7.
+7. **Dispatch shape.** Default: Agent-tool dispatch from `fukan-architect` to a general-purpose implementing LLM. Push back if you want a different shape (e.g. external workflow, CI agent).
+8. **Multi-instruction batching.** Default: one instruction per dispatch in Phase 7. Phase 8 candidate. Push back if you want batching in Phase 7.
+
+**Trial-run question:**
+
+9. **Trial-run target.** Default: continue `canvas/distributed/*` work — Phase 6's deliberate omissions are ready material for closing-loop trial. Push back if you want a different target.
 
 ---
 
@@ -437,10 +578,121 @@ jj new
 
 | Sprint | Tasks | Outcome |
 |--------|-------|---------|
-| 1 | 1–2 | Instruction-shape design + handoff protocol design (two pause points) |
+| 1 | 1–2 | Project-lens design (Layer A) + scenario-handoff design (Layer B) — two pause points |
 | 2 | 3–4 | Compound-shape comparator + Sprint-1-surfaced prereqs |
-| 3 | 5–N | Instruction substrate (core/registry/render) + per-instruction-type generators (5-6 to ship; 2-3 deferred) |
+| 3 | 5–N | Layer A substrate + 5-7 Clojure-lens projections + Layer B substrate + 2 scenarios + agent api integration |
 | 4 | N+1 to N+2 | Architect agent extension + close-the-loop trial run |
 | 5 | Final | Phase 7 verification + Phase 8 brief |
 
-**Estimated calendar:** Sprint 1 ≈ 2 sessions (design + 2 pauses). Sprint 2 ≈ 1-2 sessions (compound-shape comparator is the meaningful piece). Sprint 3 ≈ 4-6 sessions (substrate + 5-6 generators). Sprint 4 ≈ 2 sessions (integration + trial). Sprint 5 ≈ 1 session. **Total: 10-13 working sessions.**
+**Estimated calendar:** Sprint 1 ≈ 2 sessions (design + 2 pauses). Sprint 2 ≈ 1-2 sessions (compound-shape comparator is the meaningful piece). Sprint 3 ≈ 5-7 sessions (two substrates + 5-7 projections + 2 scenarios + agent api). Sprint 4 ≈ 2 sessions (integration + trial). Sprint 5 ≈ 1 session. **Total: 11-14 working sessions.**
+
+---
+
+## Amendment — 2026-05-27 two-layer architecture clarification
+
+After review, the user surfaced a load-bearing distinction the original draft was conflating: **code specification is fundamentally projection of the generic Model through a project-configured language lens; the instruction layer wraps the resulting raw spec with scenario context.**
+
+The original draft's per-instruction-type generators mixed two responsibilities into one fn. The amendment splits them.
+
+### Two layers
+
+**Layer A — Project-lens projection** (the generic-Model → project-specific-code-spec layer)
+
+The Model substrate is language-agnostic (canvas vocab carries no Clojure or Malli assumptions). Each project that uses fukan registers a **lens configuration** defining how its generic Model elements project into code for that project's language + conventions. For fukan-on-fukan (Clojure):
+
+| Model element | Projects to |
+|---|---|
+| `Type` (record-shaped) | Malli `[:map [:field-name :field-type] ...]` schema |
+| `Type` (value/opaque) | `def Name :tag/name-or-equivalent` |
+| `Affordance` (function role) | `(defn name [args] body)` |
+| `Affordance` (getter role) | `(defn get-name [] (Optional<T>))` |
+| `Affordance` (checker role) | `(defn check [model] [Violation...])` |
+| `Affordance` (invariant role) | predicate fn named by `holds-that` clause |
+| `Affordance` (rule role) | predicate fn named by kebab(rule-name) |
+| `Affordance` (event role) | event-schema def |
+| `Affordance` (handler role) | `(defn on-event-name [payload] ...)` |
+
+Projection of one Model element through the lens produces a deterministic **low-level code specification**: target path, namespace, symbol name, structural template where the structure is determinate, prose where structure leaves semantic intent (fn bodies, invariant property logic). The totality is "pretty nailed down" — the implementing LLM has unambiguous structure plus targeted prose.
+
+**This layer is reusable across scenarios.** Whether the canvas-author is closing a drift gap or writing from scratch, the projection of `canvas function get_self_role in distributed.cluster` is the same: same path (`src/fukan/distributed/cluster.clj`), same `(defn get-self-role [] …)` shape, same docstring source, same arglist derived from the canvas `takes`/`gives`.
+
+**The lens is pluggable.** External projects using fukan register their own language lens. The fukan-on-fukan Clojure lens is the reference implementation; the registry mechanism (in `src/fukan/project_layer/`) already has `:root-prefix` as a seed of this pluggability.
+
+**Layer B — Scenario-aware instruction** (the project-spec + situation-context layer)
+
+Takes a raw projection from Layer A and wraps it with situation-specific framing. Same projection, different prose envelope, different "what to pay attention to" guidance:
+
+- **drift-close scenario**: "You're closing a gap. Here's the spec; here's what's already in the file; canvas declared this but code is missing. Don't disturb neighbors."
+- **cold-write scenario**: "You're writing from scratch. Here's the spec; here are the canvas conventions; here are matching-pattern neighbors elsewhere you should reference for style."
+- **refactor scenario** (Phase 8 candidate): "Code exists but its shape diverges from canvas. Here's the delta; preserve unrelated behavior."
+
+The scenario IS the context that turns a raw spec into useful framing for the implementing LLM.
+
+### Where the existing machinery fits
+
+`src/fukan/target/clojure/{address,projector,blueprint}.clj` already does **half of Layer A** — specifically the canonical-address mapping (Model entity → file path + symbol) and the source-side direction (code → Model artifacts for the analyzer). What's new for Phase 7 is the **reverse direction of Layer A**: generate the structural code spec FROM a Model element, given the lens config. Phase 7 reuses the address mapping; the structural-template generation is the new work.
+
+`src/fukan/project_layer/defaults.clj` already has the `fukan-on-fukan` registry hook. Layer A's pluggability extends this — the project-lens registry adds the per-Model-element projection fns alongside the existing root-prefix.
+
+### Amended file structure
+
+```
+src/fukan/canvas/project/             ; LAYER A — project-lens projections (pluggable per project)
+  core.clj                            ; the lens contract (per-Model-element projection contract)
+  registry.clj                        ; project-lens registry; the fukan-on-fukan Clojure lens registers here
+  render.clj                          ; structured projection → markdown spec rendering
+
+  clojure/                            ; the Clojure lens (fukan-on-fukan's reference projection set)
+    type_to_malli.clj                 ; Type (record-shaped) → Malli :map schema
+    value_to_def.clj                  ; Type (value/opaque) → def
+    function_to_defn.clj              ; Affordance (function/getter/checker) → defn
+    invariant_to_predicate.clj        ; Affordance (invariant) → predicate fn
+    rule_to_predicate.clj             ; Affordance (rule) → predicate fn
+    event_to_schema.clj               ; Affordance (event) → schema def
+    handler_to_defn.clj               ; Affordance (handler) → defn
+
+src/fukan/canvas/instruct/            ; LAYER B — scenario-aware instructions (situation context over projections)
+  core.clj                            ; the scenario contract
+  registry.clj                        ; scenario registry
+  render.clj                          ; structured instruction → markdown rendering for the implementing LLM
+
+  drift_close.clj                     ; scenario: closing a drift gap
+  cold_write.clj                      ; scenario: writing canvas content from scratch
+  ; refactor.clj                      ; (deferred to Phase 8) scenario: code exists but shape diverges
+```
+
+### Amended Sprint 1 task scopes
+
+The two design docs reshape:
+
+- **Task 1: Project-lens design.** What's the lens contract (per-Model-element projection contract)? What does the fukan-on-fukan Clojure lens register for each Model element type? How is the lens pluggable from outside fukan (so a TypeScript project could register its own)? What's the address-mapping reuse path through the existing `target/clojure/` machinery?
+- **Task 2: Scenario + handoff design.** What scenarios ship first (drift-close, cold-write)? How does scenario context wrap the projection? What's the handoff protocol from canvas-author LLM to implementing LLM (the original Task 2's content folds in here)?
+
+### Amended Sprint 3 task shape
+
+Sprint 3 builds **two substrates and their occupants**:
+
+- **Project-lens substrate (Layer A core)**: contract + registry + render. Same shape as Phase 5's lens substrate (small, mechanical).
+- **Per-Model-element projections (Clojure lens)**: one task per element type. Type→Malli; Function→defn; Invariant→predicate; Event→schema; etc.
+- **Scenario substrate (Layer B core)**: contract + registry + render.
+- **Per-scenario wrappers**: one task per scenario. drift-close + cold-write for Phase 7.
+
+Sprint 1 picks which Model elements + scenarios ship in Phase 7 vs defer.
+
+### Updated open questions
+
+Existing open questions in the plan stay relevant; add:
+
+- **Project-lens pluggability shape.** How does an external project register its language lens? Sprint 1 Task 1 settles. Default: a `defmethod`-style multimethod keyed on `[language Model-element-kind]`, plus a registry entry that the project ships.
+- **Scenario priority.** Of the three named scenarios (drift-close, cold-write, refactor), which ship first? Default: drift-close + cold-write in Phase 7; refactor deferred to Phase 8.
+- **Layer naming.** "Project-lens" vs "language-lens" vs "code-spec lens" — sharper terminology may emerge during Sprint 1.
+
+### Why this layering matters
+
+The original draft's "per-instruction-type generator" risked locking Clojure-specific assumptions into the instruction layer. The amended two-layer design keeps:
+
+- The Model generic (canvas substrate stays language-agnostic)
+- The project-lens pluggable (fukan usable beyond fukan-itself)
+- The scenarios composable (any projection × any scenario = a coherent instruction)
+
+The bet stays the same — clear instructions + capable implementing LLM > rich templates + constrained dispatcher — but the architecture now expresses where each piece of clarity comes from.
