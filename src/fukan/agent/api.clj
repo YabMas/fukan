@@ -4,6 +4,7 @@
    call (help) for the live catalog."
   (:require [fukan.agent.edb :as edb]
             [fukan.agent.query :as query]
+            [fukan.canvas.inspect.coverage :as inspect-coverage]
             [fukan.canvas.inspect.integrity :as inspect-integrity]
             [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.infra.model :as infra-model]
@@ -340,3 +341,18 @@
   integrity
   []
   (inspect-integrity/check (canvas-source/build-canvas-db)))
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :agent/doc "Coverage analysis. Surfaces structural coverage gaps in
+                    the canvas: orphan entities (no incoming refs),
+                    unreached entities (substrate-floating), exports nobody
+                    consumes, modules without an (exports …) declaration,
+                    rules with no triggering function, events with no
+                    handler. Every finding carries :severity {:error
+                    :warning :info} — callers filter by severity. Returns
+                    a vector of finding maps; [] when coverage is full."
+        :agent/example "(canvas-coverage)"}
+  canvas-coverage
+  []
+  (inspect-coverage/check (canvas-source/build-canvas-db)))

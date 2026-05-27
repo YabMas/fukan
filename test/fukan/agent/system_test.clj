@@ -46,7 +46,9 @@
         (is (some #(= 'q (:name %)) (:L0 api)))
         (is (some #(= 'drift (:name %)) (:L2 api)))
         (is (some #(= 'integrity (:name %)) (:trust api))
-            "Trust-tier integrity helper must be discoverable via (help)")))))
+            "Trust-tier integrity helper must be discoverable via (help)")
+        (is (some #(= 'canvas-coverage (:name %)) (:trust api))
+            "Trust-tier canvas-coverage helper must be discoverable via (help)")))))
 
 (deftest help-for-single-fn
   (testing "(help 'primitives) returns docstring + signatures + examples"
