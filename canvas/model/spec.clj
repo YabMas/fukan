@@ -223,6 +223,25 @@
         (field canonical_side (optional :String))
         (field coherence_query (optional :Any)))
 
+      (record "PredicateRegistration"
+        "A registered structural predicate. Identity is the (namespace, name)
+         tuple — the pipeline's defaults-registration step keys on this pair
+         so repeat loads do not multiply violation counts. severity controls
+         whether failure produces an error or a warning. kind classifies the
+         predicate within its registering module. scope distinguishes
+         model-wide predicates from tag-scoped ones. message-template is the
+         human-facing failure message. predicate is the opaque evaluator
+         attached at registration time. applies-to (optional) narrows the
+         predicate to targets carrying a specific tag."
+        (field namespace        :String)
+        (field name             :String)
+        (field severity         :String)
+        (field kind             :String)
+        (field scope            :String)
+        (field message_template :String)
+        (field predicate        :Any)
+        (field applies_to       (optional :TagRef)))
+
       ;; ── Model Top-Level Record ────────────────────────────────────────────
 
       (record "Model"
