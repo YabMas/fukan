@@ -166,6 +166,7 @@ as facts and either fix the issue or escalate.
 |----|-----------------|
 | `(integrity)` | Cross-reference integrity — unresolved refs, trigger/emit role mismatches, broken cross-module shape targets. Returns `[]` when clean; every finding is `:severity :error`. |
 | `(canvas-coverage)` | Structural coverage gaps — orphan entities, modules without `(exports …)`, rules with no trigger, events with no handler. Findings carry `:severity` in `{:error :warning :info}`. |
+| `(canvas-drift)` | Canvas ↔ code drift — canvas declarations whose code-side counterpart is missing (functions, events, invariants, rules, getters, checkers) plus shape drift on records (canvas-declared fields vs code-side defrecord/Malli schema fields). Every finding is `:severity :warning`. Each offender names BOTH sides — canvas stable-id and expected code path — so the caller weighs which side should move. Returns `[]` when canvas and code align. |
 
 **Weigh tier — interpretive.** Output is input to judgment, not a verdict.
 Findings are framed as candidates / likely-intentional / open judgments.
@@ -190,9 +191,18 @@ mode means dropping a file and registering its var in
 - `:tar-pit` — theoretical. Frames the canvas through Moseley & Marks
   *Out of the Tar Pit*: essential vs accidental complexity.
 
+**When to invoke `(canvas-drift)`.** Drift only carries signal when `src/`
+is in scope. A canvas-only authoring or design session has nothing to drift
+against; skip it. A session that touches canvas *and* code — or that opens
+on a canvas+code pair to establish the baseline — runs it. Drift is a
+session-boundary signal (on entry, on exit), not a per-edit reflex. The
+full discipline lives in `doc/canvas-authoring-system-prompt.md` §
+authoring loop.
+
 **Discipline.** Run `(integrity)` and `(canvas-coverage)` first — trust
 tier before weigh tier. A survey on top of structurally broken canvas is
-noise; fix the trust findings, then weigh.
+noise; fix the trust findings, then weigh. Drift sits alongside them in
+the trust tier but is invoked conditionally on `src/` scope.
 
 **The `fukan-architect` subagent** is the canonical surface for the
 `survey design improvements` workflow: dispatch with a scope and a survey
@@ -367,7 +377,7 @@ so you can see what names are available.
 - `doc/canvas-authoring-system-prompt.md` — permanent activation surface for canvas authoring (layered-language lineage, trust/weigh model, named failure modes, EXAMPLES pointers)
 - `canvas/` — the canvas spec tree (62 modules); the design surface for fukan-itself
 - `src/fukan/canvas/` — canvas machinery (core, construction, vocab libraries, inspect, lens)
-- `src/fukan/canvas/inspect/` — trust-tier checks (`integrity`, `coverage`)
+- `src/fukan/canvas/inspect/` — trust-tier checks (`integrity`, `coverage`, `drift`)
 - `src/fukan/canvas/lens/` — weigh-tier lenses (`patterns`, `consistency`, `tar-pit`) + the survey/registry substrate
 
 When working on Fukan itself, `src/fukan/agent/api.clj` and
