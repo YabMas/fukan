@@ -6,6 +6,7 @@
             [fukan.canvas.construction :refer [function value]]
             [fukan.canvas.identity :as identity]
             [fukan.canvas.projection.canvas-source :as canvas-source]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             canvas.infra.server
             canvas.infra.model))
 
@@ -281,3 +282,79 @@
       (is (= "infra.server/start_server"
              (identity/resolve-id db "infra.server/start"))
           "single-port alias must resolve"))))
+
+;; ---------------------------------------------------------------------------
+;; Phase 5 Sprint 2 Task 3: name+role disambiguation convention
+;; ---------------------------------------------------------------------------
+;;
+;; A canvas module may declare multiple entities with the same :entity/name
+;; PROVIDED they have distinct :affordance/role values. The canonical example
+;; is the rule + invariant pair in `canvas/validation/*`: a single behavioral
+;; commitment expressed from two angles. Reference resolution disambiguates
+;; via the (name, role) tuple where role is unambiguous from context.
+;;
+;; These tests lock in the substrate behavior that makes the convention work.
+
+(deftest name-plus-role-rule-invariant-pair-coexist
+  (testing "a rule and an invariant with the same name in one module produce two distinct entities"
+    (let [db    (h/with-canvas
+                  (h/within-module "demo.rules"
+                    (rule "SharedName"
+                      "Reactive declaration that shares its name with an invariant."
+                      (when SharedName (model :model/Model)))
+                    (invariant "SharedName"
+                      "Timeless commitment that shares its name with a rule."
+                      (holds-that "shared-name-is-intentional"))))
+          ;; Find the module entity
+          mod-eid (ffirst (d/q '[:find ?m
+                                  :where [?m :entity/type :Module]
+                                         [?m :entity/name "demo.rules"]]
+                                db))
+          ;; Find children with name SharedName
+          children (d/q '[:find ?c ?role ?uuid
+                           :in $ ?m
+                           :where [?m :module/child ?c]
+                                  [?c :entity/name "SharedName"]
+                                  [?c :affordance/role ?role]
+                                  [?c :entity/id ?uuid]]
+                         db mod-eid)]
+      (is (= 2 (count children))
+          "both rule and invariant must appear as distinct children")
+      (let [roles (set (map second children))
+            uuids (set (map #(nth % 2) children))]
+        (is (= #{:canvas/rule :canvas/invariant} roles)
+            "the two children must carry distinct :affordance/role values")
+        (is (= 2 (count uuids))
+            "the two children must have distinct :entity/id UUIDs"))
+      ;; Disambiguation by (name, role) tuple resolves uniquely
+      (let [resolve-by-name+role
+            (fn [role-kw]
+              (d/q '[:find ?c .
+                      :in $ ?m ?role
+                      :where [?m :module/child ?c]
+                             [?c :entity/name "SharedName"]
+                             [?c :affordance/role ?role]]
+                    db mod-eid role-kw))]
+        (is (some? (resolve-by-name+role :canvas/rule))
+            "(name=SharedName, role=:canvas/rule) resolves to one entity")
+        (is (some? (resolve-by-name+role :canvas/invariant))
+            "(name=SharedName, role=:canvas/invariant) resolves to one entity")
+        (is (not= (resolve-by-name+role :canvas/rule)
+                  (resolve-by-name+role :canvas/invariant))
+            "the two role lookups must resolve to different entities")))))
+
+(deftest name-plus-role-warn-only-not-throw
+  (testing "the rule+invariant pair produces an informational warning, not an exception"
+    ;; The full canvas corpus has 31 such pairs in canvas/validation/*; this
+    ;; locks in that build-canvas-db never throws on them.
+    (let [err-output (java.io.StringWriter.)
+          db         (binding [*err* err-output]
+                       (canvas-source/build-canvas-db))
+          err-str    (.toString err-output)]
+      (is (some? db) "build-canvas-db must succeed despite intra-module same-name pairs")
+      (is (.contains err-str "name+role convention")
+          "warning text must reference the name+role convention")
+      (is (.contains err-str ":canvas/rule")
+          "warning must surface the distinct roles (e.g. :canvas/rule)")
+      (is (.contains err-str ":canvas/invariant")
+          "warning must surface the distinct roles (e.g. :canvas/invariant)"))))

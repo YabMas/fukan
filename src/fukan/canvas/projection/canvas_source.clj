@@ -221,26 +221,57 @@
         (d/db-with all-child-txs))))
 
 ;; ---------------------------------------------------------------------------
-;; Duplicate-name detection
+;; Intra-module same-name detection — the name+role convention
 ;; ---------------------------------------------------------------------------
+;;
+;; A canvas module may declare multiple entities with the same :entity/name
+;; PROVIDED they have distinct :affordance/role values. The canonical example
+;; is the rule + invariant pair in `canvas/validation/*`: a single behavioral
+;; commitment expressed from two complementary angles — a reactive `rule`
+;; (role :canvas/rule) and a timeless `invariant` (role :canvas/invariant)
+;; — naturally share a name.
+;;
+;; Reference resolution disambiguates such pairs via the (name, role) tuple,
+;; where role is unambiguous from context (a `when`-trigger position resolves
+;; to the rule, a `holds-that` position to the invariant, etc.).
+;;
+;; The warn-not-throw behavior below is the FINAL design, not transitional:
+;; warnings surface authoring bugs (e.g. two `value`s with the same name and
+;; identical role) without blocking startup when the colliding declarations
+;; carry the intended distinct roles.
 
 (defn- find-intra-module-collisions
-  "Query the db for (module-name, child-name, count) triples where a single
-   module has more than one child with the same :entity/name.
-   Returns a seq of {:module, :name, :count} maps; empty when no collisions."
+  "Query the db for same-name child entities within each Module.
+   Returns a seq of {:module, :name, :roles, :count} maps where roles is the
+   set of distinct :affordance/role values observed for the colliding name;
+   empty when no collisions.
+
+   When :roles is a singleton, the duplicates are NOT explained by the
+   name+role convention and constitute a likely authoring bug."
   [db]
-  (->> (d/q '[:find ?mn ?cn (count ?c)
-               :where [?m :entity/type :Module]
-                      [?m :entity/name ?mn]
-                      [?m :module/child ?c]
-                      [?c :entity/name ?cn]]
-             db)
-       (filter #(> (last %) 1))
-       (mapv (fn [[mn cn cnt]] {:module mn :name cn :count cnt}))))
+  (let [rows (d/q '[:find ?mn ?cn ?c ?role
+                     :where [?m :entity/type :Module]
+                            [?m :entity/name ?mn]
+                            [?m :module/child ?c]
+                            [?c :entity/name ?cn]
+                            [(get-else $ ?c :affordance/role :none) ?role]]
+                   db)]
+    (->> rows
+         (group-by (fn [[mn cn _ _]] [mn cn]))
+         (keep (fn [[[mn cn] entries]]
+                 (let [child-eids (into #{} (map #(nth % 2)) entries)
+                       roles      (into #{} (map #(nth % 3)) entries)]
+                   (when (> (count child-eids) 1)
+                     {:module mn :name cn :roles roles :count (count child-eids)}))))
+         (vec))))
 
 (defn detect-intra-module-duplicates-for-test
   "Throw ExceptionInfo if any Module has two children with the same
-   :entity/name. Exposed for white-box unit tests.
+   :entity/name. Exposed for white-box unit tests of the strict variant.
+
+   Production canvas ingestion uses the warn-not-throw variant
+   (`detect-intra-module-duplicates-warn`) because the name+role convention
+   permits intentional same-name pairs with distinct roles.
 
    Cross-module duplicates (same name in different modules) are NOT flagged
    here; the module-qualified resolution in project-edges disambiguates them
@@ -252,16 +283,32 @@
                       {:duplicates collisions}))))
   nil)
 
+(defn- format-collision-line
+  "Human-readable line for a single intra-module collision.
+   Roles appear sorted by keyword name for stable output."
+  [{:keys [module name roles]}]
+  (let [role-list (->> roles
+                       (map str)
+                       sort
+                       (str/join ", "))]
+    (str "duplicate name " module "/" name
+         " — distinct roles " role-list
+         " — confirm intentional via the name+role convention")))
+
 (defn- detect-intra-module-duplicates-warn
-  "Warn to stderr if any Module has two children with the same :entity/name.
-   Used during build-canvas-db to surface authoring bugs without failing the
-   build when the corpus has pre-existing intra-module duplicates."
+  "Warn to stderr for each intra-module same-name collision.
+
+   The name+role convention permits a canvas module to declare multiple
+   entities with the same :entity/name when their :affordance/role values
+   differ (e.g. the rule + invariant pair in `canvas/validation/*`). The
+   warning is informational: it surfaces every such collision so an author
+   can confirm the distinct roles are intentional rather than accidental."
   [db]
   (let [collisions (find-intra-module-collisions db)]
     (when (seq collisions)
       (binding [*out* *err*]
-        (println "canvas-source: intra-module duplicate entity names (authoring bugs):"
-                 (mapv (fn [{:keys [module name]}] (str module "/" name)) collisions)))))
+        (doseq [c collisions]
+          (println (str "canvas-source: " (format-collision-line c)))))))
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -294,9 +341,16 @@
    Fails fast if any canvas namespace fails to load (compilation error in
    a port = load error at startup).
 
-   Throws if any module has intra-module duplicate entity names (authoring bug).
-   Cross-module duplicate names are permitted — the module-qualified reference
-   resolution disambiguates them via the keyword namespace."
+   Intra-module same-name entities are permitted under the name+role
+   convention: a module may declare multiple entities with the same
+   :entity/name PROVIDED they have distinct :affordance/role values
+   (the rule + invariant pair in `canvas/validation/*` is the canonical
+   example). Each such collision is logged to stderr as an informational
+   warning so authors can confirm the distinct roles are intentional.
+   This warn-not-throw behavior is the final design.
+
+   Cross-module duplicate names are permitted — the module-qualified
+   reference resolution disambiguates them via the keyword namespace."
   []
   (let [per-module-dbs (mapv (fn [ns-sym]
                                (let [build-fn (ns-resolve (the-ns ns-sym) 'build-canvas)]

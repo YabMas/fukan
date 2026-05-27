@@ -99,6 +99,10 @@ Canvas ports (in `canvas/`) may require any combination of `construction` and `v
 
 Module ownership flows via `:module/child` Relations on the owner, not via back-references on the owned entity. Affordances, States, and Types carry no `:module` field. The `within-module` helper in `core/helpers.clj` emits `:module/child` datoms automatically.
 
+## Canvas conventions
+
+**Name+role disambiguation.** A canvas module may declare multiple entities with the same `:entity/name` provided they have distinct `:affordance/role` values. The canonical example is the rule + invariant pair in `canvas/validation/*` — a single behavioral commitment expressed from two angles: a reactive `(rule "X" ...)` (role `:canvas/rule`) and a timeless `(invariant "X" ...)` (role `:canvas/invariant`). Reference resolution disambiguates such pairs via the `(name, role)` tuple, where role is unambiguous from context (a `when`-trigger position resolves to the rule, a `holds-that` position to the invariant). `canvas-source/build-canvas-db` emits an informational stderr warning for each collision so the author can confirm the distinct roles are intentional; it never throws.
+
 ## REPL workflow
 
 - **After editing a canvas spec**: use `(refresh)` — reloads changed code + rebuilds model (Phase 0–6).

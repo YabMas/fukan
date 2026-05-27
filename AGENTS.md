@@ -47,6 +47,8 @@ defined in `src/fukan/canvas/`.
 | `vocab.lifecycle` | `(getter name doc :ReturnType)` | A zero-arg `Optional<T>` accessor |
 | `vocab.validation` | `(checker name doc)` | A `(Model) -> [Violation]` validation entry point |
 
+**Name+role convention.** A canvas module may declare multiple entities with the same name provided they have distinct `:affordance/role` values. The canonical example is the rule + invariant pair in `canvas/validation/*` — the same behavioral commitment expressed reactively (`(rule "X" ...)`, role `:canvas/rule`) and timelessly (`(invariant "X" ...)`, role `:canvas/invariant`). Reference resolution uses the `(name, role)` tuple; role is unambiguous from context. The canvas builder warns once per collision and never throws.
+
 **Shape expression grammar (type positions):**
 
 | Expression | Meaning |
