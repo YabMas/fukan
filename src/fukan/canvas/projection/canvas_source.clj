@@ -27,6 +27,7 @@
    canvas.constraint.phase5
    canvas.constraint.sort
    canvas.constraint.well-known
+   canvas.distributed.cluster
    canvas.infra.model
    canvas.infra.server
    canvas.libs.allium.parser
@@ -101,6 +102,7 @@
     canvas.constraint.phase5
     canvas.constraint.sort
     canvas.constraint.well-known
+    canvas.distributed.cluster
     canvas.infra.model
     canvas.infra.server
     canvas.libs.allium.parser
