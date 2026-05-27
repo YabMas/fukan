@@ -10,7 +10,14 @@
              :unused-public-var      {:level :off}}}}
 
  :linters
- {:unresolved-symbol
+ {;; The canvas DSL's `rule` lift body uses (when TriggerName ...) as
+  ;; structural trigger syntax, which clj-kondo confuses for Clojure's
+  ;; `when` macro and complains is missing a body. Off project-wide because
+  ;; the canvas DSL is more pervasive than the Clojure `when`-bug-catch is
+  ;; valuable; restore if/when a hook teaches clj-kondo the DSL shape.
+  :missing-body-in-when {:level :off}
+
+  :unresolved-symbol
   {:exclude [;; fukan.canvas.construction — non-opt-out lifts
              (fukan.canvas.construction/function)
              (fukan.canvas.construction/record)
