@@ -35,7 +35,7 @@ The agent surface lives in two namespaces, both auto-referred inside `fukan eval
 | **L0** | `q` — Datalog over the Model | Joins, aggregations, anything ad-hoc |
 | **L1** | `primitives`, `get-primitive`, `relations`, `vocabulary`, `schema`, `idioms`, `constraints`, `violations` | Daily driver; filter by kw-args |
 | **L2** | `drift`, `neighborhood`, `coverage` + project-local views in `.fukan/agent-views.clj` | Recurring questions, named |
-| **trust** | `integrity`, `canvas-coverage` | Decision-ready canvas feedback — facts |
+| **trust** | `integrity`, `canvas-coverage`, `canvas-drift` | Decision-ready canvas feedback — facts |
 | **weigh** | `survey`, `canvas-lenses` | Interpretive canvas feedback — observations |
 
 Higher layers are *convenience*, not *capability*. Reach for L1 first; drop to `q` when you need joins or aggregations L1 filters can't express; let `(drift)` and `(neighborhood …)` carry the common shapes. The trust and weigh tiers are described below.
@@ -67,17 +67,17 @@ The reference catalog is live. Call `(help)` inside `fukan eval` for current sig
 
 Canvas feedback comes in two distinct tiers. Collapsing them is a named authoring failure (see `doc/canvas-authoring-system-prompt.md` § Named failure modes).
 
-- **Trust tier** (`(integrity)`, `(canvas-coverage)`) — decision-ready findings. Every finding is an error under any methodology. State trust-tier output as **facts** in your response ("`model.build` has 3 unresolved references; their stable-ids are…"). Filter `(canvas-coverage)` by `:severity` when needed; `:error` is structurally impossible, `:warning` is likely-but-might-be-intentional, `:info` is observational.
+- **Trust tier** (`(integrity)`, `(canvas-coverage)`, `(canvas-drift)`) — decision-ready findings. Every finding is a fact, not a judgment. State trust-tier output as **facts** in your response ("`model.build` has 3 unresolved references; their stable-ids are…"). Filter `(canvas-coverage)` by `:severity` when needed; `:error` is structurally impossible, `:warning` is likely-but-might-be-intentional, `:info` is observational. `(canvas-drift)` returns all findings at `:severity :warning` — drift is fact-of-discrepancy but resolution is judgment; each offender names both canvas side and code side so the user (not the agent) decides which moves.
 - **Weigh tier** (`(survey)`, `(canvas-lenses)`) — interpretive observations. Frame weigh-tier output as **observations + judgment** ("three affordances in `validation/*` share shape `(Model) -> [Violation]`; `vocab.validation/checker` already covers this — consider applying it"). A weigh-tier cluster is not "an error"; never present it as one.
 
-Invoke trust first to establish a structural baseline. A weigh-tier survey on top of structurally broken canvas is noise — surface the trust findings instead.
+Invoke trust first to establish a structural baseline. A weigh-tier survey on top of structurally broken canvas is noise — surface the trust findings instead. `(canvas-drift)` is conditional on `src/` being in scope — meaningful only when the conversation spans canvas and code together; skip it for pure-canvas design discussion.
 
 ## The `survey design improvements` mode
 
 When the dispatching prompt names "survey", "weigh", "improvements", or "design review" alongside a scope, enter survey mode and follow this deterministic shape:
 
 1. **Discover lenses.** Call `(canvas-lenses)` to learn what lenses are registered. The Phase 5 default set is `[:patterns :consistency :tar-pit]`; new lenses become available automatically once registered.
-2. **Trust tier first.** Run `(integrity)` and `(canvas-coverage)`. If findings are non-empty, **pause the survey** and return the trust findings as the primary response. Don't survey on top of broken canvas.
+2. **Trust tier first.** Run `(integrity)` and `(canvas-coverage)`. When the dispatch's scope spans canvas + `src/` (e.g. an "improvements" review touching both layers), also run `(canvas-drift)`; skip drift for pure-canvas survey scopes. If trust-tier findings are non-empty, **pause the survey** and return the trust findings as the primary response. Don't survey on top of broken canvas. Drift findings are reported alongside integrity/coverage as facts, with each finding's bidirectional framing preserved (canvas side + code side named) so the user weighs which should move.
 3. **Run the survey.** With trust clean, invoke `(survey)` for the default set, or `(survey [<lens-ids>])` if the dispatch named a specific lens-set. Pick the lens-set relevant to the task: `:patterns` for vocab-promotion questions, `:consistency` for naming/style/symmetry questions, `:tar-pit` for essential/accidental complexity reasoning, full default for a closing review.
 4. **Synthesize.** Compose a unified report with sections:
    - **Recurring patterns** — clusters of 3+ with the suggested lift (existing or new) and the entities involved.
