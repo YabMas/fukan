@@ -68,3 +68,16 @@
                               "m::events::OrderPlaced" :projection-kind/schema)]
     (is (= [:map [:order-id :string]]
            (-> bp :signature :malli-shape)))))
+
+(deftest signature-for-is-publicly-callable-from-outside
+  ;; Phase 7 Task 4 gap 1 — Layer A's `function-to-defn` projection needs to
+  ;; call `signature-for` directly with a primitive + projection-kind to
+  ;; derive arglist + return-hint without going through the full project
+  ;; pipeline. Verifies the fn is reachable through the public alias.
+  (let [op   (p/make-operation
+               {:id "m::Contract.submit" :label "submit"
+                :parameters [(p/make-parameter "order-id" (t/make-scalar "String") false 0)]})
+        reg  (registry/make-registry)
+        sig  (projector/signature-for reg op :projection-kind/operation)]
+    (is (= ["order-id"] (:arglist sig)))
+    (is (= [:string]    (:param-types sig)))))

@@ -46,11 +46,15 @@
   [registry param]
   [(keyword (:name param)) (types/render registry (:type-ref param))])
 
-(defn- signature-for
+(defn signature-for
   "Return the expected-signature map for a primitive + projection-kind pair.
    Note: :primitive/expression (invariant substrate addresses) is not yet
    routable through the Projector's primitive-keyed entry point — invariant
-   projection is a future path. Drop those cases for Plan 6 MVP."
+   projection is a future path. Drop those cases for Plan 6 MVP.
+
+   Public for Phase 7 Layer A reuse — `function-to-defn` and sibling
+   project-lens projections call this to derive arglist + return-hint
+   from a canvas function's Model element."
   [registry primitive projection-kind]
   (case [(:kind primitive) projection-kind]
     [:primitive/operation :projection-kind/operation]
