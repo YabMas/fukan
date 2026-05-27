@@ -3,10 +3,11 @@
             [datascript.core :as d]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.substrate.store :as store]
-            [fukan.canvas.construction :refer [function value]]
+            [fukan.canvas.construction :refer [function record value]]
             [fukan.canvas.identity :as identity]
             [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]
+            [fukan.canvas.vocab.event :refer [event]]
             canvas.infra.server
             canvas.infra.model))
 
@@ -342,6 +343,133 @@
         (is (not= (resolve-by-name+role :canvas/rule)
                   (resolve-by-name+role :canvas/invariant))
             "the two role lookups must resolve to different entities")))))
+
+;; ---------------------------------------------------------------------------
+;; Ref-typed cardinality-many merge: :triggers / :emits eid→uuid translation
+;; ---------------------------------------------------------------------------
+;;
+;; Before the fix, db->entity-maps stored :triggers / :emits as raw per-module
+;; eids in entity-maps. When the merged db was built, those integer eids
+;; pointed at whatever entity happened to land on that eid in the unified db
+;; — usually the wrong target. These tests lock in correct eid→uuid
+;; translation across the per-module → unified-db merge.
+
+(deftest triggers-relation-survives-merge
+  (testing ":triggers ref survives per-module → unified-db merge and resolves to the correct rule"
+    ;; modB is transacted FIRST so its decoy entities populate the merged-db's
+    ;; low eid slots — guaranteeing that modA's per-module eid for RuleX (which
+    ;; would be small) does NOT coincide with the merged-db eid of RuleX. Any
+    ;; failure to translate eid→uuid will land on a decoy entity from modB,
+    ;; surfacing the merge bug.
+    (let [modB-db (h/with-canvas
+                    (h/within-module "demo.modB"
+                      (value "Decoy0" "Decoy.")
+                      (value "Decoy1" "Decoy.")
+                      (value "Decoy2" "Decoy.")
+                      (value "Decoy3" "Decoy.")
+                      (value "Decoy4" "Decoy.")
+                      (value "Decoy5" "Decoy.")))
+          modA-db (h/with-canvas
+                    (h/within-module "demo.modA"
+                      (rule "RuleX"
+                        "Reactive rule fired by a function."
+                        (when RuleX (model :model/Model)))
+                      (function "doWork"
+                        "Function that triggers RuleX."
+                        (takes [x :String])
+                        (gives :String)
+                        (triggers RuleX))))
+          db      (canvas-source/merge-for-test [modB-db modA-db])
+          ;; Walk :triggers datoms; each value is a ref eid in the merged db.
+          target-roles (->> (d/datoms db :aevt :triggers)
+                            (map (fn [datom]
+                                   (let [target-ent (d/entity db (.-v datom))]
+                                     [(:entity/name target-ent)
+                                      (:affordance/role target-ent)])))
+                            vec)]
+      (is (= 1 (count target-roles))
+          "exactly one :triggers datom expected (doWork → RuleX)")
+      (is (= ["RuleX" :canvas/rule] (first target-roles))
+          ":triggers must resolve to the rule named RuleX, not a stray entity"))))
+
+(deftest emits-relation-survives-merge
+  (testing ":emits ref survives per-module → unified-db merge and resolves to the correct event"
+    ;; modB is transacted FIRST so its decoys eat early merged-db eids; see
+    ;; triggers-relation-survives-merge for rationale.
+    (let [modB-db (h/with-canvas
+                    (h/within-module "demo.modB"
+                      (value "Decoy0" "Decoy.")
+                      (value "Decoy1" "Decoy.")
+                      (value "Decoy2" "Decoy.")
+                      (value "Decoy3" "Decoy.")
+                      (value "Decoy4" "Decoy.")
+                      (value "Decoy5" "Decoy.")))
+          modA-db (h/with-canvas
+                    (h/within-module "demo.modA"
+                      (event "ThingHappened"
+                        "An event the function emits.")
+                      (function "doWork"
+                        "Function that emits ThingHappened."
+                        (takes [x :String])
+                        (gives :String)
+                        (emits ThingHappened))))
+          db      (canvas-source/merge-for-test [modB-db modA-db])
+          target-roles (->> (d/datoms db :aevt :emits)
+                            (map (fn [datom]
+                                   (let [target-ent (d/entity db (.-v datom))]
+                                     [(:entity/name target-ent)
+                                      (:affordance/role target-ent)])))
+                            vec)]
+      (is (= 1 (count target-roles))
+          "exactly one :emits datom expected (doWork → ThingHappened)")
+      (is (= ["ThingHappened" :canvas/event] (first target-roles))
+          ":emits must resolve to the event named ThingHappened, not a stray entity"))))
+
+(deftest triggers-integrity-clean-in-full-canvas
+  (testing "the full canvas db produces no :triggers-target-not-a-rule integrity findings"
+    ;; Regression test for the live bug: constraint.phase5/run, target.clojure.analyzer/run,
+    ;; and validation.phase4/run all declare (triggers RunPhase5) etc. with matching rules
+    ;; in-module. The merge bug caused those triggers to alias onto unrelated entities.
+    (let [db        (canvas-source/build-canvas-db)
+          findings  (require 'fukan.canvas.inspect.integrity)
+          _ findings
+          run-fn    (resolve 'fukan.canvas.inspect.integrity/check)
+          all       (run-fn db)
+          triggers-findings (filter #(= :inspect.integrity/triggers-target-not-a-rule
+                                         (:check %))
+                                    all)]
+      (is (empty? triggers-findings)
+          (str ":triggers integrity findings must be empty after the merge fix; got "
+               (pr-str triggers-findings))))))
+
+(deftest type-field-types-survives-merge
+  (testing ":type/field-types (cardinality-many scalar) survives merge for a record with multiple field types"
+    (let [modA-db (h/with-canvas
+                    (h/within-module "demo.modA"
+                      (value "Alpha" "Type A.")
+                      (value "Beta"  "Type B.")
+                      (value "Gamma" "Type C.")
+                      (record "Triple"
+                        "A record referring to three distinct field types."
+                        (field a :Alpha)
+                        (field b :Beta)
+                        (field c :Gamma))))
+          modB-db (h/with-canvas
+                    (h/within-module "demo.modB"
+                      (value "Decoy" "Decoy.")))
+          db      (canvas-source/merge-for-test [modA-db modB-db])
+          field-types (ffirst (d/q '[:find ?fts
+                                      :where [?e :entity/name "Triple"]
+                                             [?e :type/field-types ?fts]]
+                                    db))
+          ;; Datascript returns each card-many value separately; collect them all
+          all-field-types (d/q '[:find [?ft ...]
+                                  :where [?e :entity/name "Triple"]
+                                         [?e :type/field-types ?ft]]
+                                db)]
+      (is (some? field-types) ":type/field-types must be present on the merged Triple record")
+      (is (= #{:Alpha :Beta :Gamma} (set all-field-types))
+          "all three field-type names must survive the merge — none silently dropped"))))
 
 (deftest name-plus-role-warn-only-not-throw
   (testing "the rule+invariant pair produces an informational warning, not an exception"
