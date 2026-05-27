@@ -23,8 +23,12 @@
    Six checks:
 
      1. orphan-entity              :warning  — entity has zero incoming refs
-                                                of any kind (skips Modules
-                                                and `:exported` entities)
+                                                of any kind. Skips Modules,
+                                                `:exported` entities, and
+                                                affordances whose role is
+                                                wired by mechanism rather
+                                                than by the ref graph (see
+                                                `orphan-exempt-roles`).
      2. unreached-entity           :error    — entity not reachable from any
                                                 Module via :module/child
      3. exported-but-unreferenced  :warning  — `:exported` entity that no
@@ -144,6 +148,25 @@
 ;; Check 1 — Orphan entities (no incoming references)
 ;; ---------------------------------------------------------------------------
 
+(def ^:private orphan-exempt-roles
+  "Affordance roles whose mechanism does not run through the ref graph.
+   Orphan-check skips these so the warning only fires on entities that
+   genuinely SHOULD be wired into the graph but aren't.
+
+   - :canvas/invariant  — timeless commitments, semantic not structural.
+   - :canvas/checker    — wired by the validation phase, not by :triggers/:references.
+   - :canvas/getter     — wired by the lifecycle mechanism.
+   - :canvas/rule       — coverage gap is tracked more precisely by
+                          `rule-without-trigger`; double-flagging as orphan
+                          is noise.
+   - :canvas/event      — coverage gap is tracked more precisely by
+                          `event-without-handler`."
+  #{:canvas/invariant
+    :canvas/checker
+    :canvas/getter
+    :canvas/rule
+    :canvas/event})
+
 (defn- incoming-ref-eids
   "Set of every eid pointed at by some incoming reference (excluding
    :module/child ownership)."
@@ -155,13 +178,17 @@
     (into #{} (concat trigger-targets emit-targets ref-targets shape-targets))))
 
 (defn check-orphans
-  "Affordances and Types with no incoming references. Skips Modules and
-   :exported entities."
+  "Affordances and Types with no incoming references. Skips Modules,
+   :exported entities, and affordances whose role is in
+   `orphan-exempt-roles` (mechanism-driven roles whose orphan-ness is
+   either expected idiom or tracked by a more specific check)."
   [db]
   (let [pointed (incoming-ref-eids db)]
     (->> (non-module-entity-eids db)
          (remove pointed)
          (remove #(has-tag? db % :exported))
+         (remove #(contains? orphan-exempt-roles
+                             (:affordance/role (d/entity db %))))
          (map (fn [eid]
                 (let [ent  (d/entity db eid)
                       etype (:entity/type ent)

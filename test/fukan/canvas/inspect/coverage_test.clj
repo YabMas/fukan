@@ -4,7 +4,7 @@
             [fukan.canvas.construction :refer [function value exports]]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.inspect.coverage :as coverage]
-            [fukan.canvas.vocab.behavioral :refer [rule]]
+            [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [fukan.canvas.vocab.event :refer [event handler]]))
 
 ;; ---------------------------------------------------------------------------
@@ -87,6 +87,24 @@
       (is (empty? (filter #(re-find #"ApiSurface" (-> % :offenders first :stable-id))
                           orphans))
           ":exported tag must suppress orphan finding"))))
+
+(deftest mechanism-driven-roles-exempt-from-orphan
+  (testing "affordances wired by mechanism rather than ref graph are not flagged"
+    (let [db (h/with-canvas
+               (h/within-module "demo"
+                 (rule "UnshippedRule"
+                   "A rule with no triggering function."
+                   (when UnshippedRule (model :model/Model)))
+                 (invariant "UnshippedInvariant"
+                   "Timeless commitment, no incoming ref."
+                   (holds-that "always-true"))))
+          orphans (filter #(= :inspect.coverage/orphan-entity (:check %))
+                          (coverage/check db))
+          orphan-names (set (map #(-> % :offenders first :stable-id) orphans))]
+      (is (not (some #(re-find #"UnshippedRule" %) orphan-names))
+          ":canvas/rule role must be exempt from orphan check")
+      (is (not (some #(re-find #"UnshippedInvariant" %) orphan-names))
+          ":canvas/invariant role must be exempt from orphan check"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Check 2 — unreached entities
