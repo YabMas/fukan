@@ -571,21 +571,24 @@
                 (= seg ns-str-hyph)))
           segments)))
 
-(defn- resolve-reference-target
+(defn resolve-reference-uuid
   "Given a cross-module reference keyword (e.g. :model/Model), find the child
    entity of a module whose name matches the keyword's namespace, returning the
-   stable string id of the target entity, or nil if not found.
+   :entity/id UUID of the target entity, or nil if not found.
 
    Module-qualified resolution:
      1. Take the keyword namespace as the module-name hint (e.g. \"model\").
      2. Find all Modules whose dot-separated name contains that string as a
         segment (e.g. \"model.spec\", \"model.build\" all match \"model\").
      3. Among those modules, find the child entity with the keyword's local name.
-     4. Return the first match's stable id, or nil if unresolvable.
+     4. Return the first match's UUID, or nil if unresolvable.
 
    This correctly disambiguates :modA/Foo from :modB/Foo when both modules
-   export an entity named 'Foo'."
-  [db uuid->stable-id ref-kw]
+   export an entity named 'Foo'.
+
+   Exposed as a public helper so trust-tier integrity checks can ask
+   'does this reference resolve?' without needing a uuid→stable-id map."
+  [db ref-kw]
   (when (namespace ref-kw)
     (let [ns-str      (namespace ref-kw)
           entity-name (name ref-kw)
@@ -597,17 +600,24 @@
           matching-module-eids (->> all-modules
                                     (filter (fn [[_eid mname]]
                                               (module-name-matches-ns? mname ns-str)))
-                                    (map first))
-          ;; Among matching modules, find a child with the given name
-          result (when (seq matching-module-eids)
-                   (ffirst (d/q '[:find ?cuuid
-                                   :in $ [?m ...] ?n
-                                   :where [?m :module/child ?c]
-                                          [?c :entity/name ?n]
-                                          [?c :entity/id ?cuuid]]
-                                 db matching-module-eids entity-name)))]
-      (when result
-        (get uuid->stable-id result)))))
+                                    (map first))]
+      (when (seq matching-module-eids)
+        (ffirst (d/q '[:find ?cuuid
+                       :in $ [?m ...] ?n
+                       :where [?m :module/child ?c]
+                              [?c :entity/name ?n]
+                              [?c :entity/id ?cuuid]]
+                     db matching-module-eids entity-name))))))
+
+(defn resolve-reference-target
+  "Given a cross-module reference keyword (e.g. :model/Model), find the child
+   entity of a module whose name matches the keyword's namespace, returning the
+   stable string id of the target entity, or nil if not found.
+
+   See `resolve-reference-uuid` for the resolution algorithm."
+  [db uuid->stable-id ref-kw]
+  (when-let [uuid (resolve-reference-uuid db ref-kw)]
+    (get uuid->stable-id uuid)))
 
 (defn- eid->stable-id
   "Resolve a Datascript integer eid to its stable string id via :entity/id UUID lookup."

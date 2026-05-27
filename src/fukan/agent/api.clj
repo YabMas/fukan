@@ -4,6 +4,8 @@
    call (help) for the live catalog."
   (:require [fukan.agent.edb :as edb]
             [fukan.agent.query :as query]
+            [fukan.canvas.inspect.integrity :as inspect-integrity]
+            [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.infra.model :as infra-model]
             [fukan.model.primitives :as primitives]
             [fukan.model.relations :as relations]
@@ -318,3 +320,23 @@
      :covered-ratio          (ratio (count covered))
      :unprojected-ratio      (ratio (count unprojected))
      :absent-edge-count      (count absent-tos)}))
+
+;; -- Trust tier ---------------------------------------------------------------
+;;
+;; Trust-tier helpers produce decision-ready feedback: every finding is an
+;; error under any methodology — no interpretive judgment required. Contrast
+;; with weigh-tier lenses (Sprint 3 Task 7+), which produce interpretive
+;; output the caller must weigh against context.
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :agent/doc "Cross-reference integrity check. Walks the canvas db and
+                    reports every reference that fails to land — unresolved
+                    :references, :triggers/:emits role mismatches, and
+                    unresolved cross-module shape targets. Returns a vector
+                    of finding maps; [] when clean. Every finding is
+                    :severity :error."
+        :agent/example "(integrity)"}
+  integrity
+  []
+  (inspect-integrity/check (canvas-source/build-canvas-db)))

@@ -40,9 +40,13 @@
         (is (contains? api :L0))
         (is (contains? api :L1))
         (is (contains? api :L2))
+        (is (contains? api :trust)
+            "Trust-tier group must be a top-level help bucket")
         (is (some #(= 'primitives (:name %)) (:L1 api)))
         (is (some #(= 'q (:name %)) (:L0 api)))
-        (is (some #(= 'drift (:name %)) (:L2 api)))))))
+        (is (some #(= 'drift (:name %)) (:L2 api)))
+        (is (some #(= 'integrity (:name %)) (:trust api))
+            "Trust-tier integrity helper must be discoverable via (help)")))))
 
 (deftest help-for-single-fn
   (testing "(help 'primitives) returns docstring + signatures + examples"
