@@ -54,25 +54,55 @@ A second axis cuts across the six signals: **does the signal produce facts that 
 | Structural integrity | "this reference doesn't resolve" — broken refs are errors | **trust** | `src/fukan/canvas/inspect/` |
 | Behavioral coverage | "this entity has no incoming refs; this rule has no trigger" — severity varies | **trust** | `src/fukan/canvas/inspect/` |
 | Delta awareness | "X removed since snapshot; these refs now break" — mechanical impact | **trust** | `src/fukan/canvas/inspect/` |
-| Pattern recurrence | "these 5 affordances share a shape" — interpretation needed | **weigh** | `src/fukan/canvas/architect/` |
-| Consistency | "naming style varies in this module" — intentional? worth normalizing? | **weigh** | `src/fukan/canvas/architect/` |
-| Methodology coherence | "vocabulary fingerprint doesn't match the dominant paradigm" — drift? mixed methodology by design? | **weigh** | `src/fukan/canvas/architect/` |
-
-**Both tiers are plain Clojure fns under `src/fukan/canvas/`.** The tier distinction is the *kind of signal each produces*, not where it's exposed. There are no new CLI subcommands and no new MCP-style tools — the existing `bin/fukan eval '<expr>'` agent invocation surface is sufficient.
+| Pattern recurrence | "these 5 affordances share a shape" — interpretation needed | **weigh** (lens) | `src/fukan/canvas/lens/` |
+| Consistency | "naming style varies in this module" — intentional? worth normalizing? | **weigh** (lens) | `src/fukan/canvas/lens/` |
+| Methodology coherence | "vocabulary fingerprint doesn't match the dominant paradigm" — drift? mixed methodology by design? | **weigh** (lens) | `src/fukan/canvas/lens/` |
+| Theoretical perspectives (Tar Pit, FCIS, DDD, …) | "does this design honor essential-complexity minimization?" — pure interpretation | **weigh** (lens) | `src/fukan/canvas/lens/` |
 
 **Trust tier (`inspect/*`):** pure functions over the canvas db; output is decision-ready. If `inspect/integrity` says a reference is broken, the reference is broken — no interpretation required. The LLM treats these as authoritative.
 
-**Weigh tier (`architect/*`):** pure functions over the canvas db; output is observational. If `architect/patterns` surfaces a cluster of 3 similar affordances, the cluster is real — but whether to extract a lift is a judgment call the LLM has to make.
+**Weigh tier (`lens/*`):** pluggable *lenses* — each lens is a single namespace declaring a contract: identifier, description, prompt fragment, optional compute fn over the canvas db, render fn. Lenses output observations that the LLM weighs. The lens substrate is the **load-bearing pluggability surface of Phase 5** — see the next section.
 
-**Discovery surface:** the agent API's `(help)` fn (in `fukan.agent.api`) lists both groups separately so the LLM sees the trust distinction at discovery time. `AGENTS.md` gets a short section explaining the partition.
+**Discovery surface:** the agent API's `(help)` fn (in `fukan.agent.api`) lists trust-tier fns and registered lenses separately so the LLM sees the trust distinction at discovery time. `AGENTS.md` gets a short section explaining the partition.
 
 **Invocation surface:** both tiers go through `bin/fukan eval`. Example:
 - Trust: `bin/fukan eval '(canvas.inspect.integrity/check (model))'` → structured violations report
-- Weigh: `bin/fukan eval '(canvas.architect.patterns/cluster (model))'` → annotated cluster list for LLM consumption
+- Weigh: `bin/fukan eval '(canvas.lens.survey/run (model) [:patterns :consistency])'` → unified survey through requested lenses
 
-**Subagent surface (orchestrated weighing):** the `weigh` tier's interpretive load makes sense to bundle into a subagent mode rather than direct fn calls. Phase 5 extends the existing `fukan-architect` agent with a `survey design improvements` capability that invokes the `architect/*` fns and synthesizes a unified survey. See Sprint 4 Task 10.
+**Subagent surface (orchestrated weighing):** the existing `fukan-architect` agent is extended (Sprint 4 Task 10) to dispatch surveys via the lens substrate. A `survey design improvements` request invokes `(survey/run (model) <lens-set>)` and synthesizes findings. The lens set is configurable per dispatch — default set in agent definition; specific lenses requestable in the prompt.
 
 **Constraint integration deferred.** Trust-tier helpers COULD be wired as built-in `fc/check` constraints (every `:references` Relation must resolve, etc.) but Phase 5 ships them as plain pure fns. Constraint wiring is a follow-on if use evidence demands automatic enforcement — requires `fc/check` to grow severity-awareness, which today's binary model doesn't have.
+
+### The lens substrate (Phase 5's pluggability core)
+
+The user reframe (2026-05-27): *"discovering what works and doesn't in terms of agent interaction will be an ongoing effort... build the integration pluggable from the start. Prompts should be swappable, but also the different modes of thinking/surveying; e.g. looking for recurring patterns is one, but checking the existing high-level design against certain perspectives/theories (e.g. Out of the Tar Pit paper) would be another, and I want to freely experiment with different modes."*
+
+**What a lens is.** A lens is a way of seeing the canvas. Each lens is a single Clojure namespace under `src/fukan/canvas/lens/` declaring a `lens` var of shape:
+
+```clojure
+(def lens
+  {:id          :patterns                          ; namespaced or simple keyword
+   :description "Recurring-shape detection — rule-of-three lift candidates"
+   :prompt-fragment "..."                          ; LLM priming content for this lens
+   :compute     (fn [canvas-db opts] ...)          ; optional — structural lenses compute findings; theoretical lenses may skip
+   :render      (fn [findings opts] ...)})         ; composes findings + prompt-fragment into LLM-consumable context
+```
+
+**Two lens shapes.** Structural lenses (patterns, consistency) compute findings from canvas-db queries. Theoretical lenses (Tar Pit, FCIS, DDD, ...) primarily contribute a prompt fragment that frames the canvas through a theory; their `compute` fn may extract relevant slices (e.g. for Tar Pit: all `:canvas/getter` Affordances as candidate state, all `function` Affordances as candidate behavior) but the interpretation is LLM-driven.
+
+**Substrate machinery** (lives at `src/fukan/canvas/lens/`):
+
+- `core.clj` — the lens contract; a small spec for the `lens` map; `validate-lens` helper
+- `registry.clj` — discovers `lens` vars from all `fukan.canvas.lens.*` namespaces; `all-lenses`, `lens-by-id`
+- `survey.clj` — `(run canvas-db lens-ids opts)`; invokes each requested lens's compute + render; concatenates into a unified survey
+
+**Plugging in a new lens** = drop a `.clj` file under `src/fukan/canvas/lens/` that declares a valid `lens` var. The registry picks it up automatically. Adding the file + a require in `canvas-source/canvas-builders`-equivalent registry is the entire integration step.
+
+**Swapping a prompt** = edit the lens's `:prompt-fragment` field. (No system-level coordination needed; prompts are data.)
+
+**Swapping the architect's base prompt** = edit `doc/canvas-authoring-system-prompt.md` (the permanent versioned prompt the `fukan-architect` agent references). Sprint 4 Task 10 establishes this artifact.
+
+**Why this matters for Phase 5.** The user wants to freely experiment with thinking modes. The architecture must accommodate that from the start, not as a refactor. Phase 5 ships 3 starter lenses (patterns, consistency, tar-pit) to validate the substrate handles both structural and theoretical lens shapes; subsequent phases add more.
 
 ---
 
@@ -83,13 +113,20 @@ A second axis cuts across the six signals: **does the signal produce facts that 
 ```
 src/fukan/canvas/inspect/             ; trust tier — decision-ready output
   integrity.clj                  ; cross-reference resolution + trigger/emit coherence
-  coverage.clj                   ; orphans, unreachable entities, dead exports, invariant target checks
-  delta.clj                      ; canvas-to-canvas diff + impact analysis
+  coverage.clj                   ; orphans, unreachable entities, dead exports, missing trigger/handler coverage
+  ; delta.clj                    ; deferred to Phase 6+; snapshot lifecycle is its own design conversation
 
-src/fukan/canvas/architect/           ; weigh tier — interpretive output
-  patterns.clj                   ; recurring-shape detection; lift candidates
-  consistency.clj                ; naming + structural consistency observations
-  ; methodology.clj              ; deferred to Phase 6+; corpus too uniformly fukan-shaped to design against
+src/fukan/canvas/lens/                ; weigh tier — pluggable lenses (the experimentation surface)
+  core.clj                       ; lens contract; validate-lens
+  registry.clj                   ; auto-discovers lens vars from src/fukan/canvas/lens/*.clj
+  survey.clj                     ; (run canvas-db lens-ids opts) — dispatch + synthesis
+
+  patterns.clj                   ; structural lens — recurring shapes; rule-of-three lift candidates
+  consistency.clj                ; structural lens — naming style, field-type symmetry, sister-module symmetry
+  tar_pit.clj                    ; theoretical lens — essential vs accidental complexity (Moseley & Marks 2006)
+
+doc/
+  canvas-authoring-system-prompt.md     ; permanent system prompt the fukan-architect agent references
 
 doc/plans/
   2026-05-26-feedback-signals-design.md   ; Sprint 1 output
@@ -100,12 +137,13 @@ doc/plans/
 **Likely modified files:**
 
 ```
-src/fukan/agent/api.clj                ; expose new fns through (help); group by tier
+src/fukan/agent/api.clj                ; expose new fns through (help); list trust-tier fns + registered lenses separately
 src/fukan/canvas/construction.clj      ; Sprint 2 — emits form
-src/fukan/canvas/projection/canvas_source.clj  ; Sprint 2 — duplicate-name fix (TBD)
+src/fukan/canvas/projection/canvas_source.clj  ; Sprint 2 — duplicate-name convention promotion
+src/fukan/canvas/core/substrate/store.clj      ; Sprint 2 — :type/fields derived attribute
 .claude/agents/fukan-architect.md      ; Sprint 4 — extend with survey-improvements capability (or equivalent path)
 dev/user.clj                           ; REPL convenience for invoking signals (optional)
-CLAUDE.md, AGENTS.md                   ; Sprint 5 — authoring workflow guidance + tier explanation
+CLAUDE.md, AGENTS.md                   ; Sprint 5 — authoring workflow guidance + tier explanation + lens registry pointer
 ```
 
 **`bin/fukan` is NOT modified.** Phase 5 adds no CLI subcommands. Both tiers are invoked through `bin/fukan eval`.
@@ -137,7 +175,7 @@ For each of the six signal categories listed in the "thinking-enhancing tool" se
 
 - **What it computes.** Concretely. Datalog query, walk over the canvas db, set comparison, etc.
 - **What it surfaces.** A list of findings, structured for both LLM and human consumption.
-- **Tier.** Canvas-level helper (decision-ready output, pure fn under `inspect/`) or LLM-side tool (interpretive output under `architect/`). Verify the partition holds — surface anything that resists the split.
+- **Tier.** Trust-tier helper (decision-ready output, pure fn under `inspect/`) or weigh-tier lens (interpretive output under `lens/`). Verify the partition holds — surface anything that resists the split.
 - **How it integrates with workflow.** REPL fn? `bin/fukan` subcommand? Both?
 - **Priority for Phase 5.** Ship in Phase 5 vs defer to Phase 6 or beyond.
 
@@ -239,26 +277,34 @@ jj new
 
 ---
 
-# Sprint 2 — Pre-implementation hardening (Tasks 3–4)
+# Sprint 2 — Pre-implementation hardening (Tasks 3–5)
 
-Two items Phase 4 verification flagged as Phase 5 conversations. Both block the feedback signals from being accurate against real canvas content.
+Three items needed before Sprint 3 signal/lens work begins. All three are small additive changes that unblock accurate signal output.
 
 ---
 
-## Phase 5, Task 3: Resolve the 31 intra-module duplicate names
+## Phase 5, Task 3: Promote the duplicate-name convention (resolves 31 intra-module duplicates)
 
-**Files:** TBD per chosen resolution
+**User decision (2026-05-27):** option 3 — **promote the convention**. The substrate already disambiguates same-name entities by `name + role` silently; option 3 makes the idiom explicit in canvas documentation without churning the validation subsystem's 31 rule+invariant pairs. The Allium-derived pattern (paired rule + invariant sharing a name) is a real design idiom worth preserving.
 
-Three options from `doc/plans/2026-05-26-phase-4-sprint-1-notes.md`:
+**Files:**
+- Modify: `CLAUDE.md` — add a "Canvas conventions" section documenting the name+role disambiguation idiom
+- Modify: `AGENTS.md` — same note for the agent surface
+- Modify: `src/fukan/canvas/projection/canvas_source.clj` — confirm warn-not-throw behavior is final, not transitional; add a docstring referencing the convention
+- Test: extend `test/fukan/canvas/projection/canvas_source_test.clj` with an assertion that same-name entities with different roles co-exist correctly
 
-1. **Disallow** — rename the 31 colliding entities in canvas/validation/* to disambiguate
-2. **Allow + scope resolution by name+role** — substrate stays; resolution gets richer
-3. **Promote the convention** — document explicitly as canvas idiom
+Steps:
 
-- [ ] **Step 1: Pick an option with the user.**
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Re-enable strict throw-on-duplicate** in `canvas-source/build-canvas-db` if applicable.
-- [ ] **Step 4: Per-commit logical changes.**
+- [ ] **Step 1: Document the convention.** A canvas module may declare multiple entities with the same name PROVIDED they have distinct roles (e.g. `rule` + `invariant` named the same describe two views of the same behavioral commitment). Reference resolution uses `(name, role)` as the disambiguation tuple where role is unambiguous from context.
+- [ ] **Step 2: Codify in docstring.** Update `canvas-source/build-canvas-db`'s docstring to reference the convention; remove any TODO/transitional language.
+- [ ] **Step 3: Confirm warn-not-throw is the final behavior** (not transitional); the warning text becomes "duplicate name X — distinct roles A, B — confirm intentional via the name+role convention".
+- [ ] **Step 4: Test.** Assert two same-name same-module entities with distinct roles produce two distinct datoms and resolve correctly when queried by `(name, role)`.
+- [ ] **Step 5: Commit.**
+
+```bash
+jj desc -m "feat(canvas): promote name+role disambiguation as canvas convention; resolve 31 intra-module duplicates"
+jj new
+```
 
 ---
 
@@ -289,26 +335,48 @@ jj new
 
 ---
 
-# Sprint 3 — Build the feedback signals (Tasks 5–9)
+## Phase 5, Task 5: `:type/fields` derived attribute (substrate addition)
 
-The substantive sprint. Each task implements one of Sprint 1 Task 1's selected signals. The exact list depends on Sprint 1's prioritization; the placeholders below are the most likely picks based on the design space described above.
+Sprint 1 Task 1 design surfaced that field-type consistency analysis needs `(name, type)` queryable per field of every record-shaped Type. Today the substrate stores field names + parsed field shapes but doesn't expose a queryable derived attribute. Sprint 2 ships the addition before Sprint 3's consistency lens needs it.
+
+**Files:**
+- Modify: `src/fukan/canvas/core/substrate/store.clj` — add `:type/fields` schema entry + derivation in `->datoms` for `:type-record`
+- Test: `test/fukan/canvas/core/substrate/store_test.clj` — assert a query for "all records with a `:status` field, grouped by its type" works
+- Confirm no canvas content changes — the addition is derived from existing data
+
+- [ ] **Step 1: Schema** — `:type/fields` as a cardinality-many attribute holding tuple values `[field-name type-name]` (or a ref to a small intermediate entity, depending on what queries the consistency lens wants).
+- [ ] **Step 2: Test the query** consistency relies on.
+- [ ] **Step 3: Implement** in the `:type-record` `->datoms` multimethod.
+- [ ] **Step 4: Run against fukan-itself.** Confirm no regressions in existing canvas suite.
+- [ ] **Step 5: Commit.**
+
+```bash
+jj desc -m "feat(canvas/substrate): :type/fields derived attribute for field-level queries"
+jj new
+```
+
+---
+
+# Sprint 3 — Build the feedback signals (Tasks 6–10)
+
+The substantive sprint. Two trust-tier helpers, then the lens substrate plus three starter lenses (two structural, one theoretical). The lens substrate is the **load-bearing pluggability core** introduced in this sprint — Task 8 lands the substrate alongside the first lens; subsequent tasks validate the substrate accepts both additional structural lenses and a non-structural theoretical lens.
 
 Sprint 3 splits into two groups corresponding to the two tiers:
 
-- **Trust tier** — Tasks 5–7. Land under `src/fukan/canvas/inspect/`. Pure fns; decision-ready output; the LLM treats them as authoritative.
-- **Weigh tier** — Tasks 8–9. Land under `src/fukan/canvas/architect/`. Pure fns; observational output; the LLM interprets and decides.
+- **Trust tier** — Tasks 6–7. Land under `src/fukan/canvas/inspect/`. Pure fns; decision-ready output; the LLM treats them as authoritative.
+- **Weigh tier (lens substrate + starter lenses)** — Tasks 8–10. Land under `src/fukan/canvas/lens/`. Each lens declares the lens contract (`:id`, `:description`, `:prompt-fragment`, optional `:compute`, `:render`). The lens substrate (Task 8) lands alongside the first lens.
 
-Each signal lands as:
+Each task lands as:
 - One namespace under the tier's directory
 - Tests
-- Registration in the agent API's `(help)` surface, grouped by tier
+- Registration in the agent API's `(help)` surface, grouped by tier; lenses additionally register with the lens registry automatically
 - A short EXAMPLES.md showing typical use
 
 **No new `bin/fukan` subcommands.** All fns are invoked through `bin/fukan eval`. The agent API surface (and AGENTS.md) is responsible for telling the LLM these fns exist and what tier each one belongs to.
 
 ---
 
-## Phase 5, Task 5: Cross-reference integrity — trust tier
+## Phase 5, Task 6: Cross-reference integrity — trust tier
 
 **Files:**
 - Create: `src/fukan/canvas/inspect/integrity.clj`
@@ -339,7 +407,7 @@ What it returns: a structured report of unresolved references with source-locati
 
 ---
 
-## Phase 5, Task 6: Coverage analysis — trust tier
+## Phase 5, Task 7: Coverage analysis — trust tier
 
 **Files:**
 - Create: `src/fukan/canvas/inspect/coverage.clj`
@@ -363,127 +431,164 @@ Each finding has a severity (error / warning / info) callers can filter on. Outp
 
 ---
 
-## Phase 5, Task 7: Delta inspection — trust tier
+## Phase 5, Task 8: Lens substrate + patterns lens (the first lens)
 
 **Files:**
-- Create: `src/fukan/canvas/inspect/delta.clj`
-- Test: `test/fukan/canvas/inspect/delta_test.clj`
+- Create: `src/fukan/canvas/lens/core.clj` — the lens contract (spec for a valid `lens` map; `validate-lens`)
+- Create: `src/fukan/canvas/lens/registry.clj` — discovers `lens` vars from `fukan.canvas.lens.*` namespaces; `all-lenses`, `lens-by-id`
+- Create: `src/fukan/canvas/lens/survey.clj` — `(run canvas-db lens-ids opts)`; dispatches and synthesizes
+- Create: `src/fukan/canvas/lens/patterns.clj` — the first lens; structural
+- Tests for each of the four
 
-What it computes (given two canvas db states):
-- Entities added
-- Entities removed
-- Entities whose attributes changed (e.g. docstring updated, shape changed)
-- Cross-reference impact: when you remove entity X, which references now break?
+**What the lens substrate must provide.** This task ships the pluggability core. Read the "Lens substrate" section in the framing earlier in this plan. The contract a lens must satisfy:
 
-Usage pattern: a snapshot is taken (manually or automatically on `(refresh)`); subsequent changes are compared against the snapshot. Output is **decision-ready** — impact is structural.
+```clojure
+(def lens
+  {:id          :patterns                          ; required; namespaced or simple keyword
+   :description "..."                              ; required; short one-line summary
+   :prompt-fragment "..."                          ; required; LLM priming content for this lens
+   :compute     (fn [canvas-db opts] ...)          ; optional; returns findings data
+   :render      (fn [findings opts] ...)})         ; required; composes findings + prompt-fragment → context
+```
 
-- [ ] **Step 1: Snapshot representation.** Probably: serialize the canvas db to edn at a known location (e.g. `.fukan/canvas-snapshot.edn`).
-- [ ] **Step 2: Diff algorithm.** Walk both dbs; compare by `:entity/id`.
-- [ ] **Step 3: Format output** to highlight impact.
-- [ ] **Step 4: Register in `(help)`** under the `Trust` group.
-- [ ] **Step 5: Commit.**
+The substrate validates lenses on registration. Adding a new lens = drop a `.clj` file under `src/fukan/canvas/lens/` declaring a valid `lens` var; the registry picks it up.
 
----
+**Survey dispatch.** `(survey/run canvas-db [:patterns :consistency])` invokes each requested lens's `compute` (if provided), then each lens's `render`, then concatenates the rendered output into a single LLM-consumable survey.
 
-## Phase 5, Task 8: Pattern recurrence — weigh tier
-
-**Files:**
-- Create: `src/fukan/canvas/architect/patterns.clj`
-- Test: `test/fukan/canvas/architect/patterns_test.clj`
-
-What it computes:
+**The patterns lens specifically.** Computes:
 - Cluster Affordances by structural shape similarity (input/output type sets, role, presence/absence of formal-expression)
 - Flag clusters of 3+ as candidate lift patterns
-- For each cluster: show the entities, the shared structure, the suggestion ("consider extracting a lift named X")
+- For each cluster: emit the entities, the shared structure, the suggestion ("consider extracting a lift named X")
 
-This is potentially the highest-value LLM-side signal — the rule-of-three discipline Phase 2 used can be automated here. When canvas authoring surfaces a 3rd instance of a recurring pattern, the LLM gets told. **Interpretation lives with the LLM** — the tool surfaces the cluster; the LLM decides whether a lift is warranted.
+The prompt-fragment frames the LLM through the rule-of-three discipline: "If the same shape appears 3+ times, consider a lift. Existing lifts in `fukan.canvas.vocab.*` are the first place to look before inventing new vocabulary."
 
-- [ ] **Step 1: Define "structural similarity"** rigorously. Probably: same `:affordance/role`; same set-of-type-names in input + output; same presence of formal-expression.
-- [ ] **Step 2: Implement clustering.** Group entities by their similarity signature; emit clusters >= 3.
-- [ ] **Step 3: Format the output** so it's actionable to an LLM. E.g. "Three Affordances with shape `(Model) -> [Violation]`: rules_4a/check, rules_4b/check, rules_4c/check. Consider `vocab.validation/checker` (already exists). Apply at: …"
-- [ ] **Step 4: Register in `(help)`** under a `Weigh` group with a one-line summary.
-- [ ] **Step 5: Run against fukan-itself.** The existing `checker` lift should surface for the validation rules. If new patterns surface, document them as Phase 6 vocab candidates.
-- [ ] **Step 6: Commit.**
+Steps:
+
+- [ ] **Step 1: Lens contract.** Spec + `validate-lens`. Tests: valid lens passes; missing required keys fail with clear errors.
+- [ ] **Step 2: Registry.** Auto-discovery of `lens` vars from `fukan.canvas.lens.*` namespaces. Tests: register two synthetic lenses; assert `all-lenses` returns both; `lens-by-id` retrieves.
+- [ ] **Step 3: Survey dispatch.** `(run canvas-db lens-ids opts)`. Tests: run a survey with one synthetic lens; assert compute + render are invoked and output assembled correctly.
+- [ ] **Step 4: Patterns lens implementation.** Define "structural similarity" rigorously; cluster by signature; emit clusters >= 3 with the suggestion frame above.
+- [ ] **Step 5: Register lens id + description in `(help)`** under a `Lenses` group; agent API exposes `(canvas.lens/all-lenses)` for discovery.
+- [ ] **Step 6: Run against fukan-itself.** The existing `checker` lift should surface for the validation rules. If new patterns surface, document them as Phase 6 vocab candidates.
+- [ ] **Step 7: Per-commit logical changes.** Substrate (core + registry + survey) is one commit; patterns lens is a separate commit.
 
 ---
 
-## Phase 5, Task 9: Consistency analysis — weigh tier
+## Phase 5, Task 9: Consistency lens — validates substrate accepts additional structural lenses
 
 **Files:**
-- Create: `src/fukan/canvas/architect/consistency.clj`
-- Test: `test/fukan/canvas/architect/consistency_test.clj`
+- Create: `src/fukan/canvas/lens/consistency.clj`
+- Test: `test/fukan/canvas/lens/consistency_test.clj`
 
-What it computes:
+What it computes (using `:type/fields` shipped in Sprint 2 Task 5):
 - Naming-style consistency within a module (entities named `snake_case` vs `camelCase` vs `PascalCase`)
-- Field-name consistency across records (e.g. all records with `:id` — is it always `:String`?)
+- Field-name consistency across records (e.g. all records with a `:status` field — is it always `:String`?)
 - Sister-module structural symmetry (e.g. `rules_4a..g` should all look alike)
 
-Output is **observational** — the LLM (or human) interprets whether each inconsistency is intentional or worth normalizing.
+Output is **observational** — the prompt-fragment frames each finding as a question the LLM weighs, not an error to fix.
 
-- [ ] **Step 1: Define each consistency check.**
-- [ ] **Step 2: Make checks optional / configurable** so authoring projects can opt in/out of specific style rules.
-- [ ] **Step 3: Format output** as annotated suggestions (interpretive framing, not error framing).
-- [ ] **Step 4: Register in `(help)`** under the `Weigh` group.
-- [ ] **Step 5: Run against fukan-itself.** Expect surprises.
+The point of this task: **prove the lens substrate accepts a second structural lens with zero changes to the substrate machinery.** If anything in the substrate has to change to accommodate this lens, that's a substrate bug worth surfacing.
+
+- [ ] **Step 1: Define each consistency check** as a query over the canvas db.
+- [ ] **Step 2: Implement as a lens** — `def lens` with the four required keys + `compute` + `render`.
+- [ ] **Step 3: Make checks optional / configurable** via `opts` passed to `compute`.
+- [ ] **Step 4: Run against fukan-itself.** Expect surprises.
+- [ ] **Step 5: Verify substrate unchanged.** If `core`/`registry`/`survey` changed, surface the reason.
 - [ ] **Step 6: Commit.**
 
 ---
 
-**Note on methodology coherence (signal 3 from the six-category list).** It was a candidate LLM-side tool, but Phase 5 defers it. Methodology fingerprint computation is genuinely hard to design without a corpus of multi-paradigm projects to test against — fukan's canvas is too uniformly fukan-shaped. Revisit in Phase 6+ once more demos exist.
+## Phase 5, Task 10: Tar-pit lens — validates substrate accepts theoretical (non-structural) lenses
+
+**Files:**
+- Create: `src/fukan/canvas/lens/tar_pit.clj`
+- Test: `test/fukan/canvas/lens/tar_pit_test.clj`
+
+**Why this task exists.** The user wants to "freely experiment with different modes" of thinking about canvas designs. Modes range from purely structural (patterns, consistency) to purely theoretical (a paper's framework applied as a lens). The tar-pit lens is the first theoretical lens — it proves the substrate handles both shapes.
+
+Based on Moseley & Marks (2006) "Out of the Tar Pit," the lens frames the canvas through the paper's central distinction: **essential complexity** (inherent to the problem domain) vs **accidental complexity** (introduced by representation choices, mutable state, control flow). The prompt-fragment poses Tar-Pit questions to the LLM:
+
+- Which Types in this module are essential state vs derived/accidental state?
+- Which Affordances accomplish essential behavior vs incidental coordination?
+- Where does mutable state appear; is it justified by essentiality or absorbed accidentally?
+- (Tar Pit's prescription: essential state + functional derivations; minimize accidental state. How does this module score?)
+
+`compute` is allowed but optional for this lens. A minimal version extracts the relevant canvas slice (all `:canvas/getter` affordances as candidate state; all `function` affordances as candidate behavior) and hands it to `render` along with the prompt-fragment; the LLM does the interpretation.
+
+- [ ] **Step 1: Read Out of the Tar Pit** carefully — the lens's prompt-fragment quality is the load-bearing artifact here, not the compute fn.
+- [ ] **Step 2: Draft the prompt-fragment.** Pose the paper's central questions in canvas-vocabulary terms.
+- [ ] **Step 3: Minimal compute fn.** Extract candidate-state + candidate-behavior slices from the canvas db; pass to render.
+- [ ] **Step 4: Run against fukan-itself.** The output goes to a markdown file for review (the human reads the LLM's tar-pit analysis of fukan's own canvas). Subjective evidence.
+- [ ] **Step 5: Verify substrate unchanged.** If anything in core/registry/survey had to bend to accommodate a theoretical lens, surface why.
+- [ ] **Step 6: Commit.**
 
 ---
 
-# Sprint 4 — LLM workflow integration + trial run (Tasks 10–11)
-
-The signals from Sprint 3 are useful in isolation. Sprint 4 integrates them into a workflow the LLM can use to author canvas content with feedback.
+**Note on deferred signals.** Methodology coherence and Delta awareness are not Phase 5 lenses. Methodology coherence wants a multi-paradigm corpus to design against, which fukan doesn't have yet. Delta awareness wants a snapshot-lifecycle design (when is a snapshot taken; what's the human-visible diff; impact analysis on removed entities) that's its own conversation. Both revisit in Phase 6+ once Phase 5's lens substrate is in use.
 
 ---
 
-## Phase 5, Task 10: Extend the `fukan-architect` agent with feedback-signal awareness + `survey design improvements` capability
+# Sprint 4 — LLM workflow integration + trial run (Tasks 11–12)
+
+The trust-tier helpers + lens substrate from Sprint 3 are useful in isolation. Sprint 4 integrates them into a workflow the LLM can use to author canvas content with feedback.
+
+---
+
+## Phase 5, Task 11: Extend the `fukan-architect` agent with tier awareness + lens-driven `survey design improvements`
 
 **Files:**
 - Update: `.claude/agents/fukan-architect.md` (or equivalent agent-definition path)
-- Create: `doc/canvas-authoring-system-prompt.md` — extracted system-prompt content the agent reuses
-- Update: `AGENTS.md` — explain the trust/weigh tier model so the LLM understands what to invoke when
+- Create: `doc/canvas-authoring-system-prompt.md` — permanent versioned system-prompt content the agent references
+- Update: `AGENTS.md` — explain trust/weigh tier model + the lens substrate so any LLM understands the partition
 
-The Phase 2 architect-explorer system prompt activated layered-language thinking. Phase 5 promotes it from one-shot artifact to permanent reusable subagent behavior, expressed through the existing `fukan-architect` agent.
+The Phase 2 architect-explorer system prompt activated layered-language thinking. Phase 5 promotes it from one-shot artifact to permanent reusable subagent behavior, expressed through the existing `fukan-architect` agent and the pluggable lens substrate.
 
-**Why extend rather than create a new agent:** `fukan-architect` is already described as "High-altitude design partner... reviews existing structure and explores improvements/expansions." That description already encompasses the survey capability. Keeping it unified keeps the agent surface compact and discoverable. If `survey design improvements` becomes a workload distinct enough from generalist design-partner work to warrant its own agent, split in Phase 6.
+**Why extend rather than create a new agent:** `fukan-architect` is already described as "High-altitude design partner... reviews existing structure and explores improvements/expansions." That description already encompasses the survey capability. Keeping it unified keeps the agent surface compact and discoverable. If `survey design improvements` becomes a workload distinct enough from generalist design-partner work to warrant its own agent, split in Phase 6+.
 
-**Survey is monolithic in Phase 5.** A single dispatch produces a unified survey covering pattern recurrence + consistency. Rule of three: split into separate verbs only if the survey grows long enough to lose coherence.
+**Lens-driven survey.** The agent dispatches surveys through the lens registry. A default lens set is configured in the agent definition (likely `[:patterns :consistency :tar-pit]` for Phase 5). A specific lens set is requestable per dispatch — e.g. "survey design improvements through the tar-pit lens only" → `(survey/run (model) [:tar-pit])`. The pluggable lens substrate is what makes this trivial: new lenses become available to the agent automatically once registered.
 
 Key additions to the agent definition:
 
-- **Tier awareness.** Agent instructions explicitly distinguish trust vs weigh. Trust-tier helpers (`inspect/*`) are invoked first to establish a structural baseline; their findings are stated as facts. Weigh-tier helpers (`architect/*`) are invoked when surveying improvements; their findings are framed as observations + judgments.
+- **Tier awareness.** Agent instructions explicitly distinguish trust vs weigh. Trust-tier helpers (`inspect/*`) are invoked first to establish a structural baseline; their findings are stated as facts. Weigh-tier output (from the lens survey) is framed as observations + judgments.
 - **References to the existing vocab libraries** (behavioral, validation, lifecycle, event) and EXAMPLES.md files.
-- **The `survey design improvements` mode.** When dispatched with a survey-shaped task, the agent invokes `architect/patterns` + `architect/consistency` via `bin/fukan eval`, then synthesizes the findings into a structured survey.
+- **Lens registry discovery.** The agent calls `(canvas.lens.registry/all-lenses)` at session start to know what lenses are available; instructions teach it how to pick a relevant lens-set per task.
+- **The `survey design improvements` mode.** When dispatched with a survey request, the agent invokes `(canvas.lens.survey/run (model) <lens-ids>)` via `bin/fukan eval`, then synthesizes the survey output into a structured response.
 - **The original architect-explorer principles** (compose first, vocabulary justified by use, etc.) carry forward as the agent's reasoning posture.
 
 - [ ] **Step 1: Reread the Phase 2 architect-explorer system prompt.** Identify generalizable principles vs experiment-specific framing.
-- [ ] **Step 2: Draft `doc/canvas-authoring-system-prompt.md`** as the permanent versioned prompt content. Includes explicit trust/weigh tier framing.
-- [ ] **Step 3: Update the `fukan-architect` agent definition.** Reference the prompt; add the survey-improvements mode; ensure agent tool surface includes `bin/fukan eval` so it can invoke the helpers.
-- [ ] **Step 4: Update AGENTS.md** with the tier explanation so any LLM (not just the dispatched subagent) understands the model.
+- [ ] **Step 2: Draft `doc/canvas-authoring-system-prompt.md`** as the permanent versioned prompt content. Includes: trust/weigh tier framing; lens substrate explanation; reach-for-existing-vocab-first anchor; named failure modes; the Lineage section preserved verbatim (it does the activation work).
+- [ ] **Step 3: Update the `fukan-architect` agent definition.** Reference the prompt; add the lens-driven survey mode; ensure agent tool surface includes `bin/fukan eval` for invocation.
+- [ ] **Step 4: Update AGENTS.md** with the tier + lens explanations so any LLM (not just the dispatched subagent) understands the model.
 - [ ] **Step 5: Commit.**
 
 ---
 
-## Phase 5, Task 11: Trial run
+## Phase 5, Task 12: Trial run — `demo/distributed/` authoring with the full loop
 
-**Files:** dependent on the trial-run target chosen in Sprint 1 Task 2.
+**Files:**
+- Create: `demo/distributed/*.clj` — 3-4 canvas modules covering leader election or routing-with-retries (target chosen in Sprint 1 Task 2; can adjust)
+- Create: `doc/plans/2026-05-26-trial-run-findings.md`
 
-Execute the loop end-to-end on a real authoring task. Document what worked, what didn't.
+Execute the loop end-to-end on a real authoring task. **Both Sprint 1 design agents independently picked this target** (a new distributed-systems demo, paradigm not previously stress-tested), which provides good evidence value.
 
-- [ ] **Step 1: Dispatch an LLM subagent** with the canvas-authoring system prompt + the chosen task + access to feedback signals.
-- [ ] **Step 2: Observe the loop.** What did the LLM invoke? Did the feedback signals catch the right things? Where did the LLM go astray?
-- [ ] **Step 3: Document findings** in `doc/plans/2026-05-26-trial-run-findings.md`.
-- [ ] **Step 4: Identify gaps.** What feedback would have made the loop tighter? What signals are missing?
+**Loop shape for the trial:**
+1. Dispatch the extended `fukan-architect` agent (or a peer LLM subagent loaded with the canvas-authoring system prompt) with the authoring task.
+2. The agent reads the existing canvas + demos, calls `inspect/integrity` for a baseline, picks a relevant initial lens-set, drafts canvas content.
+3. After each module lands, the agent runs `inspect/integrity` + `inspect/coverage` + the survey through the active lens-set; iterates.
+4. Human observer (you) can correct mid-run if the LLM drifts; no automation enforces correctness.
+5. At the end of the trial, the agent produces a self-review through the tar-pit lens applied to the new subsystem.
+
+- [ ] **Step 1: Dispatch the trial.** Give the agent the authoring goal + access to all Phase 5 infrastructure.
+- [ ] **Step 2: Observe the loop.** What did the LLM invoke? Did the feedback signals catch the right things? Did the lens-driven survey shape the design? Where did the LLM go astray?
+- [ ] **Step 3: Document findings.** What worked, what didn't. Be specific about which lens output the LLM actually used vs ignored.
+- [ ] **Step 4: Identify gaps.** What feedback would have made the loop tighter? What lenses are missing? What does the substrate need next?
 - [ ] **Step 5: Commit.**
 
 ---
 
-# Sprint 5 — Verification (Task 12)
+# Sprint 5 — Verification (Task 13)
 
-## Phase 5, Task 12: Phase 5 verification report
+## Phase 5, Task 13: Phase 5 verification report
 
 **Files:**
 - Create: `doc/plans/2026-05-26-phase-5-verification.md`
@@ -491,14 +596,15 @@ Execute the loop end-to-end on a real authoring task. Document what worked, what
 Standard verification template per Phases 1, 3, 4:
 
 - [ ] **Section 1: What was attempted vs. built.** Recap Sprints 1-4.
-- [ ] **Section 2: Did the feedback signals produce useful output against fukan's own canvas?** What did they find? What surprised?
-- [ ] **Section 3: Did the LLM co-author trial run succeed?** Was the loop tight? Did the feedback genuinely shape the LLM's authoring?
-- [ ] **Section 4: What did the trial run reveal about gaps?** Specific signals or workflow improvements that would help.
-- [ ] **Section 5: Decision.** Three outcomes:
+- [ ] **Section 2: Did the trust-tier signals produce useful output against fukan's own canvas?** What did integrity + coverage find? What surprised?
+- [ ] **Section 3: Did the lens substrate work?** Was adding the consistency lens really just a single-file addition? Did the tar-pit lens validate the theoretical-lens shape? Were any substrate bends required to accommodate the second/third lens (substrate bug)?
+- [ ] **Section 4: Did the LLM co-author trial run succeed?** Was the loop tight? Did the feedback genuinely shape the LLM's authoring? Which lenses did the LLM actually reach for?
+- [ ] **Section 5: What did the trial run reveal about gaps?** Specific lenses, helpers, or workflow improvements that would help next.
+- [ ] **Section 6: Decision.** Three outcomes:
   1. The thinking-enhancing tool works → Phase 6 (browser UI) can begin.
   2. Works with caveats → Phase 5.5 to close caveats first.
   3. The loop didn't produce a noticeable thinking improvement → reset; rethink approach.
-- [ ] **Section 6: Phase 6+ implications.** Browser UI as the next phase. Plus: diff detection + impl generation as the eventual product surface (per the user's strategic frame).
+- [ ] **Section 7: Phase 6+ implications.** Browser UI as the next phase. Plus: additional lenses (methodology coherence, delta awareness, FCIS, DDD, ...). Plus: diff detection + impl generation as the eventual product surface (per the user's strategic frame).
 
 ```bash
 jj desc -m "doc(canvas): phase-5 verification + phase-6 brief"
@@ -519,25 +625,40 @@ jj new
 
 ## Self-review notes
 
-- **Sprint 1's design docs (Tasks 1 + 2) are the load-bearing artifacts of Phase 5.** Both have pause points before downstream work begins.
-- **Don't speculate signals.** Each one in Sprint 3 should be selected because Sprint 1 evidence justified it.
-- **Resist scope creep on feedback signals.** "More feedback" isn't the goal; "the RIGHT feedback at the right moment" is.
-- **The architect-explorer prompt is reusable infrastructure now.** Treat it carefully.
-- **Phase 5 is about FEELING the canvas as a thinking tool.** Hard to verify without authoring something real (Sprint 4's trial run). Plan for that to be subjective evidence.
+- **Sprint 1's design docs (Tasks 1 + 2) are the load-bearing artifacts of Phase 5.** Both pause points completed 2026-05-26; the 2026-05-27 lens-substrate reframe builds on top.
+- **Don't speculate signals.** Each one in Sprint 3 is justified by Sprint 1 evidence + the lens substrate's two-shape coverage (structural + theoretical).
+- **Resist scope creep on lenses.** Phase 5 ships three starter lenses (patterns, consistency, tar-pit) to validate the substrate. New lenses (methodology, FCIS, DDD, etc.) wait for Phase 6+ unless trial-run evidence demands them.
+- **The lens substrate must stay small.** core + registry + survey = three small namespaces. If the substrate grows in Sprint 3, surface the reason — it's a substrate-design question, not a Sprint 3 implementation detail.
+- **Prompts are data.** Every prompt fragment (per-lens) and the architect base prompt are plain files editable without code changes.
+- **Phase 5 is about FEELING the canvas as a thinking tool.** Hard to verify without authoring something real (Sprint 4's trial run). Plan for subjective evidence.
 
 ---
 
-## Open questions for the user (before Sprint 1 begins)
+## Open-question status (settled 2026-05-27 unless noted)
 
-These don't block dispatch but help shape Sprint 1's design docs:
+The user reframe of 2026-05-27 settled most open questions. Recorded here for reference.
 
-1. **Feedback-signal priority preference.** Which 2-3 categories matter most to you for the LLM authoring experience? Integrity (refs resolve, etc.) is foundational. Pattern recurrence is high-leverage. Coverage may surface dead canvas. Consistency is style-driven. Delta is feedback-during-edit. Methodology is bigger-picture. Pick 2-3 you'd bet on for early evidence.
+1. **Feedback-signal priority** — Settled: ship integrity + coverage (trust tier); patterns + consistency + tar-pit (lens tier). Defer methodology + delta to Phase 6+.
 
-2. **Trial-run target.** All 62 fukan modules are already ported. Possible trial-run tasks: (a) refactor one existing canvas module for clarity using the loop; (b) extend one demo (e.g. add `vocab.cqrs` to demo/event-driven/); (c) author a NEW small subsystem hand-in-hand (e.g. a /demo/distributed/ port). Which has the most evidence value?
+2. **Trial-run target** — Settled: `demo/distributed/` (new subsystem; both Sprint 1 design agents independently chose this).
 
-3. **31 duplicate names — preference?** Phase 4 deferred this; Phase 5 needs to settle it.
+3. **31 intra-module duplicate names** — Settled: option 3, promote the convention. Substrate already disambiguates by name+role silently; canvas docs make the idiom explicit. Sprint 2 Task 3 codifies this.
 
-4. **Agent organization for the survey.** Phase 5 currently plans to extend the existing `fukan-architect` agent with a `survey design improvements` capability rather than create a new `fukan-design-surveyor` agent. Survey is monolithic for Phase 5 (one dispatch produces a unified report). Preference to push back? Options: (a) extend `fukan-architect` as planned; (b) create a separate `fukan-design-surveyor` agent; (c) keep survey monolithic but split into `patterns` + `consistency` survey verbs later if it grows.
+4. **Agent organization** — Settled: extend `fukan-architect` (not new agent). Lens-driven survey, configurable lens-set per dispatch. Split into separate verbs only if it grows.
+
+5. **Lens substrate framing** — Settled by the 2026-05-27 user reframe: the weigh-tier helpers become pluggable lenses to support open-ended experimentation with thinking modes. Three starter lenses (patterns, consistency, tar-pit) cover the two lens shapes (structural + theoretical).
+
+6. **In-band severity on coverage findings** — Default: yes, reuse Phase 4 violation-diagnostics pattern.
+
+7. **`:type/fields` substrate addition** — Default: yes, ship in Sprint 2 Task 5.
+
+8. **System-prompt versioning** — Default: flat path (`doc/canvas-authoring-system-prompt.md`); add `-v1` only when there's a `v2` to compare.
+
+9. **Trial-run drive** — Default: LLM subagent does the authoring with you observing; you can correct mid-run.
+
+10. **Survey-dispatch interface** — Default: free-form prompt to `fukan-architect`; specific lens-set requestable in the prompt body.
+
+Any of the "default" items remain open for pushback before the relevant sprint dispatches. Items 1-5 are settled.
 
 ---
 
@@ -545,10 +666,10 @@ These don't block dispatch but help shape Sprint 1's design docs:
 
 | Sprint | Tasks | Outcome |
 |--------|-------|---------|
-| 1 | 1–2 | Feedback signals design + co-author workflow design (two pause points) |
-| 2 | 3–4 | Pre-implementation hardening: 31 duplicates + emits form |
-| 3 | 5–9 | Build 4-5 feedback signals (per Sprint 1 prioritization) |
-| 4 | 10–11 | Promote architect-explorer prompt + trial run |
-| 5 | 12 | Phase 5 verification + Phase 6 brief |
+| 1 | 1–2 | Feedback signals design + co-author workflow design (✅ both docs landed 2026-05-26) |
+| 2 | 3–5 | Pre-implementation hardening: name+role convention promotion + emits form + `:type/fields` substrate attr |
+| 3 | 6–10 | Trust-tier helpers (integrity, coverage) + lens substrate + 3 starter lenses (patterns, consistency, tar-pit) |
+| 4 | 11–12 | Extend `fukan-architect` with tier + lens awareness + trial run on `demo/distributed/` |
+| 5 | 13 | Phase 5 verification + Phase 6 brief |
 
-**Estimated calendar:** Sprint 1 ≈ 1-2 sessions (design + pause). Sprint 2 ≈ 1 session. Sprint 3 ≈ 4-5 sessions (one per signal). Sprint 4 ≈ 2 sessions (workflow integration + trial run). Sprint 5 ≈ 1 session. **Total: 9-11 working sessions.**
+**Estimated calendar:** Sprint 1 ≈ done. Sprint 2 ≈ 1-2 sessions. Sprint 3 ≈ 4-5 sessions (substrate + 2 trust-tier + 3 lenses; the substrate task is the heaviest). Sprint 4 ≈ 2 sessions (workflow integration + trial run). Sprint 5 ≈ 1 session. **Total remaining: 8-10 working sessions.**
