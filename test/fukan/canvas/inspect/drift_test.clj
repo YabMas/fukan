@@ -314,6 +314,173 @@
       (is (= [] (drift/check-shape-drift m db))
           "no comparison possible without code-side fields"))))
 
+;; ---------------------------------------------------------------------------
+;; Compound-shape normalisation (Phase 7 Sprint 2 Task 3)
+;;
+;; Each test passes a richer field shape on one or both sides — full Malli
+;; vectors on the code side, full canvas parsed-shape maps on the canvas
+;; side. The fixtures bypass the substrate-level flattening so we exercise
+;; the comparator's recursion directly. A separate fixture
+;; `canvas-db-with-type-field-shapes` writes parsed shapes into the new
+;; `:type/field-shapes` substrate attr, mirroring the real ingestion path.
+
+(defn- canvas-db-with-type-field-shapes
+  "Build a tiny canvas-db carrying one Module + one Type entity with
+   parsed compound shapes per field. `shape-tuples` is a sequence of
+   `[field-name-kw parsed-shape-edn-map]` pairs. The fixture pr-strs the
+   shape and writes it under `:type/field-shapes` (cardinality-many) so
+   the drift check's substrate query path picks it up."
+  [stable-id field-shapes]
+  (require 'fukan.canvas.core.substrate.store)
+  (require 'datascript.core)
+  (let [create  (resolve 'fukan.canvas.core.substrate.store/create)
+        db-with (resolve 'datascript.core/db-with)
+        [mod-name type-name] (str/split stable-id #"/type/" 2)
+        mod-uuid  (str "mod-" mod-name)
+        type-uuid (str "type-" type-name)]
+    (db-with (create)
+             [{:db/id      -1
+               :entity/id  mod-uuid
+               :entity/type :Module
+               :entity/name mod-name}
+              {:db/id      -2
+               :entity/id  type-uuid
+               :entity/type :Type
+               :entity/name type-name
+               :type/field-shapes (set (mapv (fn [[fname shape]]
+                                               [fname (pr-str shape)])
+                                             field-shapes))}
+              [:db/add -1 :module/child -2]])))
+
+(deftest shape-drift-set-of-equivalent-to-malli-set
+  (testing "canvas (set-of :NodeId) vs code [:set :NodeId] → no finding"
+    (let [prim-id "demo/type/Graph"
+          m       (model-with-record-projection
+                    prim-id "demo/Graph"
+                    [[:nodes [:set :NodeId]]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:nodes {:kind :set :elem {:kind :atomic :name :NodeId}}]])]
+      (is (= [] (drift/check-shape-drift m db))
+          "outer kind :set matches; inner :NodeId matches"))))
+
+(deftest shape-drift-list-of-equivalent-to-malli-sequential
+  (testing "canvas (list-of :Item) vs code [:sequential :Item] → no finding"
+    (let [prim-id "demo/type/Order"
+          m       (model-with-record-projection
+                    prim-id "demo/Order"
+                    [[:items [:sequential :Item]]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:items {:kind :list :elem {:kind :atomic :name :Item}}]])]
+      (is (= [] (drift/check-shape-drift m db))
+          "Malli :sequential canonicalises to canvas :list-of"))))
+
+(deftest shape-drift-list-of-equivalent-to-malli-vector
+  (testing "canvas (list-of :Item) vs code [:vector :Item] → no finding"
+    ;; Interpretive call: the canvas vocabulary has one ordered-collection
+    ;; compound (`list-of`); Malli has three (`:sequential`, `:vector`,
+    ;; `:list`). Treating them as equivalent is the smallest call that
+    ;; collapses spurious noise — fukan-canvas authors don't pick between
+    ;; them when writing `(list-of …)`.
+    (let [prim-id "demo/type/Order"
+          m       (model-with-record-projection
+                    prim-id "demo/Order"
+                    [[:items [:vector :Item]]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:items {:kind :list :elem {:kind :atomic :name :Item}}]])]
+      (is (= [] (drift/check-shape-drift m db))
+          "Malli :vector also canonicalises to canvas :list-of"))))
+
+(deftest shape-drift-map-of-equivalent-with-alias-on-leaves
+  (testing "canvas (map-of :String :Foo) vs code [:map-of :string :Foo] → no finding"
+    (let [prim-id "demo/type/Idx"
+          m       (model-with-record-projection
+                    prim-id "demo/Idx"
+                    [[:by-name [:map-of :string :Foo]]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:by-name {:kind :map
+                                :key {:kind :atomic :name :String}
+                                :val {:kind :atomic :name :Foo}}]])]
+      (is (= [] (drift/check-shape-drift m db))
+          "leaf alias collapses :String ↔ :string under the same :map outer"))))
+
+(deftest shape-drift-optional-equivalent-to-malli-maybe
+  (testing "canvas (optional :Integer) vs code [:maybe :int] → no finding"
+    (let [prim-id "demo/type/Opt"
+          m       (model-with-record-projection
+                    prim-id "demo/Opt"
+                    [[:age [:maybe :int]]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:age {:kind :optional :inner {:kind :atomic :name :Integer}}]])]
+      (is (= [] (drift/check-shape-drift m db))
+          "Malli :maybe canonicalises to canvas :optional, alias on inner leaf"))))
+
+(deftest shape-drift-set-vs-vector-genuine-mismatch
+  (testing "canvas (set-of :NodeId) vs code [:vector :NodeId] → ONE finding (set vs vector)"
+    (let [prim-id "demo/type/Graph"
+          m       (model-with-record-projection
+                    prim-id "demo/Graph"
+                    [[:nodes [:vector :NodeId]]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:nodes {:kind :set :elem {:kind :atomic :name :NodeId}}]])
+          findings (drift/check-shape-drift m db)]
+      (is (= 1 (count findings)))
+      (let [off (-> findings first :offenders first)]
+        (is (contains? (get-in off [:delta :type-mismatch]) :nodes)
+            "outer kind :set vs :list (canonical for :vector) is real drift")))))
+
+(deftest shape-drift-optional-vs-required-is-real-drift
+  (testing "canvas (optional :Integer) vs code :int → ONE finding"
+    ;; Interpretive call: a canvas-side compound (optional/maybe) facing a
+    ;; bare scalar on the code side is a real divergence — the field can be
+    ;; absent on one side but not the other. We surface it rather than
+    ;; silently collapsing.
+    (let [prim-id "demo/type/Opt"
+          m       (model-with-record-projection
+                    prim-id "demo/Opt"
+                    [[:age :int]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:age {:kind :optional :inner {:kind :atomic :name :Integer}}]])
+          findings (drift/check-shape-drift m db)]
+      (is (= 1 (count findings))
+          "optional vs required is genuine drift"))))
+
+(deftest shape-drift-head-only-code-matches-canvas-compound
+  (testing "head-only code keyword (today's analyzer flatten) matches canvas same-outer compound"
+    ;; This mirrors what the Clojure target analyzer emits today: for a
+    ;; field declared `[:set :NodeId]` it extracts type `:set` (head
+    ;; only). The comparator must treat the head-only code-side as a
+    ;; wildcard *inside* the same outer compound kind, otherwise the
+    ;; cytoscape-style noise resurfaces.
+    (let [prim-id "demo/type/Graph"
+          m       (model-with-record-projection
+                    prim-id "demo/Graph"
+                    [[:nodes :set]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:nodes {:kind :set :elem {:kind :atomic :name :NodeId}}]])]
+      (is (= [] (drift/check-shape-drift m db))
+          "code `:set` head canonicalises to {:set :unknown}; wildcard matches inner :NodeId"))))
+
+(deftest shape-drift-head-only-set-vs-canvas-list-still-mismatches
+  (testing "head-only code :sequential vs canvas (set-of …) → mismatch (outer kinds differ)"
+    (let [prim-id "demo/type/Graph"
+          m       (model-with-record-projection
+                    prim-id "demo/Graph"
+                    [[:nodes :sequential]])
+          db      (canvas-db-with-type-field-shapes
+                    prim-id
+                    [[:nodes {:kind :set :elem {:kind :atomic :name :NodeId}}]])
+          findings (drift/check-shape-drift m db)]
+      (is (= 1 (count findings))
+          "outer kind disagreement (:list canonical vs :set) is real even with unknown inner"))))
+
 (deftest check-aggregates-missing-impl-and-shape-drift
   (testing "drift/check returns both missing-implementation and shape-drift findings"
     (let [;; A clean missing-impl pair

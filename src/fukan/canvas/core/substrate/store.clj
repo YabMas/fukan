@@ -18,6 +18,7 @@
    :type/doc                {:db/index true}
    :type/field-types        {:db/cardinality :db.cardinality/many}
    :type/fields             {:db/cardinality :db.cardinality/many}
+   :type/field-shapes       {:db/cardinality :db.cardinality/many}
    :affordance/returns-label {:db/index true}
    :triggers                {:db/cardinality :db.cardinality/many
                               :db/valueType   :db.type/ref}
@@ -81,19 +82,39 @@
               tname (shape/type-names fshape)]
           [(field-name->keyword fname) tname])))
 
+(defn- field-shape-tuples
+  "For each [field-name parsed-shape] pair, emit one
+   [field-name-kw shape-edn-pr-str] tuple. Used to derive the
+   :type/field-shapes cardinality-many attribute for record-shaped Types,
+   preserving the full parsed compound shape (which `:type/fields` flattens
+   to leaf type-names). Read consumers (e.g. shape-drift comparator) parse
+   the shape string back to edn via `clojure.edn/read-string`.
+
+   Why pr-str rather than store the edn map directly? Cardinality-many
+   datom values must be comparable scalars in Datascript; nested edn maps
+   compare structurally but the stringified form gives stable identity and
+   matches the precedent set by `:affordance/shape`."
+  [fields]
+  (into #{}
+        (for [[fname fshape] fields]
+          [(field-name->keyword fname) (pr-str fshape)])))
+
 (defmethod ->datoms :Type [t]
   (let [record? (= :record (:kind t))
         field-types-set (when record?
                           (shape/type-names {:kind :record :fields (:fields t)}))
         field-tuples-set (when record?
-                           (field-tuples (:fields t)))]
+                           (field-tuples (:fields t)))
+        field-shapes-set (when record?
+                           (field-shape-tuples (:fields t)))]
     [(cond-> {:entity/id (sub/id-of t)
               :entity/type :Type
               :entity/name (sub/name-of t)
               :entity/tag (vec (sub/tags-of t))}
        (sub/doc-of t)         (assoc :type/doc (sub/doc-of t))
        (seq field-types-set)  (assoc :type/field-types field-types-set)
-       (seq field-tuples-set) (assoc :type/fields field-tuples-set))]))
+       (seq field-tuples-set) (assoc :type/fields field-tuples-set)
+       (seq field-shapes-set) (assoc :type/field-shapes field-shapes-set))]))
 
 (defmethod ->datoms :Relation [r]
   (let [to-val (sub/to-of r)

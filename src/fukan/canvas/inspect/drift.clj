@@ -30,7 +30,8 @@
         one-arg form skips shape-drift (no canvas-side fields available).
         Returns a vector of finding maps; [] when every canvas declaration
         has a matching code-side counterpart."
-  (:require [clojure.set :as set]
+  (:require [clojure.edn :as edn]
+            [clojure.set :as set]
             [clojure.string :as str]
             [datascript.core :as d]))
 
@@ -214,34 +215,288 @@
   [tk]
   (or (canvas->malli-aliases tk) tk))
 
+;; ---------------------------------------------------------------------------
+;; Canonical compound-shape representation
+;;
+;; Phase 7 Task 3 — recurse into compound shapes (set-of, list-of, map-of,
+;; optional, sum-of, tuple-of, record-of) and compare structurally.
+;;
+;; Both sides flow through a single canonical form before comparison so
+;; canvas `(set-of :NodeId)` and Malli `[:set :NodeId]` collapse to the
+;; same value. Leaves continue to normalise through `canvas->malli-aliases`.
+;;
+;; Canonical form (mirrors `fukan.canvas.core.shape/parse` output):
+;;   {:kind :leaf :name :string}                       atomic + refs (collapsed)
+;;   {:kind :optional :inner <shape>}
+;;   {:kind :list :elem <shape>}                       list-of / sequential / vector
+;;   {:kind :set :elem <shape>}
+;;   {:kind :map :key <shape> :val <shape>}
+;;   {:kind :sum :variants [<shape> ...]}
+;;   {:kind :tuple :elems [<shape> ...]}
+;;   {:kind :record :fields [[name <shape>] ...]}
+;;
+;; Interpretive calls:
+;;   * `:atomic` and `:ref` from canvas-side parse collapse to a single
+;;     `:leaf` form — the comparator can't tell apart "type named :NodeId"
+;;     from "ref to module-scoped :NodeId", and both sides only carry the
+;;     leaf-keyword anyway.
+;;   * Malli `[:sequential T]`, `[:vector T]`, AND `[:list T]` all map to
+;;     canonical `:list` — the canvas vocabulary distinguishes only "list
+;;     of" vs "set of" vs "map of"; concrete ordered-collection types in
+;;     Malli are an implementation detail below that distinction.
+;;   * Malli `[:maybe T]` and canvas `(optional T)` are equivalent.
+;;   * A bare `:set` / `:sequential` / `:vector` head keyword on the code
+;;     side (the head-only output of today's `target/clojure/source`
+;;     analyzer) is recognised as a compound head with an *unknown*
+;;     element type and represented as `{:kind :list/:set :elem
+;;     {:kind :leaf :name :any}}`. A canvas `(list-of :T)` will type-
+;;     mismatch against that unless `:T` itself reduces to `:any`. This is
+;;     intentional: we don't want to silently mask differences when the
+;;     analyzer hasn't yet extracted the inner type.
+
+(def ^:private malli-list-heads
+  "Malli vector heads that canonicalise to canvas `(list-of …)`. The canvas
+   vocabulary has one ordered-collection compound; Malli has three near-
+   synonyms (sequential / vector / list). Treating them as equivalent is
+   the smallest interpretive call that avoids spurious shape-drift findings
+   between e.g. `(list-of :CytoscapeNode)` and `[:sequential CytoscapeNode]`."
+  #{:sequential :vector :list})
+
+(declare ^:private to-canonical)
+
+(defn- leaf
+  "Build a canonical leaf for a type keyword, normalising via the alias
+   table so :Integer ↔ :int etc. compare clean."
+  [tk]
+  {:kind :leaf :name (normalize-type-keyword tk)})
+
+(defn- canvas-shape->canonical
+  "Normalise a canvas-side parsed shape map (the output of
+   `fukan.canvas.core.shape/parse`, retrieved from the substrate's
+   `:type/field-shapes` attr) to the comparator's canonical form."
+  [shape]
+  (case (:kind shape)
+    :atomic   (leaf (:name shape))
+    :ref      (leaf (:target shape))
+    :optional {:kind :optional :inner (to-canonical (:inner shape))}
+    :list     {:kind :list :elem (to-canonical (:elem shape))}
+    :set      {:kind :set :elem (to-canonical (:elem shape))}
+    :map      {:kind :map
+               :key (to-canonical (:key shape))
+               :val (to-canonical (:val shape))}
+    :sum      {:kind :sum :variants (mapv to-canonical (:variants shape))}
+    :tuple    {:kind :tuple :elems (mapv to-canonical (:elems shape))}
+    :record   {:kind :record
+               :fields (mapv (fn [[n s]] [n (to-canonical s)]) (:fields shape))}
+    ;; Unknown / future canvas shape kinds — fall back to a leaf so the
+    ;; comparator can still produce a sane mismatch finding.
+    (leaf (or (:name shape) (:target shape) :unknown))))
+
+(def ^:private unknown-leaf
+  "Sentinel leaf used when the inner type of a compound is structurally
+   absent on the code side (today's analyzer flattens `[:set :NodeId]` to
+   `:set`). `shape=?` treats this as a wildcard so a head-only code-side
+   compound (`:set`) compares equal to a canvas-side compound of the same
+   outer kind (`(set-of :NodeId)`) — the analyzer didn't extract enough
+   information to disagree.
+
+   The wildcard is intentionally narrow: it only matches when the OUTER
+   compound kinds agree on both sides. Different outer kinds (set vs
+   vector) still produce a finding. A bare scalar on the code side does
+   NOT use this sentinel — `:int` vs canvas `(optional :Integer)` remains
+   a genuine type-mismatch."
+  {:kind :leaf :name ::unknown})
+
+(defn- code-shape->canonical
+  "Normalise a code-side shape descriptor to the comparator's canonical
+   form. Code-side descriptors arrive in two flavours:
+
+   * Bare keyword — today's analyzer extraction collapses Malli compounds
+     to their head keyword (e.g. `[:set :NodeId]` → `:set`). The compound
+     head is recognised and represented with `unknown-leaf` for its
+     element type; `shape=?` treats `unknown-leaf` as a wildcard so the
+     resulting compound matches any canvas-side compound of the same
+     outer kind. Genuine outer-kind divergences (set vs vector) still
+     surface.
+   * Vector — direct Malli-style expressions (e.g. `[:set :NodeId]`,
+     `[:map-of :string :int]`). Recursed structurally."
+  [shape]
+  (cond
+    (keyword? shape)
+    (cond
+      (= :any shape)                    (leaf :any)
+      (contains? malli-list-heads shape) {:kind :list :elem unknown-leaf}
+      (= :set shape)                    {:kind :set :elem unknown-leaf}
+      (= :map-of shape)                 {:kind :map :key unknown-leaf :val unknown-leaf}
+      (= :map shape)                    (leaf :map)
+      (= :maybe shape)                  {:kind :optional :inner unknown-leaf}
+      (= :or shape)                     {:kind :sum :variants []}
+      (= :tuple shape)                  {:kind :tuple :elems []}
+      :else                             (leaf shape))
+
+    (vector? shape)
+    (let [head (first shape)
+          ;; Malli entries may carry an options map immediately after the
+          ;; head; skip it so [:vector {:min 1} :T] reads as :vector with
+          ;; elem :T.
+          rest-args (let [r (rest shape)]
+                      (if (and (seq r) (map? (first r))) (rest r) r))]
+      (cond
+        (contains? malli-list-heads head)
+        {:kind :list :elem (to-canonical (first rest-args))}
+
+        (= :set head)
+        {:kind :set :elem (to-canonical (first rest-args))}
+
+        (= :map-of head)
+        {:kind :map
+         :key (to-canonical (first rest-args))
+         :val (to-canonical (second rest-args))}
+
+        (= :maybe head)
+        {:kind :optional :inner (to-canonical (first rest-args))}
+
+        (= :or head)
+        {:kind :sum :variants (mapv to-canonical rest-args)}
+
+        (= :tuple head)
+        {:kind :tuple :elems (mapv to-canonical rest-args)}
+
+        (= :map head)
+        ;; Inline Malli :map — entries are [name (opts?) type] vectors.
+        {:kind :record
+         :fields (mapv (fn [entry]
+                         (let [n     (first entry)
+                               tail  (rest entry)
+                               tail  (if (and (seq tail) (map? (first tail)))
+                                       (rest tail)
+                                       tail)]
+                           [n (to-canonical (first tail))]))
+                       rest-args)}
+
+        :else
+        ;; Unknown vector head — first arg as leaf is the historical
+        ;; analyzer behaviour; keep it for non-breaking back-compat.
+        (leaf head)))
+
+    (map? shape)
+    ;; Already-canonical shape (e.g. canvas pre-parsed). Pass through.
+    shape
+
+    :else
+    (leaf :any)))
+
+(defn- to-canonical
+  "Dispatch to canvas- or code-side normalisation based on the shape's
+   shape. Canvas shapes are edn maps carrying a :kind key from
+   `shape/parse`; code-side shapes are bare keywords or Malli-style
+   vectors."
+  [shape]
+  (cond
+    (and (map? shape) (contains? shape :kind))
+    (canvas-shape->canonical shape)
+
+    :else
+    (code-shape->canonical shape)))
+
+(defn- unknown?
+  [s]
+  (and (map? s) (= :leaf (:kind s)) (= ::unknown (:name s))))
+
+(defn- shape-equal?
+  "Recursive structural equality on canonical shapes. `unknown-leaf`
+   matches any shape (wildcard) so a head-only code-side compound
+   collapses against a canvas-side compound of the same outer kind."
+  [a b]
+  (cond
+    (or (unknown? a) (unknown? b))
+    true
+
+    (not= (:kind a) (:kind b))
+    false
+
+    :else
+    (case (:kind a)
+      :leaf     (= (:name a) (:name b))
+      :optional (shape-equal? (:inner a) (:inner b))
+      :list     (shape-equal? (:elem a) (:elem b))
+      :set      (shape-equal? (:elem a) (:elem b))
+      :map      (and (shape-equal? (:key a) (:key b))
+                     (shape-equal? (:val a) (:val b)))
+      :sum      (and (= (count (:variants a)) (count (:variants b)))
+                     (every? identity
+                             (map shape-equal? (:variants a) (:variants b))))
+      :tuple    (and (= (count (:elems a)) (count (:elems b)))
+                     (every? identity
+                             (map shape-equal? (:elems a) (:elems b))))
+      :record   (and (= (mapv first (:fields a)) (mapv first (:fields b)))
+                     (every? identity
+                             (map (fn [[_ sa] [_ sb]] (shape-equal? sa sb))
+                                  (:fields a) (:fields b))))
+      ;; Fallback — compare raw.
+      (= a b))))
+
+(defn- shape=?
+  "Structural equality on raw (mixed canvas / code) shape values. Each
+   side flows through `to-canonical` first; the alias table collapses
+   leaf scalars (`:Integer ↔ :int`) and structural recursion checks
+   compound shapes."
+  [a b]
+  (shape-equal? (to-canonical a) (to-canonical b)))
+
 (defn- canvas-record-fields
   "Query the canvas-db for every Type entity carrying `:type/fields`. Returns
-   a map `{stable-id {field-name-kw type-name-kw …}}` keeping the canvas-
-   declared type name verbatim (no normalisation). If a field appears with
-   multiple declared types on the canvas side (e.g. a sum-of), the first
-   one wins; shape drift won't fan out per-variant.
+   a map `{stable-id {field-name-kw <shape> …}}`. The shape value is the
+   per-field parsed compound shape read from `:type/field-shapes` when
+   available (Phase 7); otherwise it falls back to the leaf type-keyword
+   from `:type/fields` (Phase 6 behaviour).
 
-   The canvas substrate stores fields as a set of [name type] tuples; we
-   collapse per-field by taking one entry per field-name. The canvas db
-   stores entities under a random UUID `:entity/id`; the projection layer
-   converts UUID → stable-id-string of the form `<module>/type/<Name>`. We
-   reconstruct that stable-id here by joining Type entities against their
-   owning Module."
+   If a field appears with multiple declared types on the canvas side
+   (e.g. a sum-of that wasn't preserved via `:type/field-shapes`), the
+   first leaf wins; shape drift won't fan out per-variant. With
+   `:type/field-shapes` present the full compound is preserved instead.
+
+   The canvas db stores entities under a random UUID `:entity/id`; the
+   projection layer converts UUID → stable-id-string of the form
+   `<module>/type/<Name>`. We reconstruct that stable-id here by joining
+   Type entities against their owning Module."
   [canvas-db]
-  (let [tuples (d/q '[:find ?mod-name ?type-name ?field-tuple
-                       :where [?m :entity/type :Module]
-                              [?m :entity/name ?mod-name]
-                              [?m :module/child ?e]
-                              [?e :entity/type :Type]
-                              [?e :entity/name ?type-name]
-                              [?e :type/fields ?field-tuple]]
-                     canvas-db)]
-    (reduce (fn [acc [mod-name type-name [fname ftype]]]
-              (let [stable-id (str mod-name "/type/" type-name)]
+  (let [leaf-tuples (d/q '[:find ?mod-name ?type-name ?field-tuple
+                            :where [?m :entity/type :Module]
+                                   [?m :entity/name ?mod-name]
+                                   [?m :module/child ?e]
+                                   [?e :entity/type :Type]
+                                   [?e :entity/name ?type-name]
+                                   [?e :type/fields ?field-tuple]]
+                          canvas-db)
+        shape-tuples (d/q '[:find ?mod-name ?type-name ?shape-tuple
+                             :where [?m :entity/type :Module]
+                                    [?m :entity/name ?mod-name]
+                                    [?m :module/child ?e]
+                                    [?e :entity/type :Type]
+                                    [?e :entity/name ?type-name]
+                                    [?e :type/field-shapes ?shape-tuple]]
+                           canvas-db)
+        ;; Rich shapes first — they fully describe the compound; leaves fill
+        ;; in fields that lack a richer entry (e.g. test fixtures that go
+        ;; through the canvas-db directly).
+        with-leaves (reduce (fn [acc [mod-name type-name [fname ftype]]]
+                              (let [stable-id (str mod-name "/type/" type-name)]
+                                (update acc stable-id (fn [existing]
+                                                        (let [cur (or existing {})]
+                                                          (if (contains? cur fname)
+                                                            cur
+                                                            (assoc cur fname ftype)))))))
+                            {}
+                            leaf-tuples)]
+    (reduce (fn [acc [mod-name type-name [fname shape-pr-str]]]
+              (let [stable-id (str mod-name "/type/" type-name)
+                    parsed    (try (edn/read-string shape-pr-str)
+                                   (catch Exception _ shape-pr-str))]
                 (update acc stable-id (fn [existing]
-                                        (assoc (or existing {}) fname ftype)))))
-            {}
-            tuples)))
+                                        (assoc (or existing {}) fname parsed)))))
+            with-leaves
+            shape-tuples)))
 
 (defn- code-record-fields-by-primitive
   "Walk projects edges from Type primitives to Code.DataStructure artifacts
@@ -278,12 +533,15 @@
 
 (defn- compute-delta
   "Compare canvas fields vs code fields. Inputs carry the original
-   (unnormalised) type keywords from each side; comparison normalises
-   through `canvas->malli-aliases` so `:Integer ↔ :int`, `:String ↔
-   :string`, etc. collapse to clean. The returned delta carries the
-   ORIGINAL (unnormalised) values so the finding shows what each side
-   literally declared. Returns `{:only-in-canvas {} :only-in-code {}
-   :type-mismatch {}}`."
+   (unnormalised) shape values from each side — these may be bare
+   type keywords (leaf scalars on either side, head-only Malli compound
+   from the analyzer) or full compound shapes (canvas parsed shape from
+   `:type/field-shapes`, Malli vector on the code side). Comparison
+   normalises both sides through `to-canonical` + the leaf alias table
+   and tests structural equality with `shape=?`. The returned delta
+   carries the ORIGINAL (unnormalised) values so the finding shows what
+   each side literally declared. Returns
+   `{:only-in-canvas {} :only-in-code {} :type-mismatch {}}`."
   [canvas-fields code-fields]
   (let [canvas-names (set (keys canvas-fields))
         code-names   (set (keys code-fields))
@@ -293,8 +551,7 @@
         mismatch     (reduce (fn [acc fname]
                                 (let [ct (canvas-fields fname)
                                       kt (code-fields fname)]
-                                  (if (= (normalize-type-keyword ct)
-                                         (normalize-type-keyword kt))
+                                  (if (shape=? ct kt)
                                     acc
                                     (assoc acc fname {:canvas ct :code kt}))))
                               {}

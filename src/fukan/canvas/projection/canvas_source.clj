@@ -139,6 +139,7 @@
     :references
     :type/fields
     :type/field-types
+    :type/field-shapes
     :affordance/input-types
     :affordance/output-types})
 
@@ -168,7 +169,7 @@
    boundary (per-module eids are meaningless in the merged db).
 
    Cardinality-many scalar attributes (entity/tag, entity/alias, references,
-   type/fields, type/field-types, affordance/input-types,
+   type/fields, type/field-types, type/field-shapes, affordance/input-types,
    affordance/output-types) are accumulated as sets so that all values survive
    the extraction."
   [db]
