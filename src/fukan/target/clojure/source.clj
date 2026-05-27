@@ -44,11 +44,129 @@
             (str (second f))))
         forms))
 
+;; ---------------------------------------------------------------------------
+;; Field extraction — read def bodies for record/schema field shape
+;; ---------------------------------------------------------------------------
+;;
+;; Two recognised shapes:
+;;
+;;   1. Malli `[:map …]` schema — the most common case in fukan:
+;;        (def ServerOpts
+;;          [:map {:description "..."}            ; optional options map
+;;           [:port {:optional true} :int]        ; per-entry options map ok
+;;           [:host :string]
+;;           [:handler fn?]])                     ; non-keyword type → :any
+;;
+;;      Fields: [[:port :int] [:host :string] [:handler :any]].
+;;
+;;   2. `defrecord` — positional symbol list, no carried types:
+;;        (defrecord Order [id customer items total])
+;;
+;;      Fields: [[:id :any] [:customer :any] [:items :any] [:total :any]].
+;;
+;; Any other def shape (single keyword, value literal, fn, etc.) yields no
+;; `:fields`. Shape extraction is best-effort — unrecognised forms simply
+;; don't produce a `:fields` slot on the symbol record.
+
+(defn- field-name->keyword
+  "Normalize a field name to a keyword. defrecord fields arrive as symbols;
+   Malli schema entries arrive as keywords already."
+  [n]
+  (cond
+    (keyword? n) n
+    (symbol? n)  (keyword (name n))
+    (string? n)  (keyword n)
+    :else        (keyword (str n))))
+
+(defn- malli-entry-type
+  "Pull the type-name keyword out of one Malli :map entry vector.
+   An entry is one of:
+     [:field :type]                       → :type
+     [:field {opts} :type]                → :type (skip options map)
+   The :type slot may be:
+     :keyword                             → returned as-is
+     [:keyword …]                         → first keyword of the inner vector
+     symbol/other                         → :any (non-keyword types not handled)"
+  [entry]
+  (let [tail (rest entry)
+        ;; Skip an options map immediately following the field-name
+        type-slot (if (and (seq tail) (map? (first tail)))
+                    (second tail)
+                    (first tail))]
+    (cond
+      (keyword? type-slot)
+      type-slot
+
+      (and (vector? type-slot) (keyword? (first type-slot)))
+      (first type-slot)
+
+      :else :any)))
+
+(defn- parse-malli-map-fields
+  "Given the body of a (def Name [:map …]) form (the [:map …] vector),
+   return a vector of [field-name-kw type-name-kw] pairs.
+   Skips a leading options map (e.g. [:map {:description ...} …]).
+   Returns nil if the body isn't a Malli :map form."
+  [body]
+  (when (and (vector? body) (= :map (first body)))
+    (let [entries (rest body)
+          entries (if (and (seq entries) (map? (first entries)))
+                    (rest entries)
+                    entries)]
+      (->> entries
+           (keep (fn [entry]
+                   (when (and (vector? entry) (>= (count entry) 2))
+                     [(field-name->keyword (first entry))
+                      (malli-entry-type entry)])))
+           vec))))
+
+(defn- unwrap-schema-wrapper
+  "Unwrap one layer of `(m/schema X)` or `(malli/schema X)` so the
+   underlying [:map …] literal becomes visible. Many fukan defs wrap
+   the schema in `(m/schema [:map …])` so other Malli functions can
+   later refer to the schema instance instead of the literal."
+  [body]
+  (if (and (seq? body)
+           (symbol? (first body))
+           (= "schema" (name (first body))))
+    (second body)
+    body))
+
+(defn- def-body
+  "Extract the body of a `(def Name body)` or `(def Name \"docstring\" body)`
+   form. Skips the docstring when present."
+  [form]
+  (let [third (nth form 2 nil)
+        fourth (nth form 3 nil)]
+    (if (and (string? third) (some? fourth))
+      fourth
+      third)))
+
+(defn- def-fields
+  "Look at a `(def Name body)` (or `(def Name \"doc\" body)`) form; if the
+   body is a Malli `:map` literal (optionally wrapped in `(m/schema …)`),
+   return the parsed `[field-name field-type]` pairs; otherwise nil."
+  [form]
+  (parse-malli-map-fields (unwrap-schema-wrapper (def-body form))))
+
+(defn- defrecord-fields
+  "Given a (defrecord Name [field1 field2 …]) form, return
+   [[:field1 :any] [:field2 :any] …]. Returns nil if the field vector
+   isn't where we expect it."
+  [form]
+  (let [field-vec (nth form 2 nil)]
+    (when (and (vector? field-vec) (every? symbol? field-vec))
+      (mapv (fn [s] [(field-name->keyword s) :any]) field-vec))))
+
 (defn extract-symbols
   "Read a Clojure file and return a vector of
      {:kind :function|:data-structure|:function-private :ns <string> :name <string>
       :file <path>}
-   records for every top-level def / defn / defn-."
+   records for every top-level def / defn / defn- / defrecord.
+
+   When the def body is a Malli `[:map …]` schema OR the form is a defrecord,
+   a `:fields` slot is added carrying a vector of
+   `[field-name-kw type-name-kw]` pairs."
   [path]
   (let [forms (read-forms path)
         ns-name (or (ns-of-forms forms) "")]
@@ -56,10 +174,18 @@
       (keep (fn [f]
               (when (and (list? f) (symbol? (first f)) (symbol? (second f)))
                 (case (str (first f))
-                  "def"   {:kind :data-structure
-                           :ns ns-name
-                           :name (str (second f))
-                           :file path}
+                  "def"   (let [fields (def-fields f)]
+                            (cond-> {:kind :data-structure
+                                     :ns ns-name
+                                     :name (str (second f))
+                                     :file path}
+                              (some? fields) (assoc :fields fields)))
+                  "defrecord" (let [fields (defrecord-fields f)]
+                                (cond-> {:kind :data-structure
+                                         :ns ns-name
+                                         :name (str (second f))
+                                         :file path}
+                                  (some? fields) (assoc :fields fields)))
                   "defn"  {:kind :function
                            :ns ns-name
                            :name (str (second f))

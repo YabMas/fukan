@@ -47,3 +47,30 @@
         (is (empty? errors)
             (str "Phase 4/5/6 produced unexpected errors: "
                  (pr-str (mapv (juxt :phase :sub-phase :kind :message) errors))))))))
+
+(deftest data-structure-artifact-carries-fields-when-source-has-malli-map
+  (testing "the analyzer attaches :fields to a matched Code.DataStructure artifact"
+    ;; The model declares a canvas container primitive at fukan.test.fixture.sample/Order.
+    ;; The matching source fixture has (def Order [:map [:id :string] [:total :int]]).
+    ;; After analyzer/run the projected data-structure artifact should carry
+    ;; :fields [[:id :string] [:total :int]] in its :sub map.
+    (let [model (-> (build/empty-model)
+                    (build/add-primitive
+                      (assoc (p/make-container
+                               {:id "fukan.test.fixture.sample/type/Order"
+                                :label "Order"})
+                             :canvas-role :canvas/type)))
+          reg   (registry/make-registry)
+          m1    (analyzer/run model reg "test/fixtures/clojure")
+          arts  (vals (:artifacts m1))
+          order-art (->> arts
+                         (filter (fn [a]
+                                   (and (= :artifact/code (:case a))
+                                        (= :code/data-structure (get-in a [:sub :case]))
+                                        (= "fukan.test.fixture.sample/Order"
+                                           (get-in a [:sub :qualified-name])))))
+                         first)]
+      (is (some? order-art)
+          "the projected Code.DataStructure artifact exists")
+      (is (= [[:id :string] [:total :int]] (get-in order-art [:sub :fields]))
+          "the artifact carries :fields parsed from the Malli :map literal"))))

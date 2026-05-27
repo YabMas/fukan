@@ -159,13 +159,21 @@
   (filter (fn [[_ p]] (= :primitive/event (:kind p))) (:primitives model)))
 
 (defn- emit-data-structure-projection
+  "Emit one projects edge from a canvas Type primitive to a Code.DataStructure
+   artifact. When a matching source-index symbol carries `:fields` (parsed
+   from a Malli `[:map …]` schema or a defrecord field list), attach those
+   fields to the artifact's `:sub` map so downstream drift checks can compare
+   canvas field shape against code field shape."
   [model source-index reg primitive-id primitive-kind primitive-label]
   (let [module-coord (module-coord-of-primitive primitive-id)
         {:keys [ns name]} (addr/canonical reg primitive-kind :projection-kind/schema
                                           module-coord primitive-label)
-        artifact (a/make-code-data-structure "clojure" (str ns "/" name))
+        found       (find-symbol source-index ns name :data-structure)
+        base-art    (a/make-code-data-structure "clojure" (str ns "/" name))
+        artifact    (if-let [fs (:fields found)]
+                      (assoc-in base-art [:sub :fields] fs)
+                      base-art)
         aid (a/artifact-identity artifact)
-        found (find-symbol source-index ns name :data-structure)
         validity (if found :valid :absent)
         m1 (ensure-artifact model artifact)]  ;; ALWAYS materialize
     (emit-projects-edge m1
@@ -179,12 +187,13 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- symbol->artifact
-  [{:keys [ns name kind file]}]
+  [{:keys [ns name kind file fields]}]
   (let [qname (str ns "/" name)
         loc   {:file file}]
     (case kind
       :function         (a/make-code-function "clojure" qname loc true)
-      :data-structure   (a/make-code-data-structure "clojure" qname loc)
+      :data-structure   (cond-> (a/make-code-data-structure "clojure" qname loc)
+                          (some? fields) (assoc-in [:sub :fields] fields))
       :function-private (a/make-code-function "clojure" qname loc false)
       nil)))
 
