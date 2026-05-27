@@ -446,6 +446,7 @@
     :canvas/rule                          :primitive/rule
     :canvas/getter                        :primitive/operation
     :canvas/checker                       :primitive/operation
+    :canvas/event                         :primitive/event
     :fukan.canvas.monolith/exposed-call   :primitive/operation
     :primitive/operation))  ; default fallback
 
@@ -521,9 +522,12 @@
                              prim  (cond-> {:kind  kind
                                             :id    id
                                             :label name}
-                                     (get docs uuid)              (assoc :description (get docs uuid))
-                                     ;; :primitive/operation requires :parameters in the Malli schema
-                                     (= kind :primitive/operation) (assoc :parameters []))]
+                                     (get docs uuid)               (assoc :description (get docs uuid))
+                                     ;; Both :primitive/operation and :primitive/event require
+                                     ;; :parameters in the Malli schema; canvas-source does not
+                                     ;; yet project parameter shapes, so seed with [].
+                                     (#{:primitive/operation
+                                        :primitive/event} kind)    (assoc :parameters []))]
                          [id prim])))
                    affordances-full))))
 

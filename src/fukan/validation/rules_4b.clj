@@ -25,24 +25,41 @@
   [model]
   (filter #(= :primitive/event (:kind %)) (vals (:primitives model))))
 
+(defn- event-tag-app
+  "Find the Allium::Event TagApplication for an Event, if any."
+  [model event-id]
+  (first (filter (fn [ta]
+                   (and (= "Allium" (-> ta :tag :namespace))
+                        (= "Event"  (-> ta :tag :name))
+                        (= :target/primitive (-> ta :target :case))
+                        (= event-id (-> ta :target :id))))
+                 (:tag-apps model))))
+
 (defn- event-declaration-sites
   "Read `:declaration-sites` for an Event from its Allium::Event TagApplication
    payload. Returns nil if no such TagApplication exists."
   [model event-id]
-  (let [ta (first (filter (fn [ta]
-                            (and (= "Allium" (-> ta :tag :namespace))
-                                 (= "Event"  (-> ta :tag :name))
-                                 (= :target/primitive (-> ta :target :case))
-                                 (= event-id (-> ta :target :id))))
-                          (:tag-apps model)))]
-    (-> ta :payload :declaration-sites)))
+  (-> (event-tag-app model event-id) :payload :declaration-sites))
 
 ;; -- Rule 1: event must have at least one declaration site -------------------
+;;
+;; This rule is Allium-era: it interrogates the :declaration-sites payload that
+;; the Allium analyzer attaches to Events via the Allium::Event TagApplication.
+;; Canvas-source-emitted events do not carry that tag-app — declaration-site
+;; semantics for canvas events are handled by canvas-side inspect checks
+;; (e.g. `emits` Relation integrity). Canvas-style event ids use '/' (e.g.
+;; "demo.events/ThingHappened") while Allium-era ids use '::'. Events whose
+;; id is canvas-style are out of scope for this rule.
+
+(defn- canvas-style-id?
+  [id]
+  (and (string? id) (str/includes? id "/") (not (str/includes? id "::"))))
 
 (defn- events-without-declaration-sites [model]
   (for [ev (events model)
         :let [sites (event-declaration-sites model (:id ev))]
-        :when (or (nil? sites) (empty? sites))]
+        :when (and (not (canvas-style-id? (:id ev)))
+                   (or (nil? sites) (empty? sites)))]
     (v/make-violation
       {:severity :error :phase :phase4 :sub-phase :4b
        :kind     :4b/event-no-declaration-site

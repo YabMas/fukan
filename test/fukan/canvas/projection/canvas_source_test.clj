@@ -135,6 +135,20 @@
       (is (= :primitive/operation (:kind operation-prim)) "exposed-call → :primitive/operation")
       (is (= :primitive/operation (:kind getter-prim))    "getter → :primitive/operation"))))
 
+(deftest project-event-routes-to-primitive-event
+  (testing "an Affordance with role :canvas/event projects as :primitive/event"
+    ;; Gap 4: affordance-kind previously had no case for :canvas/event so
+    ;; events fell through to the default :primitive/operation, hiding them
+    ;; from the analyzer's events selector.
+    (let [mod-db (h/with-canvas
+                   (h/within-module "demo.events"
+                     (event "ThingHappened" "An event.")))
+          model  (canvas-source/project (canvas-source/merge-for-test [mod-db]))
+          ev     (get (:primitives model) "demo.events/ThingHappened")]
+      (is (some? ev) "event must be projected as a primitive")
+      (is (= :primitive/event (:kind ev))
+          (str "expected :primitive/event, got " (pr-str (:kind ev)))))))
+
 (deftest project-edges-generated
   (testing ":references relations become :relation/uses edges"
     (let [model (canvas-source/build)]
