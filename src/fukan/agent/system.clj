@@ -34,9 +34,22 @@
        (map ns-name)
        (filter (fn [sym] (str/starts-with? (str sym) "canvas.")))))
 
+(def ^:private dynamic-load-loaders
+  "Loader namespaces whose `:require` list is the registration surface for
+   a dynamic-load registry (multimethod or var-collection). Reloading the
+   loader re-evaluates its `:require` form, which causes Clojure's standard
+   require machinery to load any newly-added file in the registry directory.
+   Add new loaders here as the canvas substrate grows."
+  '[fukan.canvas.project.clojure
+    fukan.canvas.lens.registry
+    fukan.canvas.instruct.registry])
+
 (defn ^{:agent/doc "Reload all canvas namespaces (incl. newly-added files) + rebuild
                     the Model. Use this after adding a new canvas/<...>.clj file —
                     canvas files are auto-discovered, no registry edit required.
+                    Also reloads the dynamic-load registry loaders under
+                    `fukan.canvas.{project,lens,instruct}` so newly-added
+                    projection/lens/scenario files in src/ are picked up.
                     Blocks; returns the new status. Heavier than `refresh` —
                     equivalent to `clj -M:run` restart minus the server bounce."
         :agent/example "(reset)"}
@@ -55,7 +68,22 @@
       (require ns-sym :reload)
       (catch java.io.FileNotFoundException _
         (remove-ns ns-sym))))
-  ;; Step 2: rebuild the model. canvas-source/build-canvas-db walks
+  ;; Step 2: reload the dynamic-load loaders so newly-added projection/lens/
+  ;; scenario files in src/fukan/canvas/{project,lens,instruct}/* register.
+  ;; Each loader's `:require` form names the registered files; reloading
+  ;; the loader re-runs the requires, which loads any new files via
+  ;; Clojure's standard machinery (existing files are no-ops). For lens
+  ;; and instruct, the registry's `known-*` vector still needs the new var
+  ;; conj'd explicitly — that edit lives in the loader file and reloads
+  ;; with it. For project, the multimethod defmethods register as a
+  ;; side-effect of loading each projection file.
+  (doseq [loader-sym dynamic-load-loaders]
+    (try
+      (require loader-sym :reload)
+      (catch java.io.FileNotFoundException _
+        ;; loader removed/renamed since last load — drop the dangling ns
+        (when (find-ns loader-sym) (remove-ns loader-sym)))))
+  ;; Step 3: rebuild the model. canvas-source/build-canvas-db walks
   ;; canvas/**/*.clj at each build, so newly-added files are picked up
   ;; here without any additional reload step.
   (infra-model/refresh-model)

@@ -114,6 +114,8 @@ Module ownership flows via `:module/child` Relations on the owner, not via back-
 - **After editing a canvas spec**: use `(refresh)` — reloads changed code + rebuilds model (Phase 0–6).
 - **After editing handler/routes/infra**: use `(reset)` — full server restart (recreates handler).
 - **After adding a new canvas file**: use `(reset)` (or `bin/fukan reset`). Canvas files under `canvas/**/*.clj` are auto-discovered — no registry edit required.
+- **After adding a new projection/lens/scenario file** under `src/fukan/canvas/{project,lens,instruct}/`: edit the loader's `:require` list (the per-subsystem loader namespace) AND run `(reset)`. The reset path reloads dynamic-load loaders, so the new defmethod/var registers without a JVM restart.
+- **Defmulti caveat**: REMOVING a projection file requires a full JVM restart (`clj -M:run`). Clojure's `defmulti` has defonce semantics — `(remove-method …)` is needed to clear a registration, and `(reset)` doesn't do that. Adding new files is fine; removing/renaming is the JVM-restart case.
 - **Never** use `remove-ns`, `require :reload`, or `(reload/reload)` directly.
 - `(status)` shows server/model state.
 - nREPL runs on port 7889, web UI on port 8080.
