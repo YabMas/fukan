@@ -355,6 +355,53 @@ Pre-classified by guess at "blocks Phase 8 automation?":
 Final classification (block-Phase-8-automation? yes/no/maybe) is Task
 4's call after canvas-author review.
 
+## Defect classification (Task 4)
+
+After Task 4 review against the criterion "does this make the closure
+controller's MVP unable to ship?":
+
+| # | Defect | Outcome | Notes |
+|----|----|----|----|
+| 1 | Event projection drops payload fields | **[BLOCKER FIXED]** | `affordance-element` for `:canvas/event` now reads `:fields` from a record-kind `:affordance/shape`. Verified: `(spec "distributed.log/AppendEntriesRequested")` renders all six payload fields; `:payload-count` is 6. Commit `c714335e`. |
+| 2 | Cold-write has no public entry point | **[BLOCKER FIXED]** | `(instruct {:module-coord "…"} :code-side/cold-write)` is now a first-class call. Walks the canvas db for every child entity, projects each via `(spec …)`, hands the vector to the scenario. Verified: `distributed.election` renders 16 entities. Commit `305a9231`. |
+| 3 | Cold-write `target-file-exists?` not filesystem-checked | **[BLOCKER FIXED]** | Folded into defect #2's fix — the module-scope dispatch in `instruct` derives `:target-file-exists?` from disk using the conventional `src/fukan/…` path. Verified: `distributed.election` rendered output reads "already exists — append to it". Commit `305a9231`. |
+| 4 | `function-to-defn` `?`-suffix predicate convention not honored | **[PHASE 9 CARRY-FORWARD]** | MVP-ships-or-not criterion: NO blocker. Drift comparator catches the duplicate-def case and surfaces it as a finding; canvas-author can rename `is_primitive_id` → `is_primitive_id_p` (or the comparator can normalise `?` away on the code side). The instruction is paste-clean and Clojure-legal — it just generates a redundant def. Fix candidates: (a) canvas-side `:predicate?` tag on `function`, (b) comparator normalises `?` suffix on code side, (c) authoring convention. Pick during Phase 9 once we see more cases. |
+| 5 | `Type/atomic` opacity prose missing | **[PHASE 9 CARRY-FORWARD]** | Minor signal-quality nit. `[:any …]` is correct Malli for an opaque atomic; the implementing LLM can over-interpret but the instruction is mechanically valid. One-line prose addition in `value-to-def` is straightforward; fold into Phase 9's "render polish" pass alongside any other instruction-text refinements. |
+| 6 | Canvas name+role collision (rule + invariant same name) | **[PHASE 9 CARRY-FORWARD]** | Phase 8's invariant-property-test rehome (Sprint 1 design) already dispatches `(invariant …)` to a test file and `(rule …)` to a src predicate; the targets differ by path so the comparator handles them independently. No MVP-blocking ambiguity observed. Revisit if Phase 9 surfaces an actual collision in dispatched closure. |
+| 7 | No `Agent` tool in harness | **[PHASE 9 CARRY-FORWARD]** | Documented in the findings doc as the trial-fidelity gap. Sprint 3 ships the closure-controller MVP with Sprint-1-proposed retry/concurrency thresholds tagged `:trial/calibration-pending`; empirical recalibration awaits a real-Agent dispatch trial from a seat that grants subagent dispatch. No MVP-blocker — the controller can ship; only the threshold calibration is deferred. |
+
+## Sprint 3 readiness
+
+Both substrate blockers identified in the trial — defect #1 (event
+payload drop) and defect #2 (cold-write public entry point) — are
+closed. Defect #3 (target-file-exists?) closed as a side-effect of
+defect #2's fix.
+
+Sprint 3's closure controller can now safely:
+
+- Render event drift-close instructions and expect schemas that
+  match the canvas declaration (payload fields preserved).
+- Dispatch cold-write at module scope from a single public call,
+  with `:target-file-exists?` deriving correctly from disk.
+- Cover the six Phase 7-unexercised projection kinds plus cold-write
+  end-to-end on the rendering side. Test count: 989/989 passing
+  (no change in count — both fixes were narrow enough that existing
+  test coverage held; future event/cold-write trial runs will add
+  empirical-closure-rate data, not unit-test count).
+
+What remains carry-forward into Phase 9:
+
+- Defect #4 (predicate-suffix) — fix during Phase 9 once the canvas-
+  comparator interaction is clearer; the MVP ships without it.
+- Defect #5 (atomic prose) — fold into Phase 9 render polish.
+- Defect #6 (name+role collision) — revisit if dispatched closure
+  surfaces an actual collision.
+- Defect #7 (Agent tool gap) — Sprint 3 plan must mark retry-policy
+  thresholds `:trial/calibration-pending` until a future trial-run
+  seat with subagent dispatch produces measurable closure-rate data.
+
+The closure controller's MVP is unblocked.
+
 ## Recommendations for Sprint 3 design amendment
 
 1. **Fix defect #1 before Sprint 3 MVP**, not after. Event projection
