@@ -29,7 +29,13 @@
 (defn- ensure-view-ctx! []
   (or @view-ctx (reset! view-ctx (build-ctx))))
 
-(defn reset-ctx! []
+(defn ^:export reset-ctx!
+  "Clear the cached SCI context so the next eval rebuilds bindings from
+   the current `(ns-publics …)` of fukan.agent.{api,system}. Resolved
+   dynamically by `fukan.agent.system/reset` via `requiring-resolve`
+   to break the static load cycle; the ^:export metadata flags this
+   for clojure-lsp's unused-public-var exemption."
+  []
   (reset! view-ctx nil))
 
 (def ^:private default-timeout-ms 5000)
