@@ -828,3 +828,50 @@
           (is (str/includes? (:rendered v) "attempts: 2"))
           (is (str/includes? (:rendered v) "canvas-side-hint"))
           (is (str/includes? (:rendered v) "Attempts:")))))))
+
+;; ---------------------------------------------------------------------------
+;; Sprint 6 — Regression: invariant property-test findings populate the
+;; structured :expected-code-path on the plan entry. The bug: when Sprint 5
+;; added `expected-path-for` projection-kind branching in
+;; `fukan.canvas.inspect.drift`, the structured `:offenders[0]
+;; :expected-code-path` had to track the test/-rooted path for
+;; `:projection-kind/property-test` findings. If it ever regresses to
+;; `src/<ns>.clj`, the closure controller's :batches grouping drops all
+;; invariant entries into the wrong file bucket.
+
+(deftest plan-invariant-finding-carries-test-side-expected-code-path
+  (testing "Synthetic invariant drift with projection-kind/property-test → plan entry's :expected-code-path is test/-rooted"
+    (let [synthetic [{:check     :inspect.drift/missing-implementation
+                      :severity  :warning
+                      :message   "synthetic invariant"
+                      :offenders [{:stable-id          "distributed.cluster/MajorityRequiredForLeadership"
+                                   :expected-code-path "test/fukan/distributed/cluster_test.clj"
+                                   :expected-symbol    "majority-required-for-leadership-property"
+                                   :canvas-kind        :invariant
+                                   :projection-kind    :projection-kind/property-test}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] synthetic)]
+        (let [p     (api/close-drift-plan :module-coord "distributed.cluster")
+              entry (first (:plan p))]
+          (is (= 1 (count (:plan p))))
+          (is (= "test/fukan/distributed/cluster_test.clj"
+                 (-> entry :context :expected-code-path))
+              (str "structured :expected-code-path on the plan entry must be the test/-rooted path; "
+                   "if this falls back to src/ the closure controller's :batches mis-groups invariant entries."))
+          (is (= "test/fukan/distributed/cluster_test.clj" (:batch-key entry))
+              ":batch-key derives from :expected-code-path; same regression surface")
+          (is (= ["test/fukan/distributed/cluster_test.clj"]
+                 (keys (:batches p)))
+              ":batches grouping keys on the test-side path"))))))
+
+(deftest plan-invariant-finding-from-live-drift-test-side-path
+  (testing "End-to-end: live (canvas-drift) over distributed.cluster yields invariant plan entries on test/-rooted paths"
+    (let [p (api/close-drift-plan :module-coord "distributed.cluster" :limit 25)
+          invariant-entries (filter #(= :invariant (-> % :context :canvas-kind))
+                                    (:plan p))]
+      (when (seq invariant-entries)
+        (doseq [e invariant-entries]
+          (is (str/starts-with? (-> e :context :expected-code-path) "test/")
+              (str "invariant plan entry " (:stable-id e)
+                   " should target a test/ file; got " (-> e :context :expected-code-path)))
+          (is (str/ends-with? (-> e :context :expected-code-path) "_test.clj"))
+          (is (= (-> e :context :expected-code-path) (:batch-key e))))))))
