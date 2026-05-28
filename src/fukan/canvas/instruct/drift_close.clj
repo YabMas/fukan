@@ -133,8 +133,28 @@
 ;; ---------------------------------------------------------------------------
 ;; render — markdown assembly
 
-(defn- frame-section
-  []
+;; ---------------------------------------------------------------------------
+;; Kind-dispatched sections
+;;
+;; The frame / gap / neighbor-insertion / output prose all depend on what KIND
+;; of drift gap we are closing. The dispatch key is the finding's `:check`
+;; keyword. The `:default` branch carries a generic-but-correct framing so a
+;; future drift kind doesn't crash drift-close or hard-code missing-impl prose.
+
+(defn- drift-kind
+  "Pull the dispatch key from the scenario-context. Falls back to :default
+   when no finding is carried or no `:check` is present — defensive so a
+   caller-supplied bare offender map still renders something sane."
+  [scenario-context]
+  (or (some-> scenario-context :drift-finding :check)
+      :default))
+
+(defmulti ^:private frame-section
+  "Kind-specific 'What you're doing' framing prose."
+  drift-kind)
+
+(defmethod frame-section :inspect.drift/missing-implementation
+  [_]
   (render/section
    "## What you're doing"
    (str "You are closing a known **canvas↔code drift gap** in fukan. "
@@ -142,9 +162,23 @@
         "in `src/`. Your job: add the missing definition to the target "
         "file. Do not disturb unrelated content.")))
 
-(defn- gap-section
-  [code-spec finding]
-  (let [{:keys [stable-id expected-code-path expected-symbol canvas-kind]} finding
+(defmethod frame-section :default
+  [_]
+  (render/section
+   "## What you're doing"
+   (str "You are closing a known **canvas↔code drift gap** in fukan. "
+        "The canvas and the code-side artifact have diverged. Your job: "
+        "reconcile the code-side with the canvas-declared shape. Do not "
+        "disturb unrelated content.")))
+
+(defmulti ^:private gap-section
+  "Kind-specific 'The gap' summary."
+  (fn [_code-spec scenario-context] (drift-kind scenario-context)))
+
+(defmethod gap-section :inspect.drift/missing-implementation
+  [code-spec scenario-context]
+  (let [finding (:drift-finding scenario-context)
+        {:keys [stable-id expected-code-path expected-symbol canvas-kind]} finding
         {:keys [model-element-id]} code-spec]
     (render/section
      "## The gap (canvas -> code)"
@@ -152,6 +186,24 @@
       (cond-> []
         true (conj (str "**Canvas declaration:** stable-id `"
                         (or stable-id model-element-id) "`"))
+        true (conj (str "**Drift kind:** missing-implementation"))
+        canvas-kind        (conj (str "**Canvas-kind:** " (name canvas-kind)))
+        expected-code-path (conj (str "**Target file:** `" expected-code-path "`"))
+        expected-symbol    (conj (str "**Expected symbol:** `" expected-symbol "`"))
+        true (conj "**Severity:** :warning (drift is fact-of-discrepancy; resolution is judgment)"))))))
+
+(defmethod gap-section :default
+  [code-spec scenario-context]
+  (let [finding (:drift-finding scenario-context)
+        {:keys [stable-id expected-code-path expected-symbol canvas-kind check]} finding
+        {:keys [model-element-id]} code-spec]
+    (render/section
+     "## The gap (canvas -> code)"
+     (render/bulleted
+      (cond-> []
+        true (conj (str "**Canvas declaration:** stable-id `"
+                        (or stable-id model-element-id) "`"))
+        check              (conj (str "**Drift kind:** " (name check)))
         canvas-kind        (conj (str "**Canvas-kind:** " (name canvas-kind)))
         expected-code-path (conj (str "**Target file:** `" expected-code-path "`"))
         expected-symbol    (conj (str "**Expected symbol:** `" expected-symbol "`"))
@@ -166,8 +218,12 @@
    (when-let [src-ref (:canvas-source-ref context)]
      (str "_Canvas source:_ `" src-ref "`"))))
 
-(defn- neighbors-section
-  [{:keys [target-file-state what-exists-in-target-file]} target-path]
+(defn- neighbors-base-section
+  "Shared assembly of the neighbor context. Kind-specific overlays
+   (insertion-point hint, style call-out) are spliced in by the per-kind
+   `neighbors-section` defmethod."
+  [{:keys [target-file-state what-exists-in-target-file]} target-path
+   {:keys [insertion-prose style-prose]}]
   (if (= :absent target-file-state)
     (render/section
      "## Neighbor context"
@@ -191,12 +247,27 @@
                         (str "`" symbol "`")
                         (str "`" symbol "` — " first-line)))
                     sibling-defs))))
-       (when insertion-point
-         (str "**Insertion point:** " insertion-point "."))
-       (str "**Match the existing sibling style.** The implementing LLM "
-            "should imitate the surrounding file's conventions (naming, "
-            "metadata placement, doc-string style) rather than inventing "
-            "new ones.")))))
+       (or insertion-prose
+           (when insertion-point
+             (str "**Insertion point:** " insertion-point ".")))
+       (or style-prose
+           (str "**Match the existing sibling style.** The implementing LLM "
+                "should imitate the surrounding file's conventions (naming, "
+                "metadata placement, doc-string style) rather than inventing "
+                "new ones."))))))
+
+(defmulti ^:private neighbors-section
+  "Kind-specific neighbor section. Most of the body is shared; the
+   insertion-point hint is what diverges across drift kinds."
+  (fn [scenario-context _target-path] (drift-kind scenario-context)))
+
+(defmethod neighbors-section :inspect.drift/missing-implementation
+  [scenario-context target-path]
+  (neighbors-base-section scenario-context target-path {}))
+
+(defmethod neighbors-section :default
+  [scenario-context target-path]
+  (neighbors-base-section scenario-context target-path {}))
 
 (defn- discipline-section
   [{:keys [discipline-prose]}]
@@ -208,8 +279,15 @@
      "Preserve the file's existing imports and ns form exactly."
      "After writing, run `clj -M:test` to confirm the file still loads."])))
 
-(defn- output-section
-  [{:keys [target]}]
+(defmulti ^:private output-section
+  "Kind-specific 'Output format' section — what the implementing LLM is
+   expected to report back. The output expectations differ between
+   add-at-end (report the symbol added + insertion point) and
+   rewrite-in-place (report the lines replaced + what changed)."
+  (fn [_code-spec scenario-context] (drift-kind scenario-context)))
+
+(defmethod output-section :inspect.drift/missing-implementation
+  [{:keys [target]} _scenario-context]
   (render/section
    "## Output format"
    (str "Write the edit directly to `" (:path target) "` using the `Edit` "
@@ -219,20 +297,35 @@
      "The exact insertion point used"
      "The result of the test run"])))
 
+(defmethod output-section :default
+  [{:keys [target]} _scenario-context]
+  (render/section
+   "## Output format"
+   (str "Write the edit directly to `" (:path target) "` using the `Edit` "
+        "or `Write` tool. After writing, report:")
+   (render/bulleted
+    ["The symbol you touched"
+     "The exact edit you applied (insertion-at-end or rewrite-in-place)"
+     "The result of the test run"])))
+
 (defn- render-fn
   "Produce the full instruction map. The structured fields round-trip;
-   `:rendered` is the markdown the implementing LLM consumes."
+   `:rendered` is the markdown the implementing LLM consumes.
+
+   Section assembly is kind-dispatched: each `defmulti` above branches on
+   the finding's `:check` so prose can differ between
+   missing-implementation, shape-drift-on-record, and unknown future
+   kinds."
   [code-spec scenario-context _opts]
-  (let [finding (:drift-finding scenario-context)
-        target  (:target code-spec)
-        body    (render/section
-                 "# Implementation instruction — drift-close"
-                 (frame-section)
-                 (gap-section code-spec finding)
-                 (code-spec-section code-spec)
-                 (neighbors-section scenario-context (:path target))
-                 (discipline-section scenario-context)
-                 (output-section code-spec))]
+  (let [target (:target code-spec)
+        body   (render/section
+                "# Implementation instruction — drift-close"
+                (frame-section scenario-context)
+                (gap-section code-spec scenario-context)
+                (code-spec-section code-spec)
+                (neighbors-section scenario-context (:path target))
+                (discipline-section scenario-context)
+                (output-section code-spec scenario-context))]
     {:scenario-id      :code-side/drift-close
      :code-spec        code-spec
      :scenario-context scenario-context
