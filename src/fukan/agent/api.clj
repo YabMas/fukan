@@ -862,3 +862,459 @@
            :description     (:description s)
            :prompt-fragment (:prompt-fragment s)})
         (instruct-registry/all-scenarios)))
+
+;; -- Trust tier: closure controller (Phase 8 Sprint 3) -----------------------
+;;
+;; Two pure entry points compose the drift-closure dispatch loop:
+;;
+;;   `(close-drift-plan {…scope…})`    — renders per-finding instructions.
+;;   `(close-drift-verify {:plan … :reports […]})` — verifies via fresh drift.
+;;
+;; The architect's Phase D loop drives between them by invoking its native
+;; `Agent` tool against each plan entry's `:rendered` body and collecting
+;; reports. A thin `(close-drift {…})` wrapper composes the two for tests
+;; and terminal callers with an injected `:dispatch-fn` (default stub
+;; returns "manual dispatch required").
+;;
+;; The SCI sandbox can't escape to invoke `Agent` directly; that's why
+;; dispatch is *not* part of the controller's contract. See
+;; `doc/plans/2026-05-28-closure-controller-design.md` (Sprint 1) for the
+;; full design.
+;;
+;; Retry/concurrency thresholds (`:max-attempts`, file-fanout) ship as
+;; Sprint-1-proposed defaults tagged `:trial/calibration-pending` per the
+;; Sprint 2 trial findings — real-Agent dispatch data from canvas-author
+;; sessions recalibrates over time.
+
+(def ^:private drift-kind->scenario
+  "Map a `(canvas-drift)` `:check` keyword to the registered Layer-B
+   scenario id that closes it. Both supported drift kinds today close via
+   `:code-side/drift-close` — the scenario internally dispatches by
+   `:check` to pick missing-implementation vs shape-drift framing.
+
+   Findings whose `:check` has no entry here flow into
+   `close-drift-plan`'s `:unhandled` vector with reason
+   `:scenario-not-found` (one of Sprint 1's six escalation triggers)."
+  {:inspect.drift/missing-implementation :code-side/drift-close
+   :inspect.drift/shape-drift-on-record  :code-side/drift-close})
+
+(defn- finding->plan-entry
+  "Turn one drift finding into one plan entry. Renders the per-finding
+   instruction via `(instruct …)` and packages it with batching metadata
+   (`:batch-key` = `:expected-code-path`). Returns nil when the finding
+   has no offenders (shouldn't happen against current drift output, but
+   defensively — orphans don't get an instruction rendered)."
+  [finding scenario-id]
+  (when-let [offender (first (:offenders finding))]
+    (let [stable-id   (:stable-id offender)
+          code-path   (:expected-code-path offender)
+          canvas-kind (:canvas-kind offender)
+          rendered    (instruct finding scenario-id)]
+      {:stable-id   stable-id
+       :scenario    scenario-id
+       :check       (:check finding)
+       :rendered    (:rendered rendered)
+       :code-spec   (:code-spec rendered)
+       :context     (cond-> {}
+                      code-path   (assoc :expected-code-path code-path)
+                      canvas-kind (assoc :canvas-kind canvas-kind))
+       :batch-key   (or code-path :no-path)})))
+
+(defn- finding->unhandled-entry
+  "Turn a finding whose drift-kind has no registered scenario into an
+   `:unhandled` entry. Sprint 1 escalation trigger
+   `:scenario-not-found`."
+  [finding]
+  {:stable-id (-> finding :offenders first :stable-id)
+   :check     (:check finding)
+   :reason    :scenario-not-found
+   :detail    (str "no scenario registered for drift kind "
+                   (pr-str (:check finding)))})
+
+(defn- group-by-batch-key
+  "Group plan entries by `:batch-key`. Preserves insertion order within
+   each group. Returns `{batch-key [<plan-entry> …]}`."
+  [plan]
+  (reduce (fn [acc entry]
+            (update acc (:batch-key entry) (fnil conj []) entry))
+          {}
+          plan))
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :severity     :info
+        :export       true
+        :agent/doc "Render a drift-closure plan from a scope. Calls
+                    `(canvas-drift)` against the scope filter; for each
+                    finding, renders the per-finding instruction via
+                    `(instruct …)`; groups entries by
+                    `:expected-code-path` so the architect's dispatch
+                    loop can serialize same-file edits and parallelise
+                    across files.
+
+                    Scope opts (AND together):
+                      :module-coord <prefix-string>
+                      :check        <drift-kind-keyword>
+                      :stable-id    <single-id-string>   — overrides
+                                                          the other
+                                                          scope filters
+                      :limit        <int>                — default 25
+                      :max-attempts <int>                — default 2
+                                                          (placeholder;
+                                                          architect-side
+                                                          retry lands in
+                                                          Sprint 4)
+
+                    Returns
+                      {:plan         [<plan-entry> …]
+                       :batches      {<code-path> [<plan-entry> …]}
+                       :unhandled    [<unhandled-entry> …]
+                       :scope        {…echo of scope filters…}
+                       :counts       {:findings-total N
+                                      :findings-planned P
+                                      :findings-unhandled U
+                                      :findings-truncated K}
+                       :truncated?   boolean
+                       :remaining    <count beyond :limit>
+                       :max-attempts <int — echoed for architect's loop>}
+
+                    Pure: no dispatch, no side effects beyond reading the
+                    canvas db + the loaded Model. Architect's Phase D
+                    `Agent` invocations consume the `:rendered` field
+                    per plan entry."
+        :agent/example "(close-drift-plan :module-coord \"distributed.cluster\")
+                        (close-drift-plan :stable-id \"distributed.log/AppendEntriesRequested\")"}
+  close-drift-plan
+  [& {:keys [module-coord check stable-id limit max-attempts]
+      :or {limit 25 max-attempts 2}
+      :as opts}]
+  (let [known #{:module-coord :check :stable-id :limit :max-attempts}
+        unknown (seq (remove known (keys opts)))]
+    (when unknown
+      (throw (ex-info (str "unknown close-drift-plan filter: " (first unknown))
+                      {:type :unknown-filter :filter (first unknown)})))
+    (let [;; :stable-id is the strongest scope; if present, filter to it
+          ;; client-side after pulling the broader (module-coord or whole)
+          ;; drift output.
+          drift-opts (cond-> {}
+                       module-coord (assoc :module-coord module-coord))
+          all-findings (apply canvas-drift (mapcat identity drift-opts))
+          by-stable    (if stable-id
+                         (filterv #(= stable-id (-> % :offenders first :stable-id))
+                                  all-findings)
+                         all-findings)
+          by-check     (if check
+                         (filterv #(= check (:check %)) by-stable)
+                         by-stable)
+          findings     by-check
+          total        (count findings)
+          take-n       (min total limit)
+          taken        (vec (take take-n findings))
+          truncated?   (> total limit)
+          remaining    (max 0 (- total limit))
+          ;; Partition into plannable + unhandled.
+          {:keys [plan unhandled]}
+          (reduce (fn [acc f]
+                    (if-let [scenario-id (drift-kind->scenario (:check f))]
+                      (if-let [entry (finding->plan-entry f scenario-id)]
+                        (update acc :plan conj entry)
+                        acc)
+                      (update acc :unhandled conj (finding->unhandled-entry f))))
+                  {:plan [] :unhandled []}
+                  taken)]
+      {:plan         plan
+       :batches      (group-by-batch-key plan)
+       :unhandled    unhandled
+       :scope        {:module-coord module-coord
+                      :check        check
+                      :stable-id    stable-id
+                      :limit        limit}
+       :counts       {:findings-total      total
+                      :findings-planned    (count plan)
+                      :findings-unhandled  (count unhandled)
+                      :findings-truncated  remaining}
+       :truncated?   truncated?
+       :remaining    remaining
+       :max-attempts max-attempts})))
+
+(defn- excerpt
+  "Truncate a string at `n` chars with an ellipsis when over."
+  [^String s n]
+  (if (and s (> (count s) n))
+    (str (subs s 0 n) "…")
+    s))
+
+(defn- snapshot-finding
+  "Compact snapshot of a finding for the verify report. Drops the long
+   `:detail` map so per-finding entries stay readable."
+  [finding]
+  (when finding
+    {:check     (:check finding)
+     :severity  (:severity finding)
+     :message   (:message finding)
+     :offender  (some-> finding :offenders first
+                        (select-keys [:stable-id :expected-code-path
+                                      :expected-symbol :canvas-kind]))}))
+
+(defn- finding-still-present?
+  "True if `stable-id` is still surfaced by `findings` (post-dispatch
+   re-walk)."
+  [stable-id findings]
+  (some (fn [f]
+          (= stable-id (-> f :offenders first :stable-id)))
+        findings))
+
+(defn- classify-outcome
+  "Decide a per-finding outcome from the plan entry + pre/post drift +
+   report. Returns
+     {:outcome :closed | :failed | :no-report
+      :requires-retry? bool
+      :escalation-reason <kw or nil>}.
+
+   Sprint 4 lands the full six-trigger classification (Task 12). MVP
+   handles the three triggers the architect's single-pass loop can
+   actually surface."
+  [plan-entry report post-findings attempts max-attempts]
+  (let [present? (finding-still-present? (:stable-id plan-entry) post-findings)]
+    (cond
+      (nil? report)
+      {:outcome :no-report
+       :requires-retry? false
+       :escalation-reason :no-report}
+
+      (not present?)
+      {:outcome :closed
+       :requires-retry? false
+       :escalation-reason nil}
+
+      ;; Still present after dispatch.
+      :else
+      {:outcome :failed
+       :requires-retry? (< attempts max-attempts)
+       :escalation-reason (when-not (< attempts max-attempts)
+                            :attempts-exhausted)})))
+
+(defn- render-verify-markdown
+  "Render the verify report as markdown — terse, factual, decision-ready.
+   Mirrors Phase 7's `(instruct …)` body discipline (structured headings,
+   no marketing)."
+  [{:keys [scope counts per-finding]}]
+  (let [{:keys [findings-total findings-closed findings-failed
+                findings-escalated]} counts
+        scope-line (cond
+                     (:stable-id scope) (str "stable-id " (:stable-id scope))
+                     (:module-coord scope) (str "module-coord " (pr-str (:module-coord scope))
+                                                (when (:check scope)
+                                                  (str ", check " (pr-str (:check scope)))))
+                     (:check scope) (str "check " (pr-str (:check scope)))
+                     :else "all canvas drift")
+        lines (atom [])
+        push! (fn [& xs] (swap! lines conj (apply str xs)))]
+    (push! "# Close-drift report")
+    (push! "")
+    (push! "**Scope:** " scope-line)
+    (push! "")
+    (push! "**Summary:** " findings-closed " of " findings-total
+           " closed; " findings-failed " failed; "
+           findings-escalated " escalated.")
+    (push! "")
+    (when (seq per-finding)
+      (push! "## Per-finding outcomes")
+      (push! "")
+      (doseq [pf per-finding]
+        (push! "- `" (:stable-id pf) "` — **" (name (:outcome pf)) "**"
+               (when (and (:attempts pf) (pos? (:attempts pf)))
+                 (str " (attempts: " (:attempts pf) ")"))
+               (when (:escalation-reason pf)
+                 (str " · escalation: `" (name (:escalation-reason pf)) "`")))))
+    (push! "")
+    (let [escalated (filter #(= :failed (:outcome %)) per-finding)]
+      (when (seq escalated)
+        (push! "## Escalations")
+        (push! "")
+        (doseq [pf escalated]
+          (push! "### `" (:stable-id pf) "`")
+          (push! "")
+          (when-let [r (:escalation-reason pf)]
+            (push! "**Reason:** `" (name r) "`")
+            (push! ""))
+          (when-let [rep (:report-excerpt pf)]
+            (push! "**Report excerpt:** " rep)
+            (push! ""))
+          (when-let [snap (:post-drift-snapshot pf)]
+            (push! "**Post-drift:** " (pr-str snap))
+            (push! "")))))
+    (let [no-report (filter #(= :no-report (:outcome %)) per-finding)]
+      (when (seq no-report)
+        (push! "## No report received")
+        (push! "")
+        (doseq [pf no-report]
+          (push! "- `" (:stable-id pf) "` — architect did not dispatch this finding"))))
+    (str/join "\n" @lines)))
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :severity     :info
+        :export       true
+        :agent/doc "Verify a drift-closure dispatch round. Consumes the
+                    plan from `(close-drift-plan …)` and the architect's
+                    per-finding reports; re-runs `(canvas-drift)` against
+                    the plan's scope to classify outcomes.
+
+                    Args (as kw-args or single map):
+                      :plan     <plan from close-drift-plan>
+                      :reports  [{:stable-id … :report \"…\" :attempt 1} …]
+
+                    Returns
+                      {:scope        <echo of plan's scope>
+                       :counts       {:findings-total N
+                                      :findings-closed M
+                                      :findings-failed K
+                                      :findings-escalated E
+                                      :findings-no-report R}
+                       :per-finding  [<entry> …]
+                       :rendered     \"…markdown summary…\"}
+
+                    Per-finding entry shape:
+                      {:stable-id           …
+                       :outcome             :closed | :failed | :no-report
+                       :attempts            <int>
+                       :requires-retry?     <bool>
+                       :escalation-reason   <kw or nil>
+                       :report-excerpt      <truncated subagent narrative>
+                       :pre-drift-snapshot  <compact finding snapshot>
+                       :post-drift-snapshot <compact finding snapshot or nil>}
+
+                    Sprint 4 lands the full six-trigger classification
+                    (Task 12). MVP recognises `:attempts-exhausted`,
+                    `:scenario-not-found` (via the plan's :unhandled),
+                    and `:no-report`."
+        :agent/example "(close-drift-verify :plan p :reports [{:stable-id \"x\" :report \"done\" :attempt 1}])"}
+  close-drift-verify
+  [& {:keys [plan reports] :as opts}]
+  (let [known #{:plan :reports}
+        unknown (seq (remove known (keys opts)))]
+    (when unknown
+      (throw (ex-info (str "unknown close-drift-verify arg: " (first unknown))
+                      {:type :unknown-filter :filter (first unknown)})))
+    (when-not (and (map? plan) (vector? (:plan plan)))
+      (throw (ex-info "close-drift-verify: :plan must be the return of close-drift-plan"
+                      {:type :bad-argument :plan plan})))
+    (let [max-attempts  (or (:max-attempts plan) 2)
+          scope         (:scope plan)
+          plan-entries  (:plan plan)
+          unhandled     (:unhandled plan)
+          report-by-id  (reduce (fn [acc r]
+                                  (update acc (:stable-id r)
+                                          (fnil conj []) r))
+                                {}
+                                (or reports []))
+          ;; Snapshot pre-dispatch drift via the plan's findings (the
+          ;; plan already captured the per-finding shape at plan time).
+          pre-snapshots (into {}
+                              (map (fn [pe]
+                                     [(:stable-id pe)
+                                      (snapshot-finding
+                                        (assoc {:check (:check pe)
+                                                :severity :warning
+                                                :message nil
+                                                :offenders [(merge {:stable-id (:stable-id pe)}
+                                                                   (:context pe))]}
+                                               :detail nil))]))
+                              plan-entries)
+          ;; Re-run drift across the plan's scope.
+          drift-opts    (cond-> {}
+                          (:module-coord scope) (assoc :module-coord (:module-coord scope)))
+          post-findings (apply canvas-drift (mapcat identity drift-opts))
+          per-finding   (mapv (fn [pe]
+                                (let [rs       (get report-by-id (:stable-id pe))
+                                      ;; Latest attempt for the finding.
+                                      latest   (last (sort-by (fnil :attempt 0) (or rs [])))
+                                      attempts (count rs)
+                                      cls      (classify-outcome pe latest post-findings
+                                                                  attempts max-attempts)
+                                      post-finding (some (fn [f]
+                                                           (when (= (:stable-id pe)
+                                                                    (-> f :offenders first :stable-id))
+                                                             f))
+                                                         post-findings)]
+                                  (cond-> {:stable-id          (:stable-id pe)
+                                           :outcome            (:outcome cls)
+                                           :attempts           attempts
+                                           :requires-retry?    (:requires-retry? cls)
+                                           :escalation-reason  (:escalation-reason cls)
+                                           :report-excerpt     (some-> latest :report (excerpt 280))
+                                           :pre-drift-snapshot (get pre-snapshots (:stable-id pe))
+                                           :post-drift-snapshot (snapshot-finding post-finding)})))
+                              plan-entries)
+          ;; Unhandled findings (no scenario) count as escalated.
+          unhandled-entries (mapv (fn [u]
+                                    {:stable-id          (:stable-id u)
+                                     :outcome            :failed
+                                     :attempts           0
+                                     :requires-retry?    false
+                                     :escalation-reason  (:reason u)
+                                     :report-excerpt     (:detail u)
+                                     :pre-drift-snapshot nil
+                                     :post-drift-snapshot nil})
+                                  (or unhandled []))
+          all-pf        (into per-finding unhandled-entries)
+          closed-count  (count (filter #(= :closed   (:outcome %)) all-pf))
+          failed-count  (count (filter #(= :failed   (:outcome %)) all-pf))
+          no-report-cnt (count (filter #(= :no-report (:outcome %)) all-pf))
+          escalated-cnt (count (filter :escalation-reason all-pf))
+          counts        {:findings-total      (count all-pf)
+                         :findings-closed     closed-count
+                         :findings-failed     failed-count
+                         :findings-no-report  no-report-cnt
+                         :findings-escalated  escalated-cnt}
+          result        {:scope       scope
+                         :counts      counts
+                         :per-finding all-pf}]
+      (assoc result :rendered (render-verify-markdown result)))))
+
+(defn- default-dispatch-fn
+  "Stub dispatch-fn for terminal `bin/fukan eval` callers. Surfaces a
+   useful 'use the architect' message rather than silently no-op'ing.
+   Tests inject their own stub via `:dispatch-fn`."
+  [{:keys [stable-id]}]
+  {:stable-id stable-id
+   :report    "manual dispatch required — fukan-architect's Phase D close-drift mode handles dispatch"
+   :attempt   1})
+
+(defn ^{:agent/layer :trust
+        :agent/origin :built-in
+        :severity     :info
+        :export       true
+        :agent/doc "Convenience wrapper composing `(close-drift-plan …)`
+                    and `(close-drift-verify …)` end-to-end.
+
+                    Takes the same scope opts as `close-drift-plan` plus:
+                      :dispatch-fn  <fn>  — called per plan entry as
+                                            (f {:stable-id … :rendered …
+                                                :context …}); must
+                                            return {:stable-id …
+                                                    :report \"…\"
+                                                    :attempt 1}.
+
+                    Defaults to a stub surfacing 'manual dispatch
+                    required'. Tests inject canned-report stubs; the
+                    architect's Phase D loop calls the two entry points
+                    directly with real `Agent` invocations between.
+
+                    Returns the same shape as `close-drift-verify`."
+        :agent/example "(close-drift :module-coord \"distributed.cluster\")"}
+  close-drift
+  [& {:keys [dispatch-fn] :as opts}]
+  (let [dispatch-fn (or dispatch-fn default-dispatch-fn)
+        plan-opts   (dissoc opts :dispatch-fn)
+        plan        (apply close-drift-plan (mapcat identity plan-opts))
+        reports     (mapv (fn [entry]
+                            (let [r (dispatch-fn {:stable-id (:stable-id entry)
+                                                  :rendered  (:rendered entry)
+                                                  :context   (:context entry)})]
+                              (cond-> r
+                                (nil? (:stable-id r)) (assoc :stable-id (:stable-id entry))
+                                (nil? (:attempt r))   (assoc :attempt 1))))
+                          (:plan plan))]
+    (close-drift-verify :plan plan :reports reports)))
