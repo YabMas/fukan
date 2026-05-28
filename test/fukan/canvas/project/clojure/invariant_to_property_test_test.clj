@@ -93,6 +93,17 @@
       (is (str/includes? t "(gen/return ::placeholder)"))
       (is (str/includes? t "not yet implemented")))))
 
+(deftest template-frames-skeleton-as-audit-trail-closure-marker
+  (testing "Sprint 6 — template comments tell the implementing-LLM to LEAVE the placeholder + throw intact (audit-trail skeleton); do not encourage generator authorship here"
+    (let [p (core/project :clojure majority-required {:registry registry})
+          t (:template p)]
+      (is (str/includes? t "AUDIT-TRAIL CLOSURE MARKER")
+          "template's inline comment names the placeholder as the audit-trail closure marker")
+      (is (str/includes? t "Leave them intact")
+          "template's inline comment tells the implementing-LLM to leave the skeleton intact")
+      (is (not (str/includes? t "Replace the placeholder generator"))
+          "no prose that asks the implementing-LLM to replace the placeholder"))))
+
 (deftest prose-envelope-frames-property-test-not-predicate
   (let [p (core/project :clojure majority-required {:registry registry})
         pr (:prose p)]
@@ -100,6 +111,21 @@
     (is (str/includes? pr "What must hold: no node is leader for term T without > N/2 grants for T."))
     (is (str/includes? pr "clojure.test.check"))
     (is (str/includes? pr "property test, not a predicate"))))
+
+(deftest prose-envelope-frames-skeleton-as-audit-trail-closure-marker
+  (testing "Sprint 6 — prose envelope frames the placeholder+throw as the audit-trail closure marker, NOT as something to replace with a generator"
+    (let [p (core/project :clojure majority-required {:registry registry})
+          pr (:prose p)]
+      (is (str/includes? pr "audit-trail closure marker")
+          "prose names the skeleton as the audit-trail closure marker")
+      (is (str/includes? pr "Leave the")
+          "prose tells the implementing-LLM to leave the skeleton intact")
+      (is (str/includes? pr "land this skeleton verbatim")
+          "prose frames the job as landing the skeleton verbatim")
+      (is (not (str/includes? pr "should replace the placeholder generator"))
+          "prose no longer asks the implementing-LLM to replace the placeholder generator")
+      (is (not (str/includes? pr "replace the audit-trail `throw` body with"))
+          "prose no longer asks the implementing-LLM to replace the throw body with the real assertion"))))
 
 (deftest context-marks-projection-as-test-side
   (let [p (core/project :clojure majority-required {:registry registry})]

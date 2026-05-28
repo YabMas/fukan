@@ -71,18 +71,28 @@
 (defn- prose-envelope
   "The full prose carried alongside the skeleton — descriptive doc
    first, then the holds-that clause, then a property-check framing
-   that names the test-side artifact convention for the implementing-LLM."
+   that names the test-side artifact convention for the implementing-LLM.
+
+   The implementing-LLM's job is to LAND the skeleton verbatim at its
+   canonical address. The placeholder generator and `throw` body are
+   the audit-trail closure marker — they are deliberately broken so a
+   later canvas-author iteration can recognise the un-encoded property
+   and replace them with a real generator + assertion when the
+   invariant's property semantics are ready. Do not author a generator
+   here; that's a separate, later step."
   [invariant-name doc holds-that]
   (str "Invariant: " invariant-name "."
        (when (seq doc) (str " " (str/trim doc)))
        (when (seq holds-that)
          (str "\n\nWhat must hold: " holds-that "."))
        "\n\nProperty-check approach: this is a `clojure.test.check` property"
-       " test, not a predicate. The implementing-LLM should replace the"
-       " placeholder generator (`gen/return ::placeholder`) with a generator"
-       " that produces representative model states, then replace the"
-       " audit-trail `throw` body with `prop/for-all`'s expected boolean"
-       " body — assert the invariant holds against each generated state."))
+       " test, not a predicate. The skeleton below — `gen/return ::placeholder`"
+       " plus the `throw` body — is the **audit-trail closure marker**: it"
+       " stands in for a real property test until a future canvas-author"
+       " iteration encodes the invariant's property semantics. **Leave the"
+       " placeholder generator and the `throw` body intact.** Your job is"
+       " to land this skeleton verbatim at its canonical address; do NOT"
+       " replace the generator or fill in `prop/for-all`'s body here."))
 
 (defn- render-template
   [{:keys [symbol]} stable-id doc invariant-name holds-that]
@@ -97,9 +107,10 @@
          "    ;; Invariant: " invariant-name ".\n"
          doc-comment
          holds-that-comment
-         "    ;; Property-check approach: generate a representative model state,\n"
-         "    ;; walk the relevant entities, and assert the invariant. Replace\n"
-         "    ;; the placeholder generator and the throw-body below.\n"
+         "    ;; AUDIT-TRAIL CLOSURE MARKER. The placeholder generator and the\n"
+         "    ;; throw-body below stand in for a real property test until a future\n"
+         "    ;; canvas-author iteration encodes the invariant's property semantics.\n"
+         "    ;; Leave them intact — do NOT author a generator or fill in the body here.\n"
          "    (throw (ex-info \"" symbol ": not yet implemented\"\n"
          "                    {:canvas-id        \"" stable-id "\"\n"
          "                     :invariant-name   \"" invariant-name "\""
