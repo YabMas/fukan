@@ -107,17 +107,19 @@
 ;; behavioural commitments; the code-side counterpart is a predicate over
 ;; the model that returns true iff the invariant holds.
 ;;
-;; NB: the rendered Layer-A template named the predicate after the
-;; `holds-that` prose string verbatim ("leader holds majority for its term"),
-;; which is not a legal Clojure symbol. Sanitized to a kebab-case symbol
-;; derived from the invariant id.
+;; Phase 7.5 Sprint 2 convention: the predicate name is derived from the
+;; invariant's :entity/name (kebab-cased) — uniform with all other
+;; affordance kinds. The `holds-that` prose lands in the docstring / ex-info
+;; payload, never in the symbol position.
 ;; --------------------------------------------------------------------------
 
-(defn leader-holds-majority-for-its-term
+(defn majority-required-for-leadership
   "A node may not become Leader for a Term unless it has received vote
-   grants from a strict majority of cluster members for that Term."
+   grants from a strict majority of cluster members for that Term.
+
+   What must hold: leader holds majority for its term."
   [_model]
-  (throw (ex-info "leader holds majority for its term: not yet implemented"
+  (throw (ex-info "majority-required-for-leadership: not yet implemented"
                   {:canvas-id "distributed.cluster/MajorityRequiredForLeadership"
                    :invariant-name "MajorityRequiredForLeadership"
                    :holds-that "leader holds majority for its term"})))
