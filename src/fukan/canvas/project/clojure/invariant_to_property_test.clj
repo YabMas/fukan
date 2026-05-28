@@ -96,12 +96,16 @@
 
 (defn- render-template
   [{:keys [symbol]} stable-id doc invariant-name holds-that]
-  (let [doc-comment (when (seq doc)
-                      (str "  ;; " (str/replace (str/trim doc) #"\n" "\n  ;; ") "\n"
-                           "  ;;\n"))
+  (let [;; Comments below live in `(prop/for-all [model …] …)`'s body and
+        ;; share its 4-space body indent. Keeping doc/holds-that comments
+        ;; flush with the surrounding audit-trail comment block — see
+        ;; Phase 9 Sprint 2 Task 6 (trial finding 4: mixed-indent fix).
+        doc-comment (when (seq doc)
+                      (str "    ;; " (str/replace (str/trim doc) #"\n" "\n    ;; ") "\n"
+                           "    ;;\n"))
         holds-that-comment (when (seq holds-that)
-                             (str "  ;; What must hold: " holds-that ".\n"
-                                  "  ;;\n"))]
+                             (str "    ;; What must hold: " holds-that ".\n"
+                                  "    ;;\n"))]
     (str "(defspec " symbol " " iteration-count "\n"
          "  (prop/for-all [model (gen/return ::placeholder)]\n"
          "    ;; Invariant: " invariant-name ".\n"

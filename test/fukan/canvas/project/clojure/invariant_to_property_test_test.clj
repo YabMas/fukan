@@ -79,6 +79,32 @@
     (is (str/includes? t ":holds-that       \"no node is leader for term T without > N/2 grants for T\"")
         "holds-that prose also carried in the ex-info audit-trail payload")))
 
+(deftest comment-block-indentation-is-consistent
+  (testing "Phase 9 Sprint 2 Task 6 — the doc + holds-that comments share the same 4-space body indent as the surrounding audit-trail comments; no mixed 2/4-space rendering"
+    (let [p (core/project :clojure majority-required {:registry registry})
+          t (:template p)
+          ;; Every `;;` comment line that the template emits sits in the
+          ;; body of (prop/for-all [model …] …). The audit-trail comment
+          ;; lines use 4-space indent; doc + holds-that should match.
+          comment-lines (->> (str/split-lines t)
+                             (filter #(str/includes? % ";;")))
+          ;; Drop lines that don't start with whitespace + ;; (e.g. lines
+          ;; that carry an inline `;;` mid-expression — none today, but
+          ;; defensively).
+          indented-comments (filter #(re-find #"^\s+;;" %) comment-lines)]
+      (is (seq indented-comments)
+          "template emits comment lines (sanity)")
+      (is (every? #(str/starts-with? % "    ;;") indented-comments)
+          (str "every emitted comment line starts at 4-space indent; "
+               "actual lines:\n"
+               (str/join "\n" indented-comments)))
+      ;; Spot-check the doc + holds-that lines specifically — these were
+      ;; the ones that drifted to 2-space pre-fix.
+      (is (str/includes? t "    ;; A node becomes leader only with majority")
+          "doc comment line starts at 4-space indent (not 2-space)")
+      (is (str/includes? t "    ;; What must hold: no node is leader")
+          "holds-that comment line starts at 4-space indent (not 2-space)"))))
+
 (deftest ex-info-payload-carries-canvas-id-name-iteration-count
   (let [p (core/project :clojure majority-required {:registry registry})
         t (:template p)]
