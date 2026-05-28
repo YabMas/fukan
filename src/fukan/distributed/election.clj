@@ -3,15 +3,16 @@
 
    Phase 6 Sprint 4 trial-run scope. Stubs throw; payloads are Malli
    schemas. Canvas declares the reactive protocol; this file projects
-   a representative slice and deliberately leaves four declarations
-   absent (3 events, 2 handlers) for drift evidence.
+   a representative slice and deliberately leaves declarations absent
+   for drift evidence.
 
    Canvas coverage in this file:
      Records  — Vote, ElectionRound                      (both)
      Events   — HeartbeatExpired, ElectionStarted,
-                VoteRequested, VoteGranted               (4 of 7;
-                VoteDenied, LeaderElected,
-                HeartbeatReceived intentionally absent)
+                VoteRequested, VoteGranted,
+                HeartbeatReceived                        (5 of 7;
+                VoteDenied, LeaderElected
+                intentionally absent)
      Handlers — on-heartbeat-expired,
                 on-vote-requested                        (2 of 4;
                 on-vote-granted, on-heartbeat-received
@@ -97,6 +98,14 @@
                    :received {:event-payload event-payload
                               :cluster-state cluster-state}})))
 
+(def HeartbeatReceived
+  "A node has observed a heartbeat from a leader for some term. If the
+   term is at-or-above the observer's current term, the observer adopts
+   the term and remains Follower."
+  [:map
+   [:term cluster/Term]
+   [:leader cluster/NodeId]])
+
 ;; on-vote-granted and on-heartbeat-received intentionally omitted —
-;; drift evidence. Together with the three absent events, drift should
-;; surface 5 missing-implementation findings post-reset.
+;; drift evidence. Together with the two remaining absent events, drift
+;; should surface 4 missing-implementation findings post-reset.

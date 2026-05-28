@@ -81,3 +81,6 @@
     (mapv (fn [b]
             (into {} (map (fn [v] [v (get b v)]) (:find parsed))))
           bindings)))
+
+(def ^:schema QueryRow
+  [:any {:description "One result row: a map from :find variable keyword to bound value."}])

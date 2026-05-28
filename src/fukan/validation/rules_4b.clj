@@ -149,3 +149,13 @@
          (shape-mismatches model)
          (provides-without-external-stimulus model)
          (exposes-unresolved model))))
+
+(defn exposes-paths-resolve
+  "Check that every exposes: path declared on a Surface resolves to a
+         known substrate endpoint. Unresolved paths emit
+         :4b/exposes-unresolved (error)."
+  [model]
+  (throw (ex-info "exposes-paths-resolve: not yet implemented"
+                  {:canvas-id "validation.rules-4b/ExposesPathsResolve"
+                   :rule-name "ExposesPathsResolve"
+                   :when (quote (ExposesPathsResolve (model :model/Model)))})))

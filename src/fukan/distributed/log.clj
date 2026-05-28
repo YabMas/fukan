@@ -83,3 +83,14 @@
   [_index]
   (throw (ex-info "get-entry: not yet implemented"
                   {:canvas-id "distributed.log/get_entry"})))
+
+(defn on-append-entries-requested
+  "A follower validates the request (leader_term not stale,
+         prev_index/prev_term match), then appends the entries or
+         rejects the request."
+  {:malli/schema [:=> [:cat :log/AppendEntriesRequested :any] :any]}
+  [payload state]
+  (throw (ex-info "on-append-entries-requested: not yet implemented"
+                  {:canvas-id "distributed.log/on_append_entries_requested"
+                   :on :log/AppendEntriesRequested
+                   :emits [:log/AppendEntriesAcknowledged]})))
