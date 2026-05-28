@@ -120,7 +120,18 @@
   fukan.agent.api
   {:linters {:unused-public-var {:level :off}}}
   fukan.agent.system
-  {:linters {:unused-public-var {:level :off}}}}
+  {:linters {:unused-public-var {:level :off}}}
+
+  ;; Phase 8 Sprint 6 trial — property-test audit-trail skeletons. The
+  ;; defspec form is the implementing-LLM's audit-trail closure marker;
+  ;; the placeholder generator's `model` binding is intentionally unused
+  ;; (the throw body fires before the binding is consumed). clojure.test
+  ;; is required by convention for parity with sibling test files even
+  ;; though the current body uses only defspec.
+  fukan.distributed.cluster-test
+  {:linters {:unused-binding         {:level :off}
+             :unused-referred-var    {:level :off}
+             :unused-namespace       {:level :off}}}}
 
  :linters
  {;; The canvas DSL's `rule` lift body uses (when TriggerName ...) as
@@ -171,4 +182,10 @@
              fukan.canvas.vocab.event/event
              fukan.canvas.vocab.event/handler
              fukan.canvas.core.helpers/within-module
-             fukan.canvas.core.helpers/with-canvas]}}}
+             fukan.canvas.core.helpers/with-canvas]}}
+
+ ;; Teach clj-kondo about clojure.test.check macros it doesn't have
+ ;; built-in shape for. `defspec` registers a named symbol; lint as def
+ ;; so the symbol resolves and the first arg becomes a known var name.
+ :lint-as
+ {clojure.test.check.clojure-test/defspec clojure.core/def}}

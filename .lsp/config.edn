@@ -64,7 +64,11 @@
               ;; declarations. Never called by fukan-itself; the lint is
               ;; right and the design is right. Until distributed.* graduates
               ;; from trial-run to real implementation, exempt wholesale.
+              ;; distributed.cluster-test holds the Phase 8 Sprint 6
+              ;; property-test audit-trail skeletons (`defspec` vars
+              ;; discovered by the test runner, not statically called).
               fukan.distributed.cluster
+              fukan.distributed.cluster-test
               fukan.distributed.election
               fukan.distributed.log
 
