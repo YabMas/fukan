@@ -8,6 +8,8 @@
 (def ^:private registry (defaults/fukan-on-fukan))
 
 ;; Ground-truth: canvas/validation/rules-4a :: AtMostOneCompositeParent.
+;; Phase 7.5 Sprint 2: holds-that is now prose (not a kebab-case slug). The
+;; symbol is derived from :entity-name; holds-that lands in the docstring.
 (def ^:private at-most-one-element
   {:model-element-kind :Affordance
    :canvas-role        :canvas/invariant
@@ -15,7 +17,7 @@
    :entity-name        "AtMostOneCompositeParent"
    :module-coord       "validation.rules-4a"
    :doc                "A module-Container belongs to at most one composite parent. A Violation of kind :4a/multiple-composite-parents (error) is emitted for every module appearing in two or more composites' :children sets."
-   :holds-that         "module-has-at-most-one-composite-parent"})
+   :holds-that         "a module-Container belongs to at most one composite parent"})
 
 (deftest produces-valid-projection
   (let [p (core/project :clojure at-most-one-element {:registry registry})]
@@ -27,16 +29,17 @@
     (is (= :clojure/invariant-to-predicate (:projection-kind p)))
     (is (= :Affordance                     (:model-element-kind p)))))
 
-(deftest target-derivation-uses-holds-that-as-symbol
+(deftest target-derivation-uses-entity-name-as-symbol
   (let [p (core/project :clojure at-most-one-element {:registry registry})]
     (is (= "fukan.validation.rules-4a" (-> p :target :namespace)))
-    (is (= "module-has-at-most-one-composite-parent"
-           (-> p :target :symbol)))))
+    (is (= "at-most-one-composite-parent"
+           (-> p :target :symbol))
+        "symbol is kebab(entity-name), never the prose holds-that clause")))
 
 (deftest template-defn-shape
   (let [p (core/project :clojure at-most-one-element {:registry registry})
         t (:template p)]
-    (is (str/includes? t "(defn module-has-at-most-one-composite-parent"))
+    (is (str/includes? t "(defn at-most-one-composite-parent"))
     (is (str/includes? t "[model]"))
     (is (str/includes? t "(throw (ex-info"))))
 
@@ -45,32 +48,28 @@
         t (:template p)]
     (is (str/includes? t ":canvas-id \"validation.rules-4a/invariant/AtMostOneCompositeParent\""))
     (is (str/includes? t ":invariant-name \"AtMostOneCompositeParent\""))
-    (is (str/includes? t ":holds-that \"module-has-at-most-one-composite-parent\""))))
+    (is (str/includes? t ":holds-that \"a module-Container belongs to at most one composite parent\""))))
 
 (deftest prose-envelope-frames-invariant
   (let [p (core/project :clojure at-most-one-element {:registry registry})
         pr (:prose p)]
     (is (str/starts-with? pr "Invariant: AtMostOneCompositeParent."))
-    (is (str/includes? pr "What must hold: module-has-at-most-one-composite-parent."))
+    (is (str/includes? pr "What must hold: a module-Container belongs to at most one composite parent."))
     (is (str/includes? pr "Property-check approach:"))))
 
-(deftest holds-that-absent-falls-back-to-invariant-name
-  (testing "missing holds-that triggers addr/canonical's :invariant-name fallback"
-    (let [el (assoc at-most-one-element :holds-that nil)
-          p  (core/project :clojure el {:registry registry})]
-      (is (= "at-most-one-composite-parent" (-> p :target :symbol)))
-      (is (str/includes? (:template p)
-                         "(defn at-most-one-composite-parent")))))
-
-(deftest holds-that-blank-string-also-falls-back
-  (let [el (assoc at-most-one-element :holds-that "")
-        p  (core/project :clojure el {:registry registry})]
-    (is (= "at-most-one-composite-parent" (-> p :target :symbol)))))
+(deftest holds-that-absent-still-produces-valid-symbol
+  (testing "missing/blank holds-that does not affect the symbol (entity-name path)"
+    (doseq [val [nil ""]]
+      (let [el (assoc at-most-one-element :holds-that val)
+            p  (core/project :clojure el {:registry registry})]
+        (is (= "at-most-one-composite-parent" (-> p :target :symbol)))
+        (is (str/includes? (:template p)
+                           "(defn at-most-one-composite-parent"))))))
 
 (deftest context-carries-invariant-name-and-holds-that
   (let [p (core/project :clojure at-most-one-element {:registry registry})]
     (is (= "AtMostOneCompositeParent" (-> p :context :invariant-name)))
-    (is (= "module-has-at-most-one-composite-parent"
+    (is (= "a module-Container belongs to at most one composite parent"
            (-> p :context :holds-that)))
     (is (= "canvas/validation/rules-4a.clj"
            (-> p :context :canvas-source-ref)))))

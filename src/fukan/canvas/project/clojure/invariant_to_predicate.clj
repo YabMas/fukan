@@ -6,20 +6,16 @@
    (holds-that \"current_term is monotonically non-decreasing per
    node\"))` declares a named behavioral commitment. The
    corresponding Clojure idiom is a one-arg predicate `(defn
-   <kebab(holds-that)> [model] …)` that returns true iff the
-   invariant holds against the model.
+   <kebab(entity-name)> [model] …)` that returns true iff the
+   invariant holds against the model. The `holds-that` clause is
+   prose — it carries the semantic intent and lands in the docstring,
+   never in the symbol position (Phase 7.5 Sprint 2).
 
    Layer A's job is the *skeleton* — bare signature + throw-stub body
    + prose envelope that carries the semantic intent (the
    descriptive docstring plus the holds-that clause). The
    implementing LLM writes the actual property check; invariants are
    inherently semantic and template-able only as a shape.
-
-   When the canvas declaration omits its `holds-that` clause, the
-   address falls back to `kebab(invariant-name)` via `addr/canonical`'s
-   `:invariant-name` opt (Phase 7 Task 4 gap 2). The fallback keeps
-   the projection's output valid — the implementing LLM still gets a
-   named predicate to fill in.
 
    Routes: `[:clojure :canvas/invariant]`."
   (:require [clojure.string :as str]
@@ -68,8 +64,7 @@
                                  :primitive/rule
                                  :projection-kind/invariant
                                  module-coord
-                                 holds-that
-                                 {:invariant-name entity-name})
+                                 entity-name)
         target   {:path      (core/ns->path (:ns address))
                   :namespace (:ns address)
                   :symbol    (:name address)}]
