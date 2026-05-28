@@ -103,23 +103,8 @@
                    :received {:cluster cluster}})))
 
 ;; --------------------------------------------------------------------------
-;; Invariant predicates — property-style checks. Canvas declares these as
-;; behavioural commitments; the code-side counterpart is a predicate over
-;; the model that returns true iff the invariant holds.
-;;
-;; Phase 7.5 Sprint 2 convention: the predicate name is derived from the
-;; invariant's :entity/name (kebab-cased) — uniform with all other
-;; affordance kinds. The `holds-that` prose lands in the docstring / ex-info
-;; payload, never in the symbol position.
+;; Invariants project to property tests at test/fukan/distributed/cluster_test.clj
+;; per Phase 8 Sprint 5 (the migrate path). No predicate stubs live in src/
+;; for the cluster invariants — their code-side counterpart is a
+;; `clojure.test.check` defspec.
 ;; --------------------------------------------------------------------------
-
-(defn majority-required-for-leadership
-  "A node may not become Leader for a Term unless it has received vote
-   grants from a strict majority of cluster members for that Term.
-
-   What must hold: leader holds majority for its term."
-  [_model]
-  (throw (ex-info "majority-required-for-leadership: not yet implemented"
-                  {:canvas-id "distributed.cluster/MajorityRequiredForLeadership"
-                   :invariant-name "MajorityRequiredForLeadership"
-                   :holds-that "leader holds majority for its term"})))
