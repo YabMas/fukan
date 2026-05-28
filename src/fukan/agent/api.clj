@@ -1529,6 +1529,19 @@
                     per-finding reports; re-runs `(canvas-drift)` against
                     the plan's scope to classify outcomes.
 
+                    **Plan-snapshot dependency.** `:plan` must be the
+                    snapshot returned by `(close-drift-plan …)` taken
+                    BEFORE dispatches landed. A fresh `(close-drift-plan)`
+                    called AFTER dispatches won't see closed findings —
+                    their stable-ids will be absent from the new plan,
+                    and verify won't classify them as `:closed`. Hold the
+                    original plan across the dispatch step; pass it back
+                    to verify. Throws `:stale-plan` ex-info when the
+                    plan-snapshot+reports shape suggests verify was
+                    called after dispatch with a fresh plan (no plan
+                    stable-id overlaps current drift AND `:reports` is
+                    non-empty).
+
                     Args (as kw-args or single map):
                       :plan     <plan from close-drift-plan>
                       :reports  [{:stable-id … :report \"…\" :attempt 1} …]
@@ -1584,6 +1597,29 @@
     (when-not (and (map? plan) (vector? (:plan plan)))
       (throw (ex-info "close-drift-verify: :plan must be the return of close-drift-plan"
                       {:type :bad-argument :plan plan})))
+    ;; Stale-plan heuristic (Phase 9 Sprint 2 Task 5b). The Sprint 6
+    ;; ad-hoc mistake: canvas-author calls `close-drift-plan` AFTER
+    ;; dispatches landed, then passes that fresh plan to verify along
+    ;; with reports captured pre-dispatch. The fresh plan won't see
+    ;; closed findings — verify mis-classifies. Catch the shape: reports
+    ;; carry stable-ids that the plan doesn't recognise. The plan would
+    ;; legitimately not recognise a report's stable-id only when the
+    ;; canvas-author is mixing reports across scopes — also a bug.
+    (let [plan-stable-ids   (set (map :stable-id (:plan plan)))
+          report-stable-ids (set (keep :stable-id (or reports [])))
+          unmatched-reports (into #{} (remove plan-stable-ids) report-stable-ids)]
+      (when (and (seq report-stable-ids)
+                 (= unmatched-reports report-stable-ids))
+        (throw (ex-info
+                 (str "plan appears stale — its findings are absent from "
+                      "current drift output. If dispatches landed since the "
+                      "plan was captured, the plan snapshot from BEFORE "
+                      "dispatch is required. Re-run close-drift-plan and "
+                      "snapshot the result before dispatches.")
+                 {:type :stale-plan
+                  :plan-scope (:scope plan)
+                  :reports-count (count reports)
+                  :unmatched-report-stable-ids (vec unmatched-reports)}))))
     (let [max-attempts  (or (:max-attempts plan) 2)
           scope         (:scope plan)
           plan-entries  (:plan plan)

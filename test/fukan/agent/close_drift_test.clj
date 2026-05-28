@@ -830,6 +830,79 @@
           (is (str/includes? (:rendered v) "Attempts:")))))))
 
 ;; ---------------------------------------------------------------------------
+;; Phase 9 Sprint 2 Task 5b — Stale-plan heuristic
+
+(deftest verify-stale-plan-throws-when-reports-stable-ids-absent-from-plan
+  (testing "Reports referencing stable-ids the plan doesn't carry → :stale-plan"
+    (let [;; Stale shape: plan is empty (canvas-author re-ran plan AFTER
+          ;; dispatch and findings were closed), but they still hold reports
+          ;; from the original pre-dispatch plan.
+          fresh-plan {:plan []
+                      :unhandled []
+                      :scope {:module-coord "distributed.cluster"}
+                      :max-attempts 2}
+          stale-reports [{:stable-id "distributed.cluster/MajorityRequiredForLeadership"
+                          :report "I wrote the test" :attempt 1}]]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        (let [thrown (try
+                       (api/close-drift-verify :plan fresh-plan
+                                               :reports stale-reports)
+                       nil
+                       (catch clojure.lang.ExceptionInfo e e))]
+          (is (some? thrown)
+              ":stale-plan should throw on this shape")
+          (is (= :stale-plan (-> thrown ex-data :type)))
+          (is (= 1 (-> thrown ex-data :reports-count)))
+          (is (= {:module-coord "distributed.cluster"}
+                 (-> thrown ex-data :plan-scope)))
+          (is (= ["distributed.cluster/MajorityRequiredForLeadership"]
+                 (-> thrown ex-data :unmatched-report-stable-ids))))))))
+
+(deftest verify-stale-plan-no-throw-when-reports-match-plan
+  (testing "Reports stable-ids match plan stable-ids → no stale-plan throw"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/foo" :report "done" :attempt 1}]]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        ;; Should not throw — plan recognises the report's stable-id.
+        (let [v (api/close-drift-verify :plan plan :reports reports)]
+          (is (= :closed (-> v :per-finding first :outcome))))))))
+
+(deftest verify-stale-plan-no-throw-on-empty-reports
+  (testing "Empty reports + any plan → no stale-plan throw (legitimate edge case)"
+    (let [empty-plan {:plan []
+                      :unhandled []
+                      :scope {:module-coord "x"}
+                      :max-attempts 2}]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        ;; Should not throw — no reports to mismatch.
+        (let [v (api/close-drift-verify :plan empty-plan :reports [])]
+          (is (= [] (:per-finding v))))))))
+
+(deftest verify-stale-plan-no-throw-when-partial-overlap
+  (testing "At least one report stable-id matches the plan → not stale (partial overlap is acceptable; the unmatched reports get dropped silently — they have no plan entry to classify)"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          ;; One report matches, one doesn't.
+          reports [{:stable-id "x/foo" :report "done" :attempt 1}
+                   {:stable-id "x/bar" :report "stray" :attempt 1}]]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        ;; Should NOT throw — at least one report matches plan entries.
+        (let [v (api/close-drift-verify :plan plan :reports reports)]
+          (is (= 1 (count (:per-finding v))))
+          (is (= :closed (-> v :per-finding first :outcome))))))))
+
+;; ---------------------------------------------------------------------------
 ;; Sprint 6 — Regression: invariant property-test findings populate the
 ;; structured :expected-code-path on the plan entry. The bug: when Sprint 5
 ;; added `expected-path-for` projection-kind branching in
