@@ -276,17 +276,17 @@
                                             :rendered-preview (subs rendered 0 (min 20 (count rendered)))})
                     {:stable-id stable-id
                      :report "stub closed it"
-                     :attempt 1})]
-      ;; First call: simulate drift present. Verify re-call: simulate drift gone.
-      (let [call-count (atom 0)
-            drift-fn (fn [& _]
-                       (swap! call-count inc)
-                       (if (= 1 @call-count) synthetic []))]
-        (with-redefs [api/canvas-drift drift-fn]
-          (let [v (api/close-drift :dispatch-fn stub-fn)]
-            (is (= 1 (count @dispatched)) "dispatch-fn called once per plan entry")
-            (is (= 1 (count (:per-finding v))))
-            (is (= :closed (-> v :per-finding first :outcome)))))))))
+                     :attempt 1})
+          ;; First call: simulate drift present. Verify re-call: simulate drift gone.
+          call-count (atom 0)
+          drift-fn (fn [& _]
+                     (swap! call-count inc)
+                     (if (= 1 @call-count) synthetic []))]
+      (with-redefs [api/canvas-drift drift-fn]
+        (let [v (api/close-drift :dispatch-fn stub-fn)]
+          (is (= 1 (count @dispatched)) "dispatch-fn called once per plan entry")
+          (is (= 1 (count (:per-finding v))))
+          (is (= :closed (-> v :per-finding first :outcome))))))))
 
 (deftest close-drift-stub-default-returns-manual-dispatch-required
   (testing "Default dispatch-fn surfaces the architect-required message"
