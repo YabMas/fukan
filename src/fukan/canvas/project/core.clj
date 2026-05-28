@@ -34,16 +34,43 @@
    :canvas/invariant, :canvas/rule, :canvas/operation,
    :fukan.canvas.monolith/exposed-call for canvas functions).
 
+   Invariants (Phase 8 Sprint 5 — Option β): the synthetic dispatch
+   key `:canvas/invariant+property-test` fires when the element carries
+   `:canvas-role :canvas/invariant` AND no override flag selecting
+   another projection-kind. The default flips invariants from the
+   predicate-stub projection (`invariant-to-predicate`) to the
+   `clojure.test.check` property-test projection
+   (`invariant-to-property-test`). The element-map field
+   `:canvas-projection-kind` carries the override when set; the legal
+   values are `:property-test` (the default; routes to the synthetic
+   key) and `:predicate` (the opt-out; falls through to plain
+   `:canvas/invariant` for the predicate projection). The opt-out is
+   reserved for a future canvas-side `(projects-to :predicate)`
+   clause; today's canvas declarations get the property-test default.
+
+   The narrow extension is invariant-specific by design: invariants are
+   the only canvas role with two valid Clojure-side counterparts at
+   present. Every other Phase 7 + 7.5 projection routes on the plain
+   `:canvas-role` discriminator.
+
    Types: refine by :type-kind when provided so atomic values and
    record types route to distinct projections — `:Type/atomic` and
    `:Type/record`. A bare `:Type` (no :type-kind) falls back to the
    namespaceless `:Type` key for callers that don't (or can't) provide
    the discriminator yet.
 
-   Modules: use the :model-element-kind directly."
-  [{:keys [model-element-kind canvas-role type-kind]}]
+   Modules: use the :model-element-kind directly.
+
+   See doc/plans/2026-05-28-invariant-projection-design.md § 5
+   (Option β)."
+  [{:keys [model-element-kind canvas-role type-kind canvas-projection-kind]}]
   (case model-element-kind
-    :Affordance canvas-role
+    :Affordance (if (and (= :canvas/invariant canvas-role)
+                         ;; Default = property-test. Only :predicate falls
+                         ;; through to the predicate projection.
+                         (not= :predicate canvas-projection-kind))
+                  :canvas/invariant+property-test
+                  canvas-role)
     :Type       (cond
                   (= :atomic type-kind) :Type/atomic
                   (= :record type-kind) :Type/record

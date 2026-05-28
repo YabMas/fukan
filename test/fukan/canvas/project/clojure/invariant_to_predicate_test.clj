@@ -10,14 +10,22 @@
 ;; Ground-truth: canvas/validation/rules-4a :: AtMostOneCompositeParent.
 ;; Phase 7.5 Sprint 2: holds-that is now prose (not a kebab-case slug). The
 ;; symbol is derived from :entity-name; holds-that lands in the docstring.
+;;
+;; Phase 8 Sprint 5: this projection is now the opt-in path; the element
+;; explicitly carries :canvas-projection-kind :predicate so the augmented
+;; dispatch-key-of routes through :canvas/invariant rather than the
+;; default :canvas/invariant+property-test synthetic key. The default
+;; behavior (property-test) is covered by the
+;; `invariant-to-property-test` test ns.
 (def ^:private at-most-one-element
-  {:model-element-kind :Affordance
-   :canvas-role        :canvas/invariant
-   :stable-id          "validation.rules-4a/invariant/AtMostOneCompositeParent"
-   :entity-name        "AtMostOneCompositeParent"
-   :module-coord       "validation.rules-4a"
-   :doc                "A module-Container belongs to at most one composite parent. A Violation of kind :4a/multiple-composite-parents (error) is emitted for every module appearing in two or more composites' :children sets."
-   :holds-that         "a module-Container belongs to at most one composite parent"})
+  {:model-element-kind     :Affordance
+   :canvas-role            :canvas/invariant
+   :canvas-projection-kind :predicate
+   :stable-id              "validation.rules-4a/invariant/AtMostOneCompositeParent"
+   :entity-name            "AtMostOneCompositeParent"
+   :module-coord           "validation.rules-4a"
+   :doc                    "A module-Container belongs to at most one composite parent. A Violation of kind :4a/multiple-composite-parents (error) is emitted for every module appearing in two or more composites' :children sets."
+   :holds-that             "a module-Container belongs to at most one composite parent"})
 
 (deftest produces-valid-projection
   (let [p (core/project :clojure at-most-one-element {:registry registry})]
@@ -65,6 +73,22 @@
         (is (= "at-most-one-composite-parent" (-> p :target :symbol)))
         (is (str/includes? (:template p)
                            "(defn at-most-one-composite-parent"))))))
+
+(deftest predicate-projection-requires-explicit-opt-out
+  ;; Phase 8 Sprint 5 — Option β. Without the
+  ;; :canvas-projection-kind :predicate override, the default
+  ;; dispatch-key-of routes invariants to the property-test projection.
+  ;; This test pins the opt-out contract: omitting the override flips
+  ;; routing to the test-side projection.
+  (testing "invariant element WITHOUT :canvas-projection-kind override → property-test"
+    (let [el (dissoc at-most-one-element :canvas-projection-kind)
+          p  (core/project :clojure el {:registry registry})]
+      (is (= :clojure/invariant-to-property-test (:projection-kind p))
+          "no override = default = property-test projection")))
+  (testing "invariant element WITH :canvas-projection-kind :predicate → predicate"
+    (let [p (core/project :clojure at-most-one-element {:registry registry})]
+      (is (= :clojure/invariant-to-predicate (:projection-kind p))
+          "explicit :predicate override routes back to the predicate projection"))))
 
 (deftest context-carries-invariant-name-and-holds-that
   (let [p (core/project :clojure at-most-one-element {:registry registry})]
