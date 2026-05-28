@@ -617,6 +617,59 @@
   []
   (canvas-source/build-canvas-db))
 
+(defn- module-coord->src-path
+  "Convention mirror of `cold_write/module-coord->src-path` — dot→slash,
+   dash→underscore, prefix `src/fukan/`, suffix `.clj`. Used by the
+   `instruct` module-scope path to compute `:target-file-exists?` from
+   disk so the cold-write scenario doesn't have to guess."
+  [module-coord]
+  (when (string? module-coord)
+    (str "src/fukan/"
+         (-> module-coord
+             (str/replace #"-" "_")
+             (str/replace #"\." "/"))
+         ".clj")))
+
+(defn- module-children-stable-ids
+  "Return the stable-ids of every Affordance/Type/State entity owned by the
+   given module, in canvas-declaration order. Used by `instruct` to drive
+   the cold-write scenario from a module-coord scope.
+
+   The canvas db doesn't preserve declaration order across all child kinds
+   uniformly, so the result is grouped: Types first, then Affordances,
+   then States. The cold-write scenario re-orders inside its own
+   discipline-prose anyway (\"match canvas declaration order — types
+   first …\"), so this approximation is adequate."
+  [db module-name]
+  (let [type-names (sort (d/q '[:find [?n ...]
+                                :in $ ?mn
+                                :where [?m :entity/type :Module]
+                                       [?m :entity/name ?mn]
+                                       [?m :module/child ?c]
+                                       [?c :entity/type :Type]
+                                       [?c :entity/name ?n]]
+                              db module-name))
+        aff-names  (sort (d/q '[:find [?n ...]
+                                :in $ ?mn
+                                :where [?m :entity/type :Module]
+                                       [?m :entity/name ?mn]
+                                       [?m :module/child ?c]
+                                       [?c :entity/type :Affordance]
+                                       [?c :entity/name ?n]]
+                              db module-name))
+        state-names (sort (d/q '[:find [?n ...]
+                                 :in $ ?mn
+                                 :where [?m :entity/type :Module]
+                                        [?m :entity/name ?mn]
+                                        [?m :module/child ?c]
+                                        [?c :entity/type :State]
+                                        [?c :entity/name ?n]]
+                               db module-name))]
+    (-> []
+        (into (map #(str module-name "/type/"  %)) type-names)
+        (into (map #(str module-name "/"       %)) aff-names)
+        (into (map #(str module-name "/state/" %)) state-names))))
+
 (defn- resolve-element
   "Resolve a Layer-A element from one of: a stable-id string, an existing
    element map (passed through), or a drift-finding map (the kind
@@ -715,7 +768,8 @@
 
                     Returns {:scenario-id :code-spec :scenario-context
                     :rendered}."
-        :agent/example "(instruct \"infra.server/start_server\" :code-side/drift-close)"}
+        :agent/example "(instruct \"infra.server/start_server\" :code-side/drift-close)
+                        (instruct {:module-coord \"distributed.election\"} :code-side/cold-write)"}
   instruct
   ([finding-or-id scenario-id]
    (instruct finding-or-id scenario-id {}))
@@ -725,21 +779,57 @@
                      (throw (ex-info (str "no scenario registered for id: " scenario-id)
                                      {:type :scenario-not-found
                                       :scenario-id scenario-id})))
-         ;; If caller passed a full drift finding, surface it to the
-         ;; scenario unless they explicitly overrode :drift-finding.
-         drift-finding (when (and (map? finding-or-id)
-                                  (seq (:offenders finding-or-id)))
-                         (-> finding-or-id :offenders first
-                             (assoc :check (:check finding-or-id)
-                                    :message (:message finding-or-id))))
-         build-opts    (cond-> opts
-                         (and drift-finding
-                              (not (contains? opts :drift-finding)))
-                         (assoc :drift-finding drift-finding))
-         code-spec (spec finding-or-id)
-         context   ((:build-context scenario) code-spec build-opts)
-         rendered  ((:render scenario) code-spec context build-opts)]
-     rendered)))
+         module-scope? (and (map? finding-or-id)
+                            (string? (:module-coord finding-or-id))
+                            (not (contains? finding-or-id :model-element-kind))
+                            (not (:stable-id finding-or-id))
+                            (not (seq (:offenders finding-or-id))))]
+     (if module-scope?
+       ;; Module-scoped dispatch — currently the only scenario that
+       ;; consumes a whole-module scope is cold-write. Walk the canvas
+       ;; for every child entity, project each through Layer A, then hand
+       ;; the assembled projections vector to the scenario as if the
+       ;; caller had built it. Auto-derives `:target-file-exists?` from
+       ;; the conventional `src/fukan/...` path so the rendered output
+       ;; gets the file-state prose right without the caller having to
+       ;; pass it. Surfaced by Phase 8 Sprint 2 Task 3's cold-write
+       ;; probe (no public entry point for module-scope cold-write).
+       (let [module-coord (:module-coord finding-or-id)
+             db           (canvas-db)
+             stable-ids   (module-children-stable-ids db module-coord)
+             _            (when (empty? stable-ids)
+                            (throw (ex-info (str "no canvas children for module-coord: " module-coord)
+                                            {:type :module-not-found
+                                             :module-coord module-coord})))
+             projections  (mapv #(spec %) stable-ids)
+             src-path     (module-coord->src-path module-coord)
+             exists?      (boolean (and src-path
+                                        (.exists (java.io.File. ^String src-path))))
+             build-opts   (cond-> (assoc opts
+                                        :module-id module-coord
+                                        :projections projections)
+                            (not (contains? opts :target-file-exists?))
+                            (assoc :target-file-exists? exists?))
+             code-spec    nil
+             context      ((:build-context scenario) code-spec build-opts)
+             rendered     ((:render scenario) code-spec context build-opts)]
+         rendered)
+       ;; Single-element dispatch — original path.
+       (let [;; If caller passed a full drift finding, surface it to the
+             ;; scenario unless they explicitly overrode :drift-finding.
+             drift-finding (when (and (map? finding-or-id)
+                                      (seq (:offenders finding-or-id)))
+                             (-> finding-or-id :offenders first
+                                 (assoc :check (:check finding-or-id)
+                                        :message (:message finding-or-id))))
+             build-opts    (cond-> opts
+                             (and drift-finding
+                                  (not (contains? opts :drift-finding)))
+                             (assoc :drift-finding drift-finding))
+             code-spec (spec finding-or-id)
+             context   ((:build-context scenario) code-spec build-opts)
+             rendered  ((:render scenario) code-spec context build-opts)]
+         rendered)))))
 
 (defn ^{:agent/layer :trust
         :agent/origin :built-in
