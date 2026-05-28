@@ -575,8 +575,21 @@
       (assoc base :when-vec (when (vector? (:when fe)) (:when fe)))
 
       :canvas/event
-      (let [payload (when (and shape (= :arrow (:kind shape)))
-                      (first (arrow-shape->inputs-outputs shape)))]
+      ;; `vocab.event/event` stores the payload as
+      ;; `{:kind :record :fields [[name parsed-shape] …]}` on
+      ;; `:affordance/shape`. Earlier drafts of this code expected an
+      ;; arrow shape and silently dropped the fields when the shape was
+      ;; a record — surfaced by Phase 8 Sprint 2 Task 3's event probe.
+      ;; Read the fields directly from the record shape; fall back to
+      ;; an empty payload only when the canvas declared none.
+      (let [payload (cond
+                      (and shape (= :record (:kind shape)))
+                      (vec (:fields shape))
+
+                      (and shape (= :arrow (:kind shape)))
+                      (first (arrow-shape->inputs-outputs shape))
+
+                      :else nil)]
         (assoc base :payload (or payload [])))
 
       :canvas/handler
