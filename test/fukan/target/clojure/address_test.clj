@@ -103,6 +103,30 @@
            (addr/canonical reg :primitive/rule :projection-kind/invariant
                            "distributed.cluster" "MajorityRequiredForLeadership")))))
 
+(deftest property-test-projection-suffixes-ns-with-test-and-name-with-property
+  ;; Phase 8 Sprint 5 — `:projection-kind/property-test` addresses the
+  ;; canvas-invariant-as-clojure.test.check-property idiom. The ns
+  ;; carries the `-test` suffix (mirroring `:projection-kind/test`); the
+  ;; local symbol carries `-property` (not `-test`) to name the *kind*
+  ;; of test rather than the test itself, matching `defspec` convention.
+  (let [reg (r/with-root-prefix (r/make-registry) "fukan")]
+    (is (= {:ns "fukan.distributed.cluster-test"
+            :name "majority-required-for-leadership-property"}
+           (addr/canonical reg :primitive/rule :projection-kind/property-test
+                           "distributed.cluster" "MajorityRequiredForLeadership")))
+    (is (= {:ns "fukan.distributed.cluster-test"
+            :name "term-monotonicity-property"}
+           (addr/canonical reg :primitive/rule :projection-kind/property-test
+                           "distributed.cluster" "TermMonotonicity")))))
+
+(deftest property-test-name-is-kebab-lower-from-pascal
+  ;; The local-name machinery treats :projection-kind/property-test as a
+  ;; function-shaped kind for kebab-lower normalisation. The address-level
+  ;; '-property' suffix is added by `canonical`, not by `local-name`.
+  (is (= "at-most-one-composite-parent"
+         (addr/local-name :primitive/rule :projection-kind/property-test
+                          "AtMostOneCompositeParent"))))
+
 (deftest canonical-rule-pascal-name-via-canvas
   ;; Phase 6 Sprint 2 Task 4 sub-task C: canvas rules carry their own
   ;; :entity/name as the primitive label (e.g. "AtMostOneCompositeParent").

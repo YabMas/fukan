@@ -6,7 +6,9 @@
    - Type-shaped projections (DataStructure): PascalCase preserved
    - Function-shaped projections: PascalCase → kebab-lower;
                                   snake_case → kebab-lower
-   - Test projection: ns + '-test', name + '-test'."
+   - Test projection: ns + '-test', name + '-test'.
+   - Property-test projection: ns + '-test', name + '-property'
+     (the canvas-invariant-as-property idiom; Phase 8 Sprint 5)."
   (:require [clojure.string :as str]))
 
 (def ^:private datastructure-kinds
@@ -22,7 +24,8 @@
   #{:projection-kind/rule
     :projection-kind/operation
     :projection-kind/invariant
-    :projection-kind/test})
+    :projection-kind/test
+    :projection-kind/property-test})
 
 (defn module-ns
   "Compute the Clojure namespace from a module coord.
@@ -81,10 +84,20 @@
 
 (defn canonical
   "Build the full canonical address {:ns <string> :name <string>}.
-   Test projections append '-test' to both ns and name."
+   Test projections append '-test' to both ns and name.
+   Property-test projections (Phase 8 Sprint 5 — the
+   invariant-as-clojure.test.check-property idiom) append '-test' to ns
+   and '-property' to name; the `-property` suffix names the kind of
+   test rather than the test itself, mirroring `defspec` convention."
   [registry primitive-kind projection-kind module-coord primitive-label]
   (let [base-ns (module-ns registry module-coord)
         base-name (local-name primitive-kind projection-kind primitive-label)]
-    (if (= :projection-kind/test projection-kind)
+    (cond
+      (= :projection-kind/test projection-kind)
       {:ns (str base-ns "-test") :name (str base-name "-test")}
+
+      (= :projection-kind/property-test projection-kind)
+      {:ns (str base-ns "-test") :name (str base-name "-property")}
+
+      :else
       {:ns base-ns :name base-name})))
