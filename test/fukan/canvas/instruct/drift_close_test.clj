@@ -147,3 +147,137 @@
         (is (contains? siblings "NodeId"))
         (is (contains? siblings "get-current-term"))
         (is (contains? siblings "get-node"))))))
+
+;; ---------------------------------------------------------------------------
+;; Kind-dispatched framing — shape-drift-on-record
+
+(def ^:private sample-shape-drift-finding
+  "Shape mirrors `fukan.canvas.inspect.drift/shape-drift-finding` output:
+   the top-level finding map plus the merged-offender shape that
+   `agent.api/instruct` passes through to scenarios."
+  {:check     :inspect.drift/shape-drift-on-record
+   :stable-id "distributed.cluster/type/Cluster"
+   :code-side-path "src/fukan/distributed/cluster.clj"
+   :canvas-fields {:current_term     :Term
+                   :current_leader   '(optional :NodeId)
+                   :voted_for        '(optional :NodeId)
+                   :commit_index     :LogIndex}
+   :code-fields   {:current_term   :int
+                   :current_leader :string
+                   :commit_index   :int}
+   :delta {:only-in-canvas {:voted_for '(optional :NodeId)}
+           :only-in-code   {}
+           :type-mismatch  {:current_leader {:canvas '(optional :NodeId)
+                                             :code   :string}}}
+   :message "Canvas record Cluster has fields …; code-side has …"})
+
+(def ^:private sample-shape-drift-code-spec
+  {:projection-kind    :clojure/type-to-malli
+   :lens-id            :clojure
+   :model-element-kind :Type
+   :model-element-id   "distributed.cluster/type/Cluster"
+   :target             {:path      "src/fukan/distributed/cluster.clj"
+                        :namespace "fukan.distributed.cluster"
+                        :symbol    "Cluster"}
+   :template           (str "(def Cluster\n"
+                            "  \"Per-node aggregate of distributed-cluster state.\"\n"
+                            "  [:map\n"
+                            "    [:current_term :Term]\n"
+                            "    [:current_leader {:optional true} :NodeId]\n"
+                            "    [:voted_for {:optional true} :NodeId]\n"
+                            "    [:commit_index :LogIndex]])")
+   :prose              "Cluster's canvas-side shape."
+   :context            {:canvas-source-ref "canvas/distributed/cluster.clj"}})
+
+(def ^:private fake-cluster-source
+  (str "(ns fukan.distributed.cluster\n"
+       "  \"Cluster impl.\")\n\n"
+       "(def NodeId\n"
+       "  \"opaque id\"\n"
+       "  [:string {:min 1}])\n\n"
+       "(def Cluster\n"
+       "  \"old shape\"\n"
+       "  [:map\n"
+       "    [:current_term :int]\n"
+       "    [:current_leader :string]\n"
+       "    [:commit_index :int]])\n"))
+
+(deftest shape-drift-build-context-locates-existing-def
+  (testing "shape-drift finding + existing target file -> :existing-def carried"
+    (let [opts {:target-file-reader (fn [_] fake-cluster-source)
+                :drift-finding sample-shape-drift-finding}
+          ctx  ((:build-context drift-close/scenario)
+                sample-shape-drift-code-spec opts)
+          existing (:existing-def ctx)]
+      (is (= :present (:target-file-state ctx)))
+      (is (map? existing) "existing-def must be located for shape-drift")
+      (is (integer? (:start-line existing)))
+      (is (integer? (:end-line existing)))
+      (is (<= (:start-line existing) (:end-line existing)))
+      (is (str/includes? (:preview existing) "Cluster")))))
+
+(deftest shape-drift-render-emits-rewrite-in-place-framing
+  (testing "shape-drift finding -> rewrite-in-place prose surfaces"
+    (let [opts {:target-file-reader (fn [_] fake-cluster-source)
+                :drift-finding sample-shape-drift-finding}
+          ctx  ((:build-context drift-close/scenario)
+                sample-shape-drift-code-spec opts)
+          inst ((:render drift-close/scenario)
+                sample-shape-drift-code-spec ctx opts)
+          md   (:rendered inst)]
+      (is (core/valid-instruction? inst))
+      (is (re-find #"(?i)rewrite.*in.?place" md)
+          "frame or insertion section should call out rewrite-in-place")
+      (is (re-find #"(?i)do(?:\s+\*\*)?\s*not\s*(?:\*\*\s*)?append" md)
+          "must warn against appending a duplicate def")
+      (is (re-find #"(?i)shape-drift" md)
+          "drift kind should be surfaced")
+      (is (str/includes? md "Cluster")
+          "the symbol being rewritten should appear")
+      (testing "field-level divergence is cited"
+        (is (re-find #"(?i)only.in.canvas" md))
+        (is (re-find #"(?i)type.mismatch" md))
+        (is (str/includes? md ":voted_for"))
+        (is (str/includes? md ":current_leader"))))))
+
+(deftest shape-drift-render-does-not-use-missing-impl-prose
+  (testing "the missing-impl 'does not exist' phrasing must not appear"
+    (let [opts {:target-file-reader (fn [_] fake-cluster-source)
+                :drift-finding sample-shape-drift-finding}
+          ctx  ((:build-context drift-close/scenario)
+                sample-shape-drift-code-spec opts)
+          md   (:rendered ((:render drift-close/scenario)
+                           sample-shape-drift-code-spec ctx opts))]
+      (is (not (re-find #"does not exist" md)))
+      (is (not (re-find #"add the missing definition" md)))
+      (is (not (re-find #"Insertion point:\s*end-of-file" md))
+          "end-of-file hint is wrong for shape-drift"))))
+
+;; ---------------------------------------------------------------------------
+;; Generic fallback — unknown :check
+
+(def ^:private sample-unknown-kind-finding
+  {:check     :inspect.drift/orphan-implementation
+   :stable-id "distributed.cluster/type/Foo"
+   :expected-code-path "src/fukan/distributed/cluster.clj"
+   :expected-symbol    "Foo"
+   :canvas-kind        :type
+   :message            "hypothetical future drift kind"})
+
+(deftest unknown-drift-kind-falls-back-to-generic-framing
+  (testing "unknown :check renders without crashing and without missing-impl phrasing"
+    (let [opts {:target-file-reader (fn [_] fake-cluster-source)
+                :drift-finding sample-unknown-kind-finding}
+          ctx  ((:build-context drift-close/scenario)
+                sample-shape-drift-code-spec opts)
+          inst ((:render drift-close/scenario)
+                sample-shape-drift-code-spec ctx opts)
+          md   (:rendered inst)]
+      (is (core/valid-instruction? inst))
+      (is (string? md))
+      (is (re-find #"(?i)reconcile|drift" md)
+          "generic framing should still describe drift work")
+      (is (not (re-find #"does not exist" md))
+          "must not parrot missing-impl framing for unknown kinds")
+      (is (re-find #"(?i)orphan-implementation" md)
+          "the unknown :check should be surfaced for the canvas-author"))))
