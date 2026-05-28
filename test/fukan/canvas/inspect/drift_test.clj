@@ -100,6 +100,29 @@
 ;; Test C — one missing invariant → finding with :canvas-kind :invariant
 ;; ---------------------------------------------------------------------------
 
+(defn- model-with-property-test-invariant
+  "Phase 8 Sprint 5 fixture — synthetic model with one canvas invariant
+   projection edge whose `:projection-kind` is
+   `:projection-kind/property-test` (test-side artifact under `test/`).
+   The artifact's qualified-name carries the `-test` ns suffix per the
+   address registry's property-test convention."
+  [validity]
+  (let [prim-id  "demo/MajorityHolds"
+        artifact (a/make-code-function "clojure" "demo-test/majority-holds-property" nil nil)
+        aid      (a/artifact-identity artifact)
+        prim     (assoc (p/make-operation
+                          {:id prim-id, :label "MajorityHolds" :parameters []})
+                        :canvas-role :canvas/invariant)
+        edge     (-> (r/make-edge :relation/projects
+                                  (r/primitive-ref prim-id)
+                                  (r/artifact-ref aid)
+                                  {:projection-kind :projection-kind/property-test})
+                     (assoc :validity validity))]
+    (-> (build/empty-model)
+        (build/add-primitive prim)
+        (assoc-in [:artifacts aid] artifact)
+        (build/add-edge edge))))
+
 (deftest absent-invariant-edge-tagged-as-invariant
   (testing "umbrella check tags an absent invariant projection with :canvas-kind :invariant"
     (let [m        (model-with-invariant :absent)
@@ -108,6 +131,33 @@
       (let [off (first (:offenders (first findings)))]
         (is (= :invariant (:canvas-kind off))
             "canvas-role :canvas/invariant → :canvas-kind :invariant")))))
+
+(deftest absent-property-test-edge-resolves-to-test-side-path
+  ;; Phase 8 Sprint 5 — a canvas invariant whose projection-kind is
+  ;; :projection-kind/property-test resolves its expected-code-path
+  ;; under test/ rather than src/. The offender additionally carries
+  ;; the projection-kind so Layer B can branch on it for kind-aware
+  ;; neighbor rendering.
+  (testing "an absent :projection-kind/property-test edge points at test/"
+    (let [m        (model-with-property-test-invariant :absent)
+          findings (drift/check m)]
+      (is (= 1 (count findings)))
+      (let [f   (first findings)
+            off (first (:offenders f))]
+        (is (= :inspect.drift/missing-implementation (:check f)))
+        (is (= "test/demo_test.clj" (:expected-code-path off))
+            "expected-code-path is rooted at test/, not src/")
+        (is (= "majority-holds-property" (:expected-symbol off))
+            "expected-symbol is the defspec name with the -property suffix")
+        (is (= :projection-kind/property-test (:projection-kind off))
+            "offender carries the projection-kind so drift-close can pick the property-test rendering")
+        (is (= :invariant (:canvas-kind off))
+            "canvas-kind stays :invariant — the test-side rendering doesn't change the semantic kind")))))
+
+(deftest valid-property-test-edge-emits-no-finding
+  (testing ":validity :valid → no drift finding even when projection-kind is property-test"
+    (let [m (model-with-property-test-invariant :valid)]
+      (is (= [] (drift/check m))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Umbrella behaviour — mixed kinds in one model

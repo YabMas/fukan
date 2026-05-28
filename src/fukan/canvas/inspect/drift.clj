@@ -70,11 +70,12 @@
    ship :canvas-role today)."
   [pk]
   (case pk
-    :projection-kind/operation :function
-    :projection-kind/rule      :rule
-    :projection-kind/invariant :invariant
-    :projection-kind/schema    :type
-    :projection-kind/test      :test
+    :projection-kind/operation     :function
+    :projection-kind/rule          :rule
+    :projection-kind/invariant     :invariant
+    :projection-kind/property-test :invariant
+    :projection-kind/schema        :type
+    :projection-kind/test          :test
     :unknown))
 
 (defn- infer-canvas-kind
@@ -107,6 +108,31 @@
              (str/replace "-" "_"))
          ".clj")))
 
+(defn- ns->test-file-path
+  "Convert a Clojure namespace to a conventional test file path under
+   test/. Mirrors `ns->file-path` but rooted at `test/`. Used by Phase 8
+   Sprint 5's invariant→property-test projection to derive the expected
+   path of `defspec` artifacts: a canvas invariant projects to
+   `test/fukan/<module>_test.clj` rather than `src/<module>.clj`."
+  [ns-string]
+  (when (string? ns-string)
+    (str "test/"
+         (-> ns-string
+             (str/replace "." "/")
+             (str/replace "-" "_"))
+         ".clj")))
+
+(defn- expected-path-for
+  "Derive the expected source-file path for a projects-edge target.
+   For `:projection-kind/property-test` edges (invariant → defspec
+   under test/), the path is `test/<ns-as-path>.clj`. All other
+   projection-kinds resolve under `src/`. Sprint 5 added the test-side
+   branch; pre-Sprint-5 callers always saw `src/`."
+  [projection-kind ns-str]
+  (case projection-kind
+    :projection-kind/property-test (ns->test-file-path ns-str)
+    (ns->file-path ns-str)))
+
 (defn- qualified-name->parts
   "Split 'ns/name' into [ns-string name-string]. Returns nil on malformed
    input."
@@ -122,7 +148,13 @@
 (defn- absent-edge->finding
   "Turn one `:validity :absent` projects edge into a finding map. The model
    carries the primitive on the `:from` side and the (expected) code
-   artifact id on the `:to` side."
+   artifact id on the `:to` side.
+
+   The expected-code-path branches on the edge's `:projection-kind`:
+   property-test projections resolve under `test/`; all other kinds
+   resolve under `src/`. The finding's offender carries the
+   `:projection-kind` so Layer B (drift-close) can render kind-aware
+   neighbor sections."
   [model edge]
   (let [primitive-id  (-> edge :from :id)
         primitive     (get-in model [:primitives primitive-id])
@@ -131,7 +163,7 @@
         [ns-str sym]  (qualified-name->parts qualified)
         proj-kind     (:projection-kind edge)
         canvas-kind   (infer-canvas-kind primitive proj-kind)
-        expected-path (ns->file-path ns-str)
+        expected-path (expected-path-for proj-kind ns-str)
         module-coord  (module-coord-from-stable-id primitive-id)
         label         (:label primitive)]
     {:check     :inspect.drift/missing-implementation
@@ -145,7 +177,8 @@
      :offenders [{:stable-id           primitive-id
                   :expected-code-path  expected-path
                   :expected-symbol     sym
-                  :canvas-kind         canvas-kind}]
+                  :canvas-kind         canvas-kind
+                  :projection-kind     proj-kind}]
      :detail    {:canvas-side-id     primitive-id
                  :code-side-expected qualified
                  :projection-kind    proj-kind}}))
