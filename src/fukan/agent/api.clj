@@ -579,8 +579,21 @@
                       (first (arrow-shape->inputs-outputs shape)))]
         (assoc base :payload (or payload [])))
 
+      :canvas/handler
+      ;; Handlers have no canvas-side `:shape` (the event vocab does not
+      ;; declare an arrow shape — the on/emits formal-expression is the
+      ;; carrier). Surface the :on event reference + :emits vector so
+      ;; Layer A's handler-to-defn projection can render the reactive
+      ;; framing. The formal-expression read here is the map shape
+      ;; `{:on "<event-kw>" :emits [<event-kw> …]}` written by
+      ;; `vocab.event/handler`.
+      (let [fe-map (when (map? fe) fe)]
+        (cond-> base
+          (some? (:on fe-map))    (assoc :on    (:on fe-map))
+          (seq   (:emits fe-map)) (assoc :emits (:emits fe-map))))
+
       ;; default: function-shaped affordance (exposed-call, operation,
-      ;; getter, checker, handler)
+      ;; getter, checker)
       (if (and shape (= :arrow (:kind shape)))
         (let [[inputs outputs] (arrow-shape->inputs-outputs shape)]
           (assoc base :inputs inputs :outputs outputs))

@@ -15,4 +15,5 @@
             [fukan.canvas.project.clojure.invariant-to-predicate]
             [fukan.canvas.project.clojure.rule-to-predicate]
             [fukan.canvas.project.clojure.getter-to-defn]
-            [fukan.canvas.project.clojure.checker-to-defn]))
+            [fukan.canvas.project.clojure.checker-to-defn]
+            [fukan.canvas.project.clojure.handler-to-defn]))

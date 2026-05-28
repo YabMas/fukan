@@ -76,6 +76,8 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.project.clojure.checker-to-defn
   {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.project.clojure.handler-to-defn
+  {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.instruct.core
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.instruct.registry
@@ -106,6 +108,8 @@
   fukan.canvas.project.clojure.getter-to-defn-test
   {:linters {:unused-namespace {:level :off}}}
   fukan.canvas.project.clojure.checker-to-defn-test
+  {:linters {:unused-namespace {:level :off}}}
+  fukan.canvas.project.clojure.handler-to-defn-test
   {:linters {:unused-namespace {:level :off}}}
   fukan.agent.api
   {:linters {:unused-public-var {:level :off}}}
