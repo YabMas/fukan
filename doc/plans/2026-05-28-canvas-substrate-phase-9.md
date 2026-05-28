@@ -5,29 +5,40 @@
 
 Phase 8's verification (`doc/plans/2026-05-28-phase-8-verification.md`)
 landed outcome 2 — works with caveats — with a substantial
-carried-forward list. The load-bearing item is that three doc surfaces
-still describe `fukan-architect` as the dispatch orchestrator, which
-Sprint 6 empirically falsified. Phase 9 is a deliberate hygiene phase:
-close the carried-forward items, give the substrate breathing room
-between Phase 8's seven sprints and whatever the next push is.
+carried-forward list. The load-bearing item is the architect's
+relationship to dispatch: Phase 8's design assumed the architect
+orchestrates end-to-end via its own `Agent` tool grant; Sprint 6
+empirically confirmed the harness blocks nested `Agent` invocation.
+Sprint 6 worked by accident — the canvas-author (main session) drove
+dispatch directly while the architect's plan + instructions remained
+the substantive output. Phase 9 metabolises that finding by making
+the 2-seat collaboration first-class: architect plans + renders +
+returns a handoff package; canvas-author (main session) consumes the
+package and dispatches; verify runs from either seat depending on
+scope.
 
 The trajectory hasn't changed — canvas-author writes design; fukan
 tells the implementing-LLM what to write; canvas as the intersection
 between LLM and human. Phase 9 doesn't add new mechanism; it makes
-the existing one accurate and exercises what hasn't been exercised yet.
+the collaboration protocol accurate and exercises what hasn't been
+exercised yet.
 
 ## Strategic frame
 
 Phase 6 closed *detection*. Phase 7 closed *instruction*. Phase 8
-closed *dispatch* — and discovered along the way that the dispatching
-seat is the top-level main session, not a sub-agent. Phase 9
-metabolises that discovery: revising the docs that name the wrong seat,
-formalising the workflow patterns Sprint 6 exercised in passing
-(same-file re-render, plan-input persistence), exercising the surfaces
-that shipped without end-to-end fidelity (Sprint 2's six unexercised
-projection kinds, three reserved escalation triggers), and closing the
-small substrate carry-forwards (template prose indentation, optional
-`(projects-to :predicate)` producer-side).
+closed *dispatch* — and discovered that dispatch lives at the
+canvas-author seat (top-level main session), not at the architect
+sub-agent. The architect keeps its substantive role — planning, rendering
+per-finding instructions, weighing verify outcomes at canvas altitude —
+but loses the dispatch step. Phase 9 names that collaboration
+explicitly: a handoff protocol from architect to canvas-author,
+documented in both prompts so it's reproducible rather than accidental.
+
+Phase 9 closes:
+- The architect↔canvas-author handoff protocol (Sprint 1)
+- The implicit Sprint 6 workflow patterns (Sprint 2)
+- Sprint 2 of Phase 8's six unexercised projection kinds + three
+  reserved escalation triggers (Sprint 3)
 
 Nothing here is new mechanism. Phase 9 is what Phase 8 didn't have
 time to clean up.
@@ -44,51 +55,143 @@ time to clean up.
 
 Four sprints. Three working + verification.
 
-### Sprint 1 — Doc revisions for architect role retirement
+### Sprint 1 — Architect↔canvas-author handoff protocol
 
-The largest single carry-forward item. Three doc surfaces describe
-`fukan-architect` as the dispatch orchestrator; Sprint 6 confirmed
-this isn't the case. Revise all three to retire the architect's
-"orchestrator" role to "planner + verifier" — the architect can call
-`close-drift-plan`/`close-drift-verify` via Bash but cannot dispatch;
-the canvas-author (top-level main session) drives the dispatch loop.
+The substantive sprint. Two seats — architect and canvas-author —
+collaborate across the close-drift loop. Sprint 6 demonstrated the
+shape worked accidentally; Sprint 1 makes it first-class:
 
-**Task 1 — Closure controller design doc.**
+- **Architect's job:** plan + render per-finding instructions + return
+  a structured handoff package the canvas-author consumes. Optionally
+  verify after the canvas-author reports back.
+- **Canvas-author's job:** dispatch each implementing-LLM via the
+  main session's `Agent` tool, collect reports, decide whether to
+  call verify directly or re-dispatch the architect for canvas-altitude
+  verify interpretation.
+
+Two verify flows ship — canvas-author picks based on scope:
+- **Light scope (single-finding or familiar module):** canvas-author
+  calls `(close-drift-verify)` directly from main session
+- **Heavy scope (multi-finding or unfamiliar canvas territory):**
+  canvas-author re-dispatches architect with the reports; architect
+  calls `(close-drift-verify)` and returns a canvas-altitude
+  interpretation + escalation summary
+
+**Task 1 — Handoff package format.** A markdown dispatch package the
+architect returns from its planning step. Single self-contained
+document the canvas-author reads top-to-bottom. Structure:
+
+```markdown
+# close-drift handoff — <scope description>
+
+## Summary
+- Scope: <module-coord / check / stable-id>
+- Findings in scope: N
+- Plan entries: M (excluding K :unhandled)
+- Same-file batches: <list of paths each batch lands in>
+
+## Dispatch instructions
+[Canvas-author guidance:]
+- Dispatch each finding's instruction below as a fresh Agent call
+  with subagent_type: general-purpose
+- For same-file batches: dispatch serially (one Agent at a time),
+  re-rendering each instruction via `(close-drift-plan :stable-id …)`
+  before its dispatch to pick up sibling state
+- Collect each subagent's report tagged with :attempt 1
+- After all reports collected, choose a verify flow (Section "Verify")
+
+## Per-finding instructions
+
+### Finding 1 — <stable-id> (canvas-kind, batch path)
+[verbatim rendered instruction]
+
+### Finding 2 — <stable-id> (canvas-kind, batch path)
+[verbatim rendered instruction]
+
+...
+
+## Verify
+After collecting reports, either:
+(a) Call `(close-drift-verify :plan <plan-from-this-handoff> :reports [...])`
+    directly from main session. Reads escalations from the structured
+    return.
+(b) Re-dispatch fukan-architect with the reports + this handoff. The
+    architect calls verify and returns a canvas-altitude interpretation.
+
+Recommendation for this scope: <(a) or (b), with one-line reason>.
+```
+
+The architect renders this single markdown document; the canvas-author
+copies per-finding blocks into Agent prompts; reports come back as
+plain text the canvas-author accumulates.
+
+**Task 2 — Architect's render of the handoff package.** New section
+in `.claude/agents/fukan-architect.md` Phase D close-drift mode
+defining the planning flow:
+
+1. Canvas-author asks architect "plan close-drift for <scope>"
+2. Architect calls `(close-drift-plan …)` via Bash
+3. Architect inspects the plan: per-finding rendered instructions,
+   batches, unhandled
+4. Architect composes the handoff markdown package + a
+   verify-flow recommendation based on scope size
+5. Architect returns the package as its response
+
+Sprint 6's serial-same-file dispatch + re-render pattern gets baked
+into the dispatch-instructions section of the handoff (Task 4
+formalises the convention generally; here it appears as architect-
+emitted guidance for the canvas-author).
+
+**Task 3 — Architect's verify flow.** New section in
+`.claude/agents/fukan-architect.md` for verify mode:
+
+1. Canvas-author re-dispatches architect with `:plan <…>` +
+   `:reports [<…>]`
+2. Architect calls `(close-drift-verify :plan … :reports …)` via Bash
+3. Architect reads the structured outcome, weighs escalations at
+   canvas altitude (canvas-side hints especially), composes a
+   canvas-author-facing summary
+4. Architect returns the summary + recommendation (close session,
+   dispatch iter-2 on findings X/Y/Z, escalate finding W for
+   canvas-side action, etc.)
+
+This is the canvas-altitude interpretation step — architect's value
+beyond what verify's raw structured return surfaces.
+
+**Task 4 — Closure controller design doc amendment.**
 `doc/plans/2026-05-28-closure-controller-design.md` § "Where the
-controller lives" + the dispatch sketches (Sketch B section). Update
-to reflect that the canvas-author (top-level) is the only context
-with working `Agent`. The two-entry-point split stays the right design
-even though its motivating constraint (architect-driven orchestration)
-doesn't hold — the split works equally well for top-level-driven
-dispatch. Add a brief "harness constraint" section explaining the
-empirical finding (Sprint 6).
+controller lives" + the dispatch sketches. Add a "two-seat
+collaboration" section explaining the empirical Sprint 6 finding +
+the new handoff protocol. The two-entry-point split (`close-drift-plan`
+/ `close-drift-verify`) stays the right design — it now naturally
+supports the architect-plans, canvas-author-dispatches, either-seat-
+verifies flow.
 
-**Task 2 — `fukan-architect` agent prompt.**
-`.claude/agents/fukan-architect.md`. The architect retains: `Bash`
-for `fukan eval`/`fukan status`/`fukan primer`, `Read` for source
-inspection. The architect LOSES: `Agent` tool grant (it never worked;
-keep the declared grant or remove it — Phase 9 design decides).
-Phase D close-drift mode revises from "dispatch the loop" to "plan
-the loop + render instructions + verify after canvas-author
-dispatches". The architect becomes a planner+verifier; the
-canvas-author dispatches.
-
-Decision needed in Sprint 1: keep `Agent` in the architect's declared
-tool grant (despite the harness blocking it) or remove. Removing is
-honest about what actually works; keeping anticipates harness changes
-that might expose nested Agent later. Recommendation: remove + add a
-comment explaining the empirical limitation.
-
-**Task 3 — Canvas-authoring system prompt.**
+**Task 5 — Canvas-authoring system prompt amendment.**
 `doc/canvas-authoring-system-prompt.md` § Phase D close-drift mode.
-Revise the 5-step orchestration loop to name the canvas-author as
-the dispatcher. The architect's role in this prompt becomes:
-canvas-author asks the architect to plan; architect renders
-instructions per finding; canvas-author dispatches each; canvas-author
-holds the plan + reports; canvas-author calls verify. The architect
-can advise + verify but doesn't dispatch.
+Replace the prior "architect orchestrates" 5-step flow with the new
+2-seat protocol. Canvas-author learns: "delegate planning to the
+architect, dispatch the implementing-LLMs yourself per the architect's
+package, choose verify flow."
 
-Sprint 1 is doc-only — no code changes.
+**Task 6 — Architect tool grant decision.** The architect's `.md`
+front-matter currently declares `Agent` in its tool list. Sprint 6
+confirmed the harness blocks nested `Agent` invocation. Decide:
+
+- (a) Remove `Agent` from the declared grant. Honest about what
+  works. The architect's prompt no longer mentions dispatch.
+- (b) Keep `Agent` in the declared grant. Anticipates a future
+  harness change that might expose nested Agent. The architect's
+  prompt notes "Agent declared but currently blocked by harness; if
+  available, the architect-driven dispatch flow may work — try
+  one finding, fall back to handoff if it fails."
+
+Sprint 1's call. Recommendation: (a). Removing matches the documented
+flow; (b) creates surface for confusion when the harness behaviour
+later changes.
+
+Sprint 1 is doc + prompt work — the substrate stays the same. The
+protocol is what the sprint ships.
 
 ### Sprint 2 — Workflow patterns formalised in docs
 
@@ -238,15 +341,20 @@ Recommendation: defer. Reopen if Sprint 3 demands.
 
 ## Definition of done
 
-- The three architect-role-retirement doc surfaces accurately
-  describe the canvas-author-driven dispatch flow. No
-  "architect dispatches" claims remain.
-- Same-file-batched re-render pattern is documented as canvas-author
-  convention. Plan-input dependency for `close-drift-verify` is
-  documented + surfaced via explicit error.
+- The architect↔canvas-author handoff protocol is documented in the
+  architect's prompt, the canvas-authoring system prompt, and the
+  closure-controller-design doc. The architect knows how to render
+  the handoff package + verify summary; the canvas-author knows how
+  to consume both.
+- Same-file-batched re-render pattern lives as canvas-author guidance
+  in the handoff package's dispatch-instructions section (Sprint 1)
+  AND as documented convention in the canvas-authoring prompt
+  (Sprint 2 Task 4).
+- Plan-input dependency for `close-drift-verify` is documented +
+  surfaced via explicit error.
 - Cosmetic prose indentation in the invariant template normalised.
 - Six unexercised projection kinds have empirical iter-1 closure-rate
-  data from real-Agent dispatch.
+  data from real-Agent dispatch (via the new handoff protocol).
 - Two reserved escalation triggers exercised via unit tests; the
   third (`:projection-emits-warning`) explicitly classified
   (deferred or implemented).
@@ -257,7 +365,7 @@ Recommendation: defer. Reopen if Sprint 3 demands.
 
 | Concern | Phase 9 sprint |
 |---|---|
-| Architect role retirement requires doc revision | Sprint 1 |
+| Architect↔canvas-author handoff protocol needed | Sprint 1 (replaces "retirement") |
 | Same-file-batched re-render pattern not formalised | Sprint 2 Task 4 |
 | Verify path's plan-input dependency | Sprint 2 Task 5 |
 | Cosmetic prose indentation | Sprint 2 Task 6 |
