@@ -903,22 +903,37 @@
    instruction via `(instruct …)` and packages it with batching metadata
    (`:batch-key` = `:expected-code-path`). Returns nil when the finding
    has no offenders (shouldn't happen against current drift output, but
-   defensively — orphans don't get an instruction rendered)."
+   defensively — orphans don't get an instruction rendered).
+
+   Returns a map with `:unhandled? true` + `:reason
+   :no-projection-registered` when Layer A's `(spec …)` rejects the
+   finding's canvas element (Sprint 4 Task 12 escalation surface)."
   [finding scenario-id]
   (when-let [offender (first (:offenders finding))]
     (let [stable-id   (:stable-id offender)
           code-path   (:expected-code-path offender)
-          canvas-kind (:canvas-kind offender)
-          rendered    (instruct finding scenario-id)]
-      {:stable-id   stable-id
-       :scenario    scenario-id
-       :check       (:check finding)
-       :rendered    (:rendered rendered)
-       :code-spec   (:code-spec rendered)
-       :context     (cond-> {:attempt 1}
-                      code-path   (assoc :expected-code-path code-path)
-                      canvas-kind (assoc :canvas-kind canvas-kind))
-       :batch-key   (or code-path :no-path)})))
+          canvas-kind (:canvas-kind offender)]
+      (try
+        (let [rendered (instruct finding scenario-id)]
+          {:stable-id   stable-id
+           :scenario    scenario-id
+           :check       (:check finding)
+           :rendered    (:rendered rendered)
+           :code-spec   (:code-spec rendered)
+           :context     (cond-> {:attempt 1}
+                          code-path   (assoc :expected-code-path code-path)
+                          canvas-kind (assoc :canvas-kind canvas-kind))
+           :batch-key   (or code-path :no-path)})
+        (catch clojure.lang.ExceptionInfo e
+          (let [msg (.getMessage e)]
+            (if (and msg (str/includes? msg "no project-lens projection registered"))
+              {:unhandled? true
+               :stable-id  stable-id
+               :check      (:check finding)
+               :reason     :no-projection-registered
+               :detail     (str "Layer A has no registered projection for canvas-kind "
+                                (pr-str canvas-kind) " — substrate gap upstream.")}
+              (throw e))))))))
 
 ;; -- Sprint 4 — iter-2 retry rendering ---------------------------------------
 
@@ -1084,21 +1099,27 @@
                           (throw (ex-info (str "close-drift-plan: :retry-of finding not present in current drift: " retry-of)
                                           {:type :element-not-found :retry-of retry-of})))
             scenario-id (drift-kind->scenario (:check finding))
-            base-entry  (and scenario-id (finding->plan-entry finding scenario-id))]
-        (if-not base-entry
+            base-entry  (and scenario-id (finding->plan-entry finding scenario-id))
+            unhandled-from-projection? (and base-entry (:unhandled? base-entry))]
+        (cond
+          (or (not base-entry) unhandled-from-projection?)
           {:plan         []
            :batches      {}
-           :unhandled    (if scenario-id
-                           []
-                           [(finding->unhandled-entry finding)])
+           :unhandled    (cond
+                           unhandled-from-projection? [(dissoc base-entry :unhandled?)]
+                           scenario-id                []
+                           :else                      [(finding->unhandled-entry finding)])
            :scope        {:retry-of retry-of}
            :counts       {:findings-total      1
                           :findings-planned    0
-                          :findings-unhandled  (if scenario-id 0 1)
+                          :findings-unhandled  (if (or unhandled-from-projection?
+                                                       (not scenario-id))
+                                                 1 0)
                           :findings-truncated  0}
            :truncated?   false
            :remaining    0
            :max-attempts max-attempts}
+          :else
           (let [wrapped (wrap-iter-2-instruction (:rendered base-entry)
                                                  iter-1-report
                                                  iter-1-drift)
@@ -1142,7 +1163,9 @@
             (reduce (fn [acc f]
                       (if-let [scenario-id (drift-kind->scenario (:check f))]
                         (if-let [entry (finding->plan-entry f scenario-id)]
-                          (update acc :plan conj entry)
+                          (if (:unhandled? entry)
+                            (update acc :unhandled conj (dissoc entry :unhandled?))
+                            (update acc :plan conj entry))
                           acc)
                         (update acc :unhandled conj (finding->unhandled-entry f))))
                     {:plan [] :unhandled []}
@@ -1189,35 +1212,236 @@
           (= stable-id (-> f :offenders first :stable-id)))
         findings))
 
+;; -- Sprint 4 Task 13 — canvas-side hint heuristics --------------------------
+
+(def ^:private predicate-stubbed-patterns
+  "Substring patterns that signal the implementing-LLM stubbed the
+   invariant predicate without writing the real body. Heuristic (a) for
+   `:canvas-side-hint` fires when both iter-1 and iter-2 reports match
+   any of these."
+  ["not yet implemented"
+   "not implemented"
+   "could not implement"
+   "could not write"
+   "unclear what to check"
+   "not enough context"
+   "needs clarification"
+   "TODO"
+   "placeholder"
+   "stub"
+   "unable to determine"])
+
+(defn- report-suggests-stub?
+  "True when the subagent's report carries any of the
+   `predicate-stubbed-patterns`. Case-insensitive."
+  [^String report]
+  (when (string? report)
+    (let [lower (.toLowerCase report)]
+      (boolean (some (fn [^String pat]
+                       (.contains lower (.toLowerCase pat)))
+                     predicate-stubbed-patterns)))))
+
+(defn- canvas-source-path-for
+  "Map a stable-id's module-coord to its canvas source path. Mirrors
+   the Phase 0 file convention `canvas/<dotpath>/<segment>.clj` —
+   approximated by trying the last segment as the file. Returns the
+   first path that exists, or nil."
+  [stable-id]
+  (when (string? stable-id)
+    (let [module-coord (first (str/split stable-id #"/" 2))
+          dotparts     (str/split module-coord #"\.")
+          ;; Common shapes: 'canvas/foo/bar.clj' or 'canvas/foo.clj'.
+          candidates   (concat
+                         (when (>= (count dotparts) 2)
+                           [(str "canvas/"
+                                 (str/join "/" (butlast dotparts))
+                                 "/"
+                                 (last dotparts)
+                                 ".clj")])
+                         [(str "canvas/" (str/join "/" dotparts) ".clj")
+                          (str "canvas/" (str/join "/" dotparts) "/" (last dotparts) ".clj")])]
+      (some (fn [p]
+              (when (.exists (java.io.File. ^String p))
+                p))
+            candidates))))
+
+(def ^:private recent-edit-window-ms
+  "How fresh a canvas file must be to count as 'recent'. 24 hours."
+  (* 24 60 60 1000))
+
+(def ^:private stable-src-window-ms
+  "How old a src file must be to count as 'stable'. 7 days."
+  (* 7 24 60 60 1000))
+
+(defn- file-mtime
+  "Return the file's last-modified millis, or nil if absent."
+  [^String path]
+  (when (and path (.exists (java.io.File. path)))
+    (.lastModified (java.io.File. path))))
+
+(defn- canvas-side-hint-shape-drift
+  "Heuristic (b) — record shape-drift where the canvas-side adds fields
+   but `src/` has been touched recently. The signal we *can* easily
+   compute is the inverse: canvas-file freshly touched + src-file
+   stable. Returns nil unless the heuristic fires."
+  [plan-entry post-finding]
+  (let [check       (:check plan-entry)
+        stable-id   (:stable-id plan-entry)
+        src-path    (-> plan-entry :context :expected-code-path)
+        canvas-path (canvas-source-path-for stable-id)
+        now         (System/currentTimeMillis)
+        canvas-mt   (file-mtime canvas-path)
+        src-mt      (file-mtime src-path)]
+    (when (and (= :inspect.drift/shape-drift-on-record check)
+               post-finding
+               canvas-mt src-mt
+               (< (- now canvas-mt) recent-edit-window-ms)
+               (> (- now src-mt) stable-src-window-ms))
+      {:reason :recent-canvas-stable-src
+       :detail (str "Canvas file " canvas-path " was modified in the last 24h "
+                    "while src file " src-path " has been stable for >7 days. "
+                    "Canvas may be ahead of code — consider whether the canvas "
+                    "shape addition is intentional, or retract the new fields.")})))
+
+(defn- canvas-side-hint-stubbed-invariant
+  "Heuristic (a) — invariant whose projected predicate stubbed-and-failed
+   across both attempts. Fires only when:
+     - canvas-kind is :invariant
+     - finding still present (post-dispatch)
+     - all attempt reports match `predicate-stubbed-patterns`
+     - at least 2 attempts recorded
+   Returns nil unless the heuristic fires."
+  [plan-entry reports post-finding]
+  (let [canvas-kind  (-> plan-entry :context :canvas-kind)
+        stub-reports (filter #(report-suggests-stub? (:report %)) (or reports []))]
+    (when (and post-finding
+               (= :invariant canvas-kind)
+               (>= (count reports) 2)
+               (= (count reports) (count stub-reports)))
+      {:reason :predicate-stubbed-twice
+       :detail (str "Implementing-LLM stubbed the invariant predicate across "
+                    (count reports) " attempts — each report read as 'not yet "
+                    "implemented' / 'TODO' / similar. Substrate may not give "
+                    "the LLM enough context to derive the predicate body. "
+                    "Consider tightening the canvas `holds-that` clause or "
+                    "moving the invariant to property-test projection.")})))
+
+(defn- compute-canvas-side-hint
+  "Run all canvas-side hint heuristics; return the first match or nil."
+  [plan-entry reports post-finding]
+  (or (canvas-side-hint-stubbed-invariant plan-entry reports post-finding)
+      (canvas-side-hint-shape-drift plan-entry post-finding)))
+
+;; -- Sprint 4 Task 12 — escalation classification ----------------------------
+
+(defn- structured-escalation
+  "Build the structured `:escalation-reason` map per Sprint 1's design.
+   Keys: `:trigger` (one of the six), `:detail` (prose), and optionally
+   `:hint-kind` (when `:trigger` = `:canvas-side-hint`)."
+  ([trigger detail] (structured-escalation trigger detail nil))
+  ([trigger detail hint-kind]
+   (cond-> {:trigger trigger :detail detail}
+     hint-kind (assoc :hint-kind hint-kind))))
+
+(defn- dispatch-error-report?
+  "True when the architect's `Agent` call surfaced an error rather than a
+   subagent narrative — report carries `:error true` or `:error <string>`."
+  [report]
+  (and (map? report)
+       (or (true? (:error report))
+           (string? (:error report)))))
+
 (defn- classify-outcome
   "Decide a per-finding outcome from the plan entry + pre/post drift +
-   report. Returns
+   reports. Returns
      {:outcome :closed | :failed | :no-report
       :requires-retry? bool
-      :escalation-reason <kw or nil>}.
+      :escalation-reason <structured map or nil>
+      :canvas-side-hint <hint-map or nil>}.
 
-   Sprint 4 lands the full six-trigger classification (Task 12). MVP
-   handles the three triggers the architect's single-pass loop can
-   actually surface."
-  [plan-entry report post-findings attempts max-attempts]
-  (let [present? (finding-still-present? (:stable-id plan-entry) post-findings)]
+   Sprint 4 Task 12 lands the full six-trigger classification with
+   structured `:escalation-reason` maps. Task 13 adds the
+   `:canvas-side-hint` heuristics on top.
+
+   Triggers handled here (other two surface via the plan's `:unhandled`
+   vector — `:scenario-not-found`, `:no-projection-registered`):
+     - `:dispatch-error` — latest report flagged with `:error`
+     - `:attempts-exhausted` — present + attempts >= max
+     - `:canvas-side-hint` — Task 13 heuristic fired
+     - `:projection-emits-warning` — reserved; not fired today (Layer A
+       has no `:warnings` surface yet)."
+  [plan-entry reports post-finding post-findings attempts max-attempts]
+  (let [latest    (last (sort-by (fnil :attempt 0) (or reports [])))
+        present?  (finding-still-present? (:stable-id plan-entry) post-findings)
+        hint      (when present?
+                    (compute-canvas-side-hint plan-entry reports post-finding))]
     (cond
-      (nil? report)
+      (dispatch-error-report? latest)
+      {:outcome :failed
+       :requires-retry? false
+       :escalation-reason (structured-escalation
+                            :dispatch-error
+                            (str "Dispatch failed for " (:stable-id plan-entry)
+                                 " — architect's Agent invocation returned an "
+                                 "error rather than a subagent narrative: "
+                                 (pr-str (or (:error latest) "error flag set"))))
+       :canvas-side-hint nil}
+
+      (nil? latest)
       {:outcome :no-report
        :requires-retry? false
-       :escalation-reason :no-report}
+       :escalation-reason (structured-escalation
+                            :dispatch-error
+                            (str "No report received for " (:stable-id plan-entry)
+                                 " — architect did not dispatch this finding, "
+                                 "or the subagent did not return a terminal "
+                                 "report."))
+       :canvas-side-hint nil}
 
       (not present?)
       {:outcome :closed
        :requires-retry? false
-       :escalation-reason nil}
+       :escalation-reason nil
+       :canvas-side-hint nil}
 
-      ;; Still present after dispatch.
+      ;; Still present after dispatch — pick the most specific escalation.
       :else
-      {:outcome :failed
-       :requires-retry? (< attempts max-attempts)
-       :escalation-reason (when-not (< attempts max-attempts)
-                            :attempts-exhausted)})))
+      (let [exhausted? (>= attempts max-attempts)]
+        {:outcome :failed
+         :requires-retry? (not exhausted?)
+         :escalation-reason
+         (cond
+           hint
+           (structured-escalation
+             :canvas-side-hint
+             (:detail hint)
+             (:reason hint))
+
+           exhausted?
+           (structured-escalation
+             :attempts-exhausted
+             (str "Finding " (:stable-id plan-entry) " failed all "
+                  attempts " attempts. Drift still names the same gap "
+                  "after the final dispatch — manual review required."))
+
+           :else nil)
+         :canvas-side-hint hint}))))
+
+(defn- escalation-trigger-name
+  "Extract the trigger keyword's name from either a structured map (Sprint
+   4) or a bare keyword (legacy/MVP)."
+  [reason]
+  (cond
+    (map? reason)     (some-> (:trigger reason) name)
+    (keyword? reason) (name reason)
+    :else             nil))
+
+(defn- escalation-detail
+  "Extract the human-readable detail string from a structured
+   escalation-reason map. Returns nil for legacy bare-keyword reasons."
+  [reason]
+  (when (map? reason)
+    (:detail reason)))
 
 (defn- render-verify-markdown
   "Render the verify report as markdown — terse, factual, decision-ready.
@@ -1225,16 +1449,19 @@
    no marketing)."
   [{:keys [scope counts per-finding]}]
   (let [{:keys [findings-total findings-closed findings-failed
-                findings-escalated]} counts
+                findings-escalated total-attempts iter-1-closure-rate
+                iter-2-closure-rate total-elapsed-ms]} counts
         scope-line (cond
-                     (:stable-id scope) (str "stable-id " (:stable-id scope))
+                     (:retry-of scope)     (str "retry-of " (:retry-of scope))
+                     (:stable-id scope)    (str "stable-id " (:stable-id scope))
                      (:module-coord scope) (str "module-coord " (pr-str (:module-coord scope))
                                                 (when (:check scope)
                                                   (str ", check " (pr-str (:check scope)))))
-                     (:check scope) (str "check " (pr-str (:check scope)))
-                     :else "all canvas drift")
+                     (:check scope)        (str "check " (pr-str (:check scope)))
+                     :else                 "all canvas drift")
         lines (atom [])
-        push! (fn [& xs] (swap! lines conj (apply str xs)))]
+        push! (fn [& xs] (swap! lines conj (apply str xs)))
+        fmt-pct (fn [r] (format "%.0f%%" (* 100.0 (or r 0.0))))]
     (push! "# Close-drift report")
     (push! "")
     (push! "**Scope:** " scope-line)
@@ -1243,6 +1470,14 @@
            " closed; " findings-failed " failed; "
            findings-escalated " escalated.")
     (push! "")
+    (push! "**Attempts:** " (or total-attempts 0) " total"
+           (when (some? iter-1-closure-rate)
+             (str " · iter-1 closure rate: " (fmt-pct iter-1-closure-rate)))
+           (when (and (some? iter-2-closure-rate) (pos? iter-2-closure-rate))
+             (str " · iter-2 closure rate: " (fmt-pct iter-2-closure-rate)))
+           (when total-elapsed-ms
+             (str " · total elapsed: " total-elapsed-ms "ms")))
+    (push! "")
     (when (seq per-finding)
       (push! "## Per-finding outcomes")
       (push! "")
@@ -1250,8 +1485,10 @@
         (push! "- `" (:stable-id pf) "` — **" (name (:outcome pf)) "**"
                (when (and (:attempts pf) (pos? (:attempts pf)))
                  (str " (attempts: " (:attempts pf) ")"))
-               (when (:escalation-reason pf)
-                 (str " · escalation: `" (name (:escalation-reason pf)) "`")))))
+               (when-let [tn (escalation-trigger-name (:escalation-reason pf))]
+                 (str " · escalation: `" tn "`"))
+               (when-let [h (:canvas-side-hint pf)]
+                 (str " · canvas-side-hint: `" (some-> (:reason h) name) "`")))))
     (push! "")
     (let [escalated (filter #(= :failed (:outcome %)) per-finding)]
       (when (seq escalated)
@@ -1260,8 +1497,14 @@
         (doseq [pf escalated]
           (push! "### `" (:stable-id pf) "`")
           (push! "")
-          (when-let [r (:escalation-reason pf)]
-            (push! "**Reason:** `" (name r) "`")
+          (when-let [tn (escalation-trigger-name (:escalation-reason pf))]
+            (push! "**Reason:** `" tn "`")
+            (push! ""))
+          (when-let [d (escalation-detail (:escalation-reason pf))]
+            (push! d)
+            (push! ""))
+          (when-let [h (:canvas-side-hint pf)]
+            (push! "**Canvas-side hint** (`" (some-> (:reason h) name) "`): " (:detail h))
             (push! ""))
           (when-let [rep (:report-excerpt pf)]
             (push! "**Report excerpt:** " rep)
@@ -1305,15 +1548,31 @@
                        :outcome             :closed | :failed | :no-report
                        :attempts            <int>
                        :requires-retry?     <bool>
-                       :escalation-reason   <kw or nil>
-                       :report-excerpt      <truncated subagent narrative>
+                       :escalation-reason   <structured map or nil>
+                       :canvas-side-hint    <hint-map or nil>
+                       :per-attempt         [{:attempt 1
+                                              :report-excerpt \"…\"
+                                              :elapsed-ms <int or nil>} …]
+                       :report-excerpt      <truncated final report>
                        :pre-drift-snapshot  <compact finding snapshot>
                        :post-drift-snapshot <compact finding snapshot or nil>}
 
-                    Sprint 4 lands the full six-trigger classification
-                    (Task 12). MVP recognises `:attempts-exhausted`,
-                    `:scenario-not-found` (via the plan's :unhandled),
-                    and `:no-report`."
+                    Escalation-reason map shape:
+                      {:trigger    <one of the six trigger keywords>
+                       :detail     <human-readable prose>
+                       :hint-kind  <kw, only when :trigger
+                                    = :canvas-side-hint>}
+
+                    Six escalation triggers (Sprint 4 Task 12):
+                      :attempts-exhausted, :no-projection-registered,
+                      :projection-emits-warning (reserved),
+                      :canvas-side-hint, :scenario-not-found,
+                      :dispatch-error.
+
+                    `:counts` also surfaces aggregate timing + closure
+                    rates (Sprint 4 Task 14): :iter-1-closure-rate,
+                    :iter-2-closure-rate, :total-attempts,
+                    :total-elapsed-ms."
         :agent/example "(close-drift-verify :plan p :reports [{:stable-id \"x\" :report \"done\" :attempt 1}])"}
   close-drift-verify
   [& {:keys [plan reports] :as opts}]
@@ -1352,33 +1611,46 @@
                           (:module-coord scope) (assoc :module-coord (:module-coord scope)))
           post-findings (apply canvas-drift (mapcat identity drift-opts))
           per-finding   (mapv (fn [pe]
-                                (let [rs       (get report-by-id (:stable-id pe))
+                                (let [rs           (vec (sort-by (fnil :attempt 0)
+                                                                  (get report-by-id (:stable-id pe))))
                                       ;; Latest attempt for the finding.
-                                      latest   (last (sort-by (fnil :attempt 0) (or rs [])))
-                                      attempts (count rs)
-                                      cls      (classify-outcome pe latest post-findings
-                                                                  attempts max-attempts)
+                                      latest       (last rs)
+                                      attempts     (count rs)
                                       post-finding (some (fn [f]
                                                            (when (= (:stable-id pe)
                                                                     (-> f :offenders first :stable-id))
                                                              f))
-                                                         post-findings)]
-                                  (cond-> {:stable-id          (:stable-id pe)
-                                           :outcome            (:outcome cls)
-                                           :attempts           attempts
-                                           :requires-retry?    (:requires-retry? cls)
-                                           :escalation-reason  (:escalation-reason cls)
-                                           :report-excerpt     (some-> latest :report (excerpt 280))
-                                           :pre-drift-snapshot (get pre-snapshots (:stable-id pe))
-                                           :post-drift-snapshot (snapshot-finding post-finding)})))
+                                                         post-findings)
+                                      cls          (classify-outcome pe rs post-finding
+                                                                      post-findings
+                                                                      attempts max-attempts)
+                                      per-attempt  (mapv (fn [r]
+                                                           {:attempt        (or (:attempt r) 1)
+                                                            :report-excerpt (some-> (:report r) (excerpt 280))
+                                                            :elapsed-ms     (:elapsed-ms r)})
+                                                         rs)]
+                                  {:stable-id          (:stable-id pe)
+                                   :outcome            (:outcome cls)
+                                   :attempts           attempts
+                                   :requires-retry?    (:requires-retry? cls)
+                                   :escalation-reason  (:escalation-reason cls)
+                                   :canvas-side-hint   (:canvas-side-hint cls)
+                                   :per-attempt        per-attempt
+                                   :report-excerpt     (some-> latest :report (excerpt 280))
+                                   :pre-drift-snapshot (get pre-snapshots (:stable-id pe))
+                                   :post-drift-snapshot (snapshot-finding post-finding)}))
                               plan-entries)
-          ;; Unhandled findings (no scenario) count as escalated.
+          ;; Unhandled findings (no scenario / no projection) count as escalated.
           unhandled-entries (mapv (fn [u]
                                     {:stable-id          (:stable-id u)
                                      :outcome            :failed
                                      :attempts           0
                                      :requires-retry?    false
-                                     :escalation-reason  (:reason u)
+                                     :escalation-reason  (structured-escalation
+                                                           (:reason u)
+                                                           (or (:detail u) (str "unhandled — " (:reason u))))
+                                     :canvas-side-hint   nil
+                                     :per-attempt        []
                                      :report-excerpt     (:detail u)
                                      :pre-drift-snapshot nil
                                      :post-drift-snapshot nil})
@@ -1388,11 +1660,28 @@
           failed-count  (count (filter #(= :failed   (:outcome %)) all-pf))
           no-report-cnt (count (filter #(= :no-report (:outcome %)) all-pf))
           escalated-cnt (count (filter :escalation-reason all-pf))
-          counts        {:findings-total      (count all-pf)
-                         :findings-closed     closed-count
-                         :findings-failed     failed-count
-                         :findings-no-report  no-report-cnt
-                         :findings-escalated  escalated-cnt}
+          ;; Task 14 — aggregate timing + closure rates.
+          total-attempts   (reduce + 0 (map :attempts all-pf))
+          retried-set      (filter #(>= (:attempts %) 2) all-pf)
+          closed-iter-1    (count (filter #(and (= :closed (:outcome %))
+                                                (= 1 (:attempts %)))
+                                          all-pf))
+          closed-iter-2    (count (filter #(and (= :closed (:outcome %))
+                                                (>= (:attempts %) 2))
+                                          all-pf))
+          total-elapsed-ms (when-let [ms (seq (keep :elapsed-ms
+                                                    (mapcat :per-attempt all-pf)))]
+                             (reduce + 0 ms))
+          rate (fn [n d] (if (pos? d) (double (/ n d)) 0.0))
+          counts        {:findings-total       (count all-pf)
+                         :findings-closed      closed-count
+                         :findings-failed      failed-count
+                         :findings-no-report   no-report-cnt
+                         :findings-escalated   escalated-cnt
+                         :total-attempts       total-attempts
+                         :iter-1-closure-rate  (rate closed-iter-1 (count all-pf))
+                         :iter-2-closure-rate  (rate closed-iter-2 (count retried-set))
+                         :total-elapsed-ms     total-elapsed-ms}
           result        {:scope       scope
                          :counts      counts
                          :per-finding all-pf}]

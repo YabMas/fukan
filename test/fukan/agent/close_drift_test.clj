@@ -196,11 +196,13 @@
               pf (-> v :per-finding first)]
           (is (= :failed (:outcome pf)))
           (is (false? (:requires-retry? pf)))
-          (is (= :attempts-exhausted (:escalation-reason pf)))
+          (is (= :attempts-exhausted (-> pf :escalation-reason :trigger))
+              "Sprint 4 — escalation-reason is now a structured map")
+          (is (string? (-> pf :escalation-reason :detail)))
           (is (pos? (-> v :counts :findings-escalated))))))))
 
 (deftest verify-no-report-case
-  (testing "Plan entry without a matching report → :no-report"
+  (testing "Plan entry without a matching report → :no-report + :dispatch-error trigger"
     (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
                         :check :inspect.drift/missing-implementation
                         :rendered "…" :code-spec {}
@@ -213,7 +215,8 @@
         (let [v (api/close-drift-verify :plan plan :reports reports)
               pf (-> v :per-finding first)]
           (is (= :no-report (:outcome pf)))
-          (is (= :no-report (:escalation-reason pf)))
+          (is (= :dispatch-error (-> pf :escalation-reason :trigger))
+              "no-report is classified as a :dispatch-error per Sprint 4 Task 12")
           (is (false? (:requires-retry? pf))))))))
 
 (deftest verify-unhandled-entries-counted-as-escalated
@@ -230,7 +233,7 @@
         (let [v (api/close-drift-verify :plan plan :reports reports)]
           (is (= 1 (count (:per-finding v))))
           (is (= :scenario-not-found
-                 (-> v :per-finding first :escalation-reason)))
+                 (-> v :per-finding first :escalation-reason :trigger)))
           (is (= :failed (-> v :per-finding first :outcome))))))))
 
 (deftest verify-rendered-markdown-includes-summary
@@ -448,3 +451,381 @@
       (with-redefs [api/canvas-drift (fn [& _] synthetic)]
         (let [p (api/close-drift-plan :module-coord "distributed.cluster")]
           (is (every? #(= 1 (-> % :context :attempt)) (:plan p))))))))
+
+;; ---------------------------------------------------------------------------
+;; Sprint 4 — Task 12: Escalation classification (six triggers)
+
+(deftest escalation-trigger-attempts-exhausted
+  (testing ":attempts-exhausted fires when attempts >= max-attempts + still present"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 1}
+          reports [{:stable-id "x/foo" :report "tried" :attempt 1}]
+          still-there [{:check :inspect.drift/missing-implementation
+                        :severity :warning
+                        :offenders [{:stable-id "x/foo"
+                                     :expected-code-path "p"
+                                     :expected-symbol "foo"}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] still-there)]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (is (= :attempts-exhausted (-> pf :escalation-reason :trigger)))
+          (is (str/includes? (-> pf :escalation-reason :detail) "attempts")))))))
+
+(deftest escalation-trigger-scenario-not-found
+  (testing ":scenario-not-found surfaces from plan :unhandled with structured reason"
+    (let [synthetic [{:check    :inspect.drift/never-heard-of
+                      :severity :warning
+                      :offenders [{:stable-id "synthetic/Whatever"
+                                   :expected-code-path "p"
+                                   :expected-symbol "Whatever"
+                                   :canvas-kind :function}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] synthetic)]
+        (let [p (api/close-drift-plan)
+              v (api/close-drift-verify :plan p :reports [])
+              pf (-> v :per-finding first)]
+          (is (= :scenario-not-found (-> pf :escalation-reason :trigger)))
+          (is (string? (-> pf :escalation-reason :detail))))))))
+
+(deftest escalation-trigger-no-projection-registered
+  (testing ":no-projection-registered surfaces when (spec …) rejects the canvas-kind"
+    (let [synthetic [{:check :inspect.drift/missing-implementation
+                      :severity :warning
+                      :offenders [{:stable-id          "x/Whatever"
+                                   :expected-code-path "src/x.clj"
+                                   :expected-symbol    "whatever"
+                                   :canvas-kind        :function}]}]]
+      ;; Stub instruct to throw the substrate's "no project-lens projection
+      ;; registered" exception — same shape Layer A's default method
+      ;; raises.
+      (with-redefs [api/canvas-drift (fn [& _] synthetic)
+                    api/instruct (fn [_ _ & _]
+                                   (throw (ex-info
+                                            "no project-lens projection registered for kind ?"
+                                            {:type :no-projection})))]
+        (let [p (api/close-drift-plan)
+              v (api/close-drift-verify :plan p :reports [])
+              pf (-> v :per-finding first)]
+          (is (= 0 (count (:plan p))))
+          (is (= 1 (count (:unhandled p))))
+          (is (= :no-projection-registered
+                 (-> p :unhandled first :reason)))
+          (is (= :no-projection-registered
+                 (-> pf :escalation-reason :trigger))))))))
+
+(deftest escalation-trigger-dispatch-error
+  (testing ":dispatch-error fires when the report carries :error true"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/foo" :report nil
+                    :error "Agent timeout" :attempt 1}]]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (is (= :failed (:outcome pf)))
+          (is (= :dispatch-error (-> pf :escalation-reason :trigger)))
+          (is (str/includes? (-> pf :escalation-reason :detail) "Agent")))))))
+
+(deftest escalation-trigger-dispatch-error-from-no-report
+  (testing ":dispatch-error also fires when no report exists for a plan entry"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports []]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (is (= :no-report (:outcome pf)))
+          (is (= :dispatch-error (-> pf :escalation-reason :trigger))))))))
+
+(deftest escalation-structured-reason-shape
+  (testing "Every structured escalation-reason carries :trigger + :detail"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 1}
+          reports [{:stable-id "x/foo" :report "first" :attempt 1}]
+          still-there [{:check :inspect.drift/missing-implementation
+                        :severity :warning
+                        :offenders [{:stable-id "x/foo"
+                                     :expected-code-path "p"
+                                     :expected-symbol "foo"}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] still-there)]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              er (-> v :per-finding first :escalation-reason)]
+          (is (map? er))
+          (is (keyword? (:trigger er)))
+          (is (string? (:detail er))))))))
+
+;; ---------------------------------------------------------------------------
+;; Sprint 4 — Task 13: Canvas-side hint heuristics
+
+(deftest canvas-side-hint-stubbed-invariant-fires
+  (testing "Heuristic (a) — invariant stubbed across both attempts → hint"
+    (let [plan {:plan [{:stable-id "x/SomeInvariant"
+                        :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {:expected-code-path "src/x.clj"
+                                  :canvas-kind :invariant
+                                  :attempt 1}
+                        :batch-key "src/x.clj"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/SomeInvariant"
+                    :report "I could not implement — not enough context to determine the predicate body."
+                    :attempt 1}
+                   {:stable-id "x/SomeInvariant"
+                    :report "TODO: not yet implemented; placeholder body."
+                    :attempt 2}]
+          still-there [{:check :inspect.drift/missing-implementation
+                        :severity :warning
+                        :offenders [{:stable-id "x/SomeInvariant"
+                                     :expected-code-path "src/x.clj"
+                                     :expected-symbol "some-invariant?"
+                                     :canvas-kind :invariant}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] still-there)]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (is (some? (:canvas-side-hint pf)))
+          (is (= :predicate-stubbed-twice (-> pf :canvas-side-hint :reason)))
+          (is (= :canvas-side-hint (-> pf :escalation-reason :trigger)))
+          (is (= :predicate-stubbed-twice (-> pf :escalation-reason :hint-kind))))))))
+
+(deftest canvas-side-hint-stubbed-invariant-skipped-on-single-attempt
+  (testing "Heuristic (a) requires >= 2 attempts before firing"
+    (let [plan {:plan [{:stable-id "x/SomeInvariant"
+                        :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {:expected-code-path "src/x.clj"
+                                  :canvas-kind :invariant
+                                  :attempt 1}
+                        :batch-key "src/x.clj"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/SomeInvariant"
+                    :report "not yet implemented"
+                    :attempt 1}]
+          still-there [{:check :inspect.drift/missing-implementation
+                        :severity :warning
+                        :offenders [{:stable-id "x/SomeInvariant"
+                                     :expected-code-path "src/x.clj"
+                                     :expected-symbol "some-invariant?"
+                                     :canvas-kind :invariant}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] still-there)]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (is (nil? (:canvas-side-hint pf))
+              "single attempt should not fire heuristic (a)"))))))
+
+(deftest canvas-side-hint-shape-drift-fires
+  (testing "Heuristic (b) — recent canvas + stable src → hint"
+    ;; The private heuristic uses file-mtime; rather than stub a private
+    ;; var (problematic), exercise the inner fn via its var directly
+    ;; with a redefed file-mtime that returns synthetic mtimes
+    ;; matching the contract: recent canvas (now), stable src (10d ago).
+    (let [now            (System/currentTimeMillis)
+          ten-days-ago   (- now (* 10 24 60 60 1000))
+          file-mtime-var #'fukan.agent.api/file-mtime
+          heuristic-var  #'fukan.agent.api/canvas-side-hint-shape-drift]
+      (with-redefs [fukan.agent.api/file-mtime
+                    (fn [path]
+                      (cond
+                        (str/starts-with? (str path) "canvas/") now
+                        (str/starts-with? (str path) "src/")    ten-days-ago
+                        :else                                    nil))
+                    fukan.agent.api/canvas-source-path-for
+                    (fn [_] "canvas/x/thing.clj")]
+        (let [pe {:stable-id "x.thing/type/SomeRecord"
+                  :check     :inspect.drift/shape-drift-on-record
+                  :context   {:expected-code-path "src/fukan/x/thing.clj"
+                              :canvas-kind        :type
+                              :attempt            1}}
+              post {:check :inspect.drift/shape-drift-on-record
+                    :offenders [{:stable-id "x.thing/type/SomeRecord"}]}
+              hint (heuristic-var pe post)]
+          (is (some? hint))
+          (is (= :recent-canvas-stable-src (:reason hint)))
+          (is (str/includes? (:detail hint) "canvas")))))))
+
+(deftest canvas-side-hint-shape-drift-skipped-when-src-also-recent
+  (testing "Heuristic (b) — src recently touched too → no hint"
+    (let [now            (System/currentTimeMillis)
+          heuristic-var  #'fukan.agent.api/canvas-side-hint-shape-drift]
+      (with-redefs [fukan.agent.api/file-mtime (fn [_] now)
+                    fukan.agent.api/canvas-source-path-for
+                    (fn [_] "canvas/x/thing.clj")]
+        (let [pe {:stable-id "x.thing/type/SomeRecord"
+                  :check     :inspect.drift/shape-drift-on-record
+                  :context   {:expected-code-path "src/fukan/x/thing.clj"
+                              :canvas-kind        :type
+                              :attempt            1}}
+              post {:check :inspect.drift/shape-drift-on-record
+                    :offenders [{:stable-id "x.thing/type/SomeRecord"}]}]
+          (is (nil? (heuristic-var pe post))))))))
+
+(deftest canvas-side-hint-stubbed-invariant-needs-canvas-kind
+  (testing "Heuristic (a) is keyed on canvas-kind :invariant, not function"
+    (let [plan {:plan [{:stable-id "x/some_function"
+                        :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {:expected-code-path "src/x.clj"
+                                  :canvas-kind :function
+                                  :attempt 1}
+                        :batch-key "src/x.clj"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/some_function"
+                    :report "not yet implemented" :attempt 1}
+                   {:stable-id "x/some_function"
+                    :report "TODO placeholder" :attempt 2}]
+          still-there [{:check :inspect.drift/missing-implementation
+                        :severity :warning
+                        :offenders [{:stable-id "x/some_function"
+                                     :expected-code-path "src/x.clj"
+                                     :expected-symbol "some-function"
+                                     :canvas-kind :function}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] still-there)]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (is (nil? (:canvas-side-hint pf))
+              "function-kind doesn't trigger the stubbed-invariant hint"))))))
+
+;; ---------------------------------------------------------------------------
+;; Sprint 4 — Task 14: Per-attempt timing + aggregate observability
+
+(deftest verify-per-attempt-shape
+  (testing ":per-attempt vector carries one entry per report with timing"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/foo" :report "first attempt"
+                    :attempt 1 :elapsed-ms 1500}
+                   {:stable-id "x/foo" :report "second attempt"
+                    :attempt 2 :elapsed-ms 2300}]]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (is (= 2 (count (:per-attempt pf))))
+          (is (= 1 (-> pf :per-attempt first :attempt)))
+          (is (= 1500 (-> pf :per-attempt first :elapsed-ms)))
+          (is (= 2 (-> pf :per-attempt second :attempt)))
+          (is (= 2300 (-> pf :per-attempt second :elapsed-ms)))
+          (is (str/includes? (-> pf :per-attempt first :report-excerpt) "first")))))))
+
+(deftest verify-aggregate-timing
+  (testing ":counts surfaces total-attempts, closure rates, total-elapsed-ms"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}
+                       {:stable-id "x/bar" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/foo" :report "ok" :attempt 1 :elapsed-ms 1000}
+                   {:stable-id "x/bar" :report "first" :attempt 1 :elapsed-ms 500}
+                   {:stable-id "x/bar" :report "second" :attempt 2 :elapsed-ms 700}]]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        (let [v  (api/close-drift-verify :plan plan :reports reports)
+              c  (:counts v)]
+          (is (= 3 (:total-attempts c)))
+          (is (= 2200 (:total-elapsed-ms c)))
+          (is (number? (:iter-1-closure-rate c)))
+          (is (number? (:iter-2-closure-rate c))))))))
+
+(deftest verify-aggregate-timing-handles-missing-elapsed-ms
+  (testing "elapsed-ms is optional — missing values don't break aggregate"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/foo" :report "ok" :attempt 1}]]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          ;; No elapsed-ms supplied — :elapsed-ms must be nil, not 0.
+          (is (nil? (-> pf :per-attempt first :elapsed-ms)))
+          ;; Total elapsed should be nil when no attempts carry timing.
+          (is (nil? (-> v :counts :total-elapsed-ms))))))))
+
+(deftest verify-iter-2-happy-path
+  (testing "Iter-1 fails, iter-2 closes — report shows 2 attempts, outcome :closed"
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/foo" :report "first try failed"
+                    :attempt 1 :elapsed-ms 1000}
+                   {:stable-id "x/foo" :report "second try succeeded"
+                    :attempt 2 :elapsed-ms 1500}]]
+      ;; Post-verify: finding gone.
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        (let [v (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (is (= :closed (:outcome pf)))
+          (is (= 2 (:attempts pf)))
+          (is (= 2 (count (:per-attempt pf))))
+          (is (= 1.0 (-> v :counts :iter-2-closure-rate))
+              "1 finding with 2 attempts that closed → 100% iter-2 closure rate"))))))
+
+(deftest render-shows-attempts-and-hint-marker
+  (testing ":rendered surfaces attempts count + canvas-side-hint marker"
+    (let [plan {:plan [{:stable-id "x/SomeInvariant"
+                        :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {:canvas-kind :invariant :attempt 1}
+                        :batch-key "src/x.clj"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id "x/SomeInvariant"
+                    :report "not yet implemented" :attempt 1}
+                   {:stable-id "x/SomeInvariant"
+                    :report "TODO placeholder" :attempt 2}]
+          still-there [{:check :inspect.drift/missing-implementation
+                        :severity :warning
+                        :offenders [{:stable-id "x/SomeInvariant"
+                                     :expected-code-path "src/x.clj"
+                                     :expected-symbol "some-invariant?"
+                                     :canvas-kind :invariant}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] still-there)]
+        (let [v (api/close-drift-verify :plan plan :reports reports)]
+          (is (str/includes? (:rendered v) "attempts: 2"))
+          (is (str/includes? (:rendered v) "canvas-side-hint"))
+          (is (str/includes? (:rendered v) "Attempts:")))))))
