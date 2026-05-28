@@ -350,34 +350,52 @@ to an implementing-LLM subagent. Two modes, picked by scope shape:
   feedback. Max 2 iterations per instruction.
 
 *Close-drift mode* — module-scope orchestration via the closure controller
-(Phase 8 Sprint 3):
+(Phase 8 Sprints 3 + 4):
 
 - Run `(close-drift-plan :module-coord "<X>")` (or `:check <kind>`, or
   `:stable-id <id>`). The controller walks `(canvas-drift)`, renders a
   per-finding instruction via `(instruct …)`, and groups entries by
   `:expected-code-path` so same-file edits serialize. Returns
   `{:plan [<entry> …] :batches {<path> [<entry> …]} :unhandled […]
-  :scope … :counts … :max-attempts}`.
+  :scope … :counts … :max-attempts}`. Default `:max-attempts` is 2;
+  `:max-attempts 1` requests a single-shot run with no iter-2.
 - For each entry in `:plan`, dispatch the implementing-LLM subagent with
   the entry's `:rendered` instruction. Within a batch (same code-path),
-  serialize; across batches, parallelise at fanout 3. Collect each
+  serialize; across batches, parallelise at fanout 3. Track wall-clock
+  per dispatch and surface as `:elapsed-ms` on the report. Collect each
   subagent's terminal report into a `:reports` vector keyed by
-  `:stable-id`.
+  `:stable-id` and tagged `:attempt 1`. On `Agent` failure, emit
+  `{:stable-id "…" :error "<reason>" :attempt 1}`.
 - Run `(close-drift-verify :plan <plan> :reports [<reports>])`. The
   controller re-runs `(canvas-drift)` against the scope and classifies
   each entry as `:closed` / `:failed` / `:no-report` with a
-  `:requires-retry?` flag and an `:escalation-reason` when relevant.
-- Surface the verify report's `:rendered` markdown to the canvas-author.
-  Call out `:escalation-reason` entries explicitly —
-  `:attempts-exhausted`, `:scenario-not-found`, `:no-report` are the
-  MVP triggers; Sprint 4 lands the full six-trigger set.
+  `:requires-retry?` flag and a structured `:escalation-reason` map
+  (`{:trigger :detail :hint-kind}`).
+- **Iter-2 retry.** For each `:per-finding` entry with
+  `:requires-retry? true` AND `:attempts < :max-attempts`, render the
+  iter-2 instruction via `(close-drift-plan :retry-of "<stable-id>"
+  :iter-1-report "<subagent-narrative>" :iter-1-drift <snapshot>)`.
+  The controller wraps the original instruction with a four-section
+  reconciliation preamble (iter-1 report + iter-1 drift + original
+  instruction). Invoke `Agent` with the iter-2 body; tag the returned
+  report `:attempt 2`. After all iter-2 dispatches complete, call
+  `close-drift-verify` again with the **combined** iter-1 + iter-2
+  reports — verify needs the full attempt history to classify
+  escalations correctly (canvas-side-hint heuristic (a) requires
+  ≥2 attempts).
+- Surface the final verify report's `:rendered` markdown to the
+  canvas-author. Call out `:escalation-reason :trigger` entries
+  explicitly across the six classes: `:attempts-exhausted`,
+  `:no-projection-registered`, `:projection-emits-warning` (reserved),
+  `:canvas-side-hint`, `:scenario-not-found`, `:dispatch-error`.
+  Surface `:canvas-side-hint` as **advisory** — the canvas-author
+  decides whether to edit canvas; the architect never autonomously
+  edits canvas in Phase 8.
 
-Sprint 3 ships single-pass dispatch only. Sprint 4 lands iter-2 retry
-when `:requires-retry? true` and `:attempts < :max-attempts`; until
-then, every `:failed` outcome is a manual follow-up the canvas-author
-decides next move on. Closure-rate calibration is
-`:trial/calibration-pending` per Sprint 2's findings — observe rates
-over time, surface patterns when they emerge, don't make strong claims
+Closure-rate calibration is `:trial/calibration-pending` per Sprint 2's
+findings — observe rates over time using the report's
+`:iter-1-closure-rate` / `:iter-2-closure-rate` / `:total-elapsed-ms`
+counters, surface patterns when they emerge, don't make strong claims
 early.
 
 Phase D's cadence is **per-targeted-gap** (per-finding mode) or
