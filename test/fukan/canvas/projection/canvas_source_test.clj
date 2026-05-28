@@ -188,25 +188,27 @@
       (is (= :primitive/event (:kind ev))
           (str "expected :primitive/event, got " (pr-str (:kind ev)))))))
 
-(deftest project-invariant-label-is-holds-that
-  (testing "an Affordance with role :canvas/invariant uses :holds-that string as label"
-    ;; Phase 6 Sprint 2 Task 4 sub-task A: invariants project so the analyzer's
-    ;; rules selector can derive a canonical address from the holds-that clause
-    ;; (the canvas-side expected code-side predicate name). Without this the
-    ;; entity name (PascalCase) is the label and drift derives addresses against
-    ;; the wrong code-side counterpart.
+(deftest project-invariant-label-is-entity-name
+  (testing "an Affordance with role :canvas/invariant uses :entity/name as label"
+    ;; Phase 7.5 Sprint 2: invariants project with the entity-name as label
+    ;; (uniform with all other affordance kinds). `addr/canonical` then
+    ;; kebab-cases it into a legal Clojure symbol on both the analyzer
+    ;; (drift) and Layer A (instruct) sides. The holds-that prose is
+    ;; preserved separately via `:formal-expression` on the primitive.
     (let [mod-db (h/with-canvas
                    (h/within-module "demo.inv"
                      (invariant "FooHolds"
                        "Foo must hold."
-                       (holds-that "foo-must-hold"))))
+                       (holds-that "foo must hold"))))
           model  (canvas-source/project (canvas-source/merge-for-test [mod-db]))
           prim   (get (:primitives model) "demo.inv/FooHolds")]
       (is (some? prim) "invariant must be projected as a primitive")
       (is (= :primitive/rule (:kind prim))
           (str "expected :primitive/rule, got " (pr-str (:kind prim))))
-      (is (= "foo-must-hold" (:label prim))
-          (str "expected label \"foo-must-hold\", got " (pr-str (:label prim))))
+      (is (= "FooHolds" (:label prim))
+          (str "expected label \"FooHolds\" (entity-name), got " (pr-str (:label prim))))
+      (is (= "foo must hold" (:formal-expression prim))
+          "holds-that prose is preserved on :formal-expression")
       (is (= :canvas/invariant (:canvas-role prim))
           "primitive must carry :canvas-role for drift-helper messages"))))
 

@@ -474,12 +474,14 @@
   "Project all Affordance entities into primitive map entries.
    Returns {stable-id → primitive-map}.
 
-   For affordances with role :canvas/invariant, the primitive's :label
-   is taken from :formal-expression (the holds-that string). This is the
-   canonical name the analyzer's rules selector uses to derive the
-   expected code-side predicate fn address. The stable-id still uses
-   the affordance's :entity/name (the canvas-side declaration name) so
-   primitive identity in the model map is unaffected."
+   The primitive's :label is uniformly the affordance's :entity/name across
+   all roles. For invariants this means PascalCase (e.g.
+   `MajorityRequiredForLeadership`), which `addr/canonical` then kebab-cases
+   into a legal Clojure symbol on both the analyzer (drift) and Layer A
+   (instruct) sides. The `holds-that` prose is preserved separately via
+   `:formal-expression` for consumers that want the original semantic
+   clause; Layer A's `affordance-element` reads it directly from the canvas
+   db instead of this primitive field, so this is informational."
   [db uuid->stable-id]
   (let [affordances-full (d/q '[:find ?uuid ?name ?role
                                  :where [?e :entity/type :Affordance]
@@ -499,30 +501,22 @@
                                     db))]
     (into {} (keep (fn [[uuid name role]]
                      (when-let [id (get uuid->stable-id uuid)]
-                       (let [kind  (affordance-kind role)
-                             ;; For invariants, the :holds-that string lives in
-                             ;; :formal-expression (pr-str'd in the canvas db)
-                             ;; and serves as the canonical code-side predicate
-                             ;; name. read-string round-trips back to the bare
-                             ;; string.
+                       (let [kind   (affordance-kind role)
                              fe-raw (get formal-exprs uuid)
                              fe-val (when (string? fe-raw)
                                       (try (read-string fe-raw)
                                            (catch Exception _ nil)))
-                             label (if (and (= role :canvas/invariant)
-                                            (string? fe-val))
-                                     fe-val
-                                     name)
-                             prim  (cond-> {:kind        kind
-                                            :id          id
-                                            :label       label
-                                            :canvas-role role}
-                                     (get docs uuid)               (assoc :description (get docs uuid))
-                                     ;; Both :primitive/operation and :primitive/event require
-                                     ;; :parameters in the Malli schema; canvas-source does not
-                                     ;; yet project parameter shapes, so seed with [].
-                                     (#{:primitive/operation
-                                        :primitive/event} kind)    (assoc :parameters []))]
+                             prim   (cond-> {:kind        kind
+                                             :id          id
+                                             :label       name
+                                             :canvas-role role}
+                                      (get docs uuid)               (assoc :description (get docs uuid))
+                                      (some? fe-val)                (assoc :formal-expression fe-val)
+                                      ;; Both :primitive/operation and :primitive/event require
+                                      ;; :parameters in the Malli schema; canvas-source does not
+                                      ;; yet project parameter shapes, so seed with [].
+                                      (#{:primitive/operation
+                                         :primitive/event} kind)    (assoc :parameters []))]
                          [id prim])))
                    affordances-full))))
 
