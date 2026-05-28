@@ -35,21 +35,36 @@
        (filter (fn [sym] (str/starts-with? (str sym) "canvas.")))))
 
 (def ^:private dynamic-load-loaders
-  "Loader namespaces whose `:require` list is the registration surface for
-   a dynamic-load registry (multimethod or var-collection). Reloading the
-   loader re-evaluates its `:require` form, which causes Clojure's standard
-   require machinery to load any newly-added file in the registry directory.
-   Add new loaders here as the canvas substrate grows."
+  "Namespaces whose vars change in ways the substrate-aware reset path must
+   pick up. Two patterns covered:
+
+   1. Loader namespaces whose `:require` list is the registration surface
+      for a dynamic-load registry (multimethod or var-collection).
+      Reloading the loader re-evaluates its `:require` form, which causes
+      Clojure's standard require machinery to load any newly-added file
+      in the registry directory. Add new loaders here as the canvas
+      substrate grows.
+
+   2. Agent sandbox surface namespaces — `fukan.agent.api` is itself
+      bound into the SCI context at first eval. New `defn`s added to it
+      don't appear in `bin/fukan eval` until the namespace reloads AND
+      the SCI context rebuilds. The reset path does both."
   '[fukan.canvas.project.clojure
     fukan.canvas.lens.registry
-    fukan.canvas.instruct.registry])
+    fukan.canvas.instruct.registry
+    fukan.agent.api])
 
 (defn ^{:agent/doc "Reload all canvas namespaces (incl. newly-added files) + rebuild
                     the Model. Use this after adding a new canvas/<...>.clj file —
                     canvas files are auto-discovered, no registry edit required.
                     Also reloads the dynamic-load registry loaders under
-                    `fukan.canvas.{project,lens,instruct}` so newly-added
-                    projection/lens/scenario files in src/ are picked up.
+                    `fukan.canvas.{project,lens,instruct}` and the agent
+                    sandbox surface `fukan.agent.api`, so newly-added
+                    projection/lens/scenario files in src/ AND newly-added
+                    agent-api fns are picked up. Rebuilds the SCI context
+                    afterward so the new agent-api vars appear in subsequent
+                    `bin/fukan eval` calls.
+
                     Blocks; returns the new status. Heavier than `refresh` —
                     equivalent to `clj -M:run` restart minus the server bounce."
         :agent/example "(reset)"}
@@ -68,22 +83,30 @@
       (require ns-sym :reload)
       (catch java.io.FileNotFoundException _
         (remove-ns ns-sym))))
-  ;; Step 2: reload the dynamic-load loaders so newly-added projection/lens/
-  ;; scenario files in src/fukan/canvas/{project,lens,instruct}/* register.
-  ;; Each loader's `:require` form names the registered files; reloading
-  ;; the loader re-runs the requires, which loads any new files via
-  ;; Clojure's standard machinery (existing files are no-ops). For lens
-  ;; and instruct, the registry's `known-*` vector still needs the new var
-  ;; conj'd explicitly — that edit lives in the loader file and reloads
-  ;; with it. For project, the multimethod defmethods register as a
-  ;; side-effect of loading each projection file.
+  ;; Step 2: reload the dynamic-load loaders + agent sandbox surface. For
+  ;; canvas/{project,lens,instruct} loaders: reloading re-runs the
+  ;; `:require` form, picking up newly-added projection/lens/scenario
+  ;; files. For `fukan.agent.api`: reloading picks up newly-added
+  ;; agent-api fns (new vars in ns-publics) so the SCI context rebuild
+  ;; in step 3 sees them.
   (doseq [loader-sym dynamic-load-loaders]
     (try
       (require loader-sym :reload)
       (catch java.io.FileNotFoundException _
         ;; loader removed/renamed since last load — drop the dangling ns
         (when (find-ns loader-sym) (remove-ns loader-sym)))))
-  ;; Step 3: rebuild the model. canvas-source/build-canvas-db walks
+  ;; Step 3: rebuild the SCI context so the new agent-api vars (from step 2's
+  ;; `fukan.agent.api` reload) appear in subsequent eval calls. The SCI
+  ;; context is built once at first eval from `(ns-publics 'fukan.agent.api)`
+  ;; + `(ns-publics 'fukan.agent.system)`; without this reset the new vars
+  ;; stay invisible to `bin/fukan eval` until daemon restart.
+  ;;
+  ;; Resolved at runtime via `requiring-resolve` to break the static cycle —
+  ;; `fukan.agent.sci` already requires `fukan.agent.system` to merge its
+  ;; ns-publics into the SCI bindings, so a static require here would loop.
+  (when-let [reset-fn (requiring-resolve 'fukan.agent.sci/reset-ctx!)]
+    (reset-fn))
+  ;; Step 4: rebuild the model. canvas-source/build-canvas-db walks
   ;; canvas/**/*.clj at each build, so newly-added files are picked up
   ;; here without any additional reload step.
   (infra-model/refresh-model)

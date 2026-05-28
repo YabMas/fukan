@@ -61,9 +61,11 @@
        :else
        (assoc result :elapsed-ms elapsed)))))
 
-(defn eval-string-as-view
+(defn ^:export eval-string-as-view
   "Evaluate a form-string in the view-loading context.
-   Defs land in the shared ctx and are reachable from subsequent eval-string calls."
+   Defs land in the shared ctx and are reachable from subsequent eval-string calls.
+   Resolved dynamically by views_loader via `requiring-resolve`; the ^:export
+   metadata flags this for clojure-lsp's unused-public-var exemption."
   [s]
   (try
     (let [ctx (ensure-view-ctx!)]
