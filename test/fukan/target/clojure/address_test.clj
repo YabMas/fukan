@@ -1,5 +1,5 @@
 (ns fukan.target.clojure.address-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [fukan.target.clojure.address :as addr]
             [fukan.project-layer.registry :as r]))
 
@@ -62,16 +62,17 @@
          (addr/canonical (r/make-registry) :primitive/rule :projection-kind/rule
                          "fukan/web/views/spec" "SelectNode"))))
 
-(deftest canonical-invariant-via-holds-that-label
-  ;; Phase 6 Sprint 2 Task 4 sub-task C: invariants project as :primitive/rule
-  ;; with the holds-that string as label. The address machinery must accept
-  ;; the label verbatim when it's already kebab-case (the convention for
-  ;; holds-that strings) and pass through unchanged.
+(deftest canonical-invariant-via-entity-name-label
+  ;; Phase 7.5 Sprint 2: invariants carry their :entity/name as the
+  ;; primitive label (uniform with all other affordance kinds). The
+  ;; address machinery kebab-cases PascalCase entity names into legal
+  ;; Clojure symbols on both the analyzer (drift) and Layer A (instruct)
+  ;; sides.
   (let [reg (r/with-root-prefix (r/make-registry) "fukan")]
-    (is (= {:ns "fukan.validation.rules-4a" :name "module-has-at-most-one-composite-parent"}
-           (addr/canonical reg :primitive/rule :projection-kind/rule
+    (is (= {:ns "fukan.validation.rules-4a" :name "at-most-one-composite-parent"}
+           (addr/canonical reg :primitive/rule :projection-kind/invariant
                            "validation.rules-4a"
-                           "module-has-at-most-one-composite-parent")))))
+                           "AtMostOneCompositeParent")))))
 
 (deftest module-ns-converts-underscores-to-hyphens
   ;; Phase 6 Sprint 2 Task 4 sub-task E: canvas module names use underscores
@@ -87,44 +88,20 @@
          (addr/module-ns (r/with-root-prefix (r/make-registry) "fukan")
                          "project_layer.registry"))))
 
-(deftest invariant-holds-that-text-kebabs-to-predicate-name
-  ;; Phase 7 Task 4 gap 2 — invariant primitives carry the `holds-that`
-  ;; clause as their primitive label. When the clause is present, the
-  ;; address derivation kebab-cases it the same way as any other
-  ;; function-shaped projection.
+(deftest invariant-entity-name-kebabs-to-predicate-name
+  ;; Phase 7.5 Sprint 2 — invariant primitives carry their PascalCase
+  ;; entity-name as the label. Address derivation kebab-cases it the
+  ;; same way as any other function-shaped projection, producing a
+  ;; legal Clojure symbol on both the analyzer and Layer A sides.
   (let [reg (r/with-root-prefix (r/make-registry) "fukan")]
     (is (= {:ns "fukan.distributed.cluster"
-            :name "current-term-is-monotonically-non-decreasing-per-node"}
+            :name "term-monotonicity"}
            (addr/canonical reg :primitive/rule :projection-kind/invariant
-                           "distributed.cluster"
-                           "current-term-is-monotonically-non-decreasing-per-node")))))
-
-(deftest invariant-holds-that-absent-falls-back-to-kebab-invariant-name
-  ;; Phase 7 Task 4 gap 2 — when a canvas invariant declaration omits
-  ;; `holds-that` (or the clause is blank/nil), `addr/canonical` must
-  ;; fall back to `kebab(invariant-name)` rather than emitting an empty
-  ;; or junk predicate name. The caller supplies the invariant name as
-  ;; a fallback via the opts arity.
-  (let [reg (r/with-root-prefix (r/make-registry) "fukan")]
-    (testing "nil label falls back to kebab(invariant-name)"
-      (is (= {:ns "fukan.distributed.cluster"
-              :name "term-monotonicity"}
-             (addr/canonical reg :primitive/rule :projection-kind/invariant
-                             "distributed.cluster" nil
-                             {:invariant-name "TermMonotonicity"}))))
-    (testing "blank-string label falls back to kebab(invariant-name)"
-      (is (= {:ns "fukan.distributed.cluster"
-              :name "at-most-one-leader-per-term"}
-             (addr/canonical reg :primitive/rule :projection-kind/invariant
-                             "distributed.cluster" "   "
-                             {:invariant-name "AtMostOneLeaderPerTerm"}))))
-    (testing "present label wins; fallback unused"
-      (is (= {:ns "fukan.distributed.cluster"
-              :name "majority-required-for-leadership"}
-             (addr/canonical reg :primitive/rule :projection-kind/invariant
-                             "distributed.cluster"
-                             "majority-required-for-leadership"
-                             {:invariant-name "Ignored"}))))))
+                           "distributed.cluster" "TermMonotonicity")))
+    (is (= {:ns "fukan.distributed.cluster"
+            :name "majority-required-for-leadership"}
+           (addr/canonical reg :primitive/rule :projection-kind/invariant
+                           "distributed.cluster" "MajorityRequiredForLeadership")))))
 
 (deftest canonical-rule-pascal-name-via-canvas
   ;; Phase 6 Sprint 2 Task 4 sub-task C: canvas rules carry their own
