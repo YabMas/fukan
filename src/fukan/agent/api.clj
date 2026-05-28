@@ -915,10 +915,65 @@
        :check       (:check finding)
        :rendered    (:rendered rendered)
        :code-spec   (:code-spec rendered)
-       :context     (cond-> {}
+       :context     (cond-> {:attempt 1}
                       code-path   (assoc :expected-code-path code-path)
                       canvas-kind (assoc :canvas-kind canvas-kind))
        :batch-key   (or code-path :no-path)})))
+
+;; -- Sprint 4 — iter-2 retry rendering ---------------------------------------
+
+(def ^:private reconciliation-preamble
+  "Reconciliation-prose preamble for iter-2 instructions. Four-section
+   shape per Sprint 1's 'Retry context' design — most urgent
+   information first."
+  (str
+    "**This is iteration 2 of a drift-closure attempt.** Your previous "
+    "attempt did not close the finding — `(canvas-drift)` re-ran after "
+    "your edit and the same drift is still present. Read your previous "
+    "attempt's report below, read the current drift state, then make a "
+    "SECOND attempt that addresses why the first edit failed to close. "
+    "If the failure mode looks like a substrate-side gap rather than a "
+    "missed edit on your part, say so in your report — the canvas-author "
+    "will escalate."))
+
+(defn- render-iter-1-drift-section
+  "Render a `:iter-1-drift` finding-snapshot as markdown. The caller
+   passes either a `snapshot-finding`-shaped map or the raw drift
+   finding; we accept both shapes pragmatically."
+  [iter-1-drift]
+  (cond
+    (nil? iter-1-drift)
+    "_(no drift snapshot supplied)_"
+
+    (string? iter-1-drift)
+    iter-1-drift
+
+    (map? iter-1-drift)
+    (let [check    (:check iter-1-drift)
+          message  (:message iter-1-drift)
+          offender (or (:offender iter-1-drift)
+                       (first (:offenders iter-1-drift)))]
+      (str "- check: `" (pr-str check) "`\n"
+           (when message (str "- message: " message "\n"))
+           (when offender
+             (str "- offender: " (pr-str offender) "\n"))))
+
+    :else
+    (pr-str iter-1-drift)))
+
+(defn- wrap-iter-2-instruction
+  "Wrap an iter-1 rendered instruction with the four-section
+   reconciliation prose (Sprint 1 design 'Retry context'). Sections in
+   urgency order: preamble → iter-1 subagent report → iter-1 drift state
+   → original instruction."
+  [iter-1-rendered iter-1-report iter-1-drift]
+  (str reconciliation-preamble
+       "\n\n## Iter-1 subagent report\n\n"
+       (or iter-1-report "_(no iter-1 report supplied)_")
+       "\n\n## Iter-1 drift state\n\n"
+       (render-iter-1-drift-section iter-1-drift)
+       "\n\n## Original instruction\n\n"
+       iter-1-rendered))
 
 (defn- finding->unhandled-entry
   "Turn a finding whose drift-kind has no registered scenario into an
@@ -960,10 +1015,22 @@
                                                           scope filters
                       :limit        <int>                — default 25
                       :max-attempts <int>                — default 2
-                                                          (placeholder;
-                                                          architect-side
-                                                          retry lands in
-                                                          Sprint 4)
+
+                    Retry opts (Sprint 4 — iter-2 rendering):
+                      :retry-of      <stable-id-string>  — flags this
+                                                          render as an
+                                                          iter-2 attempt
+                                                          for the given
+                                                          finding
+                      :iter-1-report <string>            — verbatim
+                                                          subagent
+                                                          narrative from
+                                                          iter-1
+                      :iter-1-drift  <snapshot or map>   — the iter-1
+                                                          drift state
+                                                          (post-iter-1
+                                                          (canvas-drift)
+                                                          output)
 
                     Returns
                       {:plan         [<plan-entry> …]
@@ -981,61 +1048,119 @@
                     Pure: no dispatch, no side effects beyond reading the
                     canvas db + the loaded Model. Architect's Phase D
                     `Agent` invocations consume the `:rendered` field
-                    per plan entry."
+                    per plan entry.
+
+                    When `:retry-of` is present, the rendered instruction
+                    is wrapped with the four-section reconciliation
+                    preamble + iter-1 report + iter-1 drift + original
+                    instruction (Sprint 1 design 'Retry context'). The
+                    plan-entry's `:context` carries `:attempt 2` so the
+                    architect's loop can route accordingly."
         :agent/example "(close-drift-plan :module-coord \"distributed.cluster\")
-                        (close-drift-plan :stable-id \"distributed.log/AppendEntriesRequested\")"}
+                        (close-drift-plan :stable-id \"distributed.log/AppendEntriesRequested\")
+                        (close-drift-plan :retry-of \"x/foo\" :iter-1-report \"…\" :iter-1-drift {…})"}
   close-drift-plan
-  [& {:keys [module-coord check stable-id limit max-attempts]
+  [& {:keys [module-coord check stable-id limit max-attempts
+             retry-of iter-1-report iter-1-drift]
       :or {limit 25 max-attempts 2}
       :as opts}]
-  (let [known #{:module-coord :check :stable-id :limit :max-attempts}
+  (let [known #{:module-coord :check :stable-id :limit :max-attempts
+                :retry-of :iter-1-report :iter-1-drift}
         unknown (seq (remove known (keys opts)))]
     (when unknown
       (throw (ex-info (str "unknown close-drift-plan filter: " (first unknown))
                       {:type :unknown-filter :filter (first unknown)})))
-    (let [;; :stable-id is the strongest scope; if present, filter to it
-          ;; client-side after pulling the broader (module-coord or whole)
-          ;; drift output.
-          drift-opts (cond-> {}
-                       module-coord (assoc :module-coord module-coord))
-          all-findings (apply canvas-drift (mapcat identity drift-opts))
-          by-stable    (if stable-id
-                         (filterv #(= stable-id (-> % :offenders first :stable-id))
-                                  all-findings)
-                         all-findings)
-          by-check     (if check
-                         (filterv #(= check (:check %)) by-stable)
-                         by-stable)
-          findings     by-check
-          total        (count findings)
-          take-n       (min total limit)
-          taken        (vec (take take-n findings))
-          truncated?   (> total limit)
-          remaining    (max 0 (- total limit))
-          ;; Partition into plannable + unhandled.
-          {:keys [plan unhandled]}
-          (reduce (fn [acc f]
-                    (if-let [scenario-id (drift-kind->scenario (:check f))]
-                      (if-let [entry (finding->plan-entry f scenario-id)]
-                        (update acc :plan conj entry)
-                        acc)
-                      (update acc :unhandled conj (finding->unhandled-entry f))))
-                  {:plan [] :unhandled []}
-                  taken)]
-      {:plan         plan
-       :batches      (group-by-batch-key plan)
-       :unhandled    unhandled
-       :scope        {:module-coord module-coord
-                      :check        check
-                      :stable-id    stable-id
-                      :limit        limit}
-       :counts       {:findings-total      total
-                      :findings-planned    (count plan)
-                      :findings-unhandled  (count unhandled)
-                      :findings-truncated  remaining}
-       :truncated?   truncated?
-       :remaining    remaining
-       :max-attempts max-attempts})))
+    (when (and retry-of (or module-coord check stable-id))
+      (throw (ex-info "close-drift-plan: :retry-of is exclusive with :module-coord/:check/:stable-id (scope is implicit — single finding)"
+                      {:type :bad-argument :retry-of retry-of})))
+    (if retry-of
+      ;; Iter-2 render — single-finding scope implicit via :retry-of.
+      (let [findings    (canvas-drift)
+            finding     (some (fn [f]
+                                (when (= retry-of (-> f :offenders first :stable-id))
+                                  f))
+                              findings)
+            _           (when-not finding
+                          (throw (ex-info (str "close-drift-plan: :retry-of finding not present in current drift: " retry-of)
+                                          {:type :element-not-found :retry-of retry-of})))
+            scenario-id (drift-kind->scenario (:check finding))
+            base-entry  (and scenario-id (finding->plan-entry finding scenario-id))]
+        (if-not base-entry
+          {:plan         []
+           :batches      {}
+           :unhandled    (if scenario-id
+                           []
+                           [(finding->unhandled-entry finding)])
+           :scope        {:retry-of retry-of}
+           :counts       {:findings-total      1
+                          :findings-planned    0
+                          :findings-unhandled  (if scenario-id 0 1)
+                          :findings-truncated  0}
+           :truncated?   false
+           :remaining    0
+           :max-attempts max-attempts}
+          (let [wrapped (wrap-iter-2-instruction (:rendered base-entry)
+                                                 iter-1-report
+                                                 iter-1-drift)
+                entry   (-> base-entry
+                            (assoc :rendered wrapped)
+                            (assoc-in [:context :attempt] 2)
+                            (assoc-in [:context :retry-of] retry-of))]
+            {:plan         [entry]
+             :batches      (group-by-batch-key [entry])
+             :unhandled    []
+             :scope        {:retry-of retry-of}
+             :counts       {:findings-total      1
+                            :findings-planned    1
+                            :findings-unhandled  0
+                            :findings-truncated  0}
+             :truncated?   false
+             :remaining    0
+             :max-attempts max-attempts})))
+      ;; Iter-1 render — original scope-driven path.
+      (let [;; :stable-id is the strongest scope; if present, filter to it
+            ;; client-side after pulling the broader (module-coord or whole)
+            ;; drift output.
+            drift-opts (cond-> {}
+                         module-coord (assoc :module-coord module-coord))
+            all-findings (apply canvas-drift (mapcat identity drift-opts))
+            by-stable    (if stable-id
+                           (filterv #(= stable-id (-> % :offenders first :stable-id))
+                                    all-findings)
+                           all-findings)
+            by-check     (if check
+                           (filterv #(= check (:check %)) by-stable)
+                           by-stable)
+            findings     by-check
+            total        (count findings)
+            take-n       (min total limit)
+            taken        (vec (take take-n findings))
+            truncated?   (> total limit)
+            remaining    (max 0 (- total limit))
+            ;; Partition into plannable + unhandled.
+            {:keys [plan unhandled]}
+            (reduce (fn [acc f]
+                      (if-let [scenario-id (drift-kind->scenario (:check f))]
+                        (if-let [entry (finding->plan-entry f scenario-id)]
+                          (update acc :plan conj entry)
+                          acc)
+                        (update acc :unhandled conj (finding->unhandled-entry f))))
+                    {:plan [] :unhandled []}
+                    taken)]
+        {:plan         plan
+         :batches      (group-by-batch-key plan)
+         :unhandled    unhandled
+         :scope        {:module-coord module-coord
+                        :check        check
+                        :stable-id    stable-id
+                        :limit        limit}
+         :counts       {:findings-total      total
+                        :findings-planned    (count plan)
+                        :findings-unhandled  (count unhandled)
+                        :findings-truncated  remaining}
+         :truncated?   truncated?
+         :remaining    remaining
+         :max-attempts max-attempts}))))
 
 (defn- excerpt
   "Truncate a string at `n` chars with an ellipsis when over."

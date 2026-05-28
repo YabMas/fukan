@@ -374,3 +374,77 @@
             "noop dispatch ⇒ no finding closes"))
       (is (< plan-ms 30000) "close-drift-plan completes in under 30s")
       (is (< full-ms 30000) "close-drift completes in under 30s"))))
+
+;; ---------------------------------------------------------------------------
+;; Sprint 4 — Task 10: Iter-2 instruction rendering
+
+(deftest plan-retry-of-renders-iter-2-instruction
+  (testing "(close-drift-plan :retry-of …) wraps iter-1 instruction with reconciliation prose"
+    (let [;; Synthetic drift finding present in canvas-drift output.
+          synthetic [{:check :inspect.drift/missing-implementation
+                      :severity :warning
+                      :message "synthetic"
+                      :offenders [{:stable-id          "distributed.cluster/get_self_role"
+                                   :expected-code-path "src/fukan/distributed/cluster.clj"
+                                   :expected-symbol    "get-self-role"
+                                   :canvas-kind        :function}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] synthetic)]
+        (let [p (api/close-drift-plan
+                  :retry-of "distributed.cluster/get_self_role"
+                  :iter-1-report "I tried to write the fn but the path was wrong."
+                  :iter-1-drift {:check :inspect.drift/missing-implementation
+                                 :message "still missing"
+                                 :offender {:stable-id "distributed.cluster/get_self_role"
+                                            :expected-code-path "src/fukan/distributed/cluster.clj"
+                                            :expected-symbol "get-self-role"}})]
+          (is (= 1 (count (:plan p))))
+          (let [entry (first (:plan p))
+                rendered (:rendered entry)]
+            (is (str/includes? rendered "iteration 2 of a drift-closure attempt"))
+            (is (str/includes? rendered "## Iter-1 subagent report"))
+            (is (str/includes? rendered "I tried to write the fn but the path was wrong."))
+            (is (str/includes? rendered "## Iter-1 drift state"))
+            (is (str/includes? rendered "## Original instruction"))
+            (is (str/includes? rendered "Implementation instruction")
+                "wrapped instruction still carries the original Layer A+B body")
+            (is (= 2 (-> entry :context :attempt))
+                ":context :attempt flagged as 2 for the architect's loop")
+            (is (= "distributed.cluster/get_self_role"
+                   (-> entry :context :retry-of)))))))))
+
+(deftest plan-retry-of-scope-is-implicit-single-finding
+  (testing ":retry-of with scope opts throws — scope is implicit"
+    (let [synthetic [{:check :inspect.drift/missing-implementation
+                      :severity :warning
+                      :offenders [{:stable-id "x/foo"
+                                   :expected-code-path "p"
+                                   :expected-symbol "foo"
+                                   :canvas-kind :function}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] synthetic)]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"exclusive with"
+                              (api/close-drift-plan
+                                :retry-of "x/foo"
+                                :module-coord "x")))))))
+
+(deftest plan-retry-of-missing-finding-throws
+  (testing ":retry-of throws when the finding is no longer in current drift"
+    (with-redefs [api/canvas-drift (fn [& _] [])]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"not present in current drift"
+                            (api/close-drift-plan
+                              :retry-of "no.such/finding"
+                              :iter-1-report "tried"
+                              :iter-1-drift nil))))))
+
+(deftest plan-iter-1-attempt-marker-set-on-context
+  (testing "iter-1 plan-entries carry :attempt 1 on :context"
+    (let [synthetic [{:check :inspect.drift/missing-implementation
+                      :severity :warning
+                      :offenders [{:stable-id "distributed.cluster/get_self_role"
+                                   :expected-code-path "src/fukan/distributed/cluster.clj"
+                                   :expected-symbol "get-self-role"
+                                   :canvas-kind :function}]}]]
+      (with-redefs [api/canvas-drift (fn [& _] synthetic)]
+        (let [p (api/close-drift-plan :module-coord "distributed.cluster")]
+          (is (every? #(= 1 (-> % :context :attempt)) (:plan p))))))))
