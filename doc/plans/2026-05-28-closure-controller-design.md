@@ -137,6 +137,87 @@ gets a non-stub implementation and nothing else changes.
 
 ---
 
+## Two-seat collaboration (Phase 9 amendment)
+
+The sketches above (A/B/C, plus the resolution toward Sketch B with two pure
+entry points) reasoned about the architect as the orchestrating seat — the
+agent that holds the plan, dispatches per-finding, and drives verify. Phase 8
+Sprint 6 falsified the dispatch half of that hypothesis empirically:
+
+> When `fukan-architect` was dispatched as a subagent from the main session,
+> its `Agent` tool returned `"No such tool available: Agent. Agent is not
+> available inside subagents."` — uniform, hard error. The harness blocks
+> `Agent` invocation at the subagent boundary regardless of agent type or
+> declared grants.
+>
+> — `doc/plans/2026-05-28-property-test-trial-findings.md`
+
+Sprint 6's trial closed three invariants successfully — not via architect-
+driven dispatch but via an implicit pivot. The canvas-author (main session)
+called `(close-drift-plan)` from `bin/fukan eval`, then dispatched the
+implementing-LLMs from the main session's `Agent` tool, then verified.
+The architect's planning role stayed intact; the dispatch role moved to
+the only seat where it works.
+
+**Phase 9 Sprint 1 metabolises this as a 2-seat protocol:**
+
+- **Architect seat.** Plans + renders per-finding instructions + returns a
+  self-contained handoff package the canvas-author consumes. Optionally
+  interprets verify outcomes at canvas altitude (escalation framing,
+  canvas-side hint reading) when the canvas-author re-dispatches with the
+  collected reports.
+- **Canvas-author seat (main session).** Dispatches each implementing-LLM
+  via the main session's `Agent` tool. Owns the dispatch loop, including
+  the same-file serialization and the re-render-between-dispatches
+  convention. Chooses how verify runs.
+
+**Two verify flows ship — canvas-author picks based on scope:**
+
+- **(a) Main-session-direct.** Canvas-author calls
+  `(close-drift-verify :plan … :reports …)` directly from
+  `bin/fukan eval`. Reads the structured return. Best for ≤2 findings or
+  single familiar module.
+- **(b) Architect-re-engaged.** Canvas-author re-dispatches the architect
+  with `"verify close-drift with these reports: …"` plus the original
+  plan snapshot. The architect calls verify and returns a canvas-altitude
+  summary. Best for >2 findings, multi-module batches, or any verify
+  where iter-2 retries may be needed.
+
+The architect emits a verify-flow recommendation as part of the handoff
+package — heuristic: ≤2 findings or single-module → (a); >2 findings or
+multi-module → (b). The canvas-author overrides freely.
+
+**The substrate doesn't change.** The two-entry-point split
+(`close-drift-plan` / `close-drift-verify`) introduced earlier in this doc
+naturally supports the 2-seat protocol without code changes:
+
+- Plan is pure — either seat can call it (the architect emits per-finding
+  instructions; the canvas-author can re-render between dispatches via
+  `:stable-id <id>` to refresh sibling state).
+- Verify is pure — either seat can call it; both consume the same
+  structured return.
+- Dispatch lives nowhere in the substrate; both seats agree it belongs
+  with whichever entity has the working `Agent` tool, which the harness
+  scopes to top-level main session only.
+
+The earlier sketches A/B/C remain as design history — they reasoned through
+the substrate split correctly. The empirical correction is just to which
+seat dispatches. The substrate-side resolution (Sketch B's two pure entry
+points) is the right answer regardless.
+
+**Load-bearing convention from Sprint 6 — same-file batch re-render.** When
+the canvas-author dispatches multiple findings against one
+`:expected-code-path`, each subsequent dispatch must call
+`(close-drift-plan :stable-id <next-id>)` between dispatches to re-render
+the instruction with the updated on-disk state. Without re-render, the
+neighbor-section will carry stale sibling-def listings or falsely claim
+the target file is absent. Sprint 6 iter-2 and iter-3 only worked because
+the canvas-author followed this convention; the convention is now
+explicit in the architect's handoff package and in the canvas-authoring
+system prompt.
+
+---
+
 ## Scope shape
 
 Mirror `(canvas-drift)`'s filter surface; add a small batch of controller-
