@@ -143,36 +143,44 @@ landed in the working tree as of 2026-05-28.
 - **Drift comparator** gets a `ns->test-path` mirror and a
   projection-kind-branched `expected-path-for`.
 
-### Sprint 2 — Trial-fidelity probe across unexercised projections
+### Sprint 2 — Trial-fidelity probe across unexercised projections ✅
 
-Goal: get honest end-to-end data on how often a *real subagent* (with
-zero prior context) successfully implements a Phase 7 instruction. This
-data is the empirical input to Sprint 1's retry-policy design.
+Goal: get honest end-to-end data on how often a real subagent (with
+zero prior context) successfully implements a Phase 7 instruction.
 
-Sprint 2 sits BEFORE Sprint 3 deliberately. The Phase 7 trial-run used
-in-session implementing-LLM substitution (canvas-author and
-implementing-LLM were the same context); the controller's retry +
-escalation thresholds need to be calibrated against real cold-subagent
-behavior, not pretend.
+**Sprint 2 pivoted to an instruction-quality survey.** Task 3's subagent
+discovered that the harness running the trial does not grant the `Agent`
+tool to nested subagents — the same fidelity gap Phase 7 ran into. Rather
+than substitute in-session implementing-LLM behavior (which would
+reproduce Phase 7 data with no new signal), the subagent ran an
+instruction-rendering survey across the 6 unexercised projection kinds +
+cold-write scenario, capturing per-kind instruction quality + defects
+surfaced. The survey produced actionable Task 4 input even though it
+didn't produce closure-rate empirics.
 
-**Task 3 — Real-Agent dispatch probe.** `fukan-architect` dispatches
-implementing-LLMs against the 6 unexercised projection kinds:
-`event-to-schema`, `rule-to-predicate`, `checker-to-defn`,
-`handler-to-defn`, `value-to-def`, plus the `cold-write` scenario.
-Each probe runs at least 2 iterations with fresh subagents. Output:
-`doc/plans/2026-05-28-trial-run-real-agent-findings.md` — structured
-per-projection-kind, with closure rate, instruction-quality observations,
-and any defects surfaced.
+Architectural consequence: Sprint 3's MVP ships with the closure-
+controller design's retry/concurrency thresholds as placeholders. Real
+closure-rate data accumulates organically through Sprint 3's smoke test
+(Task 9) + Sprint 6's property-test trial + canvas-author use, not via a
+contrived trial. The two-entry-point split (Sprint 1 design) is even
+more load-bearing under the confirmed harness constraint — the only
+context with reliable `Agent` tool grant is the human-driven main
+session driving `fukan-architect`.
 
-**Task 4 — Defect triage.** Fixes for surfaced defects land between
-Task 3 and Sprint 3. Defects worth a Phase 8 fix vs deferred to
-Phase 9 get explicitly classified in the trial doc. The classification
-criterion: does the defect block automation? If yes, fix now; if no,
-log and continue.
+**Task 3 — Real-Agent dispatch probe** (delivered as instruction-quality
+survey). Output: `doc/plans/2026-05-28-trial-run-real-agent-findings.md` —
+per-projection-kind instruction quality, defects surfaced, Sprint 3
+readiness assessment.
 
-Sprint 2 must complete before Sprint 3 begins. The Sprint 1 design's
-retry-policy section gets amended post-Sprint 2 if the empirical data
-contradicts the proposed thresholds.
+**Task 4 — Defect triage** ✅. Two blockers fixed: (a) event projection
+dropped payload fields (`affordance-element` had an `:arrow`-shape guard
+but events use record-kind shape — one-line fix); (b) cold-write had no
+public entry point (`(instruct …)` unconditionally called `(spec …)`
+which rejects module-shaped input — extended to detect module-coord
+shape and walk the canvas db's module children). Four other defects
+deferred to Phase 9 with documented rationale: predicate `?`-suffix
+naming, atomic `[:any]` render prose, rule/invariant name collision
+artifact, Agent-tool harness gap.
 
 ### Sprint 3 — Closure controller MVP
 
