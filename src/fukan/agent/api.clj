@@ -1369,7 +1369,13 @@
      - `:attempts-exhausted` — present + attempts >= max
      - `:canvas-side-hint` — Task 13 heuristic fired
      - `:projection-emits-warning` — reserved; not fired today (Layer A
-       has no `:warnings` surface yet)."
+       has no `:warnings` surface yet). Phase 9 Sprint 3 Task 8 confirmed
+       this trigger stays reserved: no projection in
+       `src/fukan/canvas/project/clojure/*.clj` emits a `:warnings`
+       vector, and synthesising one purely to fire the trigger creates
+       test noise without representing real Layer A behaviour. Re-open
+       when a projection has a genuine cause to fall back / skip with a
+       structured warning."
   [plan-entry reports post-finding post-findings attempts max-attempts]
   (let [latest    (last (sort-by (fnil :attempt 0) (or reports [])))
         present?  (finding-still-present? (:stable-id plan-entry) post-findings)

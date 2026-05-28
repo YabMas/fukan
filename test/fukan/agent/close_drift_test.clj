@@ -948,3 +948,141 @@
                    " should target a test/ file; got " (-> e :context :expected-code-path)))
           (is (str/ends-with? (-> e :context :expected-code-path) "_test.clj"))
           (is (= (-> e :context :expected-code-path) (:batch-key e))))))))
+
+;; ---------------------------------------------------------------------------
+;; Phase 9 Sprint 3 Task 8 — stress-test coverage for the three reserved
+;; escalation triggers Sprint 4 of Phase 8 implemented but didn't exercise
+;; empirically:
+;;   - :scenario-not-found        (8.1) — plan→verify chain through
+;;                                  :unhandled
+;;   - :dispatch-error            (8.2) — :error true boolean shape
+;;                                  (separate codepath from the string
+;;                                  shape covered by
+;;                                  `escalation-trigger-dispatch-error`)
+;;   - :projection-emits-warning  (8.3) — decision: leave reserved.
+;;                                  Today no projection emits :warnings;
+;;                                  these tests pin the reserved state so
+;;                                  the trigger doesn't accidentally
+;;                                  start firing from a stray
+;;                                  classification branch.
+
+(deftest sprint-3-task-8-1-scenario-not-found-full-plan-verify-chain
+  (testing "Full plan→verify chain for an unknown drift kind surfaces :scenario-not-found via the :unhandled-entries path"
+    ;; This is a sibling to `escalation-trigger-scenario-not-found`. The
+    ;; sibling asserts the broader contract: the synthetic finding flows
+    ;; from plan's :unhandled into verify's :per-finding (via
+    ;; unhandled-entries), is counted as escalated, and carries a
+    ;; structured :escalation-reason with the right :trigger + :detail.
+    (let [synthetic [{:check     :inspect.drift/this-kind-is-not-registered
+                      :severity  :warning
+                      :message   "synthetic finding for Sprint 3 Task 8.1"
+                      :offenders [{:stable-id          "synthetic.module/Whatever"
+                                   :expected-code-path "src/synthetic/module.clj"
+                                   :expected-symbol    "Whatever"
+                                   :canvas-kind        :function}]
+                      :detail    {}}]]
+      (with-redefs [api/canvas-drift (fn [& _] synthetic)]
+        (let [p (api/close-drift-plan)]
+          (testing "plan extracts the finding into :unhandled with :scenario-not-found"
+            (is (= 0 (count (:plan p))))
+            (is (= 1 (count (:unhandled p))))
+            (is (= :scenario-not-found (-> p :unhandled first :reason))))
+          (let [v  (api/close-drift-verify :plan p :reports [])
+                pf (-> v :per-finding first)]
+            (testing "verify lifts the unhandled entry into :per-finding"
+              (is (= 1 (count (:per-finding v))))
+              (is (= "synthetic.module/Whatever" (:stable-id pf)))
+              (is (= :failed (:outcome pf))))
+            (testing "structured :escalation-reason carries :scenario-not-found"
+              (let [er (:escalation-reason pf)]
+                (is (map? er))
+                (is (= :scenario-not-found (:trigger er)))
+                (is (string? (:detail er)))))
+            (testing ":counts reflects the entry as escalated"
+              (is (= 1 (-> v :counts :findings-total)))
+              (is (= 1 (-> v :counts :findings-failed)))
+              (is (= 1 (-> v :counts :findings-escalated))))))))))
+
+(deftest sprint-3-task-8-2-dispatch-error-from-error-true-boolean
+  (testing ":dispatch-error fires when the report carries :error true (boolean, separate branch from :error <string>)"
+    ;; Existing `escalation-trigger-dispatch-error` exercises the
+    ;; :error "Agent timeout" string shape. `dispatch-error-report?`
+    ;; accepts both (true? :error) and (string? :error). This test
+    ;; pins the boolean branch — the exact shape the task contract
+    ;; calls out: {:stable-id ... :error true ...}.
+    (let [plan {:plan [{:stable-id "x/foo" :scenario :code-side/drift-close
+                        :check :inspect.drift/missing-implementation
+                        :rendered "…" :code-spec {}
+                        :context {} :batch-key "p"}]
+                :unhandled []
+                :scope {:module-coord "x"}
+                :max-attempts 2}
+          reports [{:stable-id    "x/foo"
+                    :report       nil
+                    :error        true
+                    :error-reason "Agent dispatch failed"
+                    :attempt      1}]]
+      (with-redefs [api/canvas-drift (fn [& _] [])]
+        (let [v  (api/close-drift-verify :plan plan :reports reports)
+              pf (-> v :per-finding first)]
+          (testing "outcome is :failed and not retried (dispatch failure is not a retry case)"
+            (is (= :failed (:outcome pf)))
+            (is (false? (:requires-retry? pf))))
+          (testing ":escalation-reason classifies the boolean :error as :dispatch-error"
+            (let [er (:escalation-reason pf)]
+              (is (map? er))
+              (is (= :dispatch-error (:trigger er)))
+              (is (string? (:detail er)))
+              (is (str/includes? (:detail er) "x/foo"))))
+          (testing ":counts reflects the failed dispatch"
+            (is (= 1 (-> v :counts :findings-failed)))
+            (is (= 1 (-> v :counts :findings-escalated)))))))))
+
+(deftest sprint-3-task-8-3-projection-emits-warning-stays-reserved
+  (testing ":projection-emits-warning trigger is reserved — no classification path fires it today (Sprint 3 decision: leave reserved)"
+    ;; Decision (Phase 9 Sprint 3 Task 8.3, option a): leave the trigger
+    ;; reserved. Layer A projections in
+    ;; src/fukan/canvas/project/clojure/*.clj emit no :warnings vector.
+    ;; Inventing a synthetic warning surface purely to fire the trigger
+    ;; creates noise without representing real Layer A behaviour.
+    ;;
+    ;; This test pins the reserved state in two ways:
+    ;;   1. The docstring on `close-drift-verify` still names the trigger
+    ;;      as reserved (so the public contract advertises it).
+    ;;   2. A plan entry carrying a `:warnings` vector does NOT cause the
+    ;;      classifier to emit `:projection-emits-warning` — confirming
+    ;;      no stray branch fires before Layer A grows a warning surface.
+    (testing "docstring on close-drift-verify advertises the reserved trigger"
+      (let [doc (or (-> #'api/close-drift-verify meta :agent/doc) "")]
+        (is (str/includes? doc ":projection-emits-warning"))
+        (is (str/includes? doc "reserved"))))
+    (testing "a plan entry with synthetic :warnings does not fire :projection-emits-warning today"
+      (let [still-there [{:check    :inspect.drift/missing-implementation
+                          :severity :warning
+                          :offenders [{:stable-id          "x/foo"
+                                       :expected-code-path "p"
+                                       :expected-symbol    "foo"}]}]
+            plan {:plan [{:stable-id "x/foo"
+                          :scenario  :code-side/drift-close
+                          :check     :inspect.drift/missing-implementation
+                          :rendered  "…"
+                          :code-spec {}
+                          :context   {}
+                          :batch-key "p"
+                          ;; Synthetic future-shape: Layer A would attach
+                          ;; warnings here if/when it grows a fall-back
+                          ;; surface.
+                          :warnings  [{:kind :synthetic
+                                       :detail "would-fire-if-classified"}]}]
+                  :unhandled []
+                  :scope {:module-coord "x"}
+                  :max-attempts 1}
+            reports [{:stable-id "x/foo" :report "first" :attempt 1}]]
+        (with-redefs [api/canvas-drift (fn [& _] still-there)]
+          (let [v  (api/close-drift-verify :plan plan :reports reports)
+                pf (-> v :per-finding first)
+                er (:escalation-reason pf)]
+            (is (some? er)
+                "the finding is still escalated — exhausted attempts triggers it, NOT :projection-emits-warning")
+            (is (not= :projection-emits-warning (:trigger er))
+                ":projection-emits-warning must not fire today; reserved for a future Layer A warning surface")))))))
