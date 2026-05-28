@@ -187,13 +187,18 @@
 
 (defn extract-symbols
   "Read a Clojure file and return a vector of
-     {:kind :function|:data-structure|:function-private :ns <string> :name <string>
-      :file <path>}
-   records for every top-level def / defn / defn- / defrecord.
+     {:kind :function|:data-structure|:function-private|:property-test
+      :ns <string> :name <string> :file <path>}
+   records for every top-level def / defn / defn- / defrecord / defspec.
 
    When the def body is a Malli `[:map …]` schema OR the form is a defrecord,
    a `:fields` slot is added carrying a vector of
-   `[field-name-kw type-name-kw]` pairs."
+   `[field-name-kw type-name-kw]` pairs.
+
+   `defspec` forms (Phase 8 Sprint 5 — `clojure.test.check` property tests)
+   surface as `:kind :property-test`. The walker recognises them on the
+   same convention as `defn` / `defrecord`: a top-level list whose head is
+   the form-keyword and whose second element is the test symbol."
   [path]
   (let [forms (read-forms path)
         ns-name (or (ns-of-forms forms) "")]
@@ -221,5 +226,9 @@
                            :ns ns-name
                            :name (str (second f))
                            :file path}
+                  "defspec" {:kind :property-test
+                             :ns ns-name
+                             :name (str (second f))
+                             :file path}
                   nil)))
             forms))))

@@ -19,12 +19,28 @@
 ;; Source index
 ;; ---------------------------------------------------------------------------
 
+(defn- safe-extract-symbols
+  "Extract symbols from `path`, returning [] on read errors. The
+   analyzer must not crash when a single source file is unreadable —
+   fixtures and demos under `test/` sometimes contain intentionally
+   malformed snippets. Per-file failures are skipped silently so the
+   rest of the walk completes."
+  [path]
+  (try
+    (source/extract-symbols path)
+    (catch Exception _
+      [])))
+
 (defn- walk-symbols
-  "Walk `code-root` and return a flat vector of all source symbol records."
+  "Walk `code-root` and return a flat vector of all source symbol records.
+   Per-file read errors are skipped rather than crashing the walk —
+   fixture files (under `test/fixtures` etc.) sometimes carry
+   intentionally malformed snippets that aren't legal Clojure but live
+   on the test-side classpath."
   [code-root]
   (if (and code-root (.exists (io/file code-root)))
     (let [files (source/find-clj-files code-root)]
-      (vec (mapcat source/extract-symbols files)))
+      (vec (mapcat safe-extract-symbols files)))
     []))
 
 (defn- index-from-symbols
@@ -119,6 +135,30 @@
                         projection-kind
                         validity)))
 
+(defn- emit-property-test-projection
+  "Emit one projects edge from a `:canvas/invariant` primitive to a
+   Code.Function artifact at the property-test canonical address (under
+   `test/`). Phase 8 Sprint 5 — the migrate path: invariants project to
+   `clojure.test.check` `defspec` symbols in `test/<module>_test.clj`,
+   not to predicate stubs in `src/`. The validity flips :valid when the
+   test source-index carries a `:property-test` symbol at the canonical
+   address."
+  [model test-source-index reg primitive-id primitive-label]
+  (let [module-coord (module-coord-of-primitive primitive-id)
+        {:keys [ns name]} (addr/canonical reg :primitive/rule
+                                          :projection-kind/property-test
+                                          module-coord primitive-label)
+        property-match (find-symbol test-source-index ns name :property-test)
+        artifact (a/make-code-function "clojure" (str ns "/" name) nil nil)
+        aid (a/artifact-identity artifact)
+        validity (if property-match :valid :absent)
+        m1 (ensure-artifact model artifact)]
+    (emit-projects-edge m1
+                        (r/primitive-ref primitive-id)
+                        aid
+                        :projection-kind/property-test
+                        validity)))
+
 ;; ---------------------------------------------------------------------------
 ;; Top-level run
 ;; ---------------------------------------------------------------------------
@@ -127,8 +167,28 @@
   (filter (fn [[_ p]] (= :primitive/operation (:kind p)))
           (:primitives model)))
 
-(defn- rules [model]
-  (filter (fn [[_ p]] (= :primitive/rule (:kind p)))
+(defn- rules
+  "Reactive rules — canvas `:canvas/rule` primitives. Excludes invariants,
+   which canvas-source maps to the same `:primitive/rule` kernel kind but
+   carry `:canvas-role :canvas/invariant` and (Phase 8 Sprint 5) project
+   to test-side property-test artifacts instead of src-side predicate
+   stubs."
+  [model]
+  (filter (fn [[_ p]]
+            (and (= :primitive/rule (:kind p))
+                 (not= :canvas/invariant (:canvas-role p))))
+          (:primitives model)))
+
+(defn- invariants
+  "Timeless commitments — canvas `:canvas/invariant` primitives. Phase 8
+   Sprint 5 migrates these from `src/`-side predicate stubs (the Phase 7
+   default) to `test/`-side `clojure.test.check` property tests; the
+   `:projection-kind/property-test` discriminator drives drift comparator
+   and Layer A's `invariant-to-property-test` projection alike."
+  [model]
+  (filter (fn [[_ p]]
+            (and (= :primitive/rule (:kind p))
+                 (= :canvas/invariant (:canvas-role p))))
           (:primitives model)))
 
 (defn- entities-values-variants [model]
@@ -213,6 +273,22 @@
     model
     symbols))
 
+(defn- src-root->test-root
+  "Conventional sibling of a src/ root: a peer `test/` directory.
+   `code-root` of `src` (or any directory ending in `/src`) yields the
+   matching `test` directory; otherwise returns nil (no test-side walk).
+
+   The convention keeps invariant property-test artifacts colocated with
+   the src/ implementation tree the analyzer already walks. Callers that
+   pass an irregular code-root simply skip the test-side walk; analyzer
+   semantics for src/-side artifacts are unaffected."
+  [code-root]
+  (when (string? code-root)
+    (cond
+      (= "src" code-root) "test"
+      (str/ends-with? code-root "/src") (str (subs code-root 0 (- (count code-root) 3)) "test")
+      :else nil)))
+
 (defn run
   "Run the Clojure Analyzer on the model. Emits Code.Function and
    Code.DataStructure artifacts and :relation/projects edges with
@@ -222,15 +298,25 @@
    non-existent, source-index is empty and all edges land with
    :validity :absent.
 
+   The analyzer additionally walks the peer `test/` directory (Phase 8
+   Sprint 5) to recognise `defspec` property-test artifacts as the
+   code-side counterpart of canvas invariants. Test-side artifacts use
+   the address convention ns = `<module>-test`, symbol =
+   `<kebab(label)>-property`; canvas invariants now project there
+   instead of to `src/`-side predicate stubs.
+
    Plan 5 Task 6 covers function-shaped analyzers (Operation, Rule).
    Plan 5 Task 7 covers DataStructure (Entity/Value/Variant/Event) and
    Invariant analyzers. Phase 6 is non-gating.
    Plan 6 Task 13 materialises unprojected Code.* artifacts for defns
    not bound to any spec primitive."
   [model registry code-root]
-  (let [symbols       (walk-symbols code-root)
-        source-index  (index-from-symbols symbols)
-        dup-violations (detect-duplicate-addresses symbols)
+  (let [symbols           (walk-symbols code-root)
+        test-root         (src-root->test-root code-root)
+        test-symbols      (walk-symbols test-root)
+        source-index      (index-from-symbols symbols)
+        test-source-index (index-from-symbols test-symbols)
+        dup-violations    (detect-duplicate-addresses symbols)
         m1 (reduce (fn [m [op-id op]]
                      (emit-function-projection
                        m source-index registry op-id :primitive/operation
@@ -243,10 +329,15 @@
                        :projection-kind/rule (:label rule)))
                    m1
                    (rules model))
+        m2-inv (reduce (fn [m [inv-id inv]]
+                         (emit-property-test-projection
+                           m test-source-index registry inv-id (:label inv)))
+                       m2
+                       (invariants m2))
         m3 (reduce (fn [m [c-id c]]
                      (emit-data-structure-projection
                        m source-index registry c-id :primitive/container (:label c)))
-                   m2 (entities-values-variants m2))
+                   m2-inv (entities-values-variants m2-inv))
         m4 (reduce (fn [m [ev-id ev]]
                      (emit-data-structure-projection
                        m source-index registry ev-id :primitive/event (:label ev)))
