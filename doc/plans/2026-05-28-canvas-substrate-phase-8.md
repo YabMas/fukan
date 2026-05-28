@@ -30,16 +30,30 @@ substrate Phase 7 shipped.
 
 Two complementary moves carry this phase:
 
-- **Closure controller.** A new agent-api fn `(close-drift {…})` plus a
-  Phase D extension on `fukan-architect`. Takes a finding scope, dispatches
-  instructions, verifies, retries, escalates, reports. Lives on top of
-  `(canvas-drift)` + `(spec)` + `(instruct)` + the `Agent` tool grant —
-  pure orchestration, no new substrate primitives.
+- **Closure controller.** Two new agent-api fns — `(close-drift-plan {…})`
+  and `(close-drift-verify {…})` — plus a Phase D extension on
+  `fukan-architect`. Sprint 1's design surfaced that **the SCI sandbox
+  cannot invoke the `Agent` tool** (tool grants are harness-level; the
+  sandbox runs in-daemon with no channel to the harness). Resolution:
+  split the controller into two pure entry points and put the dispatch
+  loop in `fukan-architect`'s Phase D prompt. `close-drift-plan` renders
+  per-finding instructions from a scope; the architect invokes `Agent`
+  for each plan entry and collects subagent reports; `close-drift-verify`
+  re-runs drift against the reported scope to classify outcomes and
+  produce the structured report. A thin convenience wrapper
+  `(close-drift {…})` exists for terminal callers (with a stub dispatch-fn
+  that returns "manual dispatch required") and tests (with an injected
+  stub). Pure orchestration; no new substrate primitives.
 - **Property-test projection.** A second invariant projection targeting
-  `test/<ns>/properties.clj` instead of `src/<ns>.clj`. Drift comparator
-  gains a test-side awareness path. The `defn` predicate projection stays
-  as a fallback shape, but property-tests become the primary code-side
-  counterpart for invariants.
+  `test/<ns>_test.clj` instead of `src/<ns>.clj`. Sprint 1's design picked
+  the **migrate** path: property-test becomes the default; the predicate
+  projection stays registered for opt-in via a canvas-side
+  `(projects-to :predicate)` flag. Existing predicate stubs in
+  `distributed.cluster` get deleted in Sprint 6 after property-test
+  closures land. Drift comparator gains a test-side awareness path; the
+  dispatch tuple stays `[lens-id canvas-role]` via a synthetic
+  `:canvas/invariant+property-test` key (Option β from the design — the
+  other 9 Phase 7+7.5 registrations stay untouched).
 
 The product surface stays the REPL, `bin/fukan eval`, `(help)`, and
 `fukan-architect`. No browser UI work; no canvas-side bidirectional
@@ -69,32 +83,65 @@ what happened.
 
 Seven sprints. Two design + five working + verification.
 
-### Sprint 1 — Closure controller + invariant-projection designs
+### Sprint 1 — Closure controller + invariant-projection designs ✅
 
-Two design docs paused for user review before any code lands.
+Two design docs paused for user review before downstream sprints. Both
+landed in the working tree as of 2026-05-28.
 
-**Task 1 — Closure controller design.** Output: `doc/plans/2026-05-28-closure-controller-design.md`. Covers:
+**Task 1 — Closure controller design.** `doc/plans/2026-05-28-closure-controller-design.md`. Key decisions:
 
-- **Where the controller lives.** Agent-api fn vs architect-agent extension vs new CLI subcommand. Recommendation: agent-api fn `(close-drift {…})` callable from `bin/fukan eval` AND from `fukan-architect`'s Phase D. Pure orchestration on top of existing surface.
-- **Scope shape.** `:module-coord`, `:check` (drift kind), `:stable-id` (single finding), `:all`. Mirrors `(canvas-drift)`'s filter surface.
-- **Concurrency model.** Sequential vs parallel dispatch. Recommendation: sequential per-file (avoids edit conflicts when multiple findings land in the same target), parallel across files. The architect already has this constraint.
-- **Retry policy.** Per-finding attempt count (recommend max 2). On attempt 2, the verification failure from attempt 1 is fed into the instruction. Persistent failure → escalation.
-- **Escalation triggers.** What surfaces as "needs human review": (a) >N failed attempts, (b) drift kind not handled by any scenario, (c) projection emits warnings or skips, (d) Sprint 4's canvas-side hint heuristics.
-- **Report shape.** Structured map per finding: `{:stable-id :outcome :attempts :elapsed :final-state}` plus a markdown summary. Returns to caller; the architect can fold into a Phase D report.
-- **State + observability.** Where the controller's progress lives (in-memory only? `.fukan/closure-log.edn`?). Recommendation: in-memory return value first; persistence only if Sprint 3 trial-run reveals need.
+- **Two pure entry points** — `(close-drift-plan {…scope…})` returns a
+  rendered-instruction plan per finding; `(close-drift-verify
+  {:plan … :reports […]})` consumes subagent reports + re-runs drift to
+  classify outcomes. Both run inside the SCI sandbox. A convenience
+  `(close-drift)` wrapper exists for terminal/test callers with a
+  stub dispatch-fn.
+- **`fukan-architect`'s Phase D drives the dispatch loop** between the
+  two entry points — the architect calls `close-drift-plan`, iterates
+  through `:plan`, invokes its native `Agent` tool with each rendered
+  instruction, collects reports, calls `close-drift-verify`, handles
+  retries up to `:max-attempts`. The SCI sandbox stays sealed; the
+  architect's harness-level `Agent` grant is the only dispatch surface.
+- **Scope shape.** `:module-coord`, `:check`, `:stable-id`, `:limit`
+  (default 25 with truncation flag), `:dry-run`, `:max-attempts`
+  (default 2), `:dispatch-fn` (architect-injected; stub for non-architect
+  callers).
+- **Concurrency.** Findings batch by `:expected-code-path`; sequential
+  within file (avoids edit conflicts), parallel across files at fanout
+  cap 3.
+- **Retry context.** Iter-2 instructions carry reconciliation-prose
+  preamble + iter-1 subagent report + iter-1 drift state + original
+  instruction (top-down urgency order).
+- **Six escalation triggers.** `:attempts-exhausted`,
+  `:no-projection-registered`, `:projection-emits-warning`,
+  `:canvas-side-hint`, `:scenario-not-found`, `:dispatch-error` —
+  each maps to a specific upstream cause with a hinted resolution path.
+- **In-memory state only** for Phase 8; `.fukan/closure-log.edn`
+  persistence deferred unless Sprint 3 trial reveals need.
 
-**Task 2 — Invariant projection design.** Output: `doc/plans/2026-05-28-invariant-projection-design.md`. Covers:
+**Task 2 — Invariant projection design.** `doc/plans/2026-05-28-invariant-projection-design.md`. Key decisions:
 
-- **Why property-tests, not predicate `defn`s.** The trial doc's recommendation #4 framing. Invariants are timeless behavioral commitments — generative property tests express them naturally; `defn` stubs that throw express them as deferred work.
-- **Projection-kind addition.** New `:projection-kind/property-test` alongside the existing `:projection-kind/invariant`. The Clojure-lens registers BOTH for `:canvas/invariant`; selection happens at controller level (canvas-author preference) or projection-level (a `:fukan/projects-to-tests` flag on the canvas declaration).
-- **Artifact kind addition.** New `Code.PropertyTest` artifact kind alongside `Code.Function`. The analyzer's projection edges from invariants now optionally land on the test-side artifact.
-- **Address convention for test artifacts.** `addr/canonical` extension: invariants project to `test/<root>/<module>-test.clj` namespace, symbol `<invariant-kebab>-property` or similar. Mirror `:projection-kind/test`'s existing path but distinguish from generic tests.
-- **Template shape.** A `defspec`-style or `clojure.test.check` `defproperty` template skeleton — generative inputs + property body with the holds-that prose as the property name + an `is`-style assertion against the invariant.
-- **Drift comparator updates.** A property-test artifact at the conventional path closes the drift finding. A bare `defn` stub at the conventional `src/` path also closes (legacy compatibility). Either-or: a single canvas-side invariant has at most one closing artifact at a time, and the comparator chooses the matching projection-kind.
-- **Coexistence with predicate projection.** Keep `invariant-to-predicate` registered. The two projections produce different `:target.path` (src vs test) and different `:projection-kind` so they don't collide. Canvas-author picks; future canvas-decoration can choose per invariant.
-
-Both docs pause for user review before Sprints 2–6 begin. The user
-amendment cycle has been load-bearing across Phases 5–7; preserve it.
+- **Migrate, not coexist.** Property-test becomes the default invariant
+  projection; predicate stays as opt-in via canvas-side
+  `(projects-to :predicate)` flag. Sprint 6 closes via property-test
+  then deletes the three orphan predicate stubs in
+  `distributed.cluster`.
+- **New `:projection-kind/property-test` keyword** distinct from the
+  existing (mostly-dormant) `:projection-kind/test`.
+- **New `:code/property-test` artifact-kind** sibling to
+  `:code/function` + `:code/data-structure`.
+- **Address convention.** ns `<base>-test`, symbol `<kebab>-property`,
+  file `test/<path>_test.clj`.
+- **Template idiom.** `clojure.test.check` `defspec` with
+  `gen/return ::placeholder` + audit-trail `throw` body. Holds-that
+  prose carried as the property's docstring/comment.
+- **Dispatch via Option β** — augmented `dispatch-key-of` returns the
+  synthetic key `:canvas/invariant+property-test` when the canvas
+  declaration opts to the property-test default. The other 9
+  Phase 7+7.5 registrations stay on `[lens-id canvas-role]` untouched;
+  only invariants pay the discriminator cost.
+- **Drift comparator** gets a `ns->test-path` mirror and a
+  projection-kind-branched `expected-path-for`.
 
 ### Sprint 2 — Trial-fidelity probe across unexercised projections
 
@@ -130,120 +177,182 @@ contradicts the proposed thresholds.
 ### Sprint 3 — Closure controller MVP
 
 Implement the controller per Sprint 1 + Sprint 2 amendments. MVP scope:
-single-pass dispatch, no retries yet. The MVP exercises the orchestration
-shape (scope filtering, instruction generation, dispatch, verification,
-report) end-to-end against the easy cases (function-kind drift, getter
-drift) before retry logic adds complexity.
+single-pass dispatch (no retry yet, no canvas-side hints yet). The MVP
+exercises the two-entry-point orchestration shape end-to-end against the
+easy cases (function-kind drift, getter drift) before retry logic adds
+complexity. The architect's Phase D extension is load-bearing here — the
+dispatch loop lives in the architect's prompt, not in the controller.
 
-**Task 5 — `(close-drift {…})` agent-api fn.** Under `:trust` layer
+**Task 5 — `(close-drift-plan {…})` agent-api fn.** Under `:trust` layer
 with `:severity :info`. Same SCI sandbox surface as `(canvas-drift)`
-and `(instruct)`. Accepts the scope shape Sprint 1 specified. Returns
-the structured-report map.
+and `(instruct)`. Accepts the scope shape Sprint 1 specified. Returns a
+plan map: `{:plan [{:stable-id … :scenario … :rendered "…markdown…"
+:context {…}} …] :scope … :counts {:findings-total N}}`. Pure: no
+dispatch, no side effects beyond reading the canvas db.
 
-**Task 6 — Dispatch backbone.** For each finding in scope:
-`(instruct finding scenario-id)` → render instruction → `Agent`
-dispatch → wait for completion → `(canvas-drift)` against same scope →
-finding present? failure : success. Sequential per-file, parallel
-across files (per Sprint 1's concurrency model).
+**Task 6 — `(close-drift-verify {…})` agent-api fn.** Same layer.
+Accepts `{:plan <plan-from-task-5> :reports [{:stable-id … :report
+"…subagent narrative…"} …]}`. Re-runs `(canvas-drift)` against the
+plan's scope; per finding, classifies outcome (`:closed`, `:failed`,
+`:requires-retry?`) and aggregates into the structured report. Pure
+against the live canvas + drift state.
 
 **Task 7 — `fukan-architect` Phase D extension.** Architect gains
 "close-drift mode": canvas-author asks "close drift in module X", the
-architect calls `(close-drift :module-coord "X")`, watches the
-controller's progress, and renders a Phase D close-drift report. The
-architect remains the *only* code-side actor — it never edits source
-itself; it only orchestrates.
+architect's Phase D prompt teaches it the two-step orchestration:
 
-**Task 8 — Smoke test on canvas/distributed/*.** End-to-end run against
-the Phase 7 trial-run's remaining drift findings in `distributed/*`.
-Verifies the controller closes the cases Phase 7 closed manually.
+1. Call `(close-drift-plan :module-coord "X")` via Bash; receive `:plan`.
+2. For each entry in `:plan`, invoke `Agent` with the rendered instruction;
+   collect each subagent's final report into a `:reports` vector.
+3. Call `(close-drift-verify :plan … :reports …)`; receive structured outcome.
+4. (Sprint 4 lands retry handling here.)
+5. Render the markdown summary to the canvas-author; flag any escalations.
+
+The architect remains the only code-side actor — it never edits source
+itself; it dispatches implementing-LLM subagents and orchestrates
+verification. The Phase D system-prompt addition lives in
+`.claude/agents/fukan-architect.md` + `doc/canvas-authoring-system-prompt.md`.
+
+**Task 8 — Convenience wrapper `(close-drift {…})`.** Thin SCI-sandbox
+helper for terminal/test callers. Takes `:dispatch-fn` (defaults to a
+stub that returns `"manual dispatch required"`). Composes the two
+entry points end-to-end when called from a context that CAN dispatch
+(future phases; tests with stubbed dispatch). For terminal canvas-author
+use, the stub return surfaces "use fukan-architect to close drift" prose
+so the canvas-author doesn't misuse the surface.
+
+**Task 9 — Smoke test on canvas/distributed/*.** End-to-end run via
+`fukan-architect` against the Phase 7 trial-run's remaining drift
+findings in `distributed/*`. Verifies the architect-driven loop closes
+the cases Phase 7 closed manually. Captures latency data and per-iter
+subagent report shape to feed Sprint 4's retry-context design.
 
 ### Sprint 4 — Retry + escalation + canvas-side hints
 
-The controller learns to be less brittle.
+The loop learns to be less brittle. Retry handling lives across two
+seats — `close-drift-plan` learns to render an iter-2 instruction
+given an iter-1 outcome; the architect's Phase D loop learns when to
+dispatch iter-2 vs surface as escalation.
 
-**Task 9 — Retry on failure.** Attempt 2 receives the attempt-1
-verification failure as additional instruction context. The
-verification-error format is structured — drift kind, comparator
-output (e.g. expected-symbol vs actual-symbol, shape divergence
-detail). Max 2 attempts per finding by default; configurable via
-`:max-attempts` opt.
+**Task 10 — Iter-2 instruction rendering.** Extend `close-drift-plan`
+with `:retry-of <finding-id>` and `:iter-1-report <subagent-narrative>`
++ `:iter-1-drift <finding-snapshot>` opts. When present, the rendered
+instruction carries reconciliation-prose preamble (Sprint 1 spec) + the
+iter-1 subagent report + the iter-1 drift state + the original
+instruction body. Architecture: the architect's loop calls
+`close-drift-plan` a second time with these opts after iter-1 verify
+returns `:requires-retry? true` for a finding.
 
-**Task 10 — Escalation report.** Findings that fail after max attempts
-land in an escalation section of the controller's report: per-finding,
-why it escalated, what the attempted instructions were, what the
-verification said. The canvas-author reads this section and decides
-manually.
+**Task 11 — Architect's iter-2 dispatch loop.** Extend Phase D prompt
+to handle the per-finding retry flow:
 
-**Task 11 — Canvas-side hint heuristics.** Pattern-match on drift
+1. After iter-1 `close-drift-verify`, for each `:per-finding` entry
+   where `:requires-retry? true` and `:attempts < :max-attempts`:
+2. Call `(close-drift-plan :retry-of <id> :iter-1-report … :iter-1-drift …)`.
+3. Invoke `Agent` with the iter-2 rendered instruction.
+4. Append iter-2's subagent report to the running `:reports` vector
+   (tagged with `:attempt 2`).
+5. After all iter-2 dispatches complete, call `close-drift-verify`
+   again over the iter-2 reports.
+6. Findings still failing after iter-2 land in the escalation report.
+
+**Task 12 — Escalation classification.** `close-drift-verify` learns the
+six escalation triggers from Sprint 1: `:attempts-exhausted`,
+`:no-projection-registered`, `:projection-emits-warning`,
+`:canvas-side-hint`, `:scenario-not-found`, `:dispatch-error`. Each
+escalation entry in the report carries the trigger keyword, a
+human-readable explanation, and a hinted resolution path. Canvas-author
+reads escalations to decide manual follow-up.
+
+**Task 13 — Canvas-side hint heuristics.** Pattern-match on drift
 findings to flag "canvas might be wrong here": (a) invariants whose
-projected predicate has been stubbed-and-failed twice across iterations,
-(b) record shape-drift where the canvas-side adds fields but `src/` has
-been touched recently (`git log` heuristic) — code-side may be the
-ground truth, (c) cross-module references where the *referenced* canvas
-declaration has been edited recently. Hints surface in the controller's
-report as advisory; canvas-author decides. NO `:canvas-side/*`
-scenarios in Phase 8 — only the hint.
+projected predicate has been stubbed-and-failed twice across iterations
+(now possible to detect because Sprint 4 has retry data), (b) record
+shape-drift where the canvas-side adds fields but `src/` has been
+touched recently (`git log` heuristic), (c) cross-module references
+where the *referenced* canvas declaration has been edited recently.
+Hints surface in the controller's report as advisory `:canvas-side-hint`
+escalations; canvas-author decides. NO `:canvas-side/*` scenarios in
+Phase 8 — only the hint.
 
-**Task 12 — Observability.** Per-attempt timing + dispatch log surfaces
-in the controller's report. Useful for Sprint 7 verification + future
-Phase 9 trial-run framing.
+**Task 14 — Observability.** Per-attempt timing + dispatch log + per-iter
+subagent report excerpts surface in the report. Useful for Sprint 7
+verification + future Phase 9 trial-run framing.
 
 ### Sprint 5 — Property-test projection substrate
 
-Land the Sprint 1 design.
+Land the Sprint 1 design (Option β dispatch + migrate path).
 
-**Task 13 — Layer A `invariant-to-property-test` projection.**
+**Task 15 — Layer A `invariant-to-property-test` projection.**
 `src/fukan/canvas/project/clojure/invariant_to_property_test.clj`.
-Registers `defmethod project [:clojure :canvas/invariant]` — wait, the
-key collides with the existing `invariant-to-predicate`. Resolution:
-add a `:projection-kind` discriminator at dispatch level, OR retire
-the predicate projection. The Sprint 1 design picks; if predicate stays,
-the dispatch key extends to `[lens-id :canvas/invariant :projection-kind]`
-and the existing 2-tuple form delegates to the default (predicate).
+Registers `defmethod project [:clojure :canvas/invariant+property-test]`
+(the synthetic key from Option β). `dispatch-key-of` learns to return
+the synthetic key when the canvas declaration omits the
+`(projects-to :predicate)` opt — that is, when property-test is the
+selected projection-kind. Existing `invariant-to-predicate` stays
+registered on `[:clojure :canvas/invariant]` for the opt-in predicate
+case.
 
-**Task 14 — Drift comparator's test-side awareness.**
-`src/fukan/canvas/inspect/drift.clj` learns to recognize a
-`Code.PropertyTest` artifact at the conventional test path as the
-closer for an invariant drift finding. The canvas-side projection-kind
-selection (predicate vs property-test) becomes part of finding context;
-the comparator uses it to pick the right path.
+**Task 16 — Canvas-source flag plumbing.** Extend `canvas-source` to
+recognize the `(projects-to :predicate)` clause on `(invariant …)`
+forms. The primitive's projection-kind selection rides on the
+canvas-source-emitted `:invariant/projects-to` (default
+`:property-test`).
 
-**Task 15 — Address registry update.**
-`src/fukan/target/clojure/address.clj` gains the `:projection-kind/property-test`
-address shape per Sprint 1's address-convention design.
+**Task 17 — Drift comparator's test-side awareness.**
+`src/fukan/canvas/inspect/drift.clj` gains a `ns->test-path` mirror
+and a projection-kind-branched `expected-path-for`. Given an invariant
+finding, the comparator uses the canvas-side `:invariant/projects-to`
+to pick `src/<ns>.clj` (predicate) or `test/<ns>_test.clj`
+(property-test). A property-test artifact at the conventional path
+closes the finding; missing artifact at either path surfaces the
+appropriate `:expected-code-path` in the finding's offender.
 
-**Task 16 — Layer B `drift-close` extends drift-kind dispatch.** A
-property-test artifact lives in a test file with imports and
-`defproperty`-shaped neighbors, not in the impl-side defn neighborhood.
-The drift-close scenario's neighbor-section needs a property-test-aware
-branch (new `defmethod` keyed on the projection-kind or on a property-test
-sentinel in the finding).
+**Task 18 — Address registry update.**
+`src/fukan/target/clojure/address.clj` gains the
+`:projection-kind/property-test` address shape: ns `<base>-test`,
+symbol `<kebab>-property`, file `test/<path>_test.clj`.
 
-**Task 17 — Tests.** Unit tests for the new projection. Coverage
-regression test updates: the projection-coverage assertion now
-expects two registrations under `:canvas/invariant` (predicate +
-property-test).
+**Task 19 — Layer B `drift-close` extends drift-kind dispatch.** A
+property-test artifact lives in a test file with `clojure.test.check`
+imports and `defspec` neighbors, not in the impl-side defn neighborhood.
+The drift-close scenario's `neighbors-section` gets a property-test-aware
+branch (new `defmethod` keyed on a property-test sentinel in the finding).
+
+**Task 20 — Tests + coverage regression update.** Unit tests for the new
+projection. `test/fukan/canvas/project/coverage_test.clj` updated: the
+projection-coverage assertion now expects the
+`:canvas/invariant+property-test` synthetic key alongside the existing
+`:canvas/invariant`. Address-shape test for the test-path convention.
 
 ### Sprint 6 — Property-test trial run via the controller
 
-Use Sprint 3's controller to close invariant drift via the new
-property-test projection. The harder, end-to-end test of the
+Use Sprint 3+4's architect-driven loop to close invariant drift via the
+new property-test projection. The harder, end-to-end test of the
 automation loop.
 
-**Task 18 — Trial-run on canvas/distributed/*.** Invariants in
+**Task 21 — Trial-run on canvas/distributed/*.** Invariants in
 `distributed.cluster` (`AtMostOneLeaderPerTerm`, `TermMonotonicity`,
 `MajorityRequiredForLeadership`) close via property-test projection
-through the controller. Verifies that (a) the controller routes
-correctly, (b) the implementing-LLM produces working property tests
-from the template, (c) drift recognizes the test-side closure.
+through the architect-driven loop. Verifies that (a) the dispatch
+loop routes correctly, (b) the implementing-LLM produces working
+property tests from the template, (c) drift recognizes the test-side
+closure.
 
-**Task 19 — Trial-run on one other canvas module with invariants.**
+**Task 22 — Migrate path cleanup.** After Task 21 closes the three
+invariants via property-tests, the orphan predicate stubs in
+`src/fukan/distributed/cluster.clj` get deleted (per Sprint 1's
+migrate decision). The deletion is itself drift-closure-shaped — the
+canvas now expects the test-side artifact, so the src-side stub is
+no longer projected.
+
+**Task 23 — Trial-run on one other canvas module with invariants.**
 Pick a canvas module that's stable enough that real property tests
 make sense (e.g. `canvas/model/build.clj`'s invariants if they exist,
 or `canvas/validation/*`). Closes the same loop on richer canvas
 material than `distributed/*`'s trial-run scaffolding.
 
-**Task 20 — Findings doc.** `doc/plans/2026-05-28-property-test-trial-findings.md`.
+**Task 24 — Findings doc.** `doc/plans/2026-05-28-property-test-trial-findings.md`.
 Same structure as Phase 7's trial doc — per-iteration, instruction
 quality, defect/decision separation. Inputs Sprint 7 verification.
 
@@ -265,14 +374,21 @@ items naming the Phase 9 opener.
 
 ## Definition of done
 
-- `(close-drift {…opts…})` is a `:trust`-layer agent-api fn callable from
-  `bin/fukan eval` and from `fukan-architect`'s Phase D.
-- The controller closes a Phase 6-style drift finding-set end-to-end with
-  no human edits between scope-selection and report-review.
-- Retry on first failure works; escalation on persistent failure surfaces
-  a decision-ready report.
+- `(close-drift-plan {…opts…})` and `(close-drift-verify {…opts…})` are
+  `:trust`-layer agent-api fns callable from `bin/fukan eval`.
+- `fukan-architect`'s Phase D prompt drives the two-step dispatch loop —
+  canvas-author asks "close drift in module X", the architect plans,
+  dispatches per-finding via `Agent`, verifies, surfaces the report.
+- The architect-driven loop closes a Phase 6-style drift finding-set
+  end-to-end with no human edits between scope-selection and
+  report-review.
+- Iter-2 retry on first failure works; escalation on persistent failure
+  surfaces a decision-ready report with one of the six escalation
+  triggers naming the cause.
 - Invariant drift findings close via property-test projection through the
-  controller, at least for the canvas/distributed/* canonical set.
+  architect-driven loop, at least for the canvas/distributed/* canonical
+  set; the three orphan predicate stubs in `distributed.cluster` get
+  cleaned up post-closure (migrate path).
 - The Phase 7 trial-fidelity gap (real-Agent dispatch) is empirically
   resolved — closure-rate data exists for at least the 6 projection kinds
   that shipped without end-to-end exercise.
