@@ -94,15 +94,34 @@ The survey is currently **monolithic** — one dispatch yields one unified repor
 
 When the canvas-author has decided to close a drift gap in code (after weighing via trust-tier + weigh-tier evidence), the agent invokes Layer A + Layer B to produce a structured implementation instruction, reviews it, then dispatches an implementing-LLM subagent. The full discipline is in `doc/canvas-authoring-system-prompt.md` § Phase D — this section names the architect-side shape.
 
-Five-step shape:
+Phase D ships in two modes:
 
-1. **Pick the drift finding(s) to close.** Typically scoped via `(canvas-drift :module-coord <prefix>)` rather than the global firehose. Don't close all findings reflexively — the canvas-author chooses which gaps move on the code side (vs. retracting canvas, vs. deferring).
+- **Per-finding mode** — one instruction, one dispatch, one verify. The original Phase D shape; suitable for one-off gap-closing.
+- **Close-drift mode** — module-scope orchestration driven by the closure controller. Plan all findings in scope, dispatch per-finding, verify in one structured report. Use this when the canvas-author asks "close drift in module X" rather than picking a single offender.
+
+### Per-finding mode — five-step shape
+
+1. **Pick the drift finding to close.** Typically scoped via `(canvas-drift :module-coord <prefix>)` rather than the global firehose. Don't close all findings reflexively — the canvas-author chooses which gaps move on the code side (vs. retracting canvas, vs. deferring).
 2. **Generate the instruction.** `(instruct <stable-id-or-finding> :code-side/drift-close)` for closing a known gap; `(instruct <module-id> :code-side/cold-write)` for writing canvas content from scratch. Use `(canvas-projections)` / `(canvas-scenarios)` for discovery.
 3. **Review the rendered instruction.** Catch obvious issues — wrong target path, missing context, oddly-shaped signature, canvas-side intent the projection couldn't infer. The generator is mechanical, not omniscient. Use `Read` to fetch target-file neighbor context (existing imports, sibling defs) when drift-close needs richer context than `(instruct …)` carried.
 4. **Dispatch the implementing-LLM subagent** (general-purpose) with the rendered instruction + the targeted neighbor context. **Don't dump the canvas db** — minimum sufficient context. The implementing LLM trusts what you hand it.
 5. **Verify.** After the subagent commits, re-run `(canvas-drift :module-coord <scope>)` to verify the gap cleared. If not, dispatch once more with the new drift output as feedback. **Max 2 iterations per instruction.**
 
-The agent still doesn't write canvas or `src/`. Phase D is dispatch + review, not edit.
+### Close-drift mode — five-step orchestration loop
+
+When the canvas-author asks "close drift in module X" (or per-kind, or single-finding), enter close-drift mode. The closure controller's two pure entry points (`close-drift-plan` / `close-drift-verify`) carry the structural work; the architect drives the dispatch loop between them.
+
+1. **Plan.** Call `bin/fukan eval '(close-drift-plan :module-coord "<X>")'`. The controller walks `(canvas-drift)`, renders a per-finding instruction via `(instruct …)`, and groups entries by `:expected-code-path` so same-file edits serialize and cross-file edits parallelise. The plan returns `{:plan [<entry> …] :batches {<path> [<entry> …]} :unhandled […] :scope … :counts … :max-attempts <int>}`. Confirm the scope + `:counts` with the canvas-author before dispatching.
+2. **Dispatch per-finding.** For each entry in `:plan`, invoke `Agent` (general-purpose subagent) with the entry's `:rendered` body. Don't add extra context — the rendered instruction is self-contained by Layer A+B construction. Collect each subagent's terminal report into a `:reports` vector keyed by `:stable-id`: `[{:stable-id "…" :report "…subagent narrative…" :attempt 1} …]`.
+3. **Respect file batching.** Within one batch (same `:expected-code-path`), dispatch sequentially so iter-1 sees iter-0's edits. Across batches, dispatch in parallel; cap fanout at 3 to keep wall-clock bounded and API contention low.
+4. **Verify.** Call `bin/fukan eval '(close-drift-verify :plan <plan> :reports [<reports>])'`. The controller re-runs `(canvas-drift)` against the plan's scope, classifies each entry as `:closed` / `:failed` / `:no-report`, and produces a structured report with a `:rendered` markdown summary.
+5. **Surface.** Render the `:rendered` markdown for the canvas-author. Call out any `:escalation-reason` entries explicitly — `:attempts-exhausted` (single-pass MVP defaults to 1 attempt), `:scenario-not-found` (substrate gap), `:no-report` (architect didn't dispatch this finding). Don't downplay escalations.
+
+Sprint 4 lands retry handling (iter-2 dispatch when `:requires-retry? true` and `:attempts < :max-attempts`); the MVP is single-pass. Until Sprint 4 ships, treat every `:failed` outcome as a manual follow-up the canvas-author decides next move on.
+
+Closure-rate calibration is `:trial/calibration-pending` — Sprint 2's instruction-quality survey didn't produce empirical closure-rate data (harness `Agent`-tool gap). Observe rates over time and surface them when patterns emerge; don't make strong claims early. The two-entry-point split exists precisely so this seat — the one with reliable `Agent` grant — is the calibration source.
+
+The architect remains the only code-side actor in the loop. It dispatches; it never edits `src/` or `canvas/` directly. The implementing-LLM subagents do the writing.
 
 ## Reference depth
 

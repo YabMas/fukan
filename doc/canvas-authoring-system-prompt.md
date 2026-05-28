@@ -333,7 +333,9 @@ When *not* to invoke the survey:
 
 After Phase C surfaces drift findings the canvas-author decides to close in
 code, Phase D produces structured implementation instructions and hands them
-to an implementing-LLM subagent:
+to an implementing-LLM subagent. Two modes, picked by scope shape:
+
+*Per-finding mode* — one drift gap at a time:
 
 - Run `(instruct <stable-id-or-drift-finding> :code-side/drift-close)` to
   compose Layer A's projection with the drift-close scenario; use
@@ -347,7 +349,39 @@ to an implementing-LLM subagent:
   finding persists, dispatch once more with the new drift output as
   feedback. Max 2 iterations per instruction.
 
-Phase D's cadence is **per-targeted-gap**, not per-edit. The canvas-author
+*Close-drift mode* — module-scope orchestration via the closure controller
+(Phase 8 Sprint 3):
+
+- Run `(close-drift-plan :module-coord "<X>")` (or `:check <kind>`, or
+  `:stable-id <id>`). The controller walks `(canvas-drift)`, renders a
+  per-finding instruction via `(instruct …)`, and groups entries by
+  `:expected-code-path` so same-file edits serialize. Returns
+  `{:plan [<entry> …] :batches {<path> [<entry> …]} :unhandled […]
+  :scope … :counts … :max-attempts}`.
+- For each entry in `:plan`, dispatch the implementing-LLM subagent with
+  the entry's `:rendered` instruction. Within a batch (same code-path),
+  serialize; across batches, parallelise at fanout 3. Collect each
+  subagent's terminal report into a `:reports` vector keyed by
+  `:stable-id`.
+- Run `(close-drift-verify :plan <plan> :reports [<reports>])`. The
+  controller re-runs `(canvas-drift)` against the scope and classifies
+  each entry as `:closed` / `:failed` / `:no-report` with a
+  `:requires-retry?` flag and an `:escalation-reason` when relevant.
+- Surface the verify report's `:rendered` markdown to the canvas-author.
+  Call out `:escalation-reason` entries explicitly —
+  `:attempts-exhausted`, `:scenario-not-found`, `:no-report` are the
+  MVP triggers; Sprint 4 lands the full six-trigger set.
+
+Sprint 3 ships single-pass dispatch only. Sprint 4 lands iter-2 retry
+when `:requires-retry? true` and `:attempts < :max-attempts`; until
+then, every `:failed` outcome is a manual follow-up the canvas-author
+decides next move on. Closure-rate calibration is
+`:trial/calibration-pending` per Sprint 2's findings — observe rates
+over time, surface patterns when they emerge, don't make strong claims
+early.
+
+Phase D's cadence is **per-targeted-gap** (per-finding mode) or
+**per-module-scope** (close-drift mode), not per-edit. The canvas-author
 chooses WHICH findings to close (not all); the implementing LLM handles
 the writing. Phase D never lands canvas or `src/` edits from this seat —
 the implementing-LLM subagent is the only thing that writes code.
