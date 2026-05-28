@@ -13,4 +13,5 @@
             [fukan.canvas.project.clojure.event-to-schema]
             [fukan.canvas.project.clojure.function-to-defn]
             [fukan.canvas.project.clojure.invariant-to-predicate]
-            [fukan.canvas.project.clojure.rule-to-predicate]))
+            [fukan.canvas.project.clojure.rule-to-predicate]
+            [fukan.canvas.project.clojure.getter-to-defn]))
