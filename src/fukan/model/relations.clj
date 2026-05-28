@@ -91,7 +91,13 @@
 (def projection-kinds
   #{:projection-kind/rule :projection-kind/operation
     :projection-kind/invariant :projection-kind/schema
-    :projection-kind/test})
+    :projection-kind/test
+    ;; Phase 8 Sprint 5 — invariants project to test-side
+    ;; `clojure.test.check` `defspec` artifacts under test/ as the
+    ;; default. The new kind names the *invariant-as-property* idiom
+    ;; explicitly; the legacy `:projection-kind/test` remains the
+    ;; generic verification-edge kind for non-invariant primitives.
+    :projection-kind/property-test})
 
 (def Edge
   [:map

@@ -12,7 +12,13 @@
 (def projection-kinds
   #{:projection-kind/rule :projection-kind/operation
     :projection-kind/invariant :projection-kind/schema
-    :projection-kind/test})
+    :projection-kind/test
+    ;; Phase 8 Sprint 5 — invariants project to test-side
+    ;; `clojure.test.check` `defspec` artifacts under test/ as the
+    ;; default. `:projection-kind/test` is the legacy generic
+    ;; verification-edge kind; `:projection-kind/property-test`
+    ;; specifically expresses the invariant-as-property idiom.
+    :projection-kind/property-test})
 
 (defn make-code-function
   ([language qualified-name] (make-code-function language qualified-name nil nil))

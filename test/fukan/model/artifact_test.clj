@@ -36,7 +36,9 @@
     (is (not= (a/artifact-identity a) (a/artifact-identity b)))))
 
 (deftest projection-kinds-enum
+  ;; Phase 8 Sprint 5 added :projection-kind/property-test for the
+  ;; invariant-as-clojure.test.check-property idiom; siblings unchanged.
   (is (= #{:projection-kind/rule :projection-kind/operation
             :projection-kind/invariant :projection-kind/schema
-            :projection-kind/test}
+            :projection-kind/test :projection-kind/property-test}
          a/projection-kinds)))
