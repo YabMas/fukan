@@ -254,6 +254,106 @@
           "end-of-file hint is wrong for shape-drift"))))
 
 ;; ---------------------------------------------------------------------------
+;; Property-test branch (Phase 8 Sprint 5)
+;;
+;; A drift finding whose offender carries
+;; `:projection-kind :projection-kind/property-test` points at a test-side
+;; artifact (`defspec` under `test/`), not an `src/`-side defn. The
+;; drift-close scenario must render the test-side neighbor shape,
+;; insertion convention, and output-format prose rather than the
+;; src-side defaults.
+
+(def ^:private sample-property-test-finding
+  "Mirrors `fukan.canvas.inspect.drift/absent-edge->finding`'s output
+   for a property-test projection: offender carries the
+   `:projection-kind` discriminator, expected-code-path lives under
+   `test/`, expected-symbol carries the `-property` suffix."
+  {:check     :inspect.drift/missing-implementation
+   :severity  :warning
+   :message   "Canvas declares invariant MajorityRequiredForLeadership; no matching code-side artifact at fukan.distributed.cluster-test/majority-required-for-leadership-property."
+   :stable-id "distributed.cluster/invariant/MajorityRequiredForLeadership"
+   :expected-code-path "test/fukan/distributed/cluster_test.clj"
+   :expected-symbol    "majority-required-for-leadership-property"
+   :canvas-kind        :invariant
+   :projection-kind    :projection-kind/property-test
+   :offenders [{:stable-id          "distributed.cluster/invariant/MajorityRequiredForLeadership"
+                :expected-code-path "test/fukan/distributed/cluster_test.clj"
+                :expected-symbol    "majority-required-for-leadership-property"
+                :canvas-kind        :invariant
+                :projection-kind    :projection-kind/property-test}]})
+
+(def ^:private sample-property-test-code-spec
+  {:projection-kind    :clojure/invariant-to-property-test
+   :lens-id            :clojure
+   :model-element-kind :Affordance
+   :model-element-id   "distributed.cluster/invariant/MajorityRequiredForLeadership"
+   :target             {:path      "test/fukan/distributed/cluster_test.clj"
+                        :namespace "fukan.distributed.cluster-test"
+                        :symbol    "majority-required-for-leadership-property"}
+   :template           (str "(defspec majority-required-for-leadership-property 100\n"
+                            "  (prop/for-all [model (gen/return ::placeholder)]\n"
+                            "    (throw (ex-info \"...\" {:canvas-id \"...\"}))))")
+   :prose              "Invariant: MajorityRequiredForLeadership. clojure.test.check property."
+   :context            {:canvas-source-ref "canvas/distributed/cluster.clj"
+                        :projection-kind   :projection-kind/property-test
+                        :test-side?        true}})
+
+(def ^:private fake-cluster-test-source
+  (str "(ns fukan.distributed.cluster-test\n"
+       "  (:require [clojure.test :refer [is]]\n"
+       "            [clojure.test.check.clojure-test :refer [defspec]]\n"
+       "            [clojure.test.check.generators :as gen]\n"
+       "            [clojure.test.check.properties :as prop]))\n\n"
+       "(defspec term-monotonicity-property 100\n"
+       "  (prop/for-all [model (gen/return ::placeholder)]\n"
+       "    true))\n"))
+
+(deftest property-test-render-frames-as-test-side-work
+  (testing "property-test finding surfaces test-side-aware framing"
+    (let [opts {:target-file-reader (fn [_] fake-cluster-test-source)
+                :drift-finding sample-property-test-finding}
+          ctx  ((:build-context drift-close/scenario)
+                sample-property-test-code-spec opts)
+          inst ((:render drift-close/scenario)
+                sample-property-test-code-spec ctx opts)
+          md   (:rendered inst)]
+      (is (core/valid-instruction? inst))
+      (is (re-find #"(?i)property test" md)
+          "frame should call out property-test work")
+      (is (re-find #"(?i)clojure\.test\.check" md)
+          "the clojure.test.check idiom should be named")
+      (is (str/includes? md "defspec")
+          "defspec form should be surfaced")
+      (is (str/includes? md "test/fukan/distributed/cluster_test.clj")
+          "test-side path should appear")
+      (is (str/includes? md "majority-required-for-leadership-property")
+          "the property-suffixed symbol should appear"))))
+
+(deftest property-test-render-does-not-use-src-side-prose
+  (testing "property-test rendering must not parrot the src-side defn framing"
+    (let [opts {:target-file-reader (fn [_] fake-cluster-test-source)
+                :drift-finding sample-property-test-finding}
+          ctx  ((:build-context drift-close/scenario)
+                sample-property-test-code-spec opts)
+          md   (:rendered ((:render drift-close/scenario)
+                           sample-property-test-code-spec ctx opts))]
+      (is (not (re-find #"does not exist in `src/`" md))
+          "must not say the artifact lives in src/")
+      (is (not (re-find #"add the missing definition" md))
+          "the generic missing-impl prose belongs to src-side findings, not property tests"))))
+
+(deftest property-test-render-surfaces-defspec-neighbors
+  (testing "the defspec regex catches existing property-test siblings in the target file"
+    (let [opts {:target-file-reader (fn [_] fake-cluster-test-source)
+                :drift-finding sample-property-test-finding}
+          ctx  ((:build-context drift-close/scenario)
+                sample-property-test-code-spec opts)
+          md   (:rendered ((:render drift-close/scenario)
+                           sample-property-test-code-spec ctx opts))]
+      (is (str/includes? md "term-monotonicity-property")
+          "existing defspec siblings should appear in the neighbor section"))))
+
+;; ---------------------------------------------------------------------------
 ;; Generic fallback — unknown :check
 
 (def ^:private sample-unknown-kind-finding

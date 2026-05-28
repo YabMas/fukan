@@ -83,12 +83,18 @@
 (defn- extract-sibling-defs
   "Walk the source string and return a vector of `{:symbol :first-line}`
    maps for each top-level `def` / `defn` / `defn-` / `defrecord` /
-   `defmulti` / `defmethod`. Order matches file order. Capped at
-   `sibling-cap`."
+   `defmulti` / `defmethod` / `defspec` / `deftest`. Order matches file
+   order. Capped at `sibling-cap`.
+
+   `defspec` and `deftest` join the alternation for Phase 8 Sprint 5 —
+   property-test target files carry `clojure.test.check` neighbors
+   rather than src-side defn neighbors; surfacing those neighbors helps
+   the implementing-LLM imitate the test-file style instead of inventing
+   a defn shape."
   [source]
   (if (str/blank? source)
     []
-    (let [pattern #"(?m)^\((def|defn|defn-|defrecord|defmulti|defmethod)\s+(\^?\w+/?\w*\s+)?([\w\-\?\!\*]+)(?:\s+\"([^\"]*)\")?"
+    (let [pattern #"(?m)^\((def|defn|defn-|defrecord|defmulti|defmethod|defspec|deftest)\s+(\^?\w+/?\w*\s+)?([\w\-\?\!\*]+)(?:\s+\"([^\"]*)\")?"
           hits    (re-seq pattern source)]
       (->> hits
            (map (fn [[_ _kind _meta sym docstring]]
@@ -234,13 +240,37 @@
 ;; keyword. The `:default` branch carries a generic-but-correct framing so a
 ;; future drift kind doesn't crash drift-close or hard-code missing-impl prose.
 
+(defn- property-test-finding?
+  "True when the drift finding's offender targets a `clojure.test.check`
+   property-test artifact (Phase 8 Sprint 5 — invariant→property-test
+   projection). The offender carries `:projection-kind` set to
+   `:projection-kind/property-test`; defensive fallback also accepts a
+   `:projection-kind/property-test` slot on the finding map itself."
+  [finding]
+  (let [from-offender (some-> finding :offenders first :projection-kind)
+        from-detail   (some-> finding :detail :projection-kind)]
+    (or (= :projection-kind/property-test from-offender)
+        (= :projection-kind/property-test from-detail))))
+
 (defn- drift-kind
   "Pull the dispatch key from the scenario-context. Falls back to :default
    when no finding is carried or no `:check` is present — defensive so a
-   caller-supplied bare offender map still renders something sane."
+   caller-supplied bare offender map still renders something sane.
+
+   Property-test findings (Phase 8 Sprint 5) get a synthetic
+   discriminator `:inspect.drift/missing-property-test` even though
+   their underlying `:check` keyword is the same
+   `:inspect.drift/missing-implementation` — the test-side artifact's
+   neighbor shape (defspec / deftest with `clojure.test.check` imports)
+   diverges enough from the src-side defn neighborhood that the prose
+   wants its own dispatch lane."
   [scenario-context]
-  (or (some-> scenario-context :drift-finding :check)
-      :default))
+  (let [finding (:drift-finding scenario-context)
+        base    (or (:check finding) :default)]
+    (if (and (= :inspect.drift/missing-implementation base)
+             (property-test-finding? finding))
+      :inspect.drift/missing-property-test
+      base)))
 
 (defmulti ^:private frame-section
   "Kind-specific 'What you're doing' framing prose."
@@ -254,6 +284,19 @@
         "The canvas declared a code-side artifact that does not exist "
         "in `src/`. Your job: add the missing definition to the target "
         "file. Do not disturb unrelated content.")))
+
+(defmethod frame-section :inspect.drift/missing-property-test
+  [_]
+  (render/section
+   "## What you're doing"
+   (str "You are closing a known **canvas↔code drift gap** in fukan by "
+        "writing a **`clojure.test.check` property test** for a canvas "
+        "invariant. The canvas declares a *timeless behavioral commitment* "
+        "(an `(invariant ...)` declaration with a `(holds-that ...)` clause); "
+        "the code-side counterpart lives under `test/` as a `defspec` form "
+        "that asserts the commitment against generated model states. You "
+        "are NOT writing a predicate `defn` in `src/` — you are writing a "
+        "property test under `test/`. Do not disturb unrelated content.")))
 
 (defmethod frame-section :inspect.drift/shape-drift-on-record
   [_]
@@ -279,10 +322,27 @@
   "Kind-specific 'The gap' summary."
   (fn [_code-spec scenario-context] (drift-kind scenario-context)))
 
+(defn- offender-fields
+  "Pull the offender's surface fields out of a drift-finding map. The
+   comparator stores them on `(:offenders 0)`; older fixtures sometimes
+   carry them on the finding map directly. Both shapes are accepted so
+   tests and callers don't have to mirror the comparator's exact layout."
+  [finding]
+  (let [offender (first (:offenders finding))]
+    (merge {:stable-id          (:stable-id finding)
+            :expected-code-path (:expected-code-path finding)
+            :expected-symbol    (:expected-symbol finding)
+            :canvas-kind        (:canvas-kind finding)
+            :projection-kind    (:projection-kind finding)}
+           (select-keys offender [:stable-id :expected-code-path
+                                  :expected-symbol :canvas-kind
+                                  :projection-kind]))))
+
 (defmethod gap-section :inspect.drift/missing-implementation
   [code-spec scenario-context]
   (let [finding (:drift-finding scenario-context)
-        {:keys [stable-id expected-code-path expected-symbol canvas-kind]} finding
+        {:keys [stable-id expected-code-path expected-symbol canvas-kind]}
+        (offender-fields finding)
         {:keys [model-element-id]} code-spec]
     (render/section
      "## The gap (canvas -> code)"
@@ -294,6 +354,28 @@
         canvas-kind        (conj (str "**Canvas-kind:** " (name canvas-kind)))
         expected-code-path (conj (str "**Target file:** `" expected-code-path "`"))
         expected-symbol    (conj (str "**Expected symbol:** `" expected-symbol "`"))
+        true (conj "**Severity:** :warning (drift is fact-of-discrepancy; resolution is judgment)"))))))
+
+(defmethod gap-section :inspect.drift/missing-property-test
+  [code-spec scenario-context]
+  (let [finding (:drift-finding scenario-context)
+        {:keys [stable-id expected-code-path expected-symbol]}
+        (offender-fields finding)
+        {:keys [model-element-id]} code-spec]
+    (render/section
+     "## The gap (canvas -> code)"
+     (render/bulleted
+      (cond-> []
+        true (conj (str "**Canvas declaration:** stable-id `"
+                        (or stable-id model-element-id) "`"))
+        true (conj "**Drift kind:** missing-property-test (canvas invariant → defspec)")
+        true (conj "**Canvas-kind:** invariant (timeless behavioral commitment)")
+        expected-code-path (conj (str "**Target file:** `" expected-code-path
+                                      "` (test-side — `defspec` lives under `test/`)"))
+        expected-symbol    (conj (str "**Expected defspec symbol:** `" expected-symbol "`"))
+        true (conj (str "**Idiom:** `clojure.test.check` property test — replace the"
+                        " placeholder generator (`gen/return ::placeholder`) and the"
+                        " audit-trail `throw` body with a real generator + property body."))
         true (conj "**Severity:** :warning (drift is fact-of-discrepancy; resolution is judgment)"))))))
 
 (defn- format-field-shape
@@ -432,6 +514,31 @@
   [scenario-context target-path]
   (neighbors-base-section scenario-context target-path {}))
 
+(defmethod neighbors-section :inspect.drift/missing-property-test
+  [scenario-context target-path]
+  (let [insertion-prose
+        (str "**Insertion point:** end-of-file, as a new `defspec` form. "
+             "If the target file does not yet exist, create it with a `(ns "
+             "... (:require [clojure.test :refer [is]] "
+             "[clojure.test.check.clojure-test :refer [defspec]] "
+             "[clojure.test.check.generators :as gen] "
+             "[clojure.test.check.properties :as prop]))` form. Existing "
+             "test files typically already pull in those requires; reuse "
+             "the file's existing requires rather than duplicating.")
+        style-prose
+        (str "**You are writing a test, not an implementation.** The "
+             "target file lives under `test/`; surrounding forms are "
+             "`defspec` / `deftest`, not `defn`. The Layer-A skeleton's "
+             "placeholder generator (`gen/return ::placeholder`) and "
+             "`throw`-body are deliberately broken — both MUST be replaced "
+             "with a real generator over the canvas-declared model shape "
+             "and a real property body asserting the invariant holds. "
+             "Mechanical copies of the placeholder will fail on first "
+             "generation by design.")]
+    (neighbors-base-section scenario-context target-path
+                            {:insertion-prose insertion-prose
+                             :style-prose     style-prose})))
+
 (defmethod neighbors-section :inspect.drift/shape-drift-on-record
   [scenario-context target-path]
   (let [existing (:existing-def scenario-context)
@@ -484,6 +591,18 @@
     ["The symbol you added"
      "The exact insertion point used"
      "The result of the test run"])))
+
+(defmethod output-section :inspect.drift/missing-property-test
+  [{:keys [target]} _scenario-context]
+  (render/section
+   "## Output format"
+   (str "Write the property test directly to `" (:path target) "` using the "
+        "`Edit` or `Write` tool. After writing, report:")
+   (render/bulleted
+    ["The defspec symbol you added"
+     "The generator strategy you chose (one sentence)"
+     "The property body's assertion (one sentence)"
+     "The result of `clj -M:test` — confirm the new property runs (and passes, or fails meaningfully if the invariant is intentionally not yet established)"])))
 
 (defmethod output-section :inspect.drift/shape-drift-on-record
   [{:keys [target]} _scenario-context]
