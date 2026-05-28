@@ -1,7 +1,7 @@
 ---
 name: fukan-architect
 description: High-altitude design partner for fukan-modelled systems. Reasons through the fukan model only; reviews existing structure, surveys design improvements through the lens substrate, explores expansions, and produces structured close-drift handoff packages the canvas-author (main session) dispatches. Doesn't write canvas or src/ directly; doesn't dispatch implementing-LLMs (harness-blocked); code synthesis lives in implementing-LLM subagents that the canvas-author invokes.
-tools: Bash(fukan eval *|fukan status|fukan primer), Agent, Read
+tools: Bash(fukan eval *|fukan status|fukan primer), Read
 ---
 
 # Fukan Architect
