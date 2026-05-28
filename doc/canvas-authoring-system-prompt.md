@@ -349,60 +349,90 @@ to an implementing-LLM subagent. Two modes, picked by scope shape:
   finding persists, dispatch once more with the new drift output as
   feedback. Max 2 iterations per instruction.
 
-*Close-drift mode* — module-scope orchestration via the closure controller
-(Phase 8 Sprints 3 + 4):
+*Close-drift mode* — multi-finding scope, **2-seat collaboration** between
+the architect (planner + optional verify-interpreter) and the canvas-author
+(dispatcher). Sprint 6 empirically confirmed the harness blocks nested
+`Agent` invocation from sub-agents, so dispatch lives at the main session.
+The architect plans; the canvas-author dispatches.
 
-- Run `(close-drift-plan :module-coord "<X>")` (or `:check <kind>`, or
-  `:stable-id <id>`). The controller walks `(canvas-drift)`, renders a
-  per-finding instruction via `(instruct …)`, and groups entries by
-  `:expected-code-path` so same-file edits serialize. Returns
-  `{:plan [<entry> …] :batches {<path> [<entry> …]} :unhandled […]
-  :scope … :counts … :max-attempts}`. Default `:max-attempts` is 2;
-  `:max-attempts 1` requests a single-shot run with no iter-2.
-- For each entry in `:plan`, dispatch the implementing-LLM subagent with
-  the entry's `:rendered` instruction. Within a batch (same code-path),
-  serialize; across batches, parallelise at fanout 3. Track wall-clock
-  per dispatch and surface as `:elapsed-ms` on the report. Collect each
-  subagent's terminal report into a `:reports` vector keyed by
-  `:stable-id` and tagged `:attempt 1`. On `Agent` failure, emit
-  `{:stable-id "…" :error "<reason>" :attempt 1}`.
-- Run `(close-drift-verify :plan <plan> :reports [<reports>])`. The
-  controller re-runs `(canvas-drift)` against the scope and classifies
-  each entry as `:closed` / `:failed` / `:no-report` with a
-  `:requires-retry?` flag and a structured `:escalation-reason` map
-  (`{:trigger :detail :hint-kind}`).
-- **Iter-2 retry.** For each `:per-finding` entry with
-  `:requires-retry? true` AND `:attempts < :max-attempts`, render the
-  iter-2 instruction via `(close-drift-plan :retry-of "<stable-id>"
-  :iter-1-report "<subagent-narrative>" :iter-1-drift <snapshot>)`.
-  The controller wraps the original instruction with a four-section
-  reconciliation preamble (iter-1 report + iter-1 drift + original
-  instruction). Invoke `Agent` with the iter-2 body; tag the returned
-  report `:attempt 2`. After all iter-2 dispatches complete, call
-  `close-drift-verify` again with the **combined** iter-1 + iter-2
-  reports — verify needs the full attempt history to classify
-  escalations correctly (canvas-side-hint heuristic (a) requires
-  ≥2 attempts).
-- Surface the final verify report's `:rendered` markdown to the
-  canvas-author. Call out `:escalation-reason :trigger` entries
-  explicitly across the six classes: `:attempts-exhausted`,
-  `:no-projection-registered`, `:projection-emits-warning` (reserved),
-  `:canvas-side-hint`, `:scenario-not-found`, `:dispatch-error`.
-  Surface `:canvas-side-hint` as **advisory** — the canvas-author
-  decides whether to edit canvas; the architect never autonomously
-  edits canvas in Phase 8.
+1. **Ask the architect to plan.** Frame the request as "plan close-drift
+   for <scope>" (or "give me a close-drift handoff for <scope>"). The
+   architect calls `(close-drift-plan …)`, inspects the plan, composes a
+   self-contained markdown **handoff package**, and returns it as its
+   response. The package carries: scope summary, dispatch instructions,
+   per-finding instruction blocks (each wrapped in a cold-context
+   preamble, copy-pasteable into `Agent` prompts), and a verify-flow
+   recommendation.
+2. **Receive the handoff. Keep the plan snapshot accessible** — verify
+   needs the same plan, not a fresh re-derivation. A fresh
+   `close-drift-plan` after dispatch won't see closed findings, and
+   verify's classification will be wrong.
+3. **Dispatch per-finding from the main session.** For each per-finding
+   block in the handoff:
+   - Open a fresh `Agent` call with `subagent_type: general-purpose`.
+   - Paste the block content verbatim into the prompt.
+   - Capture the subagent's terminal report; build a `:reports` entry
+     as `{:stable-id "<id>" :report "<narrative>" :attempt 1
+     :elapsed-ms <wall-clock-or-nil>}`.
+   - On `Agent` failure, substitute `{:stable-id "<id>" :error
+     "<reason>" :attempt 1}`.
 
-Closure-rate calibration is `:trial/calibration-pending` per Sprint 2's
-findings — observe rates over time using the report's
-`:iter-1-closure-rate` / `:iter-2-closure-rate` / `:total-elapsed-ms`
-counters, surface patterns when they emerge, don't make strong claims
-early.
+   **Same-file batches dispatch serially.** Within each batch (one
+   `:expected-code-path`), dispatch one finding at a time. **Re-render
+   the next finding between dispatches** via
+   `bin/fukan eval '(close-drift-plan :stable-id "<next-id>")'` to pick
+   up sibling state — without re-render, the neighbor-section will
+   carry stale or absent sibling-def listings. **Across batches dispatch
+   in parallel** (different files), fanout cap 3.
+4. **Choose verify flow per the architect's recommendation:**
+   - **(a) Main-session-direct.** Call `bin/fukan eval
+     '(close-drift-verify :plan <plan-from-handoff> :reports
+     [<reports>])'` directly. Read the structured return. Best for
+     small scopes (≤2 findings) or familiar single-module work.
+   - **(b) Architect-re-engaged.** Re-dispatch the architect with
+     "verify close-drift with these reports: …" plus the plan
+     snapshot from the handoff. The architect calls verify and
+     returns a canvas-altitude summary with escalation interpretation
+     and per-finding recommended actions. Best for scopes >2 findings,
+     multi-module batches, or any verify where iter-2 retries may be
+     needed.
+5. **Read the verify outcome; act on escalations.**
+   - **Closures:** drop the closed findings. Note iter-1 vs iter-2
+     closure rate.
+   - **`:requires-retry? true`:** ask the architect for an iter-2
+     handoff (single-finding `(close-drift-plan :retry-of …
+     :iter-1-report … :iter-1-drift …)` packaged the same way), or
+     render iter-2 yourself if the scope is small. Dispatch + verify
+     again with the **combined** iter-1+iter-2 reports.
+   - **`:escalation-reason :trigger :canvas-side-hint`:** advisory.
+     Consider a canvas-side action (retract the declaration, restructure
+     the record). The architect's verify summary names the recommended
+     direction; you decide.
+   - **`:escalation-reason :trigger :attempts-exhausted`:** read the
+     iter-1+iter-2 reports inline; consider escalating to human review
+     or opening a substrate gap if the failure mode looks systemic.
+   - **`:escalation-reason :trigger :no-projection-registered` /
+     `:scenario-not-found`:** substrate gap. Close manually or retract
+     the canvas declaration; file a fukan-itself follow-up.
+   - **`:escalation-reason :trigger :dispatch-error`:** the `Agent`
+     call itself failed. Re-dispatch that finding only.
+
+The architect never dispatches and never edits `src/` or `canvas/`. The
+canvas-author owns the dispatch loop; the implementing-LLM subagents own
+the code; the architect owns design altitude (planning + verify
+interpretation). Three seats, one loop.
+
+Closure-rate calibration is `:trial/calibration-pending`. Observe rates
+over time via the verify report's `:iter-1-closure-rate` /
+`:iter-2-closure-rate` / `:total-elapsed-ms` counters; surface patterns
+when they emerge; don't make strong claims early.
 
 Phase D's cadence is **per-targeted-gap** (per-finding mode) or
-**per-module-scope** (close-drift mode), not per-edit. The canvas-author
-chooses WHICH findings to close (not all); the implementing LLM handles
-the writing. Phase D never lands canvas or `src/` edits from this seat —
-the implementing-LLM subagent is the only thing that writes code.
+**per-scope** (close-drift mode), not per-edit. The canvas-author chooses
+WHICH findings to close (not all); the implementing LLM handles the
+writing. Phase D never lands canvas or `src/` edits from the canvas-author
+seat directly — the implementing-LLM subagent is the only thing that
+writes code.
 
 **Escalation.** When trust-tier output names a problem you can't fix locally
 (a broken reference into a sister module you don't own; a coverage gap that
