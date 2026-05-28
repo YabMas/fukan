@@ -70,6 +70,8 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.project.clojure.invariant-to-predicate
   {:linters {:unused-public-var {:level :off}}}
+  fukan.canvas.project.clojure.invariant-to-property-test
+  {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.project.clojure.rule-to-predicate
   {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.project.clojure.getter-to-defn
@@ -102,6 +104,8 @@
   fukan.canvas.project.clojure.function-to-defn-test
   {:linters {:unused-namespace {:level :off}}}
   fukan.canvas.project.clojure.invariant-to-predicate-test
+  {:linters {:unused-namespace {:level :off}}}
+  fukan.canvas.project.clojure.invariant-to-property-test-test
   {:linters {:unused-namespace {:level :off}}}
   fukan.canvas.project.clojure.rule-to-predicate-test
   {:linters {:unused-namespace {:level :off}}}
