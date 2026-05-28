@@ -134,3 +134,60 @@
       (is (core/valid-projection? p))
       (is (= :clojure/getter-to-defn (:projection-kind p)))
       (is (= "get-self-role" (-> p :target :symbol))))))
+
+(deftest both-invariant-projections-are-registered
+  ;; Phase 8 Sprint 5 — invariants get two registered projections:
+  ;;   * `:canvas/invariant`                      → predicate stub under src/
+  ;;     (opt-in via `(projects-to :predicate)` — reserved for future)
+  ;;   * `:canvas/invariant+property-test`        → defspec under test/
+  ;;     (the default; the synthetic dispatch key from `dispatch-key-of`)
+  ;; The coverage regression accepts either as covering an emitted
+  ;; :canvas/invariant role.
+  (testing "the predicate fallback projection stays registered"
+    (is (contains? (registered-clojure-dispatch-keys) :canvas/invariant)))
+  (testing "the property-test default projection is registered"
+    (is (contains? (registered-clojure-dispatch-keys)
+                   :canvas/invariant+property-test))))
+
+(deftest canonical-invariant-projects-to-property-test
+  ;; Phase 8 Sprint 5 — Option β. A canvas invariant element with no
+  ;; explicit projection-kind override routes through the synthetic
+  ;; dispatch key `:canvas/invariant+property-test`, landing in the
+  ;; new `invariant-to-property-test` projection. The target file is
+  ;; under `test/`; the symbol carries the `-property` suffix; the
+  ;; template renders a `defspec` form with `clojure.test.check`
+  ;; conventions.
+  (testing "an invariant without :predicate override projects to a property test"
+    (let [el {:model-element-kind :Affordance
+              :canvas-role        :canvas/invariant
+              :stable-id          "distributed.cluster/invariant/MajorityRequiredForLeadership"
+              :entity-name        "MajorityRequiredForLeadership"
+              :module-coord       "distributed.cluster"
+              :doc                "A node becomes leader only with majority vote grants."
+              :holds-that         "no node is leader for term T without > N/2 grants for T"}
+          p (core/project :clojure el {:registry {:root-prefix "fukan"}})]
+      (is (core/valid-projection? p))
+      (is (= :clojure/invariant-to-property-test (:projection-kind p)))
+      (is (= "majority-required-for-leadership-property" (-> p :target :symbol)))
+      (is (= "fukan.distributed.cluster-test" (-> p :target :namespace)))
+      (is (= "test/fukan/distributed/cluster_test.clj" (-> p :target :path))))))
+
+(deftest invariant-with-predicate-override-falls-back
+  ;; Phase 8 Sprint 5 — the opt-out path. When the element carries
+  ;; `:canvas-projection-kind :predicate` (set by canvas-source when the
+  ;; canvas declaration's `(projects-to :predicate)` clause fires —
+  ;; reserved for future), `dispatch-key-of` falls back to the plain
+  ;; `:canvas/invariant` role and the existing `invariant-to-predicate`
+  ;; projection runs.
+  (testing "an invariant with explicit :predicate projection-kind routes to invariant-to-predicate"
+    (let [el {:model-element-kind     :Affordance
+              :canvas-role            :canvas/invariant
+              :canvas-projection-kind :predicate
+              :stable-id              "validation.rules-4a/invariant/X"
+              :entity-name            "X"
+              :module-coord           "validation.rules-4a"
+              :doc                    "Doc."
+              :holds-that             "X holds."}
+          p (core/project :clojure el {:registry {:root-prefix "fukan"}})]
+      (is (core/valid-projection? p))
+      (is (= :clojure/invariant-to-predicate (:projection-kind p))))))
