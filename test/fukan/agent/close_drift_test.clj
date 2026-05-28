@@ -645,7 +645,6 @@
     ;; matching the contract: recent canvas (now), stable src (10d ago).
     (let [now            (System/currentTimeMillis)
           ten-days-ago   (- now (* 10 24 60 60 1000))
-          file-mtime-var #'fukan.agent.api/file-mtime
           heuristic-var  #'fukan.agent.api/canvas-side-hint-shape-drift]
       (with-redefs [fukan.agent.api/file-mtime
                     (fn [path]
