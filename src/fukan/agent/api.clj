@@ -346,7 +346,7 @@
    is loaded (cold eval, tests). Carved out so tests can stub via `with-redefs`."
   []
   (or (infra-model/get-canvas-db)
-      (canvas-source/build-canvas-db)))
+      (canvas-source/build-substrate)))
 
 (defn ^{:agent/layer :trust
         :agent/origin :built-in

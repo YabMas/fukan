@@ -7,11 +7,19 @@
   {:entity/id           {:db/unique :db.unique/identity}
    :entity/type         {:db/index true}
    :entity/name         {:db/index true}
+   ;; Canonical stable-id (module-name / name-qualified) stamped onto every
+   ;; entity so agent L0 d/q can return the cross-fn addressing currency.
+   ;; Indexed, NOT unique: name+role rule/invariant pairs share a stable-id.
+   :entity/stable-id    {:db/index true}
    :module/child        {:db/cardinality :db.cardinality/many
                          :db/valueType :db.type/ref}
    :entity/tag          {:db/cardinality :db.cardinality/many}
    :entity/alias        {:db/cardinality :db.cardinality/many}
    :references          {:db/cardinality :db.cardinality/many}
+   ;; Resolved cross-module dependency edge — the ref-datom form of
+   ;; :references (which stays as keyword values for the map-side projection).
+   :uses                {:db/cardinality :db.cardinality/many
+                         :db/valueType   :db.type/ref}
    :affordance/doc          {:db/index true}
    :affordance/input-types  {:db/cardinality :db.cardinality/many}
    :affordance/output-types {:db/cardinality :db.cardinality/many}

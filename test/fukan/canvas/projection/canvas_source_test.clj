@@ -4,6 +4,7 @@
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.substrate.store :as store]
             [fukan.canvas.construction :refer [function record value]]
             [fukan.canvas.identity :as identity]
@@ -652,3 +653,46 @@
           "warning must surface the distinct roles (e.g. :canvas/rule)")
       (is (.contains err-str ":canvas/invariant")
           "warning must surface the distinct roles (e.g. :canvas/invariant)"))))
+
+;; ---------------------------------------------------------------------------
+;; Step C: substrate enrichment — :entity/stable-id + resolved :uses
+;; ---------------------------------------------------------------------------
+
+(deftest enrich-substrate-stamps-stable-ids-and-resolves-uses
+  (testing "enrich-substrate stamps :entity/stable-id on every entity and turns
+            cross-module :references into :uses ref-datoms"
+    (let [ma  (sub/module "alpha")
+          mb  (sub/module "beta")
+          foo (sub/type-record "Foo" [])
+          bar (sub/type-primitive "Bar")
+          db  (-> (store/create)
+                  (store/transact! ma)
+                  (store/transact! mb)
+                  (store/transact! foo)
+                  (store/transact! bar)
+                  (d/db-with [[:db/add [:entity/id (sub/id-of ma)] :module/child [:entity/id (sub/id-of foo)]]
+                              [:db/add [:entity/id (sub/id-of mb)] :module/child [:entity/id (sub/id-of bar)]]
+                              [:db/add [:entity/id (sub/id-of foo)] :references :beta/Bar]])
+                  canvas-source/enrich-substrate)]
+      (is (= "alpha"
+             (ffirst (d/q '[:find ?id :where [?e :entity/name "alpha"] [?e :entity/stable-id ?id]] db)))
+          "module stable-id is the module name")
+      (is (= "alpha/type/Foo"
+             (ffirst (d/q '[:find ?id :where [?e :entity/name "Foo"] [?e :entity/stable-id ?id]] db)))
+          "type stable-id is module/type/Name")
+      (is (= "Bar"
+             (ffirst (d/q '[:find ?n
+                            :where [?foo :entity/name "Foo"]
+                                   [?foo :uses ?bar]
+                                   [?bar :entity/name ?n]]
+                          db)))
+          ":references :beta/Bar resolves to a :uses ref-datom toward Bar"))))
+
+(deftest build-substrate-enriches-the-real-canvas
+  (testing "build-substrate stamps stable-ids and resolves uses over the full canvas"
+    (let [db   (canvas-source/build-substrate)
+          ids  (set (map first (d/q '[:find ?id :where [_ :entity/stable-id ?id]] db)))]
+      (is (pos? (count ids)) "stable-ids stamped")
+      (is (contains? ids "infra.server") "a known module carries its stable-id")
+      (is (pos? (count (d/q '[:find ?f ?t :where [?f :uses ?t]] db)))
+          "cross-module references resolved to :uses edges"))))

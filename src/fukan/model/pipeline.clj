@@ -46,7 +46,7 @@
    Phase 0 builds and projects all 62 canvas ports into the initial model map.
    Legacy Allium/Boundary parse phases have been retired."
   [source-root]
-  (let [db0 (canvas-source/build-canvas-db)             ; Phase 0a: build unified db once
+  (let [db0 (canvas-source/build-substrate)             ; Phase 0a: build + enrich (uses, stable-ids)
         m0  (canvas-source/project db0)                 ; Phase 0b: structural map for Phase 4/5
         {:keys [model violations]} (phase4/run m0)      ; Phase 4: structural validation (gate)
         m2  (-> model (assoc :violations violations) register-defaults)

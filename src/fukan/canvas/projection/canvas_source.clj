@@ -817,8 +817,50 @@
           eeids)))
 
 ;; ---------------------------------------------------------------------------
+;; Substrate enrichment (Step C): make the unified db directly queryable by
+;; agent L0 — stamp stable-ids and resolve cross-module refs into :uses edges.
+;; ---------------------------------------------------------------------------
+
+(defn- stable-id-txs
+  "Stamp :entity/stable-id onto every entity, computed the same way the
+   projection labels graph nodes (via build-module-id-map)."
+  [db]
+  (mapv (fn [[uuid sid]] [:db/add [:entity/id uuid] :entity/stable-id sid])
+        (build-module-id-map db)))
+
+(defn- uses-txs
+  "Resolve each :references keyword datom to a :uses ref-datom toward the
+   target entity. Unresolvable references are dropped (same policy as the
+   map-side project-edges)."
+  [db]
+  (->> (d/datoms db :aevt :references)
+       (keep (fn [datom]
+               (let [from-eid (.-e datom)
+                     ref-kw   (.-v datom)]
+                 (when (keyword? ref-kw)
+                   (when-let [to-uuid (resolve-reference-uuid db ref-kw)]
+                     [:db/add from-eid :uses [:entity/id to-uuid]])))))
+       vec))
+
+(defn enrich-substrate
+  "Make the unified canvas db a complete, directly-queryable substrate:
+   stamp :entity/stable-id on every entity and resolve cross-module
+   :references into :uses ref-datoms. Additive — :references keywords remain
+   for the map-side projection."
+  [db]
+  (-> db
+      (d/db-with (stable-id-txs db))
+      (d/db-with (uses-txs db))))
+
+;; ---------------------------------------------------------------------------
 ;; Public: build
 ;; ---------------------------------------------------------------------------
+
+(defn build-substrate
+  "build-canvas-db + enrich-substrate: the enriched, directly-queryable db the
+   pipeline retains and agent L0 queries."
+  []
+  (enrich-substrate (build-canvas-db)))
 
 (defn build
   "Convenience: build-canvas-db + project in one call.
