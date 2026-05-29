@@ -23,7 +23,34 @@
    :triggers                {:db/cardinality :db.cardinality/many
                               :db/valueType   :db.type/ref}
    :emits                   {:db/cardinality :db.cardinality/many
-                              :db/valueType   :db.type/ref}})
+                              :db/valueType   :db.type/ref}
+
+   ;; ── Artifacts (Step B) ──────────────────────────────────────────────
+   ;; Phase-6 Code.* artifacts as db entities. Identity is the
+   ;; (sub-case, language, qualified-name) tuple, encoded as a unique
+   ;; :artifact/id string so re-transaction upserts. Distinct from
+   ;; primitives' :entity/id UUIDs.
+   :artifact/id             {:db/unique :db.unique/identity}
+   :artifact/case           {:db/index true}
+   :artifact/sub-case       {:db/index true}
+   :artifact/language       {}
+   :artifact/qualified-name {:db/index true}
+   :artifact/public         {}
+   :artifact/source-file    {}
+   :artifact/source-line    {}
+   :artifact/fields         {:db/cardinality :db.cardinality/many}
+
+   ;; ── Reified edges (Step B) ──────────────────────────────────────────
+   ;; Metadata-bearing edges (projects today) as db entities — a plain ref
+   ;; datom is a triple with nowhere to hang :projection-kind / :validity.
+   ;; Plain kernel relations stay ref datoms; this shape is the additive
+   ;; seam for observes/reads/writes (condition/scope) when forced.
+   :edge/id                 {:db/unique :db.unique/identity}
+   :edge/kind               {:db/index true}
+   :edge/from               {:db/valueType :db.type/ref}
+   :edge/to                 {:db/valueType :db.type/ref}
+   :edge/projection-kind    {:db/index true}
+   :edge/validity           {:db/index true}})
 
 (defn create []
   (d/empty-db schema))
@@ -125,6 +152,68 @@
 
 (defn transact! [db entity]
   (d/db-with db (->datoms entity)))
+
+;; ---------------------------------------------------------------------------
+;; Phase-6 content as datoms (Step B): artifacts + reified projects edges.
+;; These let the analyzer transact its output into the canvas db instead of
+;; assoc-ing it onto the model map; the map then derives from the db.
+;; ---------------------------------------------------------------------------
+
+(defn artifact-id-str
+  "Deterministic :artifact/id for a Code.* artifact map: the identity tuple
+   (sub-case, language, qualified-name) joined with '|'. Stable across
+   rebuilds, so re-transaction upserts rather than duplicating."
+  [artifact]
+  (str (get-in artifact [:sub :case]) "|"
+       (:language artifact) "|"
+       (get-in artifact [:sub :qualified-name])))
+
+(defn artifact-id-of-tuple
+  "Same :artifact/id encoding, from an artifact identity tuple
+   [sub-case language qualified-name] (the shape an artifact endpoint carries)."
+  [[sub-case language qualified-name]]
+  (str sub-case "|" language "|" qualified-name))
+
+(defn artifact->datoms
+  "Datoms for a Code.* artifact map (per fukan.model.artifact). The
+   data-structure :fields are pr-str'd per the :type/field-shapes precedent
+   (cardinality-many values must be comparable scalars; field types may be
+   compound Malli vectors)."
+  [artifact]
+  (let [sub    (:sub artifact)
+        fields (:fields sub)
+        sloc   (:source-location sub)]
+    [(cond-> {:artifact/id             (artifact-id-str artifact)
+              :artifact/case           (:case artifact)
+              :artifact/sub-case       (:case sub)
+              :artifact/language       (:language artifact)
+              :artifact/qualified-name (:qualified-name sub)}
+       (some? (:public? sub)) (assoc :artifact/public (:public? sub))
+       (:file sloc)           (assoc :artifact/source-file (:file sloc))
+       (:line sloc)           (assoc :artifact/source-line (:line sloc))
+       (seq fields)           (assoc :artifact/fields (into #{} (map pr-str) fields)))]))
+
+(defn edge->datoms
+  "Datoms for a reified metadata-bearing edge (projects today). `from` is a
+   primitive endpoint whose stable-id is resolved to a primitive eid via the
+   `stable->uuid` map; `to` is an artifact endpoint (identity tuple →
+   :artifact/id lookup-ref). Identity (:edge/id) is
+   (kind, from-stable, artifact-id, projection-kind) so re-transaction
+   upserts. Returns [] when the `from` endpoint does not resolve (the
+   artifact target is assumed transacted first)."
+  [edge stable->uuid]
+  (let [from-id   (get-in edge [:from :id])
+        from-uuid (get stable->uuid from-id)
+        art-id    (artifact-id-of-tuple (get-in edge [:to :id]))
+        pk        (:projection-kind edge)]
+    (if (nil? from-uuid)
+      []
+      [(cond-> {:edge/id   (str (name (:kind edge)) "|" from-id "|" art-id "|" pk)
+                :edge/kind (:kind edge)
+                :edge/from [:entity/id from-uuid]
+                :edge/to   [:artifact/id art-id]}
+         pk               (assoc :edge/projection-kind pk)
+         (:validity edge) (assoc :edge/validity (:validity edge)))])))
 
 (defn all-modules [db]
   (->> (d/q '[:find ?n :where [?e :entity/type :Module] [?e :entity/name ?n]] db)

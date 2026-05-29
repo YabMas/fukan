@@ -2,7 +2,9 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.substrate :as sub]
-            [fukan.canvas.core.substrate.store :as store]))
+            [fukan.canvas.core.substrate.store :as store]
+            [fukan.model.artifact :as a]
+            [fukan.model.relations :as r]))
 
 (deftest store-creation
   (testing "creates an empty store"
@@ -155,3 +157,82 @@
     (let [t (sub/type-primitive "Stratum")
           db (-> (store/create) (store/transact! t))]
       (is (empty? (d/q '[:find ?p :where [?ty :type/fields ?p]] db))))))
+
+;; ── Phase-6 content as datoms (Step B) ─────────────────────────────────────
+
+(deftest artifact-datoms-code-function
+  (testing "a Code.Function artifact round-trips its queryable attrs"
+    (let [art (a/make-code-function "clojure" "fukan.infra.server/start-server" nil true)
+          db  (-> (store/create) (d/db-with (store/artifact->datoms art)))]
+      (is (= #{["fukan.infra.server/start-server" :artifact/code :code/function "clojure" true]}
+             (d/q '[:find ?qn ?c ?sc ?lang ?pub
+                    :where [?a :artifact/qualified-name ?qn]
+                           [?a :artifact/case ?c]
+                           [?a :artifact/sub-case ?sc]
+                           [?a :artifact/language ?lang]
+                           [?a :artifact/public ?pub]]
+                  db))))))
+
+(deftest artifact-datoms-public-tri-state-absent
+  (testing "public? absent => no :artifact/public datom (distinct from public? false)"
+    (let [art (a/make-code-function "clojure" "fukan.x/y")          ; public? nil
+          db  (-> (store/create) (d/db-with (store/artifact->datoms art)))]
+      (is (empty? (d/q '[:find ?p :where [?a :artifact/public ?p]] db))))))
+
+(deftest artifact-datoms-data-structure-fields-and-source
+  (testing "a Code.DataStructure artifact stores pr-str'd fields + source location"
+    (let [art (-> (a/make-code-data-structure "clojure" "fukan.infra.server/ServerOpts"
+                                              {:file "src/fukan/infra/server.clj" :line 12})
+                  (assoc-in [:sub :fields] [[:port [:maybe :int]]]))
+          db  (-> (store/create) (d/db-with (store/artifact->datoms art)))]
+      (is (= "src/fukan/infra/server.clj"
+             (ffirst (d/q '[:find ?f :where [?a :artifact/source-file ?f]] db))))
+      (is (= 12 (ffirst (d/q '[:find ?l :where [?a :artifact/source-line ?l]] db))))
+      (is (= #{(pr-str [:port [:maybe :int]])}
+             (set (map first (d/q '[:find ?fl :where [?a :artifact/fields ?fl]] db))))))))
+
+(deftest artifact-id-deterministic-upserts
+  (testing "re-transacting the same artifact upserts to a single entity"
+    (let [art (a/make-code-function "clojure" "fukan.x/y" nil true)
+          db  (-> (store/create)
+                  (d/db-with (store/artifact->datoms art))
+                  (d/db-with (store/artifact->datoms art)))]
+      (is (= 1 (count (d/q '[:find ?a :where [?a :artifact/id _]] db)))))))
+
+(deftest edge-datoms-projects-resolves-endpoints
+  (testing "a reified projects edge links primitive entity → artifact entity with metadata"
+    (let [m            (sub/module "infra.server")
+          aff          (sub/affordance "start_server")
+          stable       "infra.server/start_server"
+          art          (a/make-code-function "clojure" "fukan.infra.server/start-server" nil true)
+          edge         (-> (r/make-edge :relation/projects
+                                        (r/primitive-ref stable)
+                                        (r/artifact-ref (a/artifact-identity art))
+                                        {:projection-kind :projection-kind/operation})
+                           (assoc :validity :valid))
+          stable->uuid {stable (sub/id-of aff)}
+          db           (-> (store/create)
+                           (store/transact! m)
+                           (store/transact! aff)
+                           (d/db-with (store/artifact->datoms art))
+                           (d/db-with (store/edge->datoms edge stable->uuid)))]
+      (is (= #{[:relation/projects :projection-kind/operation :valid
+                "start_server" "fukan.infra.server/start-server"]}
+             (d/q '[:find ?k ?pk ?v ?fn ?qn
+                    :where [?e :edge/kind ?k]
+                           [?e :edge/projection-kind ?pk]
+                           [?e :edge/validity ?v]
+                           [?e :edge/from ?from]
+                           [?from :entity/name ?fn]
+                           [?e :edge/to ?art]
+                           [?art :artifact/qualified-name ?qn]]
+                  db))))))
+
+(deftest edge-datoms-unresolved-from-drops
+  (testing "edge->datoms returns [] when the from stable-id doesn't resolve"
+    (let [art  (a/make-code-function "clojure" "fukan.x/y")
+          edge (r/make-edge :relation/projects
+                            (r/primitive-ref "missing/thing")
+                            (r/artifact-ref (a/artifact-identity art))
+                            {:projection-kind :projection-kind/operation})]
+      (is (= [] (store/edge->datoms edge {}))))))
