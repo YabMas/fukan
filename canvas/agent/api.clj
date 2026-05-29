@@ -34,10 +34,11 @@
 
    Notes:
      - Cross-module type ref model.SourceLocation uses :model/SourceLocation.
-     - QueryForm and QueryRow are cross-module refs to agent/query.
-     - Envelope.rows and QueryRow are opaque (Value / Map) — typed as :Value / :Map."
+     - q takes an opaque Datalog form and returns an opaque tuple set (:Value);
+       it runs real Datascript d/q over the substrate db (see fukan.agent.api/q).
+     - Envelope.rows is opaque (Value / Map) — typed as :Value / :Map."
   (:require [fukan.canvas.core.helpers :as h]
-            [fukan.canvas.construction :refer [function record value exports]]
+            [fukan.canvas.construction :refer [function record exports]]
             [fukan.canvas.vocab.behavioral :refer [invariant]]))
 
 (defn ^:export build-canvas []
@@ -188,10 +189,12 @@
       ;; ── L0 Kernel ─────────────────────────────────────────────────────────
 
       (function "q"
-        "Evaluate a Datalog query against the loaded Model. Throws
-         :model-not-loaded when no model has been built."
-        (takes [form :query/QueryForm])
-        (gives (list-of :query/QueryRow)))
+        "Evaluate a Datascript Datalog query ([:find … :where …]) against the
+         canvas substrate db. Full d/q dialect over the substrate vocabulary
+         (:entity/type, :affordance/role, :entity/stable-id, :module/child,
+         :uses, :edge/*, :artifact/*). Returns a set of result tuples."
+        (takes [form :Value])
+        (gives (set-of :Value)))
 
       ;; ── L1 Probes ─────────────────────────────────────────────────────────
 
