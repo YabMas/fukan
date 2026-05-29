@@ -5,8 +5,6 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [datascript.core :as d]
-            [fukan.agent.edb :as edb]
-            [fukan.agent.query :as query]
             [fukan.canvas.inspect.coverage :as inspect-coverage]
             [fukan.canvas.inspect.drift :as inspect-drift]
             [fukan.canvas.inspect.integrity :as inspect-integrity]
@@ -31,17 +29,34 @@
   (or (infra-model/get-model)
       (throw (ex-info "no model loaded" {:type :model-not-loaded}))))
 
+(defn- canvas-db
+  "The enriched canvas substrate db: the unified Datascript store with
+   :uses edges resolved and :entity/stable-id stamped. Reuses the db the
+   model lifecycle retains; falls back to a fresh enriched build when no
+   model is loaded (cold eval, tests). Carved out so tests can stub via
+   `with-redefs`."
+  []
+  (or (infra-model/get-canvas-db)
+      (canvas-source/build-substrate)))
+
 ;; -- L0 Kernel ----------------------------------------------------------------
 
 (defn ^{:agent/layer :L0
-        :agent/doc "Datalog over the loaded Model. Form: [:find … :where …]."
-        :agent/example "(q '[:find ?p :where [?p :primitive/kind :primitive/behaviour]])"}
+        :agent/doc "Datascript Datalog over the canvas substrate db. Form:
+                    [:find … :where …]. Query the substrate vocabulary
+                    directly: :entity/type (:Module/:Affordance/:State/:Type),
+                    :affordance/role (:canvas/invariant, :canvas/rule,
+                    :canvas/getter, :canvas/checker, …), :entity/stable-id
+                    (the cross-fn addressing currency), :module/child, :uses,
+                    :edge/* (projects edges), :artifact/*, plus :triggers/:emits.
+                    Returns a set of result tuples."
+        :agent/example "(q '[:find ?id :where [?e :affordance/role :canvas/invariant] [?e :entity/stable-id ?id]])"}
   q
-  "Evaluate a Datalog query against the loaded Model.
-   Returns a vector of binding maps keyed by :find variables."
+  "Evaluate a Datascript Datalog query against the canvas substrate db.
+   Full d/q dialect — joins, rules, aggregates, pull. Returns a set of
+   result tuples (one per :find binding row)."
   [form]
-  (let [m (ensure-model)]
-    (query/evaluate (query/parse form) (edb/model->edb m))))
+  (d/q form (canvas-db)))
 
 ;; -- L1 Probes ----------------------------------------------------------------
 
@@ -339,14 +354,6 @@
 ;; error under any methodology — no interpretive judgment required. Contrast
 ;; with weigh-tier lenses (Sprint 3 Task 7+), which produce interpretive
 ;; output the caller must weigh against context.
-
-(defn- canvas-db
-  "Canvas-db for trust/weigh/Layer-A queries. Reuses the unified Phase-0 db
-   retained by the model lifecycle; falls back to a fresh build when no model
-   is loaded (cold eval, tests). Carved out so tests can stub via `with-redefs`."
-  []
-  (or (infra-model/get-canvas-db)
-      (canvas-source/build-substrate)))
 
 (defn ^{:agent/layer :trust
         :agent/origin :built-in

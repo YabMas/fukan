@@ -16,10 +16,22 @@
 
 (use-fixtures :each with-fixture-model)
 
-(deftest q-finds-primitives-by-kind
-  (testing "(q '[:find ?p :where [?p :primitive/kind :primitive/behaviour]]) returns 2 rows"
-    (let [rows (api/q '[:find ?p :where [?p :primitive/kind :primitive/behaviour]])]
-      (is (= 2 (count rows))))))
+(deftest q-runs-datascript-over-the-substrate
+  (testing "q is real Datascript d/q over the canvas substrate db"
+    ;; addressing currency: resolve a known module by its stable-id
+    (is (= #{["infra.server"]}
+           (api/q '[:find ?id
+                    :where [?e :entity/type :Module]
+                           [?e :entity/stable-id "infra.server"]
+                           [?e :entity/stable-id ?id]])))
+    ;; precision the old EDB L0 lacked: invariants are distinguishable from
+    ;; rules (both collapsed to :primitive/rule under the projected vocabulary)
+    (let [invs (api/q '[:find ?id
+                        :where [?e :affordance/role :canvas/invariant]
+                               [?e :entity/stable-id ?id]])]
+      (is (set? invs) "d/q returns a set of tuples")
+      (is (pos? (count invs)))
+      (is (every? #(string? (first %)) invs) "results carry stable-id strings"))))
 
 (deftest primitives-all
   (testing "(primitives) returns the standard listing envelope"
