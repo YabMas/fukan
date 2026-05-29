@@ -9,6 +9,8 @@
    Per MODEL.md §7.6 and DESIGN.md 'Implementation linkage'."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [datascript.core :as d]
+            [fukan.canvas.core.substrate.store :as store]
             [fukan.model.artifact :as a]
             [fukan.model.build :as build]
             [fukan.model.relations :as r]
@@ -346,3 +348,26 @@
                     (update :violations (fnil into []) dup-violations)
                     (materialize-unprojected symbols))]
     m-final))
+
+(defn enrich-db
+  "Phase 6 as a db-enrichment pass (Step B). Runs the analyzer (`run`) to
+   compute Code.* artifacts + :relation/projects edges, then transacts them
+   into the canvas db as datoms — artifacts first so each edge's :edge/to
+   lookup-ref resolves. `stable->uuid` maps primitive stable-ids to their
+   :entity/id UUIDs so projects-edge :from endpoints resolve to primitive
+   entities.
+
+   Returns {:db <enriched-db> :violations <run's violations: carried + dup>}.
+   The held model map derives its :artifacts and :relation/projects edges
+   from this db (canvas-source/db->artifacts + db->projects-edges) — the db
+   is the source, the map the view. `run` itself is unchanged; the in-memory
+   model it builds here is a transient computation vehicle, not a persisted
+   second source."
+  [db model registry code-root stable->uuid]
+  (let [enriched   (run model registry code-root)
+        artifacts  (vals (:artifacts enriched))
+        proj-edges (filter #(= :relation/projects (:kind %)) (:edges enriched))
+        db'        (-> db
+                       (d/db-with (into [] (mapcat store/artifact->datoms) artifacts))
+                       (d/db-with (into [] (mapcat #(store/edge->datoms % stable->uuid)) proj-edges)))]
+    {:db db' :violations (:violations enriched)}))

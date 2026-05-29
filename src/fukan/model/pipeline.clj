@@ -31,20 +31,31 @@
 
 (defn build-model
   "Top-level build: Phase 0 (canvas ingestion) → Phase 4 → Phase 5 → Phase 6.
-   Returns {:model <Model> :canvas-db <Datascript db>}, where Model carries
-   :violations from Phase 4 (gating), Phase 5 (non-gating), and :artifacts +
-   :relation/projects edges from Phase 6, and canvas-db is the unified Phase-0
-   Datascript db (retained so trust/weigh queries reuse it rather than
-   rebuilding it per call).
-   Raises on Gate G2 halt during Phase 4.
+   Returns {:model <Model> :canvas-db <Datascript db>}.
+
+   The canvas db is the single source: Phase 6 transacts Code.* artifacts and
+   :relation/projects edges into it (clj-analyzer/enrich-db), and the held
+   Model derives its :artifacts and projects edges back out of the db
+   (canvas-source/db->artifacts + db->projects-edges) — the map is a view, not
+   a second source. Phase 4/5 are projection-agnostic, so they run on the
+   pre-Phase-6 structural projection (m0) unchanged.
+
+   Model carries :violations from Phase 4 (gating), Phase 5 (non-gating), and
+   the analyzer's duplicate-address lint. Raises on Gate G2 halt during Phase 4.
 
    Phase 0 builds and projects all 62 canvas ports into the initial model map.
    Legacy Allium/Boundary parse phases have been retired."
   [source-root]
-  (let [db (canvas-source/build-canvas-db)              ; Phase 0a: build unified db once
-        m0 (canvas-source/project db)                   ; Phase 0b: project to model map
-        {:keys [model violations]} (phase4/run m0)      ; Phase 4: structural validation
-        m2 (-> model (assoc :violations violations) register-defaults)
-        m3 (phase5/run m2)                               ; Phase 5: constraint evaluation
-        model (clj-analyzer/run m3 (project-defaults/fukan-on-fukan) source-root)] ; Phase 6
-    {:model model :canvas-db db}))
+  (let [db0 (canvas-source/build-canvas-db)             ; Phase 0a: build unified db once
+        m0  (canvas-source/project db0)                 ; Phase 0b: structural map for Phase 4/5
+        {:keys [model violations]} (phase4/run m0)      ; Phase 4: structural validation (gate)
+        m2  (-> model (assoc :violations violations) register-defaults)
+        m3  (phase5/run m2)                              ; Phase 5: constraint evaluation
+        {db1 :db v :violations}                          ; Phase 6: analyzer transacts into the db
+        (clj-analyzer/enrich-db db0 m3 (project-defaults/fukan-on-fukan)
+                                source-root (canvas-source/stable->uuid-map db0))
+        full (-> m3                                      ; held map derives Phase-6 content from db1
+                 (assoc :violations v)
+                 (assoc :artifacts (canvas-source/db->artifacts db1))
+                 (update :edges into (canvas-source/db->projects-edges db1)))]
+    {:model full :canvas-db db1}))

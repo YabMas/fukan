@@ -15,7 +15,9 @@
    `(reset)` picks it up without any registry edit."
   (:require
    [clojure.java.io :as io]
+   [clojure.set :as set]
    [clojure.string :as str]
+   [clojure.edn :as edn]
    [datascript.core :as d]
    [fukan.canvas.core.substrate.store :as store]
    [fukan.canvas.identity :as identity]))
@@ -750,6 +752,69 @@
      :predicates []
      :renderers  []
      :artifacts  {}}))
+
+;; ---------------------------------------------------------------------------
+;; Phase-6 content read back out of the db (Step B): the db is the source of
+;; artifacts + projects edges; these reconstruct the model-map view of them.
+;; Inverses of store/artifact->datoms and store/edge->datoms.
+;; ---------------------------------------------------------------------------
+
+(defn stable->uuid-map
+  "Inverse of build-module-id-map: stable string id → :entity/id UUID. Used to
+   resolve projects-edge :from endpoints (stable-ids) to primitive entities
+   when the analyzer transacts Phase-6 edges into the db."
+  [db]
+  (set/map-invert (build-module-id-map db)))
+
+(defn db->artifacts
+  "Reconstruct the model map's :artifacts {identity-tuple → artifact-map} from
+   :artifact/* entities in the db. Inverse of store/artifact->datoms. Fields
+   are read back from their pr-str form; their iteration order is irrelevant —
+   the only consumer (shape-drift) treats them as a name→type map."
+  [db]
+  (let [aeids (d/q '[:find [?a ...] :where [?a :artifact/id _]] db)]
+    (into {}
+          (map (fn [aeid]
+                 (let [e        (d/entity db aeid)
+                       sub-case (:artifact/sub-case e)
+                       lang     (:artifact/language e)
+                       qn       (:artifact/qualified-name e)
+                       sf       (:artifact/source-file e)
+                       sl       (:artifact/source-line e)
+                       fields   (:artifact/fields e)
+                       art {:case     (:artifact/case e)
+                            :language lang
+                            :sub      (cond-> {:case sub-case :qualified-name qn}
+                                        (some? (:artifact/public e))
+                                        (assoc :public? (:artifact/public e))
+                                        sf
+                                        (assoc :source-location
+                                               (cond-> {:file sf} sl (assoc :line sl)))
+                                        (seq fields)
+                                        (assoc :fields (mapv edn/read-string fields)))}]
+                   [[sub-case lang qn] art])))
+          aeids)))
+
+(defn db->projects-edges
+  "Reconstruct the model map's :relation/projects edges from :edge/* entities
+   in the db. Inverse of store/edge->datoms."
+  [db]
+  (let [uuid->stable (build-module-id-map db)
+        eeids (d/q '[:find [?e ...] :where [?e :edge/kind :relation/projects]] db)]
+    (mapv (fn [eeid]
+            (let [e           (d/entity db eeid)
+                  from-eid    (:db/id (:edge/from e))
+                  from-stable (eid->stable-id db uuid->stable from-eid)
+                  art         (:edge/to e)
+                  art-tuple   [(:artifact/sub-case art)
+                               (:artifact/language art)
+                               (:artifact/qualified-name art)]]
+              {:kind            :relation/projects
+               :from            {:case :endpoint/primitive :id from-stable}
+               :to              {:case :endpoint/artifact :id art-tuple}
+               :projection-kind (:edge/projection-kind e)
+               :validity        (:edge/validity e)}))
+          eeids)))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: build
