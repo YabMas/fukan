@@ -31,15 +31,20 @@
 
 (defn build-model
   "Top-level build: Phase 0 (canvas ingestion) → Phase 4 → Phase 5 → Phase 6.
-   Returns the unified Model with :violations from Phase 4 (gating),
-   Phase 5 (non-gating), and :artifacts + :relation/projects edges from Phase 6.
+   Returns {:model <Model> :canvas-db <Datascript db>}, where Model carries
+   :violations from Phase 4 (gating), Phase 5 (non-gating), and :artifacts +
+   :relation/projects edges from Phase 6, and canvas-db is the unified Phase-0
+   Datascript db (retained so trust/weigh queries reuse it rather than
+   rebuilding it per call).
    Raises on Gate G2 halt during Phase 4.
 
    Phase 0 builds and projects all 62 canvas ports into the initial model map.
    Legacy Allium/Boundary parse phases have been retired."
   [source-root]
-  (let [m0 (canvas-source/build)                        ; Phase 0: canvas ingestion
+  (let [db (canvas-source/build-canvas-db)              ; Phase 0a: build unified db once
+        m0 (canvas-source/project db)                   ; Phase 0b: project to model map
         {:keys [model violations]} (phase4/run m0)      ; Phase 4: structural validation
         m2 (-> model (assoc :violations violations) register-defaults)
-        m3 (phase5/run m2)]                              ; Phase 5: constraint evaluation
-    (clj-analyzer/run m3 (project-defaults/fukan-on-fukan) source-root)))  ; Phase 6
+        m3 (phase5/run m2)                               ; Phase 5: constraint evaluation
+        model (clj-analyzer/run m3 (project-defaults/fukan-on-fukan) source-root)] ; Phase 6
+    {:model model :canvas-db db}))

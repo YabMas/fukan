@@ -24,7 +24,7 @@
 
 (defonce ^:private model-once
   (delay
-    (let [m (pipeline/build-model "/Users/yabmas/Code/fukan/src")]
+    (let [m (:model (pipeline/build-model "/Users/yabmas/Code/fukan/src"))]
       (infra-model/set-model-for-test! m)
       m)))
 

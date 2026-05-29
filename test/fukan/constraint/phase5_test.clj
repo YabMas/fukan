@@ -46,7 +46,7 @@
 
 (deftest combined-pipeline-with-phase5-runs-cleanly
   (testing "fukan-on-fukan loads through all phases — no errors, Phase 5 silent"
-    (let [m (model-pipeline/build-model "src")]
+    (let [m (:model (model-pipeline/build-model "src"))]
       (is (map? m))
       (is (contains? m :violations))
       (let [errors    (filter #(= :error (:severity %)) (:violations m))

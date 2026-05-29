@@ -40,7 +40,7 @@
 
 (deftest combined-pipeline-with-phase6-runs-cleanly
   (testing "fukan-on-fukan loads through all phases (4–6, canvas is sole spec source)"
-    (let [m (model-pipeline/build-model "src")]
+    (let [m (:model (model-pipeline/build-model "src"))]
       (is (map? m))
       (is (contains? m :violations))
       (let [errors (filter #(= :error (:severity %)) (:violations m))]

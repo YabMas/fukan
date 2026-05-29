@@ -340,6 +340,14 @@
 ;; with weigh-tier lenses (Sprint 3 Task 7+), which produce interpretive
 ;; output the caller must weigh against context.
 
+(defn- canvas-db
+  "Canvas-db for trust/weigh/Layer-A queries. Reuses the unified Phase-0 db
+   retained by the model lifecycle; falls back to a fresh build when no model
+   is loaded (cold eval, tests). Carved out so tests can stub via `with-redefs`."
+  []
+  (or (infra-model/get-canvas-db)
+      (canvas-source/build-canvas-db)))
+
 (defn ^{:agent/layer :trust
         :agent/origin :built-in
         :agent/doc "Cross-reference integrity check. Walks the canvas db and
@@ -351,7 +359,7 @@
         :agent/example "(integrity)"}
   integrity
   []
-  (inspect-integrity/check (canvas-source/build-canvas-db)))
+  (inspect-integrity/check (canvas-db)))
 
 (defn ^{:agent/layer :trust
         :agent/origin :built-in
@@ -366,7 +374,7 @@
         :agent/example "(canvas-coverage)"}
   canvas-coverage
   []
-  (inspect-coverage/check (canvas-source/build-canvas-db)))
+  (inspect-coverage/check (canvas-db)))
 
 (defn ^{:agent/layer :trust
         :agent/origin :built-in
@@ -413,7 +421,7 @@
       (throw (ex-info (str "unknown canvas-drift filter: " (first unknown))
                       {:type :unknown-filter :filter (first unknown)}))))
   (inspect-drift/check (ensure-model)
-                       (canvas-source/build-canvas-db)
+                       (canvas-db)
                        {:module-coord module-coord}))
 
 ;; -- Weigh tier ---------------------------------------------------------------
@@ -437,7 +445,7 @@
   survey
   ([] (survey nil))
   ([lens-ids-or-nil]
-   (let [db  (canvas-source/build-canvas-db)
+   (let [db  (canvas-db)
          ids (or lens-ids-or-nil
                  (mapv :id (lens-registry/all-lenses)))]
      (lens-survey/run db ids))))
@@ -611,11 +619,6 @@
         (let [[inputs outputs] (arrow-shape->inputs-outputs shape)]
           (assoc base :inputs inputs :outputs outputs))
         base))))
-
-(defn- canvas-db
-  "Live canvas-db. Carved out so tests can stub via `with-redefs`."
-  []
-  (canvas-source/build-canvas-db))
 
 (defn- module-coord->src-path
   "Convention mirror of `cold_write/module-coord->src-path` — dot→slash,

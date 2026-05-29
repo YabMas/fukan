@@ -36,7 +36,7 @@
 
 (deftest combined-pipeline-with-phase4-runs-cleanly
   (testing "fukan-on-fukan loads through Allium + Boundary + Phase 4"
-    (let [model (model-pipeline/build-model "src")]
+    (let [model (:model (model-pipeline/build-model "src"))]
       (is (map? model))
       (is (contains? model :violations))
       (let [errors (filter #(= :error (:severity %)) (:violations model))]
