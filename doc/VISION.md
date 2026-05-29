@@ -48,7 +48,7 @@ The canvas exists primarily to be reasoned over; the graph viewer is fukan's cur
 
 This ordering is deliberate. Before investing in authoring ergonomics, the substrate must demonstrate it can represent the full vocabulary of a real codebase — modules, functions, records, invariants, rules, getters, checkers — and make that vocabulary navigable in the graph. Phase 3 validated this across 62 modules of fukan-itself.
 
-Phase 4 (authoring loop) builds on the validated substrate.
+The bet paid off: with the substrate proven, subsequent work built on it without re-foundation — convention-resolved code projection with per-entity drift edges, a pluggable lens substrate for design-altitude analysis, and an agent query/authoring surface (`bin/fukan`, the `fukan-architect`/`fukan-reconciler` agents, the canvas-authoring system prompt). Authoring today is agent-driven through that surface and the REPL edit→`(refresh)`→query loop; an interactive *browser* authoring experience remains the open frontier (see *What is deferred*).
 
 ---
 
@@ -68,15 +68,21 @@ Concretely, in the canvas-first state:
 
 ---
 
+## What has landed since
+
+The canvas-first re-foundation has been extended substantially on the same substrate:
+
+**Drift detection.** The Clojure target analyzer resolves canonical code addresses by convention, so `projects` edges now carry meaningful per-entity `:validity` (`:valid` / `:stale` / `:absent` / `:unknown`) instead of the uniform `:absent` of the early UUID-id scheme. Bidirectional drift between intent and reality is a first-class, queryable signal (`(canvas-drift)`).
+
+**Lens substrate and agent surface.** A pluggable lens layer supports design-altitude analysis modes (new modes = drop a file), and the model is queryable by humans and agents through `bin/fukan` and the `fukan-architect` / `fukan-reconciler` agents.
+
 ## What is deferred
 
-**Phase 4 — Authoring loop.** The canvas today is authored as static `.clj` files. The authoring loop — interactive canvas editing, LLM-co-authored design conversations, real-time graph feedback during authoring — is Phase 4 work.
+**Interactive browser authoring.** Canvas is authored today as `.clj` files edited in the REPL loop, and agent-assisted through the query/authoring surface. An interactive *browser* authoring experience — in-graph editing, real-time feedback during design — is the open frontier (the explorer rewrite).
 
-**Vocabulary library expansion.** The current vocab libraries (`vocab.behavioral`, `vocab.lifecycle`, `vocab.validation`, plus the construction primitives) cover the fukan-itself corpus. Methodology libraries for other architectural styles (CQRS, actor model, event-driven microservices) are Phase 5 work, justified by real usage.
+**Vocabulary library expansion.** The current vocab libraries (`vocab.behavioral`, `vocab.lifecycle`, `vocab.validation`, plus the construction primitives) cover the fukan-itself corpus. Methodology libraries for other architectural styles (CQRS, actor model, event-driven microservices) arrive when real usage justifies them.
 
-**Stable drift detection.** Phase 6 (the Clojure target analyzer) currently produces mostly `:absent` drift edges because the UUID-based primitive ids don't yet match Clojure namespace coordinates. Wiring the drift surface to the canvas id scheme is Phase 4 work.
-
-**Constraint language depth.** The `defquery` mechanism and `fc/check` constraint runner exist. The constraint language is currently used lightly — validation rules run in Phase 4/5, not as canvas-authored constraints. Richer constraint authoring at the canvas level is a follow-on after authoring lands.
+**Canvas-authored constraint depth.** The `defquery` mechanism and `fc/check` constraint runner exist and run in the build pipeline. Richer constraint *authoring at the canvas level* — projects expressing their own architectural laws as canvas constraints — remains lighter than the substrate allows.
 
 ---
 
