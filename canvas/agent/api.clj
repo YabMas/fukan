@@ -170,15 +170,17 @@
         (holds-that "l1-probes-return-envelope-shape"))
 
       (invariant "LayerDiscipline"
-        "L0 (q) is the only entry point that runs arbitrary Datalog.
-         L1 probes wrap the loaded Model with structured filters.
+        "L0 (q) runs arbitrary Datascript Datalog over the canvas substrate
+         db. L1 probes wrap the loaded Model map with structured filters.
          L2 views may compose L1 calls. Higher layers never reach below L0."
         (holds-that "layer-discipline-l0-l1-l2"))
 
       (invariant "ModelLoadedPrecondition"
-        "Probes that require a loaded Model raise :model-not-loaded when
-         none is built. get_primitive, idioms, constraints, and violations
-         tolerate the unloaded state and return nil / empty."
+        "L1 probes that read the loaded Model map raise :model-not-loaded
+         when none is built; get_primitive, idioms, constraints, and
+         violations tolerate the unloaded state and return nil / empty.
+         L0 q reads the canvas substrate db (the retained one, or a fresh
+         enriched build on fallback), so it is independent of the loaded map."
         (holds-that "model-loaded-precondition"))
 
       (invariant "FilterRejection"

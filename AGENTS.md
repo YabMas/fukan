@@ -101,7 +101,7 @@ Both referred-in by default — no ns/fn prefix needed in `fukan eval`:
 
 | Layer | What lives here | Used for |
 |-------|-----------------|----------|
-| **L0** | `q` — Datalog over the Model | Joins, aggregations, anything ad-hoc |
+| **L0** | `q` — Datascript Datalog over the substrate db | Joins, aggregations, anything ad-hoc |
 | **L1** | `primitives`, `get-primitive`, `relations`, `vocabulary`, `schema`, `idioms`, `constraints`, `violations` | Daily driver; filter by kw-args |
 | **L2** | `drift`, `neighborhood` (built-in) + whatever the project has added in `.fukan/agent-views.clj` | Recurring questions, named |
 
@@ -112,13 +112,37 @@ to L2.
 
 ### L0 — `q`
 
-Datalog form: `[:find ?vars :where clauses]`. The EDB contains one
-fact per primitive attribute and one fact per edge attribute. Useful
-when you need joins across multiple primitives or arbitrary
-aggregations that L1 filters can't express.
+`q` runs real Datascript Datalog (`[:find ?vars :where clauses]`, full
+d/q dialect — joins, rules, aggregates, pull) directly over the canvas
+substrate db. Query the **substrate vocabulary**, not projected map shapes:
+
+- `:entity/type` — `:Module` | `:Affordance` | `:State` | `:Type`
+- `:affordance/role` — `:canvas/invariant`, `:canvas/rule`, `:canvas/getter`,
+  `:canvas/checker`, `:canvas/event`, `:fukan.canvas.monolith/exposed-call`
+- `:entity/stable-id` — the cross-fn addressing currency; feed results into
+  `get-primitive` / `neighborhood` / `spec`
+- `:entity/name`, `:module/child`, `:uses` (resolved cross-module refs),
+  `:triggers`, `:emits`
+- `:edge/*` — reified projects edges (`:edge/kind`, `:edge/from`, `:edge/to`,
+  `:edge/projection-kind`, `:edge/validity`)
+- `:artifact/*` — Code.\* artifacts (`:artifact/sub-case`,
+  `:artifact/qualified-name`, `:artifact/public`, …)
+
+Returns a **set of result tuples** (native d/q). The substrate is more
+precise than the old projected vocabulary: invariants are distinguishable
+from rules, and getters from checkers from functions — distinctions the
+former `:primitive/kind` EDB collapsed.
 
 ```clojure
-(q '[:find ?p :where [?p :primitive/kind :primitive/rule]])
+;; every invariant, by stable-id
+(q '[:find ?id :where [?e :affordance/role :canvas/invariant]
+                      [?e :entity/stable-id ?id]])
+
+;; what does infra.server depend on? (resolved :uses edges, by stable-id)
+(q '[:find ?dep :where [?m :entity/stable-id "infra.server"]
+                       [?m :module/child ?c]
+                       [?c :uses ?t]
+                       [?t :entity/stable-id ?dep]])
 ```
 
 ### L1 — probes
