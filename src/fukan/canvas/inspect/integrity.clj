@@ -6,7 +6,8 @@
    A broken reference is an error under any methodology — no interpretive
    judgment required.
 
-   Four checks (see doc/plans/2026-05-26-feedback-signals-design.md § 1):
+   Four checks (see DESIGN.md § \"Drift, coverage, and the close-drift loop\";
+   original design: doc/plans/2026-05-26-feedback-signals-design.md § 1, git history):
 
      1. Unresolved `:references` Relations. Re-runs canvas-source segment
         matching against the db; any keyword target that fails to resolve

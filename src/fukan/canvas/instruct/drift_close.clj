@@ -12,8 +12,8 @@
    docstrings — no bodies), and folds them into the prompt so the
    implementing LLM matches the surrounding style rather than inventing.
 
-   See doc/plans/2026-05-27-scenario-handoff-design.md
-   § drift-close scenario."
+   See DESIGN.md § \"Scenario composition (Layer B)\" (original design:
+   doc/plans/2026-05-27-scenario-handoff-design.md, git history)."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [fukan.canvas.instruct.render :as render]))

@@ -18,8 +18,9 @@
    primary contribution. When absent, the survey passes nil as the
    first argument to `:render`.
 
-   See doc/plans/2026-05-26-canvas-substrate-phase-5.md
-   § The lens substrate (Phase 5's pluggability core).")
+   The lens substrate is summarised in VISION.md (the pluggable lens
+   layer); the full design lives in git history:
+   doc/plans/2026-05-26-canvas-substrate-phase-5.md § The lens substrate.")
 
 (defn validate-lens
   "Return a vector of issue strings describing why m is not a valid lens.

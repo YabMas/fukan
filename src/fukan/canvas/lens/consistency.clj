@@ -19,8 +19,8 @@
    Output is observational, not prescriptive. Each finding is a question
    for the LLM to weigh against context, not an error to auto-fix.
 
-   See doc/plans/2026-05-26-feedback-signals-design.md
-   § 4. Consistency — WEIGH tier."
+   Full design in git history:
+   doc/plans/2026-05-26-feedback-signals-design.md § 4. Consistency — WEIGH tier."
   (:require [clojure.string :as str]
             [datascript.core :as d]))
 

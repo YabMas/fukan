@@ -16,8 +16,8 @@
    which case the cluster is framing-for-confirmation; otherwise it is a
    rule-of-three lift candidate the LLM should weigh.
 
-   See doc/plans/2026-05-26-feedback-signals-design.md
-   § 2. Pattern recurrence — WEIGH tier."
+   Full design in git history:
+   doc/plans/2026-05-26-feedback-signals-design.md § 2. Pattern recurrence — WEIGH tier."
   (:require [clojure.string :as str]
             [datascript.core :as d]
             [fukan.canvas.identity :as identity]))

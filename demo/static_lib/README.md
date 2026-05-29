@@ -17,7 +17,3 @@ Tests whether the substrate is over-built for trivial cases.
 
 Only `construction` primitives: `record`, `function`, `exports`.
 No behavioral lifts required. Ported cleanly using only the construction layer.
-
-## Findings
-
-See `doc/plans/2026-05-26-stress-test-findings.md`.

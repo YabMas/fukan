@@ -9,8 +9,8 @@
    finding so callers can filter (the LLM treats `:error` as factual; the
    user reads `:warning`/`:info` as decision-ready but inviting context-check).
 
-   Severity ladder (see doc/plans/2026-05-26-canvas-substrate-phase-5.md
-   Sprint 3 Task 7):
+   Severity ladder (see DESIGN.md § \"Drift, coverage, and the close-drift loop\";
+   original design: doc/plans/2026-05-26-canvas-substrate-phase-5.md Sprint 3 Task 7, git history):
 
      :error    — structural impossibility (unreached entity floating outside
                  any module's :module/child graph)

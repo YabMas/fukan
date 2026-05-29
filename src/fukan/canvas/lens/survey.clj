@@ -7,8 +7,9 @@
    throwing; partial surveys are useful when an experimental lens id is
    wrong but the rest of the set still has signal to contribute.
 
-   See doc/plans/2026-05-26-canvas-substrate-phase-5.md
-   § The lens substrate (Phase 5's pluggability core)."
+   The lens substrate is summarised in VISION.md (the pluggable lens
+   layer); the full design lives in git history:
+   doc/plans/2026-05-26-canvas-substrate-phase-5.md § The lens substrate."
   (:require [clojure.string :as str]
             [fukan.canvas.lens.registry :as registry]))
 

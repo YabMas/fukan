@@ -36,7 +36,8 @@
 
    Routes: `[:clojure :canvas/invariant+property-test]`.
 
-   See doc/plans/2026-05-28-invariant-projection-design.md §§ 3, 5, 6, 7."
+   See DESIGN.md § \"Implementation linkage — the Clojure lens\" (full
+   design: doc/plans/2026-05-28-invariant-projection-design.md §§ 3, 5, 6, 7, git history)."
   (:require [clojure.string :as str]
             [fukan.canvas.project.core :as core]
             [fukan.target.clojure.address :as addr]))

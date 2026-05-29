@@ -23,8 +23,8 @@
    * **The Layer-A specs** — every entity (or the `:include-entity-ids`
      subset) rendered as its own markdown subsection.
 
-   See doc/plans/2026-05-27-scenario-handoff-design.md
-   § cold-write scenario."
+   See DESIGN.md § \"Scenario composition (Layer B)\" (original design:
+   doc/plans/2026-05-27-scenario-handoff-design.md, git history)."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [fukan.canvas.instruct.render :as render]))

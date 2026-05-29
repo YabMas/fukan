@@ -877,9 +877,9 @@
 ;; returns "manual dispatch required").
 ;;
 ;; The SCI sandbox can't escape to invoke `Agent` directly; that's why
-;; dispatch is *not* part of the controller's contract. See
-;; `doc/plans/2026-05-28-closure-controller-design.md` (Sprint 1) for the
-;; full design.
+;; dispatch is *not* part of the controller's contract. See DESIGN.md
+;; § "Drift, coverage, and the close-drift loop" (original design:
+;; doc/plans/2026-05-28-closure-controller-design.md (Sprint 1), git history).
 ;;
 ;; Retry/concurrency thresholds (`:max-attempts`, file-fanout) ship as
 ;; Sprint-1-proposed defaults tagged `:trial/calibration-pending` per the

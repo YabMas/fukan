@@ -23,8 +23,9 @@
    `:Affordance` kind but project differently); Types and Modules route
    on the kind keyword directly. See `dispatch-key-of`.
 
-   See doc/plans/2026-05-27-project-lens-design.md
-   § The lens contract."
+   See DESIGN.md § \"Implementation linkage — the Clojure lens\" → The
+   lens projection (Layer A) (original design:
+   doc/plans/2026-05-27-project-lens-design.md, git history)."
   (:require [clojure.string :as str]))
 
 (defn dispatch-key-of
@@ -61,8 +62,9 @@
 
    Modules: use the :model-element-kind directly.
 
-   See doc/plans/2026-05-28-invariant-projection-design.md § 5
-   (Option β)."
+   See DESIGN.md § \"Implementation linkage — the Clojure lens\" for the
+   invariant+property-test dispatch (Option β design:
+   doc/plans/2026-05-28-invariant-projection-design.md § 5, git history)."
   [{:keys [model-element-kind canvas-role type-kind canvas-projection-kind]}]
   (case model-element-kind
     :Affordance (if (and (= :canvas/invariant canvas-role)

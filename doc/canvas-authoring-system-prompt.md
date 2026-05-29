@@ -10,9 +10,9 @@
 > thinking that produces compositional, layered language design — and to make
 > the trust/weigh feedback partition unambiguous before the first edit lands.
 >
-> Versioning: kept at a single path; git history is the version trail. The
-> Phase 2 one-shot at `doc/plans/2026-05-25-architect-explorer-system-prompt.md`
-> remains as a frozen experiment artifact.
+> Versioning: kept at a single path; git history is the version trail. An
+> earlier Phase 2 one-shot variant of this prompt lives in git history as a
+> frozen experiment artifact.
 
 ---
 

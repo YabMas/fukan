@@ -14,8 +14,8 @@
    changes; if it doesn't, that's the substrate friction the task is meant
    to surface.
 
-   See doc/plans/2026-05-26-canvas-substrate-phase-5.md
-   § Phase 5, Task 10 — Tar-pit lens."
+   Full design in git history:
+   doc/plans/2026-05-26-canvas-substrate-phase-5.md § Phase 5, Task 10 — Tar-pit lens."
   (:require [clojure.string :as str]
             [datascript.core :as d]))
 

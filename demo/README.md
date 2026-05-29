@@ -39,8 +39,3 @@ clj -M:demo
 
 Runs thin smoke tests for each demo module (namespace loads, `build-canvas`
 returns non-empty db).
-
-## Findings
-
-See `doc/plans/2026-05-26-stress-test-findings.md` for the Sprint 3
-stress-test analysis.

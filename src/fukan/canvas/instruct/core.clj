@@ -32,8 +32,8 @@
    it. `:code-spec` and `:scenario-context` round-trip for downstream
    tooling (Phase 8's auto-dispatch will parse them).
 
-   See doc/plans/2026-05-27-scenario-handoff-design.md
-   § The scenario contract.")
+   See DESIGN.md § \"Scenario composition (Layer B)\" (original design:
+   doc/plans/2026-05-27-scenario-handoff-design.md, git history).")
 
 (defn validate-scenario
   "Return a vector of issue strings describing why m is not a valid

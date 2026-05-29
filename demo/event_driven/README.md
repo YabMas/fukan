@@ -32,7 +32,3 @@ vocabulary and reactive semantics.
 | `handler` | 6 | order(1), payment(1), shipping(1), notification(3) | SHIP |
 | `topic` | 0 | — | DEFER |
 | `emits` (standalone) | 0 | used as form within `handler` | DEFER |
-
-## Findings
-
-See `doc/plans/2026-05-26-stress-test-findings.md`.
