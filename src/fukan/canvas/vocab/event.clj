@@ -34,23 +34,8 @@
    a form within `handler` (and within `function` via the existing `effect`
    form). No case for a standalone lift."
   (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
-            [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.shape :as shape]
-            [datascript.core :as d]))
-
-(defn- emit-payload-refs!
-  "Walk a parsed payload shape and emit :references Relations for any :ref nodes."
-  [from-id parsed-shape]
-  (when parsed-shape
-    (case (:kind parsed-shape)
-      :ref      (h/declare-relation from-id :references (:target parsed-shape))
-      :optional (emit-payload-refs! from-id (:inner parsed-shape))
-      :list     (emit-payload-refs! from-id (:elem parsed-shape))
-      :set      (emit-payload-refs! from-id (:elem parsed-shape))
-      :sum      (run! #(emit-payload-refs! from-id %) (:variants parsed-shape))
-      :tuple    (run! #(emit-payload-refs! from-id %) (:elems parsed-shape))
-      :record   (run! (fn [[_ s]] (emit-payload-refs! from-id s)) (:fields parsed-shape))
-      nil)))
+            [fukan.canvas.vocab.construct :as construct]))
 
 (defconstructor event
   "A named event declaration with an optional payload shape.
@@ -67,19 +52,13 @@
   (form payload "Payload fields: zero or more [name :Type] pairs." :shape :field+)
 
   (produces [name doc forms]
-    (let [payload-vecs  (:payload forms)
-          payload-args  (when payload-vecs (apply concat payload-vecs))
-          field-pairs   (if payload-args
-                          (vec (->> (partition 2 payload-args)
-                                    (mapv (fn [[n s]] [n (shape/parse s)]))))
-                          [])
-          payload-shape {:kind :record :fields field-pairs}
-          aff (h/declare-affordance name
-                :role :canvas/event
-                :shape payload-shape
-                :doc doc)]
-      (emit-payload-refs! (:id aff) payload-shape)
-      aff)))
+    (let [payload-vecs (:payload forms)
+          payload-args (when payload-vecs (apply concat payload-vecs))
+          field-pairs  (if payload-args
+                         (vec (->> (partition 2 payload-args)
+                                   (mapv (fn [[n s]] [n (shape/parse s)]))))
+                         [])]
+      (construct/build :canvas/event name {:kind :record :fields field-pairs} {} :doc doc))))
 
 (defconstructor handler
   "A reactive handler that fires when a named event arrives.
@@ -99,18 +78,9 @@
   (form emits  "An event this handler may emit."   :shape :name-ref :repeatable true)
 
   (produces [name doc forms]
-    (let [on-kw    (first (:on forms))
-          aff      (h/declare-affordance name
-                     :role :canvas/handler
-                     :formal-expression {:on (str on-kw)
-                                         :emits (mapv #(str (first %)) (:emits forms))}
-                     :doc doc)]
-      ;; Emit :references for the incoming event
-      (when (keyword? on-kw)
-        (h/declare-relation (:id aff) :references on-kw))
-      ;; Emit :references for each emitted event
-      (doseq [emit-args (:emits forms)]
-        (let [emit-kw (first emit-args)]
-          (when (keyword? emit-kw)
-            (h/declare-relation (:id aff) :references emit-kw))))
-      aff)))
+    (let [on-kw (first (:on forms))]
+      (construct/build :canvas/handler name
+                       {:on (str on-kw)
+                        :emits (mapv #(str (first %)) (:emits forms))}
+                       {:on (when on-kw [(:on forms)]) :emits (:emits forms)}
+                       :doc doc))))

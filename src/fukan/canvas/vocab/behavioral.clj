@@ -7,7 +7,7 @@
    declarations fired by triggers). Both produce no-shape Affordances with
    distinct roles."
   (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
-            [fukan.canvas.core.helpers :as h]))
+            [fukan.canvas.vocab.construct :as construct]))
 
 (defconstructor invariant
   "A named behavioral commitment of the enclosing module. Allium's `invariant`
@@ -19,10 +19,7 @@
   (form holds-that "What must remain true." :shape :prose)
 
   (produces [name doc forms]
-    (h/declare-affordance name
-      :role :canvas/invariant
-      :formal-expression (first (:holds-that forms))
-      :doc doc)))
+    (construct/build :canvas/invariant name (first (:holds-that forms)) {} :doc doc)))
 
 (defconstructor rule
   "A reactive behavioral declaration: fires when its trigger pattern matches.
@@ -36,7 +33,4 @@
   (form when "Trigger pattern: typically (TriggerName (param :Type) ...)." :required true)
 
   (produces [name doc forms]
-    (h/declare-affordance name
-      :role :canvas/rule
-      :formal-expression {:when (vec (:when forms))}
-      :doc doc)))
+    (construct/build :canvas/rule name {:when (vec (:when forms))} {} :doc doc)))
