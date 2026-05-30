@@ -23,6 +23,29 @@
    :tagapp/id           {:db/unique :db.unique/identity}
    :tagapp/node         {:db/valueType :db.type/ref}
    :tagapp/tag          {:db/index true}
+   ;; ── Reified shapes (payload de-blob, arc-D) ─────────────────────────
+   ;; A node's typed payload (affordance arrow, record-type fields) as a
+   ;; walkable :shape/* entity tree instead of a pr-str blob. :node/shape
+   ;; links a node to its payload root. Legacy :affordance/shape /
+   ;; :type/field-shapes blobs are retained as a derived index pending
+   ;; consumer migration. Ordered children (:shape/items for sum variants
+   ;; and tuple elems, :shape/fields for record fields) carry :shape/index;
+   ;; record fields also carry :shape/field-name (verbatim).
+   :node/shape          {:db/valueType :db.type/ref}
+   :shape/id            {:db/unique :db.unique/identity}
+   :shape/kind          {:db/index true}
+   :shape/name          {}
+   :shape/target        {}
+   :shape/index         {}
+   :shape/field-name    {}
+   :shape/inner         {:db/valueType :db.type/ref}
+   :shape/elem          {:db/valueType :db.type/ref}
+   :shape/key           {:db/valueType :db.type/ref}
+   :shape/val           {:db/valueType :db.type/ref}
+   :shape/inputs        {:db/valueType :db.type/ref}
+   :shape/outputs       {:db/valueType :db.type/ref}
+   :shape/items         {:db/cardinality :db.cardinality/many :db/valueType :db.type/ref}
+   :shape/fields        {:db/cardinality :db.cardinality/many :db/valueType :db.type/ref}
    :references          {:db/cardinality :db.cardinality/many}
    ;; Resolved cross-module dependency edge — the ref-datom form of
    ;; :references (which stays as keyword values for the map-side projection).
@@ -71,6 +94,82 @@
 (defn create []
   (d/empty-db schema))
 
+;; ── Shape reification (payload de-blob) ──────────────────────────────────
+
+(defn- amend-root
+  "Set extra attrs on the root entity (the one whose :shape/id = root-id)
+   within a shape's datom list. Used to stamp :shape/index / :shape/field-name
+   onto an ordered child's root without descending into its subtree."
+  [datoms root-id extra]
+  (mapv #(if (= (:shape/id %) root-id) (merge % extra) %) datoms))
+
+(defn shape->datoms
+  "Reify a parsed shape map (per fukan.canvas.core.shape/parse) into :shape/*
+   entity maps. Returns [root-id datoms] where root-id is the :shape/id of the
+   tree root. Field-names are preserved verbatim."
+  [shape]
+  (let [;; Normalise raw keyword leaves (:String, :model/Model) that the
+        ;; low-level arrow/record-of helpers leave unparsed; the construction
+        ;; lifts already parse, so this is a no-op for them.
+        shape (if (keyword? shape) (shape/parse shape) shape)
+        id    (str (random-uuid))
+        base  {:shape/id id :shape/kind (:kind shape)}]
+    (case (:kind shape)
+      :atomic [id [(assoc base :shape/name (:name shape))]]
+      :ref    [id [(assoc base :shape/target (:target shape))]]
+      :optional (let [[c cds] (shape->datoms (:inner shape))]
+                  [id (conj cds (assoc base :shape/inner [:shape/id c]))])
+      :list (let [[c cds] (shape->datoms (:elem shape))]
+              [id (conj cds (assoc base :shape/elem [:shape/id c]))])
+      :set  (let [[c cds] (shape->datoms (:elem shape))]
+              [id (conj cds (assoc base :shape/elem [:shape/id c]))])
+      :map  (let [[kc kds] (shape->datoms (:key shape))
+                  [vc vds] (shape->datoms (:val shape))]
+              [id (-> (vec kds) (into vds)
+                      (conj (assoc base :shape/key [:shape/id kc] :shape/val [:shape/id vc])))])
+      :arrow (let [[ic ids] (shape->datoms (:inputs shape))
+                   [oc ods] (shape->datoms (:outputs shape))]
+               [id (-> (vec ids) (into ods)
+                       (conj (assoc base :shape/inputs [:shape/id ic] :shape/outputs [:shape/id oc])))])
+      :sum (let [parts (mapv shape->datoms (:variants shape))
+                 child (vec (mapcat (fn [i [c cds]] (amend-root cds c {:shape/index i}))
+                                    (range) parts))
+                 refs  (mapv (fn [[c _]] [:shape/id c]) parts)]
+             [id (conj child (assoc base :shape/items refs))])
+      :tuple (let [parts (mapv shape->datoms (:elems shape))
+                   child (vec (mapcat (fn [i [c cds]] (amend-root cds c {:shape/index i}))
+                                      (range) parts))
+                   refs  (mapv (fn [[c _]] [:shape/id c]) parts)]
+               [id (conj child (assoc base :shape/items refs))])
+      :record (let [parts (mapv (fn [[fname fshape]] (conj (shape->datoms fshape) fname))
+                                (:fields shape))
+                    child (vec (mapcat (fn [i [c cds fname]]
+                                         (amend-root cds c {:shape/index i :shape/field-name fname}))
+                                       (range) parts))
+                    refs  (mapv (fn [[c _ _]] [:shape/id c]) parts)]
+                [id (conj child (assoc base :shape/fields refs))]))))
+
+(defn read-reified-shape
+  "Reconstruct a parsed-shape map from a reified :shape/* entity (eid or
+   lookup-ref). Inverse of shape->datoms. Field-names returned verbatim."
+  [db eid]
+  (let [e (d/entity db eid)
+        rec #(read-reified-shape db (:db/id %))
+        ordered (fn [coll] (->> coll (sort-by :shape/index) vec))]
+    (case (:shape/kind e)
+      :atomic {:kind :atomic :name (:shape/name e)}
+      :ref    {:kind :ref :target (:shape/target e)}
+      :optional {:kind :optional :inner (rec (:shape/inner e))}
+      :list {:kind :list :elem (rec (:shape/elem e))}
+      :set  {:kind :set :elem (rec (:shape/elem e))}
+      :map  {:kind :map :key (rec (:shape/key e)) :val (rec (:shape/val e))}
+      :arrow {:kind :arrow :inputs (rec (:shape/inputs e)) :outputs (rec (:shape/outputs e))}
+      :sum   {:kind :sum :variants (mapv rec (ordered (:shape/items e)))}
+      :tuple {:kind :tuple :elems (mapv rec (ordered (:shape/items e)))}
+      :record {:kind :record
+               :fields (mapv (fn [c] [(:shape/field-name c) (rec c)])
+                             (ordered (:shape/fields e)))})))
+
 (defn- tagapp-maps
   "Reified tag-application entities for a node — the canonical classification
    truth. One per primary kind/role tag (nil tags are skipped). The legacy
@@ -96,20 +195,22 @@
         inputs-set  (when (and shape (= :arrow (:kind shape)))
                       (shape/type-names (:inputs shape)))
         outputs-set (when (and shape (= :arrow (:kind shape)))
-                      (shape/type-names (:outputs shape)))]
-    (into
-     [(cond-> {:entity/id (sub/id-of a)
-               :entity/type :Affordance
-               :entity/name (sub/name-of a)
-               :entity/tag (vec (sub/tags-of a))}
-        (sub/role-of a)              (assoc :affordance/role (sub/role-of a))
-        shape                        (assoc :affordance/shape (pr-str shape))
-        (sub/formal-expression-of a) (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a)))
-        (sub/doc-of a)               (assoc :affordance/doc (sub/doc-of a))
-        (sub/returns-label-of a)     (assoc :affordance/returns-label (sub/returns-label-of a))
-        (seq inputs-set)             (assoc :affordance/input-types inputs-set)
-        (seq outputs-set)            (assoc :affordance/output-types outputs-set))]
-     (tagapp-maps (sub/id-of a) (sub/role-of a)))))
+                      (shape/type-names (:outputs shape)))
+        [shape-root shape-datoms] (if shape (shape->datoms shape) [nil nil])]
+    (-> (vec (or shape-datoms []))
+        (conj (cond-> {:entity/id (sub/id-of a)
+                       :entity/type :Affordance
+                       :entity/name (sub/name-of a)
+                       :entity/tag (vec (sub/tags-of a))}
+                (sub/role-of a)              (assoc :affordance/role (sub/role-of a))
+                shape                        (assoc :affordance/shape (pr-str shape))
+                (sub/formal-expression-of a) (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a)))
+                (sub/doc-of a)               (assoc :affordance/doc (sub/doc-of a))
+                (sub/returns-label-of a)     (assoc :affordance/returns-label (sub/returns-label-of a))
+                (seq inputs-set)             (assoc :affordance/input-types inputs-set)
+                (seq outputs-set)            (assoc :affordance/output-types outputs-set)
+                shape-root                   (assoc :node/shape [:shape/id shape-root])))
+        (into (tagapp-maps (sub/id-of a) (sub/role-of a))))))
 
 (defmethod ->datoms :State [s]
   (into
@@ -165,17 +266,21 @@
         field-tuples-set (when record?
                            (field-tuples (:fields t)))
         field-shapes-set (when record?
-                           (field-shape-tuples (:fields t)))]
-    (into
-     [(cond-> {:entity/id (sub/id-of t)
-               :entity/type :Type
-               :entity/name (sub/name-of t)
-               :entity/tag (vec (sub/tags-of t))}
-        (sub/doc-of t)         (assoc :type/doc (sub/doc-of t))
-        (seq field-types-set)  (assoc :type/field-types field-types-set)
-        (seq field-tuples-set) (assoc :type/fields field-tuples-set)
-        (seq field-shapes-set) (assoc :type/field-shapes field-shapes-set))]
-     (tagapp-maps (sub/id-of t) (if record? :canvas/record :canvas/value)))))
+                           (field-shape-tuples (:fields t)))
+        [shape-root shape-datoms] (if record?
+                                    (shape->datoms {:kind :record :fields (:fields t)})
+                                    [nil nil])]
+    (-> (vec (or shape-datoms []))
+        (conj (cond-> {:entity/id (sub/id-of t)
+                       :entity/type :Type
+                       :entity/name (sub/name-of t)
+                       :entity/tag (vec (sub/tags-of t))}
+                (sub/doc-of t)         (assoc :type/doc (sub/doc-of t))
+                (seq field-types-set)  (assoc :type/field-types field-types-set)
+                (seq field-tuples-set) (assoc :type/fields field-tuples-set)
+                (seq field-shapes-set) (assoc :type/field-shapes field-shapes-set)
+                shape-root             (assoc :node/shape [:shape/id shape-root])))
+        (into (tagapp-maps (sub/id-of t) (if record? :canvas/record :canvas/value))))))
 
 (defmethod ->datoms :Relation [r]
   (let [to-val (sub/to-of r)
