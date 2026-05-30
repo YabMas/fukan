@@ -29,7 +29,7 @@
    (family, payload-type) from the tag-definition."
   [tag name payload doc returns-label]
   (let [{:keys [family] ptype :payload} (registry/by-tag tag)
-        base (cond-> {:name name}
+        base (cond-> {:name name :tag tag}
                doc                    (assoc :doc doc)
                returns-label          (assoc :returns-label returns-label)
                (= family :Affordance) (assoc :node-kind :Affordance :role tag)

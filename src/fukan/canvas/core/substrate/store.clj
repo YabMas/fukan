@@ -194,7 +194,7 @@
           :entity/type :Module
           :entity/name (sub/name-of m)
           :entity/tag (vec (sub/tags-of m))}]
-        (tagapp-maps (sub/id-of m) :canvas/module)))
+        (tagapp-maps (sub/id-of m) (sub/tag-of m))))
 
 (defmethod ->datoms :Affordance [a]
   (let [shape       (sub/shape-of a)
@@ -215,7 +215,7 @@
                 (seq inputs-set)             (assoc :affordance/input-types inputs-set)
                 (seq outputs-set)            (assoc :affordance/output-types outputs-set)
                 shape-root                   (assoc :node/shape [:shape/id shape-root])))
-        (into (tagapp-maps (sub/id-of a) (sub/role-of a))))))
+        (into (tagapp-maps (sub/id-of a) (sub/tag-of a))))))
 
 (defmethod ->datoms :State [s]
   (into
@@ -225,7 +225,7 @@
              :entity/tag (vec (sub/tags-of s))}
       (sub/shape-of s)
       (assoc :state/shape (sub/shape-of s)))]
-   (tagapp-maps (sub/id-of s) :canvas/state)))
+   (tagapp-maps (sub/id-of s) (sub/tag-of s))))
 
 (defn- field-name->keyword
   "Normalize a record field-name to a keyword. Field-names arrive as strings
@@ -265,7 +265,7 @@
                 (seq field-types-set)  (assoc :type/field-types field-types-set)
                 (seq field-tuples-set) (assoc :type/fields field-tuples-set)
                 shape-root             (assoc :node/shape [:shape/id shape-root])))
-        (into (tagapp-maps (sub/id-of t) (if record? :canvas/record :canvas/value))))))
+        (into (tagapp-maps (sub/id-of t) (sub/tag-of t))))))
 
 (defmethod ->datoms :Relation [r]
   (let [to-val (sub/to-of r)
