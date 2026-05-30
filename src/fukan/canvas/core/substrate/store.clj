@@ -135,7 +135,7 @@
           [(field-name->keyword fname) (pr-str fshape)])))
 
 (defmethod ->datoms :Type [t]
-  (let [record? (= :record (:kind t))
+  (let [record? (= :record (:type-kind t))
         field-types-set (when record?
                           (shape/type-names {:kind :record :fields (:fields t)}))
         field-tuples-set (when record?

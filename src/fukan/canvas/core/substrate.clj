@@ -1,31 +1,40 @@
 (ns fukan.canvas.core.substrate
-  "Six substrate primitives: Module, Affordance, State, Type, Relation, Tag.
-   Architecture-neutral; ships zero role/relation/tag vocabulary.")
+  "Two substrate primitives: Node and Relation.
+   Architecture-neutral; ships zero kind/role/relation/tag vocabulary.
+
+   A Node carries its kind as the :node-kind data attribute
+   (:Module/:Affordance/:State/:Type) rather than as a record class — that
+   attribute is the seam the vocabulary/tag layer plugs into. The kind-specific
+   fields (shape/role/type-kind/fields/…) are a union held on the one record;
+   most are nil for any given kind.")
 
 (defn- gen-id [] (random-uuid))
 
-(defrecord Module       [id name tags])
-(defrecord Affordance   [id name shape role formal-expression doc returns-label tags])
-(defrecord State        [id name shape tags])
-(defrecord Type         [id name kind fields doc tags])
-(defrecord Relation     [from kind to tags])
+(defrecord Node [id name node-kind tags
+                 shape role formal-expression returns-label doc
+                 type-kind fields])
+(defrecord Relation [from kind to tags])
 
 (defn module [name]
-  (->Module (gen-id) name #{}))
+  (map->Node {:id (gen-id) :name name :node-kind :Module :tags #{}}))
 
 (defn affordance [name & {:keys [shape role formal-expression doc returns-label]}]
-  (->Affordance (gen-id) name shape role formal-expression doc returns-label #{}))
+  (map->Node {:id (gen-id) :name name :node-kind :Affordance :tags #{}
+              :shape shape :role role :formal-expression formal-expression
+              :doc doc :returns-label returns-label}))
 
 (defn state [name & {:keys [shape]}]
   (when-not shape
     (throw (ex-info "State requires :shape" {:name name})))
-  (->State (gen-id) name shape #{}))
+  (map->Node {:id (gen-id) :name name :node-kind :State :tags #{} :shape shape}))
 
 (defn type-primitive [name & {:keys [doc]}]
-  (->Type (gen-id) name :atomic nil doc #{}))
+  (map->Node {:id (gen-id) :name name :node-kind :Type :tags #{}
+              :type-kind :atomic :doc doc}))
 
 (defn type-record [name fields & {:keys [doc]}]
-  (->Type (gen-id) name :record fields doc #{}))
+  (map->Node {:id (gen-id) :name name :node-kind :Type :tags #{}
+              :type-kind :record :fields fields :doc doc}))
 
 (defn relation [from kind to]
   (when-not (keyword? kind)
@@ -50,8 +59,5 @@
 
 (defn primitive-kind [e]
   (cond
-    (instance? Module e) :Module
-    (instance? Affordance e) :Affordance
-    (instance? State e) :State
-    (instance? Type e) :Type
+    (instance? Node e)     (:node-kind e)
     (instance? Relation e) :Relation))
