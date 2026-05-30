@@ -19,6 +19,7 @@
    [clojure.string :as str]
    [clojure.edn :as edn]
    [datascript.core :as d]
+   [fukan.canvas.core.classification :as classification]
    [fukan.canvas.core.substrate.store :as store]
    [fukan.canvas.identity :as identity]
    [fukan.canvas.vocab.registry :as vocab-registry]))
@@ -228,18 +229,23 @@
    When :roles is a singleton, the duplicates are NOT explained by the
    name+role convention and constitute a likely authoring bug."
   [db]
-  (let [rows (d/q '[:find ?mn ?cn ?c ?role
+  (let [rows (d/q '[:find ?mn ?cn ?c
                      :where [?m :entity/type :Module]
                             [?m :entity/name ?mn]
                             [?m :module/child ?c]
-                            [?c :entity/name ?cn]
-                            [(get-else $ ?c :affordance/role :none) ?role]]
+                            [?c :entity/name ?cn]]
                    db)]
     (->> rows
-         (group-by (fn [[mn cn _ _]] [mn cn]))
+         (group-by (fn [[mn cn _]] [mn cn]))
          (keep (fn [[[mn cn] entries]]
                  (let [child-eids (into #{} (map #(nth % 2)) entries)
-                       roles      (into #{} (map #(nth % 3)) entries)]
+                       ;; The colliding entities' immediate kinds (the name+role
+                       ;; convention's "role", generalised to each node's tag).
+                       ;; Nodes with no tag-application default to :none, matching
+                       ;; the prior :affordance/role get-else behaviour.
+                       roles      (into #{} (map (fn [[_ _ c]]
+                                                   (or (classification/direct-kind db c) :none)))
+                                        entries)]
                    (when (> (count child-eids) 1)
                      {:module mn :name cn :roles roles :count (count child-eids)}))))
          (vec))))

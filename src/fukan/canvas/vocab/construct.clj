@@ -18,6 +18,7 @@
    forms are wrapped in a one-element seq by the caller; repeatable forms pass
    their seq-of-arg-seqs directly."
   (:require [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.vocab.registry :as registry]))
@@ -71,16 +72,16 @@
 
 (defn- resolve-in-module
   "Eid of the entity named `nm` in the enclosing module (optionally filtered to
-   `:affordance/role` = role), or nil."
+   immediate kind = role), or nil."
   [nm role]
   (let [db @h/*store* mid h/*enclosing-module*]
     (when mid
       (ffirst
        (if role
-         (d/q '[:find ?id :in $ ?mid ?n ?role
+         (d/q '[:find ?id :in $ % ?mid ?n ?role
                 :where [?m :entity/id ?mid] [?m :module/child ?a]
-                       [?a :entity/name ?n] [?a :affordance/role ?role] [?a :entity/id ?id]]
-              db mid nm role)
+                       [?a :entity/name ?n] (direct-kind ?a ?role) [?a :entity/id ?id]]
+              db classification/rules mid nm role)
          (d/q '[:find ?id :in $ ?mid ?n
                 :where [?m :entity/id ?mid] [?m :module/child ?a]
                        [?a :entity/name ?n] [?a :entity/id ?id]]
