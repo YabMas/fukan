@@ -2,16 +2,23 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.set :as set]
             [datascript.core :as d]
+            [fukan.canvas.construction]
+            [fukan.canvas.vocab.behavioral]
+            [fukan.canvas.vocab.lifecycle]
+            [fukan.canvas.vocab.validation]
+            [fukan.canvas.vocab.event]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.vocab.registry :as registry]))
 
 (deftest registry-is-well-formed
-  (testing "tag-definitions carry distinct tags and known families"
-    (let [tags (mapv :tag registry/tag-definitions)]
+  (testing "registered tag-definitions carry distinct tags and known families"
+    (let [defs (registry/all)
+          tags (mapv :tag defs)]
+      (is (seq defs) "vocabularies registered their terms")
       (is (= (count tags) (count (distinct tags))) "tags are distinct")
       (is (every? (fn [{:keys [family]}]
                     (contains? #{:Module :Affordance :Type nil} family))
-                  registry/tag-definitions)
+                  defs)
           "every family is Module/Affordance/Type or nil (marker)"))))
 
 (deftest every-in-use-tag-is-defined

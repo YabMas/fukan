@@ -5,7 +5,29 @@
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.shape :as shape]
             [fukan.canvas.vocab.construct :as construct]
+            [fukan.canvas.vocab.registry :as registry]
             [datascript.core :as d]))
+
+(def tag-definitions
+  "The base (non-opt-out) vocabulary: the container kind, the export marker, and
+   the function/record/value lifts below."
+  [{:tag :canvas/module :family :Module :payload :none
+    :doc "A grouping/namespace host; owns its children via containment."}
+   {:tag :exported :family nil :payload :none
+    :doc "Marker: tags a declaration as part of its module's exported API."}
+   {:tag :canvas/value :family :Type :payload :none
+    :doc "An opaque named type — a concept whose internal structure is withheld."}
+   {:tag :canvas/record :family :Type :payload :record
+    :edges [{:strategy :shape-refs :edge :references}]
+    :doc "A data type with named, typed fields."}
+   {:tag :fukan.canvas.monolith/exposed-call :family :Affordance :payload :arrow
+    :edges [{:strategy :shape-refs  :edge :references}
+            {:strategy :to-keywords :from :effect   :edge :fukan.canvas.monolith/performs}
+            {:strategy :by-name     :from :triggers :edge :triggers}
+            {:strategy :by-name     :from :emits    :edge :emits :role :canvas/event}]
+    :doc "A synchronous function call: takes inputs, gives an output, may have effects."}])
+
+(registry/register! tag-definitions)
 
 (defconstructor function
   "A synchronous function call: takes inputs, gives output, may have effects."

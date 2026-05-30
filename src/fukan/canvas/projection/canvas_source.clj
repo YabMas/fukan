@@ -803,7 +803,7 @@
             payload (assoc :tagdef/payload payload)
             family  (assoc :tagdef/family family)
             doc     (assoc :tagdef/doc doc)))
-        vocab-registry/tag-definitions))
+        (vocab-registry/all)))
 
 (defn enrich-substrate
   "Make the unified canvas db a complete, directly-queryable substrate:

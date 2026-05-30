@@ -6,7 +6,15 @@
    Ships one lift: `getter`. The signature shape is baked in: zero-arg input,
    Optional output. The lift takes name + docstring + the inner return type."
   (:require [fukan.canvas.core.shape :as shape]
-            [fukan.canvas.vocab.construct :as construct]))
+            [fukan.canvas.vocab.construct :as construct]
+            [fukan.canvas.vocab.registry :as registry]))
+
+(def tag-definitions
+  [{:tag :canvas/getter :family :Affordance :payload :arrow
+    :edges [{:strategy :shape-refs :edge :references}]
+    :doc "A zero-arg accessor returning Optional<T>."}])
+
+(registry/register! tag-definitions)
 
 (defn getter
   "Declare a zero-arg Optional<T> accessor on the enclosing module.

@@ -22,16 +22,13 @@
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.vocab.registry :as registry]))
 
-(def ^:private by-tag
-  (into {} (map (juxt :tag identity)) registry/tag-definitions))
-
 ;; ── payload placement ─────────────────────────────────────────────────────
 
 (defn- node-attrs
   "Node field map for a tag + canonical payload value, placed per
    (family, payload-type) from the tag-definition."
   [tag name payload doc returns-label]
-  (let [{:keys [family] ptype :payload} (by-tag tag)
+  (let [{:keys [family] ptype :payload} (registry/by-tag tag)
         base (cond-> {:name name}
                doc                    (assoc :doc doc)
                returns-label          (assoc :returns-label returns-label)
@@ -51,7 +48,7 @@
   "The shape value to walk for :shape-refs — the canonical payload when it is a
    shape (arrow/record), else nil."
   [tag payload]
-  (when (#{:arrow :record} (:payload (by-tag tag))) payload))
+  (when (#{:arrow :record} (:payload (registry/by-tag tag))) payload))
 
 ;; ── edge strategies ───────────────────────────────────────────────────────
 
@@ -119,7 +116,7 @@
   (let [node    (h/declare-node (sub/node (node-attrs tag name payload doc returns-label)))
         from-id (sub/id-of node)
         shape   (node-shape tag payload)]
-    (doseq [{:keys [strategy] :as dir} (:edges (by-tag tag))]
+    (doseq [{:keys [strategy] :as dir} (:edges (registry/by-tag tag))]
       (case strategy
         :shape-refs  (emit-shape-refs! from-id shape (:edge dir))
         :to-keywords (emit-to-keywords! from-id forms dir)

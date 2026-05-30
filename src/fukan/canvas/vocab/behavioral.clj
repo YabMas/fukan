@@ -7,7 +7,16 @@
    declarations fired by triggers). Both produce no-shape Affordances with
    distinct roles."
   (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
-            [fukan.canvas.vocab.construct :as construct]))
+            [fukan.canvas.vocab.construct :as construct]
+            [fukan.canvas.vocab.registry :as registry]))
+
+(def tag-definitions
+  [{:tag :canvas/invariant :family :Affordance :payload :prose
+    :doc "A timeless behavioural commitment, stated as prose."}
+   {:tag :canvas/rule :family :Affordance :payload :trigger
+    :doc "A reactive declaration that fires when its trigger pattern matches."}])
+
+(registry/register! tag-definitions)
 
 (defconstructor invariant
   "A named behavioral commitment of the enclosing module. Allium's `invariant`

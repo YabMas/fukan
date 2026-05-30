@@ -35,7 +35,19 @@
    form). No case for a standalone lift."
   (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
             [fukan.canvas.core.shape :as shape]
-            [fukan.canvas.vocab.construct :as construct]))
+            [fukan.canvas.vocab.construct :as construct]
+            [fukan.canvas.vocab.registry :as registry]))
+
+(def tag-definitions
+  [{:tag :canvas/event :family :Affordance :payload :record
+    :edges [{:strategy :shape-refs :edge :references}]
+    :doc "A named event message carrying a payload record."}
+   {:tag :canvas/handler :family :Affordance :payload :on-emits
+    :edges [{:strategy :to-keywords :from :on    :edge :references}
+            {:strategy :to-keywords :from :emits :edge :references}]
+    :doc "A reactive handler: invoked by an event, may emit downstream events."}])
+
+(registry/register! tag-definitions)
 
 (defconstructor event
   "A named event declaration with an optional payload shape.

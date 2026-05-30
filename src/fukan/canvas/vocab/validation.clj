@@ -7,7 +7,15 @@
    exactly `(model: Model) -> [Violation]`. Checks with different signatures
    are not checkers; declare them as `function` from construction."
   (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
-            [fukan.canvas.vocab.construct :as construct]))
+            [fukan.canvas.vocab.construct :as construct]
+            [fukan.canvas.vocab.registry :as registry]))
+
+(def tag-definitions
+  [{:tag :canvas/checker :family :Affordance :payload :arrow
+    :edges [{:strategy :shape-refs :edge :references}]
+    :doc "A validation entry point with the signature (Model) -> [Violation]."}])
+
+(registry/register! tag-definitions)
 
 (def ^:private checker-shape
   {:kind :arrow
