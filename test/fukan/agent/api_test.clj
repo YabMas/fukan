@@ -21,13 +21,16 @@
     ;; addressing currency: resolve a known module by its stable-id
     (is (= #{["infra.server"]}
            (api/q '[:find ?id
-                    :where [?e :entity/type :Module]
+                    :in $ % ?fam
+                    :where (kind-of ?e ?fam)
                            [?e :entity/stable-id "infra.server"]
-                           [?e :entity/stable-id ?id]])))
+                           [?e :entity/stable-id ?id]]
+                  :family/module)))
     ;; precision the old EDB L0 lacked: invariants are distinguishable from
     ;; rules (both collapsed to :primitive/rule under the projected vocabulary)
     (let [invs (api/q '[:find ?id
-                        :where [?e :affordance/role :canvas/invariant]
+                        :in $ %
+                        :where (direct-kind ?e :canvas/invariant)
                                [?e :entity/stable-id ?id]])]
       (is (set? invs) "d/q returns a set of tuples")
       (is (pos? (count invs)))

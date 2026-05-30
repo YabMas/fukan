@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.construction :refer [function record value]]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.substrate.store :as store]
             [fukan.canvas.inspect.integrity :as integrity]
@@ -128,9 +129,10 @@
           ;; a synthetic :emits ref from f → X bypassing the construction-time
           ;; guard. This simulates a rename-drift scenario.
           f-eid (ffirst (d/q '[:find ?e :where [?e :entity/name "f"]] base))
-          x-eid (ffirst (d/q '[:find ?e :where [?e :entity/name "X"]
-                                                [?e :affordance/role :canvas/rule]]
-                              base))
+          x-eid (ffirst (d/q '[:find ?e :in $ %
+                                :where [?e :entity/name "X"]
+                                       (direct-kind ?e :canvas/rule)]
+                              base classification/rules))
           db    (d/db-with base [[:db/add f-eid :emits x-eid]])
           findings (integrity/check db)
           mismatch (filter #(= :inspect.integrity/emits-target-not-an-event (:check %))

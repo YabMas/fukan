@@ -55,7 +55,7 @@
 
 (defn- affordance-eids
   [db]
-  (classification/of-kind db :family/affordance))
+  (classification/of-family db :family/affordance))
 
 (defn- cluster-for-signature
   "Build the cluster map for a group of affordance eids sharing a signature."

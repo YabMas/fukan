@@ -496,19 +496,19 @@
   [canvas-db]
   (let [leaf-tuples (d/q '[:find ?mod-name ?type-name ?field-tuple
                             :in $ % ?mfam ?tfam
-                            :where (kind-of ?m ?mfam)
+                            :where (family-of ?m ?mfam)
                                    [?m :entity/name ?mod-name]
                                    [?m :module/child ?e]
-                                   (kind-of ?e ?tfam)
+                                   (family-of ?e ?tfam)
                                    [?e :entity/name ?type-name]
                                    [?e :type/fields ?field-tuple]]
                           canvas-db classification/rules :family/module :family/type)
         shape-roots (d/q '[:find ?mod-name ?type-name ?sh
                             :in $ % ?mfam ?tfam
-                            :where (kind-of ?m ?mfam)
+                            :where (family-of ?m ?mfam)
                                    [?m :entity/name ?mod-name]
                                    [?m :module/child ?e]
-                                   (kind-of ?e ?tfam)
+                                   (family-of ?e ?tfam)
                                    [?e :entity/name ?type-name]
                                    [?e :node/shape ?sh]]
                           canvas-db classification/rules :family/module :family/type)

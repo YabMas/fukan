@@ -1,5 +1,6 @@
 (ns fukan.canvas.vocab.validation-test
   (:require [clojure.test :refer [deftest is testing]]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.validation :refer [checker]]
             [fukan.canvas.core.substrate.store :as store]
@@ -10,12 +11,8 @@
     (let [db (h/with-canvas
                (h/within-module "validation.rules_4a"
                  (checker "check" "Run phase-4a structural checks.")))
-          rows (d/q '[:find ?n ?r ?sh
-                      :where [?a :entity/type :Affordance]
-                             [?a :entity/name ?n]
-                             [?a :affordance/role ?r]
-                             [?a :node/shape ?sh]]
-                    db)
+          rows (d/q '[:find ?n ?r ?sh :in $ % ?fam :where (kind-of ?a ?fam) [?a :entity/name ?n] (direct-kind ?a ?r)
+                             [?a :node/shape ?sh]] db classification/rules :family/affordance)
           [n role sh-eid] (first rows)
           shape (store/read-reified-shape db sh-eid)]
       (is (= 1 (count rows)))
@@ -47,10 +44,8 @@
                  (checker "rules_4a" "Phase 4a.")
                  (checker "rules_4b" "Phase 4b.")
                  (checker "rules_4c" "Phase 4c.")))
-          rows (d/q '[:find ?n
-                      :where [?a :affordance/role :canvas/checker]
-                             [?a :entity/name ?n]]
-                    db)]
+          rows (d/q '[:find ?n :in $ % :where (direct-kind ?a :canvas/checker)
+                             [?a :entity/name ?n]] db classification/rules)]
       (is (= #{"rules_4a" "rules_4b" "rules_4c"} (set (map first rows)))))))
 
 (deftest checker-persists-doc
@@ -58,9 +53,7 @@
     (let [db (h/with-canvas
                (h/within-module "validation.rules_4a"
                  (checker "check" "Run phase-4a structural checks.")))
-          rows (d/q '[:find ?n ?doc
-                      :where [?a :affordance/role :canvas/checker]
+          rows (d/q '[:find ?n ?doc :in $ % :where (direct-kind ?a :canvas/checker)
                              [?a :entity/name ?n]
-                             [?a :affordance/doc ?doc]]
-                    db)]
+                             [?a :affordance/doc ?doc]] db classification/rules)]
       (is (= [["check" "Run phase-4a structural checks."]] (vec rows))))))

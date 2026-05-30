@@ -1,5 +1,6 @@
 (ns fukan.canvas.vocab.lifecycle-test
   (:require [clojure.test :refer [deftest is testing]]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.lifecycle :refer [getter]]
             [fukan.canvas.core.substrate.store :as store]
@@ -10,12 +11,8 @@
     (let [db (h/with-canvas
                (h/within-module "infra.server"
                  (getter "get_port" "Current port if running." :Integer)))
-          rows (d/q '[:find ?n ?r ?sh
-                      :where [?a :entity/type :Affordance]
-                             [?a :entity/name ?n]
-                             [?a :affordance/role ?r]
-                             [?a :node/shape ?sh]]
-                    db)
+          rows (d/q '[:find ?n ?r ?sh :in $ % ?fam :where (kind-of ?a ?fam) [?a :entity/name ?n] (direct-kind ?a ?r)
+                             [?a :node/shape ?sh]] db classification/rules :family/affordance)
           [n role sh-eid] (first rows)
           shape (store/read-reified-shape db sh-eid)]
       (is (= 1 (count rows)))
@@ -43,10 +40,8 @@
                  (getter "get_model" "Model."   :model/Model)
                  (getter "refresh_model" "Refreshed model." :model/Model)
                  (getter "get_src" "Source path." :FilePath)))
-          rows (d/q '[:find ?n
-                      :where [?a :affordance/role :canvas/getter]
-                             [?a :entity/name ?n]]
-                    db)]
+          rows (d/q '[:find ?n :in $ % :where (direct-kind ?a :canvas/getter)
+                             [?a :entity/name ?n]] db classification/rules)]
       (is (= #{"get_model" "refresh_model" "get_src"} (set (map first rows)))))))
 
 (deftest getter-persists-doc
@@ -54,9 +49,7 @@
     (let [db (h/with-canvas
                (h/within-module "infra.server"
                  (getter "get_port" "Current port if running." :Integer)))
-          rows (d/q '[:find ?n ?doc
-                      :where [?a :affordance/role :canvas/getter]
+          rows (d/q '[:find ?n ?doc :in $ % :where (direct-kind ?a :canvas/getter)
                              [?a :entity/name ?n]
-                             [?a :affordance/doc ?doc]]
-                    db)]
+                             [?a :affordance/doc ?doc]] db classification/rules)]
       (is (= [["get_port" "Current port if running."]] (vec rows))))))

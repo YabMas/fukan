@@ -1,5 +1,6 @@
 (ns fukan.canvas.core.helpers-test
   (:require [clojure.test :refer [deftest is testing]]
+            [fukan.canvas.core.classification :as classification]
             [datascript.core :as d]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.substrate.store :as store]))
@@ -20,18 +21,18 @@
                (h/within-module "accounts"
                  (h/declare-affordance "create"
                    :shape (h/arrow (h/record-of [[:email :String]]) :Unit)
-                   :role :exposed-call)))]
+                   :role :canvas/function)))]
       (is (= 1 (count (store/all-modules db)))))))
 
 (deftest declare-affordance-registers-module-child
   (testing "declare-affordance inside within-module adds :module/child datom on the Module"
     (let [db (h/with-canvas
                (h/within-module "accounts"
-                 (h/declare-affordance "create" :role :exposed-call)))
+                 (h/declare-affordance "create" :role :canvas/function)))
           mid (ffirst (clojure.core/or
                         (seq (d/q
-                               '[:find ?id :where [?e :entity/type :Module] [?e :entity/id ?id]]
-                               db))
+                               '[:find ?id :in $ % ?fam :where (kind-of ?e ?fam) [?e :entity/id ?id]]
+                               db classification/rules :family/module))
                         nil))]
       (is (= 1 (count (store/affordances-in db mid)))))))
 
@@ -41,8 +42,8 @@
                (h/within-module "accounts"
                  (h/declare-type "Account" :kind :record :fields [["email" {:kind :atomic :name :String}]] :doc "An account.")))
           mid (ffirst (d/q
-                        '[:find ?id :where [?e :entity/type :Module] [?e :entity/id ?id]]
-                        db))]
+                        '[:find ?id :in $ % ?fam :where (kind-of ?e ?fam) [?e :entity/id ?id]]
+                        db classification/rules :family/module))]
       (is (= #{[:Type "Account"]} (set (store/children-of-module db mid)))))))
 
 (deftest declare-state-registers-module-child
@@ -51,6 +52,6 @@
                (h/within-module "accounts"
                  (h/declare-state "current-user" :shape {:kind :atomic :name :String})))
           mid (ffirst (d/q
-                        '[:find ?id :where [?e :entity/type :Module] [?e :entity/id ?id]]
-                        db))]
+                        '[:find ?id :in $ % ?fam :where (kind-of ?e ?fam) [?e :entity/id ?id]]
+                        db classification/rules :family/module))]
       (is (= #{[:State "current-user"]} (set (store/children-of-module db mid)))))))

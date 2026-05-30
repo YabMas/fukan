@@ -21,6 +21,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.set :as set]
             [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.project.core :as core]
             [fukan.canvas.project.clojure :as _clojure-lens]
             [fukan.canvas.projection.canvas-source :as canvas-source]))
@@ -57,15 +58,16 @@
   (into #{}
         (map first)
         (d/q '[:find ?role
-               :where [_ :affordance/role ?role]]
-             db)))
+               :in $ % ?fam
+               :where (kind-of ?e ?fam) (direct-kind ?e ?role)]
+             db classification/rules :family/affordance)))
 
 (defn- emitted-type-kinds
   "Distinct type-kind discriminators per `core/dispatch-key-of` for
    Types emitted by canvas-source. A Type with field-shapes is :record;
    an atomic Type (no fields) is :atomic."
   [db]
-  (let [type-eids   (mapv first (d/q '[:find ?t :where [?t :entity/type :Type]] db))
+  (let [type-eids   (classification/of-kind db :family/type)
         any-record? (some (fn [t] (some? (:node/shape (d/entity db t)))) type-eids)
         any-atomic? (some (fn [t] (nil? (:node/shape (d/entity db t)))) type-eids)]
     (cond-> #{}

@@ -1,5 +1,6 @@
 (ns fukan.canvas.vocab.behavioral-test
   (:require [clojure.test :refer [deftest is testing]]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [datascript.core :as d]))
@@ -12,10 +13,11 @@
                    "Evaluation reaches a fixed point at each stratum."
                    (holds-that "After fixed-point iteration within stratum s, no rule fires again."))))
           rows (d/q '[:find ?n ?r
-                      :where [?a :entity/type :Affordance]
+                      :in $ % ?fam
+                      :where (kind-of ?a ?fam)
                              [?a :entity/name ?n]
-                             [?a :affordance/role ?r]]
-                    db)]
+                             (direct-kind ?a ?r)]
+                    db classification/rules :family/affordance)]
       (is (= 1 (count rows)))
       (is (= ["StratifiedFixedPoint" :canvas/invariant] (first rows))))))
 
@@ -40,10 +42,10 @@
                  (invariant "MentionedButUnspecified"
                    "Documented but not formally expressed.")))
           rows (d/q '[:find ?n
-                      :where [?a :entity/type :Affordance]
-                             [?a :affordance/role :canvas/invariant]
+                      :in $ %
+                      :where (direct-kind ?a :canvas/invariant)
                              [?a :entity/name ?n]]
-                    db)]
+                    db classification/rules)]
       (is (= ["MentionedButUnspecified"] (mapv first rows))))))
 
 (deftest invariant-persists-doc
@@ -51,10 +53,11 @@
              (h/within-module "constraint.evaluator"
                (invariant "FixedPoint" "Evaluation reaches a fixed point.")))
         rows (d/q '[:find ?n ?doc
-                    :where [?e :affordance/role :canvas/invariant]
+                    :in $ %
+                    :where (direct-kind ?e :canvas/invariant)
                            [?e :entity/name ?n]
                            [?e :affordance/doc ?doc]]
-                  db)]
+                  db classification/rules)]
     (is (= [["FixedPoint" "Evaluation reaches a fixed point."]] (vec rows)))))
 
 (deftest rule-creates-affordance-with-role
@@ -65,10 +68,11 @@
                    "Source loading rule — triggered by load_source."
                    (when LoadSource (source_root :String)))))
           rows (d/q '[:find ?n ?r
-                      :where [?a :entity/type :Affordance]
+                      :in $ % ?fam
+                      :where (kind-of ?a ?fam)
                              [?a :entity/name ?n]
-                             [?a :affordance/role ?r]]
-                    db)]
+                             (direct-kind ?a ?r)]
+                    db classification/rules :family/affordance)]
       (is (= 1 (count rows)))
       (is (= ["LoadSource" :canvas/rule] (first rows))))))
 

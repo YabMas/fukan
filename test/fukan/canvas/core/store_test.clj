@@ -1,6 +1,7 @@
 (ns fukan.canvas.core.store-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.substrate.store :as store]
             [fukan.model.artifact :as a]
@@ -15,6 +16,7 @@
 (deftest transact-module
   (testing "adds a Module and finds it"
     (let [s (-> (store/create)
+                (d/db-with (classification/tagdef-datoms))
                 (store/transact! (sub/module "accounts")))]
       (is (= 1 (count (store/all-modules s))))
       (is (= "accounts" (-> s store/all-modules first :name))))))
@@ -22,9 +24,10 @@
 (deftest transact-affordance-with-module
   (testing "affordances-in finds Affordances via :module/child on the owning Module"
     (let [m   (sub/module "accounts")
-          a   (sub/affordance "create")
+          a   (sub/affordance "create" :role :canvas/function)
           mid (sub/id-of m)
           s   (-> (store/create)
+                  (d/db-with (classification/tagdef-datoms))
                   (store/transact! m)
                   (store/transact! a)
                   (d/db-with [[:db/add [:entity/id mid]
@@ -61,10 +64,11 @@
 (deftest children-of-module-query
   (testing "children-of-module returns [type name] pairs for all module children"
     (let [m   (sub/module "accounts")
-          a   (sub/affordance "create")
+          a   (sub/affordance "create" :role :canvas/function)
           t   (sub/type-record "Account" [])
           mid (sub/id-of m)
           s   (-> (store/create)
+                  (d/db-with (classification/tagdef-datoms))
                   (store/transact! m)
                   (store/transact! a)
                   (store/transact! t)

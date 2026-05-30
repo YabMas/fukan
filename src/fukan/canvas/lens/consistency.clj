@@ -86,7 +86,7 @@
   [db]
   (->> (d/q '[:find ?e ?n
               :in $ % ?fam
-              :where (kind-of ?e ?fam)
+              :where (family-of ?e ?fam)
                      [?e :entity/name ?n]]
             db classification/rules :family/module)
        (map (fn [[e n]] {:eid e :name n}))))

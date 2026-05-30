@@ -1,11 +1,11 @@
 (ns fukan.canvas.core.substrate.store
   (:require [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.shape :as shape]
             [fukan.canvas.core.substrate :as sub]))
 
 (def ^:private schema
   {:entity/id           {:db/unique :db.unique/identity}
-   :entity/type         {:db/index true}
    :entity/name         {:db/index true}
    ;; Canonical stable-id (module-name / name-qualified) stamped onto every
    ;; entity so agent L0 d/q can return the cross-fn addressing currency.
@@ -16,10 +16,11 @@
    :entity/tag          {:db/cardinality :db.cardinality/many}
    :entity/alias        {:db/cardinality :db.cardinality/many}
    ;; ── Tag-applications (canonical classification spine) ───────────────
-   ;; A Node's kind/role becomes a reified tag-application: the canonical
-   ;; truth that the tag-agnostic core knows, and that vocabularies plug
-   ;; into. :entity/type and :affordance/role above are retained as a
-   ;; derived index over these while consumers migrate onto them.
+   ;; A Node's kind/role is a reified tag-application: the sole classification
+   ;; truth the tag-agnostic core knows, and that vocabularies plug into. The
+   ;; legacy denormalised :entity/type / :affordance/role index has been
+   ;; dropped — family/kind/role are now DERIVED via the classification stratum
+   ;; (fukan.canvas.core.classification: direct-kind / kind-of / family-of).
    :tagapp/id           {:db/unique :db.unique/identity}
    :tagapp/node         {:db/valueType :db.type/ref}
    :tagapp/tag          {:db/index true}
@@ -181,10 +182,9 @@
                              (ordered (:shape/fields e)))})))
 
 (defn- tagapp-maps
-  "Reified tag-application entities for a node — the canonical classification
-   truth. One per primary kind/role tag (nil tags are skipped). The legacy
-   :entity/type / :affordance/role datoms are retained as a derived index over
-   these while consumers migrate onto them."
+  "Reified tag-application entities for a node — the canonical (and now sole)
+   classification truth. One per primary kind/role tag (nil tags are skipped).
+   Family/kind/role derive from these via the classification stratum."
   [node-uuid primary-tag]
   (when primary-tag
     [{:tagapp/id   (str node-uuid "|" primary-tag)
@@ -195,7 +195,6 @@
 
 (defmethod ->datoms :Module [m]
   (into [{:entity/id (sub/id-of m)
-          :entity/type :Module
           :entity/name (sub/name-of m)
           :entity/tag (vec (sub/tags-of m))}]
         (tagapp-maps (sub/id-of m) (sub/tag-of m))))
@@ -209,10 +208,8 @@
         [shape-root shape-datoms] (if shape (shape->datoms shape) [nil nil])]
     (-> (vec (or shape-datoms []))
         (conj (cond-> {:entity/id (sub/id-of a)
-                       :entity/type :Affordance
                        :entity/name (sub/name-of a)
                        :entity/tag (vec (sub/tags-of a))}
-                (sub/role-of a)              (assoc :affordance/role (sub/role-of a))
                 (sub/formal-expression-of a) (assoc :affordance/formal-expression (sub/formal-expression-of a))
                 (sub/doc-of a)               (assoc :affordance/doc (sub/doc-of a))
                 (sub/returns-label-of a)     (assoc :affordance/returns-label (sub/returns-label-of a))
@@ -224,7 +221,6 @@
 (defmethod ->datoms :State [s]
   (into
    [(cond-> {:entity/id (sub/id-of s)
-             :entity/type :State
              :entity/name (sub/name-of s)
              :entity/tag (vec (sub/tags-of s))}
       (sub/shape-of s)
@@ -262,7 +258,6 @@
                                     [nil nil])]
     (-> (vec (or shape-datoms []))
         (conj (cond-> {:entity/id (sub/id-of t)
-                       :entity/type :Type
                        :entity/name (sub/name-of t)
                        :entity/tag (vec (sub/tags-of t))}
                 (sub/doc-of t)         (assoc :type/doc (sub/doc-of t))
@@ -344,25 +339,27 @@
          (:validity edge) (assoc :edge/validity (:validity edge)))])))
 
 (defn all-modules [db]
-  (->> (d/q '[:find ?n :where [?e :entity/type :Module] [?e :entity/name ?n]] db)
+  (->> (d/q '[:find ?n :in $ % ?fam
+              :where (family-of ?e ?fam) [?e :entity/name ?n]]
+            db classification/rules :family/module)
        (map (fn [[n]] {:name n}))))
 
 (defn affordances-in [db module-id]
   (d/q '[:find ?n
-         :in $ ?mid
+         :in $ % ?mid ?fam
          :where [?m :entity/id ?mid]
                 [?m :module/child ?a]
-                [?a :entity/type :Affordance]
+                (family-of ?a ?fam)
                 [?a :entity/name ?n]]
-       db module-id))
+       db classification/rules module-id :family/affordance))
 
 (defn children-of-module
-  "Return [type name] pairs for all entities directly owned by module."
+  "Return [element-kind name] pairs for all entities directly owned by module."
   [db module-id]
-  (d/q '[:find ?t ?n
-         :in $ ?mid
-         :where [?m :entity/id ?mid]
-                [?m :module/child ?c]
-                [?c :entity/type ?t]
-                [?c :entity/name ?n]]
-       db module-id))
+  (->> (d/q '[:find ?c ?n
+              :in $ ?mid
+              :where [?m :entity/id ?mid]
+                     [?m :module/child ?c]
+                     [?c :entity/name ?n]]
+            db module-id)
+       (map (fn [[c n]] [(classification/element-kind db c) n]))))

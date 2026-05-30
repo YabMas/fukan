@@ -68,7 +68,7 @@
   (let [;; Module canonical ids: uuid → stable-id
         modules (d/q '[:find ?uuid ?name
                         :in $ % ?mfam
-                        :where (kind-of ?e ?mfam)
+                        :where (family-of ?e ?mfam)
                                [?e :entity/id ?uuid]
                                [?e :entity/name ?name]]
                      db classification/rules :family/module)
@@ -80,7 +80,7 @@
         ;; element-kind, the latter derived from the classification stratum)
         children (d/q '[:find ?c ?child-uuid ?child-name ?mod-name
                          :in $ % ?mfam
-                         :where (kind-of ?m ?mfam)
+                         :where (family-of ?m ?mfam)
                                 [?m :entity/name ?mod-name]
                                 [?m :module/child ?c]
                                 [?c :entity/id ?child-uuid]
@@ -142,7 +142,7 @@
   (when (integer? eid)
     (let [mod-rows   (d/q '[:find ?name
                              :in $ % ?e ?mfam
-                             :where (kind-of ?e ?mfam)
+                             :where (family-of ?e ?mfam)
                                     [?e :entity/name ?name]]
                            db classification/rules eid :family/module)
           child-rows (d/q '[:find ?cn ?mn

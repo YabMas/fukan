@@ -7,11 +7,11 @@
             [fukan.canvas.construction :refer [function]]))
 
 (deftest primitive-name-expansion
-  (testing "(Module ?x) expands to a kind-of rule call + family predicate"
+  (testing "(Module ?x) expands to a family-of rule call + family predicate"
     (let [expanded (dq/expand '[(Module ?x)])
           [kind-clause pred-clause] expanded]
       (is (= 2 (count expanded)))
-      (is (= 'kind-of (first kind-clause)) "first clause is the kind-of rule")
+      (is (= 'family-of (first kind-clause)) "first clause is the family-of rule")
       (is (= '?x (second kind-clause)))
       (let [fam-var (nth kind-clause 2)]
         (is (= ['= fam-var :family/module] (first pred-clause))
@@ -44,9 +44,9 @@
 (deftest this-expansion-shape
   (testing "(this :mod/entity ?v) expands to a module kind-of check + 3 clauses"
     (let [expanded (dq/expand '[(this :infra.server/start_server ?e)])]
-      (is (= 5 (count expanded)) "kind-of + family predicate + 3 datom clauses")
-      ;; Clause 0: (kind-of <mod-var> <fam-var>)
-      (is (= 'kind-of (first (nth expanded 0))))
+      (is (= 5 (count expanded)) "family-of + family predicate + 3 datom clauses")
+      ;; Clause 0: (family-of <mod-var> <fam-var>)
+      (is (= 'family-of (first (nth expanded 0))))
       ;; Clause 3: [<mod-var> :module/child ?e]
       (is (= :module/child (second (nth expanded 3))))
       (is (= '?e (nth (nth expanded 3) 2)))

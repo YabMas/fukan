@@ -1,5 +1,6 @@
 (ns fukan.canvas.vocab.event-test
   (:require [clojure.test :refer [deftest is testing]]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.event :refer [event handler]]
             [fukan.canvas.core.substrate.store :as store]
@@ -17,11 +18,7 @@
                    "A new shopping cart was created."
                    (payload [cart_id :String]
                             [user_id :String]))))
-          rows (d/q '[:find ?n ?r
-                      :where [?a :entity/type :Affordance]
-                             [?a :entity/name ?n]
-                             [?a :affordance/role ?r]]
-                    db)]
+          rows (d/q '[:find ?n ?r :in $ % ?fam :where (kind-of ?a ?fam) [?a :entity/name ?n] (direct-kind ?a ?r)] db classification/rules :family/affordance)]
       (is (= 1 (count rows)))
       (is (= ["CartCreated" :canvas/event] (first rows))))))
 
@@ -46,10 +43,8 @@
                (h/within-module "demo.cart"
                  (event "CartCheckedOut"
                    "The cart was submitted for checkout.")))
-          rows (d/q '[:find ?n
-                      :where [?a :affordance/role :canvas/event]
-                             [?a :entity/name ?n]]
-                    db)]
+          rows (d/q '[:find ?n :in $ % :where (direct-kind ?a :canvas/event)
+                             [?a :entity/name ?n]] db classification/rules)]
       (is (= ["CartCheckedOut"] (mapv first rows))))))
 
 (deftest event-emits-cross-module-refs
@@ -87,11 +82,7 @@
                    "Place an order when a cart is checked out."
                    (on :cart/CartCheckedOut)
                    (emits :order/OrderPlaced))))
-          rows (d/q '[:find ?n ?r
-                      :where [?a :entity/type :Affordance]
-                             [?a :entity/name ?n]
-                             [?a :affordance/role ?r]]
-                    db)]
+          rows (d/q '[:find ?n ?r :in $ % ?fam :where (kind-of ?a ?fam) [?a :entity/name ?n] (direct-kind ?a ?r)] db classification/rules :family/affordance)]
       (is (= 1 (count rows)))
       (is (= ["handle_cart_checked_out" :canvas/handler] (first rows))))))
 

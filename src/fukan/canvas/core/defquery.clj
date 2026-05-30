@@ -36,7 +36,7 @@
         entity-name (name ref-kw)
         mod-sym     (gensym "?__this_mod_")
         fam-var     (gensym "?__fam_")]
-    [(list 'kind-of mod-sym fam-var)
+    [(list 'family-of mod-sym fam-var)
      [(list '= fam-var :family/module)]
      [mod-sym     :entity/name  mod-name]
      [mod-sym     :module/child target-var]
@@ -67,12 +67,13 @@
           (let [head (first clause)
                 args (rest clause)]
             (cond
-              ;; Primitive type pattern → classification stratum (kind-of + a
-              ;; family predicate); needs the rule set threaded as `%`.
+              ;; Primitive type pattern (Module/Affordance/Type/State) → the
+              ;; classification stratum (family-of + a family predicate); needs
+              ;; the rule set threaded as `%`.
               (contains? primitive-kinds head)
               (let [fam     (classification/family->super-tag (keyword (str head)))
                     fam-var (gensym "?__fam_")]
-                [(list 'kind-of (first args) fam-var)
+                [(list 'family-of (first args) fam-var)
                  [(list '= fam-var fam)]])
 
               ;; Tag pattern

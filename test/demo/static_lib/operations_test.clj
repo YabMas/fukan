@@ -2,6 +2,7 @@
   "Smoke tests for the operations canvas port."
   (:require [clojure.test :refer [deftest is testing]]
             [demo.static-lib.operations :as ops]
+            [fukan.canvas.core.classification :as classification]
             [datascript.core :as d]))
 
 (deftest build-canvas-loads
@@ -11,13 +12,13 @@
 (deftest build-canvas-has-module
   (testing "db contains the static-lib.operations module"
     (let [db (ops/build-canvas)
-          modules (d/q '[:find [?n ...] :where [?e :entity/type :Module] [?e :entity/name ?n]] db)]
+          modules (d/q '[:find [?n ...] :in $ % ?fam :where (kind-of ?e ?fam) [?e :entity/name ?n]] db classification/rules :family/module)]
       (is (= ["static-lib.operations"] modules)))))
 
 (deftest build-canvas-has-expected-functions
   (testing "db contains all 6 cross-cutting operations"
     (let [db (ops/build-canvas)
-          affs (set (d/q '[:find [?n ...] :where [?e :entity/type :Affordance] [?e :entity/name ?n]] db))]
+          affs (set (d/q '[:find [?n ...] :in $ % ?fam :where (kind-of ?e ?fam) [?e :entity/name ?n]] db classification/rules :family/affordance))]
       (is (contains? affs "apply_transform_to_vec3"))
       (is (contains? affs "project_vec3_to_vec2"))
       (is (contains? affs "lerp_vec2"))

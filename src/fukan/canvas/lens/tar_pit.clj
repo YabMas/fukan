@@ -64,7 +64,7 @@
   [db]
   (->> (d/q '[:find ?e ?n
               :in $ % ?fam
-              :where (kind-of ?e ?fam)
+              :where (family-of ?e ?fam)
                      [?e :entity/name ?n]
                      [?e :type/fields _]]
             db classification/rules :family/type)
@@ -91,7 +91,7 @@
   [db]
   (->> (d/q '[:find ?e ?n
               :in $ % ?fam
-              :where (kind-of ?e ?fam)
+              :where (family-of ?e ?fam)
                      [?e :entity/name ?n]
                      (not [?e :type/fields _])]
             db classification/rules :family/type)
@@ -194,7 +194,7 @@
        vec))
 
 (defn- total-modules [db]
-  (count (classification/of-kind db :family/module)))
+  (count (classification/of-family db :family/module)))
 
 ;; ---------------------------------------------------------------------------
 ;; Truncation

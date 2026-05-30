@@ -57,15 +57,17 @@
                     currency), :module/child, :uses, :tagapp/* (classification
                     spine), :edge/* (projects edges), :artifact/*, plus
                     :triggers/:emits. For classification, declare `:in $ %`
-                    and use the stratum rules — (direct-kind ?e ?tag),
-                    (kind-of ?e ?k), (family-of ?e ?fam) — the rule set is
-                    threaded automatically. Returns a set of result tuples."
-        :agent/example "(q '[:find ?id :in $ % :where (kind-of ?e :family/affordance) [?e :entity/stable-id ?id]])"}
+                    and use the stratum rules — everyday: (direct-kind ?e ?tag)
+                    for the exact kind/role, (family-of ?e ?fam) for the family;
+                    (kind-of ?e ?k) is the transitive is-a form for hierarchical
+                    vocabularies. The rule set is threaded automatically. Returns
+                    a set of result tuples."
+        :agent/example "(q '[:find ?id :in $ % :where (family-of ?e :family/affordance) [?e :entity/stable-id ?id]])"}
   q
   "Evaluate a Datascript Datalog query against the canvas substrate db.
    Full d/q dialect — joins, rules, aggregates, pull. When the query declares
-   `%` in its :in clause, the classification rule set (direct-kind / kind-of /
-   family-of / refines*) is supplied automatically as that rules input; any
+   `%` in its :in clause, the classification rule set (direct-kind / family-of /
+   kind-of / refines*) is supplied automatically as that rules input; any
    further :in parameters are passed positionally after it. Returns a set of
    result tuples (one per :find binding row)."
   [form & inputs]
@@ -510,16 +512,16 @@
     :Module
     (ffirst (d/q '[:find ?e
                    :in $ % ?fam ?n
-                   :where (kind-of ?e ?fam)
+                   :where (family-of ?e ?fam)
                           [?e :entity/name ?n]]
                  db classification/rules :family/module module-name))
     ;; Owned entities: child of a Module, discriminated by family
     (ffirst (d/q '[:find ?c
                    :in $ % ?fam ?cfam ?mod-name ?cname
-                   :where (kind-of ?m ?fam)
+                   :where (family-of ?m ?fam)
                           [?m :entity/name ?mod-name]
                           [?m :module/child ?c]
-                          (kind-of ?c ?cfam)
+                          (family-of ?c ?cfam)
                           [?c :entity/name ?cname]]
                  db classification/rules :family/module
                  (classification/family->super-tag entity-type)
@@ -643,10 +645,10 @@
         (fn [cfam]
           (sort (d/q '[:find [?n ...]
                        :in $ % ?mfam ?cfam ?mn
-                       :where (kind-of ?m ?mfam)
+                       :where (family-of ?m ?mfam)
                               [?m :entity/name ?mn]
                               [?m :module/child ?c]
-                              (kind-of ?c ?cfam)
+                              (family-of ?c ?cfam)
                               [?c :entity/name ?n]]
                      db classification/rules :family/module cfam module-name)))
         type-names  (children-of-family :family/type)

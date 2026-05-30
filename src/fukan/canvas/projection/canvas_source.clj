@@ -230,7 +230,7 @@
   [db]
   (let [rows (d/q '[:find ?mn ?cn ?c
                      :in $ % ?mfam
-                     :where (kind-of ?m ?mfam)
+                     :where (family-of ?m ?mfam)
                             [?m :entity/name ?mn]
                             [?m :module/child ?c]
                             [?c :entity/name ?cn]]
@@ -389,7 +389,7 @@
   (let [;; Modules: uuid → stable id
         module-entries (d/q '[:find ?uuid ?name
                                :in $ % ?mfam
-                               :where (kind-of ?e ?mfam)
+                               :where (family-of ?e ?mfam)
                                       [?e :entity/id ?uuid]
                                       [?e :entity/name ?name]]
                              db classification/rules :family/module)
@@ -398,7 +398,7 @@
         ;; For owned entities: need to know their parent module + element-kind
         child-entries (d/q '[:find ?mod-name ?c ?child-uuid ?child-name
                               :in $ % ?mfam
-                              :where (kind-of ?m ?mfam)
+                              :where (family-of ?m ?mfam)
                                      [?m :entity/name ?mod-name]
                                      [?m :module/child ?c]
                                      [?c :entity/id ?child-uuid]
@@ -423,7 +423,7 @@
   [db]
   (let [modules (d/q '[:find ?uuid ?name
                         :in $ % ?mfam
-                        :where (kind-of ?e ?mfam)
+                        :where (family-of ?e ?mfam)
                                [?e :entity/id ?uuid]
                                [?e :entity/name ?name]]
                      db classification/rules :family/module)]
@@ -449,7 +449,7 @@
   [db uuid->stable-id]
   (let [affordances-full (d/q '[:find ?uuid ?name ?role
                                  :in $ % ?afam
-                                 :where (kind-of ?e ?afam)
+                                 :where (family-of ?e ?afam)
                                         (direct-kind ?e ?role)
                                         [?e :entity/id ?uuid]
                                         [?e :entity/name ?name]]
@@ -488,7 +488,7 @@
   [db uuid->stable-id]
   (let [types (d/q '[:find ?uuid ?name
                       :in $ % ?tfam
-                      :where (kind-of ?e ?tfam)
+                      :where (family-of ?e ?tfam)
                              [?e :entity/id ?uuid]
                              [?e :entity/name ?name]]
                    db classification/rules :family/type)
@@ -511,7 +511,7 @@
   [db uuid->stable-id]
   (let [states (d/q '[:find ?uuid ?name
                        :in $ % ?sfam
-                       :where (kind-of ?e ?sfam)
+                       :where (family-of ?e ?sfam)
                               [?e :entity/id ?uuid]
                               [?e :entity/name ?name]]
                     db classification/rules :family/state)]
@@ -529,7 +529,7 @@
   (let [;; Query module→children relationships
         parent-child-pairs (d/q '[:find ?mod-uuid ?child-uuid
                                    :in $ % ?mfam
-                                   :where (kind-of ?m ?mfam)
+                                   :where (family-of ?m ?mfam)
                                           [?m :entity/id ?mod-uuid]
                                           [?m :module/child ?c]
                                           [?c :entity/id ?child-uuid]]
@@ -608,7 +608,7 @@
           entity-name (name ref-kw)
           all-modules (d/q '[:find ?m ?mn
                               :in $ % ?mfam
-                              :where (kind-of ?m ?mfam)
+                              :where (family-of ?m ?mfam)
                                      [?m :entity/name ?mn]]
                             db classification/rules :family/module)
           exact-module-eids (->> all-modules

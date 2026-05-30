@@ -17,6 +17,8 @@
     :doc "Marker: tags a declaration as part of its module's exported API."}
    {:tag :canvas/value :family :Type :payload :none
     :doc "An opaque named type — a concept whose internal structure is withheld."}
+   {:tag :canvas/state :family :State :payload :none
+    :doc "A named unit of state (substrate kind; constructed via sub/state)."}
    {:tag :canvas/record :family :Type :payload :record
     :edges [{:strategy :shape-refs :edge :references}]
     :doc "A data type with named, typed fields."}

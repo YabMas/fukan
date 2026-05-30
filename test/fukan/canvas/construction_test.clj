@@ -1,5 +1,6 @@
 (ns fukan.canvas.construction-test
   (:require [clojure.test :refer [deftest is testing]]
+            [fukan.canvas.core.classification :as classification]
             [datascript.core :as d]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function record value exports]]
@@ -36,7 +37,7 @@
                    "An account record."
                    (field email :String)
                    (field name :String))))
-          mid (ffirst (d/q '[:find ?id :where [?e :entity/type :Module] [?e :entity/id ?id]] db))]
+          mid (ffirst (d/q '[:find ?id :in $ % ?fam :where (kind-of ?e ?fam) [?e :entity/id ?id]] db classification/rules :family/module))]
       (is (= 1 (count (store/all-modules db))))
       (is (= #{[:Type "Account"]} (set (store/children-of-module db mid)))))))
 
@@ -46,8 +47,8 @@
                (h/within-module "constraint.evaluator"
                  (value "Stratum" "An opaque stratification level.")
                  (value "Binding" "A logical-variable binding.")))
-          types (d/q '[:find ?n :where [?e :entity/type :Type] [?e :entity/name ?n]] db)
-          mid   (ffirst (d/q '[:find ?id :where [?e :entity/type :Module] [?e :entity/id ?id]] db))]
+          types (d/q '[:find ?n :in $ % ?fam :where (kind-of ?e ?fam) [?e :entity/name ?n]] db classification/rules :family/type)
+          mid   (ffirst (d/q '[:find ?id :in $ % ?fam :where (kind-of ?e ?fam) [?e :entity/id ?id]] db classification/rules :family/module))]
       (is (= 2 (count types)))
       (is (= #{"Stratum" "Binding"} (set (map first types))))
       (is (= #{[:Type "Stratum"] [:Type "Binding"]} (set (store/children-of-module db mid)))))))
@@ -61,10 +62,11 @@
                    (field host :String))))]
       ;; The Type is in the store
       (is (= 1 (count (d/q '[:find ?n
-                             :where [?e :entity/type :Type]
+                             :in $ % ?fam
+                             :where (kind-of ?e ?fam)
                                     [?e :entity/name "ServerOpts"]
                                     [?e :entity/name ?n]]
-                           db)))))))
+                           db classification/rules :family/type)))))))
 
 (deftest function-accepts-list-takes
   (testing "(takes [rules (list-of :ConstraintRule)]) works"
@@ -74,10 +76,11 @@
                    (takes [rules (list-of :ConstraintRule)] [edb :EDB])
                    (gives :Model))))]
       (is (= 1 (count (d/q '[:find ?n
-                             :where [?e :entity/type :Affordance]
+                             :in $ % ?fam
+                             :where (kind-of ?e ?fam)
                                     [?e :entity/name "evaluate"]
                                     [?e :entity/name ?n]]
-                           db)))))))
+                           db classification/rules :family/affordance)))))))
 
 (deftest function-with-cross-module-takes-creates-references
   (testing "(takes [rules (list-of :ast/ConstraintRule)]) creates a :references Relation"
@@ -147,9 +150,8 @@
                    (takes [email :String])
                    (gives :Account))))
           rows (d/q '[:find ?n ?doc
-                      :where [?e :entity/type :Affordance]
-                             [?e :entity/name ?n]
-                             [?e :affordance/doc ?doc]]
+                      :where [?e :affordance/doc ?doc]
+                             [?e :entity/name ?n]]
                     db)]
       (is (= [["find-by-email" "Look up an account by email."]] (vec rows))))))
 
@@ -162,9 +164,8 @@
                    (field email :String)
                    (field name :String))))
           rows (d/q '[:find ?n ?doc
-                      :where [?e :entity/type :Type]
-                             [?e :entity/name ?n]
-                             [?e :type/doc ?doc]]
+                      :where [?e :type/doc ?doc]
+                             [?e :entity/name ?n]]
                     db)]
       (is (= [["Account" "An account record."]] (vec rows))))))
 
@@ -180,11 +181,12 @@
                    (gives :Phase4Result)
                    (triggers RunPhase4))))
           relations (d/q '[:find ?from-name ?to-name
-                            :where [?from :affordance/role :canvas/function]
+                            :in $ %
+                            :where (direct-kind ?from :canvas/function)
                                    [?from :entity/name ?from-name]
                                    [?from :triggers ?to]
                                    [?to :entity/name ?to-name]]
-                          db)]
+                          db classification/rules)]
       (is (= [["run" "RunPhase4"]] (vec relations))))))
 
 (deftest function-with-emits-creates-relation
@@ -200,11 +202,12 @@
                    (gives :Payment)
                    (emits PaymentSucceeded))))
           relations (d/q '[:find ?from-name ?to-name
-                            :where [?from :affordance/role :canvas/function]
+                            :in $ %
+                            :where (direct-kind ?from :canvas/function)
                                    [?from :entity/name ?from-name]
                                    [?from :emits ?to]
                                    [?to :entity/name ?to-name]]
-                          db)]
+                          db classification/rules)]
       (is (= [["process_payment" "PaymentSucceeded"]] (vec relations))))))
 
 (deftest function-with-multiple-emits-creates-multiple-relations

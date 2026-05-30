@@ -481,17 +481,18 @@
                       (holds-that "shared-name-is-intentional"))))
           ;; Find the module entity
           mod-eid (ffirst (d/q '[:find ?m
-                                  :where [?m :entity/type :Module]
+                                  :in $ % ?fam
+                                  :where (kind-of ?m ?fam)
                                          [?m :entity/name "demo.rules"]]
-                                db))
+                                db classification/rules :family/module))
           ;; Find children with name SharedName
           children (d/q '[:find ?c ?role ?uuid
-                           :in $ ?m
+                           :in $ % ?m
                            :where [?m :module/child ?c]
                                   [?c :entity/name "SharedName"]
-                                  [?c :affordance/role ?role]
+                                  (direct-kind ?c ?role)
                                   [?c :entity/id ?uuid]]
-                         db mod-eid)]
+                         db classification/rules mod-eid)]
       (is (= 2 (count children))
           "both rule and invariant must appear as distinct children")
       (let [roles (set (map second children))
@@ -504,11 +505,11 @@
       (let [resolve-by-name+role
             (fn [role-kw]
               (d/q '[:find ?c .
-                      :in $ ?m ?role
+                      :in $ % ?m ?role
                       :where [?m :module/child ?c]
                              [?c :entity/name "SharedName"]
-                             [?c :affordance/role ?role]]
-                    db mod-eid role-kw))]
+                             (direct-kind ?c ?role)]
+                    db classification/rules mod-eid role-kw))]
         (is (some? (resolve-by-name+role :canvas/rule))
             "(name=SharedName, role=:canvas/rule) resolves to one entity")
         (is (some? (resolve-by-name+role :canvas/invariant))
@@ -558,7 +559,7 @@
                             (map (fn [datom]
                                    (let [target-ent (d/entity db (.-v datom))]
                                      [(:entity/name target-ent)
-                                      (:affordance/role target-ent)])))
+                                      (classification/direct-kind db (.-v datom))])))
                             vec)]
       (is (= 1 (count target-roles))
           "exactly one :triggers datom expected (doWork → RuleX)")
@@ -591,7 +592,7 @@
                             (map (fn [datom]
                                    (let [target-ent (d/entity db (.-v datom))]
                                      [(:entity/name target-ent)
-                                      (:affordance/role target-ent)])))
+                                      (classification/direct-kind db (.-v datom))])))
                             vec)]
       (is (= 1 (count target-roles))
           "exactly one :emits datom expected (doWork → ThingHappened)")

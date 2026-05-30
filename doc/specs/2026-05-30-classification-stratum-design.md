@@ -241,3 +241,61 @@ predicate, as defquery does).
 Verified: full suite 1075 tests, 0 failures (3 pre-existing `not yet implemented` placeholders in the
 unrelated `distributed.cluster` trial). `store/->datoms` still emits `:entity/type`/`:affordance/role` —
 the sole remaining emitter, and the **Phase 3** drop target (run the dissolve gate, then delete emission).
+
+---
+
+## Phase 3 — DONE (2026-05-30) — the dissolution is complete
+
+`store/->datoms` no longer emits `:entity/type`/`:affordance/role`; the dead `:entity/type` schema entry
+is removed. **Tag-applications are the sole classification truth.** The real model builds with **zero**
+`:entity/type` and **zero** `:affordance/role` datoms (529 affordances, 63 modules, integrity clean) —
+family/kind/role derive entirely through the classification stratum.
+
+Completing the drop required:
+- `store` query helpers (`all-modules`/`affordances-in`/`children-of-module`) migrated onto
+  `kind-of`/`element-kind` (they were excluded from the earlier consumer audit).
+- Registering `:canvas/state` (a substrate kind `sub/state` creates) so state nodes classify, and adding
+  `:State` to the family map + the partition-checker's allowed-family set.
+- Migrating every remaining **test** reader onto the stratum (demo smoke tests, vocab tests,
+  store/helpers/construction/integrity/agent-api/canvas-source/project-coverage). Hand-crafted test dbs
+  now carry the classification spine (tagapps + tagdefs); low-level test affordances use a registered role.
+
+**Surfaced gap (by design):** the stratum classifies only **registered** tags. Nodes built via low-level
+helpers with unregistered/absent tags (e.g. `sub/affordance` with no `:role`) lose classification — the old
+index classified via `:node-kind` regardless. Production always uses registered tags, so this only touched
+low-level substrate tests.
+
+**The dissolve gate** is locked in permanently as `classification-test/dissolve-test`: a depth-2 second
+classification (`:ddd/aggregate-root refines :ddd/entity refines :family/affordance`) declared as refinement
+data only, queried by the same `kind-of`, with zero consumer/rule changes. It fails on regression.
+
+**The 7-commit arc:** classification stratum (direct-kind) → lens role-reads → transitive kind-of/family-of
+→ partition checker → of-kind/family-of fns + agent-q widening → migrate all consumers → drop emission.
+
+---
+
+## Post-mortem reflection — (c) vs (b), and settling the surface (2026-05-30)
+
+A design reflection after the arc landed: was refinement (c) over named-views (b) worth it? Honest findings:
+
+- **Depth is free, not fixed at 2.** `refines*` is arbitrary-depth recursive. But the *real* lattice is
+  100% depth-1 (every concrete tag → its family super-tag directly). The transitive machinery is
+  currently exercised only at depth-1; the only depth-2 case is the synthetic dissolve-test.
+- **At depth-1, (c) ≡ (b) + ceremony.** The (c)-specific tax is `refines`/`refines*`/`kind-of` + family
+  super-tags + **the partition checker** (which guards a multi-valued/cyclic failure mode that only
+  *exists* because the lattice is general; (b)'s scalar family is single-valued by construction).
+  Everything else (`family-of`, `direct-kind`, `of-family`, `element-kind`) is inherent to dissolving the
+  index — (b) needs it too.
+- **What (c) buys is entirely future:** the methodology vocabularies VISION.md anticipates (DDD
+  aggregate-root is-a entity, hexagonal ports/adapters, C4 layers) are inherently is-a hierarchies that
+  (b) can't express without re-foundationing. The bet: pay cheap ceremony now, make that future a
+  one-liner (proven by the dissolve gate).
+
+**Decision: keep the foundation, tidy the surface (option 1).** The "why two operators everywhere?" feel
+came largely from over-using `kind-of` for flat family questions during migration (~50 sites). Fixed:
+everyday consumer surface is now **`direct-kind`** (exact kind/role) + **`family-of` / `of-family`** (the
+family); **`kind-of` / `refines*` / `of-kind`** are the transitive foundation, kept for hierarchical
+vocabularies but invisible at call sites. Consumer code: 0 `kind-of` (was ~50), 48 `family-of`/`of-family`,
+16 `direct-kind` — (b)'s flat-feeling surface over (c)'s refinement foundation. If methodology-modelling
+turns out *not* to be fukan's direction, the remaining step is to collapse to pure (b) (drop
+refines/super-tags/checker); until then the foundation is cheap insurance.

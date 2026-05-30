@@ -17,9 +17,9 @@
       (is (seq defs) "vocabularies registered their terms")
       (is (= (count tags) (count (distinct tags))) "tags are distinct")
       (is (every? (fn [{:keys [family]}]
-                    (contains? #{:Module :Affordance :Type nil} family))
+                    (contains? #{:Module :Affordance :Type :State nil} family))
                   defs)
-          "every family is Module/Affordance/Type or nil (marker)"))))
+          "every family is Module/Affordance/Type/State or nil (marker)"))))
 
 (deftest every-in-use-tag-is-defined
   (testing "every tag-application in the built substrate has a projected :tagdef"

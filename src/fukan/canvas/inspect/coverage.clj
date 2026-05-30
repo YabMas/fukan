@@ -70,14 +70,14 @@
 (defn- entity-eids
   "All entity eids of the given element-kind (:Module/:Affordance/:Type/:State)."
   [db etype]
-  (classification/of-kind db (classification/family->super-tag etype)))
+  (classification/of-family db (classification/family->super-tag etype)))
 
 (defn- non-module-entity-eids
   "All entity eids that are not Modules."
   [db]
-  (concat (classification/of-kind db :family/affordance)
-          (classification/of-kind db :family/type)
-          (classification/of-kind db :family/state)))
+  (concat (classification/of-family db :family/affordance)
+          (classification/of-family db :family/type)
+          (classification/of-family db :family/state)))
 
 (defn- has-tag?
   [db eid tag]
@@ -90,7 +90,7 @@
   (ffirst (d/q '[:find ?m
                  :in $ % ?c ?mfam
                  :where [?m :module/child ?c]
-                        (kind-of ?m ?mfam)]
+                        (family-of ?m ?mfam)]
                db classification/rules entity-eid :family/module)))
 
 (defn- module-of

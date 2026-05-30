@@ -9,19 +9,27 @@
    reading only substrate schema — which is why it sits in `core/` and is usable
    by every tier above it (construct-kit, vocab, projection, lens, inspect).
 
-   Surface (all Datalog rules; the depth-0 case is also a fn):
+   Everyday surface — what consumers reach for (rule + fn forms):
 
-     `direct-kind` — a node's immediate classification tag (depth-0): the value
+     `direct-kind` — a node's immediate classification tag: the value
                      `:affordance/role` carried for affordances, generalised to
                      every node (a Type's `:canvas/record`, a Module's
-                     `:canvas/module`, …).
-     `refines*`    — reflexive-transitive closure over `:tagdef/refines` (the
-                     engine; rarely called directly).
+                     `:canvas/module`, …). Use for the exact kind/role.
+     `family-of`   — the node's `:family/*` super-tag (single-valued given the
+                     partition invariant). Use for \"what family / is this a
+                     Module?\" — replaces `:entity/type`.
+     `of-family`   — enumerate every node in a family. Use for \"all affordances\".
+
+   Transitive foundation — the is-a layer the everyday surface is built on, kept
+   for hierarchical vocabularies (DDD aggregate-root is-a entity, hexagonal
+   ports/adapters …) but rarely called directly by consumers:
+
+     `refines*`    — reflexive-transitive closure over `:tagdef/refines`.
      `kind-of`     — \"is-a, transitively\": a node is of kind ?k when its direct
-                     tag refines* ?k. Replaces `[?e :entity/type :Affordance]`.
-     `family-of`   — the node's `:family/*` super-tag ancestor (single-valued
-                     given the partition invariant). Replaces `:entity/type`
-                     enumeration/bucketing.
+                     tag refines* ?k. `family-of` is `kind-of` restricted to the
+                     family root; everyday family questions should say `family-of`.
+     `of-kind`     — enumerate a kind and its sub-kinds (the general form of
+                     `of-family`).
 
    The refinement lattice is data: each tag-definition's `:refines` parent (or,
    when unset, the super-tag derived from its construction family) is projected
@@ -122,14 +130,18 @@
         db eid)))
 
 (defn of-kind
-  "Eids of every node whose immediate kind refines* `k` (transitively). Pass a
-   family super-tag (`:family/affordance`) to enumerate a whole family, or a
-   concrete/intermediate tag to enumerate that kind and its sub-kinds. The
-   fn form for the common 'all nodes of kind K' query; embed the `kind-of`
-   rule directly when you need to join more attributes in one query."
+  "Eids of every node whose immediate kind refines* `k` (transitively) — the
+   general enumerator: a concrete/intermediate tag enumerates that kind and its
+   sub-kinds. For the common family case, prefer `of-family`."
   [db k]
   (into [] (map first)
         (d/q '[:find ?e :in $ % ?k :where (kind-of ?e ?k)] db rules k)))
+
+(defn of-family
+  "Eids of every node in family super-tag `fam` (e.g. :family/affordance) — the
+   everyday family enumerator. The family-restricted form of `of-kind`."
+  [db fam]
+  (of-kind db fam))
 
 (defn family-of
   "The `:family/*` super-tag of node `eid`, or nil. Single-valued given the
