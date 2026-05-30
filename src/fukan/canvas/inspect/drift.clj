@@ -30,10 +30,10 @@
         one-arg form skips shape-drift (no canvas-side fields available).
         Returns a vector of finding maps; [] when every canvas declaration
         has a matching code-side counterpart."
-  (:require [clojure.edn :as edn]
-            [clojure.set :as set]
+  (:require [clojure.set :as set]
             [clojure.string :as str]
-            [datascript.core :as d]))
+            [datascript.core :as d]
+            [fukan.canvas.core.substrate.store :as store]))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
@@ -502,14 +502,14 @@
                                    [?e :entity/name ?type-name]
                                    [?e :type/fields ?field-tuple]]
                           canvas-db)
-        shape-tuples (d/q '[:find ?mod-name ?type-name ?shape-tuple
-                             :where [?m :entity/type :Module]
-                                    [?m :entity/name ?mod-name]
-                                    [?m :module/child ?e]
-                                    [?e :entity/type :Type]
-                                    [?e :entity/name ?type-name]
-                                    [?e :type/field-shapes ?shape-tuple]]
-                           canvas-db)
+        shape-roots (d/q '[:find ?mod-name ?type-name ?sh
+                            :where [?m :entity/type :Module]
+                                   [?m :entity/name ?mod-name]
+                                   [?m :module/child ?e]
+                                   [?e :entity/type :Type]
+                                   [?e :entity/name ?type-name]
+                                   [?e :node/shape ?sh]]
+                          canvas-db)
         ;; Rich shapes first — they fully describe the compound; leaves fill
         ;; in fields that lack a richer entry (e.g. test fixtures that go
         ;; through the canvas-db directly).
@@ -522,14 +522,18 @@
                                                             (assoc cur fname ftype)))))))
                             {}
                             leaf-tuples)]
-    (reduce (fn [acc [mod-name type-name [fname shape-pr-str]]]
+    ;; Rich per-field shapes read back from the reified :node/shape tree.
+    (reduce (fn [acc [mod-name type-name sh]]
               (let [stable-id (str mod-name "/type/" type-name)
-                    parsed    (try (edn/read-string shape-pr-str)
-                                   (catch Exception _ shape-pr-str))]
-                (update acc stable-id (fn [existing]
-                                        (assoc (or existing {}) fname parsed)))))
+                    fields    (:fields (store/read-reified-shape canvas-db sh))]
+                (update acc stable-id
+                        (fn [existing]
+                          (reduce (fn [m [fname pshape]]
+                                    (assoc m (keyword fname) pshape))
+                                  (or existing {})
+                                  fields)))))
             with-leaves
-            shape-tuples)))
+            shape-roots)))
 
 (defn- code-record-fields-by-primitive
   "Walk projects edges from Type primitives to Code.DataStructure artifacts

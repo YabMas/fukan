@@ -375,32 +375,32 @@
 ;; `:type/field-shapes` substrate attr, mirroring the real ingestion path.
 
 (defn- canvas-db-with-type-field-shapes
-  "Build a tiny canvas-db carrying one Module + one Type entity with
-   parsed compound shapes per field. `shape-tuples` is a sequence of
-   `[field-name-kw parsed-shape-edn-map]` pairs. The fixture pr-strs the
-   shape and writes it under `:type/field-shapes` (cardinality-many) so
-   the drift check's substrate query path picks it up."
+  "Build a tiny canvas-db carrying one Module + one Type entity whose record
+   fields are reified into the canonical `:node/shape` :shape/* tree. `field-shapes`
+   is a sequence of `[field-name-kw parsed-shape-edn-map]` pairs — exactly what the
+   real pipeline emits — so the drift check's reified-shape query path picks it up."
   [stable-id field-shapes]
   (require 'fukan.canvas.core.substrate.store)
   (require 'datascript.core)
-  (let [create  (resolve 'fukan.canvas.core.substrate.store/create)
-        db-with (resolve 'datascript.core/db-with)
+  (let [create    (resolve 'fukan.canvas.core.substrate.store/create)
+        db-with   (resolve 'datascript.core/db-with)
+        shape->ds (resolve 'fukan.canvas.core.substrate.store/shape->datoms)
         [mod-name type-name] (str/split stable-id #"/type/" 2)
         mod-uuid  (str "mod-" mod-name)
-        type-uuid (str "type-" type-name)]
+        type-uuid (str "type-" type-name)
+        [root shape-datoms] (shape->ds {:kind :record :fields (vec field-shapes)})]
     (db-with (create)
-             [{:db/id      -1
-               :entity/id  mod-uuid
-               :entity/type :Module
-               :entity/name mod-name}
-              {:db/id      -2
-               :entity/id  type-uuid
-               :entity/type :Type
-               :entity/name type-name
-               :type/field-shapes (set (mapv (fn [[fname shape]]
-                                               [fname (pr-str shape)])
-                                             field-shapes))}
-              [:db/add -1 :module/child -2]])))
+             (into (vec shape-datoms)
+                   [{:db/id      -1
+                     :entity/id  mod-uuid
+                     :entity/type :Module
+                     :entity/name mod-name}
+                    {:db/id      -2
+                     :entity/id  type-uuid
+                     :entity/type :Type
+                     :entity/name type-name
+                     :node/shape [:shape/id root]}
+                    [:db/add -1 :module/child -2]]))))
 
 (deftest shape-drift-set-of-equivalent-to-malli-set
   (testing "canvas (set-of :NodeId) vs code [:set :NodeId] → no finding"

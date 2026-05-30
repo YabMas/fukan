@@ -5,6 +5,7 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [datascript.core :as d]
+            [fukan.canvas.core.substrate.store :as store]
             [fukan.canvas.inspect.coverage :as inspect-coverage]
             [fukan.canvas.inspect.drift :as inspect-drift]
             [fukan.canvas.inspect.integrity :as inspect-integrity]
@@ -543,10 +544,9 @@
   [db eid stable-id module-name entity-name]
   (let [ent          (d/entity db eid)
         doc          (:type/doc ent)
-        field-shapes (some->> (:type/field-shapes ent)
-                              (map (fn [[fname pr-shape]]
-                                     [fname (read-shape pr-shape)]))
-                              (vec))]
+        field-shapes (when-let [sh (:node/shape ent)]
+                       (->> (:fields (store/read-reified-shape db (:db/id sh)))
+                            (mapv (fn [[fname pshape]] [(keyword fname) pshape]))))]
     (cond-> {:model-element-kind :Type
              :stable-id          stable-id
              :entity-name        entity-name
@@ -574,7 +574,8 @@
   (let [ent     (d/entity db eid)
         role    (:affordance/role ent)
         doc     (:affordance/doc ent)
-        shape   (read-shape (:affordance/shape ent))
+        shape   (when-let [sh (:node/shape ent)]
+                  (store/read-reified-shape db (:db/id sh)))
         fe      (read-shape (:affordance/formal-expression ent))
         base    (cond-> {:model-element-kind :Affordance
                          :canvas-role        role
