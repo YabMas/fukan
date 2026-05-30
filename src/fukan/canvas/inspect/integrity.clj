@@ -32,6 +32,7 @@
         Run all four checks. Returns a vector of finding maps.
         Returns [] when the db is clean."
   (:require [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.identity :as identity]
             [fukan.canvas.projection.canvas-source :as canvas-source]))
 
@@ -168,6 +169,65 @@
        vec))
 
 ;; ---------------------------------------------------------------------------
+;; Check 5 — Refinement-lattice well-formedness (the partition invariant)
+;; ---------------------------------------------------------------------------
+
+(defn- walk-refinement
+  "Walk `tag`'s :refines chain via the `parent` map (tag → parent tag),
+   guarding against the `known` tag set. Returns
+   {:cycle? bool :dangling <tag-or-nil> :roots #{family-roots reached}}."
+  [tag parent known]
+  (loop [t tag, seen #{}, roots #{}]
+    (let [roots (cond-> roots (classification/family-root? t) (conj t))]
+      (cond
+        (contains? seen t)           {:cycle? true :dangling nil :roots roots}
+        (not (contains? parent t))   {:cycle? false :dangling nil :roots roots}
+        (not (contains? known (parent t))) {:cycle? false :dangling (parent t) :roots roots}
+        :else (recur (parent t) (conj seen t) roots)))))
+
+(defn check-refinement
+  "Assert the tag-definition refinement lattice is well-formed:
+     - acyclic (no :refines chain loops),
+     - no dangling parent (every :refines target is a registered tag), and
+     - each tag reaches at most one family-root super-tag, so `family-of`
+       stays single-valued (the partition invariant the legacy :entity/type
+       index guaranteed by construction).
+   Returns a vector of finding maps; [] when the lattice is well-formed."
+  [db]
+  (let [pairs  (d/q '[:find ?tag ?parent
+                      :where [?td :tagdef/tag ?tag] [?td :tagdef/refines ?parent]] db)
+        parent (into {} (map vec) pairs)
+        known  (set (d/q '[:find [?tag ...] :where [?td :tagdef/tag ?tag]] db))]
+    (->> (sort known)
+         (keep (fn [tag]
+                 (let [{:keys [cycle? dangling roots]} (walk-refinement tag parent known)]
+                   (cond
+                     cycle?
+                     {:check     :inspect.integrity/refinement-cycle
+                      :severity  :error
+                      :message   (str "Tag " tag " has a cyclic :refines chain.")
+                      :offenders []
+                      :detail    {:tag tag}}
+
+                     dangling
+                     {:check     :inspect.integrity/refinement-dangling-parent
+                      :severity  :error
+                      :message   (str "Tag " tag " refines " dangling
+                                      ", which is not a registered tag.")
+                      :offenders []
+                      :detail    {:tag tag :parent dangling}}
+
+                     (> (count roots) 1)
+                     {:check     :inspect.integrity/refinement-multiple-families
+                      :severity  :error
+                      :message   (str "Tag " tag " reaches multiple family roots "
+                                      (pr-str (sort roots))
+                                      "; family-of would be multi-valued.")
+                      :offenders []
+                      :detail    {:tag tag :roots roots}}))))
+         vec)))
+
+;; ---------------------------------------------------------------------------
 ;; Public entry point
 ;; ---------------------------------------------------------------------------
 
@@ -182,4 +242,5 @@
           (check-references    canvas-db)
           (check-triggers      canvas-db)
           (check-emits         canvas-db)
-          (check-shape-targets canvas-db))))
+          (check-shape-targets canvas-db)
+          (check-refinement    canvas-db))))

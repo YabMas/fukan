@@ -3,6 +3,7 @@
             [datascript.core :as d]
             [fukan.canvas.construction :refer [function record value]]
             [fukan.canvas.core.helpers :as h]
+            [fukan.canvas.core.substrate.store :as store]
             [fukan.canvas.inspect.integrity :as integrity]
             [fukan.canvas.vocab.behavioral :refer [rule]]
             [fukan.canvas.vocab.event :refer [event handler]]))
@@ -240,3 +241,45 @@
                              findings)]
       (is (some #(= :missing/Nope (-> % :detail :target)) unresolved)
           "handler's `on` keyword must surface as an unresolved-reference finding"))))
+
+;; ---------------------------------------------------------------------------
+;; Check 5 — refinement-lattice well-formedness (the partition invariant)
+;; ---------------------------------------------------------------------------
+
+(defn- lattice-db
+  "A db carrying only projected :tagdef/* datoms — the refinement lattice."
+  [tagdefs]
+  (d/db-with (store/create) tagdefs))
+
+(deftest refinement-well-formed-is-clean
+  (testing "a lattice where every tag reaches exactly one family root is clean"
+    (let [db (lattice-db [{:tagdef/tag :family/affordance}
+                          {:tagdef/tag :canvas/invariant :tagdef/refines :family/affordance}
+                          {:tagdef/tag :ddd/entity         :tagdef/refines :family/affordance}
+                          {:tagdef/tag :ddd/aggregate-root :tagdef/refines :ddd/entity}
+                          {:tagdef/tag :canvas/exported}])] ; marker: no family, fine
+      (is (= [] (integrity/check-refinement db))))))
+
+(deftest refinement-dangling-parent-detected
+  (testing "a :refines target that is not a registered tag is flagged"
+    ;; :family/affordance is never projected as a tagdef here → dangling
+    (let [db (lattice-db [{:tagdef/tag :canvas/invariant :tagdef/refines :family/affordance}])
+          fs (integrity/check-refinement db)]
+      (is (some #(= :inspect.integrity/refinement-dangling-parent (:check %)) fs))
+      (is (= :family/affordance (-> (first fs) :detail :parent))))))
+
+(deftest refinement-cycle-detected
+  (testing "a cyclic :refines chain is flagged"
+    (let [db (lattice-db [{:tagdef/tag :a :tagdef/refines :b}
+                          {:tagdef/tag :b :tagdef/refines :a}])]
+      (is (some #(= :inspect.integrity/refinement-cycle (:check %))
+                (integrity/check-refinement db))))))
+
+(deftest refinement-multiple-families-detected
+  (testing "a tag reaching two family roots breaks family-of single-valuedness"
+    ;; :two → :family/affordance → :family/type : reaches two family roots.
+    (let [db (lattice-db [{:tagdef/tag :family/affordance :tagdef/refines :family/type}
+                          {:tagdef/tag :family/type}
+                          {:tagdef/tag :two :tagdef/refines :family/affordance}])]
+      (is (some #(= :inspect.integrity/refinement-multiple-families (:check %))
+                (integrity/check-refinement db))))))
