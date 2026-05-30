@@ -1,6 +1,5 @@
 (ns fukan.canvas.vocab.event-test
   (:require [clojure.test :refer [deftest is testing]]
-            [clojure.edn :as edn]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.event :refer [event handler]]
             [fukan.canvas.core.substrate.store :as store]
@@ -108,7 +107,7 @@
                       :where [?a :entity/name "handle_cart_checked_out"]
                              [?a :affordance/formal-expression ?fe]]
                     db)
-          fe (edn/read-string (ffirst rows))]
+          fe (ffirst rows)]
       (is (= ":cart/CartCheckedOut" (:on fe)))
       (is (= [":order/OrderPlaced"] (:emits fe))))))
 
@@ -137,7 +136,7 @@
                       :where [?a :entity/name "handle_payment_outcome"]
                              [?a :affordance/formal-expression ?fe]]
                     db)
-          fe (edn/read-string (ffirst rows))]
+          fe (ffirst rows)]
       (is (= 2 (count (:emits fe)))))))
 
 (deftest handler-required-on-form

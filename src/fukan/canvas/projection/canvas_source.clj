@@ -458,10 +458,7 @@
     (into {} (keep (fn [[uuid name role]]
                      (when-let [id (get uuid->stable-id uuid)]
                        (let [kind   (affordance-kind role)
-                             fe-raw (get formal-exprs uuid)
-                             fe-val (when (string? fe-raw)
-                                      (try (read-string fe-raw)
-                                           (catch Exception _ nil)))
+                             fe-val (get formal-exprs uuid)
                              prim   (cond-> {:kind        kind
                                              :id          id
                                              :label       name

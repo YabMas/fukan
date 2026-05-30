@@ -1,6 +1,5 @@
 (ns fukan.canvas.vocab.behavioral-test
   (:require [clojure.test :refer [deftest is testing]]
-            [clojure.edn :as edn]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.behavioral :refer [invariant rule]]
             [datascript.core :as d]))
@@ -84,7 +83,7 @@
                       :where [?a :entity/name "RunPhase4"]
                              [?a :affordance/formal-expression ?fe]]
                     db)
-          parsed (edn/read-string (first (first rows)))]
+          parsed (first (first rows))]
       (is (= 1 (count rows)))
       (is (contains? parsed :when))
       (is (= 'RunPhase4 (first (:when parsed)))))))

@@ -201,7 +201,7 @@
                        :entity/name (sub/name-of a)
                        :entity/tag (vec (sub/tags-of a))}
                 (sub/role-of a)              (assoc :affordance/role (sub/role-of a))
-                (sub/formal-expression-of a) (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a)))
+                (sub/formal-expression-of a) (assoc :affordance/formal-expression (sub/formal-expression-of a))
                 (sub/doc-of a)               (assoc :affordance/doc (sub/doc-of a))
                 (sub/returns-label-of a)     (assoc :affordance/returns-label (sub/returns-label-of a))
                 (seq inputs-set)             (assoc :affordance/input-types inputs-set)

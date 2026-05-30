@@ -2,8 +2,7 @@
   "The agent's layered Model interface. The ONLY namespace the SCI sandbox
    exposes alongside fukan.agent.system. See AGENTS.md for orientation;
    call (help) for the live catalog."
-  (:require [clojure.edn :as edn]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [datascript.core :as d]
             [fukan.canvas.core.substrate.store :as store]
             [fukan.canvas.inspect.coverage :as inspect-coverage]
@@ -509,13 +508,6 @@
              (= "state" (second parts)))  [:State (first parts) (nth parts 2)]
         :else nil))))
 
-(defn- read-shape
-  "pr-str'd canvas shape map → parsed shape map. Returns nil on read failure."
-  [s]
-  (when (string? s)
-    (try (edn/read-string s)
-         (catch Exception _ nil))))
-
 (defn- canvas-db-entity-for
   "Query canvas-db for the entity matching (entity-type, module-name,
    entity-name). Returns the entity id (eid) or nil. Module entities have no
@@ -576,7 +568,7 @@
         doc     (:affordance/doc ent)
         shape   (when-let [sh (:node/shape ent)]
                   (store/read-reified-shape db (:db/id sh)))
-        fe      (read-shape (:affordance/formal-expression ent))
+        fe      (:affordance/formal-expression ent)
         base    (cond-> {:model-element-kind :Affordance
                          :canvas-role        role
                          :stable-id          stable-id
