@@ -21,8 +21,7 @@
    [datascript.core :as d]
    [fukan.canvas.core.classification :as classification]
    [fukan.canvas.core.substrate.store :as store]
-   [fukan.canvas.identity :as identity]
-   [fukan.canvas.vocab.registry :as vocab-registry]))
+   [fukan.canvas.identity :as identity]))
 
 ;; ---------------------------------------------------------------------------
 ;; Discovery — scan canvas/ for *.clj and derive namespace symbols
@@ -230,11 +229,12 @@
    name+role convention and constitute a likely authoring bug."
   [db]
   (let [rows (d/q '[:find ?mn ?cn ?c
-                     :where [?m :entity/type :Module]
+                     :in $ % ?mfam
+                     :where (kind-of ?m ?mfam)
                             [?m :entity/name ?mn]
                             [?m :module/child ?c]
                             [?c :entity/name ?cn]]
-                   db)]
+                   db classification/rules :family/module)]
     (->> rows
          (group-by (fn [[mn cn _]] [mn cn]))
          (keep (fn [[[mn cn] entries]]
@@ -388,32 +388,32 @@
   [db]
   (let [;; Modules: uuid → stable id
         module-entries (d/q '[:find ?uuid ?name
-                               :where [?e :entity/type :Module]
+                               :in $ % ?mfam
+                               :where (kind-of ?e ?mfam)
                                       [?e :entity/id ?uuid]
                                       [?e :entity/name ?name]]
-                             db)
+                             db classification/rules :family/module)
         module-id-map  (into {} (map (fn [[uuid name]] [uuid (stable-module-id name)]) module-entries))
 
-        ;; For owned entities: need to know their parent module
-        ;; Query: for each module, get its UUID and name, and each child's UUID, type, name
-        child-entries (d/q '[:find ?mod-name ?child-uuid ?child-type ?child-name
-                              :where [?m :entity/type :Module]
+        ;; For owned entities: need to know their parent module + element-kind
+        child-entries (d/q '[:find ?mod-name ?c ?child-uuid ?child-name
+                              :in $ % ?mfam
+                              :where (kind-of ?m ?mfam)
                                      [?m :entity/name ?mod-name]
                                      [?m :module/child ?c]
                                      [?c :entity/id ?child-uuid]
-                                     [?c :entity/type ?child-type]
                                      [?c :entity/name ?child-name]]
-                            db)
+                            db classification/rules :family/module)
 
         ;; Build stable ids for each child entity
-        child-id-map (into {} (map (fn [[mod-name child-uuid child-type child-name]]
+        child-id-map (into {} (map (fn [[mod-name c child-uuid child-name]]
                                      [child-uuid
-                                      (case child-type
+                                      (case (classification/element-kind db c)
                                         :Affordance (stable-affordance-id mod-name child-name)
                                         :Type       (stable-type-id mod-name child-name)
                                         :State      (stable-state-id mod-name child-name)
                                         ;; fallback
-                                        (str mod-name "/" (name child-type) "/" child-name))])
+                                        (str mod-name "/" child-name))])
                                    child-entries))]
     (merge module-id-map child-id-map)))
 
@@ -422,10 +422,11 @@
    Returns {stable-id → primitive-map}."
   [db]
   (let [modules (d/q '[:find ?uuid ?name
-                        :where [?e :entity/type :Module]
+                        :in $ % ?mfam
+                        :where (kind-of ?e ?mfam)
                                [?e :entity/id ?uuid]
                                [?e :entity/name ?name]]
-                     db)]
+                     db classification/rules :family/module)]
     (into {} (map (fn [[_ name]]
                     (let [id (stable-module-id name)]
                       [id {:kind  :primitive/container
@@ -447,20 +448,21 @@
    db instead of this primitive field, so this is informational."
   [db uuid->stable-id]
   (let [affordances-full (d/q '[:find ?uuid ?name ?role
-                                 :where [?e :entity/type :Affordance]
+                                 :in $ % ?afam
+                                 :where (kind-of ?e ?afam)
+                                        (direct-kind ?e ?role)
                                         [?e :entity/id ?uuid]
-                                        [?e :entity/name ?name]
-                                        [?e :affordance/role ?role]]
-                               db)
+                                        [?e :entity/name ?name]]
+                               db classification/rules :family/affordance)
+        ;; :affordance/doc and :affordance/formal-expression are affordance-only
+        ;; attributes, so the join already restricts to affordances.
         docs (into {} (d/q '[:find ?uuid ?doc
-                              :where [?e :entity/type :Affordance]
-                                     [?e :entity/id ?uuid]
-                                     [?e :affordance/doc ?doc]]
+                              :where [?e :affordance/doc ?doc]
+                                     [?e :entity/id ?uuid]]
                             db))
         formal-exprs (into {} (d/q '[:find ?uuid ?fe
-                                      :where [?e :entity/type :Affordance]
-                                             [?e :entity/id ?uuid]
-                                             [?e :affordance/formal-expression ?fe]]
+                                      :where [?e :affordance/formal-expression ?fe]
+                                             [?e :entity/id ?uuid]]
                                     db))]
     (into {} (keep (fn [[uuid name role]]
                      (when-let [id (get uuid->stable-id uuid)]
@@ -485,14 +487,15 @@
    Returns {stable-id → primitive-map}."
   [db uuid->stable-id]
   (let [types (d/q '[:find ?uuid ?name
-                      :where [?e :entity/type :Type]
+                      :in $ % ?tfam
+                      :where (kind-of ?e ?tfam)
                              [?e :entity/id ?uuid]
                              [?e :entity/name ?name]]
-                   db)
+                   db classification/rules :family/type)
+        ;; :type/doc is a Type-only attribute, so the join restricts to Types.
         docs  (into {} (d/q '[:find ?uuid ?doc
-                               :where [?e :entity/type :Type]
-                                      [?e :entity/id ?uuid]
-                                      [?e :type/doc ?doc]]
+                               :where [?e :type/doc ?doc]
+                                      [?e :entity/id ?uuid]]
                              db))]
     (into {} (keep (fn [[uuid name]]
                      (when-let [id (get uuid->stable-id uuid)]
@@ -507,10 +510,11 @@
    Returns {stable-id → primitive-map}."
   [db uuid->stable-id]
   (let [states (d/q '[:find ?uuid ?name
-                       :where [?e :entity/type :State]
+                       :in $ % ?sfam
+                       :where (kind-of ?e ?sfam)
                               [?e :entity/id ?uuid]
                               [?e :entity/name ?name]]
-                    db)]
+                    db classification/rules :family/state)]
     (into {} (keep (fn [[uuid name]]
                      (when-let [id (get uuid->stable-id uuid)]
                        [id {:kind  :primitive/container
@@ -524,11 +528,12 @@
   [primitives db uuid->stable-id]
   (let [;; Query module→children relationships
         parent-child-pairs (d/q '[:find ?mod-uuid ?child-uuid
-                                   :where [?m :entity/type :Module]
+                                   :in $ % ?mfam
+                                   :where (kind-of ?m ?mfam)
                                           [?m :entity/id ?mod-uuid]
                                           [?m :module/child ?c]
                                           [?c :entity/id ?child-uuid]]
-                                 db)
+                                 db classification/rules :family/module)
         ;; Build module-id → #{child-ids} map
         children-by-module (reduce (fn [acc [mod-uuid child-uuid]]
                                      (let [mod-id   (get uuid->stable-id mod-uuid)
@@ -602,9 +607,10 @@
     (let [ns-str      (namespace ref-kw)
           entity-name (name ref-kw)
           all-modules (d/q '[:find ?m ?mn
-                              :where [?m :entity/type :Module]
+                              :in $ % ?mfam
+                              :where (kind-of ?m ?mfam)
                                      [?m :entity/name ?mn]]
-                            db)
+                            db classification/rules :family/module)
           exact-module-eids (->> all-modules
                                  (filter (fn [[_eid mname]] (= mname ns-str)))
                                  (map first))
@@ -803,25 +809,11 @@
 (defn- tagdef-txs
   "Datoms projecting the tag-definition registry into the db as :tagdef/*
    entities, making the vocabulary queryable on the substrate surface.
-
-   Each tag-definition's refinement parent is `:refines` when the author set
-   one, else the super-tag derived from its construction `:family`; it is
-   projected as `:tagdef/refines` so the classification stratum's refines* /
-   kind-of / family-of close over it. The family super-tags themselves are
-   projected as parent-less :tagdef entities — the lattice roots — so the
-   reflexive base of refines* grounds on them."
+   Delegates to classification/tagdef-datoms (the shared projection that
+   with-canvas also applies, so the refinement lattice is present on every
+   substrate)."
   []
-  (let [registered (mapv (fn [{:keys [tag family payload doc refines]}]
-                           (let [parent (or refines (classification/family->super-tag family))]
-                             (cond-> {:tagdef/tag tag}
-                               payload (assoc :tagdef/payload payload)
-                               family  (assoc :tagdef/family family)
-                               parent  (assoc :tagdef/refines parent)
-                               doc     (assoc :tagdef/doc doc))))
-                         (vocab-registry/all))
-        roots      (mapv (fn [super-tag] {:tagdef/tag super-tag})
-                         (vals classification/family-super-tags))]
-    (into roots registered)))
+  (classification/tagdef-datoms))
 
 (defn enrich-substrate
   "Make the unified canvas db a complete, directly-queryable substrate:
@@ -829,10 +821,13 @@
    into :uses ref-datoms, and project the tag-definition registry as :tagdef/*
    entities. Additive — :references keywords remain for the map-side projection."
   [db]
-  (-> db
-      (d/db-with (stable-id-txs db))
-      (d/db-with (uses-txs db))
-      (d/db-with (tagdef-txs))))
+  ;; Project the vocabulary first: stable-id and uses enrichment now resolve
+  ;; modules via the classification stratum (kind-of), which needs :tagdef/* in
+  ;; the db they query — so rebind db to the tagdef-enriched value before them.
+  (let [db (d/db-with db (tagdef-txs))]
+    (-> db
+        (d/db-with (stable-id-txs db))
+        (d/db-with (uses-txs db)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: build

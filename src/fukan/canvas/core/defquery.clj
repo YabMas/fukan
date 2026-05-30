@@ -1,4 +1,5 @@
-(ns fukan.canvas.core.defquery)
+(ns fukan.canvas.core.defquery
+  (:require [fukan.canvas.core.classification :as classification]))
 
 (def registry (atom {}))
 
@@ -33,8 +34,10 @@
                     {:ref-kw ref-kw})))
   (let [mod-name    (namespace ref-kw)
         entity-name (name ref-kw)
-        mod-sym     (gensym "?__this_mod_")]
-    [[mod-sym     :entity/type  :Module]
+        mod-sym     (gensym "?__this_mod_")
+        fam-var     (gensym "?__fam_")]
+    [(list 'kind-of mod-sym fam-var)
+     [(list '= fam-var :family/module)]
      [mod-sym     :entity/name  mod-name]
      [mod-sym     :module/child target-var]
      [target-var  :entity/name  entity-name]]))
@@ -64,9 +67,13 @@
           (let [head (first clause)
                 args (rest clause)]
             (cond
-              ;; Primitive type pattern
+              ;; Primitive type pattern → classification stratum (kind-of + a
+              ;; family predicate); needs the rule set threaded as `%`.
               (contains? primitive-kinds head)
-              [[(first args) :entity/type (keyword (str head))]]
+              (let [fam     (classification/family->super-tag (keyword (str head)))
+                    fam-var (gensym "?__fam_")]
+                [(list 'kind-of (first args) fam-var)
+                 [(list '= fam-var fam)]])
 
               ;; Tag pattern
               (= head 'tag)

@@ -33,6 +33,7 @@
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.substrate.store :as store]))
 
 ;; ---------------------------------------------------------------------------
@@ -494,21 +495,23 @@
    Type entities against their owning Module."
   [canvas-db]
   (let [leaf-tuples (d/q '[:find ?mod-name ?type-name ?field-tuple
-                            :where [?m :entity/type :Module]
+                            :in $ % ?mfam ?tfam
+                            :where (kind-of ?m ?mfam)
                                    [?m :entity/name ?mod-name]
                                    [?m :module/child ?e]
-                                   [?e :entity/type :Type]
+                                   (kind-of ?e ?tfam)
                                    [?e :entity/name ?type-name]
                                    [?e :type/fields ?field-tuple]]
-                          canvas-db)
+                          canvas-db classification/rules :family/module :family/type)
         shape-roots (d/q '[:find ?mod-name ?type-name ?sh
-                            :where [?m :entity/type :Module]
+                            :in $ % ?mfam ?tfam
+                            :where (kind-of ?m ?mfam)
                                    [?m :entity/name ?mod-name]
                                    [?m :module/child ?e]
-                                   [?e :entity/type :Type]
+                                   (kind-of ?e ?tfam)
                                    [?e :entity/name ?type-name]
                                    [?e :node/shape ?sh]]
-                          canvas-db)
+                          canvas-db classification/rules :family/module :family/type)
         ;; Rich shapes first — they fully describe the compound; leaves fill
         ;; in fields that lack a richer entry (e.g. test fixtures that go
         ;; through the canvas-db directly).

@@ -85,23 +85,24 @@
   "Return seq of {:eid :name} for every Module."
   [db]
   (->> (d/q '[:find ?e ?n
-              :where [?e :entity/type :Module]
+              :in $ % ?fam
+              :where (kind-of ?e ?fam)
                      [?e :entity/name ?n]]
-            db)
+            db classification/rules :family/module)
        (map (fn [[e n]] {:eid e :name n}))))
 
 (defn- children-of
   "Return seq of {:eid :name :entity-type :role} for the direct children
    of a module (by module eid). :role is present only on Affordances."
   [db module-eid]
-  (->> (d/q '[:find ?c ?cn ?ct
+  (->> (d/q '[:find ?c ?cn
               :in $ ?m
               :where [?m :module/child ?c]
-                     [?c :entity/name ?cn]
-                     [?c :entity/type ?ct]]
+                     [?c :entity/name ?cn]]
             db module-eid)
-       (map (fn [[c cn ct]]
-              (let [role (when (= :Affordance ct)
+       (map (fn [[c cn]]
+              (let [ct   (classification/element-kind db c)
+                    role (when (= :Affordance ct)
                            (classification/direct-kind db c))]
                 {:eid c :name cn :entity-type ct :role role})))))
 

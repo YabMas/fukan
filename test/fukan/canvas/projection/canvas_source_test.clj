@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.substrate.store :as store]
@@ -423,7 +424,12 @@
                                :entity/name "DuplicateName"}
                               {:entity/id   ent-uuid-2
                                :entity/type :Type
-                               :entity/name "DuplicateName"}])
+                               :entity/name "DuplicateName"}
+                              ;; classification spine so (kind-of ?m :family/module) resolves
+                              {:tagapp/id (str mod-uuid "|module")
+                               :tagapp/node [:entity/id mod-uuid] :tagapp/tag :canvas/module}]
+                            )
+                 (d/db-with (classification/tagdef-datoms))
                  (d/db-with [[:db/add [:entity/id mod-uuid] :module/child [:entity/id ent-uuid-1]]
                               [:db/add [:entity/id mod-uuid] :module/child [:entity/id ent-uuid-2]]]))]
       (is (thrown? clojure.lang.ExceptionInfo

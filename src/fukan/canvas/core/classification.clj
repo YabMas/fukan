@@ -49,6 +49,34 @@
   [tag]
   (= "family" (some-> tag namespace)))
 
+(def ^:private super-tag->element-kind
+  "Inverse of family-super-tags: :family/* super-tag → legacy element-kind kw."
+  (into {} (map (juxt val key)) family-super-tags))
+
+;; ── Vocabulary projection (the refinement lattice as datoms) ─────────────────
+
+(defn tagdef-datoms
+  "Datoms projecting the tag-definition registry + the family super-tag roots
+   into a substrate db, so refines*/kind-of/family-of close over the lattice.
+   Each tag-definition's parent is its explicit `:refines` or the super-tag
+   derived from its construction `:family`; the family super-tags are projected
+   as parent-less roots. The registry is resolved at runtime — the vocabulary
+   lives a tier up, but the substrate must carry it for the stratum to work, so
+   this core fn reaches it dynamically rather than via a compile dependency."
+  []
+  (let [all-defs   ((requiring-resolve 'fukan.canvas.vocab.registry/all))
+        registered (mapv (fn [{:keys [tag family payload doc refines]}]
+                           (let [parent (or refines (family->super-tag family))]
+                             (cond-> {:tagdef/tag tag}
+                               payload (assoc :tagdef/payload payload)
+                               family  (assoc :tagdef/family family)
+                               parent  (assoc :tagdef/refines parent)
+                               doc     (assoc :tagdef/doc doc))))
+                         all-defs)
+        roots      (mapv (fn [super-tag] {:tagdef/tag super-tag})
+                         (vals family-super-tags))]
+    (into roots registered)))
+
 ;; ── Datalog rules ──────────────────────────────────────────────────────────
 ;; Pass `rules` as the `%` input to d/q and reference the operators in :where:
 ;;   (d/q '[:find ?e :in $ % :where (kind-of ?e :family/affordance)] db rules)
@@ -110,3 +138,12 @@
   [db eid]
   (ffirst
    (d/q '[:find ?fam :in $ % ?e :where (family-of ?e ?fam)] db rules eid)))
+
+(defn element-kind
+  "The legacy element-kind keyword (:Module/:Affordance/:Type/:State) of node
+   `eid`, derived from its family super-tag, or nil. The model/Layer-A
+   vocabulary projected from the stratum — lets addressing and projection keep
+   their element-kind vocabulary while `:entity/type` is sourced from
+   classification rather than stored."
+  [db eid]
+  (super-tag->element-kind (family-of db eid)))

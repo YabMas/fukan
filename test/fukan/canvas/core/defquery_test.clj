@@ -1,14 +1,21 @@
 (ns fukan.canvas.core.defquery-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.defquery :as dq]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.construction :refer [function]]))
 
 (deftest primitive-name-expansion
-  (testing "(Module ?x) expands to [?x :entity/type :Module]"
-    (is (= '[[?x :entity/type :Module]]
-           (dq/expand '[(Module ?x)])))))
+  (testing "(Module ?x) expands to a kind-of rule call + family predicate"
+    (let [expanded (dq/expand '[(Module ?x)])
+          [kind-clause pred-clause] expanded]
+      (is (= 2 (count expanded)))
+      (is (= 'kind-of (first kind-clause)) "first clause is the kind-of rule")
+      (is (= '?x (second kind-clause)))
+      (let [fam-var (nth kind-clause 2)]
+        (is (= ['= fam-var :family/module] (first pred-clause))
+            "predicate binds the family var to :family/module")))))
 
 (deftest tag-name-expansion
   (testing "(tag :X ?e) expands to [?e :entity/tag :X]"
@@ -35,16 +42,18 @@
            (dq/expand '[(outer-op ?a)])))))
 
 (deftest this-expansion-shape
-  (testing "(this :mod/entity ?v) expands to four datom clauses binding ?v"
+  (testing "(this :mod/entity ?v) expands to a module kind-of check + 3 clauses"
     (let [expanded (dq/expand '[(this :infra.server/start_server ?e)])]
-      (is (= 4 (count expanded)) "should produce four datom clauses")
-      ;; Third clause: [<mod-var> :module/child ?e]
-      (is (= :module/child (second (nth expanded 2))))
-      (is (= '?e (nth (nth expanded 2) 2)))
-      ;; Fourth clause: [?e :entity/name "start_server"]
-      (is (= '?e (first (nth expanded 3))))
-      (is (= :entity/name (second (nth expanded 3))))
-      (is (= "start_server" (nth (nth expanded 3) 2))))))
+      (is (= 5 (count expanded)) "kind-of + family predicate + 3 datom clauses")
+      ;; Clause 0: (kind-of <mod-var> <fam-var>)
+      (is (= 'kind-of (first (nth expanded 0))))
+      ;; Clause 3: [<mod-var> :module/child ?e]
+      (is (= :module/child (second (nth expanded 3))))
+      (is (= '?e (nth (nth expanded 3) 2)))
+      ;; Clause 4: [?e :entity/name "start_server"]
+      (is (= '?e (first (nth expanded 4))))
+      (is (= :entity/name (second (nth expanded 4))))
+      (is (= "start_server" (nth (nth expanded 4) 2))))))
 
 (deftest this-resolves-namespaced-keyword
   (testing "(this :module/name ?var) binds ?var to the entity in that module"
@@ -56,7 +65,7 @@
                    (gives :Unit))))]
       (let [expanded (dq/expand '[(this :infra.server/start_server ?a)
                                   [?a :entity/name ?n]])
-            query    (into [:find '?n :where] expanded)
-            results  (d/q query db)]
+            query    (into [:find '?n :in '$ '% :where] expanded)
+            results  (d/q query db classification/rules)]
         (is (= #{["start_server"]} results)
             "query should find the entity named start_server")))))

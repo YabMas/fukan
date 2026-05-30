@@ -22,6 +22,7 @@
      Type:        \"<module-name>/type/<name>\"  e.g. \"infra.server/type/ServerOpts\""
   (:refer-clojure :exclude [alias])
   (:require [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]))
 
 ;; ---------------------------------------------------------------------------
@@ -66,25 +67,28 @@
   [db]
   (let [;; Module canonical ids: uuid → stable-id
         modules (d/q '[:find ?uuid ?name
-                        :where [?e :entity/type :Module]
+                        :in $ % ?mfam
+                        :where (kind-of ?e ?mfam)
                                [?e :entity/id ?uuid]
                                [?e :entity/name ?name]]
-                     db)
+                     db classification/rules :family/module)
         module-id-map (into {} (map (fn [[uuid mname]]
                                       [uuid (stable-id :Module mname mname)])
                                     modules))
 
-        ;; Child canonical ids: uuid → stable-id (needs parent module name)
-        children (d/q '[:find ?child-uuid ?child-type ?child-name ?mod-name
-                         :where [?m :entity/type :Module]
+        ;; Child canonical ids: uuid → stable-id (needs parent module name +
+        ;; element-kind, the latter derived from the classification stratum)
+        children (d/q '[:find ?c ?child-uuid ?child-name ?mod-name
+                         :in $ % ?mfam
+                         :where (kind-of ?m ?mfam)
                                 [?m :entity/name ?mod-name]
                                 [?m :module/child ?c]
                                 [?c :entity/id ?child-uuid]
-                                [?c :entity/type ?child-type]
                                 [?c :entity/name ?child-name]]
-                      db)
-        child-id-map (into {} (map (fn [[uuid child-type child-name mod-name]]
-                                     [uuid (stable-id child-type mod-name child-name)])
+                      db classification/rules :family/module)
+        child-id-map (into {} (map (fn [[c uuid child-name mod-name]]
+                                     [uuid (stable-id (classification/element-kind db c)
+                                                      mod-name child-name)])
                                    children))
 
         ;; Merged: all entity-uuid → canonical-id
@@ -137,21 +141,20 @@
   [db eid]
   (when (integer? eid)
     (let [mod-rows   (d/q '[:find ?name
-                             :in $ ?e
-                             :where [?e :entity/type :Module]
+                             :in $ % ?e ?mfam
+                             :where (kind-of ?e ?mfam)
                                     [?e :entity/name ?name]]
-                           db eid)
-          child-rows (d/q '[:find ?ct ?cn ?mn
+                           db classification/rules eid :family/module)
+          child-rows (d/q '[:find ?cn ?mn
                              :in $ ?e
-                             :where [?e :entity/type ?ct]
-                                    [?e :entity/name ?cn]
+                             :where [?e :entity/name ?cn]
                                     [?m :module/child ?e]
                                     [?m :entity/name ?mn]]
                            db eid)]
       (cond
         (seq mod-rows)   (stable-id :Module (ffirst mod-rows) (ffirst mod-rows))
-        (seq child-rows) (let [[ct cn mn] (first child-rows)]
-                           (stable-id ct mn cn))
+        (seq child-rows) (let [[cn mn] (first child-rows)]
+                           (stable-id (classification/element-kind db eid) mn cn))
         :else            nil))))
 
 ;; ---------------------------------------------------------------------------

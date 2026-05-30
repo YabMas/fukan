@@ -55,8 +55,7 @@
 
 (defn- affordance-eids
   [db]
-  (->> (d/datoms db :aevt :entity/type)
-       (keep (fn [d] (when (= :Affordance (.-v d)) (.-e d))))))
+  (classification/of-kind db :family/affordance))
 
 (defn- cluster-for-signature
   "Build the cluster map for a group of affordance eids sharing a signature."

@@ -63,10 +63,11 @@
    the type's field list as a vector of [field-name field-type] pairs."
   [db]
   (->> (d/q '[:find ?e ?n
-              :where [?e :entity/type :Type]
+              :in $ % ?fam
+              :where (kind-of ?e ?fam)
                      [?e :entity/name ?n]
                      [?e :type/fields _]]
-            db)
+            db classification/rules :family/type)
        (map (fn [[eid n]]
               (let [mn      (module-name-for-entity db eid)
                     fields  (->> (d/q '[:find ?v
@@ -89,10 +90,11 @@
    indivisible kind (statuses, ids, opaque tokens)."
   [db]
   (->> (d/q '[:find ?e ?n
-              :where [?e :entity/type :Type]
+              :in $ % ?fam
+              :where (kind-of ?e ?fam)
                      [?e :entity/name ?n]
                      (not [?e :type/fields _])]
-            db)
+            db classification/rules :family/type)
        (map (fn [[eid n]]
               (let [mn (module-name-for-entity db eid)]
                 {:stable-id (stable-id-for :Type mn n)
@@ -192,10 +194,7 @@
        vec))
 
 (defn- total-modules [db]
-  (or (ffirst (d/q '[:find (count ?e)
-                     :where [?e :entity/type :Module]]
-                   db))
-      0))
+  (count (classification/of-kind db :family/module)))
 
 ;; ---------------------------------------------------------------------------
 ;; Truncation

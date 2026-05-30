@@ -47,6 +47,7 @@
         Run all six checks. Returns a vector of finding maps; [] when
         coverage is full. Callers filter by :severity."
   (:require [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.identity :as identity]
             [fukan.canvas.projection.canvas-source :as canvas-source]))
 
@@ -67,19 +68,16 @@
   (and (keyword? k) (some? (namespace k))))
 
 (defn- entity-eids
-  "All entity eids of the given :entity/type."
+  "All entity eids of the given element-kind (:Module/:Affordance/:Type/:State)."
   [db etype]
-  (->> (d/datoms db :aevt :entity/type)
-       (filter #(= etype (.-v %)))
-       (map #(.-e %))))
+  (classification/of-kind db (classification/family->super-tag etype)))
 
 (defn- non-module-entity-eids
   "All entity eids that are not Modules."
   [db]
-  (->> (d/datoms db :aevt :entity/type)
-       (keep (fn [d]
-               (when (not= :Module (.-v d))
-                 (.-e d))))))
+  (concat (classification/of-kind db :family/affordance)
+          (classification/of-kind db :family/type)
+          (classification/of-kind db :family/state)))
 
 (defn- has-tag?
   [db eid tag]
@@ -90,18 +88,17 @@
   "Return the eid of the Module owning entity-eid via :module/child, or nil."
   [db entity-eid]
   (ffirst (d/q '[:find ?m
-                 :in $ ?c
+                 :in $ % ?c ?mfam
                  :where [?m :module/child ?c]
-                        [?m :entity/type :Module]]
-               db entity-eid)))
+                        (kind-of ?m ?mfam)]
+               db classification/rules entity-eid :family/module)))
 
 (defn- module-of
   "Return the module eid for any entity eid (self if Module, owner if child)."
   [db eid]
-  (let [t (->> (d/datoms db :eavt eid :entity/type) first (#(some-> % .-v)))]
-    (if (= :Module t)
-      eid
-      (owning-module-eid db eid))))
+  (if (= :Module (classification/element-kind db eid))
+    eid
+    (owning-module-eid db eid)))
 
 (defn- ref-keyword-resolved-eids
   "For every keyword-valued :references datom, resolve the keyword to a target
@@ -188,10 +185,10 @@
          (remove pointed)
          (remove #(has-tag? db % :canvas/exported))
          (remove #(contains? orphan-exempt-roles
-                             (:affordance/role (d/entity db %))))
+                             (classification/direct-kind db %)))
          (map (fn [eid]
                 (let [ent  (d/entity db eid)
-                      etype (:entity/type ent)
+                      etype (classification/element-kind db eid)
                       ename (:entity/name ent)
                       mod-eid (owning-module-eid db eid)
                       mod-name (when mod-eid (:entity/name (d/entity db mod-eid)))]
@@ -203,7 +200,7 @@
                                    " has no incoming references.")
                    :offenders [(offender db eid)]
                    :detail    {:entity-type etype
-                               :role        (:affordance/role ent)}})))
+                               :role        (classification/direct-kind db eid)}})))
          vec)))
 
 ;; ---------------------------------------------------------------------------
@@ -218,7 +215,7 @@
          (remove owned)
          (map (fn [eid]
                 (let [ent   (d/entity db eid)
-                      etype (:entity/type ent)
+                      etype (classification/element-kind db eid)
                       ename (:entity/name ent)]
                   {:check     :inspect.coverage/unreached-entity
                    :severity  :error
@@ -276,7 +273,7 @@
          (remove ext-targets)
          (map (fn [eid]
                 (let [ent    (d/entity db eid)
-                      etype  (:entity/type ent)
+                      etype  (classification/element-kind db eid)
                       ename  (:entity/name ent)
                       mod-eid (owning-module-eid db eid)
                       mod-name (when mod-eid (:entity/name (d/entity db mod-eid)))]
@@ -325,9 +322,7 @@
   "Affordances of role :canvas/rule that no `(triggers …)` ref points at."
   [db]
   (let [triggered (set (map #(.-v %) (d/datoms db :aevt :triggers)))
-        rule-eids (->> (d/datoms db :aevt :affordance/role)
-                       (filter #(= :canvas/rule (.-v %)))
-                       (map #(.-e %)))]
+        rule-eids (classification/of-kind db :canvas/rule)]
     (->> rule-eids
          (remove triggered)
          (map (fn [eid]
@@ -350,9 +345,7 @@
 
 (defn- handler-eids
   [db]
-  (->> (d/datoms db :aevt :affordance/role)
-       (filter #(= :canvas/handler (.-v %)))
-       (map #(.-e %))))
+  (classification/of-kind db :canvas/handler))
 
 (defn- handled-event-eids
   "Set of event eids that some :canvas/handler points at via :references
@@ -376,9 +369,7 @@
    `(on <event>)` against."
   [db]
   (let [handled    (handled-event-eids db)
-        event-eids (->> (d/datoms db :aevt :affordance/role)
-                        (filter #(= :canvas/event (.-v %)))
-                        (map #(.-e %)))]
+        event-eids (classification/of-kind db :canvas/event)]
     (->> event-eids
          (remove handled)
          (map (fn [eid]

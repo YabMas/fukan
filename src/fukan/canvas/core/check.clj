@@ -1,5 +1,6 @@
 (ns fukan.canvas.core.check
   (:require [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.defquery :as dq]
             [fukan.canvas.identity :as identity]))
@@ -33,10 +34,12 @@
        vec))
 
 (defn- build-query
-  "Builds a Datascript query map from expanded clauses, finding all logic vars."
+  "Builds a Datascript query from expanded clauses, finding all logic vars.
+   Declares `% ` so the classification-stratum rules (used by primitive-kind
+   expansions like (Module ?m)) are available."
   [expanded]
   (let [vars (logic-vars expanded)]
-    (vec (concat [:find] vars [:where] expanded))))
+    (vec (concat [:find] vars [:in '$ '%] [:where] expanded))))
 
 (defn- enrich-offenders
   "Given a db and a seq of raw offender tuples (each a vector of eids / values),
@@ -66,7 +69,7 @@
         (for [{:keys [name message body source-location]} @*constraints*
               :let [expanded (dq/expand body)
                     query    (build-query expanded)
-                    results  (d/q query db)]
+                    results  (d/q query db classification/rules)]
               :when (seq results)]
           {:constraint      name
            :message         message

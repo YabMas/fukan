@@ -1,5 +1,6 @@
 (ns fukan.canvas.core.helpers
   (:require [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.substrate.store :as store]))
 
@@ -24,7 +25,11 @@
 
 ;; Substrate construction within scope
 (defmacro with-canvas [& body]
-  `(binding [*store* (atom (store/create))]
+  ;; Seed the store with the vocabulary (tag-definition refinement lattice) up
+  ;; front, so the classification stratum (kind-of / family-of) works on every
+  ;; substrate — including code that queries *store* from inside the body, not
+  ;; only the returned db.
+  `(binding [*store* (atom (d/db-with (store/create) (classification/tagdef-datoms)))]
      ~@body
      @*store*))
 

@@ -87,7 +87,7 @@
                (let [from-eid   (.-e datom)
                      target-eid (.-v datom)
                      target-ent (d/entity db target-eid)
-                     role       (:affordance/role target-ent)]
+                     role       (classification/direct-kind db target-eid)]
                  (when (not= role :canvas/rule)
                    {:check     :inspect.integrity/triggers-target-not-a-rule
                     :severity  :error
@@ -115,7 +115,7 @@
                (let [from-eid   (.-e datom)
                      target-eid (.-v datom)
                      target-ent (d/entity db target-eid)
-                     role       (:affordance/role target-ent)]
+                     role       (classification/direct-kind db target-eid)]
                  (when (not= role :canvas/event)
                    {:check     :inspect.integrity/emits-target-not-an-event
                     :severity  :error

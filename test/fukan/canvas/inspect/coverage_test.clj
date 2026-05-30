@@ -118,10 +118,13 @@
                  (h/within-module "demo"
                    (value "Owned" "A normally-owned type.")))
           orphan-uuid (random-uuid)
-          db   (d/db-with base [{:entity/id orphan-uuid
+          db   (d/db-with base [{:db/id -1
+                                 :entity/id orphan-uuid
                                  :entity/type :Type
                                  :entity/name "Floating"
-                                 :entity/tag []}])
+                                 :entity/tag []}
+                                {:tagapp/id (str orphan-uuid "|value")
+                                 :tagapp/node -1 :tagapp/tag :canvas/value}])
           findings  (coverage/check db)
           unreached (filter #(= :inspect.coverage/unreached-entity (:check %)) findings)]
       (is (= 1 (count unreached)))
@@ -296,10 +299,13 @@
                    (event "E" "Unhandled event.")
                    (value "Internal" "Orphan type.")))
           orphan-uuid (random-uuid)
-          db   (d/db-with base [{:entity/id orphan-uuid
+          db   (d/db-with base [{:db/id -1
+                                 :entity/id orphan-uuid
                                  :entity/type :Type
                                  :entity/name "Floating"
-                                 :entity/tag []}])
+                                 :entity/tag []}
+                                {:tagapp/id (str orphan-uuid "|value")
+                                 :tagapp/node -1 :tagapp/tag :canvas/value}])
           findings (coverage/check db)
           severities (into #{} (map :severity) findings)]
       (is (every? #{:error :warning :info} severities)

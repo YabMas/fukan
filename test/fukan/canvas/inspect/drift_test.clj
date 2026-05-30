@@ -273,20 +273,26 @@
   (require 'datascript.core)
   (let [create  (resolve 'fukan.canvas.core.substrate.store/create)
         db-with (resolve 'datascript.core/db-with)
+        tagdefs (resolve 'fukan.canvas.core.classification/tagdef-datoms)
         [mod-name type-name] (str/split stable-id #"/type/" 2)
         mod-uuid  (str "mod-" mod-name)
         type-uuid (str "type-" type-name)]
     (db-with (create)
-             [{:db/id      -1
-               :entity/id  mod-uuid
-               :entity/type :Module
-               :entity/name mod-name}
-              {:db/id      -2
-               :entity/id  type-uuid
-               :entity/type :Type
-               :entity/name type-name
-               :type/fields (set field-tuples)}
-              [:db/add -1 :module/child -2]])))
+             (into
+              [{:db/id      -1
+                :entity/id  mod-uuid
+                :entity/type :Module
+                :entity/name mod-name}
+               {:db/id      -2
+                :entity/id  type-uuid
+                :entity/type :Type
+                :entity/name type-name
+                :type/fields (set field-tuples)}
+               [:db/add -1 :module/child -2]
+               ;; classification spine so kind-of/family-of resolve
+               {:tagapp/id (str mod-uuid "|module")  :tagapp/node -1 :tagapp/tag :canvas/module}
+               {:tagapp/id (str type-uuid "|record") :tagapp/node -2 :tagapp/tag :canvas/record}]
+              (tagdefs)))))
 
 (deftest shape-drift-clean-record-no-finding
   (testing "canvas record and code record with identical fields (post-alias) → no shape-drift finding"
@@ -385,22 +391,26 @@
   (let [create    (resolve 'fukan.canvas.core.substrate.store/create)
         db-with   (resolve 'datascript.core/db-with)
         shape->ds (resolve 'fukan.canvas.core.substrate.store/shape->datoms)
+        tagdefs   (resolve 'fukan.canvas.core.classification/tagdef-datoms)
         [mod-name type-name] (str/split stable-id #"/type/" 2)
         mod-uuid  (str "mod-" mod-name)
         type-uuid (str "type-" type-name)
         [root shape-datoms] (shape->ds {:kind :record :fields (vec field-shapes)})]
     (db-with (create)
-             (into (vec shape-datoms)
-                   [{:db/id      -1
-                     :entity/id  mod-uuid
-                     :entity/type :Module
-                     :entity/name mod-name}
-                    {:db/id      -2
-                     :entity/id  type-uuid
-                     :entity/type :Type
-                     :entity/name type-name
-                     :node/shape [:shape/id root]}
-                    [:db/add -1 :module/child -2]]))))
+             (-> (vec shape-datoms)
+                 (into [{:db/id      -1
+                         :entity/id  mod-uuid
+                         :entity/type :Module
+                         :entity/name mod-name}
+                        {:db/id      -2
+                         :entity/id  type-uuid
+                         :entity/type :Type
+                         :entity/name type-name
+                         :node/shape [:shape/id root]}
+                        [:db/add -1 :module/child -2]
+                        {:tagapp/id (str mod-uuid "|module")  :tagapp/node -1 :tagapp/tag :canvas/module}
+                        {:tagapp/id (str type-uuid "|record") :tagapp/node -2 :tagapp/tag :canvas/record}])
+                 (into (tagdefs))))))
 
 (deftest shape-drift-set-of-equivalent-to-malli-set
   (testing "canvas (set-of :NodeId) vs code [:set :NodeId] → no finding"
