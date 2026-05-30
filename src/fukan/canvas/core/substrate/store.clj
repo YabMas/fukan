@@ -15,6 +15,14 @@
                          :db/valueType :db.type/ref}
    :entity/tag          {:db/cardinality :db.cardinality/many}
    :entity/alias        {:db/cardinality :db.cardinality/many}
+   ;; ── Tag-applications (canonical classification spine) ───────────────
+   ;; A Node's kind/role becomes a reified tag-application: the canonical
+   ;; truth that the tag-agnostic core knows, and that vocabularies plug
+   ;; into. :entity/type and :affordance/role above are retained as a
+   ;; derived index over these while consumers migrate onto them.
+   :tagapp/id           {:db/unique :db.unique/identity}
+   :tagapp/node         {:db/valueType :db.type/ref}
+   :tagapp/tag          {:db/index true}
    :references          {:db/cardinality :db.cardinality/many}
    ;; Resolved cross-module dependency edge — the ref-datom form of
    ;; :references (which stays as keyword values for the map-side projection).
@@ -63,13 +71,25 @@
 (defn create []
   (d/empty-db schema))
 
+(defn- tagapp-maps
+  "Reified tag-application entities for a node — the canonical classification
+   truth. One per primary kind/role tag (nil tags are skipped). The legacy
+   :entity/type / :affordance/role datoms are retained as a derived index over
+   these while consumers migrate onto them."
+  [node-uuid primary-tag]
+  (when primary-tag
+    [{:tagapp/id   (str node-uuid "|" primary-tag)
+      :tagapp/node [:entity/id node-uuid]
+      :tagapp/tag  primary-tag}]))
+
 (defmulti ^:private ->datoms sub/primitive-kind)
 
 (defmethod ->datoms :Module [m]
-  [{:entity/id (sub/id-of m)
-    :entity/type :Module
-    :entity/name (sub/name-of m)
-    :entity/tag (vec (sub/tags-of m))}])
+  (into [{:entity/id (sub/id-of m)
+          :entity/type :Module
+          :entity/name (sub/name-of m)
+          :entity/tag (vec (sub/tags-of m))}]
+        (tagapp-maps (sub/id-of m) :canvas/module)))
 
 (defmethod ->datoms :Affordance [a]
   (let [shape       (sub/shape-of a)
@@ -77,25 +97,29 @@
                       (shape/type-names (:inputs shape)))
         outputs-set (when (and shape (= :arrow (:kind shape)))
                       (shape/type-names (:outputs shape)))]
-    [(cond-> {:entity/id (sub/id-of a)
-              :entity/type :Affordance
-              :entity/name (sub/name-of a)
-              :entity/tag (vec (sub/tags-of a))}
-       (sub/role-of a)              (assoc :affordance/role (sub/role-of a))
-       shape                        (assoc :affordance/shape (pr-str shape))
-       (sub/formal-expression-of a) (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a)))
-       (sub/doc-of a)               (assoc :affordance/doc (sub/doc-of a))
-       (sub/returns-label-of a)     (assoc :affordance/returns-label (sub/returns-label-of a))
-       (seq inputs-set)             (assoc :affordance/input-types inputs-set)
-       (seq outputs-set)            (assoc :affordance/output-types outputs-set))]))
+    (into
+     [(cond-> {:entity/id (sub/id-of a)
+               :entity/type :Affordance
+               :entity/name (sub/name-of a)
+               :entity/tag (vec (sub/tags-of a))}
+        (sub/role-of a)              (assoc :affordance/role (sub/role-of a))
+        shape                        (assoc :affordance/shape (pr-str shape))
+        (sub/formal-expression-of a) (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a)))
+        (sub/doc-of a)               (assoc :affordance/doc (sub/doc-of a))
+        (sub/returns-label-of a)     (assoc :affordance/returns-label (sub/returns-label-of a))
+        (seq inputs-set)             (assoc :affordance/input-types inputs-set)
+        (seq outputs-set)            (assoc :affordance/output-types outputs-set))]
+     (tagapp-maps (sub/id-of a) (sub/role-of a)))))
 
 (defmethod ->datoms :State [s]
-  [(cond-> {:entity/id (sub/id-of s)
-            :entity/type :State
-            :entity/name (sub/name-of s)
-            :entity/tag (vec (sub/tags-of s))}
-     (sub/shape-of s)
-     (assoc :state/shape (sub/shape-of s)))])
+  (into
+   [(cond-> {:entity/id (sub/id-of s)
+             :entity/type :State
+             :entity/name (sub/name-of s)
+             :entity/tag (vec (sub/tags-of s))}
+      (sub/shape-of s)
+      (assoc :state/shape (sub/shape-of s)))]
+   (tagapp-maps (sub/id-of s) :canvas/state)))
 
 (defn- field-name->keyword
   "Normalize a record field-name to a keyword. Field-names arrive as strings
@@ -142,14 +166,16 @@
                            (field-tuples (:fields t)))
         field-shapes-set (when record?
                            (field-shape-tuples (:fields t)))]
-    [(cond-> {:entity/id (sub/id-of t)
-              :entity/type :Type
-              :entity/name (sub/name-of t)
-              :entity/tag (vec (sub/tags-of t))}
-       (sub/doc-of t)         (assoc :type/doc (sub/doc-of t))
-       (seq field-types-set)  (assoc :type/field-types field-types-set)
-       (seq field-tuples-set) (assoc :type/fields field-tuples-set)
-       (seq field-shapes-set) (assoc :type/field-shapes field-shapes-set))]))
+    (into
+     [(cond-> {:entity/id (sub/id-of t)
+               :entity/type :Type
+               :entity/name (sub/name-of t)
+               :entity/tag (vec (sub/tags-of t))}
+        (sub/doc-of t)         (assoc :type/doc (sub/doc-of t))
+        (seq field-types-set)  (assoc :type/field-types field-types-set)
+        (seq field-tuples-set) (assoc :type/fields field-tuples-set)
+        (seq field-shapes-set) (assoc :type/field-shapes field-shapes-set))]
+     (tagapp-maps (sub/id-of t) (if record? :canvas/record :canvas/value)))))
 
 (defmethod ->datoms :Relation [r]
   (let [to-val (sub/to-of r)
