@@ -178,6 +178,35 @@ edits. **Dissolve, not translate.**
 
 ## Layering home
 
-The stratum is registry-aware → it **cannot** live in `core/` (core depends on nothing in `canvas/`). It
-belongs at the **vocab/construct-kit tier** — likely a `strata`/`view` sibling to `construct`, reading the
-registry + the substrate db. The partition checker lives in the validation vocab.
+**Revised during Phase 1 implementation.** The original brief placed the stratum in the vocab/construct-kit
+tier on the assumption it is "registry-aware." It is not: the stratum reads only **substrate schema**
+(`:tagapp/*` now; `:tagdef/*` later — and `:tagdef/*` are projected into the db by `canvas_source`, so the
+*query* takes no code dependency on the registry). The rules hardcode no kinds — they are **tag-agnostic**,
+which is exactly `core/`'s contract. So the stratum lives in **`fukan.canvas.core.classification`** (core
+tier), making it usable by every tier above, including construct-kit (which `construct/resolve-in-module`
+needed). The partition checker (Phase 2) still lives in the validation vocab.
+
+---
+
+## Phase 1 — DONE (2026-05-30)
+
+Recursion-free slice shipped, behaviour-preserving, in two commits:
+
+1. **`feat(stratum)`** — `fukan.canvas.core.classification`: `rules` (the `direct-kind` Datalog rule) +
+   `direct-kind` fn (per-entity, single tag or nil). Routed the **name+role convention** onto it:
+   `canvas_source/find-intra-module-collisions` derives each colliding child's kind via `direct-kind`
+   (no-tag → `:none`, preserving the prior `get-else` behaviour); `construct/resolve-in-module`'s by-name
+   role filter uses the `direct-kind` rule.
+2. **`refactor(lens)`** — `tar_pit` (getter/function/declarative-rule role filters — dropped the now-redundant
+   `:entity/type :Affordance` clause too), `consistency` (per-child role lookup), `patterns`
+   (affordance-signature role) all read `direct-kind`.
+
+Verified: full suite 1066 tests, 0 failures (3 pre-existing `not yet implemented` placeholder errors in the
+unrelated `distributed.cluster` trial scaffolding). `store/->datoms` untouched — `:entity/type` /
+`:affordance/role` still emitted unchanged. Only the *role-filter reads* migrated; the
+`:entity/type`-enumeration reads remain for Phase 2 (`kind-of` / `family-of`).
+
+**Deferred to Phase 2** (needs recursion + the `q`/view surface widened to thread `%` rules): registry
+`:refines` + `:family/*` super-tags, `refines*` / `kind-of` / `family-of`, the partition checker, and the
+`:entity/type`-enumeration consumers (coverage, identity, tar_pit Type/Module enumerations, patterns
+`affordance-eids`, canvas_source `project-affordances`).

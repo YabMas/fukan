@@ -17,7 +17,8 @@
    Full design in git history:
    doc/plans/2026-05-26-canvas-substrate-phase-5.md § Phase 5, Task 10 — Tar-pit lens."
   (:require [clojure.string :as str]
-            [datascript.core :as d]))
+            [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]))
 
 ;; ---------------------------------------------------------------------------
 ;; Defaults + opts
@@ -106,10 +107,10 @@
    is surfaced as :returns."
   [db]
   (->> (d/q '[:find ?e ?n
-              :where [?e :entity/type :Affordance]
-                     [?e :affordance/role :canvas/getter]
+              :in $ %
+              :where (direct-kind ?e :canvas/getter)
                      [?e :entity/name ?n]]
-            db)
+            db classification/rules)
        (map (fn [[eid n]]
               (let [mn      (module-name-for-entity db eid)
                     outs    (->> (d/q '[:find ?t
@@ -145,10 +146,10 @@
    functions) the effect-keyword list."
   [db]
   (->> (d/q '[:find ?e ?n
-              :where [?e :entity/type :Affordance]
-                     [?e :affordance/role :canvas/function]
+              :in $ %
+              :where (direct-kind ?e :canvas/function)
                      [?e :entity/name ?n]]
-            db)
+            db classification/rules)
        (map (fn [[eid n]]
               (let [mn       (module-name-for-entity db eid)
                     inputs   (->> (d/q '[:find ?t
@@ -176,11 +177,11 @@
    declarative behavioural surface (timeless commitments + reactive rules)."
   [db]
   (->> (d/q '[:find ?e ?n ?r
-              :where [?e :entity/type :Affordance]
-                     [?e :affordance/role ?r]
+              :in $ %
+              :where (direct-kind ?e ?r)
                      [(contains? #{:canvas/invariant :canvas/rule} ?r)]
                      [?e :entity/name ?n]]
-            db)
+            db classification/rules)
        (map (fn [[eid n r]]
               (let [mn (module-name-for-entity db eid)]
                 {:stable-id (stable-id-for :Affordance mn n)

@@ -20,6 +20,7 @@
    doc/plans/2026-05-26-feedback-signals-design.md § 2. Pattern recurrence — WEIGH tier."
   (:require [clojure.string :as str]
             [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.identity :as identity]))
 
 ;; ---------------------------------------------------------------------------
@@ -43,13 +44,14 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- affordance-signature
-  "Build the structural signature map for an Affordance entity."
-  [ent]
-  {:role            (:affordance/role ent)
-   :input-types     (vec (sort (or (:affordance/input-types ent) [])))
-   :output-types    (vec (sort (or (:affordance/output-types ent) [])))
-   :has-formal-expr (boolean (:affordance/formal-expression ent))
-   :has-returns     (boolean (:affordance/returns-label ent))})
+  "Build the structural signature map for an Affordance entity (by eid)."
+  [db eid]
+  (let [ent (d/entity db eid)]
+    {:role            (classification/direct-kind db eid)
+     :input-types     (vec (sort (or (:affordance/input-types ent) [])))
+     :output-types    (vec (sort (or (:affordance/output-types ent) [])))
+     :has-formal-expr (boolean (:affordance/formal-expression ent))
+     :has-returns     (boolean (:affordance/returns-label ent))}))
 
 (defn- affordance-eids
   [db]
@@ -78,7 +80,7 @@
    (e.g. minimum cluster size, role filters)."
   [canvas-db _opts]
   (let [eids       (affordance-eids canvas-db)
-        sig->eids  (group-by #(affordance-signature (d/entity canvas-db %)) eids)
+        sig->eids  (group-by #(affordance-signature canvas-db %) eids)
         clusters   (->> sig->eids
                         (filter (fn [[_sig es]] (>= (count es) 3)))
                         (map (fn [[sig es]] (cluster-for-signature canvas-db sig es)))

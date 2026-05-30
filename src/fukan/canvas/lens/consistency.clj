@@ -22,7 +22,8 @@
    Full design in git history:
    doc/plans/2026-05-26-feedback-signals-design.md § 4. Consistency — WEIGH tier."
   (:require [clojure.string :as str]
-            [datascript.core :as d]))
+            [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]))
 
 ;; ---------------------------------------------------------------------------
 ;; Defaults + opts
@@ -101,10 +102,7 @@
             db module-eid)
        (map (fn [[c cn ct]]
               (let [role (when (= :Affordance ct)
-                           (ffirst (d/q '[:find ?r
-                                          :in $ ?e
-                                          :where [?e :affordance/role ?r]]
-                                        db c)))]
+                           (classification/direct-kind db c))]
                 {:eid c :name cn :entity-type ct :role role})))))
 
 ;; ---------------------------------------------------------------------------
