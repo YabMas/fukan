@@ -226,7 +226,7 @@
                     [{:prefix    "rules-"
                       :majority  {[:Affordance :canvas/checker] 1}
                       :outliers  [{:module "rules-c"
-                                   :extras {[:Affordance :fukan.canvas.monolith/exposed-call] 1}}]}]}
+                                   :extras {[:Affordance :canvas/function] 1}}]}]}
           out (consistency/render findings {})]
       (is (re-find #"(?i)naming" out))
       (is (re-find #"(?i)field" out))

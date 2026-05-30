@@ -21,7 +21,7 @@
        (v/make-tag-application
          {:tag {:namespace "Boundary" :name "ModuleApi"}
           :target {:case :target/primitive :id coord}
-          :payload {:exported exports}})))))
+          :payload {:canvas/exported exports}})))))
 
 (defn- with-entity [model id]
   (-> model

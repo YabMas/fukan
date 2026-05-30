@@ -13,16 +13,16 @@
    the function/record/value lifts below."
   [{:tag :canvas/module :family :Module :payload :none
     :doc "A grouping/namespace host; owns its children via containment."}
-   {:tag :exported :family nil :payload :none
+   {:tag :canvas/exported :family nil :payload :none
     :doc "Marker: tags a declaration as part of its module's exported API."}
    {:tag :canvas/value :family :Type :payload :none
     :doc "An opaque named type — a concept whose internal structure is withheld."}
    {:tag :canvas/record :family :Type :payload :record
     :edges [{:strategy :shape-refs :edge :references}]
     :doc "A data type with named, typed fields."}
-   {:tag :fukan.canvas.monolith/exposed-call :family :Affordance :payload :arrow
+   {:tag :canvas/function :family :Affordance :payload :arrow
     :edges [{:strategy :shape-refs  :edge :references}
-            {:strategy :to-keywords :from :effect   :edge :fukan.canvas.monolith/performs}
+            {:strategy :to-keywords :from :effect   :edge :canvas/performs}
             {:strategy :by-name     :from :triggers :edge :triggers}
             {:strategy :by-name     :from :emits    :edge :emits :role :canvas/event}]
     :doc "A synchronous function call: takes inputs, gives an output, may have effects."}])
@@ -51,7 +51,7 @@
           arrow         {:kind :arrow
                          :inputs {:kind :record :fields field-pairs}
                          :outputs (shape/parse gives-arg)}]
-      (construct/build :fukan.canvas.monolith/exposed-call name arrow
+      (construct/build :canvas/function name arrow
                        {:effect   (:effect forms)
                         :triggers (when (:triggers forms) [(:triggers forms)])
                         :emits    (:emits forms)}
@@ -92,7 +92,7 @@
       ffirst))
 
 (defmacro exports
-  "Tag the listed declarations as :exported. Must appear inside `within-module`
+  "Tag the listed declarations as :canvas/exported. Must appear inside `within-module`
    after the named declarations have been transacted.
 
    Names that don't match any declaration in the current canvas are silently
@@ -102,4 +102,4 @@
      (doseq [n# '~names]
        (when-let [eid# (find-entity-by-name db# n#)]
          (swap! h/*store*
-                #(d/db-with % [{:db/id eid# :entity/tag :exported}]))))))
+                #(d/db-with % [{:db/id eid# :entity/tag :canvas/exported}]))))))

@@ -19,7 +19,7 @@
       (v/make-tag-application
         {:tag {:namespace "Boundary" :name "ModuleApi"}
          :target {:case :target/primitive :id coord}
-         :payload {:exported exports}}))))
+         :payload {:canvas/exported exports}}))))
 
 (defn- with-subsystem
   "Add a subsystem composite at coord with given children + exports list."
@@ -36,7 +36,7 @@
         (v/make-tag-application
           {:tag {:namespace "Boundary" :name "Exports"}
            :target {:case :target/primitive :id coord}
-           :payload {:exported exports}}))))
+           :payload {:canvas/exported exports}}))))
 
 (deftest subsystem-exports-unresolved-alias-is-error
   (let [model (-> (build/empty-model)

@@ -42,7 +42,7 @@
         from-closed (set (mapcat (fn [ta]
                                    (let [m (-> ta :target :id)]
                                      (map #(str m "::" %)
-                                          (-> ta :payload :exported))))
+                                          (-> ta :payload :canvas/exported))))
                                  closed-tags))
         from-open (set (filter #(some (fn [m] (str/starts-with? % (str m "::")))
                                       open)

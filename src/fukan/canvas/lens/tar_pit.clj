@@ -128,25 +128,25 @@
 
 (defn- function-effects
   "Return the set of effect keywords declared by function eid, via the
-   :fukan.canvas.monolith/performs Relation kind."
+   :canvas/performs Relation kind."
   [db eid]
   (->> (d/q '[:find ?effect
               :in $ ?e
-              :where [?e :fukan.canvas.monolith/performs ?effect]]
+              :where [?e :canvas/performs ?effect]]
             db eid)
        (map first)
        (sort)
        vec))
 
 (defn- function-affordances
-  "All Affordances with role :fukan.canvas.monolith/exposed-call. Split into
-   :pure (no :fukan.canvas.monolith/performs relation) and :effectful
+  "All Affordances with role :canvas/function. Split into
+   :pure (no :canvas/performs relation) and :effectful
    (one or more). Each entry carries inputs/outputs and (for effectful
    functions) the effect-keyword list."
   [db]
   (->> (d/q '[:find ?e ?n
               :where [?e :entity/type :Affordance]
-                     [?e :affordance/role :fukan.canvas.monolith/exposed-call]
+                     [?e :affordance/role :canvas/function]
                      [?e :entity/name ?n]]
             db)
        (map (fn [[eid n]]

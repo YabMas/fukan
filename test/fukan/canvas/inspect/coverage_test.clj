@@ -20,7 +20,7 @@
     ;; entity is internally referenced (the using-function references the
     ;; type). The using-functions themselves are referenced cross-module
     ;; via shape-target keywords (`:a/use_b` etc. would be required to
-    ;; close the loop). Below we tag every entity :exported and have each
+    ;; close the loop). Below we tag every entity :canvas/exported and have each
     ;; module reference every entity in the other, closing the graph.
     (let [db (h/with-canvas
                (h/within-module "a"
@@ -77,7 +77,7 @@
           "Thing must not be flagged as orphan"))))
 
 (deftest exported-entity-not-flagged-as-orphan
-  (testing ":exported tag suppresses the orphan finding"
+  (testing ":canvas/exported tag suppresses the orphan finding"
     (let [db (h/with-canvas
                (h/within-module "demo"
                  (value "ApiSurface" "Declared API.")
@@ -86,7 +86,7 @@
                           (coverage/check db))]
       (is (empty? (filter #(re-find #"ApiSurface" (-> % :offenders first :stable-id))
                           orphans))
-          ":exported tag must suppress orphan finding"))))
+          ":canvas/exported tag must suppress orphan finding"))))
 
 (deftest mechanism-driven-roles-exempt-from-orphan
   (testing "affordances wired by mechanism rather than ref graph are not flagged"
@@ -146,7 +146,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest exported-but-unreferenced-detected
-  (testing "an :exported entity with no external referrer surfaces as :warning"
+  (testing "an :canvas/exported entity with no external referrer surfaces as :warning"
     (let [db (h/with-canvas
                (h/within-module "demo"
                  (value "Api" "Exported but unused.")
@@ -158,7 +158,7 @@
       (is (= :warning (-> unrefs first :severity))))))
 
 (deftest exported-and-cross-module-referenced-passes
-  (testing "an :exported entity used by another module is NOT flagged"
+  (testing "an :canvas/exported entity used by another module is NOT flagged"
     (let [db (h/with-canvas
                (h/within-module "model"
                  (value "Api" "Exported API.")
@@ -196,7 +196,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest module-without-exports-detected
-  (testing "a module whose children carry no :exported tag surfaces as :info"
+  (testing "a module whose children carry no :canvas/exported tag surfaces as :info"
     (let [db (h/with-canvas
                (h/within-module "demo"
                  (value "Internal" "Nothing exported.")))
@@ -208,7 +208,7 @@
       (is (= "demo" (-> modless first :detail :module-name))))))
 
 (deftest module-with-exports-passes
-  (testing "a module with at least one :exported child is not flagged"
+  (testing "a module with at least one :canvas/exported child is not flagged"
     (let [db (h/with-canvas
                (h/within-module "demo"
                  (value "Surface" "Exported.")

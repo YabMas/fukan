@@ -90,7 +90,7 @@
   (testing "render frames a non-vocab cluster as a rule-of-three lift candidate"
     (let [findings {:clusters
                     [{:size 3
-                      :signature {:role            :fukan.canvas.monolith/exposed-call
+                      :signature {:role            :canvas/function
                                   :input-types     [:String]
                                   :output-types    [:String]
                                   :has-formal-expr false

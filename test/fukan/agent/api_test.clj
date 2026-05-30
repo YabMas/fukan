@@ -317,7 +317,7 @@
       ;; Sanity: a few known projections must be present.
       (is (contains? keys-of [:clojure :Type/atomic]))
       (is (contains? keys-of [:clojure :Type/record]))
-      (is (contains? keys-of [:clojure :fukan.canvas.monolith/exposed-call]))
+      (is (contains? keys-of [:clojure :canvas/function]))
       (is (contains? keys-of [:clojure :canvas/invariant]))
       (is (contains? keys-of [:clojure :canvas/rule]))
       (is (contains? keys-of [:clojure :canvas/event])))))

@@ -16,7 +16,7 @@
         (v/make-tag-application
           {:tag {:namespace "Boundary" :name "ModuleApi"}
            :target {:case :target/primitive :id "m"}
-           :payload {:exported exports}}))))
+           :payload {:canvas/exported exports}}))))
 
 (deftest exports-unresolved-entry-is-error
   (let [model (module-with-api ["NonexistentEntity"])
@@ -43,7 +43,7 @@
                     (v/make-tag-application
                       {:tag {:namespace "Boundary" :name "ModuleApi"}
                        :target {:case :target/primitive :id "m"}
-                       :payload {:exported ["B"]}})))
+                       :payload {:canvas/exported ["B"]}})))
         violations (r4d/check model)
         relevant (filter #(= :4d/multiple-module-api-tags (:kind %)) violations)]
     (is (= 1 (count relevant)))

@@ -33,7 +33,7 @@
 
    Affordances: use the :canvas-role (e.g. :canvas/event,
    :canvas/invariant, :canvas/rule, :canvas/operation,
-   :fukan.canvas.monolith/exposed-call for canvas functions).
+   :canvas/function for canvas functions).
 
    Invariants (Phase 8 Sprint 5 — Option β): the synthetic dispatch
    key `:canvas/invariant+property-test` fires when the element carries

@@ -373,7 +373,7 @@
     :canvas/getter                        :primitive/operation
     :canvas/checker                       :primitive/operation
     :canvas/event                         :primitive/event
-    :fukan.canvas.monolith/exposed-call   :primitive/operation
+    :canvas/function   :primitive/operation
     :primitive/operation))  ; default fallback
 
 (defn- build-module-id-map

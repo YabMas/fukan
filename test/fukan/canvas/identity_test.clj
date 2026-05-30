@@ -34,14 +34,14 @@
   (testing "a canonical module id resolves to itself"
     (let [db (h/with-canvas
                (h/within-module "infra.server"
-                 (h/declare-affordance "start_server" :role :fukan.canvas.monolith/exposed-call)))]
+                 (h/declare-affordance "start_server" :role :canvas/function)))]
       (is (= "infra.server" (identity/resolve-id db "infra.server"))))))
 
 (deftest resolve-canonical-id-roundtrips-affordance
   (testing "a canonical affordance id resolves to itself"
     (let [db (h/with-canvas
                (h/within-module "infra.server"
-                 (h/declare-affordance "start_server" :role :fukan.canvas.monolith/exposed-call)))]
+                 (h/declare-affordance "start_server" :role :canvas/function)))]
       (is (= "infra.server/start_server"
              (identity/resolve-id db "infra.server/start_server"))))))
 
@@ -53,7 +53,7 @@
   (testing "resolving an id that doesn't exist returns nil, not a throw"
     (let [db (h/with-canvas
                (h/within-module "infra.server"
-                 (h/declare-affordance "start_server" :role :fukan.canvas.monolith/exposed-call)))]
+                 (h/declare-affordance "start_server" :role :canvas/function)))]
       (is (nil? (identity/resolve-id db "made-up-id")))
       (is (nil? (identity/resolve-id db "infra.server/nonexistent"))))))
 
@@ -65,7 +65,7 @@
   (testing "declaring alias 'old-X' → entity X makes old-X resolve to canonical id of X"
     (let [db (h/with-canvas
                (h/within-module "infra.server"
-                 (h/declare-affordance "start_server" :role :fukan.canvas.monolith/exposed-call)
+                 (h/declare-affordance "start_server" :role :canvas/function)
                  (identity/alias "infra.server/start" "start_server")))]
       (is (= "infra.server/start_server"
              (identity/resolve-id db "infra.server/start"))
@@ -75,7 +75,7 @@
   (testing "multiple aliases on the same entity all resolve to its canonical id"
     (let [db (h/with-canvas
                (h/within-module "infra.server"
-                 (h/declare-affordance "start_server" :role :fukan.canvas.monolith/exposed-call)
+                 (h/declare-affordance "start_server" :role :canvas/function)
                  (identity/alias "infra.server/start" "start_server")
                  (identity/alias "infra.server/boot" "start_server")))]
       (is (= "infra.server/start_server"
@@ -91,12 +91,12 @@
   (testing "alias declared in module A does NOT make an old id resolve to module B's entity"
     (let [db (h/with-canvas
                (h/within-module "infra.server"
-                 (h/declare-affordance "start_server" :role :fukan.canvas.monolith/exposed-call)
+                 (h/declare-affordance "start_server" :role :canvas/function)
                  ;; alias in infra.server registers old-id onto infra.server/start_server
                  (identity/alias "infra.server/start" "start_server"))
                (h/within-module "infra.model"
                  ;; infra.model also has an entity named "start_server"
-                 (h/declare-affordance "start_server" :role :fukan.canvas.monolith/exposed-call)))]
+                 (h/declare-affordance "start_server" :role :canvas/function)))]
       ;; "infra.server/start" should resolve to infra.server's start_server
       (is (= "infra.server/start_server"
              (identity/resolve-id db "infra.server/start")))
@@ -114,7 +114,7 @@
     ;; Should not throw
     (let [db (h/with-canvas
                (h/within-module "infra.server"
-                 (h/declare-affordance "start_server" :role :fukan.canvas.monolith/exposed-call)
+                 (h/declare-affordance "start_server" :role :canvas/function)
                  (identity/alias "infra.server/old_ghost" "nonexistent_entity")))]
       ;; "infra.server/old_ghost" should not resolve (the alias was silently dropped)
       (is (nil? (identity/resolve-id db "infra.server/old_ghost"))))))

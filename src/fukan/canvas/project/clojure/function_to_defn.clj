@@ -24,10 +24,10 @@
    `core/render-shape` — the lens-side vocabulary is canvas, not
    kernel.
 
-   Routes: `[:clojure :fukan.canvas.monolith/exposed-call]`. This is
+   Routes: `[:clojure :canvas/function]`. This is
    the canvas role canvas's `function` construction assigns to plain
    function Affordances (see `canvas/construction.clj`'s
-   `(defconstructor function … :role :fukan.canvas.monolith/exposed-call …)`)."
+   `(defconstructor function … :role :canvas/function …)`)."
   (:require [clojure.string :as str]
             [fukan.canvas.project.core :as core]
             [fukan.target.clojure.address :as addr]))
@@ -100,7 +100,7 @@
          "  (throw (ex-info \"" symbol ": not yet implemented\"\n"
          "                  {:canvas-id \"" stable-id "\"})))")))
 
-(defmethod core/project [:clojure :fukan.canvas.monolith/exposed-call]
+(defmethod core/project [:clojure :canvas/function]
   [_lens-id element opts]
   (let [{:keys [stable-id entity-name module-coord doc inputs outputs
                 effects emits]} element

@@ -6,7 +6,7 @@ Lifts in `fukan.canvas.construction`. Non-opt-out: every project uses these.
 
 A synchronous function call with typed inputs, a typed output, and optional effects
 or rule couplings. Produces an Affordance with an `:arrow` shape and role
-`:fukan.canvas.monolith/exposed-call`.
+`:canvas/function`.
 
 ```clojure
 (function "start_server"
@@ -25,7 +25,7 @@ or rule couplings. Produces an Affordance with an `:arrow` shape and role
 ```
 
 Produces an Affordance with shape `{:kind :arrow :inputs {:kind :record :fields [...]} :outputs ...}`,
-role `:fukan.canvas.monolith/exposed-call`, owned by the enclosing module.
+role `:canvas/function`, owned by the enclosing module.
 `:references` Relations are emitted automatically for every type keyword in the shape.
 
 ### Forms
@@ -93,7 +93,7 @@ Produces a Type node with `:kind :atomic`. No fields are declared.
 
 ## `exports`
 
-Tag the listed declarations as `:exported` — closes the module's API surface.
+Tag the listed declarations as `:canvas/exported` — closes the module's API surface.
 Without `exports`, every declaration is implicitly visible. With `exports`, only
 the named items cross the module wall.
 

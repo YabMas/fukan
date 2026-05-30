@@ -24,17 +24,17 @@
 
      1. orphan-entity              :warning  — entity has zero incoming refs
                                                 of any kind. Skips Modules,
-                                                `:exported` entities, and
+                                                `:canvas/exported` entities, and
                                                 affordances whose role is
                                                 wired by mechanism rather
                                                 than by the ref graph (see
                                                 `orphan-exempt-roles`).
      2. unreached-entity           :error    — entity not reachable from any
                                                 Module via :module/child
-     3. exported-but-unreferenced  :warning  — `:exported` entity that no
+     3. exported-but-unreferenced  :warning  — `:canvas/exported` entity that no
                                                 OTHER module references
      4. module-without-exports     :info     — Module whose children carry
-                                                no `:exported` tag
+                                                no `:canvas/exported` tag
      5. rule-without-trigger       :warning  — `:canvas/rule` affordance with
                                                 no inbound :triggers
      6. event-without-handler      :warning  — `:canvas/event` affordance with
@@ -179,14 +179,14 @@
 
 (defn check-orphans
   "Affordances and Types with no incoming references. Skips Modules,
-   :exported entities, and affordances whose role is in
+   :canvas/exported entities, and affordances whose role is in
    `orphan-exempt-roles` (mechanism-driven roles whose orphan-ness is
    either expected idiom or tracked by a more specific check)."
   [db]
   (let [pointed (incoming-ref-eids db)]
     (->> (non-module-entity-eids db)
          (remove pointed)
-         (remove #(has-tag? db % :exported))
+         (remove #(has-tag? db % :canvas/exported))
          (remove #(contains? orphan-exempt-roles
                              (:affordance/role (d/entity db %))))
          (map (fn [eid]
@@ -256,7 +256,7 @@
     (shape-target-resolved-eids db)))
 
 (defn check-exported-but-unreferenced
-  "Entities tagged :exported but referenced only from within their own module
+  "Entities tagged :canvas/exported but referenced only from within their own module
    (or not at all). Same-module references don't count — exports are for
    cross-module consumption."
   [db]
@@ -270,7 +270,7 @@
                                        tgt))))
                            pairs)
         exported-eids (->> (d/datoms db :aevt :entity/tag)
-                           (filter #(= :exported (.-v %)))
+                           (filter #(= :canvas/exported (.-v %)))
                            (map #(.-e %)))]
     (->> exported-eids
          (remove ext-targets)
@@ -295,11 +295,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn check-modules-without-exports
-  "Modules whose children carry no :exported tag."
+  "Modules whose children carry no :canvas/exported tag."
   [db]
   (let [exported-eids (into #{}
                             (->> (d/datoms db :aevt :entity/tag)
-                                 (filter #(= :exported (.-v %)))
+                                 (filter #(= :canvas/exported (.-v %)))
                                  (map #(.-e %))))]
     (->> (entity-eids db :Module)
          (filter (fn [mod-eid]
@@ -312,7 +312,7 @@
                   {:check     :inspect.coverage/module-without-exports
                    :severity  :info
                    :message   (str "Module " mod-name
-                                   " declares no (exports …) — no child carries the :exported tag.")
+                                   " declares no (exports …) — no child carries the :canvas/exported tag.")
                    :offenders [(offender db mod-eid)]
                    :detail    {:module-name mod-name}})))
          vec)))

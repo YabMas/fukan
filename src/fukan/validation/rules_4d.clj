@@ -70,7 +70,7 @@
   (mapcat
     (fn [[module-id [tag]]]
       (mapcat #(check-export-entry model module-id %)
-              (-> tag :payload :exported)))
+              (-> tag :payload :canvas/exported)))
     (module-api-tags-by-target model)))
 
 (defn check

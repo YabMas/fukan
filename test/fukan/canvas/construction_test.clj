@@ -110,7 +110,7 @@
       (is (contains? targets :agent/Violation)))))
 
 (deftest exports-tags-listed-names
-  (testing "(exports …) tags the listed declarations with :exported"
+  (testing "(exports …) tags the listed declarations with :canvas/exported"
     (let [db (h/with-canvas
                (h/within-module "infra.server"
                  (record "ServerOpts" "Server config." (field port :Integer))
@@ -118,7 +118,7 @@
                  (function "start_server" "Start the server." (gives :Unit))
                  (exports ServerOpts ServerInfo start_server)))
           tagged (d/q '[:find ?n
-                        :where [?e :entity/tag :exported]
+                        :where [?e :entity/tag :canvas/exported]
                                [?e :entity/name ?n]]
                       db)]
       (is (= #{"ServerOpts" "ServerInfo" "start_server"} (set (map first tagged)))))))
@@ -132,7 +132,7 @@
                  (record "ServerOpts" "." (field port :Integer))
                  (exports ServerOpts NonexistentName)))
           tagged (d/q '[:find ?n
-                        :where [?e :entity/tag :exported]
+                        :where [?e :entity/tag :canvas/exported]
                                [?e :entity/name ?n]]
                       db)]
       ;; Only ServerOpts should be tagged
@@ -180,7 +180,7 @@
                    (gives :Phase4Result)
                    (triggers RunPhase4))))
           relations (d/q '[:find ?from-name ?to-name
-                            :where [?from :affordance/role :fukan.canvas.monolith/exposed-call]
+                            :where [?from :affordance/role :canvas/function]
                                    [?from :entity/name ?from-name]
                                    [?from :triggers ?to]
                                    [?to :entity/name ?to-name]]
@@ -200,7 +200,7 @@
                    (gives :Payment)
                    (emits PaymentSucceeded))))
           relations (d/q '[:find ?from-name ?to-name
-                            :where [?from :affordance/role :fukan.canvas.monolith/exposed-call]
+                            :where [?from :affordance/role :canvas/function]
                                    [?from :entity/name ?from-name]
                                    [?from :emits ?to]
                                    [?to :entity/name ?to-name]]

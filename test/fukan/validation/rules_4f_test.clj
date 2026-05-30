@@ -17,7 +17,7 @@
         (v/make-tag-application
           {:tag {:namespace "Boundary" :name "ModuleApi"}
            :target {:case :target/primitive :id "m"}
-           :payload {:exported exports}}))))
+           :payload {:canvas/exported exports}}))))
 
 (defn- with-entity [model id field-name field-type-id]
   (-> model
@@ -84,7 +84,7 @@
                     (v/make-tag-application
                       {:tag {:namespace "Boundary" :name "ModuleApi"}
                        :target {:case :target/primitive :id "a"}
-                       :payload {:exported ["Foo"]}}))
+                       :payload {:canvas/exported ["Foo"]}}))
                   (with-bare-entity "a::Foo"))
         errors (filter #(= :error (:severity %)) (r4f/check model))]
     (is (empty? errors))))

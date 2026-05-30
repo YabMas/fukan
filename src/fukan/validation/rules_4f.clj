@@ -48,7 +48,7 @@
         from-closed (set (mapcat (fn [ta]
                                    (let [m (-> ta :target :id)]
                                      (map #(str m "::" %)
-                                          (-> ta :payload :exported))))
+                                          (-> ta :payload :canvas/exported))))
                                  (module-api-tags model)))
         from-open (set (filter (fn [pid]
                                  (some (fn [m]
@@ -96,7 +96,7 @@
             [(v/make-violation
                {:severity :error :phase :phase4 :sub-phase :4f
                 :kind :4f/closure-violation
-                :location {:module module-id :exported entry :missing (vec missing)}
+                :location {:module module-id :canvas/exported entry :missing (vec missing)}
                 :message (str "module " module-id " exports " entry
                               " but its signature references unreached types: "
                               (vec missing))})])))
@@ -108,5 +108,5 @@
          (fn [ta]
            (check-closure-for-module model
                                      (-> ta :target :id)
-                                     (-> ta :payload :exported)))
+                                     (-> ta :payload :canvas/exported)))
          (module-api-tags model))))

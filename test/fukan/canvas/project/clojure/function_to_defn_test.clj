@@ -11,7 +11,7 @@
 ;; Ground-truth: canvas/infra/server.clj :: start_server.
 (def ^:private start-server-element
   {:model-element-kind :Affordance
-   :canvas-role        :fukan.canvas.monolith/exposed-call
+   :canvas-role        :canvas/function
    :stable-id          "infra.server/function/start_server"
    :entity-name        "start_server"
    :module-coord       "infra.server"
@@ -57,7 +57,7 @@
 (deftest zero-arg-function
   (testing "stop_server :: takes [] gives :Unit"
     (let [el {:model-element-kind :Affordance
-              :canvas-role        :fukan.canvas.monolith/exposed-call
+              :canvas-role        :canvas/function
               :stable-id          "infra.server/function/stop_server"
               :entity-name        "stop_server"
               :module-coord       "infra.server"
@@ -72,7 +72,7 @@
 
 (deftest multiple-parameters
   (let [el {:model-element-kind :Affordance
-            :canvas-role        :fukan.canvas.monolith/exposed-call
+            :canvas-role        :canvas/function
             :stable-id          "x/function/combine"
             :entity-name        "combine"
             :module-coord       "x"
@@ -96,7 +96,7 @@
 
 (deftest module-segment-underscores-kebab-in-ns
   (let [el {:model-element-kind :Affordance
-            :canvas-role        :fukan.canvas.monolith/exposed-call
+            :canvas-role        :canvas/function
             :stable-id          "project_layer.registry/function/make_registry"
             :entity-name        "make_registry"
             :module-coord       "project_layer.registry"

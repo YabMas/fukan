@@ -29,9 +29,9 @@
   (testing "a Relation is a directed triple with optional tags"
     (let [a (sub/affordance "x")
           b (sub/affordance "y")
-          r (sub/relation (sub/id-of a) :fukan.canvas.monolith/calls (sub/id-of b))]
+          r (sub/relation (sub/id-of a) :canvas/calls (sub/id-of b))]
       (is (= (sub/id-of a) (sub/from-of r)))
-      (is (= :fukan.canvas.monolith/calls (sub/kind-of r)))
+      (is (= :canvas/calls (sub/kind-of r)))
       (is (= (sub/id-of b) (sub/to-of r))))))
 
 (deftest tag-construction

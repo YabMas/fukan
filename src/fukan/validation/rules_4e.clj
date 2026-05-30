@@ -17,7 +17,7 @@
        (filter (fn [ta]
                  (and (= "Boundary" (-> ta :tag :namespace))
                       (= "ModuleApi" (-> ta :tag :name)))))
-       (map (fn [ta] [(-> ta :target :id) (set (-> ta :payload :exported))]))
+       (map (fn [ta] [(-> ta :target :id) (set (-> ta :payload :canvas/exported))]))
        (into {})))
 
 (defn- composite-children-by-name
@@ -33,7 +33,7 @@
 
 (defn- check-subsystem-exports [model exports-tag]
   (let [composite-id (-> exports-tag :target :id)
-        exported (-> exports-tag :payload :exported)
+        exported (-> exports-tag :payload :canvas/exported)
         alias-map (composite-children-by-name model composite-id)
         closed-modules (module-api-exports model)]
     (mapcat
