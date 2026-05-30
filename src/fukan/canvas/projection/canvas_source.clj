@@ -20,7 +20,8 @@
    [clojure.edn :as edn]
    [datascript.core :as d]
    [fukan.canvas.core.substrate.store :as store]
-   [fukan.canvas.identity :as identity]))
+   [fukan.canvas.identity :as identity]
+   [fukan.canvas.vocab.registry :as vocab-registry]))
 
 ;; ---------------------------------------------------------------------------
 ;; Discovery — scan canvas/ for *.clj and derive namespace symbols
@@ -793,15 +794,27 @@
                      [:db/add from-eid :uses [:entity/id to-uuid]])))))
        vec))
 
+(defn- tagdef-txs
+  "Datoms projecting the tag-definition registry into the db as :tagdef/*
+   entities, making the vocabulary queryable on the substrate surface."
+  []
+  (mapv (fn [{:keys [tag family payload doc]}]
+          (cond-> {:tagdef/tag tag}
+            payload (assoc :tagdef/payload payload)
+            family  (assoc :tagdef/family family)
+            doc     (assoc :tagdef/doc doc)))
+        vocab-registry/tag-definitions))
+
 (defn enrich-substrate
   "Make the unified canvas db a complete, directly-queryable substrate:
-   stamp :entity/stable-id on every entity and resolve cross-module
-   :references into :uses ref-datoms. Additive — :references keywords remain
-   for the map-side projection."
+   stamp :entity/stable-id on every entity, resolve cross-module :references
+   into :uses ref-datoms, and project the tag-definition registry as :tagdef/*
+   entities. Additive — :references keywords remain for the map-side projection."
   [db]
   (-> db
       (d/db-with (stable-id-txs db))
-      (d/db-with (uses-txs db))))
+      (d/db-with (uses-txs db))
+      (d/db-with (tagdef-txs))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: build

@@ -23,6 +23,14 @@
    :tagapp/id           {:db/unique :db.unique/identity}
    :tagapp/node         {:db/valueType :db.type/ref}
    :tagapp/tag          {:db/index true}
+   ;; ── Tag-definitions (the vocabulary as declared data) ───────────────
+   ;; Projected from fukan.canvas.vocab.registry in enrich-substrate so the
+   ;; vocabulary is queryable on the db surface alongside the model it
+   ;; classifies — and is the seam a generic declare-node consumes.
+   :tagdef/tag          {:db/unique :db.unique/identity}
+   :tagdef/family       {:db/index true}
+   :tagdef/payload      {:db/index true}
+   :tagdef/doc          {}
    ;; ── Reified shapes (payload de-blob, arc-D) ─────────────────────────
    ;; A node's typed payload (affordance arrow, record-type fields) as a
    ;; walkable :shape/* entity tree instead of a pr-str blob — the canonical,
