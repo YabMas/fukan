@@ -15,26 +15,36 @@
                  type-kind fields])
 (defrecord Relation [from kind to tags])
 
+(defn node
+  "Generic, kind-agnostic Node constructor — the substrate primitive. `attrs` is
+   a map supplying :node-kind and whatever payload fields the kind carries
+   (:shape / :role / :formal-expression / :type-kind / :fields / :doc / …). The
+   kind-specific constructors below are thin sugar over this."
+  [attrs]
+  (map->Node (merge {:id (gen-id) :tags #{}} attrs)))
+
+;; Kind-specific sugar over `node`. These encode vocab-flavoured kinds
+;; (Module/Affordance/State/Type); they remain only as a convenience for the
+;; bespoke lifts and the test fixtures. The registry-driven `declare-node`
+;; (followup (b)) supersedes them — at which point they retire with the lifts.
 (defn module [name]
-  (map->Node {:id (gen-id) :name name :node-kind :Module :tags #{}}))
+  (node {:name name :node-kind :Module}))
 
 (defn affordance [name & {:keys [shape role formal-expression doc returns-label]}]
-  (map->Node {:id (gen-id) :name name :node-kind :Affordance :tags #{}
-              :shape shape :role role :formal-expression formal-expression
-              :doc doc :returns-label returns-label}))
+  (node {:name name :node-kind :Affordance
+         :shape shape :role role :formal-expression formal-expression
+         :doc doc :returns-label returns-label}))
 
 (defn state [name & {:keys [shape]}]
   (when-not shape
     (throw (ex-info "State requires :shape" {:name name})))
-  (map->Node {:id (gen-id) :name name :node-kind :State :tags #{} :shape shape}))
+  (node {:name name :node-kind :State :shape shape}))
 
 (defn type-primitive [name & {:keys [doc]}]
-  (map->Node {:id (gen-id) :name name :node-kind :Type :tags #{}
-              :type-kind :atomic :doc doc}))
+  (node {:name name :node-kind :Type :type-kind :atomic :doc doc}))
 
 (defn type-record [name fields & {:keys [doc]}]
-  (map->Node {:id (gen-id) :name name :node-kind :Type :tags #{}
-              :type-kind :record :fields fields :doc doc}))
+  (node {:name name :node-kind :Type :type-kind :record :fields fields :doc doc}))
 
 (defn relation [from kind to]
   (when-not (keyword? kind)

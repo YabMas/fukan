@@ -43,33 +43,52 @@
                                    [:entity/id (sub/id-of entity)]]])))
   entity)
 
+(defn declare-node
+  "The generic, kind-agnostic construction seam: transact a built Node and
+   register it as a child of the enclosing container. The node already carries
+   whatever :node-kind / :role / payload its caller gave it — declare-node knows
+   none of those kinds.
+
+   ── Followup (b): registry-driven declare-node ──────────────────────────────
+   Today the kind-specific sugar below (and the bespoke lifts in
+   construction.clj / vocab/*) build the node and emit edges procedurally. The
+   next step makes the tag-definition registry (fukan.canvas.vocab.registry)
+   *drive* construction: a vocab-level interpreter reads a term's :payload type
+   and an :edges directive list from its tag-definition and builds node + payload
+   + edges generically — so a vocabulary term becomes pure data and the bespoke
+   lifts (plus the sugar here and the ~40 test fixtures) retire. The directive
+   set to derive from the relocated lifts is the production-directive vocabulary:
+     :shape-refs          — emit :references for every ref in a shape payload
+     :to-keywords         — emit edges to a set of keyword refs (handler on/emits,
+                            checker's fixed Model/Violation)
+     :by-name-in-module   — resolve a name to an entity in the enclosing module
+                            (function's triggers→rule, emits→event)
+   Keep these as declarative data (gated interpreter extension), never per-term
+   code. See project-substrate-unification memory."
+  [n]
+  (swap! *store* store/transact! n)
+  (register-child! n)
+  n)
+
+;; Kind-specific sugar over `declare-node` — convenience for the bespoke lifts
+;; and test fixtures, pending the registry-driven path above.
 (defn declare-affordance [name & {:as opts}]
-  (let [a (sub/affordance name
-            :shape (:shape opts)
-            :role (:role opts)
-            :formal-expression (:formal-expression opts)
-            :doc (:doc opts)
-            :returns-label (:returns-label opts))]
-    (swap! *store* store/transact! a)
-    (register-child! a)
-    a))
+  (declare-node (sub/affordance name
+                  :shape (:shape opts)
+                  :role (:role opts)
+                  :formal-expression (:formal-expression opts)
+                  :doc (:doc opts)
+                  :returns-label (:returns-label opts))))
 
 (defn declare-state [name & {:as opts}]
-  (let [s (sub/state name
-            :shape (:shape opts))]
-    (swap! *store* store/transact! s)
-    (register-child! s)
-    s))
+  (declare-node (sub/state name :shape (:shape opts))))
 
 (defn declare-type
   "Construct a Type and register it as a child of the enclosing module."
   [name & {:keys [kind fields doc]}]
-  (let [t (case kind
-            :atomic (sub/type-primitive name :doc doc)
-            :record (sub/type-record name fields :doc doc))]
-    (swap! *store* store/transact! t)
-    (register-child! t)
-    t))
+  (declare-node (case kind
+                  :atomic (sub/type-primitive name :doc doc)
+                  :record (sub/type-record name fields :doc doc))))
 
 (defn declare-relation [from kind to]
   (swap! *store* store/transact! (sub/relation from kind to))
