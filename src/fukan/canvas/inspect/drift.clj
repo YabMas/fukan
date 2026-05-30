@@ -305,8 +305,8 @@
 
 (defn- canvas-shape->canonical
   "Normalise a canvas-side parsed shape map (the output of
-   `fukan.canvas.core.shape/parse`, retrieved from the substrate's
-   `:type/field-shapes` attr) to the comparator's canonical form."
+   `fukan.canvas.core.shape/parse`, reconstructed from the reified
+   `:node/shape` tree) to the comparator's canonical form."
   [shape]
   (case (:kind shape)
     :atomic   (leaf (:name shape))
@@ -478,16 +478,15 @@
   (shape-equal? (to-canonical a) (to-canonical b)))
 
 (defn- canvas-record-fields
-  "Query the canvas-db for every Type entity carrying `:type/fields`. Returns
-   a map `{stable-id {field-name-kw <shape> …}}`. The shape value is the
-   per-field parsed compound shape read from `:type/field-shapes` when
-   available (Phase 7); otherwise it falls back to the leaf type-keyword
-   from `:type/fields` (Phase 6 behaviour).
+  "Query the canvas-db for every record Type entity. Returns a map
+   `{stable-id {field-name-kw <shape> …}}`. The shape value is the per-field
+   parsed compound shape reconstructed from the reified `:node/shape` tree
+   when present; otherwise it falls back to the leaf type-keyword from
+   `:type/fields`.
 
-   If a field appears with multiple declared types on the canvas side
-   (e.g. a sum-of that wasn't preserved via `:type/field-shapes`), the
-   first leaf wins; shape drift won't fan out per-variant. With
-   `:type/field-shapes` present the full compound is preserved instead.
+   If a field appears only via the leaf fallback (no reified shape), the
+   first leaf wins; shape drift won't fan out per-variant. With the reified
+   `:node/shape` present the full compound is preserved instead.
 
    The canvas db stores entities under a random UUID `:entity/id`; the
    projection layer converts UUID → stable-id-string of the form

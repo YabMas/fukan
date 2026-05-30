@@ -540,7 +540,7 @@
 
 (defn- type-element
   "Build the Layer-A element map for a canvas Type. Discriminates atomic vs
-   record via the presence of `:type/field-shapes` (records only)."
+   record via the presence of `:node/shape` (records only)."
   [db eid stable-id module-name entity-name]
   (let [ent          (d/entity db eid)
         doc          (:type/doc ent)

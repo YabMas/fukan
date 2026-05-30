@@ -2,8 +2,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.validation :refer [checker]]
-            [datascript.core :as d]
-            [clojure.edn :as edn]))
+            [fukan.canvas.core.substrate.store :as store]
+            [datascript.core :as d]))
 
 (deftest checker-creates-affordance-with-fixed-shape
   (testing "(checker …) produces an Affordance with the baked-in (Model) -> [Violation] arrow"
@@ -14,10 +14,10 @@
                       :where [?a :entity/type :Affordance]
                              [?a :entity/name ?n]
                              [?a :affordance/role ?r]
-                             [?a :affordance/shape ?sh]]
+                             [?a :node/shape ?sh]]
                     db)
-          [n role shape-str] (first rows)
-          shape (edn/read-string shape-str)]
+          [n role sh-eid] (first rows)
+          shape (store/read-reified-shape db sh-eid)]
       (is (= 1 (count rows)))
       (is (= "check" n))
       (is (= :canvas/checker role))

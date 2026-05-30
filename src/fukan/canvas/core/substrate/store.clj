@@ -25,12 +25,11 @@
    :tagapp/tag          {:db/index true}
    ;; ── Reified shapes (payload de-blob, arc-D) ─────────────────────────
    ;; A node's typed payload (affordance arrow, record-type fields) as a
-   ;; walkable :shape/* entity tree instead of a pr-str blob. :node/shape
-   ;; links a node to its payload root. Legacy :affordance/shape /
-   ;; :type/field-shapes blobs are retained as a derived index pending
-   ;; consumer migration. Ordered children (:shape/items for sum variants
-   ;; and tuple elems, :shape/fields for record fields) carry :shape/index;
-   ;; record fields also carry :shape/field-name (verbatim).
+   ;; walkable :shape/* entity tree instead of a pr-str blob — the canonical,
+   ;; queryable form. :node/shape links a node to its payload root. Ordered
+   ;; children (:shape/items for sum variants and tuple elems, :shape/fields
+   ;; for record fields) carry :shape/index; record fields also carry
+   ;; :shape/field-name (verbatim).
    :node/shape          {:db/valueType :db.type/ref}
    :shape/id            {:db/unique :db.unique/identity}
    :shape/kind          {:db/index true}
@@ -57,7 +56,6 @@
    :type/doc                {:db/index true}
    :type/field-types        {:db/cardinality :db.cardinality/many}
    :type/fields             {:db/cardinality :db.cardinality/many}
-   :type/field-shapes       {:db/cardinality :db.cardinality/many}
    :affordance/returns-label {:db/index true}
    :triggers                {:db/cardinality :db.cardinality/many
                               :db/valueType   :db.type/ref}
@@ -203,7 +201,6 @@
                        :entity/name (sub/name-of a)
                        :entity/tag (vec (sub/tags-of a))}
                 (sub/role-of a)              (assoc :affordance/role (sub/role-of a))
-                shape                        (assoc :affordance/shape (pr-str shape))
                 (sub/formal-expression-of a) (assoc :affordance/formal-expression (pr-str (sub/formal-expression-of a)))
                 (sub/doc-of a)               (assoc :affordance/doc (sub/doc-of a))
                 (sub/returns-label-of a)     (assoc :affordance/returns-label (sub/returns-label-of a))
@@ -242,31 +239,12 @@
               tname (shape/type-names fshape)]
           [(field-name->keyword fname) tname])))
 
-(defn- field-shape-tuples
-  "For each [field-name parsed-shape] pair, emit one
-   [field-name-kw shape-edn-pr-str] tuple. Used to derive the
-   :type/field-shapes cardinality-many attribute for record-shaped Types,
-   preserving the full parsed compound shape (which `:type/fields` flattens
-   to leaf type-names). Read consumers (e.g. shape-drift comparator) parse
-   the shape string back to edn via `clojure.edn/read-string`.
-
-   Why pr-str rather than store the edn map directly? Cardinality-many
-   datom values must be comparable scalars in Datascript; nested edn maps
-   compare structurally but the stringified form gives stable identity and
-   matches the precedent set by `:affordance/shape`."
-  [fields]
-  (into #{}
-        (for [[fname fshape] fields]
-          [(field-name->keyword fname) (pr-str fshape)])))
-
 (defmethod ->datoms :Type [t]
   (let [record? (= :record (:type-kind t))
         field-types-set (when record?
                           (shape/type-names {:kind :record :fields (:fields t)}))
         field-tuples-set (when record?
                            (field-tuples (:fields t)))
-        field-shapes-set (when record?
-                           (field-shape-tuples (:fields t)))
         [shape-root shape-datoms] (if record?
                                     (shape->datoms {:kind :record :fields (:fields t)})
                                     [nil nil])]
@@ -278,7 +256,6 @@
                 (sub/doc-of t)         (assoc :type/doc (sub/doc-of t))
                 (seq field-types-set)  (assoc :type/field-types field-types-set)
                 (seq field-tuples-set) (assoc :type/fields field-tuples-set)
-                (seq field-shapes-set) (assoc :type/field-shapes field-shapes-set)
                 shape-root             (assoc :node/shape [:shape/id shape-root])))
         (into (tagapp-maps (sub/id-of t) (if record? :canvas/record :canvas/value))))))
 

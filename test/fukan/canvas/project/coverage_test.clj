@@ -66,12 +66,8 @@
    an atomic Type (no fields) is :atomic."
   [db]
   (let [type-eids   (mapv first (d/q '[:find ?t :where [?t :entity/type :Type]] db))
-        any-record? (some (fn [t]
-                            (seq (or (:type/field-shapes (d/entity db t)) [])))
-                          type-eids)
-        any-atomic? (some (fn [t]
-                            (empty? (or (:type/field-shapes (d/entity db t)) [])))
-                          type-eids)]
+        any-record? (some (fn [t] (some? (:node/shape (d/entity db t)))) type-eids)
+        any-atomic? (some (fn [t] (nil? (:node/shape (d/entity db t)))) type-eids)]
     (cond-> #{}
       any-record? (conj :Type/record)
       any-atomic? (conj :Type/atomic))))

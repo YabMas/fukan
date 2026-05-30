@@ -3,6 +3,7 @@
             [clojure.edn :as edn]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.vocab.event :refer [event handler]]
+            [fukan.canvas.core.substrate.store :as store]
             [datascript.core :as d]))
 
 ;; ---------------------------------------------------------------------------
@@ -34,9 +35,9 @@
                    (payload [item_id :String] [qty :Integer]))))
           rows (d/q '[:find ?sh
                       :where [?a :entity/name "ItemAdded"]
-                             [?a :affordance/shape ?sh]]
+                             [?a :node/shape ?sh]]
                     db)
-          shape (edn/read-string (ffirst rows))]
+          shape (store/read-reified-shape db (ffirst rows))]
       (is (= :record (:kind shape)))
       (is (= 2 (count (:fields shape)))))))
 
