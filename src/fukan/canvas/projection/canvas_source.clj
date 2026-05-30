@@ -802,14 +802,26 @@
 
 (defn- tagdef-txs
   "Datoms projecting the tag-definition registry into the db as :tagdef/*
-   entities, making the vocabulary queryable on the substrate surface."
+   entities, making the vocabulary queryable on the substrate surface.
+
+   Each tag-definition's refinement parent is `:refines` when the author set
+   one, else the super-tag derived from its construction `:family`; it is
+   projected as `:tagdef/refines` so the classification stratum's refines* /
+   kind-of / family-of close over it. The family super-tags themselves are
+   projected as parent-less :tagdef entities — the lattice roots — so the
+   reflexive base of refines* grounds on them."
   []
-  (mapv (fn [{:keys [tag family payload doc]}]
-          (cond-> {:tagdef/tag tag}
-            payload (assoc :tagdef/payload payload)
-            family  (assoc :tagdef/family family)
-            doc     (assoc :tagdef/doc doc)))
-        (vocab-registry/all)))
+  (let [registered (mapv (fn [{:keys [tag family payload doc refines]}]
+                           (let [parent (or refines (classification/family->super-tag family))]
+                             (cond-> {:tagdef/tag tag}
+                               payload (assoc :tagdef/payload payload)
+                               family  (assoc :tagdef/family family)
+                               parent  (assoc :tagdef/refines parent)
+                               doc     (assoc :tagdef/doc doc))))
+                         (vocab-registry/all))
+        roots      (mapv (fn [super-tag] {:tagdef/tag super-tag})
+                         (vals classification/family-super-tags))]
+    (into roots registered)))
 
 (defn enrich-substrate
   "Make the unified canvas db a complete, directly-queryable substrate:

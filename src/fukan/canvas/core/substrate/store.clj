@@ -29,6 +29,10 @@
    ;; classifies — and is the seam a generic declare-node consumes.
    :tagdef/tag          {:db/unique :db.unique/identity}
    :tagdef/family       {:db/index true}
+   ;; The refinement-lattice parent tag: this tag refines (is-a) its parent.
+   ;; Explicit on the tag-definition, or derived from :family (the super-tag).
+   ;; The classification stratum's refines*/kind-of/family-of close over these.
+   :tagdef/refines      {:db/index true}
    :tagdef/payload      {:db/index true}
    :tagdef/doc          {}
    ;; ── Reified shapes (payload de-blob, arc-D) ─────────────────────────
