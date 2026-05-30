@@ -36,7 +36,8 @@
    family is the `:family/*` ancestor its kind-tag refines, transitively."
   {:Affordance :family/affordance
    :Type       :family/type
-   :Module     :family/module})
+   :Module     :family/module
+   :State      :family/state})
 
 (defn family->super-tag
   "The `:family/*` super-tag for a construction family keyword, or nil."
@@ -91,3 +92,21 @@
           :where [?ta :tagapp/node ?e]
                  [?ta :tagapp/tag ?tag]]
         db eid)))
+
+(defn of-kind
+  "Eids of every node whose immediate kind refines* `k` (transitively). Pass a
+   family super-tag (`:family/affordance`) to enumerate a whole family, or a
+   concrete/intermediate tag to enumerate that kind and its sub-kinds. The
+   fn form for the common 'all nodes of kind K' query; embed the `kind-of`
+   rule directly when you need to join more attributes in one query."
+  [db k]
+  (into [] (map first)
+        (d/q '[:find ?e :in $ % ?k :where (kind-of ?e ?k)] db rules k)))
+
+(defn family-of
+  "The `:family/*` super-tag of node `eid`, or nil. Single-valued given the
+   refinement partition invariant (see inspect.integrity/check-refinement).
+   The fn form of the `family-of` rule, for per-entity lookup."
+  [db eid]
+  (ffirst
+   (d/q '[:find ?fam :in $ % ?e :where (family-of ?e ?fam)] db rules eid)))

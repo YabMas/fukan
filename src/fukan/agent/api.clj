@@ -4,6 +4,7 @@
    call (help) for the live catalog."
   (:require [clojure.string :as str]
             [datascript.core :as d]
+            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.substrate.store :as store]
             [fukan.canvas.inspect.coverage :as inspect-coverage]
             [fukan.canvas.inspect.drift :as inspect-drift]
@@ -39,22 +40,39 @@
 
 ;; -- L0 Kernel ----------------------------------------------------------------
 
+(defn- in-vars
+  "The `:in` section symbols of a vector-form Datalog query (between :in and the
+   next clause keyword), or nil for non-vector forms."
+  [form]
+  (when (vector? form)
+    (->> form
+         (drop-while #(not= :in %))
+         rest
+         (take-while #(not (#{:where :find :with} %))))))
+
 (defn ^{:agent/layer :L0
         :agent/doc "Datascript Datalog over the canvas substrate db. Form:
                     [:find … :where …]. Query the substrate vocabulary
-                    directly: :entity/type (:Module/:Affordance/:State/:Type),
-                    :affordance/role (:canvas/invariant, :canvas/rule,
-                    :canvas/getter, :canvas/checker, …), :entity/stable-id
-                    (the cross-fn addressing currency), :module/child, :uses,
-                    :edge/* (projects edges), :artifact/*, plus :triggers/:emits.
-                    Returns a set of result tuples."
-        :agent/example "(q '[:find ?id :where [?e :affordance/role :canvas/invariant] [?e :entity/stable-id ?id]])"}
+                    directly: :entity/stable-id (the cross-fn addressing
+                    currency), :module/child, :uses, :tagapp/* (classification
+                    spine), :edge/* (projects edges), :artifact/*, plus
+                    :triggers/:emits. For classification, declare `:in $ %`
+                    and use the stratum rules — (direct-kind ?e ?tag),
+                    (kind-of ?e ?k), (family-of ?e ?fam) — the rule set is
+                    threaded automatically. Returns a set of result tuples."
+        :agent/example "(q '[:find ?id :in $ % :where (kind-of ?e :family/affordance) [?e :entity/stable-id ?id]])"}
   q
   "Evaluate a Datascript Datalog query against the canvas substrate db.
-   Full d/q dialect — joins, rules, aggregates, pull. Returns a set of
+   Full d/q dialect — joins, rules, aggregates, pull. When the query declares
+   `%` in its :in clause, the classification rule set (direct-kind / kind-of /
+   family-of / refines*) is supplied automatically as that rules input; any
+   further :in parameters are passed positionally after it. Returns a set of
    result tuples (one per :find binding row)."
-  [form]
-  (d/q form (canvas-db)))
+  [form & inputs]
+  (let [inputs (if (some #{'%} (in-vars form))
+                 (cons classification/rules inputs)
+                 inputs)]
+    (apply d/q form (canvas-db) inputs)))
 
 ;; -- L1 Probes ----------------------------------------------------------------
 
@@ -491,19 +509,21 @@
   (case entity-type
     :Module
     (ffirst (d/q '[:find ?e
-                   :in $ ?n
-                   :where [?e :entity/type :Module]
+                   :in $ % ?fam ?n
+                   :where (kind-of ?e ?fam)
                           [?e :entity/name ?n]]
-                 db module-name))
-    ;; Owned entities: child of a Module
+                 db classification/rules :family/module module-name))
+    ;; Owned entities: child of a Module, discriminated by family
     (ffirst (d/q '[:find ?c
-                   :in $ ?mod-name ?ctype ?cname
-                   :where [?m :entity/type :Module]
+                   :in $ % ?fam ?cfam ?mod-name ?cname
+                   :where (kind-of ?m ?fam)
                           [?m :entity/name ?mod-name]
                           [?m :module/child ?c]
-                          [?c :entity/type ?ctype]
+                          (kind-of ?c ?cfam)
                           [?c :entity/name ?cname]]
-                 db module-name entity-type entity-name))))
+                 db classification/rules :family/module
+                 (classification/family->super-tag entity-type)
+                 module-name entity-name))))
 
 (defn- type-element
   "Build the Layer-A element map for a canvas Type. Discriminates atomic vs
@@ -539,7 +559,7 @@
    `:affordance/role`."
   [db eid stable-id module-name entity-name]
   (let [ent     (d/entity db eid)
-        role    (:affordance/role ent)
+        role    (classification/direct-kind db eid)
         doc     (:affordance/doc ent)
         shape   (when-let [sh (:node/shape ent)]
                   (store/read-reified-shape db (:db/id sh)))
@@ -619,30 +639,19 @@
    discipline-prose anyway (\"match canvas declaration order — types
    first …\"), so this approximation is adequate."
   [db module-name]
-  (let [type-names (sort (d/q '[:find [?n ...]
-                                :in $ ?mn
-                                :where [?m :entity/type :Module]
-                                       [?m :entity/name ?mn]
-                                       [?m :module/child ?c]
-                                       [?c :entity/type :Type]
-                                       [?c :entity/name ?n]]
-                              db module-name))
-        aff-names  (sort (d/q '[:find [?n ...]
-                                :in $ ?mn
-                                :where [?m :entity/type :Module]
-                                       [?m :entity/name ?mn]
-                                       [?m :module/child ?c]
-                                       [?c :entity/type :Affordance]
-                                       [?c :entity/name ?n]]
-                              db module-name))
-        state-names (sort (d/q '[:find [?n ...]
-                                 :in $ ?mn
-                                 :where [?m :entity/type :Module]
-                                        [?m :entity/name ?mn]
-                                        [?m :module/child ?c]
-                                        [?c :entity/type :State]
-                                        [?c :entity/name ?n]]
-                               db module-name))]
+  (let [children-of-family
+        (fn [cfam]
+          (sort (d/q '[:find [?n ...]
+                       :in $ % ?mfam ?cfam ?mn
+                       :where (kind-of ?m ?mfam)
+                              [?m :entity/name ?mn]
+                              [?m :module/child ?c]
+                              (kind-of ?c ?cfam)
+                              [?c :entity/name ?n]]
+                     db classification/rules :family/module cfam module-name)))
+        type-names  (children-of-family :family/type)
+        aff-names   (children-of-family :family/affordance)
+        state-names (children-of-family :family/state)]
     (-> []
         (into (map #(str module-name "/type/"  %)) type-names)
         (into (map #(str module-name "/"       %)) aff-names)
