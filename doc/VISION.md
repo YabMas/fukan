@@ -2,7 +2,7 @@
 
 **Status:** Framing and direction — the *why*.
 
-**Reading order:** Start here for motivation and framing. [DESIGN.md](./DESIGN.md) carries the design principles (three-tier layering, ownership, constraint language). [MODEL.md](./MODEL.md) is the authoritative substrate spec (kernel primitives, vocabulary mechanism). [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace.
+**Reading order:** Start here for motivation and framing. [DESIGN.md](./DESIGN.md) carries the design principles (layering, ownership, constraint language). [MODEL.md](./MODEL.md) holds the substrate spec. [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace.
 
 ---
 
@@ -56,13 +56,13 @@ The bet paid off: with the substrate proven, subsequent work built on it without
 
 Concretely, in the canvas-first state:
 
-**Navigable design-vocabulary graph.** A team writes canvas specs. Fukan renders the canvas as a navigable graph: modules connected by `:references` edges, affordances labelled by role (function, invariant, rule, getter, checker), record types with field structure. Each node is clickable; each relationship is followable. The explorer conveys design intent, not just code shape.
+**Navigable design-vocabulary graph.** A team writes canvas specs. Fukan renders the canvas as a navigable graph: modules connected by `:references` edges, nodes tagged by kind (function, invariant, rule, getter, checker), record types with field structure. Each node is clickable; each relationship is followable. The explorer conveys design intent, not just code shape.
 
 **Spec and code on the same graph.** Canvas specs project through Phase 0 (canvas ingestion) into the same Model that Phase 6 (Clojure target analyzer) writes code artifacts into. The graph shows where canvas-declared affordances have corresponding Clojure implementations and where they don't — drift is a first-class visible property.
 
 **REPL-integrated workflow.** Canvas files are Clojure source files on the classpath. Editing a canvas spec and calling `(refresh)` in the REPL rebuilds the model and updates the graph on the next browser request. No separate compilation step, no external tooling, no round-trip to a different system.
 
-**Architecture-neutral substrate.** The six substrate primitives (Module, Affordance, State, Type, Relation, Tag) carry no architectural vocabulary. Architectural meaning — function call, invariant, reactive rule, lifecycle accessor, validation entry point — lives in vocabulary lifts that projects opt into. Different architectural styles (monolith, CQRS, actor model) can coexist in the same substrate without substrate revision.
+**Architecture-neutral substrate.** The substrate has two primitives — **Node** and **Relation** — and ships zero architectural vocabulary. A node is just an addressable thing; what *kind* of thing it is (a function call, an invariant, a reactive rule, a record type, a module) is an introspectable **tag-application**, defined by a vocabulary, not baked into a primitive. Architectural meaning — function call, invariant, reactive rule, lifecycle accessor, validation entry point — lives in vocabularies that projects opt into. Different architectural styles (monolith, CQRS, actor model) coexist in the same substrate without substrate revision.
 
 **Queryable by agents.** The same Model the graph renders is queryable via `bin/fukan`'s eval surface. Agents can ask "what affordances reference this type?" or "what invariants does this module declare?" without grepping source files. The canvas is the source of truth; the eval surface is the query layer over it.
 
@@ -75,6 +75,8 @@ The canvas-first re-foundation has been extended substantially on the same subst
 **Drift detection.** The Clojure target analyzer resolves canonical code addresses by convention, so `projects` edges now carry meaningful per-entity `:validity` (`:valid` / `:stale` / `:absent` / `:unknown`) instead of the uniform `:absent` of the early UUID-id scheme. Bidirectional drift between intent and reality is a first-class, queryable signal (`(canvas-drift)`).
 
 **Lens substrate and agent surface.** A pluggable lens layer supports design-altitude analysis modes (new modes = drop a file), and the model is queryable by humans and agents through `bin/fukan` and the `fukan-architect` / `fukan-reconciler` agents.
+
+**Substrate unification.** The substrate was collapsed to its floor — **Node + Relation** — with all classification expressed as introspectable tag-applications, payloads de-blobbed into queryable datoms, and the vocabulary turned into **self-registering data**: each vocabulary declares its terms (tag-definitions) and a generic, registry-driven interpreter turns a term + payload into substrate datoms. A vocabulary is now a plugin — drop a file and its terms register; remove it and they are gone. The core knows no kinds; the kinds are vocabulary, and the vocabulary is data.
 
 ## What is deferred
 
@@ -90,10 +92,10 @@ The canvas-first re-foundation has been extended substantially on the same subst
 
 **Fukan is the workbench for the structural layer of a system — the layer humans own, the layer that survives across LLM sessions, the layer that should drive what the LLMs build.**
 
-In the canvas chapter, "the structural layer" is expressed as canvas specs: Clojure data files using a deliberately minimal, architecture-neutral substrate extended by vocabulary lifts. The substrate has six primitives and ships zero architectural vocabulary; lift libraries carry architectural knowledge. The graph viewer renders the canvas alongside Clojure implementation reality. The eval surface makes the whole thing queryable by humans and agents alike.
+In the canvas chapter, "the structural layer" is expressed as canvas specs: Clojure data files over a deliberately minimal, architecture-neutral substrate — **Node + Relation** — extended entirely by vocabulary. The substrate is, in effect, a small virtual machine for structural models; a vocabulary is a *program* for it, declared as data; methodologies are *plugins* on top. The aim, in the lineage of stratified, grow-the-language design, is a shared middle layer others can build upon — vocabularies you can add, swap, or delete without disturbing the core. The graph viewer renders the canvas alongside Clojure implementation reality; the eval surface makes the whole thing queryable by humans and agents alike.
 
-Future phases add the authoring loop, more vocabulary libraries, richer drift analysis, and a constraint-authoring surface — all on the same substrate, without re-foundation.
+Future work grows the language upward — derived classification and view layers over the substrate, more vocabulary libraries, richer drift analysis, the authoring loop, and a constraint-authoring surface — all as strata on the same Node+Relation core, without re-foundation.
 
 ---
 
-*See [DESIGN.md](./DESIGN.md) for the three-tier layering principle, the ownership-on-owner substrate principle, and the build pipeline. [MODEL.md](./MODEL.md) is the authoritative substrate spec.*
+*See [DESIGN.md](./DESIGN.md) for the layering principle (core / construct-kit / vocabulary), the ownership-on-owner substrate principle, and the build pipeline. [MODEL.md](./MODEL.md) carries the substrate spec; [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace.*

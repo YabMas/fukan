@@ -30,9 +30,10 @@ and an LLM can both reason over. Behaviour, structure, and contracts live
 together; implementation code is a downstream projection of the canvas, not a
 separate truth.
 
-The canvas is built on a deliberately minimal **substrate**: six primitives
-(Module, Affordance, State, Type, Relation, Tag) that ship zero opinion about
-function calls vs. messages vs. events vs. commands. Architectural vocabulary
+The canvas is built on a deliberately minimal **substrate**: two primitives
+(Node and Relation) that ship zero opinion about
+function calls vs. messages vs. events vs. commands. A node's *kind* is an
+introspectable tag, not a primitive. Architectural vocabulary
 lives entirely in **lift libraries** above the substrate — small constructors
 that take readable, module-design-altitude expressions and produce substrate
 primitives.

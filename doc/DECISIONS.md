@@ -4,6 +4,8 @@
 
 This document preserves the design-phase decision trace — the forces that produced the substrate commitments, the gates they had to clear, and the framings each decision superseded. MODEL.md encodes *what* the substrate is; this file records *why*, and what alternatives were considered along the way.
 
+**Note (post-unification):** these decisions culminated in the *kernel* substrate — nine primitives (K6), thirteen relations (R2), the vocabulary mechanism (V\*). The implemented substrate has since been unified to **Node + Relation, classified by tag-applications** (see [MODEL.md §Current substrate](./MODEL.md)). The bindings to nine primitive kinds (K6–K21) are superseded, but the *reasoning* carries forward almost entirely — the force-and-gate criterion, the two-tier kernel/vocabulary stance (K2–K5), the Type-vocabulary unification (K22–K22a), the altitudes (K23–K27), the Expression/Effect substrate (K28–K31), and the vocabulary-mechanism principles (V1–V15) are exactly the lineage the unification followed. Preserved here as that trace.
+
 **Identifier tags** (cited throughout MODEL.md and DESIGN.md):
 
 - **K** — kernel substrate

@@ -2,7 +2,7 @@
 
 **Status:** Application-design specification — design principles, build pipeline, canvas layering.
 
-**Reading order:** Read [VISION.md](./VISION.md) first if you're new (motivation and framing). This document covers the canvas three-tier layering principle, the ownership-on-owner substrate principle, the build pipeline, the constraint language, and the project layer. [MODEL.md](./MODEL.md) is the authoritative substrate spec (kernel primitives, vocabulary mechanism, constraint language, projection mechanic). [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace.
+**Reading order:** Read [VISION.md](./VISION.md) first if you're new (motivation and framing). This document covers the canvas layering principle, the ownership-on-owner substrate principle, the build pipeline, the constraint language, and the project layer. [MODEL.md](./MODEL.md) holds the substrate spec (the Node/Relation primitives, relations, the tag/vocabulary mechanism, constraint language, projection mechanic). [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace.
 
 ---
 
@@ -10,74 +10,75 @@
 
 This document specifies the application-level design — the choices that sit *between* the substrate and the implementation:
 
-- The **three-tier canvas layering** (`core` / `construction` / `vocab.*`) and per-tier inclusion rules
+- The **canvas layering** (`core` / construct-kit / `construction` / `vocab.*`) and per-tier inclusion rules
 - The **ownership-on-owner substrate principle** — how Module ownership flows through `:module/child` Relations
 - The **build pipeline** (Phase 0 canvas ingestion through Phase 6 Clojure analysis)
 - The **constraint language** and how it sits over the substrate
 - The **project layer mechanics** (idioms + constraints)
 - The **Clojure lens** — code analysis (the `projects`/drift surface) and on-demand code-spec projection (`spec` / `instruct`)
 
-Substrate-level content (kernel primitives, kernel relations, edge identity, vocabulary mechanism, constraint language, projection vocabulary, projection mechanic) lives in [MODEL.md](./MODEL.md).
+Substrate-level content (the Node and Relation primitives, relations, edge identity, the tag/vocabulary mechanism, constraint language, projection vocabulary, projection mechanic) lives in [MODEL.md](./MODEL.md).
 
 ---
 
-## Canvas — three-tier layering
+## Canvas — layering
 
-The canvas machinery lives in `src/fukan/canvas/` and is structured in three tiers with distinct inclusion rules. The rule of three governed each lift addition to `vocab.*`: every lift was justified by three or more corpus instances before shipping.
+The canvas machinery lives in `src/fukan/canvas/` and is structured in tiers with distinct inclusion rules. The substrate is two primitives — **Node** and **Relation**. Architectural *kinds* (function, record, invariant, rule, …) are not primitives; they are **tag-applications** defined by vocabularies and built through a registry-driven interpreter. The tiers reflect that: a kind-agnostic core, a vocabulary-machinery tier (the *construct-kit*), and the vocabularies themselves. The rule of three governed each opt-in lift: every one was justified by three or more corpus instances before shipping.
 
 ### Tier 1 — `core/`
 
-The substrate machinery. Every canvas consumer depends on this tier.
+The substrate machinery. **Kind-agnostic** — it knows Node, Relation, containment, shapes, and the store; it knows no architectural kinds. Every canvas consumer depends on this tier.
 
 | File | Contents |
 |------|----------|
-| `core/substrate.clj` | Six substrate primitives as Clojure records: `Module`, `Affordance`, `State`, `Type`, `Relation`, `Tag`. Zero architectural vocabulary. |
-| `core/substrate/store.clj` | Datascript-backed store: schema, `->datoms` wiring, public query API. |
-| `core/helpers.clj` | Construction helpers: `with-canvas`, `within-module`, `declare-affordance`, `declare-type`, `declare-relation`. |
+| `core/substrate.clj` | Two substrate primitives as Clojure records: `Node` (carries its kind as a `:tag` plus payload fields) and `Relation` (edges). Generic `node` / `declare-node` constructors; the kind-specific `module`/`affordance`/`type-*` are thin sugar over them. Zero architectural vocabulary. |
+| `core/substrate/store.clj` | Datascript-backed store: schema, `->datoms` wiring (emits tag-applications + reified `:shape/*` payloads), query API. Tag-agnostic — no `:canvas/*` literals. |
+| `core/helpers.clj` | Construction helpers: `with-canvas`, `within-module` (containment), generic `declare-node`, `declare-relation`. |
 | `core/defconstructor.clj` | `defconstructor` macro — form grammar + `produces` block DSL for defining vocabulary lifts. |
-| `core/shape.clj` | Shape expression grammar: `parse` turns shape expressions into edn maps. |
+| `core/shape.clj` | Shape expression grammar: `parse` turns shape expressions into edn maps (reified into `:shape/*` datoms by the store). |
 | `core/check.clj` | `fc/check` — constraint runner + structured violation output. |
 | `core/defquery.clj` | `defquery` — Datalog name-resolution extension mechanism. |
 
-### Tier 2 — `construction.clj`
+### Tier 2 — construct-kit (`vocab/registry`, `vocab/construct`)
 
-Non-opt-out construction primitives. Every canvas port uses at least some of these.
+Vocabulary *machinery*, not methodology. `vocab/registry` is the tag-definition registry — vocabularies register their terms (`{:tag :family :payload :edges :doc}`) here as data; `vocab/construct` is the registry-driven interpreter `build`, which turns a tag + canonical payload into a node + its edges via a small production-directive vocabulary (`:shape-refs` / `:to-keywords` / `:by-name`). It is the one shared dependency `construction.clj` and `vocab/*` may take beyond `core/` — machinery for *declaring* vocabularies, so it does not couple one methodology to another.
 
-| Constructor | What it produces | When to use |
-|-------------|-----------------|-------------|
-| `function` | Affordance with arrow shape, role `:fukan.canvas.monolith/exposed-call` | Any synchronous cross-module callable |
-| `record` | Type with `:record` kind and field pairs | Structured data types with named fields |
-| `value` | Type with `:atomic` kind | Opaque named types (no exposed fields) |
-| `exports` | Tags named declarations as `:exported` in the current module | Module API closure |
+### Tier 3 — `construction.clj`
 
-`exports` is a macro rather than a `defconstructor`-built lift because its body consists of bare positional names rather than form-grammar clauses — a deliberate special case for the closure mechanism.
+The base (non-opt-out) vocabulary. Every canvas port uses at least some of these. Declares its terms in the registry and collapses to `construct/build`.
 
-### Tier 3 — `vocab/`
+| Constructor | Tag it applies | What it produces |
+|-------------|----------------|------------------|
+| `function` | `:canvas/function` (family Affordance) | A node with an arrow shape; `:references`/`:canvas/performs`/`:triggers`/`:emits` edges |
+| `record` | `:canvas/record` (family Type) | A node with named typed fields |
+| `value` | `:canvas/value` (family Type) | An opaque named type |
+| `exports` | `:canvas/exported` (marker) | Tags named declarations as part of the module API |
 
-Opt-in methodology vocabularies. Require only the namespaces whose lifts your module uses.
+`exports` is a macro rather than a `defconstructor`-built lift because its body is bare positional names rather than form-grammar clauses — a deliberate special case for the closure mechanism.
 
-| Namespace | Lifts | What it models |
-|-----------|-------|----------------|
-| `vocab.behavioral` | `invariant` | Named timeless behavioral commitments (produces Affordance with role `:canvas/invariant`, formal-expression carrying the `holds-that` clause) |
-| `vocab.behavioral` | `rule` | Reactive declarations with trigger signatures (produces Affordance with role `:canvas/rule`, formal-expression carrying `{:when [...]}`) |
-| `vocab.lifecycle` | `getter` | Zero-arg `Optional<T>` read accessors (baked-in arrow shape; produces Affordance with role `:canvas/getter`) |
-| `vocab.validation` | `checker` | Validation entry points with the standard signature `(Model) -> [Violation]` (fully baked-in shape; produces Affordance with role `:canvas/checker`) |
+### Tier 4 — `vocab/*`
 
-**The rule of three was satisfied for every tier-3 lift before it shipped:**
-- `invariant` — 13+ instances in Phase 1 pilots; well past threshold.
-- `rule` — 49 deferred instances surfaced across broader porting in Sprint 2; shipped 2026-05-26.
-- `getter` — appeared in every stateful module (`get_model`, `get_src`, `get_port`, etc.); shipped in Phase 2.
-- `checker` — 7 instances in `validation/phase4` alone; shipped in Phase 2.
+Opt-in methodology vocabularies. Each declares its own terms in the registry and builds through `construct/build`. Require only the namespaces whose lifts your module uses.
+
+| Namespace | Lifts | Tags applied |
+|-----------|-------|--------------|
+| `vocab.behavioral` | `invariant`, `rule` | `:canvas/invariant` (prose payload), `:canvas/rule` (trigger payload) |
+| `vocab.lifecycle` | `getter` | `:canvas/getter` (zero-arg `Optional<T>` arrow) |
+| `vocab.validation` | `checker` | `:canvas/checker` (`(Model) -> [Violation]` arrow) |
+| `vocab.event` | `event`, `handler` | `:canvas/event` (payload record), `:canvas/handler` (on/emits) |
+
+**The rule of three was satisfied for every opt-in lift before it shipped** (`invariant` 13+, `rule` 49 deferred, `getter` in every stateful module, `checker` 7 in `validation/phase4`, `event`/`handler` from the event-driven stress test).
 
 ### Per-tier inclusion rules
 
 | Tier | Who depends on it | What it may depend on |
 |------|------------------|-----------------------|
 | `core/` | Everyone | Nothing inside `canvas/` |
-| `construction.clj` | All canvas ports | `core/` only |
-| `vocab/*` | Canvas ports that opt in | `core/` only; never `construction.clj`, never each other |
+| construct-kit (`vocab/registry`, `vocab/construct`) | `construction.clj` + `vocab/*` | `core/` only |
+| `construction.clj` | All canvas ports | `core/` + construct-kit |
+| `vocab/*` | Canvas ports that opt in | `core/` + construct-kit; never `construction.clj`, never each other's methodology |
 
-Vocabularies are independent of each other by design. A canvas port that needs both `invariant` and `checker` requires both namespaces directly; neither needs the other.
+Vocabularies are independent of each other by design. A canvas port that needs both `invariant` and `checker` requires both namespaces directly; neither needs the other. The construct-kit is the one shared dependency beyond `core/` — vocabulary *machinery*, not methodology, so depending on it does not couple methodologies.
 
 ---
 
@@ -103,14 +104,14 @@ Cross-module references use the `:<module-name>/<TypeName>` convention. The modu
 
 ## Ownership-on-owner substrate principle
 
-**Module ownership flows via `:module/child` Relations on the owner.** Owned entities — Affordance, State, Type — carry no back-reference to their owning Module. This principle was established in Phase 3 Sprint 3 and applies uniformly to all three entity kinds.
+**Module ownership flows via `:module/child` Relations on the owner.** Owned nodes carry no back-reference to their owning module. This principle applies uniformly to every node kind.
 
 Rationale:
 - Ownership is a property of the owner-child relationship, not a property of the owned entity itself. Storing it on the child creates two authoritative sources (the child's `:module` field and the parent's children collection), which can drift.
-- The `within-module` helper in `core/helpers.clj` emits `:module/child` datoms automatically when any `declare-*` helper is called inside it. Canvas ports do not need to track parentage explicitly.
+- The `within-module` helper in `core/helpers.clj` emits `:module/child` datoms automatically when `declare-node` is called inside it (the lifts collapse to it). Canvas ports do not need to track parentage explicitly.
 - The projection layer queries `:module/child` uniformly for all child kinds — one query instead of three per-kind queries.
 
-Concrete implication: there are no `:affordance/module`, `:state/module`, or `:type/module` schema attributes in the Datascript store. To find which module owns an affordance, query the module that has it as a `:module/child`.
+Concrete implication: there is no `:node/module` schema attribute in the Datascript store. To find which module owns a node, query the module that has it as a `:module/child`.
 
 ---
 
@@ -155,20 +156,17 @@ Phase 6 — Clojure Target Analyzer
 
 **New canvas file:** add a `require` entry in `canvas-source/canvas-builders` and call `(reset)` (not `(refresh)`) to pick up the new namespace.
 
-### Canvas entity type → kernel primitive kind mapping
+### Tag → projected kind mapping
 
-| Canvas `:entity/type` | `:affordance/role` | Projected `:kind` |
+The substrate's canonical classification is the **tag-application** (and its `:family`, declared in the tag-definition registry). The graph-viewer model map still carries a coarser, kernel-flavoured `:kind`; the projection derives it from the node's family + tag. This `:kind` is a *legacy view* being phased out as consumers move onto the tags directly — the family/role index (`:entity/type` / `:affordance/role`) is a denormalised projection of the tag-applications, kept for the current consumers.
+
+| Family (`:entity/type`) | Tag (`:affordance/role`) | Projected `:kind` |
 |----------------------|-------------------|-------------------|
-| `:Module` | — | `:primitive/container` |
-| `:Affordance` | `:canvas/invariant` | `:primitive/rule` |
-| `:Affordance` | `:canvas/rule` | `:primitive/rule` |
-| `:Affordance` | `:canvas/getter` | `:primitive/operation` |
-| `:Affordance` | `:canvas/checker` | `:primitive/operation` |
-| `:Affordance` | `:fukan.canvas.monolith/exposed-call` | `:primitive/operation` |
-| `:Affordance` | nil / other | `:primitive/operation` |
-| `:State` | — | `:primitive/container` |
-| `:Type` (`:record`) | — | `:primitive/container` |
-| `:Type` (`:atomic`) | — | `:primitive/container` |
+| `:Module` | `:canvas/module` | `:primitive/container` |
+| `:Affordance` | `:canvas/invariant`, `:canvas/rule` | `:primitive/rule` |
+| `:Affordance` | `:canvas/getter`, `:canvas/checker`, `:canvas/function` | `:primitive/operation` |
+| `:Affordance` | other | `:primitive/operation` |
+| `:Type` | `:canvas/record`, `:canvas/value` | `:primitive/container` |
 
 ---
 
@@ -176,7 +174,7 @@ Phase 6 — Clojure Target Analyzer
 
 Every design choice in this chapter is derived from three constraints:
 
-1. **Every concept a human would choose to inspect must be addressable.** If you cannot click on it, you cannot reason about it as a unit. This determines what is a kernel primitive.
+1. **Every concept a human would choose to inspect must be addressable.** If you cannot click on it, you cannot reason about it as a unit. This determines what is an addressable node.
 2. **Every relationship a human would choose to follow must be traversable.** If a connection only exists in one party's prose, the model has no leverage. This determines what is a kernel relation or a relational tag.
 3. **The artefact must reveal where intent and reality diverge.** If you cannot see drift, the workbench is a viewer, not an instrument. This determines what bridges layers.
 
@@ -548,9 +546,9 @@ A module's `exports` declaration (the `exports` lift) names its public closure. 
 
 `projects` edges carry drift signal in MVP via per-edge `validity ∈ 'valid' | 'absent' | 'stale' | 'unknown'` ([MODEL.md §4.2](./MODEL.md#42-per-relation-semantics)). The projection layer renders this: green for `valid` (artifact exists at expected address), red for `absent` (missing implementation or missing test), neutral for `unknown` (not yet evaluated). Finer-grained `stale` checks (e.g., malli-schema field shape vs spec entity fields) hook in additively without further projection-layer work. When `.infra` arrives, the same machinery extends to Infra Artifact drift without changes.
 
-### Sidebar content per kernel primitive
+### Sidebar content per node kind
 
-Each kernel primitive carries richer content than today's Function/Schema nodes. Sidebars are populated by reading the kernel substrate, the kernel relations, and the tag applications attached to each primitive. The kernel groups primitives by **face-role** (`(vocabulary)` reports the role per kind), which shapes what a sidebar shows:
+Each node carries richer content than today's Function/Schema nodes. Sidebars are populated by reading the node, its relations, and the tag-applications attached to it. The node's tag — and its `:family` (Module/Affordance/Type), reported by `(vocabulary)` — shapes what a sidebar shows:
 
 - **Container** (`face-host`) — a module or other host. Child counts by kind, the `exports` closure (public API, with internal declarations visually distinct), declared invariants and rules, derived metrics. Where it owns children, the `:module/child` relations.
 - **Type — record / value** (`face-component`) — fields with their shape expressions, incoming `uses` references (who depends on this type), and the `projects` edge to its code-side schema with `:validity`. For records, the malli-schema projection (`(spec …)`) and any field shape-drift `(canvas-drift)` reports.
@@ -589,7 +587,7 @@ Application-design questions not resolved in this chapter. Substrate-level TBDs 
 
 ## Summary
 
-The application design layers cleanly onto MODEL.md's substrate. The canvas — three-tier layered Clojure (`core` / `construction` / `vocab.*`) — is the design surface; its vocabulary lifts (`function`, `record`, `value`, `exports`, `invariant`, `rule`, `getter`, `checker`) populate the kernel primitives, and module ownership flows via `:module/child` on the owner. Three boundary protocols (View / Signal / Call) connect boundary relations to behavioural content asymmetrically — mutations event-shaped, reads passive or call-shaped. Three altitudes — Behaviour, Structure, Infra — with strict one-up reference; Implementation is projection across them, with `.infra` still architecturally seamed.
+The application design layers cleanly onto MODEL.md's substrate. The canvas — layered Clojure (`core` / construct-kit / `construction` / `vocab.*`) — is the design surface; its vocabulary lifts (`function`, `record`, `value`, `exports`, `invariant`, `rule`, `getter`, `checker`, `event`, `handler`) build tagged Nodes through the registry-driven interpreter, and module ownership flows via `:module/child` on the owner. Three boundary protocols (View / Signal / Call) connect boundary relations to behavioural content asymmetrically — mutations event-shaped, reads passive or call-shaped. Three altitudes — Behaviour, Structure, Infra — with strict one-up reference; Implementation is projection across them, with `.infra` still architecturally seamed.
 
 Code linkage runs in two directions over one convention: the analyzer draws `projects` edges with `:validity` (the drift surface — `(canvas-drift)`, `(coverage)`), and the Clojure lens projects each element to a code spec on demand (`(spec …)`, composed with a scenario by `(instruct …)` for implementing LLMs). A project layer carries two sub-loci — idioms (`(idioms)`) and constraints (`(constraints)`) — both making the project's design vocabulary explicit for human readers, implementing LLMs, and the build pipeline. The explorer respects `exports` visibility, surfaces gaps, and renders drift markers with the close-drift loop behind them.
 
