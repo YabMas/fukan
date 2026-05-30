@@ -92,8 +92,11 @@ Shape expressions appear in `takes`/`gives`/`field`/`getter` positions:
 | Tier | Module | May depend on |
 |------|--------|--------------|
 | `core/` | Substrate machinery | Nothing inside `canvas/` |
-| `construction.clj` | Non-opt-out lifts | `core/` only |
-| `vocab/*` | Opt-in vocabularies | `core/` only; never `construction.clj`, never each other |
+| **construct-kit** (`vocab/registry`, `vocab/construct`) | Vocabulary *machinery*: the tag-definition registry (data) + the registry-driven `construct/build` interpreter | `core/` only |
+| `construction.clj` | Non-opt-out lifts | `core/` + construct-kit |
+| `vocab/*` | Opt-in vocabularies | `core/` + construct-kit; never `construction.clj`, never each other's methodology |
+
+The **construct-kit** is the one shared dependency `construction.clj` and `vocab/*` may take *beyond* `core/`. It is machinery for *declaring* vocabularies — the registry as data plus the generic interpreter that turns a tag-definition + payload into substrate datoms — not a methodology, so depending on it does not couple one methodology to another (which is what "never each other" protects). The interpreter is kind-agnostic (it reads tag-definitions; it hardcodes no kinds); the registry is the fukan-specific vocabulary data it consumes.
 
 Canvas ports (in `canvas/`) may require any combination of `construction` and `vocab.*` namespaces, plus `core/helpers` and `core/shape` directly when needed.
 

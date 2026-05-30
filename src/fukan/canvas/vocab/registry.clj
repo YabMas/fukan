@@ -24,15 +24,22 @@
     :doc "An opaque named type — a concept whose internal structure is withheld."}
    {:tag :canvas/record
     :family :Type :payload :record
+    :edges [{:strategy :shape-refs :edge :references}]
     :doc "A data type with named, typed fields."}
    {:tag :fukan.canvas.monolith/exposed-call
     :family :Affordance :payload :arrow
+    :edges [{:strategy :shape-refs  :edge :references}
+            {:strategy :to-keywords :from :effect   :edge :fukan.canvas.monolith/performs}
+            {:strategy :by-name     :from :triggers :edge :triggers}
+            {:strategy :by-name     :from :emits    :edge :emits :role :canvas/event}]
     :doc "A synchronous function call: takes inputs, gives an output, may have effects."}
    {:tag :canvas/getter
     :family :Affordance :payload :arrow
+    :edges [{:strategy :shape-refs :edge :references}]
     :doc "A zero-arg accessor returning Optional<T>."}
    {:tag :canvas/checker
     :family :Affordance :payload :arrow
+    :edges [{:strategy :shape-refs :edge :references}]
     :doc "A validation entry point with the signature (Model) -> [Violation]."}
    {:tag :canvas/invariant
     :family :Affordance :payload :prose
@@ -42,9 +49,12 @@
     :doc "A reactive declaration that fires when its trigger pattern matches."}
    {:tag :canvas/event
     :family :Affordance :payload :record
+    :edges [{:strategy :shape-refs :edge :references}]
     :doc "A named event message carrying a payload record."}
    {:tag :canvas/handler
     :family :Affordance :payload :on-emits
+    :edges [{:strategy :to-keywords :from :on    :edge :references}
+            {:strategy :to-keywords :from :emits :edge :references}]
     :doc "A reactive handler: invoked by an event, may emit downstream events."}
    {:tag :exported
     :family nil :payload :none

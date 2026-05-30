@@ -4,24 +4,8 @@
   (:require [fukan.canvas.core.defconstructor :refer [defconstructor]]
             [fukan.canvas.core.helpers :as h]
             [fukan.canvas.core.shape :as shape]
+            [fukan.canvas.vocab.construct :as construct]
             [datascript.core :as d]))
-
-(defn- emit-refs!
-  "Walk a parsed shape; for each :ref encountered, transact a :references Relation
-   from from-id to the ref's target keyword."
-  [from-id shape]
-  (case (:kind shape)
-    :ref      (h/declare-relation from-id :references (:target shape))
-    :optional (emit-refs! from-id (:inner shape))
-    :list     (emit-refs! from-id (:elem shape))
-    :set      (emit-refs! from-id (:elem shape))
-    :sum      (run! #(emit-refs! from-id %) (:variants shape))
-    :tuple    (run! #(emit-refs! from-id %) (:elems shape))
-    :record   (run! (fn [[_ s]] (emit-refs! from-id s)) (:fields shape))
-    :atomic   nil
-    :arrow    (do (emit-refs! from-id (:inputs shape))
-                  (emit-refs! from-id (:outputs shape)))
-    nil))
 
 (defconstructor function
   "A synchronous function call: takes inputs, gives output, may have effects."
@@ -34,62 +18,23 @@
   (form returns   "Returns-label binding for post-condition refs."       :shape :prose)
 
   (produces [name doc forms]
-    (let [takes-vecs     (:takes forms)                ; seq of param vectors
-          takes-args     (when takes-vecs (apply concat takes-vecs)) ; flatten all vectors
-          gives-arg      (first (:gives forms))        ; e.g. :Account or (optional :Account)
-          returns-label  (when-let [r (:returns forms)] (first r))
-          field-pairs    (if takes-args
-                           (vec (->> (partition 2 takes-args)
-                                     (mapv (fn [[n s]] [n (shape/parse s)]))))
-                           [])
-          inputs         {:kind :record :fields field-pairs}
-          outputs        (shape/parse gives-arg)
-          aff            (h/declare-affordance name
-                           :shape {:kind :arrow :inputs inputs :outputs outputs}
-                           :role :fukan.canvas.monolith/exposed-call
-                           :doc doc
-                           :returns-label (when returns-label (str returns-label)))]
-      (emit-refs! (:id aff) {:kind :arrow :inputs inputs :outputs outputs})
-      (doseq [e-args (:effect forms)]
-        (h/declare-relation (:id aff)
-                            :fukan.canvas.monolith/performs
-                            (first e-args)))
-      (when-let [trigger-args (:triggers forms)]
-        (let [rule-name    (str (first trigger-args))
-              db           @h/*store*
-              module-id    h/*enclosing-module*
-              rule-uuid    (when module-id
-                             (ffirst (d/q '[:find ?rid
-                                            :in $ ?mid ?rn
-                                            :where [?m :entity/id ?mid]
-                                                   [?m :module/child ?a]
-                                                   [?a :entity/name ?rn]
-                                                   [?a :entity/id ?rid]]
-                                          db module-id rule-name)))]
-          (if rule-uuid
-            (h/declare-relation (:id aff) :triggers rule-uuid)
-            (binding [*out* *err*]
-              (println (str "canvas/construction: (triggers " rule-name ") in function \""
-                            name "\" — rule not found in enclosing module, skipping Relation"))))))
-      (doseq [emit-args (:emits forms)]
-        (let [event-name (str (first emit-args))
-              db         @h/*store*
-              module-id  h/*enclosing-module*
-              event-uuid (when module-id
-                           (ffirst (d/q '[:find ?eid
-                                          :in $ ?mid ?en
-                                          :where [?m :entity/id ?mid]
-                                                 [?m :module/child ?a]
-                                                 [?a :entity/name ?en]
-                                                 [?a :affordance/role :canvas/event]
-                                                 [?a :entity/id ?eid]]
-                                        db module-id event-name)))]
-          (if event-uuid
-            (h/declare-relation (:id aff) :emits event-uuid)
-            (binding [*out* *err*]
-              (println (str "canvas/construction: (emits " event-name ") in function \""
-                            name "\" — event not found in enclosing module, skipping Relation"))))))
-      aff)))
+    (let [takes-vecs    (:takes forms)
+          takes-args    (when takes-vecs (apply concat takes-vecs))
+          gives-arg     (first (:gives forms))
+          returns-label (when-let [r (:returns forms)] (first r))
+          field-pairs   (if takes-args
+                          (vec (->> (partition 2 takes-args)
+                                    (mapv (fn [[n s]] [n (shape/parse s)]))))
+                          [])
+          arrow         {:kind :arrow
+                         :inputs {:kind :record :fields field-pairs}
+                         :outputs (shape/parse gives-arg)}]
+      (construct/build :fukan.canvas.monolith/exposed-call name arrow
+                       {:effect   (:effect forms)
+                        :triggers (when (:triggers forms) [(:triggers forms)])
+                        :emits    (:emits forms)}
+                       :doc doc
+                       :returns-label (when returns-label (str returns-label))))))
 
 (defconstructor record
   "An owned data type with named typed fields."
@@ -97,18 +42,15 @@
   (form field "A named typed field." :shape :field-pair :repeatable true :required true)
 
   (produces [name doc forms]
-    (let [field-args  (:field forms)
-          field-pairs (mapv (fn [args] [(first args) (shape/parse (second args))]) field-args)
-          t (h/declare-type name :kind :record :fields field-pairs :doc doc)]
-      (doseq [[_ field-shape] field-pairs]
-        (emit-refs! (:id t) field-shape)))))
+    (let [field-pairs (mapv (fn [args] [(first args) (shape/parse (second args))]) (:field forms))]
+      (construct/build :canvas/record name {:kind :record :fields field-pairs} {} :doc doc))))
 
 (defconstructor value
   "An opaque named type — a named concept whose internal structure is withheld.
    Use for Allium-style value declarations with no exposed fields."
 
   (produces [name doc forms]
-    (h/declare-type name :kind :atomic :doc doc)))
+    (construct/build :canvas/value name nil {} :doc doc)))
 
 ;; ---------------------------------------------------------------------------
 ;; Exports / closure mechanism
