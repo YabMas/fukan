@@ -132,117 +132,71 @@
 ;; Merge helpers
 ;; ---------------------------------------------------------------------------
 
-;; Scalar cardinality-many attributes that need to be accumulated as sets
-;; during entity-map extraction (as opposed to ref-typed attrs which are
-;; handled separately in ref-card-many-txs).
-(def ^:private scalar-card-many-attrs
-  #{:entity/tag
-    :entity/alias
-    :references
-    :type/fields
-    :type/field-types
-    :type/field-shapes
-    :affordance/input-types
-    :affordance/output-types})
-
-;; Ref-typed cardinality-many attributes. Their datom values are per-module
-;; eids (integers) that only mean something inside the source db — they MUST
-;; be translated to :entity/id UUID lookup-refs before being transacted into
-;; the merged db, otherwise they alias onto whatever entity happens to land
-;; on that eid in the unified db.
-;;
-;; :module/child has its own dedicated child-txs pass for historical reasons
-;; (the original two-pass shape); :triggers and :emits ride the third pass.
-(def ^:private ref-card-many-attrs
-  #{:triggers :emits})
+;; The merge is schema-driven (see db->entity-maps): ref-typed attrs are
+;; translated to identity lookup-refs and cardinality-many scalars are
+;; accumulated as sets, both discovered from the store schema. New substrate
+;; entity types and attrs are carried automatically — no per-attr registration.
 
 (defn- db->entity-maps
-  "Extract all entities from a per-module Datascript db as transactable data.
+  "Extract all identity-bearing entities from a per-module Datascript db as
+   transactable data — schema-driven, so ANY substrate entity type (nodes,
+   shapes, tag-applications, …) is carried without per-attr registration.
 
-   Returns {:entity-maps [...] :child-txs [...] :ref-txs [...]} where:
-     - entity-maps contains one map per entity with all non-ref attributes
-     - child-txs contains :module/child ref assertions using :entity/id lookup-refs
-     - ref-txs contains :triggers / :emits ref assertions using :entity/id lookup-refs
+   Returns {:entity-maps [...] :ref-txs [...]}:
+     - entity-maps: one map per entity with its identity attr plus all scalar
+       attrs (cardinality-many scalars accumulated as sets).
+     - ref-txs: a [:db/add src-lookup-ref attr tgt-lookup-ref] assertion for
+       every ref-typed datom, translating per-module eids to identity
+       lookup-refs.
 
-   Three-pass approach: entity-maps are transacted first (establishing identity
-   via :entity/id unique attr), then child-txs and ref-txs are transacted to
-   wire refs. This avoids Datascript lookup-ref failures when entities haven't
-   been added yet, AND avoids eid-aliasing across the per-module → unified-db
-   boundary (per-module eids are meaningless in the merged db).
-
-   Cardinality-many scalar attributes (entity/tag, entity/alias, references,
-   type/fields, type/field-types, type/field-shapes, affordance/input-types,
-   affordance/output-types) are accumulated as sets so that all values survive
-   the extraction."
+   Two-pass (entity-maps then ref-txs) so forward refs resolve and per-module
+   eids — meaningless in the merged db — never leak across the boundary.
+   Identity attrs, ref-typed attrs and cardinality-many attrs are all read
+   from the store schema."
   [db]
-  (let [eids (d/q '[:find [?e ...] :where [?e :entity/id _]] db)
-        eid->uuid (into {} (map (fn [eid]
-                                  [eid (ffirst (d/q '[:find ?id :in $ ?e :where [?e :entity/id ?id]] db eid))])
-                                eids))
-        entity-maps (mapv (fn [eid]
+  (let [schema   (:schema db)
+        id-attrs (->> schema
+                      (keep (fn [[a m]] (when (= :db.unique/identity (:db/unique m)) a)))
+                      set)
+        ref?     (fn [a] (= :db.type/ref (get-in schema [a :db/valueType])))
+        many?    (fn [a] (= :db.cardinality/many (get-in schema [a :db/cardinality])))
+        ident    (fn [eid]
+                   (some (fn [a] (when-let [d (first (seq (d/datoms db :eavt eid a)))]
+                                   [a (.-v d)]))
+                         id-attrs))
+        eids     (d/q '[:find [?e ...] :where [?e _ _]] db)
+        eid->id  (into {} (keep (fn [e] (when-let [i (ident e)] [e i])) eids))
+        entity-maps (mapv (fn [[eid [ida idv]]]
                             (reduce (fn [m datom]
-                                      (let [attr (.-a datom)
-                                            val  (.-v datom)]
+                                      (let [a (.-a datom) v (.-v datom)]
                                         (cond
-                                          (= attr :module/child)
-                                          m ; skip ref attrs; emitted in child-txs
-
-                                          (contains? ref-card-many-attrs attr)
-                                          m ; skip ref attrs; emitted in ref-txs
-
-                                          (contains? scalar-card-many-attrs attr)
-                                          (update m attr (fnil conj #{}) val)
-
-                                          :else
-                                          (assoc m attr val))))
-                                    {}
+                                          (ref? a)  m ; refs → ref-txs
+                                          (many? a) (update m a (fnil conj #{}) v)
+                                          :else     (assoc m a v))))
+                                    {ida idv}
                                     (d/datoms db :eavt eid)))
-                          eids)
-        child-txs (mapcat (fn [eid]
-                            (let [uuid        (get eid->uuid eid)
-                                  child-datoms (filter #(= :module/child (.-a %))
-                                                       (d/datoms db :eavt eid))]
-                              (map (fn [datom]
-                                     [:db/add
-                                      [:entity/id uuid]
-                                      :module/child
-                                      [:entity/id (get eid->uuid (.-v datom))]])
-                                   child-datoms)))
-                          eids)
-        ref-txs (mapcat (fn [eid]
-                          (let [from-uuid (get eid->uuid eid)
-                                ref-datoms (filter #(contains? ref-card-many-attrs (.-a %))
-                                                   (d/datoms db :eavt eid))]
-                            (keep (fn [datom]
-                                    (when-let [to-uuid (get eid->uuid (.-v datom))]
-                                      [:db/add
-                                       [:entity/id from-uuid]
-                                       (.-a datom)
-                                       [:entity/id to-uuid]]))
-                                  ref-datoms)))
-                        eids)]
-    {:entity-maps entity-maps :child-txs child-txs :ref-txs ref-txs}))
+                          eid->id)
+        ref-txs (mapcat (fn [[eid [ida idv]]]
+                          (keep (fn [datom]
+                                  (let [a (.-a datom) tgt (.-v datom)]
+                                    (when (ref? a)
+                                      (when-let [[ta tv] (eid->id tgt)]
+                                        [:db/add [ida idv] a [ta tv]]))))
+                                (d/datoms db :eavt eid)))
+                        eid->id)]
+    {:entity-maps entity-maps :ref-txs ref-txs}))
 
 (defn- merge-dbs
-  "Merge a seq of per-module Datascript dbs into one unified db.
-   Entities keep their UUIDs (stable :entity/id). Cross-module :references
-   relations remain as keyword values — they are not resolved to entity refs
-   at merge time; the projection layer resolves them by name.
-
-   Ref-typed cardinality-many attributes (:module/child, :triggers, :emits)
-   are translated from per-module eids to :entity/id UUID lookup-refs before
-   being transacted into the unified db, so that they resolve to the correct
-   target entity (not whichever entity happens to land on the same eid in
-   the merged db)."
+  "Merge a seq of per-module Datascript dbs into one unified db. Entities keep
+   their stable identities; all ref-typed attrs are translated from per-module
+   eids to identity lookup-refs (two passes: identities + scalars first, then
+   refs) so they resolve to the correct target in the merged db. Cross-module
+   :references stay keyword-valued (resolved by name in the projection layer)."
   [dbs]
-  (let [extractions (map db->entity-maps dbs)
-        all-entity-maps (mapcat :entity-maps extractions)
-        all-child-txs   (mapcat :child-txs extractions)
-        all-ref-txs     (mapcat :ref-txs extractions)]
+  (let [extractions (map db->entity-maps dbs)]
     (-> (store/create)
-        (d/db-with all-entity-maps)
-        (d/db-with all-child-txs)
-        (d/db-with all-ref-txs))))
+        (d/db-with (mapcat :entity-maps extractions))
+        (d/db-with (mapcat :ref-txs extractions)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Intra-module same-name detection — the name+role convention
