@@ -15,10 +15,8 @@
             [fukan.canvas.project.core :as project-core]
             [fukan.canvas.project.registry :as project-registry]
             [fukan.canvas.projection.canvas-source :as canvas-source]
+            [fukan.canvas.vocab.registry :as registry]
             [fukan.infra.model :as infra-model]
-            [fukan.model.primitives :as primitives]
-            [fukan.model.relations :as relations]
-            [fukan.model.vocabulary :as vocab]
             [fukan.project-layer.defaults :as defaults]))
 
 ;; -- Helpers ------------------------------------------------------------------
@@ -133,48 +131,25 @@
                      (filter #(relation-matches? % filters)))]
     (envelope rows limit offset)))
 
-(def ^:private known-vocabulary-filters #{:face-role})
-
-(defn- primitive-kind-entry [kind in-use-pks]
-  {:kind      kind
-   :doc       (get vocab/primitive-kind-docs kind)
-   :face-role (get vocab/primitive-kind-face-roles kind)
-   :in-use?   (contains? in-use-pks kind)})
-
-(defn- relation-kind-entry [kind in-use-rks]
-  {:kind    kind
-   :in-use? (contains? in-use-rks kind)})
-
 (defn ^{:agent/layer :L1
-        :agent/doc "Surface the kernel-declared primitive-kinds (with one-sentence
-                    docs and :face-role tags) and relation-kinds. Includes every
-                    kind the kernel substrate declares, whether or not the loaded
-                    Model contains an instance — each entry carries :in-use? so
-                    callers can distinguish 'kernel surface' from 'observed in
-                    this model'. Optional filter: :face-role (one of :face-host,
-                    :face-interface, :face-component, :face-peer)."
-        :agent/example "(vocabulary) (vocabulary :face-role :face-interface)"}
+        :agent/doc "Surface the canvas vocabulary: every registered tag-definition
+                    — the kinds the substrate classifies nodes with — each with its
+                    :family (Module/Affordance/Type), :payload type, :doc, and
+                    :in-use? (whether the loaded substrate contains a node tagged
+                    with it). This is the live, self-registered canvas vocabulary,
+                    not a fixed kernel surface."
+        :agent/example "(vocabulary)"}
   vocabulary
-  [& {:as opts}]
-  (let [unknown (seq (remove known-vocabulary-filters (keys opts)))]
-    (when unknown
-      (throw (ex-info (str "unknown vocabulary filter: " (first unknown))
-                      {:type :unknown-filter :filter (first unknown)}))))
-  (let [m           (ensure-model)
-        in-use-pks  (into #{} (map :kind) (vals (:primitives m)))
-        in-use-rks  (into #{} (map :kind) (:edges m))
-        face-role   (:face-role opts)
-        pk-entries  (->> primitives/primitive-kinds
-                         (map #(primitive-kind-entry % in-use-pks))
-                         (filter #(or (nil? face-role) (= face-role (:face-role %))))
-                         (sort-by :kind)
-                         vec)
-        rk-entries  (->> relations/relation-kinds
-                         (map #(relation-kind-entry % in-use-rks))
-                         (sort-by :kind)
-                         vec)]
-    (cond-> {:primitive-kinds pk-entries}
-      (nil? face-role) (assoc :relation-kinds rk-entries))))
+  []
+  (let [db     (canvas-db)
+        in-use (into #{} (map first)
+                     (d/q '[:find ?tag :where [_ :tagapp/tag ?tag]] db))]
+    {:tags (->> (registry/all)
+                (map (fn [{:keys [tag family payload doc]}]
+                       {:tag tag :family family :payload payload :doc doc
+                        :in-use? (contains? in-use tag)}))
+                (sort-by (comp str :tag))
+                vec)}))
 
 (defn ^{:agent/layer :L1
         :agent/doc "Surface the attribute keys observed on primitives of a given :kind,
