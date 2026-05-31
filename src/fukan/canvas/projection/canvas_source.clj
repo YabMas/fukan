@@ -93,9 +93,10 @@
    of distinct namespace symbols (one per `*.clj` file, excluding
    `*_test.clj`). Sorted so build order is deterministic across runs.
 
-   Fails fast with a clear error if no canvas/ root can be located — at
-   that point fukan has nothing to project and continuing would silently
-   produce an empty model."
+   During the lean-kernel rebuild there may be no canvas/ root yet (the old
+   specs were pruned; new defstructure examples have not landed). In that case
+   this returns an empty vector — an empty model is the correct state — and
+   emits a one-line stderr note so the emptiness is never silent."
   []
   (if-let [roots (canvas-root-dirs)]
     (->> roots
@@ -104,8 +105,11 @@
          distinct
          sort
          vec)
-    (throw (ex-info "canvas-source: canvas/ root not found on classpath or working directory"
-                    {:cwd (System/getProperty "user.dir")}))))
+    (do
+      (binding [*out* *err*]
+        (println "canvas-source: no canvas/ root found — building an empty model"
+                 "(lean-kernel rebuild phase)."))
+      [])))
 
 (defn- require-and-resolve-build-canvas
   "Require a canvas namespace and resolve its build-canvas var. Throws if

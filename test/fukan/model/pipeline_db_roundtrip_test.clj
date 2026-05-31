@@ -8,7 +8,6 @@
    If this passes, db-as-source is transparent to every downstream consumer
    (drift, coverage, edb, L1/L2, viewer), which all read the map."
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.model.pipeline :as pipeline]
             [fukan.target.clojure.analyzer :as analyzer]
             [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.project-layer.defaults :as project-defaults]))
@@ -56,11 +55,8 @@
       (is (pos? (count derived-artifacts))
           "fukan-on-fukan actually projects artifacts (guards against vacuous pass)"))))
 
-(deftest retained-canvas-db-carries-phase6-datoms
-  (testing "the retained canvas-db now carries artifact + reified projects datoms"
-    (let [{:keys [canvas-db]} (pipeline/build-model "src")
-          arts  (canvas-source/db->artifacts canvas-db)
-          edges (canvas-source/db->projects-edges canvas-db)]
-      (is (pos? (count arts)) "artifacts are queryable in the db")
-      (is (pos? (count edges)) "projects edges are queryable in the db")
-      (is (every? #(= :relation/projects (:kind %)) edges)))))
+;; (retained-canvas-db-carries-phase6-datoms removed — it asserted positive
+;;  projects-edge counts, which require spec primitives to project onto. With
+;;  the canvas specs pruned the model is empty; the assertion returns with the
+;;  Tier-2 example specs. The roundtrip-equivalence test above still exercises
+;;  Phase 6 over the analyzer's source artifacts.)
