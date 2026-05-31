@@ -1,4 +1,0 @@
--- boundary: 1
-fn hello() -> Greeting
-exports:
-    Greeting

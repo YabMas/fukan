@@ -1,7 +1,0 @@
--- allium: 2
-
--- Minimal Allium sibling for boundary fixture testing.
-
-entity Greeting {
-    text: String
-}

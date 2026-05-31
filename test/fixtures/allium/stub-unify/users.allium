@@ -1,7 +1,0 @@
--- allium: 2
--- Fixture: real entity declaration that stub-unification should bind to.
-
-entity User {
-    id: String
-    name: String
-}

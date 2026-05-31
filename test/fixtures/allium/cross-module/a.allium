@@ -1,6 +1,0 @@
--- allium: 2
--- Fixture: cross-module type-ref target module
-
-entity Foo {
-    id: String
-}
