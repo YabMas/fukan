@@ -6,6 +6,39 @@ The system is generic and pluggable: language analyzers (currently Clojure) regi
 
 The system follows a functional core / imperative shell architecture, enforced by canvas specs.
 
+## ⚠ Current state — lean-kernel rebuild (Tier 1 prune complete)
+
+Fukan is mid-regroup: a deliberate radical prune down to a lean kernel, to be
+rebuilt around a single structure-definition primitive (working name
+`defstructure`: a structure = its composition of Nodes/Relations + the datalog
+constraints that must hold of it). **Tier 1 (the prune) is done; Tier 2 (the
+primitive + rebuild) has not started.** Until it does, much of the detail below
+describes the *pre-prune* architecture and is being reworked.
+
+What this means right now:
+
+- **Pruned** (gone, recoverable from jj history): the 63 canvas specs, the demo
+  projects, Phase 4 (`validation/`) and Phase 5 (`constraint/`), the retired
+  Allium/Boundary parsers, the `distributed/` scaffolding. The build pipeline is
+  now **Phase 0 (canvas ingestion) → Phase 6 (Clojure analyzer)** only, and
+  **builds an empty model** until new examples land.
+- **Paused** (parked under `.paused/`, off the classpath — see
+  [.paused/README.md](.paused/README.md)): the browser explorer (`web/`,
+  top-level `projection/`, `infra/server`), the **agent query surface**
+  (`agent/*` + the `bin/fukan` daemon), and the rebuild-later analysis tools
+  (`canvas/{lens,inspect,instruct,project}`). So the "Querying the Model as an
+  agent" and viewer workflows below are **paused** — they return once the core
+  stabilises.
+- **Kept** (the lean tree): `model/`, `target/clojure` (analyzer),
+  `projection/canvas_source`, `infra/model`, `project_layer/`, and the canvas
+  floor (`canvas/core/{substrate,store,shape,check,helpers}`). Still present but
+  slated for Tier-2 replacement-by-`defstructure`: `construction.clj`,
+  `canvas/core/{defconstructor,defquery,classification}`, and `canvas/vocab/*`.
+- **The feedback loop in the meantime** is in-process, not the daemon: build a
+  store with `with-canvas`, query it with `d/q`, run constraints — at the REPL
+  (`clj -M:dev`). `dev/user.clj` keeps `(go)`/`(refresh)`/`(reset)`/`(status)`
+  as model-build/reload helpers (no server).
+
 ## Querying the Model as an agent
 
 Fukan exposes its Model to coding agents through `bin/fukan`. When working on or with Fukan, prefer querying the spec graph over grepping the codebase.
