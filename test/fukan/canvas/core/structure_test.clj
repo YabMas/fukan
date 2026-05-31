@@ -4,16 +4,13 @@
    `check` runs them, including a recursive free law."
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]))
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            ;; Use the real vocabulary (Type/Function) rather than redefining it —
+            ;; the structure registry is global-by-tag, so test redefinitions would
+            ;; collide with fukan.canvas.structures. Tree is test-only (unique tag).
+            [fukan.canvas.structures :refer [Type Function]]))
 
 ;; ── structures under test ───────────────────────────────────────────────────
-
-(defstructure Type "An opaque named type.")
-
-(defstructure Function
-  "A synchronous call: takes inputs, gives exactly one output."
-  (slot :takes (many Type) :label-as :param)
-  (slot :gives (one  Type)))
 
 (defstructure Tree
   "A self-referential structure."
