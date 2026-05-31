@@ -599,22 +599,8 @@
       (is (= ["ThingHappened" :canvas/event] (first target-roles))
           ":emits must resolve to the event named ThingHappened, not a stray entity"))))
 
-(deftest triggers-integrity-clean-in-full-canvas
-  (testing "the full canvas db produces no :triggers-target-not-a-rule integrity findings"
-    ;; Regression test for the live bug: constraint.phase5/run, target.clojure.analyzer/run,
-    ;; and validation.phase4/run all declare (triggers RunPhase5) etc. with matching rules
-    ;; in-module. The merge bug caused those triggers to alias onto unrelated entities.
-    (let [db        (canvas-source/build-canvas-db)
-          findings  (require 'fukan.canvas.inspect.integrity)
-          _ findings
-          run-fn    (resolve 'fukan.canvas.inspect.integrity/check)
-          all       (run-fn db)
-          triggers-findings (filter #(= :inspect.integrity/triggers-target-not-a-rule
-                                         (:check %))
-                                    all)]
-      (is (empty? triggers-findings)
-          (str ":triggers integrity findings must be empty after the merge fix; got "
-               (pr-str triggers-findings))))))
+;; (triggers-integrity-clean-in-full-canvas removed — inspect.integrity is
+;;  parked under .paused/ during the lean-kernel rebuild.)
 
 (deftest type-field-types-survives-merge
   (testing ":type/field-types (cardinality-many scalar) survives merge for a record with multiple field types"

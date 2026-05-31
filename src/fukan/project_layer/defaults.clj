@@ -1,8 +1,8 @@
 (ns fukan.project-layer.defaults
   "fukan-on-fukan's own project registry. The self-referential case:
    fukan's source lives under the `fukan.*` namespace, so a canvas
-   module-coord such as `infra.server` maps to the Clojure ns
-   `fukan.infra.server`. The registry's :root-prefix carries that
+   module-coord such as `infra.model` maps to the Clojure ns
+   `fukan.infra.model`. The registry's :root-prefix carries that
    prefix; no custom type overrides and no idioms in Plan 5's MVP."
   (:require [fukan.project-layer.registry :as r]))
 

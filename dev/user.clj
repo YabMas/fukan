@@ -1,8 +1,13 @@
 (ns user
-  "Development helpers for REPL-driven workflow."
+  "Development helpers for REPL-driven workflow.
+
+   The HTTP server + web explorer are PAUSED during the lean-kernel rebuild
+   (parked under .paused/), so the server-lifecycle helpers are gone. The
+   kernel feedback loop is now: build a store with `with-canvas`, query it
+   with `d/q`, run constraints — all in-process. `refresh` reloads code and
+   rebuilds the held model; `status` reports the model."
   (:require [clj-reload.core :as reload]
             [fukan.infra.model :as infra-model]
-            [fukan.infra.server :as infra-server]
             [fukan.canvas.projection.canvas-source :as canvas-source]))
 
 (defonce ^:private _reload-init
@@ -17,34 +22,29 @@
     result))
 
 (defn go
-  "Start the system. Options: :src (default \"src\"), :port (default 8080)."
-  [{:keys [src port] :or {src "src" port 8080}}]
-  (if (infra-server/running?)
-    (println "Server already running on port" (infra-server/get-port))
-    (do
-      (infra-model/load-model src)
-      (infra-server/start-server {:port port}))))
+  "Build the held model headlessly. Option: :src (default \"src\").
+   (The web explorer is paused — parked under .paused/.)"
+  [{:keys [src] :or {src "src"}}]
+  (infra-model/load-model src))
 
-(defn halt [] (infra-server/stop-server))
+(defn reset
+  "Reload changed code, then rebuild the held model from the last src."
+  []
+  (reload-code!)
+  (if (infra-model/get-src)
+    (infra-model/refresh-model)
+    (println "No model loaded yet. Use (go) first.")))
 
-(defn reset []
-  (if-let [src (infra-model/get-src)]
-    (let [port (or (infra-server/get-port) 8080)]
-      (halt)
-      (reload-code!)
-      (go {:src src :port port}))
-    (println "No previous configuration. Use (go) first.")))
-
-(defn refresh []
-  (if (infra-server/running?)
-    (do (reload-code!) (infra-model/refresh-model)
-        (println "Refreshed. Browser will see changes on next request."))
-    (println "Server not running. Use (go) first.")))
+(defn refresh
+  "Reload changed code + rebuild the held model. Use after editing a spec."
+  []
+  (reload-code!)
+  (if (infra-model/get-src)
+    (do (infra-model/refresh-model)
+        (println "Refreshed."))
+    (println "No model loaded yet. Use (go) first.")))
 
 (defn status []
-  (println "Server:" (if (infra-server/running?)
-                       (str "running on port " (infra-server/get-port))
-                       "stopped"))
   (println "Model:" (if-let [m (infra-model/get-model)]
                       (str (count (:primitives m)) " primitives, "
                            (count (:edges m)) " edges"
@@ -91,7 +91,6 @@
 
 (comment
   (go {})
-  (halt)
   (reset)
   (refresh)
   (status)
