@@ -4,3 +4,8 @@
 .clj-kondo/imports
 .clj-kondo/.lock
 .vsdd
+
+# Active planning artifact — design doc for the in-progress defstructure
+# rebuild. Kept on disk as a working reference but, per CLAUDE.md, planning
+# documents stay out of every commit.
+/doc/specs/2026-05-31-defstructure-design.md
