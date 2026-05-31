@@ -11,8 +11,6 @@
             [fukan.model.pipeline :as pipeline]
             [fukan.target.clojure.analyzer :as analyzer]
             [fukan.canvas.projection.canvas-source :as canvas-source]
-            [fukan.validation.phase4 :as phase4]
-            [fukan.constraint.phase5 :as phase5]
             [fukan.project-layer.defaults :as project-defaults]))
 
 (defn- norm-artifacts
@@ -36,18 +34,16 @@
 
 (deftest phase6-db-roundtrip-matches-in-memory-projection
   (testing "db-derived Phase-6 content equals the analyzer's in-memory output"
-    ;; Both representations must derive from the SAME m3 — the Phase 0–5 build
+    ;; Both representations must derive from the SAME m0 — the Phase 0 build
     ;; has run-to-run variance (symbol-walk collision ordering), so rebuilding
     ;; independently would compare two different models, not the round-trip.
     (let [db0 (canvas-source/build-canvas-db)
           m0  (canvas-source/project db0)
-          {m4 :model v :violations} (phase4/run m0)
-          m3  (phase5/run (assoc m4 :violations v))
           reg (project-defaults/fukan-on-fukan)
           ;; in-memory: analyzer assoc's onto the model (the old shape)
-          in-memory (analyzer/run m3 reg "src")
+          in-memory (analyzer/run m0 reg "src")
           ;; db path: analyzer transacts into db0; map derives back out
-          {db1 :db} (analyzer/enrich-db db0 m3 reg "src"
+          {db1 :db} (analyzer/enrich-db db0 m0 reg "src"
                                         (canvas-source/stable->uuid-map db0))
           derived-artifacts (canvas-source/db->artifacts db1)
           derived-edges     (canvas-source/db->projects-edges db1)]
