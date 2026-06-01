@@ -170,6 +170,15 @@
       (is (contains? (laws-firing db :Tree) "no cycle through :child")
           "the authored cycle is real — caught by the no-cycle law"))))
 
+(deftest unresolved-reference-is-an-error
+  (testing "a slot reference to a non-existent entity errors (not silently skipped)"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"not an entity in the enclosing module"
+          (s/with-structures
+            (s/within-module "demo"
+              (Type "Int")
+              (Function "f" (gives Nonexistent))))))))   ; Nonexistent is never declared
+
 (deftest some-cardinality-requires-at-least-one
   (testing "(some Type): zero is a violation, one or more is clean"
     (let [zero (s/with-structures

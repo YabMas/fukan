@@ -107,8 +107,10 @@
 
 (defn- emit-relations!
   "Resolve a queued instance's slot clauses against the now-declared module
-   entities and transact its reified relations. An unresolvable target is skipped
-   with a stderr note (the policy for a genuinely-absent name)."
+   entities and transact its reified relations. Resolution runs after the whole
+   module is declared (two-pass), so a target that still does not resolve is a
+   genuine error — a typo, or a forward/cross-module reference the by-name,
+   module-scoped resolver does not reach — and is thrown, not skipped."
   [{:keys [tag name node-id clauses]}]
   (let [sdef (structure-by-tag tag)
         db   @*store*]
@@ -123,16 +125,16 @@
         (doseq [arg args]
           (let [{:keys [label target]} (parse-clause-arg arg)
                 target-id (resolve-in-module db target)]
-            (if target-id
-              (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rel)
-                                               "|" target "|" (random-uuid))
-                                   :rel/from [:entity/id node-id]
-                                   :rel/kind rel
-                                   :rel/to   [:entity/id target-id]}
-                            label (assoc :rel/label label))])
-              (binding [*out* *err*]
-                (println (str name ": " (clojure.core/name rel) " target '" target
-                              "' not found in enclosing module — skipping relation"))))))))))
+            (when-not target-id
+              (throw (ex-info (str name ": " (clojure.core/name rel) " references '" target
+                                   "', which is not an entity in the enclosing module")
+                              {:structure tag :instance name :rel rel :target target})))
+            (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rel)
+                                             "|" target "|" (random-uuid))
+                                 :rel/from [:entity/id node-id]
+                                 :rel/kind rel
+                                 :rel/to   [:entity/id target-id]}
+                          label (assoc :rel/label label))])))))))
 
 (defn flush-pending-relations!
   "Pass 2 (on `within-module` exit): emit the relations queued during the body,
