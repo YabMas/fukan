@@ -177,4 +177,8 @@
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Role       hooks.fukan.structure/instance
    demos.type-system.vocab.core/Field         hooks.fukan.structure/instance
-   demos.type-system.vocab.core/Type          hooks.fukan.structure/instance}}}
+   demos.type-system.vocab.core/Type          hooks.fukan.structure/instance
+   ;; fukan self-spec vocabularies (canvas/**). Value structures (e.g. Shape) are
+   ;; authored inline inside an entity's clause body, which the hook drops — so
+   ;; only the named entity structures need registration.
+   canvas.pipeline.vocab/Stage                hooks.fukan.structure/instance}}}
