@@ -6,38 +6,50 @@ The system is generic and pluggable: language analyzers (currently Clojure) regi
 
 The system follows a functional core / imperative shell architecture, enforced by canvas specs.
 
-## ⚠ Current state — lean-kernel rebuild (Tier 1 prune complete)
+## ⚠ Current state — lean kernel rebuilt; now in a modelling-exploration phase
 
-Fukan is mid-regroup: a deliberate radical prune down to a lean kernel, to be
-rebuilt around a single structure-definition primitive (working name
-`defstructure`: a structure = its composition of Nodes/Relations + the datalog
-constraints that must hold of it). **Tier 1 (the prune) is done; Tier 2 (the
-primitive + rebuild) has not started.** Until it does, much of the detail below
-describes the *pre-prune* architecture and is being reworked.
+The radical prune and the rebuild around a single structure-definition primitive
+are **done**. `defstructure` is the heart of the kernel: *a structure = its
+composition of Nodes/Relations + the datalog laws that must hold of it.* The
+structure substrate **is** the model (no separate model-map). Much of the
+*detailed reference below this banner predates the rebuild and is stale* — trust
+this banner and the `canvas/core/structure` + `canvas/structures` source.
 
-What this means right now:
+**The lean kernel — 8 source files:**
+- `canvas/core/structure.clj` — the `defstructure` primitive (slots + laws, `check`)
+- `canvas/structures.clj` — base vocabulary (Type / Effect / Event / Function)
+- `canvas/projection/canvas_source.clj` — ingestion: discover `canvas/**/*.clj`
+  defstructure specs → merge into one structure db
+- `model/pipeline.clj` → `build-model` returns that db; `infra/model` holds it
+- `core.clj`, `utils/files.clj`, `libs/coordinate.clj`
 
-- **Pruned** (gone, recoverable from jj history): the 63 canvas specs, the demo
-  projects, Phase 4 (`validation/`) and Phase 5 (`constraint/`), the retired
-  Allium/Boundary parsers, the `distributed/` scaffolding. The build pipeline is
-  now **Phase 0 (canvas ingestion) → Phase 6 (Clojure analyzer)** only, and
-  **builds an empty model** until new examples land.
-- **Paused** (parked under `.paused/`, off the classpath — see
-  [.paused/README.md](.paused/README.md)): the browser explorer (`web/`,
-  top-level `projection/`, `infra/server`), the **agent query surface**
-  (`agent/*` + the `bin/fukan` daemon), and the rebuild-later analysis tools
-  (`canvas/{lens,inspect,instruct,project}`). So the "Querying the Model as an
-  agent" and viewer workflows below are **paused** — they return once the core
-  stabilises.
-- **Kept** (the lean tree): `model/`, `target/clojure` (analyzer),
-  `projection/canvas_source`, `infra/model`, `project_layer/`, and the canvas
-  floor (`canvas/core/{substrate,store,shape,check,helpers}`). Still present but
-  slated for Tier-2 replacement-by-`defstructure`: `construction.clj`,
-  `canvas/core/{defconstructor,defquery,classification}`, and `canvas/vocab/*`.
-- **The feedback loop in the meantime** is in-process, not the daemon: build a
-  store with `with-canvas`, query it with `d/q`, run constraints — at the REPL
-  (`clj -M:dev`). `dev/user.clj` keeps `(go)`/`(refresh)`/`(reset)`/`(status)`
-  as model-build/reload helpers (no server).
+**Parked under `.paused/`** (off-classpath; rebuilt on the structure substrate in
+their own future cycles, none scheduled): the browser explorer (`web/`, top-level
+`projection/`, `infra/server`), the agent query surface (`agent/*` + `bin/fukan`),
+the analysis tools (`canvas/{lens,inspect,instruct,project}`), the Clojure
+analyzer (`target/`), and `project_layer/`.
+
+**The browser explorer / viewer is DEFERRED INDEFINITELY.** It is fukan's eventual
+vision (the intro above), but it is *not on the near roadmap and should not be
+proposed as a next step* — the core is being exercised extensively first. Do not
+re-suggest reviving it.
+
+**Direction — exercise the core via modelling, not a premature middle layer.**
+The work now is authoring a wide variety of models directly on `defstructure`
+(canvas specs), to exercise and pressure-test the core in every way. We are
+**not** building a reusable methodology/middle layer (DDD/hexagonal/C4 vocabularies)
+yet — there's no purpose for one today. Keep the core *able* to grow such a layer
+later (the refinement mechanism — see decision #4), and prove that mechanism only
+when a concrete need arises; otherwise the focus is exploring modelling itself.
+
+**Feedback loop:** in-process REPL (`clj -M:dev`) — build a structure db with
+`with-structures`/`within-module` and the vocabulary macros, query it with `d/q`,
+run `(structure/check db)`. `build-model` ingests the `canvas/` specs into the
+model db; `dev/user.clj` keeps `(go)`/`(refresh)`/`(reset)`/`(status)` (no server).
+
+The detailed sections below (agent querying, spec locations, vocabulary catalog,
+shape grammar, three-tier rules, …) describe the **pre-rebuild** architecture and
+are retained only for historical reference until rewritten.
 
 ## Querying the Model as an agent
 
