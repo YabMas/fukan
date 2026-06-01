@@ -71,6 +71,17 @@
   (slot :pair (many Pair))
   (slot :box  (many Boxed)))
 
+;; data-literal reader: a bare Int authors a Wrapped value (exercises the generic
+;; per-structure :reader — a literal arg is expanded to construction clauses).
+(defstructure ^:value Wrapped
+  "A value with a data-literal reader: the literal `5` authors `(v 5)`."
+  (slot :v (one :Int))
+  (reader (fn [n] [(list 'v n)])))
+
+(defstructure Holder2
+  "An entity holding Wrapped values authored via the Int literal."
+  (slot :w (many Wrapped)))
+
 ;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
 ;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
 ;;  guard is exercised by registering such a law directly — see
@@ -94,6 +105,9 @@
 
 (defn- laws-firing [db tag]
   (set (map :law (filter #(= tag (:structure %)) (s/check db)))))
+
+(defn- count-of [db tag]
+  (count (d/q '[:find ?e :in $ ?t :where [?e :structure/of ?t]] db tag)))
 
 ;; ── tests ───────────────────────────────────────────────────────────────────
 
@@ -351,10 +365,17 @@
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
       (is (re-find #"must be \(one \.\.\.\) or \(optional \.\.\.\)" msg)))))
 
-;; ── value-identity (content-deduped, inline-anonymous value nodes) ───────────
+(deftest data-literal-reader-expands-and-dedups
+  (testing "a value structure's :reader expands a literal arg into clauses; equal literals dedup"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Holder2 "h" (w 5) (w 5) (w 6))))]      ; 5 authored twice
+      (is (= 2 (count-of db :Wrapped)) "5, 5, 6 → two Wrapped nodes (the two 5s dedup)")
+      (is (= #{5 6} (set (map first (d/q '[:find ?n
+                                           :where [?x :structure/of :Wrapped] [?x :val/v ?n]]
+                                         db))))))))
 
-(defn- count-of [db tag]
-  (count (d/q '[:find ?e :in $ ?t :where [?e :structure/of ?t]] db tag)))
+;; ── value-identity (content-deduped, inline-anonymous value nodes) ───────────
 
 (deftest equal-value-instances-dedup-to-one-node
   (testing "two inline value instances with identical composition collapse to one node"

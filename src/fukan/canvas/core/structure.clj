@@ -107,9 +107,12 @@
 (defn- slot-for [sdef rel] (first (filter #(= rel (:rel %)) (:slots sdef))))
 
 (defn- parse-clause-arg
-  "A slot clause arg is either `target` (a name) or `[label target]`."
+  "A slot clause arg is `[label target]` (a 2-element, symbol-headed vector) or a
+   bare `target`. A 1-element vector / map is NOT a label form — it is a data
+   literal target (e.g. a `[X]` list-shape or `{:k v}` record-shape) handed to the
+   target structure's :reader by `resolve-target`."
   [arg]
-  (if (vector? arg)
+  (if (and (vector? arg) (= 2 (count arg)) (symbol? (first arg)))
     {:label (str (first arg)) :target (second arg)}
     {:label nil :target arg}))
 
@@ -137,7 +140,7 @@
         rels    (vec (for [c clauses :when (not (scalar? c))
                            arg (rest c)
                            :let [{:keys [label target]} (parse-clause-arg arg)
-                                 tid (resolve-target db target)]]
+                                 tid (resolve-target db (:target (slot-for sdef (keyword (first c)))) target)]]
                        (do (when-not tid
                              (throw (ex-info (str (clojure.core/name tag) ": "
                                                   (clojure.core/name (keyword (first c)))
@@ -161,19 +164,35 @@
     node-id))
 
 (defn- resolve-target
-  "Resolve a relation clause target to a node id: an inline value form
-   `(ValueTag clause...)` → construct (and dedup) the value; otherwise a name →
-   the enclosing module's entity of that name (or nil if unresolved)."
-  [db target]
-  (if (and (seq? target) (symbol? (first target)))
-    (let [vtag  (keyword (first target))
-          vsdef (structure-by-tag vtag)]
-      (when-not (:value? vsdef)
-        (throw (ex-info (str "inline construction of " vtag " — only ^:value structures"
-                             " may be authored inline")
-                        {:tag vtag :form target})))
-      (construct-value! vtag (rest target)))
-    (resolve-in-module db target)))
+  "Resolve a relation clause target (for a slot whose declared target structure is
+   `target-tag`) to a node id:
+   - an explicit value form `(ValueTag clause...)` → construct (and dedup) it;
+   - a data LITERAL (symbol / vector / map) when target-tag's structure declares a
+     `:reader` → expand the literal to clauses via the reader, then construct;
+   - otherwise a name (symbol) → the enclosing module's entity of that name (nil
+     if unresolved)."
+  [db target-tag target]
+  (let [sdef (structure-by-tag target-tag)]
+    (cond
+      (and (seq? target) (symbol? (first target)))
+      (let [vtag  (keyword (first target))
+            vsdef (structure-by-tag vtag)]
+        (when-not (:value? vsdef)
+          (throw (ex-info (str "inline construction of " vtag " — only ^:value structures"
+                               " may be authored inline")
+                          {:tag vtag :form target})))
+        (construct-value! vtag (rest target)))
+
+      (and (:value? sdef) (:reader sdef))
+      (construct-value! target-tag ((:reader sdef) target))
+
+      (symbol? target)
+      (resolve-in-module db target)
+
+      :else
+      (throw (ex-info (str "cannot resolve " (pr-str target) " as a " target-tag
+                           " — not a name, and " target-tag " declares no data-literal reader")
+                      {:target target :tag target-tag})))))
 
 (defn- emit-relations!
   "Resolve a queued instance's slot clauses against the now-declared module
@@ -194,7 +213,7 @@
                           {:tag tag :rel rel})))
         (doseq [arg args]
           (let [{:keys [label target]} (parse-clause-arg arg)
-                target-id (resolve-target db target)]
+                target-id (resolve-target db (:target slot) target)]
             (when-not target-id
               (throw (ex-info (str name ": " (clojure.core/name rel) " references '" target
                                    "', which is not an entity in the enclosing module")
@@ -336,9 +355,9 @@
    shape (rejected here; the *law-timeout-ms* guard backstops the rest)."
   [sname docstring & body]
   (doseq [form body]
-    (when-not (and (seq? form) (#{'slot 'law} (first form)))
+    (when-not (and (seq? form) (#{'slot 'law 'reader} (first form)))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected (slot ...) or (law ...)")
+                           " — expected (slot ...), (law ...) or (reader ...)")
                       {:structure sname :form form}))))
   (let [value? (boolean (:value (meta sname)))   ; ^:value → content-deduped value structure
         tag   (keyword (name sname))
@@ -353,9 +372,12 @@
         ;; stamp the owning structure tag onto each law so check can auto-scope it
         laws  (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
         _     (doseq [law laws] (check-law-recursion! sname law))
+        reader-form (some (fn [f] (when (= 'reader (first f)) (second f)))
+                          (filter #(= 'reader (first %)) body))
         sdef  {:tag tag :doc docstring :slots slots :laws laws :value? value?}]
     `(do
-       (register-structure! '~sdef)
+       ;; a (reader fn) form injects a data-literal expander (fn) into the sdef
+       (register-structure! ~(if reader-form `(assoc '~sdef :reader ~reader-form) `'~sdef))
        ;; A value structure is authored inline (anonymous, deduped) → its macro
        ;; takes no name and constructs-and-dedups; an entity structure is named.
        ~(if value?
