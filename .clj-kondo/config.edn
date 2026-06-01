@@ -160,4 +160,7 @@
    fukan.canvas.core.structure-test/NonEmpty hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Plain    hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Tagged   hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Auditor  hooks.fukan.structure/instance}}}
+   fukan.canvas.core.structure-test/Auditor  hooks.fukan.structure/instance
+   ;; demo vocabularies (demos/**) — each new demo's defstructure macros go here
+   demos.grammar.vocab.core/Symbol  hooks.fukan.structure/instance
+   demos.grammar.vocab.core/Grammar hooks.fukan.structure/instance}}}
