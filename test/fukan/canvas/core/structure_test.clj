@@ -54,6 +54,23 @@
     :offenders '[?x]
     :where '[[?x :val/size ?s] [(<= ?s 0)]]))
 
+;; value-identity test vocab: Pair/Boxed are ^:value (content-deduped, inline,
+;; anonymous); Holder is an entity that holds them.
+(defstructure ^:value Pair
+  "A value-typed pair of ints — content-identified."
+  (slot :fst (one :Int))
+  (slot :snd (one :Int)))
+
+(defstructure ^:value Boxed
+  "A value wrapping a Pair (nested value) and pointing at a Type entity."
+  (slot :inner (one Pair))
+  (slot :ty    (one Type)))
+
+(defstructure Holder
+  "An entity that holds value-typed Pairs and Boxeds inline."
+  (slot :pair (many Pair))
+  (slot :box  (many Boxed)))
+
 ;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
 ;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
 ;;  guard is exercised by registering such a law directly — see
@@ -333,3 +350,72 @@
                    (catch Throwable e
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
       (is (re-find #"must be \(one \.\.\.\) or \(optional \.\.\.\)" msg)))))
+
+;; ── value-identity (content-deduped, inline-anonymous value nodes) ───────────
+
+(defn- count-of [db tag]
+  (count (d/q '[:find ?e :in $ ?t :where [?e :structure/of ?t]] db tag)))
+
+(deftest equal-value-instances-dedup-to-one-node
+  (testing "two inline value instances with identical composition collapse to one node"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Holder "h" (pair (Pair (fst 1) (snd 2)))
+                             (pair (Pair (fst 1) (snd 2))))))]   ; same content
+      (is (= 1 (count-of db :Pair)) "the two structurally-equal Pairs are one node"))))
+
+(deftest distinct-value-instances-are-distinct-nodes
+  (testing "value instances with different composition are different nodes"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Holder "h" (pair (Pair (fst 1) (snd 2)))
+                             (pair (Pair (fst 3) (snd 4))))))]
+      (is (= 2 (count-of db :Pair))))))
+
+(deftest value-nodes-are-anonymous-and-ownerless
+  (testing "a value node carries no :entity/name and is not a :module/child"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Holder "h" (pair (Pair (fst 1) (snd 2))))))
+          pair-id (ffirst (d/q '[:find ?e :where [?e :structure/of :Pair]] db))]
+      (is (empty? (d/q '[:find ?n :in $ ?e :where [?e :entity/name ?n]] db pair-id))
+          "no :entity/name")
+      (is (empty? (d/q '[:find ?m :in $ ?e :where [?m :module/child ?e]] db pair-id))
+          "not owned by any module"))))
+
+(deftest value-dedup-folds-in-entity-identity-and-nesting
+  (testing "Boxed over the same inner Pair + same Type entity dedups (recursively)"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Type "Int")
+                 (Holder "h"
+                   (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty Int)))
+                   (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty Int))))))]
+      (is (= 1 (count-of db :Boxed)) "the two Boxeds collapse")
+      (is (= 1 (count-of db :Pair))  "their inner Pairs collapse too"))))
+
+(deftest distinct-entity-target-makes-distinct-value
+  (testing "same scalar composition but a different entity target → distinct value nodes"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Type "Int")
+                 (Type "Str")
+                 (Holder "h"
+                   (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty Int)))
+                   (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty Str))))))]
+      (is (= 2 (count-of db :Boxed)) "different :ty entity → different Boxed")
+      (is (= 1 (count-of db :Pair))  "but the identical inner Pairs still share"))))
+
+(deftest laws-run-over-value-nodes
+  (testing "slot laws fire on deduped value nodes (type-check + relation target-type)"
+    (let [bad-scalar (s/with-structures
+                       (s/within-module "demo"
+                         (Holder "h" (pair (Pair (fst "no") (snd 2))))))   ; fst not an Int
+          bad-target (s/with-structures
+                       (s/within-module "demo"
+                         (Plain "p")
+                         (Holder "h"
+                           (box (Boxed (inner (Pair (fst 1) (snd 2)))
+                                       (ty p))))))]                        ; ty targets a Plain, not a Type
+      (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must be a Int"))
+      (is (contains? (set (map :law (s/check bad-target))) "Boxed.ty target must be a Type")))))

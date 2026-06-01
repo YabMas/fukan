@@ -117,6 +117,64 @@
 ;; instance node rather than emitting relations.
 (def ^:private builtin-clauses #{'doc})
 
+(declare resolve-target)
+
+(defn construct-value!
+  "Construct (and dedup) a value-typed instance of `tag` from `clauses`. Identity
+   is a deterministic function of composition (tag + scalar slot values + resolved
+   relation targets), so structurally-equal values collapse to one node via
+   datascript :entity/id uniqueness. Value nodes are anonymous (no :entity/name)
+   and ownerless (no :module/child) — a value exists only as a component. Runs in
+   the resolution pass; nested inline values recurse, entity targets resolve by
+   name. Returns the value node's content :entity/id."
+  [tag clauses]
+  (let [sdef    (structure-by-tag tag)
+        db      @*store*
+        scalar? (fn [c] (scalar-slot? (slot-for sdef (keyword (first c)))))
+        scalars (into (sorted-map)
+                      (for [c clauses :when (scalar? c)]
+                        [(keyword "val" (clojure.core/name (first c))) (second c)]))
+        rels    (vec (for [c clauses :when (not (scalar? c))
+                           arg (rest c)
+                           :let [{:keys [label target]} (parse-clause-arg arg)
+                                 tid (resolve-target db target)]]
+                       (do (when-not tid
+                             (throw (ex-info (str (clojure.core/name tag) ": "
+                                                  (clojure.core/name (keyword (first c)))
+                                                  " references '" target "', which is not an"
+                                                  " entity in the enclosing module")
+                                             {:structure tag :rel (first c) :target target})))
+                           {:rk (keyword (first c)) :label label :tid tid})))
+        ckey    (pr-str [(clojure.core/name tag)
+                         scalars
+                         (sort (map (fn [{:keys [rk label tid]}]
+                                      [(clojure.core/name rk) (str label) (str tid)])
+                                    rels))])
+        node-id (str "#val" ckey)]
+    (transact! [(into {:entity/id node-id :structure/of tag} scalars)])
+    (doseq [{:keys [rk label tid]} rels]
+      (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk) "|" tid)
+                           :rel/from [:entity/id node-id]
+                           :rel/kind rk
+                           :rel/to   [:entity/id tid]}
+                    label (assoc :rel/label label))]))
+    node-id))
+
+(defn- resolve-target
+  "Resolve a relation clause target to a node id: an inline value form
+   `(ValueTag clause...)` → construct (and dedup) the value; otherwise a name →
+   the enclosing module's entity of that name (or nil if unresolved)."
+  [db target]
+  (if (and (seq? target) (symbol? (first target)))
+    (let [vtag  (keyword (first target))
+          vsdef (structure-by-tag vtag)]
+      (when-not (:value? vsdef)
+        (throw (ex-info (str "inline construction of " vtag " — only ^:value structures"
+                             " may be authored inline")
+                        {:tag vtag :form target})))
+      (construct-value! vtag (rest target)))
+    (resolve-in-module db target)))
+
 (defn- emit-relations!
   "Resolve a queued instance's slot clauses against the now-declared module
    entities and transact its reified relations. Resolution runs after the whole
@@ -136,13 +194,13 @@
                           {:tag tag :rel rel})))
         (doseq [arg args]
           (let [{:keys [label target]} (parse-clause-arg arg)
-                target-id (resolve-in-module db target)]
+                target-id (resolve-target db target)]
             (when-not target-id
               (throw (ex-info (str name ": " (clojure.core/name rel) " references '" target
                                    "', which is not an entity in the enclosing module")
                               {:structure tag :instance name :rel rel :target target})))
             (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rel)
-                                             "|" target "|" (random-uuid))
+                                             "|" target-id "|" (random-uuid))
                                  :rel/from [:entity/id node-id]
                                  :rel/kind rel
                                  :rel/to   [:entity/id target-id]}
@@ -282,7 +340,8 @@
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
                            " — expected (slot ...) or (law ...)")
                       {:structure sname :form form}))))
-  (let [tag   (keyword (name sname))
+  (let [value? (boolean (:value (meta sname)))   ; ^:value → content-deduped value structure
+        tag   (keyword (name sname))
         slots (mapv parse-slot (filter #(= 'slot (first %)) body))
         _     (doseq [s slots]
                 (when (and (scalar-slot? s) (#{:some :many} (:card s)))
@@ -294,14 +353,16 @@
         ;; stamp the owning structure tag onto each law so check can auto-scope it
         laws  (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
         _     (doseq [law laws] (check-law-recursion! sname law))
-        sdef  {:tag tag :doc docstring :slots slots :laws laws}
-        impl  `instantiate!]   ; fully-qualified so the generated macro works when :refer-ed
+        sdef  {:tag tag :doc docstring :slots slots :laws laws :value? value?}]
     `(do
        (register-structure! '~sdef)
-       (defmacro ~sname
-         ~docstring
-         [name# & body#]
-         (list '~impl ~tag name# (list 'quote body#))))))
+       ;; A value structure is authored inline (anonymous, deduped) → its macro
+       ;; takes no name and constructs-and-dedups; an entity structure is named.
+       ~(if value?
+          `(defmacro ~sname ~docstring [& body#]
+             (list 'fukan.canvas.core.structure/construct-value! ~tag (list 'quote body#)))
+          `(defmacro ~sname ~docstring [name# & body#]
+             (list 'fukan.canvas.core.structure/instantiate! ~tag name# (list 'quote body#)))))))
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 
