@@ -1,6 +1,5 @@
 (ns fukan.canvas.core.substrate.store
   (:require [datascript.core :as d]
-            [fukan.canvas.core.classification :as classification]
             [fukan.canvas.core.shape :as shape]
             [fukan.canvas.core.substrate :as sub]))
 
@@ -15,25 +14,18 @@
                          :db/valueType :db.type/ref}
    :entity/tag          {:db/cardinality :db.cardinality/many}
    :entity/alias        {:db/cardinality :db.cardinality/many}
-   ;; ── Tag-applications (canonical classification spine) ───────────────
-   ;; A Node's kind/role is a reified tag-application: the sole classification
-   ;; truth the tag-agnostic core knows, and that vocabularies plug into. The
-   ;; legacy denormalised :entity/type / :affordance/role index has been
-   ;; dropped — family/kind/role are now DERIVED via the classification stratum
-   ;; (fukan.canvas.core.classification: direct-kind / kind-of / family-of).
+   ;; ── Tag-applications (the classification spine) ─────────────────────
+   ;; A Node's kind/role is a reified tag-application. Family/kind are DERIVED
+   ;; flatly from these via fukan.canvas.core.kinds (direct-kind / family-of)
+   ;; — the lean replacement for the retired refinement stratum.
    :tagapp/id           {:db/unique :db.unique/identity}
    :tagapp/node         {:db/valueType :db.type/ref}
    :tagapp/tag          {:db/index true}
-   ;; ── Tag-definitions (the vocabulary as declared data) ───────────────
-   ;; Projected from fukan.canvas.vocab.registry in enrich-substrate so the
-   ;; vocabulary is queryable on the db surface alongside the model it
-   ;; classifies — and is the seam a generic declare-node consumes.
+   ;; ── Tag-definitions ─────────────────────────────────────────────────
+   ;; Stamped by kinds/tagdef-datoms: :tagdef/family maps a kind-tag to its
+   ;; :family/* super-tag so the family-of rule resolves by a direct join.
    :tagdef/tag          {:db/unique :db.unique/identity}
    :tagdef/family       {:db/index true}
-   ;; The refinement-lattice parent tag: this tag refines (is-a) its parent.
-   ;; Explicit on the tag-definition, or derived from :family (the super-tag).
-   ;; The classification stratum's refines*/kind-of/family-of close over these.
-   :tagdef/refines      {:db/index true}
    :tagdef/payload      {:db/index true}
    :tagdef/doc          {}
    ;; ── Reified shapes (payload de-blob, arc-D) ─────────────────────────
@@ -182,9 +174,9 @@
                              (ordered (:shape/fields e)))})))
 
 (defn- tagapp-maps
-  "Reified tag-application entities for a node — the canonical (and now sole)
-   classification truth. One per primary kind/role tag (nil tags are skipped).
-   Family/kind/role derive from these via the classification stratum."
+  "Reified tag-application entities for a node — the canonical classification
+   truth. One per primary kind/role tag (nil tags are skipped). Family/kind
+   derive from these flatly via core/kinds."
   [node-uuid primary-tag]
   (when primary-tag
     [{:tagapp/id   (str node-uuid "|" primary-tag)
@@ -338,28 +330,3 @@
          pk               (assoc :edge/projection-kind pk)
          (:validity edge) (assoc :edge/validity (:validity edge)))])))
 
-(defn all-modules [db]
-  (->> (d/q '[:find ?n :in $ % ?fam
-              :where (family-of ?e ?fam) [?e :entity/name ?n]]
-            db classification/rules :family/module)
-       (map (fn [[n]] {:name n}))))
-
-(defn affordances-in [db module-id]
-  (d/q '[:find ?n
-         :in $ % ?mid ?fam
-         :where [?m :entity/id ?mid]
-                [?m :module/child ?a]
-                (family-of ?a ?fam)
-                [?a :entity/name ?n]]
-       db classification/rules module-id :family/affordance))
-
-(defn children-of-module
-  "Return [element-kind name] pairs for all entities directly owned by module."
-  [db module-id]
-  (->> (d/q '[:find ?c ?n
-              :in $ ?mid
-              :where [?m :entity/id ?mid]
-                     [?m :module/child ?c]
-                     [?c :entity/name ?n]]
-            db module-id)
-       (map (fn [[c n]] [(classification/element-kind db c) n]))))

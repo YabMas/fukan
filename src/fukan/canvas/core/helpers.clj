@@ -1,6 +1,6 @@
 (ns fukan.canvas.core.helpers
   (:require [datascript.core :as d]
-            [fukan.canvas.core.classification :as classification]
+            [fukan.canvas.core.kinds :as kinds]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.substrate.store :as store]))
 
@@ -25,11 +25,10 @@
 
 ;; Substrate construction within scope
 (defmacro with-canvas [& body]
-  ;; Seed the store with the vocabulary (tag-definition refinement lattice) up
-  ;; front, so the classification stratum (kind-of / family-of) works on every
-  ;; substrate — including code that queries *store* from inside the body, not
-  ;; only the returned db.
-  `(binding [*store* (atom (d/db-with (store/create) (classification/tagdef-datoms)))]
+  ;; Seed the store with the flat kind→family tagdefs up front, so kinds/family-of
+  ;; works on every substrate — including code that queries *store* from inside
+  ;; the body, not only the returned db.
+  `(binding [*store* (atom (d/db-with (store/create) (kinds/tagdef-datoms)))]
      ~@body
      @*store*))
 
@@ -54,22 +53,8 @@
    whatever :node-kind / :role / payload its caller gave it — declare-node knows
    none of those kinds.
 
-   ── Followup (b): registry-driven declare-node ──────────────────────────────
-   Today the kind-specific sugar below (and the bespoke lifts in
-   construction.clj / vocab/*) build the node and emit edges procedurally. The
-   next step makes the tag-definition registry (fukan.canvas.vocab.registry)
-   *drive* construction: a vocab-level interpreter reads a term's :payload type
-   and an :edges directive list from its tag-definition and builds node + payload
-   + edges generically — so a vocabulary term becomes pure data and the bespoke
-   lifts (plus the sugar here and the ~40 test fixtures) retire. The directive
-   set to derive from the relocated lifts is the production-directive vocabulary:
-     :shape-refs          — emit :references for every ref in a shape payload
-     :to-keywords         — emit edges to a set of keyword refs (handler on/emits,
-                            checker's fixed Model/Violation)
-     :by-name-in-module   — resolve a name to an entity in the enclosing module
-                            (function's triggers→rule, emits→event)
-   Keep these as declarative data (gated interpreter extension), never per-term
-   code. See project-substrate-unification memory."
+   Legacy floor seam from the old store substrate; the lean-kernel rebuild
+   authors via fukan.canvas.core.structure (defstructure) instead."
   [n]
   (swap! *store* store/transact! n)
   (register-child! n)

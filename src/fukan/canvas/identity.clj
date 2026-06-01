@@ -22,7 +22,7 @@
      Type:        \"<module-name>/type/<name>\"  e.g. \"infra.server/type/ServerOpts\""
   (:refer-clojure :exclude [alias])
   (:require [datascript.core :as d]
-            [fukan.canvas.core.classification :as classification]
+            [fukan.canvas.core.kinds :as kinds]
             [fukan.canvas.core.helpers :as h]))
 
 ;; ---------------------------------------------------------------------------
@@ -71,13 +71,13 @@
                         :where (family-of ?e ?mfam)
                                [?e :entity/id ?uuid]
                                [?e :entity/name ?name]]
-                     db classification/rules :family/module)
+                     db kinds/rules :family/module)
         module-id-map (into {} (map (fn [[uuid mname]]
                                       [uuid (stable-id :Module mname mname)])
                                     modules))
 
         ;; Child canonical ids: uuid → stable-id (needs parent module name +
-        ;; element-kind, the latter derived from the classification stratum)
+        ;; element-kind, the latter derived flatly via core/kinds)
         children (d/q '[:find ?c ?child-uuid ?child-name ?mod-name
                          :in $ % ?mfam
                          :where (family-of ?m ?mfam)
@@ -85,9 +85,9 @@
                                 [?m :module/child ?c]
                                 [?c :entity/id ?child-uuid]
                                 [?c :entity/name ?child-name]]
-                      db classification/rules :family/module)
+                      db kinds/rules :family/module)
         child-id-map (into {} (map (fn [[c uuid child-name mod-name]]
-                                     [uuid (stable-id (classification/element-kind db c)
+                                     [uuid (stable-id (kinds/element-kind db c)
                                                       mod-name child-name)])
                                    children))
 
@@ -144,7 +144,7 @@
                              :in $ % ?e ?mfam
                              :where (family-of ?e ?mfam)
                                     [?e :entity/name ?name]]
-                           db classification/rules eid :family/module)
+                           db kinds/rules eid :family/module)
           child-rows (d/q '[:find ?cn ?mn
                              :in $ ?e
                              :where [?e :entity/name ?cn]
@@ -154,7 +154,7 @@
       (cond
         (seq mod-rows)   (stable-id :Module (ffirst mod-rows) (ffirst mod-rows))
         (seq child-rows) (let [[cn mn] (first child-rows)]
-                           (stable-id (classification/element-kind db eid) mn cn))
+                           (stable-id (kinds/element-kind db eid) mn cn))
         :else            nil))))
 
 ;; ---------------------------------------------------------------------------
