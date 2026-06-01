@@ -32,15 +32,25 @@
     (let [db (pipeline/build-model "src")]
       (is (contains? (names-of db :Module) "model.pipeline")
           "the canvas/pipeline/model spec is ingested")
-      (is (= #{"build-model" "ingest" "merge-dbs"} (names-of db :Stage)))
+      (is (set/subset? #{"build-model" "ingest" "merge-dbs"} (names-of db :Stage)))
       ;; the StructureDb type-shape appears in 4 positions (merge-dbs in+out,
       ;; ingest out, build-model out) — value-identity collapses it to one node.
+      ;; robust to other specs contributing shapes: assert the specific shared one
       (is (= 1 (count (d/q '[:find ?s
                              :where [?s :structure/of :Shape] [?s :val/kind "type"]
                                     [?r :rel/from ?s] [?r :rel/kind :type]
-                                    [?r :rel/to ?t] [?t :entity/name "StructureDb"]]
+                                    [?r :rel/to ?t] [?t :entity/name "StructureDb"]
+                                    [?m :entity/name "model.pipeline"] [?m :module/child ?t]]
                            db)))
-          "four uses of the StructureDb type-shape are one value node")
-      ;; the three distinct shapes: {type StructureDb}, {type SrcRoot}, {list of …}
-      (is (= 3 (count (d/q '[:find ?s :where [?s :structure/of :Shape]] db)))
-          "only the three structurally-distinct shapes exist as nodes"))))
+          "the StructureDb type-shape — used in four positions — is one value node"))))
+
+(deftest canvas-source-value-model-shares-the-db-shape
+  (testing "in the value-style canvas_source spec, the Db type-shape (4 uses) is one node"
+    (let [db (pipeline/build-model "src")]
+      (is (= 1 (count (d/q '[:find ?s
+                             :where [?s :structure/of :Shape] [?s :val/kind "type"]
+                                    [?r :rel/from ?s] [?r :rel/kind :type]
+                                    [?r :rel/to ?t] [?t :entity/name "Db"]
+                                    [?m :entity/name "source.value"] [?m :module/child ?t]]
+                           db)))
+          "Db appears in db->entity-maps in, merge-dbs in (nested) + out, build out → one node"))))
