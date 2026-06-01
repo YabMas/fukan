@@ -200,7 +200,17 @@
       (is (empty? (d/q '[:find ?r :where [?x :entity/name "b"] [?r :rel/from ?x]] db))
           "value slots emit no reified relations")
       (is (empty? (laws-firing db :Box))
-          "a valid value-slot instance trips no law (scalar slots are skipped until Task 2)"))))
+          "a valid value-slot instance trips no law"))))
+
+(deftest value-false-is-stored-not-absent
+  (testing "a stored false Bool is a present value (no none-law), distinct from absent"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Box "b" (open false) (size 3))))]
+      (is (= false (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/open ?v]] db)))
+          "false is stored as a real value, not dropped")
+      (is (not (contains? (laws-firing db :Box) "Box.open requires exactly one (found none)"))
+          "a present false value does not trip the required none-law"))))
 
 (deftest some-cardinality-requires-at-least-one
   (testing "(some Type): zero is a violation, one or more is clean"
