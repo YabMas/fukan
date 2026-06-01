@@ -12,10 +12,11 @@
      but not its *sequence*. Ordered composition (a production is an ordered
      string of symbols; an AST's children are ordered) has no native expression
      on the core yet — the key gap this domain surfaces.
-   - Grammars are modelled ACYCLIC here: a cyclic grammar (left-recursion,
-     e.g. expr → expr '+' term) can't be authored under the core's forward-only
-     name resolution (the back-edge references a symbol not yet emitted). Also a
-     surfaced gap: authoring cyclic models."
+   - This grammar is modelled acyclic for simplicity, but cyclic/left-recursive
+     grammars (expr → expr '+' term) are now authorable: within-module resolves
+     references in a second pass, so forward references and cycles between
+     symbols resolve. The reachability law's `derives` recursion is inlined, so
+     it terminates over a cyclic grammar."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
 (defstructure Symbol

@@ -1,0 +1,47 @@
+(ns demos.er.vocab.core
+  "An entity-relationship data-modelling vocabulary, built directly on
+   defstructure. Entities have typed attributes and directed relationships to
+   other entities; well-formedness (referential integrity, no circular
+   dependency) is expressed as slot laws + a recursive free law.
+
+   Modelling choices worth noting — each is a finding about the core:
+   - A relationship's CARDINALITY (1:1 / 1:N / N:M), and an attribute's
+     `required?` / `unique?` / `primary-key?`, are scalar facts with no home on
+     the core (an instance carries only :name, :doc, and slot relations). They
+     are omitted here — the clearest gap this domain surfaces.
+   - Bidirectional / cyclic relationships (User⇄Order) ARE authorable now that
+     within-module resolves references in a second pass. The shop model is kept
+     acyclic on purpose (a cycle is a violation of the no-circular-dependency
+     law); the circular-dependency test authors a real cycle via forward refs."
+  (:require [fukan.canvas.core.structure :refer [defstructure]]))
+
+(defstructure DataType
+  "A primitive attribute type — String, Int, Bool, ….")
+
+(defstructure Attribute
+  "A named, typed attribute of an entity."
+  (slot :type (one DataType)))
+
+(defstructure Relationship
+  "A directed relationship from its owning entity to a target entity."
+  (slot :target (one Entity)))
+
+(defstructure Entity
+  "A data entity: at least one attribute, plus relationships to other entities."
+  (slot :attr (some Attribute))
+  (slot :rel  (many Relationship))
+  ;; No circular dependency among entities. `refs*` is reachability over the
+  ;; INDIRECT graph Entity →:rel→ Relationship →:target→ Entity, with the two-hop
+  ;; step INLINED into the recursive rule (a recursive rule may not call a helper
+  ;; rule — datascript diverges on cyclic data otherwise).
+  (law "no circular dependency among entities"
+    :rules '[[(refs* ?a ?b)
+              [?rr :rel/from ?a]   [?rr :rel/kind :rel]    [?rr :rel/to ?rel]
+              [?rt :rel/from ?rel] [?rt :rel/kind :target] [?rt :rel/to ?b]]
+             [(refs* ?a ?b)
+              [?rr :rel/from ?a]   [?rr :rel/kind :rel]    [?rr :rel/to ?rel]
+              [?rt :rel/from ?rel] [?rt :rel/kind :target] [?rt :rel/to ?m]
+              (refs* ?m ?b)]]
+    :scope :Entity
+    :offenders '[?e]
+    :where '[(refs* ?e ?e)]))
