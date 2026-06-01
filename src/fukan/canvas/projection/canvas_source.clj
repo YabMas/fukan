@@ -74,17 +74,18 @@
                    "(lean-kernel rebuild phase)."))
         [])))
 
-(defn- require-and-resolve-build-canvas
-  "Require a canvas namespace and resolve its build-canvas var; throw on a load
-   failure or a missing build-canvas."
+(defn- load-and-resolve-build-canvas
+  "Require a canvas namespace (throwing on a load failure) and return its
+   build-canvas var, or nil when it defines none. A canvas spec without
+   build-canvas is a VOCAB-ONLY spec — it `defstructure`s a vocabulary for other
+   specs to author against, contributing no instances itself (mirroring the demos'
+   vocab-vs-model split). Requiring it still registers its structures."
   [ns-sym]
   (try (require ns-sym)
        (catch Exception e
          (throw (ex-info (str "canvas-source: failed to load canvas namespace " ns-sym)
                          {:namespace ns-sym} e))))
-  (or (ns-resolve (the-ns ns-sym) 'build-canvas)
-      (throw (ex-info (str "canvas-source: no build-canvas fn in " ns-sym)
-                      {:namespace ns-sym}))))
+  (ns-resolve (the-ns ns-sym) 'build-canvas))
 
 (defn canvas-namespaces
   "The auto-discovered canvas namespace symbols (public for inspection)."
@@ -146,9 +147,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn build
-  "Discover every canvas spec, call its build-canvas (→ a structure db), and
-   merge them into one structure db. This db is the model."
+  "Discover every canvas spec, load it (registering its vocabulary), call each
+   model spec's build-canvas (→ a structure db), and merge them into one structure
+   db. Vocab-only specs (no build-canvas) are loaded but contribute no instances.
+   This db is the model."
   []
   (->> (discover-canvas-namespaces)
-       (mapv (fn [ns-sym] ((require-and-resolve-build-canvas ns-sym))))
+       (keep (fn [ns-sym] (when-let [bc (load-and-resolve-build-canvas ns-sym)] (bc))))
        merge-dbs))
