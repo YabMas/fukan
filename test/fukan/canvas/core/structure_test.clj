@@ -313,3 +313,13 @@
                    (catch Throwable e
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
       (is (re-find #"unknown body form" msg)))))
+
+(deftest scalar-slot-rejects-some-and-many
+  (testing "a scalar-typed slot may only be (one ...) or (optional ...)"
+    (let [msg (try (let [_ (macroexpand
+                            '(fukan.canvas.core.structure/defstructure BadVal "d"
+                               (slot :xs (many :Int))))]
+                     "no throw")
+                   (catch Throwable e
+                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
+      (is (re-find #"must be \(one \.\.\.\) or \(optional \.\.\.\)" msg)))))

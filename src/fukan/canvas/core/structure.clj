@@ -284,6 +284,13 @@
                       {:structure sname :form form}))))
   (let [tag   (keyword (name sname))
         slots (mapv parse-slot (filter #(= 'slot (first %)) body))
+        _     (doseq [s slots]
+                (when (and (scalar-slot? s) (#{:some :many} (:card s)))
+                  (throw (ex-info
+                          (str "defstructure " sname ": scalar slot " (:rel s)
+                               " must be (one ...) or (optional ...), not ("
+                               (name (:card s)) " ...)")
+                          {:structure sname :slot (:rel s) :card (:card s)}))))
         ;; stamp the owning structure tag onto each law so check can auto-scope it
         laws  (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
         _     (doseq [law laws] (check-law-recursion! sname law))
