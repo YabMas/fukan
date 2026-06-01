@@ -146,14 +146,20 @@
 (defn- unquote-lit [v] (if (and (seq? v) (= 'quote (first v))) (second v) v))
 
 (defn- parse-law
-  "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]?)."
+  "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?).
+
+   :scope controls auto-scoping of the first offender var to a structure:
+   absent → the owning structure (the common case: a law about my own
+   instances); a tag → that structure (a law whose subject is a related
+   structure); :global → no auto-scope (the law is fully explicit)."
   [form]
   (let [[_ desc & kvs] form
         m (apply hash-map kvs)]
     {:desc desc
      :offenders (unquote-lit (:offenders m))
      :where     (unquote-lit (:where m))
-     :rules     (unquote-lit (:rules m))}))
+     :rules     (unquote-lit (:rules m))
+     :scope     (:scope m)}))
 
 (defmacro defstructure
   "Define a structure: its slots (relations-with-laws) and free laws. Registers
@@ -165,11 +171,20 @@
        (law \"...\" :offenders '[?f] :where '[...] :rules '[...]?))
 
    Instantiate with the generated macro, slot names as clause heads:
-     (Function \"load-model\" (takes [src String]) (gives Model))"
+     (Function \"load-model\" (takes [src String]) (gives Model))
+
+   Body forms must be (slot ...) or (law ...); anything else is rejected at
+   macro-expansion time (a silently-dropped form is a footgun)."
   [sname docstring & body]
+  (doseq [form body]
+    (when-not (and (seq? form) (#{'slot 'law} (first form)))
+      (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
+                           " — expected (slot ...) or (law ...)")
+                      {:structure sname :form form}))))
   (let [tag   (keyword (name sname))
-        slots (mapv parse-slot (filter #(and (seq? %) (= 'slot (first %))) body))
-        laws  (mapv parse-law  (filter #(and (seq? %) (= 'law (first %))) body))
+        slots (mapv parse-slot (filter #(= 'slot (first %)) body))
+        ;; stamp the owning structure tag onto each law so check can auto-scope it
+        laws  (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
         sdef  {:tag tag :doc docstring :slots slots :laws laws}
         impl  `instantiate!]   ; fully-qualified so the generated macro works when :refer-ed
     `(do
@@ -194,11 +209,12 @@
                        :where [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
                                ['?x :structure/of tag]
                                (list 'not ['?t :structure/of target])]}
-           none-law {:desc (str tn "." rn " requires exactly one (found none)")
-                     :offenders '[?x]
-                     :where [['?x :structure/of tag]
-                             (list 'not-join ['?x]
-                                   ['?r :rel/from '?x] ['?r :rel/kind rel])]}
+           none-law (fn [verb]
+                      {:desc (str tn "." rn " " verb " (found none)")
+                       :offenders '[?x]
+                       :where [['?x :structure/of tag]
+                               (list 'not-join ['?x]
+                                     ['?r :rel/from '?x] ['?r :rel/kind rel])]})
            several-law (fn [verb]
                          {:desc (str tn "." rn " " verb " (found several)")
                           :offenders '[?x]
@@ -206,14 +222,31 @@
                                   ['?r1 :rel/from '?x] ['?r1 :rel/kind rel]
                                   ['?r2 :rel/from '?x] ['?r2 :rel/kind rel]
                                   [(list 'not= '?r1 '?r2)]]})]
+       ;; card → which laws: one = exactly 1, some = >=1, optional = <=1, many = any
        (cond-> [target-law]
-         (= card :one)      (conj none-law (several-law "requires exactly one"))
+         (= card :one)      (conj (none-law "requires exactly one")
+                                  (several-law "requires exactly one"))
+         (= card :some)     (conj (none-law "requires at least one"))
          (= card :optional) (conj (several-law "allows at most one")))))
    slots))
 
-(defn- run-law [db {:keys [offenders where rules]}]
-  (let [q       (vec (concat [:find] offenders [:in '$ '%] [:where] where))
-        results (d/q q db (or rules []))]
+(defn- law-scope-tag
+  "The structure tag a free law's first offender var is scoped to: its :scope
+   when set (nil when :scope is :global), else its owning structure. Slot-derived
+   laws self-scope and carry no :owner, so they get no injection."
+  [{:keys [scope owner]}]
+  (case scope
+    :global nil
+    nil     owner
+    scope))
+
+(defn- run-law [db {:keys [offenders where rules] :as law}]
+  (let [scope-tag (law-scope-tag law)
+        where*    (if scope-tag
+                    (vec (cons [(first offenders) :structure/of scope-tag] where))
+                    where)
+        q         (vec (concat [:find] offenders [:in '$ '%] [:where] where*))
+        results   (d/q q db (or rules []))]
     (when (seq results) (mapv vec results))))
 
 (defn check

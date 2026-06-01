@@ -22,6 +22,28 @@
     :offenders '[?t]
     :where '[(reaches ?t ?t)]))
 
+(defstructure NonEmpty
+  "Exercises the (some Type) cardinality — at least one."
+  (slot :item (some Type)))
+
+(defstructure Plain
+  "A plain structure with fields (no laws)."
+  (slot :field (many Type) :label-as :field-name))
+
+(defstructure Tagged
+  "A free law scoped (by default) to its own instances."
+  (slot :field (many Type) :label-as :field-name)
+  (law "no field labelled secret"
+    :offenders '[?x]
+    :where '[[?r :rel/from ?x] [?r :rel/kind :field] [?r :rel/label "secret"]]))
+
+(defstructure Auditor
+  "A free law whose subject is a *different* structure, via :scope."
+  (law "no Plain has a secret field"
+    :scope :Plain
+    :offenders '[?p]
+    :where '[[?r :rel/from ?p] [?r :rel/kind :field] [?r :rel/label "secret"]]))
+
 ;; ── helpers ─────────────────────────────────────────────────────────────────
 
 (defn- names-of [db tag]
@@ -131,3 +153,45 @@
           "a 2-cycle x→y→x is caught")
       (is (contains? (laws-firing self :Tree) "no cycle through :child")
           "a self-loop s→s is caught"))))
+
+(deftest some-cardinality-requires-at-least-one
+  (testing "(some Type): zero is a violation, one or more is clean"
+    (let [zero (s/with-structures
+                 (s/within-module "demo" (Type "Int") (NonEmpty "z")))
+          one  (s/with-structures
+                 (s/within-module "demo" (Type "Int") (NonEmpty "o" (item Int))))]
+      (is (contains? (laws-firing zero :NonEmpty)
+                     "NonEmpty.item requires at least one (found none)"))
+      (is (empty? (laws-firing one :NonEmpty))))))
+
+(deftest free-law-is-scoped-to-its-owning-structure
+  (testing "a free law on Tagged flags only Tagged instances, not a Plain with the same data"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Type "Str")
+                 (Plain  "p" (field [secret Str]))    ; matches the law's pattern but is NOT Tagged
+                 (Tagged "t" (field [secret Str]))))  ; the genuine offender
+          secret (filter #(= "no field labelled secret" (:law %)) (s/check db))]
+      (is (= [:Tagged] (vec (distinct (map :structure secret)))))
+      (is (= 1 (reduce + (map (comp count :offenders) secret)))
+          "auto-scoping excludes the Plain; only the Tagged instance is flagged"))))
+
+(deftest law-scope-can-target-another-structure
+  (testing ":scope <tag> aims a free law's subject at a different structure"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Type "Str")
+                 (Auditor "guard")
+                 (Plain "p" (field [secret Str]))))]
+      (is (some #(= "no Plain has a secret field" (:law %)) (s/check db))
+          "the Auditor law, scoped to :Plain, flags the Plain instance"))))
+
+(deftest unknown-body-form-is-rejected
+  (testing "defstructure rejects an unrecognized body form at macro-expansion"
+    ;; macroexpand wraps the macro's ex-info in a CompilerException; walk to root.
+    (let [msg (try (let [_ (macroexpand '(fukan.canvas.core.structure/defstructure Bad "d"
+                                           (slt :x)))]
+                     "no throw")
+                   (catch Throwable e
+                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
+      (is (re-find #"unknown body form" msg)))))
