@@ -122,16 +122,10 @@
   fukan.agent.system
   {:linters {:unused-public-var {:level :off}}}
 
-  ;; Phase 8 Sprint 6 trial — property-test audit-trail skeletons. The
-  ;; defspec form is the implementing-LLM's audit-trail closure marker;
-  ;; the placeholder generator's `model` binding is intentionally unused
-  ;; (the throw body fires before the binding is consumed). clojure.test
-  ;; is required by convention for parity with sibling test files even
-  ;; though the current body uses only defspec.
-  fukan.distributed.cluster-test
-  {:linters {:unused-binding         {:level :off}
-             :unused-referred-var    {:level :off}
-             :unused-namespace       {:level :off}}}}
+  ;; defstructure tests: law-only test structures (e.g. Auditor/Hang) declare a
+  ;; macro that is never called → unused-public-var false positive.
+  fukan.canvas.core.structure-test
+  {:linters {:unused-public-var {:level :off}}}}
 
  :linters
  {;; The canvas DSL's `rule` lift body uses (when TriggerName ...) as
@@ -139,53 +133,31 @@
   ;; `when` macro and complains is missing a body. Off project-wide because
   ;; the canvas DSL is more pervasive than the Clojure `when`-bug-catch is
   ;; valuable; restore if/when a hook teaches clj-kondo the DSL shape.
-  :missing-body-in-when {:level :off}
-
-  :unresolved-symbol
-  {:exclude [;; fukan.canvas.construction — non-opt-out lifts
-             (fukan.canvas.construction/function)
-             (fukan.canvas.construction/record)
-             (fukan.canvas.construction/value)
-             (fukan.canvas.construction/exports)
-
-             ;; fukan.canvas.vocab.behavioral
-             (fukan.canvas.vocab.behavioral/invariant)
-             (fukan.canvas.vocab.behavioral/rule)
-
-             ;; fukan.canvas.vocab.lifecycle
-             (fukan.canvas.vocab.lifecycle/getter)
-
-             ;; fukan.canvas.vocab.validation
-             (fukan.canvas.vocab.validation/checker)
-
-             ;; fukan.canvas.vocab.event
-             (fukan.canvas.vocab.event/event)
-             (fukan.canvas.vocab.event/handler)
-
-             ;; fukan.canvas.core.helpers — module scoping
-             (fukan.canvas.core.helpers/within-module)
-             (fukan.canvas.core.helpers/with-canvas)
-
-             ;; fukan.canvas.core — substrate macros (used to define the lifts above)
-             (fukan.canvas.core.defconstructor/defconstructor)
-             (fukan.canvas.core.defquery/defquery)]}
-
-  :unresolved-var
-  {:exclude [fukan.canvas.construction/function
-             fukan.canvas.construction/record
-             fukan.canvas.construction/value
-             fukan.canvas.construction/exports
-             fukan.canvas.vocab.behavioral/invariant
-             fukan.canvas.vocab.behavioral/rule
-             fukan.canvas.vocab.lifecycle/getter
-             fukan.canvas.vocab.validation/checker
-             fukan.canvas.vocab.event/event
-             fukan.canvas.vocab.event/handler
-             fukan.canvas.core.helpers/within-module
-             fukan.canvas.core.helpers/with-canvas]}}
+  ;; (The old construction/vocab DSL excludes were removed with that code in
+  ;; the lean-kernel prune; the defstructure DSL is handled by :hooks below.)
+  :missing-body-in-when {:level :off}}
 
  ;; Teach clj-kondo about clojure.test.check macros it doesn't have
  ;; built-in shape for. `defspec` registers a named symbol; lint as def
  ;; so the symbol resolves and the first arg becomes a known var name.
  :lint-as
- {clojure.test.check.clojure-test/defspec clojure.core/def}}
+ {clojure.test.check.clojure-test/defspec clojure.core/def}
+
+ ;; The defstructure DSL (fukan.canvas.core.structure): defstructure defines a
+ ;; structure + a macro named for it (instance authoring). Both bodies are data
+ ;; (slot/law forms; instance clauses with by-name symbols), so hooks rewrite
+ ;; them to analyzable forms. Each generated instance macro is registered by its
+ ;; fully-qualified name — add new structures here.
+ :hooks
+ {:analyze-call
+  {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
+   fukan.canvas.structures/Type     hooks.fukan.structure/instance
+   fukan.canvas.structures/Effect   hooks.fukan.structure/instance
+   fukan.canvas.structures/Event    hooks.fukan.structure/instance
+   fukan.canvas.structures/Function hooks.fukan.structure/instance
+   ;; test-only structures (test/fukan/canvas/core/structure_test.clj)
+   fukan.canvas.core.structure-test/Tree     hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/NonEmpty hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Plain    hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Tagged   hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Auditor  hooks.fukan.structure/instance}}}

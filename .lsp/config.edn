@@ -26,6 +26,11 @@
               fukan.agent.api
               fukan.agent.system
 
+              ;; defstructure tests: law-only test structures (e.g. Auditor/Hang)
+              ;; declare a macro that is never called — unused-public-var false
+              ;; positive. Mirrors `.clj-kondo/config.edn`.
+              fukan.canvas.core.structure-test
+
               ;; Canvas inspect/lens/project/instruct registries — entry points
               ;; reached via multimethod dispatch and registry lookup, not
               ;; direct calls.
