@@ -12,14 +12,31 @@
    consumes input shapes and produces an output shape."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
+(defn ^:export read-shape
+  "Expand a data-LITERAL shape into Shape construction clauses — one level; nested
+   literals are re-expanded by the interpreter (so a shape reads like ordinary
+   Clojure data):
+     Foo        (symbol)        → a \"type\" leaf naming the Type Foo
+     [X]        (1-elem vector) → a \"list\" of shape X
+     {:f X, …}  (map)           → a \"record\" with fields f: X, …"
+  [data]
+  (cond
+    (symbol? data) [(list 'kind "type") (list 'type data)]
+    (vector? data) [(list 'kind "list") (list 'of (first data))]
+    (map?    data) (into [(list 'kind "record")]
+                         (map (fn [[k v]] (list 'of [(symbol (name k)) v])) data))
+    :else (throw (ex-info (str "not a shape literal: " (pr-str data)) {:data data}))))
+
 (defstructure ^:value Shape
   "A structural type-shape, value-identified. `:kind` is the combinator — \"type\"
-   (a leaf naming a Type) or \"list\" (a homogeneous sequence of its child shape);
-   `:of` are child shapes (recursive); `:type` names the referenced Type for a
-   \"type\" leaf."
+   (a leaf naming a Type), \"list\" (a homogeneous sequence of its child shape), or
+   \"record\" (labelled child shapes); `:of` are child shapes (recursive); `:type`
+   names the referenced Type for a \"type\" leaf. Author shapes as data literals
+   (see `read-shape`): `Db`, `[Db]`, `{:entity-maps [EntityMap] :ref-txs [RefTx]}`."
   (slot :kind (one :String))
   (slot :of   (many Shape))
   (slot :type (optional Type))
+  (reader read-shape)
   ;; the kind discriminator (a leaf value) driving a structural law
   (law "a \"type\" shape must name a Type"
     :offenders '[?s]

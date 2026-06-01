@@ -16,25 +16,20 @@
 
       ;; discover-files : File -> (list {root: File, rel-path: Str})
       (Stage "discover-files"
-        (in [root (Shape (kind "type") (type File))])
-        (out (Shape (kind "list")
-                    (of (Shape (kind "record")
-                               (of [root     (Shape (kind "type") (type File))])
-                               (of [rel-path (Shape (kind "type") (type Str))]))))))
+        (in [root File])
+        (out [{:root File :rel-path Str}]))
 
       ;; db->entity-maps : Db -> {entity-maps: (list EntityMap), ref-txs: (list RefTx)}
       (Stage "db->entity-maps"
-        (in [db (Shape (kind "type") (type Db))])
-        (out (Shape (kind "record")
-                    (of [entity-maps (Shape (kind "list") (of (Shape (kind "type") (type EntityMap))))])
-                    (of [ref-txs     (Shape (kind "list") (of (Shape (kind "type") (type RefTx))))]))))
+        (in [db Db])
+        (out {:entity-maps [EntityMap] :ref-txs [RefTx]}))
 
       ;; merge-dbs : (list Db) -> Db
       (Stage "merge-dbs"
-        (in [dbs (Shape (kind "list") (of (Shape (kind "type") (type Db))))])
-        (out (Shape (kind "type") (type Db))))
+        (in [dbs [Db]])
+        (out Db))
 
       ;; build : -> Db ; calls the others
       (Stage "build"
-        (out (Shape (kind "type") (type Db)))
+        (out Db)
         (calls discover-files db->entity-maps merge-dbs)))))

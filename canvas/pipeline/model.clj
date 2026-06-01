@@ -22,16 +22,16 @@
 
       ;; merge-dbs : (list StructureDb) -> StructureDb
       (Stage "merge-dbs"
-        (in [dbs (Shape (kind "list") (of (Shape (kind "type") (type StructureDb))))])
-        (out (Shape (kind "type") (type StructureDb))))
+        (in [dbs [StructureDb]])
+        (out StructureDb))
 
       ;; ingest (canvas-source/build) : () -> StructureDb ; merges the per-spec dbs
       (Stage "ingest"
-        (out (Shape (kind "type") (type StructureDb)))
+        (out StructureDb)
         (calls merge-dbs))
 
       ;; build-model : SrcRoot -> StructureDb ; the pipeline entry point
       (Stage "build-model"
-        (in [source (Shape (kind "type") (type SrcRoot))])
-        (out (Shape (kind "type") (type StructureDb)))
+        (in [source SrcRoot])
+        (out StructureDb)
         (calls ingest)))))
