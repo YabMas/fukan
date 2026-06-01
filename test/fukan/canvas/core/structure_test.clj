@@ -67,6 +67,17 @@
                  (Function "f" (takes [x Int]) (gives Int))))]
       (is (empty? (laws-firing db :Function))))))
 
+(deftest doc-clause-sets-instance-doc
+  (testing "(doc ...) is a universal built-in clause → :entity/doc, not a slot"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Type "Int")
+                 (Function "f" (doc "Builds the thing.") (gives Int))))]
+      (is (= "Builds the thing."
+             (ffirst (d/q '[:find ?d :where [?e :entity/name "f"] [?e :entity/doc ?d]] db))))
+      (is (empty? (laws-firing db :Function))
+          "the doc clause does not register as a slot or trip any law"))))
+
 (deftest cardinality-one-catches-zero-and-several
   (testing "gives (one Type): zero and several are both violations"
     (let [db (s/with-structures

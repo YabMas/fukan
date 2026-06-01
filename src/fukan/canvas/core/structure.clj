@@ -23,6 +23,7 @@
 (def schema
   {:entity/id    {:db/unique :db.unique/identity}
    :entity/name  {:db/index true}
+   :entity/doc   {}                                            ; instance documentation (the (doc ...) clause)
    :structure/of {:db/index true}                              ; the structure tag of an instance
    :module/child {:db/cardinality :db.cardinality/many :db/valueType :db.type/ref}
    ;; reified slot relations — the seam that carries :rel/label and :rel/wrap
@@ -90,17 +91,25 @@
     {:label (str (first arg)) :target (second arg)}
     {:label nil :target arg}))
 
+;; Universal built-in clauses are not slots — they set scalar attributes on the
+;; instance node rather than emitting relations.
+(def ^:private builtin-clauses #{'doc})
+
 (defn instantiate!
   "Emit an instance of structure `tag` named `name` from `clauses` (a seq of
-   (slot-rel arg*) forms). Returns the instance :entity/id."
+   (slot-rel arg*) forms, plus the universal (doc \"...\") clause). Returns the
+   instance :entity/id."
   [tag name clauses]
   (let [sdef    (structure-by-tag tag)
-        node-id (random-uuid)]
+        node-id (random-uuid)
+        doc     (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) clauses)]
     (when-not sdef
       (throw (ex-info (str "unknown structure " tag) {:tag tag})))
-    (transact! [{:entity/id node-id :entity/name (str name) :structure/of tag}])
+    (transact! [(cond-> {:entity/id node-id :entity/name (str name) :structure/of tag}
+                  doc (assoc :entity/doc doc))])
     (register-child! node-id)
-    (doseq [clause clauses]
+    (doseq [clause clauses
+            :when (not (contains? builtin-clauses (first clause)))]
       (let [rel  (keyword (first clause))
             slot (slot-for sdef rel)
             args (rest clause)]
