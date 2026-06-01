@@ -36,6 +36,18 @@
 
 (defn create [] (d/empty-db schema))
 
+;; ── scalar value types (the leaf-value vocabulary) ───────────────────────────
+;; A slot whose target is one of these is a VALUE slot (stores a leaf datum),
+;; not a RELATION slot (an edge to a node). Predicate held as a symbol so it
+;; splices into a datalog clause. Extend by adding a type → predicate-symbol pair.
+
+(def scalar-types {:Int 'integer?, :String 'string?, :Bool 'boolean?})
+
+(defn- scalar-slot?
+  "True when a parsed slot's target is a registered scalar type."
+  [slot]
+  (contains? scalar-types (:target slot)))
+
 (def ^:dynamic *store* nil)
 (def ^:dynamic *enclosing-module* nil)
 
@@ -145,21 +157,29 @@
       (emit-relations! pending))))
 
 (defn instantiate!
-  "Emit an instance of structure `tag` named `name` from `clauses` (slot-rel
-   forms + the universal (doc \"...\") clause). Pass 1: declare the node now and
-   queue its relations for `flush-pending-relations!` (or emit immediately when
-   not inside a `within-module` two-pass scope). Returns the instance :entity/id."
+  "Emit an instance of structure `tag` named `name` from `clauses` (slot-rel and
+   slot-value forms + the universal (doc \"...\") clause). VALUE clauses (scalar
+   target) are applied now — they need no name resolution. RELATION clauses are
+   queued for `flush-pending-relations!` (or emitted immediately when not inside a
+   `within-module` two-pass scope). Returns the instance :entity/id."
   [tag name clauses]
   (let [sdef        (structure-by-tag tag)
         node-id     (random-uuid)
         doc         (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) clauses)
-        rel-clauses (remove #(contains? builtin-clauses (first %)) clauses)
+        non-builtin (remove #(contains? builtin-clauses (first %)) clauses)
+        value?      (fn [c] (let [slot (slot-for sdef (keyword (first c)))]
+                              (and slot (scalar-slot? slot))))
+        val-clauses (filter value? non-builtin)
+        rel-clauses (remove value? non-builtin)
         pending     {:tag tag :name name :node-id node-id :clauses rel-clauses}]
     (when-not sdef
       (throw (ex-info (str "unknown structure " tag) {:tag tag})))
     (transact! [(cond-> {:entity/id node-id :entity/name (str name) :structure/of tag}
                   doc (assoc :entity/doc doc))])
     (register-child! node-id)
+    (doseq [c val-clauses]
+      (transact! [{:entity/id node-id
+                   (keyword "val" (clojure.core/name (first c))) (second c)}]))
     (if *pending-relations*
       (swap! *pending-relations* conj pending)
       (emit-relations! pending))
@@ -283,7 +303,8 @@
    to a datalog offender query over the reified relations."
   [{:keys [tag slots]}]
   (mapcat
-   (fn [{:keys [rel card target]}]
+   (fn [{:keys [rel card target] :as slot}]
+     (when-not (scalar-slot? slot)
      (let [tn (name tag) rn (name rel)
            ;; every target of this slot must be tagged the slot's target structure
            target-law {:desc (str tn "." rn " target must be a " (name target))
@@ -309,7 +330,7 @@
          (= card :one)      (conj (none-law "requires exactly one")
                                   (several-law "requires exactly one"))
          (= card :some)     (conj (none-law "requires at least one"))
-         (= card :optional) (conj (several-law "allows at most one")))))
+         (= card :optional) (conj (several-law "allows at most one"))))))
    slots))
 
 (defn- law-scope-tag

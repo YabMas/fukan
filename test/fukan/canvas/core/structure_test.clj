@@ -44,6 +44,16 @@
     :offenders '[?p]
     :where '[[?r :rel/from ?p] [?r :rel/kind :field] [?r :rel/label "secret"]]))
 
+(defstructure Box
+  "Exercises value slots: a required Bool, an optional String, a required Int.
+   The positivity constraint is a free law — proving predicates ride the engine."
+  (slot :open  (one :Bool))
+  (slot :label (optional :String))
+  (slot :size  (one :Int))
+  (law "size must be positive"
+    :offenders '[?x]
+    :where '[[?x :val/size ?s] [(<= ?s 0)]]))
+
 ;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
 ;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
 ;;  guard is exercised by registering such a law directly — see
@@ -178,6 +188,19 @@
             (s/within-module "demo"
               (Type "Int")
               (Function "f" (gives Nonexistent))))))))   ; Nonexistent is never declared
+
+(deftest value-slot-stores-leaf-datom
+  (testing "a scalar-typed slot stores a leaf :val/<key> datom on the node, not a relation"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Box "b" (open true) (label "hi") (size 3))))]
+      (is (= true  (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/open ?v]] db))))
+      (is (= "hi"  (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/label ?v]] db))))
+      (is (= 3     (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/size ?v]] db))))
+      (is (empty? (d/q '[:find ?r :where [?x :entity/name "b"] [?r :rel/from ?x]] db))
+          "value slots emit no reified relations")
+      (is (empty? (laws-firing db :Box))
+          "a valid value-slot instance trips no law (scalar slots are skipped until Task 2)"))))
 
 (deftest some-cardinality-requires-at-least-one
   (testing "(some Type): zero is a violation, one or more is clean"
