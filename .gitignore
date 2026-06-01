@@ -5,7 +5,9 @@
 .clj-kondo/.lock
 .vsdd
 
-# Active planning artifact — design doc for the in-progress defstructure
-# rebuild. Kept on disk as a working reference but, per CLAUDE.md, planning
-# documents stay out of every commit.
+# Active planning artifacts — design docs for in-progress work. Kept on disk as
+# working references but, per CLAUDE.md, planning documents stay out of every
+# commit.
 /doc/specs/2026-05-31-defstructure-design.md
+/doc/specs/2026-06-01-leaf-scalars-design.md
+/doc/specs/2026-06-01-leaf-scalars-plan.md
