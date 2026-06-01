@@ -44,6 +44,11 @@
     :offenders '[?p]
     :where '[[?r :rel/from ?p] [?r :rel/kind :field] [?r :rel/label "secret"]]))
 
+;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
+;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
+;;  guard is exercised by registering such a law directly — see
+;;  pathological-recursive-law-times-out-rather-than-hangs.)
+
 ;; ── helpers ─────────────────────────────────────────────────────────────────
 
 (defn- names-of [db tag]
@@ -185,6 +190,48 @@
                  (Plain "p" (field [secret Str]))))]
       (is (some #(= "no Plain has a secret field" (:law %)) (s/check db))
           "the Auditor law, scoped to :Plain, flags the Plain instance"))))
+
+(deftest rule-calls-rule-recursion-is-rejected
+  (testing "defstructure rejects a self-recursive rule that calls a helper rule"
+    (let [msg (try (let [_ (macroexpand
+                            '(fukan.canvas.core.structure/defstructure BadRec "d"
+                               (law "diverges"
+                                 :offenders '[?a]
+                                 :where '[(reaches ?a ?a)]
+                                 :rules '[[(step ?x ?y) [?x :e ?y]]
+                                          [(reaches ?x ?y) (step ?x ?y)]
+                                          [(reaches ?x ?y) (step ?x ?z) (reaches ?z ?y)]])))]
+                     "no throw")
+                   (catch Throwable e
+                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
+      (is (re-find #"rule-calls-rule recursion" msg)))))
+
+(deftest pathological-recursive-law-times-out-rather-than-hangs
+  (testing "a divergent recursive law is bounded by *law-timeout-ms* and reported, not hung"
+    ;; Register the divergent law DIRECTLY — defstructure would reject this
+    ;; rule-calls-rule shape (see test above), so we bypass it to exercise the
+    ;; runtime guard against shapes the static check can't catch.
+    (s/register-structure!
+     {:tag :Diverge :doc "test-only" :slots []
+      :laws [{:desc "pathological reachability" :scope :global
+              :offenders '[?a ?b] :where '[(hreach ?a ?b)]
+              :rules '[[(hstep ?a ?b)
+                        [?r1 :rel/from ?e] [?r1 :rel/kind :h-from] [?r1 :rel/to ?a]
+                        [?r2 :rel/from ?e] [?r2 :rel/kind :h-to]   [?r2 :rel/to ?b]]
+                       [(hreach ?a ?b) (hstep ?a ?b)]
+                       [(hreach ?a ?b) (hstep ?a ?z) (hreach ?z ?b)]]}]})
+    ;; n1 -> n2 -> n1 as an INDIRECT graph (edges via e1/e2 reified rels), the
+    ;; shape that diverges under a helper-rule recursion.
+    (let [db (-> (s/create)
+                 (d/db-with [{:entity/id "e1"} {:entity/id "e2"}
+                             {:entity/id "n1"} {:entity/id "n2"}])
+                 (d/db-with [{:rel/id "1" :rel/from [:entity/id "e1"] :rel/kind :h-from :rel/to [:entity/id "n1"]}
+                             {:rel/id "2" :rel/from [:entity/id "e1"] :rel/kind :h-to   :rel/to [:entity/id "n2"]}
+                             {:rel/id "3" :rel/from [:entity/id "e2"] :rel/kind :h-from :rel/to [:entity/id "n2"]}
+                             {:rel/id "4" :rel/from [:entity/id "e2"] :rel/kind :h-to   :rel/to [:entity/id "n1"]}]))]
+      (binding [s/*law-timeout-ms* 300]
+        (is (some :timed-out? (s/check db))
+            "the divergent Hang law is reported as timed-out and check still returns")))))
 
 (deftest unknown-body-form-is-rejected
   (testing "defstructure rejects an unrecognized body form at macro-expansion"

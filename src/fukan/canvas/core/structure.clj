@@ -161,6 +161,50 @@
      :rules     (unquote-lit (:rules m))
      :scope     (:scope m)}))
 
+(defn- defined-rule-names
+  "The set of rule-head names defined in a datalog rule vector."
+  [rules]
+  (set (map (comp first first) rules)))
+
+(defn- rule-refs
+  "Defined rule-names invoked as clause heads within `clauses`, recursing into
+   not / not-join / or / and wrappers. Datom vectors `[?e :a ?v]` and predicate
+   clauses `[(pred …)]` are not rule calls, so they're skipped."
+  [clauses defined]
+  (mapcat
+   (fn [c]
+     (if (and (seq? c) (symbol? (first c)))
+       (let [h (first c)]
+         (cond
+           (#{'not 'or 'and} h)  (rule-refs (rest c) defined)
+           (= 'not-join h)       (rule-refs (drop 2 c) defined)
+           (contains? defined h) [h]
+           :else                 []))
+       []))
+   clauses))
+
+(defn- check-law-recursion!
+  "Reject a law whose :rules contains a self-recursive rule that ALSO calls
+   another rule. datascript diverges on cyclic data for that rule-calls-rule
+   shape (see the no-cycle / reachability finding) — the helper rule's clauses
+   must be inlined into the recursive rule. The *law-timeout-ms* guard is the
+   runtime backstop for divergent shapes this static check misses (e.g. mutual
+   recursion)."
+  [sname {:keys [desc rules]}]
+  (when (seq rules)
+    (let [defined (defined-rule-names rules)]
+      (doseq [rule rules]
+        (let [hname (-> rule first first)
+              refs  (set (rule-refs (rest rule) defined))]
+          (when (and (contains? refs hname) (seq (disj refs hname)))
+            (throw (ex-info
+                    (str "defstructure " sname ", law " (pr-str desc)
+                         ": recursive rule (" hname ") calls another rule "
+                         (vec (disj refs hname)) " — datascript diverges on cyclic data "
+                         "for rule-calls-rule recursion. Inline that rule's clauses "
+                         "directly into (" hname ").")
+                    {:structure sname :law desc :rule hname}))))))))
+
 (defmacro defstructure
   "Define a structure: its slots (relations-with-laws) and free laws. Registers
    the structure-definition and defines an instantiation macro named `sname`.
@@ -174,7 +218,11 @@
      (Function \"load-model\" (takes [src String]) (gives Model))
 
    Body forms must be (slot ...) or (law ...); anything else is rejected at
-   macro-expansion time (a silently-dropped form is a footgun)."
+   macro-expansion time (a silently-dropped form is a footgun).
+
+   A law's recursive :rules must INLINE their step — a self-recursive rule may
+   not call another rule, because datascript diverges on cyclic data for that
+   shape (rejected here; the *law-timeout-ms* guard backstops the rest)."
   [sname docstring & body]
   (doseq [form body]
     (when-not (and (seq? form) (#{'slot 'law} (first form)))
@@ -185,6 +233,7 @@
         slots (mapv parse-slot (filter #(= 'slot (first %)) body))
         ;; stamp the owning structure tag onto each law so check can auto-scope it
         laws  (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
+        _     (doseq [law laws] (check-law-recursion! sname law))
         sdef  {:tag tag :doc docstring :slots slots :laws laws}
         impl  `instantiate!]   ; fully-qualified so the generated macro works when :refer-ed
     `(do
@@ -240,22 +289,56 @@
     nil     owner
     scope))
 
+(def ^:dynamic *law-timeout-ms*
+  "Per-law wall-clock budget for `check`. A recursive law that exceeds it —
+   e.g. unbounded recursion over a cyclic/indirect graph — is reported as
+   timed-out instead of hanging the whole check. Best-effort: the underlying
+   datascript query thread is abandoned (datascript queries aren't cleanly
+   interruptible), so it runs on until it finishes or the JVM exits."
+  5000)
+
+(defn- run-query
+  "Run a law's offender query, returning the offender rows (or nil if none).
+   Only laws with recursive `:rules` can diverge, so only they are run under the
+   *law-timeout-ms* guard (via a future); non-recursive laws run inline. Returns
+   ::timeout if a guarded query exceeds the budget."
+  [db q rules]
+  (if (seq rules)
+    (let [fut     (future (d/q q db rules))
+          results (deref fut *law-timeout-ms* ::timeout)]
+      (if (= results ::timeout)
+        (do (future-cancel fut) ::timeout)
+        results))
+    (d/q q db [])))
+
 (defn- run-law [db {:keys [offenders where rules] :as law}]
   (let [scope-tag (law-scope-tag law)
         where*    (if scope-tag
                     (vec (cons [(first offenders) :structure/of scope-tag] where))
                     where)
         q         (vec (concat [:find] offenders [:in '$ '%] [:where] where*))
-        results   (d/q q db (or rules []))]
-    (when (seq results) (mapv vec results))))
+        results   (run-query db q rules)]
+    (cond
+      (= results ::timeout) ::timeout
+      (seq results)         (mapv vec results)
+      :else                 nil)))
 
 (defn check
   "Run every registered structure's laws (slot-cardinality + free) over `db`.
-   Returns a vector of {:structure :law :offenders} violation maps."
+   Returns a vector of result maps:
+     {:structure :law :offenders [...]}        — a violation
+     {:structure :law :timed-out? true :message …} — a (recursive) law that
+        exceeded *law-timeout-ms* instead of completing."
   [db]
   (vec
    (for [{:keys [tag laws] :as sdef} (all-structures)
          {:keys [desc] :as law} (concat (slot-laws sdef) laws)
-         :let [offenders (run-law db law)]
-         :when offenders]
-     {:structure tag :law desc :offenders offenders})))
+         :let [r (run-law db law)]
+         :when r]
+     (if (= r ::timeout)
+       {:structure tag :law desc :timed-out? true
+        :message (str "law exceeded *law-timeout-ms* (" *law-timeout-ms* "ms) "
+                      "without completing — likely unbounded recursion over a "
+                      "cyclic/indirect graph (recursion must run over a direct "
+                      "binary relation, not a rule-derived one)")}
+       {:structure tag :law desc :offenders r}))))
