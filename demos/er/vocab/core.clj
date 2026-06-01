@@ -5,10 +5,10 @@
    dependency) is expressed as slot laws + a recursive free law.
 
    Modelling choices worth noting — each is a finding about the core:
-   - A relationship's CARDINALITY (1:1 / 1:N / N:M), and an attribute's
-     `required?` / `unique?` / `primary-key?`, are scalar facts with no home on
-     the core (an instance carries only :name, :doc, and slot relations). They
-     are omitted here — the clearest gap this domain surfaces.
+   - A relationship's CARDINALITY (1:1 / 1:N / N:M) is still a scalar fact with no
+     home (an instance carries :name/:doc, slot relations, and now scalar VALUES).
+     An attribute's `required?` / `unique?` ARE now expressible — as value slots
+     (leaf :Bool values) — closing the gap this domain originally surfaced.
    - Bidirectional / cyclic relationships (User⇄Order) ARE authorable now that
      within-module resolves references in a second pass. The shop model is kept
      acyclic on purpose (a cycle is a violation of the no-circular-dependency
@@ -19,8 +19,11 @@
   "A primitive attribute type — String, Int, Bool, ….")
 
 (defstructure Attribute
-  "A named, typed attribute of an entity."
-  (slot :type (one DataType)))
+  "A named, typed attribute of an entity. `:required`/`:unique?` are scalar flags
+   — leaf values now that the core has them (closing this domain's original gap)."
+  (slot :type     (one DataType))
+  (slot :required (optional :Bool))
+  (slot :unique?  (optional :Bool)))
 
 (defstructure Relationship
   "A directed relationship from its owning entity to a target entity."

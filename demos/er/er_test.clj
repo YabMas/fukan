@@ -33,6 +33,14 @@
       ;; "Relationship.target target must be a Entity"
       (is (contains? (laws db) "Relationship.target target must be a Entity")))))
 
+(deftest attribute-flag-must-be-boolean
+  (testing "a non-boolean :required flag is caught by the value-type law"
+    (let [db (s/with-structures
+               (s/within-module "shop"
+                 (DataType "String")
+                 (Attribute "bad" (type String) (required "yes"))))]   ; not a Bool
+      (is (contains? (laws db) "Attribute.required value must be a Bool")))))
+
 (deftest circular-dependency-is-caught
   (testing "a reference cycle A→B→A — now AUTHORABLE via forward references — is caught"
     (let [db (s/with-structures

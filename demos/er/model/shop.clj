@@ -16,12 +16,12 @@
       (DataType "String")
       (DataType "Int")
       ;; User
-      (Attribute "name"  (type String))
-      (Attribute "email" (type String))
+      (Attribute "name"  (type String) (required true))
+      (Attribute "email" (type String) (required true) (unique? true))
       (Entity "User" (attr name) (attr email))
       ;; Product
-      (Attribute "title" (type String))
-      (Attribute "price" (type Int))
+      (Attribute "title" (type String) (required true))
+      (Attribute "price" (type Int)    (required true))
       (Entity "Product" (attr title) (attr price))
       ;; Order — references User and Product
       (Attribute "total" (type Int))
