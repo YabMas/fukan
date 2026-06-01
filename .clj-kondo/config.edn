@@ -167,4 +167,6 @@
    demos.er.vocab.core/DataType          hooks.fukan.structure/instance
    demos.er.vocab.core/Attribute         hooks.fukan.structure/instance
    demos.er.vocab.core/Relationship      hooks.fukan.structure/instance
-   demos.er.vocab.core/Entity            hooks.fukan.structure/instance}}}
+   demos.er.vocab.core/Entity            hooks.fukan.structure/instance
+   demos.workflow.vocab.core/Step        hooks.fukan.structure/instance
+   demos.workflow.vocab.core/Workflow    hooks.fukan.structure/instance}}}
