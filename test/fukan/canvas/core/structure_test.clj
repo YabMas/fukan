@@ -159,6 +159,17 @@
       (is (contains? (laws-firing self :Tree) "no cycle through :child")
           "a self-loop s→s is caught"))))
 
+(deftest forward-references-and-cycles-resolve
+  (testing "two-pass within-module resolves forward references and cycles between instances"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Tree "a" (child b))     ; forward reference — b declared below
+                 (Tree "b" (child a))))]  ; back reference — together an a→b→a cycle
+      (is (= 2 (count (d/q '[:find ?r :where [?r :rel/kind :child]] db)))
+          "both :child relations resolved (the forward ref is no longer skipped)")
+      (is (contains? (laws-firing db :Tree) "no cycle through :child")
+          "the authored cycle is real — caught by the no-cycle law"))))
+
 (deftest some-cardinality-requires-at-least-one
   (testing "(some Type): zero is a violation, one or more is clean"
     (let [zero (s/with-structures

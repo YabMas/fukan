@@ -39,6 +39,12 @@
 (def ^:dynamic *store* nil)
 (def ^:dynamic *enclosing-module* nil)
 
+(def ^:dynamic *pending-relations*
+  "When bound (inside `within-module`), an atom collecting each instance's
+   relation clauses for a SECOND resolution pass — so forward references and
+   cycles between instances resolve once every instance in the module is declared."
+  nil)
+
 (defn transact! [tx] (swap! *store* d/db-with tx))
 
 (defn register-child! [child-id]
@@ -53,13 +59,17 @@
      @*store*))
 
 (defmacro within-module
-  "Declare a module and run body with it as the enclosing container; children
-   declared inside register under it via :module/child."
+  "Declare a module and run `body` with it as the enclosing container; children
+   register under it via :module/child. Two-pass: `body` declares the instances
+   (queuing their relations); on exit the queued relations are resolved and
+   emitted — so forward references and cycles between instances resolve."
   [mname & body]
   `(let [mid# (random-uuid)]
      (transact! [{:entity/id mid# :entity/name ~mname :structure/of :Module}])
-     (binding [*enclosing-module* mid#]
+     (binding [*enclosing-module*  mid#
+               *pending-relations* (atom [])]
        ~@body
+       (flush-pending-relations!)
        mid#)))
 
 (defn resolve-in-module
@@ -95,21 +105,14 @@
 ;; instance node rather than emitting relations.
 (def ^:private builtin-clauses #{'doc})
 
-(defn instantiate!
-  "Emit an instance of structure `tag` named `name` from `clauses` (a seq of
-   (slot-rel arg*) forms, plus the universal (doc \"...\") clause). Returns the
-   instance :entity/id."
-  [tag name clauses]
-  (let [sdef    (structure-by-tag tag)
-        node-id (random-uuid)
-        doc     (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) clauses)]
-    (when-not sdef
-      (throw (ex-info (str "unknown structure " tag) {:tag tag})))
-    (transact! [(cond-> {:entity/id node-id :entity/name (str name) :structure/of tag}
-                  doc (assoc :entity/doc doc))])
-    (register-child! node-id)
-    (doseq [clause clauses
-            :when (not (contains? builtin-clauses (first clause)))]
+(defn- emit-relations!
+  "Resolve a queued instance's slot clauses against the now-declared module
+   entities and transact its reified relations. An unresolvable target is skipped
+   with a stderr note (the policy for a genuinely-absent name)."
+  [{:keys [tag name node-id clauses]}]
+  (let [sdef (structure-by-tag tag)
+        db   @*store*]
+    (doseq [clause clauses]
       (let [rel  (keyword (first clause))
             slot (slot-for sdef rel)
             args (rest clause)]
@@ -119,7 +122,7 @@
                           {:tag tag :rel rel})))
         (doseq [arg args]
           (let [{:keys [label target]} (parse-clause-arg arg)
-                target-id (resolve-in-module @*store* target)]
+                target-id (resolve-in-module db target)]
             (if target-id
               (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rel)
                                                "|" target "|" (random-uuid))
@@ -129,7 +132,35 @@
                             label (assoc :rel/label label))])
               (binding [*out* *err*]
                 (println (str name ": " (clojure.core/name rel) " target '" target
-                              "' not found in enclosing module — skipping relation"))))))))
+                              "' not found in enclosing module — skipping relation"))))))))))
+
+(defn flush-pending-relations!
+  "Pass 2 (on `within-module` exit): emit the relations queued during the body,
+   now that every instance is declared — so forward references and cycles resolve."
+  []
+  (when *pending-relations*
+    (doseq [pending @*pending-relations*]
+      (emit-relations! pending))))
+
+(defn instantiate!
+  "Emit an instance of structure `tag` named `name` from `clauses` (slot-rel
+   forms + the universal (doc \"...\") clause). Pass 1: declare the node now and
+   queue its relations for `flush-pending-relations!` (or emit immediately when
+   not inside a `within-module` two-pass scope). Returns the instance :entity/id."
+  [tag name clauses]
+  (let [sdef        (structure-by-tag tag)
+        node-id     (random-uuid)
+        doc         (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) clauses)
+        rel-clauses (remove #(contains? builtin-clauses (first %)) clauses)
+        pending     {:tag tag :name name :node-id node-id :clauses rel-clauses}]
+    (when-not sdef
+      (throw (ex-info (str "unknown structure " tag) {:tag tag})))
+    (transact! [(cond-> {:entity/id node-id :entity/name (str name) :structure/of tag}
+                  doc (assoc :entity/doc doc))])
+    (register-child! node-id)
+    (if *pending-relations*
+      (swap! *pending-relations* conj pending)
+      (emit-relations! pending))
     node-id))
 
 ;; ── defstructure (the one form) ──────────────────────────────────────────────
