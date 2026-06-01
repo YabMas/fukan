@@ -41,7 +41,7 @@
 ;; not a RELATION slot (an edge to a node). Predicate held as a symbol so it
 ;; splices into a datalog clause. Extend by adding a type → predicate-symbol pair.
 
-(def scalar-types {:Int 'integer?, :String 'string?, :Bool 'boolean?})
+(def scalar-types {:Int 'clojure.core/integer?, :String 'clojure.core/string?, :Bool 'clojure.core/boolean?})
 
 (defn- scalar-slot?
   "True when a parsed slot's target is a registered scalar type."
@@ -298,40 +298,61 @@
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 
-(defn- slot-laws
-  "Derive cardinality + target-type laws for a structure's slots. Each compiles
-   to a datalog offender query over the reified relations."
-  [{:keys [tag slots]}]
-  (mapcat
-   (fn [{:keys [rel card target] :as slot}]
-     (when-not (scalar-slot? slot)
-     (let [tn (name tag) rn (name rel)
-           ;; every target of this slot must be tagged the slot's target structure
-           target-law {:desc (str tn "." rn " target must be a " (name target))
-                       :offenders '[?x ?t]
-                       :where [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
-                               ['?x :structure/of tag]
-                               (list 'not ['?t :structure/of target])]}
-           none-law (fn [verb]
-                      {:desc (str tn "." rn " " verb " (found none)")
+(defn- relation-slot-laws
+  "Cardinality + target-type laws for a RELATION slot (target is a structure)."
+  [tag {:keys [rel card target]}]
+  (let [tn (name tag) rn (name rel)
+        target-law {:desc (str tn "." rn " target must be a " (name target))
+                    :offenders '[?x ?t]
+                    :where [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
+                            ['?x :structure/of tag]
+                            (list 'not ['?t :structure/of target])]}
+        none-law (fn [verb]
+                   {:desc (str tn "." rn " " verb " (found none)")
+                    :offenders '[?x]
+                    :where [['?x :structure/of tag]
+                            (list 'not-join ['?x]
+                                  ['?r :rel/from '?x] ['?r :rel/kind rel])]})
+        several-law (fn [verb]
+                      {:desc (str tn "." rn " " verb " (found several)")
                        :offenders '[?x]
                        :where [['?x :structure/of tag]
-                               (list 'not-join ['?x]
-                                     ['?r :rel/from '?x] ['?r :rel/kind rel])]})
-           several-law (fn [verb]
-                         {:desc (str tn "." rn " " verb " (found several)")
-                          :offenders '[?x]
-                          :where [['?x :structure/of tag]
-                                  ['?r1 :rel/from '?x] ['?r1 :rel/kind rel]
-                                  ['?r2 :rel/from '?x] ['?r2 :rel/kind rel]
-                                  [(list 'not= '?r1 '?r2)]]})]
-       ;; card → which laws: one = exactly 1, some = >=1, optional = <=1, many = any
-       (cond-> [target-law]
-         (= card :one)      (conj (none-law "requires exactly one")
-                                  (several-law "requires exactly one"))
-         (= card :some)     (conj (none-law "requires at least one"))
-         (= card :optional) (conj (several-law "allows at most one"))))))
-   slots))
+                               ['?r1 :rel/from '?x] ['?r1 :rel/kind rel]
+                               ['?r2 :rel/from '?x] ['?r2 :rel/kind rel]
+                               [(list 'not= '?r1 '?r2)]]})]
+    (cond-> [target-law]
+      (= card :one)      (conj (none-law "requires exactly one")
+                               (several-law "requires exactly one"))
+      (= card :some)     (conj (none-law "requires at least one"))
+      (= card :optional) (conj (several-law "allows at most one")))))
+
+(defn- value-slot-laws
+  "Type-check (+ none for `one`) laws for a VALUE slot (target is a scalar type).
+   No 'found several' law: plain :val/<key> storage is cardinality-one."
+  [tag {:keys [rel card target]}]
+  (let [tn (name tag) rn (name rel)
+        val-attr (keyword "val" (name rel))
+        pred     (scalar-types target)
+        type-law {:desc (str tn "." rn " value must be a " (name target))
+                  :offenders '[?x]
+                  :where [['?x :structure/of tag]
+                          ['?x val-attr '?v]
+                          [(list pred '?v) '?ok]
+                          [(list 'false? '?ok)]]}
+        none-law {:desc (str tn "." rn " requires exactly one (found none)")
+                  :offenders '[?x]
+                  :where [['?x :structure/of tag]
+                          (list 'not-join ['?x] ['?x val-attr '?_v])]}]
+    (cond-> [type-law]
+      (= card :one) (conj none-law))))
+
+(defn- slot-laws
+  "Derive laws for a structure's slots, dispatching value vs relation slots."
+  [{:keys [tag slots]}]
+  (mapcat #(if (scalar-slot? %)
+             (value-slot-laws tag %)
+             (relation-slot-laws tag %))
+          slots))
 
 (defn- law-scope-tag
   "The structure tag a free law's first offender var is scoped to: its :scope

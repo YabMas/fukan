@@ -276,6 +276,34 @@
         (is (some :timed-out? (s/check db))
             "the divergent Hang law is reported as timed-out and check still returns")))))
 
+(deftest value-slots-well-formed-passes-check
+  (testing "valid scalar values (and an absent optional) trip no law"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Box "b" (open true) (size 3))))]   ; label optional, omitted
+      (is (empty? (laws-firing db :Box))))))
+
+(deftest value-type-law-catches-wrong-type
+  (testing "a value whose literal fails its declared scalar type is caught"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Box "b" (open "yes") (size 3))))]   ; open is a String, not a Bool
+      (is (contains? (laws-firing db :Box) "Box.open value must be a Bool")))))
+
+(deftest value-one-cardinality-catches-missing
+  (testing "a required (one :T) value that is absent trips the none-law"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Box "b" (size 3))))]                ; open absent
+      (is (contains? (laws-firing db :Box) "Box.open requires exactly one (found none)")))))
+
+(deftest free-law-over-a-value-fires
+  (testing "an author free law can bind a stored value directly (predicates ride the engine)"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Box "b" (open true) (size 0))))]    ; size 0 violates positivity
+      (is (contains? (laws-firing db :Box) "size must be positive")))))
+
 (deftest unknown-body-form-is-rejected
   (testing "defstructure rejects an unrecognized body form at macro-expansion"
     ;; macroexpand wraps the macro's ex-info in a CompilerException; walk to root.
