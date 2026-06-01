@@ -174,4 +174,6 @@
    demos.access-control.vocab.core/Action     hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource   hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
-   demos.access-control.vocab.core/Role       hooks.fukan.structure/instance}}}
+   demos.access-control.vocab.core/Role       hooks.fukan.structure/instance
+   demos.type-system.vocab.core/Field         hooks.fukan.structure/instance
+   demos.type-system.vocab.core/Type          hooks.fukan.structure/instance}}}
