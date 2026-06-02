@@ -26,18 +26,20 @@
       (Faculty "Target" (doc "The analyzed codebase — implementation + specifications.")
         (feeds Model))
 
-      ;; the thinking faculties — each reads the Model and yields a perspective/output
-      (Faculty "Lens"    (doc "A thinking-mode / view over the model.")        (reads Model) (feeds View)
-        (realized-by (across "lens")))                                          ; the lens subsystem view
-      (Faculty "Inspect" (doc "Trust signals — integrity, coverage, drift.")   (reads Model) (feeds Signal)
-        (realized-by (across "inspect")))                                       ; the inspect subsystem view
-      (Faculty "Projection" (doc "Re-presents the model in a target form (blueprint, …).") (reads Model) (feeds Blueprint)
-        (realized-by (across "projection")))                                    ; the projection subsystem view
+      ;; the cross-cutting FOCUS and the two ACTS that compose with it
+      (Faculty "Lens" (doc "A focus over the model — which slice/aspect to attend to; composes with either act.")
+        (reads Model) (feeds Probe Projection)
+        (realized-by (across "lens")))                                          ; the lens (focus) view
+      (Faculty "Probe" (doc "Reads the model through a lens → a finding (inspect = a gating finding).")
+        (reads Model) (feeds Finding)
+        (realized-by (across "probe")))                                         ; the probe (read) view
+      (Faculty "Projection" (doc "Re-presents the model in a target form (blueprint, …).")
+        (reads Model) (feeds Blueprint)
+        (realized-by (across "projection")))                                    ; the projection (render) view
       (Faculty "Instruct"(doc "Turns the model into instructions for an LLM.")  (reads Model) (feeds Instruction))
-      (Faculty "Agent"   (doc "Queries the model; saved, shiftable views.")     (reads Model) (feeds View))
+      (Faculty "Agent"   (doc "Orchestrates lenses ∘ acts to serve an LLM/human — the next milestone.") (reads Model) (feeds Finding))
 
       ;; the outputs reasoned-with
-      (Faculty "View"        (doc "A perspective on the model a human/LLM reasons with."))
-      (Faculty "Signal"      (doc "A trust signal about the model's health."))
+      (Faculty "Finding"     (doc "A probe's output — a View to reason with, or a gating Signal (inspect)."))
       (Faculty "Blueprint"   (doc "Implementation code projected from the model — one projection target."))
       (Faculty "Instruction" (doc "Guidance an LLM acts on to build or close drift.")))))

@@ -12,8 +12,8 @@
             ;; the kernel self-model's schema vocab (MetaSlot authored inline → not referred)
             [canvas.vocab.meta :refer [Concept]]
             [canvas.vocab.arch :refer [Faculty]]
-            [canvas.vocab.lens :refer [Lens View]]
-            [canvas.vocab.inspect :refer [Check Signal]]
+            [canvas.vocab.lens :refer [Lens]]
+            [canvas.vocab.probe :refer [Probe Finding]]
             [canvas.vocab.projection :refer [Projection]]))
 
 (defn- names-of [db tag]
@@ -138,63 +138,59 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unresolved cross-module reference"
                             (canvas-source/resolve-cross-refs db))))))
 
-(deftest lens-substrate-modelled-as-pluggable-thinking-modes
-  (testing "the lens view: each lens weighs an aspect and yields a view"
+(deftest lenses-modelled-as-cross-cutting-focuses
+  (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
     (let [db (pipeline/build-model "src")]
       (is (contains? (names-of db :Module) "lens"))
-      (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit"} (names-of db :Lens)))
-      (is (seq (d/q '[:find ?v
-                      :where [?l :structure/of :Lens] [?l :entity/name "patterns"]
-                             [?r :rel/from ?l] [?r :rel/kind :yields] [?r :rel/to ?v]
-                             [?v :entity/name "Patterns"]]
-                    db))
-          "the patterns lens yields the Patterns view"))))
+      (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
+                       (names-of db :Lens))))))
 
-(deftest overview-lens-faculty-interlocks-with-the-lens-view
-  (testing "the top-level Lens faculty is realized-by the lens module (cross-ref interlock)"
+(deftest probe-acts-read-through-a-lens-yielding-findings
+  (testing "the probe view: a probe reads the model THROUGH a lens (cross-module) → a finding; inspect = gating"
+    (let [db (pipeline/build-model "src")]
+      (is (contains? (names-of db :Module) "probe"))
+      (is (set/subset? #{"survey" "patterns" "integrity" "drift"} (names-of db :Probe)))
+      ;; lens ∘ act composition: the patterns probe reads through the patterns lens,
+      ;; resolved cross-module to the lens node
+      (is (seq (d/q '[:find ?l
+                      :where [?p :structure/of :Probe] [?p :entity/name "patterns"]
+                             [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
+                             [?l :structure/of :Lens] [?l :entity/name "patterns"]]
+                    db))
+          "the patterns probe reads through the patterns lens")
+      ;; inspect ⊂ probe — drift is a probe whose finding GATES (a trust Signal)
+      (is (seq (d/q '[:find ?f
+                      :where [?p :structure/of :Probe] [?p :entity/name "drift"]
+                             [?r :rel/from ?p] [?r :rel/kind :yields] [?r :rel/to ?f]
+                             [?f :structure/of :Finding] [?f :val/gating true]]
+                    db))
+          "drift is an inspect — a probe whose finding gates"))))
+
+(deftest overview-lens-and-probe-faculties-interlock-with-their-views
+  (testing "the top-level Lens and Probe faculties are realized-by their modules (cross-ref interlock)"
     (let [db (pipeline/build-model "src")]
       (is (seq (d/q '[:find ?m
                       :where [?f :structure/of :Faculty] [?f :entity/name "Lens"]
                              [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
                              [?m :structure/of :Module] [?m :entity/name "lens"]]
                     db))
-          "the Lens faculty links across modules to the lens view"))))
-
-(deftest orphan-view-is-caught
-  (testing "a view yielded by no lens trips the lens law"
-    (let [db (s/with-structures
-               (s/within-module "l"
-                 (View "Used")
-                 (View "Orphan")
-                 (Lens "x" (weighs "things") (yields Used))))]
-      (is (contains? (set (map :law (s/check db))) "every view is yielded by some lens")))))
-
-(deftest inspect-subsystem-modelled-as-trust-checks
-  (testing "the inspect view: each check inspects an aspect and raises a signal"
-    (let [db (pipeline/build-model "src")]
-      (is (contains? (names-of db :Module) "inspect"))
-      (is (set/subset? #{"integrity" "coverage" "drift"} (names-of db :Check)))
-      (is (seq (d/q '[:find ?s
-                      :where [?c :structure/of :Check] [?c :entity/name "drift"]
-                             [?r :rel/from ?c] [?r :rel/kind :raises] [?r :rel/to ?s]
-                             [?s :entity/name "DriftReport"]]
-                    db))
-          "the drift check raises the DriftReport signal")
+          "the Lens faculty links to the lens view")
       (is (seq (d/q '[:find ?m
-                      :where [?f :structure/of :Faculty] [?f :entity/name "Inspect"]
+                      :where [?f :structure/of :Faculty] [?f :entity/name "Probe"]
                              [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
-                             [?m :structure/of :Module] [?m :entity/name "inspect"]]
+                             [?m :structure/of :Module] [?m :entity/name "probe"]]
                     db))
-          "the Inspect faculty interlocks with the inspect view"))))
+          "the Probe faculty links to the probe view"))))
 
-(deftest orphan-signal-is-caught
-  (testing "a signal raised by no check trips the inspect law"
+(deftest orphan-finding-is-caught
+  (testing "a finding yielded by no probe trips the probe law"
     (let [db (s/with-structures
-               (s/within-module "i"
-                 (Signal "Used")
-                 (Signal "Orphan")
-                 (Check "x" (inspects "things") (raises Used))))]
-      (is (contains? (set (map :law (s/check db))) "every signal is raised by some check")))))
+               (s/within-module "p"
+                 (Lens "l" (focus "things"))
+                 (Finding "Used"   (gating false))
+                 (Finding "Orphan" (gating false))
+                 (Probe "x" (through l) (yields Used))))]
+      (is (contains? (set (map :law (s/check db))) "every finding is yielded by some probe")))))
 
 (deftest projection-subsystem-modelled-as-target-representations
   (testing "the projection view: the model is re-presented into a target (Blueprint) via source→artifact mappings"
