@@ -156,6 +156,7 @@
    canvas.vocab.shape/Kind  hooks.fukan.structure/instance
    canvas.vocab.op/Stage    hooks.fukan.structure/instance
    canvas.vocab.meta/Concept hooks.fukan.structure/instance
+   canvas.vocab.arch/Faculty hooks.fukan.structure/instance
    ;; test-only structures (test/fukan/canvas/core/structure_test.clj)
    fukan.canvas.core.structure-test/Type     hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Function hooks.fukan.structure/instance

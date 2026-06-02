@@ -9,7 +9,8 @@
             [fukan.canvas.core.structure :as s]
             [fukan.model.pipeline :as pipeline]
             ;; the kernel self-model's schema vocab (MetaSlot authored inline → not referred)
-            [canvas.vocab.meta :refer [Concept]]))
+            [canvas.vocab.meta :refer [Concept]]
+            [canvas.vocab.arch :refer [Faculty]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t
@@ -94,3 +95,23 @@
                   (Concept "X" (slot (MetaSlot (name "f") (cardinality "lots") (of T))))))]
       (is (contains? (set (map :law (s/check bad)))
                      "a slot's cardinality is one of the known cardinalities")))))
+
+(deftest overview-model-makes-the-model-the-hub
+  (testing "the top-level overview: every faculty connects to the Model, which is the hub"
+    (let [db (pipeline/build-model "src")]
+      (is (contains? (names-of db :Module) "fukan"))
+      ;; the Model faculty has the most flow connections (everything orbits it)
+      (is (<= 6 (count (d/q '[:find ?r
+                              :where [?m :structure/of :Faculty] [?m :entity/name "Model"]
+                                     (or [?r :rel/to ?m] [?r :rel/from ?m])]
+                            db)))
+          "many faculties feed or read the Model"))))
+
+(deftest orphan-faculty-is-caught
+  (testing "a faculty with no flow edges trips the no-isolated-faculty law"
+    (let [db (s/with-structures
+               (s/within-module "f"
+                 (Faculty "Model")
+                 (Faculty "Reader" (reads Model))   ; Model gets an incoming edge; Reader an outgoing
+                 (Faculty "Loner")))]               ; connects to nothing
+      (is (contains? (set (map :law (s/check db))) "no faculty is isolated")))))
