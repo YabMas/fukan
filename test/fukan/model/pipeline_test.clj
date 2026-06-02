@@ -7,7 +7,9 @@
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.structure :as s]
-            [fukan.model.pipeline :as pipeline]))
+            [fukan.model.pipeline :as pipeline]
+            ;; the kernel self-model's schema vocab (MetaSlot authored inline → not referred)
+            [canvas.vocab.meta :refer [Concept]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t
@@ -65,3 +67,30 @@
                              [?e :structure/of :Effect] [?e :val/name "io"]]
                     db))
           "build performs :io"))))
+
+(deftest kernel-meta-model-captures-structure-composition
+  (testing "the reflexive kernel model: Structure is composed of Slot and Law"
+    (let [db (pipeline/build-model "src")]
+      (is (contains? (names-of db :Module) "core.structure"))
+      (is (= #{"slot" "law" "value"}
+             (set (map first (d/q '[:find ?n
+                                    :where [?st :structure/of :Concept] [?st :entity/name "Structure"]
+                                           [?r :rel/from ?st] [?r :rel/kind :slot] [?r :rel/to ?ms]
+                                           [?ms :val/name ?n]] db))))
+          "Structure's MetaSlots are slot, law, value")
+      (is (seq (d/q '[:find ?slot-c
+                      :where [?st :structure/of :Concept] [?st :entity/name "Structure"]
+                             [?r :rel/from ?st] [?r :rel/kind :slot] [?r :rel/to ?ms]
+                             [?ms :val/name "slot"]
+                             [?o :rel/from ?ms] [?o :rel/kind :of] [?o :rel/to ?slot-c]
+                             [?slot-c :entity/name "Slot"]] db))
+          "Structure.slot targets the Slot concept (composition)"))))
+
+(deftest metaslot-cardinality-law-catches-unknown-cardinality
+  (testing "a MetaSlot whose cardinality is outside the known set is caught"
+    (let [bad (s/with-structures
+                (s/within-module "k"
+                  (Concept "T")
+                  (Concept "X" (slot (MetaSlot (name "f") (cardinality "lots") (of T))))))]
+      (is (contains? (set (map :law (s/check bad)))
+                     "a slot's cardinality is one of the known cardinalities")))))
