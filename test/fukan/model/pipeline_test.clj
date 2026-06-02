@@ -193,11 +193,18 @@
       (is (contains? (set (map :law (s/check db))) "every finding is yielded by some probe")))))
 
 (deftest projection-subsystem-modelled-as-target-representations
-  (testing "the projection view: the model is re-presented into a target (Blueprint) via source→artifact mappings"
+  (testing "the projection view: model re-presented into targets through a lens + source→artifact mappings"
     (let [db (pipeline/build-model "src")]
       (is (contains? (names-of db :Module) "projection"))
-      ;; Blueprint is one projection target (more — docs, diagrams — to come)
-      (is (contains? (names-of db :Projection) "Blueprint"))
+      ;; Blueprint (code) + DriftClose (instructions — instruct ⊂ projection); more to come
+      (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
+      ;; a projection composes lens ∘ act too: Blueprint renders THROUGH the survey lens
+      (is (seq (d/q '[:find ?l
+                      :where [?p :structure/of :Projection] [?p :entity/name "Blueprint"]
+                             [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
+                             [?l :structure/of :Lens] [?l :entity/name "survey"]]
+                    db))
+          "Blueprint renders through the survey lens")
       ;; a projection is built from mappings (value-typed source→artifact pairs)
       (is (seq (d/q '[:find ?mp
                       :where [?p :structure/of :Projection] [?p :entity/name "Blueprint"]
@@ -212,6 +219,20 @@
                              [?m :structure/of :Module] [?m :entity/name "projection"]]
                     db))
           "the Projection faculty interlocks with the projection view"))))
+
+(deftest a-lens-is-reused-across-acts
+  (testing "the payoff: ONE drift lens feeds BOTH the drift inspect-probe AND the drift-close projection"
+    (let [db (pipeline/build-model "src")]
+      (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :Lens] [?l :entity/name "drift"]] db)))
+          "there is exactly one drift lens node")
+      (is (seq (d/q '[:find ?l
+                      :where [?l :structure/of :Lens] [?l :entity/name "drift"]
+                             ;; consumed by a probe (the inspect) …
+                             [?pr :structure/of :Probe] [?rp :rel/from ?pr] [?rp :rel/kind :through] [?rp :rel/to ?l]
+                             ;; … AND by a projection (drift-close)
+                             [?pj :structure/of :Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
+                    db))
+          "one drift focus, composed with two different acts"))))
 
 (deftest projection-with-no-mappings-is-caught
   (testing "a projection that maps nothing trips the at-least-one-mapping law"

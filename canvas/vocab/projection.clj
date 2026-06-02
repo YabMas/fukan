@@ -18,7 +18,11 @@
 
 (defstructure Projection
   "A projected representation of the model — a target we render it into. The
-   implementation Blueprint is one; more (docs, diagrams, …) as we add them. Built
-   from the mappings that turn each source kind into a target artifact."
-  (slot :doc  (optional :String))
-  (slot :maps (some Mapping)))   ; at least one source→artifact mapping
+   implementation Blueprint is one; more (docs, diagrams, instructions, …) as we add
+   them. Like a probe, a projection composes with a `Lens` — it renders THROUGH a focus
+   (the WHAT) and its mappings say HOW each focused source kind becomes a target
+   artifact. The same lens can feed a probe and a projection (e.g. the drift lens feeds
+   the drift inspect AND the drift-close projection)."
+  (slot :doc     (optional :String))
+  (slot :through (one Lens))     ; the focus it renders through (the WHAT)
+  (slot :maps    (some Mapping)))   ; ≥1 source→artifact mapping (the HOW)

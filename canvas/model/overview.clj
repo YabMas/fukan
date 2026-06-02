@@ -33,10 +33,9 @@
       (Faculty "Probe" (doc "Reads the model through a lens → a finding (inspect = a gating finding).")
         (reads Model) (feeds Finding)
         (realized-by (across "probe")))                                         ; the probe (read) view
-      (Faculty "Projection" (doc "Re-presents the model in a target form (blueprint, …).")
-        (reads Model) (feeds Blueprint)
+      (Faculty "Projection" (doc "Re-presents the model in a target form — blueprint, instructions, ….")
+        (reads Model) (feeds Blueprint Instruction)                             ; instruct ⊂ projection (a target)
         (realized-by (across "projection")))                                    ; the projection (render) view
-      (Faculty "Instruct"(doc "Turns the model into instructions for an LLM.")  (reads Model) (feeds Instruction))
       (Faculty "Agent"   (doc "Orchestrates lenses ∘ acts to serve an LLM/human — the next milestone.") (reads Model) (feeds Finding))
 
       ;; the outputs reasoned-with
