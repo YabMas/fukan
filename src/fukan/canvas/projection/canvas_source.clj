@@ -143,15 +143,49 @@
         (d/db-with (mapcat :ref-txs extractions)))))
 
 ;; ---------------------------------------------------------------------------
+;; Cross-module references — resolve deferred `:rel/to-ref` post-merge
+;; ---------------------------------------------------------------------------
+
+(defn- resolve-ref
+  "Resolve a cross-module reference vector against the merged db, returning the
+   target eid (or nil): `[module]` → the :Module node of that name; `[module name]`
+   → that module's child of that name."
+  [db ref]
+  (case (count ref)
+    1 (ffirst (d/q '[:find ?m :in $ ?mn
+                     :where [?m :entity/name ?mn] [?m :structure/of :Module]]
+                   db (first ref)))
+    2 (ffirst (d/q '[:find ?c :in $ ?mn ?cn
+                     :where [?m :entity/name ?mn] [?m :structure/of :Module]
+                            [?m :module/child ?c] [?c :entity/name ?cn]]
+                   db (first ref) (second ref)))
+    nil))
+
+(defn resolve-cross-refs
+  "Resolve every deferred cross-module reference (`:rel/to-ref`, no `:rel/to`) in
+   the merged db to its actual target node. Throws on an unresolved reference — the
+   cross-module analogue of the local 'not an entity in the module' error."
+  [db]
+  (reduce (fn [db [r ref]]
+            (if-let [target (resolve-ref db ref)]
+              (d/db-with db [[:db/add r :rel/to target]])
+              (throw (ex-info (str "canvas-source: unresolved cross-module reference "
+                                   (pr-str ref) " — no such module/node in the model")
+                              {:ref ref :rel r}))))
+          db
+          (d/q '[:find ?r ?ref :where [?r :rel/to-ref ?ref] (not [?r :rel/to _])] db)))
+
+;; ---------------------------------------------------------------------------
 ;; Build — the model
 ;; ---------------------------------------------------------------------------
 
 (defn build
   "Discover every canvas spec, load it (registering its vocabulary), call each
-   model spec's build-canvas (→ a structure db), and merge them into one structure
-   db. Vocab-only specs (no build-canvas) are loaded but contribute no instances.
-   This db is the model."
+   model spec's build-canvas (→ a structure db), merge them, and resolve deferred
+   cross-module references. Vocab-only specs (no build-canvas) are loaded but
+   contribute no instances. This db is the model."
   []
   (->> (discover-canvas-namespaces)
        (keep (fn [ns-sym] (when-let [bc (load-and-resolve-build-canvas ns-sym)] (bc))))
-       merge-dbs))
+       merge-dbs
+       resolve-cross-refs))

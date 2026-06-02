@@ -12,12 +12,15 @@
 (defn ^:export build-canvas []
   (s/with-structures
     (s/within-module "fukan"
-      ;; the hub
-      (Faculty "Model" (doc "The unified structure db — fukan's heart; everything orbits it."))
+      ;; the hub — realized by the subsystems that build and hold it
+      (Faculty "Model" (doc "The unified structure db — fukan's heart; everything orbits it.")
+        (realized-by (across "model.pipeline") (across "canvas-source") (across "infra.model")))
 
-      ;; what the Model is built from / fed by
+      ;; what the Model is built from / fed by — with cross-view links to the
+      ;; subsystem models that realize them (interlocking views)
       (Faculty "Structure" (doc "The lean-core primitive: a composition of slots + laws.")
-        (feeds Model))
+        (feeds Model)
+        (realized-by (across "core.structure")))          ; the kernel meta-model
       (Faculty "Canvas" (doc "The reasoning surface; specs author structures into the model.")
         (feeds Model))
       (Faculty "Target" (doc "The analyzed codebase — implementation + specifications.")

@@ -8,6 +8,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.structure :as s]
             [fukan.model.pipeline :as pipeline]
+            [fukan.canvas.projection.canvas-source :as canvas-source]
             ;; the kernel self-model's schema vocab (MetaSlot authored inline → not referred)
             [canvas.vocab.meta :refer [Concept]]
             [canvas.vocab.arch :refer [Faculty]]))
@@ -115,3 +116,21 @@
                  (Faculty "Reader" (reads Model))   ; Model gets an incoming edge; Reader an outgoing
                  (Faculty "Loner")))]               ; connects to nothing
       (is (contains? (set (map :law (s/check db))) "no faculty is isolated")))))
+
+(deftest cross-module-ref-resolves-post-merge
+  (testing "overview's Structure faculty is realized-by → the core.structure module node"
+    (let [db (pipeline/build-model "src")]
+      (is (seq (d/q '[:find ?m
+                      :where [?f :structure/of :Faculty] [?f :entity/name "Structure"]
+                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
+                             [?m :structure/of :Module] [?m :entity/name "core.structure"]]
+                    db))
+          "the cross-ref resolved to the core.structure :Module node")
+      (is (empty? (d/q '[:find ?r :where [?r :rel/to-ref _] (not [?r :rel/to _])] db))
+          "every cross-ref in the merged model is resolved"))))
+
+(deftest unresolved-cross-ref-throws
+  (testing "a cross-ref to a non-existent module/node throws at resolution"
+    (let [db (d/db-with (s/create) [{:entity/id "r1" :rel/to-ref ["nope"]}])]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unresolved cross-module reference"
+                            (canvas-source/resolve-cross-refs db))))))

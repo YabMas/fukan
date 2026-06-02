@@ -33,7 +33,8 @@
    :rel/to       {:db/valueType :db.type/ref}
    :rel/label    {}
    :rel/wrap     {}
-   :rel/order    {}})                                         ; position in an (ordered ...) slot
+   :rel/order    {}                                           ; position in an (ordered ...) slot
+   :rel/to-ref   {}})                                         ; deferred cross-module target [module] / [module name]
 
 (defn create [] (d/empty-db schema))
 
@@ -143,25 +144,34 @@
         ;; :order enters the content key, so [A B] and [B A] are distinct values
         ckey    (pr-str [(clojure.core/name tag)
                          scalars
-                         (sort (map (fn [{:keys [rk label order tid]}]
-                                      [(clojure.core/name rk) (str order) (str label) (str tid)])
+                         (sort (map (fn [{:keys [rk label order tid ref]}]
+                                      [(clojure.core/name rk) (str order) (str label) (str (or tid ref))])
                                     rels))])
         node-id (str "#val" ckey)]
     (transact! [(into {:entity/id node-id :structure/of tag} scalars)])
-    (doseq [{:keys [rk label order tid]} rels]
-      (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk) "|" order "|" tid)
+    (doseq [{:keys [rk label order tid ref]} rels]
+      (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk) "|" order "|" (or tid ref))
                            :rel/from [:entity/id node-id]
-                           :rel/kind rk
-                           :rel/to   [:entity/id tid]}
+                           :rel/kind rk}
+                    tid   (assoc :rel/to [:entity/id tid])
+                    ref   (assoc :rel/to-ref ref)
                     label (assoc :rel/label label)
                     order (assoc :rel/order order))]))
     node-id))
 
+(defn- across-form?
+  "An `(across <module>)` / `(across <module> <name>)` clause arg — a deferred
+   CROSS-MODULE reference, resolved post-merge rather than in the local module."
+  [target]
+  (and (seq? target) (= 'across (first target))))
+
 (defn- clause->rels
   "Resolve one relation clause of an instance of `sdef` into relation specs
-   {:rk :label :order :tid}. An ORDERED slot splices its vector arg(s) and
-   position-indexes them (:order 0,1,…, no label); any other slot parses each arg
-   as `target` or `[label target]` (:order nil). Throws on an unresolved target."
+   {:rk :label :order (:tid | :ref)}. A local target resolves to a node (:tid); an
+   `(across …)` target is recorded symbolically (:ref [module] / [module name]) for
+   post-merge resolution. An ORDERED slot splices its vector arg(s) and
+   position-indexes them (no label); any other slot parses each arg as `target` or
+   `[label target]`. Throws on an unresolved local target."
   [db sdef clause]
   (let [rk   (keyword (first clause))
         slot (slot-for sdef rk)
@@ -175,13 +185,16 @@
                          (throw (ex-info (str (clojure.core/name (:tag sdef)) ": "
                                               (clojure.core/name rk) " references '" target
                                               "', which is not an entity in the enclosing module")
-                                         {:structure (:tag sdef) :rel rk :target target}))))]
+                                         {:structure (:tag sdef) :rel rk :target target}))))
+          spec     (fn [target order label]
+                     (if (across-form? target)
+                       {:rk rk :label label :order order :ref (mapv str (rest target))}
+                       {:rk rk :label label :order order :tid (resolve* target)}))]
       (if (= :ordered (:card slot))
-        (map-indexed (fn [i t] {:rk rk :label nil :order i :tid (resolve* t)})
-                     (mapcat #(if (vector? %) % [%]) args))
+        (map-indexed (fn [i t] (spec t i nil)) (mapcat #(if (vector? %) % [%]) args))
         (for [a args
               :let [{:keys [label target]} (parse-clause-arg a)]]
-          {:rk rk :label label :order nil :tid (resolve* target)})))))
+          (spec target nil label))))))
 
 (defn- resolve-target
   "Resolve a relation clause target (for a slot whose declared target structure is
@@ -224,12 +237,13 @@
   (let [sdef (structure-by-tag tag)
         db   @*store*]
     (doseq [clause clauses
-            {:keys [rk label order tid]} (clause->rels db sdef clause)]
+            {:keys [rk label order tid ref]} (clause->rels db sdef clause)]
       (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk)
-                                          "|" tid "|" (random-uuid))
+                                          "|" (or tid ref) "|" (random-uuid))
                            :rel/from [:entity/id node-id]
-                           :rel/kind rk
-                           :rel/to   [:entity/id tid]}
+                           :rel/kind rk}
+                    tid   (assoc :rel/to [:entity/id tid])
+                    ref   (assoc :rel/to-ref ref)        ; deferred cross-module target
                     label (assoc :rel/label label)
                     order (assoc :rel/order order))]))))
 

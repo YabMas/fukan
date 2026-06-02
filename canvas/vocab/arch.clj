@@ -13,6 +13,9 @@
   (slot :doc   (optional :String))
   (slot :feeds (many Faculty))     ; produces into / contributes to
   (slot :reads (many Faculty))     ; operates on / consumes
+  ;; cross-VIEW link: the subsystem views (modules) that realize this concept —
+  ;; authored with `(realized-by (across "<module>"))`, resolved post-merge
+  (slot :realized-by (many Module))
   ;; No isolated faculty — every concept participates in the flow (has an incoming
   ;; or outgoing edge). A bounded invariant; the Model's hub-ness is evident in the
   ;; model's shape (it has the most connections) rather than enforced by a (cyclic,
