@@ -15,7 +15,8 @@
             [canvas.vocab.lens :refer [Lens]]
             [canvas.vocab.probe :refer [Probe Finding]]
             [canvas.vocab.projection :refer [Projection]]
-            [canvas.vocab.agent :refer [Composition]]))
+            [canvas.vocab.agent :refer [Composition]]
+            [canvas.vocab.collab :refer [Phase]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t
@@ -274,6 +275,38 @@
                              [?r :rel/from ?c] [?r :rel/kind :through] [?r :rel/to ?l]]
                     db))
           "the drift lens is also composed by the agent surface"))))
+
+(deftest collaboration-loop-modelled-as-a-closed-cycle
+  (testing "the collab view: phases form a closed OODA cycle, each (mostly) exercising a faculty"
+    (let [db (pipeline/build-model "src")]
+      (is (contains? (names-of db :Module) "collab"))
+      (is (set/subset? #{"Intend" "Focus" "Observe" "Reason" "Apply" "Reinspect"}
+                       (names-of db :Phase)))
+      ;; a phase exercises a faculty cross-module: observe → the Probe faculty (interlock)
+      (is (seq (d/q '[:find ?fac
+                      :where [?p :structure/of :Phase] [?p :entity/name "Observe"]
+                             [?r :rel/from ?p] [?r :rel/kind :via] [?r :rel/to ?fac]
+                             [?fac :structure/of :Faculty] [?fac :entity/name "Probe"]]
+                    db))
+          "the observe phase exercises the Probe faculty (loop interlocks with the overview)")
+      ;; the cycle closes: Reinspect flows back to Intend
+      (is (seq (d/q '[:find ?i
+                      :where [?p :structure/of :Phase] [?p :entity/name "Reinspect"]
+                             [?r :rel/from ?p] [?r :rel/kind :next] [?r :rel/to ?i]
+                             [?i :entity/name "Intend"]]
+                    db))
+          "the loop closes — reinspect flows back to intend")
+      ;; and the build is clean — the loop-closes law is satisfied (no dangling phase)
+      (is (empty? (s/check db)) "the whole self-model — loop included — satisfies every law"))))
+
+(deftest dangling-phase-is-caught
+  (testing "a phase reached by no other phase trips the loop-closes law"
+    (let [db (s/with-structures
+               (s/within-module "c"
+                 (Phase "A" (next B))
+                 (Phase "B" (next A))
+                 (Phase "Dangling" (next A))))]   ; Dangling is no phase's :next
+      (is (contains? (set (map :law (s/check db))) "the loop closes — every phase is reached")))))
 
 (deftest agent-composition-rejects-unknown-act
   (testing "a composition whose act is outside {probe, project} trips the law"
