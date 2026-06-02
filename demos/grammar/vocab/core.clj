@@ -1,41 +1,55 @@
 (ns demos.grammar.vocab.core
   "A vocabulary for context-free grammars, built directly on defstructure. A
-   grammar is a graph of Symbols: a nonterminal :produces the symbols its
-   productions reference; a terminal produces none. Well-formedness is a law.
+   grammar is a graph of Symbols. A nonterminal :produces one or more Productions
+   (its ALTERNATIVES); each Production's :rhs is the ORDERED sequence of symbols on
+   that production's right-hand side. A terminal produces nothing. Well-formedness
+   (no useless symbols) is a recursive law over Symbol →:produces→ Production →:rhs→
+   Symbol.
 
    Modelling choices worth noting — each is a finding about the core:
-   - Terminal vs nonterminal is NOT two structures (that would need a union /
-     refinement for the :produces target). It's one `Symbol`; a terminal is a
-     Symbol with no :produces — collapsed the way value/record collapsed into
-     Type. The union case is what the deferred refinement mechanism would serve.
-   - :produces is an UNORDERED set, so this captures a production's *references*
-     but not its *sequence*. Ordered composition (a production is an ordered
-     string of symbols; an AST's children are ordered) has no native expression
-     on the core yet — the key gap this domain surfaces.
-   - This grammar is modelled acyclic for simplicity, but cyclic/left-recursive
-     grammars (expr → expr '+' term) are now authorable: within-module resolves
-     references in a second pass, so forward references and cycles between
-     symbols resolve. The reachability law's `derives` recursion is inlined, so
-     it terminates over a cyclic grammar."
+
+   - ALTERNATION vs SEQUENCE are now distinct, the way a grammar means them. An
+     earlier version flattened both into a single unordered `:produces (many
+     Symbol)`, which conflated `value → STRING | NUMBER` (two alternatives) with
+     `pair → key ':' value` (one ordered sequence). Separating them needs BOTH new
+     primitives at once: a Symbol :produces many Productions (alternation), and a
+     Production's :rhs is `(ordered Symbol)` (sequence, position-bearing).
+
+   - A Production is a `^:value`: a production IS its (ordered) rhs sequence, so two
+     productions with the same rhs are one node (value-identity). Authored inline,
+     anonymous — there is no \"which\" production beyond its sequence.
+
+   - The reachability law's `derives` recursion INLINES its two-hop step (Symbol →
+     Production → Symbol) — a recursive rule may not call a helper rule (datascript
+     diverges on cyclic data otherwise) — so it terminates over a cyclic grammar.
+     Cyclic/left-recursive grammars are authorable (within-module's second pass
+     resolves forward references)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
+(defstructure ^:value Production
+  "One production alternative: the ORDERED right-hand side sequence of symbols.
+   Value-identified — a production is its rhs."
+  (slot :rhs (ordered Symbol)))
+
 (defstructure Symbol
-  "A grammar symbol. A nonterminal :produces the symbols its productions
-   reference; a terminal :produces none."
-  (slot :produces (many Symbol)))
+  "A grammar symbol. A nonterminal :produces one or more Productions (its
+   alternatives); a terminal produces none."
+  (slot :produces (many Production)))
 
 (defstructure Grammar
   "A context-free grammar: a start symbol over a set of symbols."
   (slot :start  (one  Symbol))
   (slot :symbol (some Symbol))
-  ;; No useless symbols: every symbol is reachable from the start. The recursive
-  ;; `derives` rule INLINES its step (per the core's rule-calls-rule constraint —
-  ;; a recursive rule may not call a helper rule).
+  ;; No useless symbols: every symbol is reachable from the start. `derives` is
+  ;; reachability over the indirect graph Symbol →:produces→ Production →:rhs→
+  ;; Symbol, with the two-hop step INLINED into the recursive rule.
   (law "every symbol is reachable from the start symbol"
     :rules '[[(derives ?a ?b)
-              [?r :rel/from ?a] [?r :rel/kind :produces] [?r :rel/to ?b]]
+              [?rp :rel/from ?a]    [?rp :rel/kind :produces] [?rp :rel/to ?prod]
+              [?rr :rel/from ?prod] [?rr :rel/kind :rhs]      [?rr :rel/to ?b]]
              [(derives ?a ?b)
-              [?r :rel/from ?a] [?r :rel/kind :produces] [?r :rel/to ?m]
+              [?rp :rel/from ?a]    [?rp :rel/kind :produces] [?rp :rel/to ?prod]
+              [?rr :rel/from ?prod] [?rr :rel/kind :rhs]      [?rr :rel/to ?m]
               (derives ?m ?b)]]
     :scope :Symbol
     :offenders '[?s]

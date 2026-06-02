@@ -5,10 +5,11 @@
      key   → IDENT
      value → STRING | NUMBER
 
-   Terminals (COLON, IDENT, STRING, NUMBER) are declared first so the forward
-   references in the nonterminal productions resolve under the core's
-   forward-only name resolution."
+   `value` has TWO Productions (alternation); `pair` has ONE Production whose rhs
+   is the ORDERED sequence [key COLON value]. Terminals (COLON, IDENT, STRING,
+   NUMBER) are declared first so the forward references in the productions resolve."
   (:require [fukan.canvas.core.structure :as s]
+            ;; Production is authored inline (a value) → not referred
             [demos.grammar.vocab.core :refer [Symbol Grammar]]))
 
 (defn build []
@@ -19,10 +20,12 @@
       (Symbol "IDENT")
       (Symbol "STRING")
       (Symbol "NUMBER")
-      ;; nonterminals
-      (Symbol "key"   (produces IDENT))
-      (Symbol "value" (produces STRING NUMBER))
-      (Symbol "pair"  (produces key COLON value))
+      ;; nonterminals — :produces one or more Production alternatives;
+      ;; a Production's :rhs is an ordered sequence (vector)
+      (Symbol "key"   (produces (Production (rhs [IDENT]))))
+      (Symbol "value" (produces (Production (rhs [STRING]))      ; value → STRING
+                                (Production (rhs [NUMBER]))))    ; value → NUMBER
+      (Symbol "pair"  (produces (Production (rhs [key COLON value]))))  ; ordered RHS
       (Grammar "kv"
         (start  pair)
         (symbol pair) (symbol key) (symbol value)
