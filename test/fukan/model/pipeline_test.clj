@@ -14,7 +14,8 @@
             [canvas.vocab.arch :refer [Faculty]]
             [canvas.vocab.lens :refer [Lens]]
             [canvas.vocab.probe :refer [Probe Finding]]
-            [canvas.vocab.projection :refer [Projection]]))
+            [canvas.vocab.projection :refer [Projection]]
+            [canvas.vocab.agent :refer [Composition]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t
@@ -241,3 +242,44 @@
                  (Projection "Empty")))]
       (is (contains? (set (map :law (s/check db)))
                      "Projection.maps requires at least one (found none)")))))
+
+(deftest agent-surface-composes-lens-and-act
+  (testing "the agent view: each saved Composition composes a lens (cross-module) with an act"
+    (let [db (pipeline/build-model "src")]
+      (is (contains? (names-of db :Module) "agent"))
+      (is (set/subset? #{"contracts" "drift-report" "hotspots" "scaffold" "close-drift"}
+                       (names-of db :Composition)))
+      ;; lens ∘ act: the scaffold composition PROJECTS through the survey lens
+      (is (seq (d/q '[:find ?l
+                      :where [?c :structure/of :Composition] [?c :entity/name "scaffold"]
+                             [?c :val/act "project"]
+                             [?r :rel/from ?c] [?r :rel/kind :through] [?r :rel/to ?l]
+                             [?l :structure/of :Lens] [?l :entity/name "survey"]]
+                    db))
+          "the scaffold composition projects through the survey lens")
+      (is (seq (d/q '[:find ?m
+                      :where [?f :structure/of :Faculty] [?f :entity/name "Agent"]
+                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
+                             [?m :structure/of :Module] [?m :entity/name "agent"]]
+                    db))
+          "the Agent faculty interlocks with the agent view"))))
+
+(deftest one-lens-now-feeds-probe-projection-and-agent
+  (testing "capstone: the single drift lens is composed by a probe, a projection, AND agent compositions"
+    (let [db (pipeline/build-model "src")]
+      ;; every act-kind that composes the drift lens — probe (inspect), projection, agent
+      (is (seq (d/q '[:find ?c
+                      :where [?l :structure/of :Lens] [?l :entity/name "drift"]
+                             [?c :structure/of :Composition]
+                             [?r :rel/from ?c] [?r :rel/kind :through] [?r :rel/to ?l]]
+                    db))
+          "the drift lens is also composed by the agent surface"))))
+
+(deftest agent-composition-rejects-unknown-act
+  (testing "a composition whose act is outside {probe, project} trips the law"
+    (let [db (s/with-structures
+               (s/within-module "a"
+                 (Lens "l" (focus "things"))
+                 (Composition "bad" (answers "?") (through l) (act "frobnicate"))))]
+      (is (contains? (set (map :law (s/check db)))
+                     "a composition's act is probe or project")))))

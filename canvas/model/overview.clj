@@ -36,7 +36,9 @@
       (Faculty "Projection" (doc "Re-presents the model in a target form — blueprint, instructions, ….")
         (reads Model) (feeds Blueprint Instruction)                             ; instruct ⊂ projection (a target)
         (realized-by (across "projection")))                                    ; the projection (render) view
-      (Faculty "Agent"   (doc "Orchestrates lenses ∘ acts to serve an LLM/human — the next milestone.") (reads Model) (feeds Finding))
+      (Faculty "Agent"   (doc "Orchestrates lenses ∘ acts to serve an LLM/human — the next milestone.")
+        (reads Model) (feeds Finding Blueprint Instruction)
+        (realized-by (across "agent")))                                         ; the agent (composer) view
 
       ;; the outputs reasoned-with
       (Faculty "Finding"     (doc "A probe's output — a View to reason with, or a gating Signal (inspect)."))
