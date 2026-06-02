@@ -44,13 +44,13 @@
                            db)))
           "the StructureDb type-shape — used in four positions — is one value node"))))
 
-(deftest canvas-source-value-model-shares-the-db-shape
-  (testing "in the value-style canvas_source spec, the Db type-shape (4 uses) is one node"
+(deftest canvas-source-model-shares-the-db-shape
+  (testing "in the canvas_source self-model, the Db type-shape (4 uses) is one node"
     (let [db (pipeline/build-model "src")]
       (is (= 1 (count (d/q '[:find ?s
                              :where [?s :structure/of :Shape] [?s :val/kind "type"]
                                     [?r :rel/from ?s] [?r :rel/kind :type]
                                     [?r :rel/to ?t] [?t :entity/name "Db"]
-                                    [?m :entity/name "source.value"] [?m :module/child ?t]]
+                                    [?m :entity/name "canvas-source"] [?m :module/child ?t]]
                            db)))
           "Db appears in db->entity-maps in, merge-dbs in (nested) + out, build out → one node"))))
