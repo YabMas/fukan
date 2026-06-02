@@ -27,7 +27,8 @@
         (feeds Model))
 
       ;; the thinking faculties — each reads the Model and yields a perspective/output
-      (Faculty "Lens"    (doc "A thinking-mode / view over the model.")        (reads Model) (feeds View))
+      (Faculty "Lens"    (doc "A thinking-mode / view over the model.")        (reads Model) (feeds View)
+        (realized-by (across "lens")))                                          ; the lens subsystem view
       (Faculty "Inspect" (doc "Trust signals — integrity, coverage, drift.")   (reads Model) (feeds Signal))
       (Faculty "Project" (doc "Realizes the model back into code.")            (reads Model) (feeds Code))
       (Faculty "Instruct"(doc "Turns the model into instructions for an LLM.")  (reads Model) (feeds Instruction))

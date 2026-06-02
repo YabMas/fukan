@@ -11,7 +11,8 @@
             [fukan.canvas.projection.canvas-source :as canvas-source]
             ;; the kernel self-model's schema vocab (MetaSlot authored inline → not referred)
             [canvas.vocab.meta :refer [Concept]]
-            [canvas.vocab.arch :refer [Faculty]]))
+            [canvas.vocab.arch :refer [Faculty]]
+            [canvas.vocab.lens :refer [Lens View]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t
@@ -134,3 +135,34 @@
     (let [db (d/db-with (s/create) [{:entity/id "r1" :rel/to-ref ["nope"]}])]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unresolved cross-module reference"
                             (canvas-source/resolve-cross-refs db))))))
+
+(deftest lens-substrate-modelled-as-pluggable-thinking-modes
+  (testing "the lens view: each lens weighs an aspect and yields a view"
+    (let [db (pipeline/build-model "src")]
+      (is (contains? (names-of db :Module) "lens"))
+      (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit"} (names-of db :Lens)))
+      (is (seq (d/q '[:find ?v
+                      :where [?l :structure/of :Lens] [?l :entity/name "patterns"]
+                             [?r :rel/from ?l] [?r :rel/kind :yields] [?r :rel/to ?v]
+                             [?v :entity/name "Patterns"]]
+                    db))
+          "the patterns lens yields the Patterns view"))))
+
+(deftest overview-lens-faculty-interlocks-with-the-lens-view
+  (testing "the top-level Lens faculty is realized-by the lens module (cross-ref interlock)"
+    (let [db (pipeline/build-model "src")]
+      (is (seq (d/q '[:find ?m
+                      :where [?f :structure/of :Faculty] [?f :entity/name "Lens"]
+                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
+                             [?m :structure/of :Module] [?m :entity/name "lens"]]
+                    db))
+          "the Lens faculty links across modules to the lens view"))))
+
+(deftest orphan-view-is-caught
+  (testing "a view yielded by no lens trips the lens law"
+    (let [db (s/with-structures
+               (s/within-module "l"
+                 (View "Used")
+                 (View "Orphan")
+                 (Lens "x" (weighs "things") (yields Used))))]
+      (is (contains? (set (map :law (s/check db))) "every view is yielded by some lens")))))
