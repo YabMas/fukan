@@ -18,7 +18,7 @@
   (s/with-structures
     (s/within-module "canvas-source"
       (Kind "Str") (Kind "File") (Kind "NsSymbol") (Kind "Db")
-      (Kind "EntityMap") (Kind "RefTx") (Kind "BuildCanvasFn")
+      (Kind "EntityMap") (Kind "RefTx") (Kind "BuildCanvasFn") (Kind "Eid")
 
       ;; discovery — scan canvas/ for *.clj and derive namespace symbols
       (Stage "file->ns-segment"  (in [seg Str])      (out Str))               ; pure
@@ -40,6 +40,11 @@
       (Stage "merge-dbs" (in [dbs [Db]]) (out Db)                             ; pure
         (calls db->entity-maps))
 
+      ;; cross-module refs — resolve deferred :rel/to-ref post-merge
+      (Stage "resolve-ref" (in [db Db]) (in [ref [Str]]) (out Eid))           ; pure (datascript)
+      (Stage "resolve-cross-refs" (in [db Db]) (out Db) (performs :throws)    ; throws on unresolved ref
+        (calls resolve-ref))
+
       ;; build — the model
       (Stage "build" (out Db) (performs :io :stderr :require)
-        (calls discover-canvas-namespaces load-and-resolve-build-canvas merge-dbs)))))
+        (calls discover-canvas-namespaces load-and-resolve-build-canvas merge-dbs resolve-cross-refs)))))

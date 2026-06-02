@@ -1,13 +1,15 @@
 (ns canvas.model.pipeline
-  "Self-spec: fukan's model-build pipeline (`fukan.model.pipeline` +
-   `canvas.projection.canvas-source`), modelled with `canvas.pipeline.vocab`.
+  "Self-spec: fukan's model-build pipeline (`fukan.model.pipeline`), modelled with
+   the fukan-on-fukan grammar (`canvas.vocab.{shape,op}`).
 
-   The point of this spec is to SEE value-identity in a real fukan model: the
-   `StructureDb` type-shape is the input-or-output of nearly every stage, so it
-   recurs across four signature positions — yet, being value-identified, it
-   collapses to ONE Shape node. `merge-dbs`'s input `(list StructureDb)` wraps that
-   very same shared leaf. Authored separately from the vocabulary, mirroring the
-   demos' vocab/model split."
+   Post lean-kernel prune this subsystem is a single public entry point:
+   `build-model` is a thin delegate that hands off entirely to the ingestion
+   machinery in `canvas-source`. The merge/ingest stages it used to model now live
+   in `canvas-source` (their real home), so this spec no longer redeclares them — it
+   instead LINKS across to the realizing stage with `(calls (across …))`. That
+   cross-module call is the seam between the entry point and the machinery: one edge,
+   not a duplicated description. Authored separately from the vocabulary, mirroring
+   the demos' vocab/model split."
   (:require [fukan.canvas.core.structure :as s]
             ;; the fukan-on-fukan grammar; Shape is authored inline (data), not referred
             [canvas.vocab.shape :refer [Kind]]
@@ -19,18 +21,9 @@
       (Kind "SrcRoot")
       (Kind "StructureDb")
 
-      ;; merge-dbs : (list StructureDb) -> StructureDb
-      (Stage "merge-dbs"
-        (in [dbs [StructureDb]])
-        (out StructureDb))
-
-      ;; ingest (canvas-source/build) : () -> StructureDb ; merges the per-spec dbs
-      (Stage "ingest"
-        (out StructureDb)
-        (calls merge-dbs))
-
-      ;; build-model : SrcRoot -> StructureDb ; the pipeline entry point
+      ;; build-model : SrcRoot -> StructureDb ; the pipeline entry point — a thin
+      ;; delegate that hands off to canvas-source/build (cross-module link, the seam)
       (Stage "build-model"
         (in [source SrcRoot])
         (out StructureDb)
-        (calls ingest)))))
+        (calls (across "canvas-source" "build"))))))

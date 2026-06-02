@@ -35,22 +35,29 @@
       (is (empty? (s/check db))
           "the whole self-model satisfies every structure's laws"))))
 
-(deftest pipeline-self-spec-shares-value-identified-shapes
-  (testing "the StructureDb type-shape recurs across stage signatures but is ONE node"
+(deftest pipeline-links-across-to-canvas-source
+  (testing "build-model is a thin entry point that calls across to canvas-source/build"
     (let [db (pipeline/build-model "src")]
       (is (contains? (names-of db :Module) "model.pipeline")
           "the canvas/pipeline/model spec is ingested")
-      (is (set/subset? #{"build-model" "ingest" "merge-dbs"} (names-of db :Stage)))
-      ;; the StructureDb type-shape appears in 4 positions (merge-dbs in+out,
-      ;; ingest out, build-model out) — value-identity collapses it to one node.
-      ;; robust to other specs contributing shapes: assert the specific shared one
-      (is (= 1 (count (d/q '[:find ?s
-                             :where [?s :structure/of :Shape] [?s :val/kind "type"]
-                                    [?r :rel/from ?s] [?r :rel/kind :type]
-                                    [?r :rel/to ?t] [?t :entity/name "StructureDb"]
-                                    [?m :entity/name "model.pipeline"] [?m :module/child ?t]]
-                           db)))
-          "the StructureDb type-shape — used in four positions — is one value node"))))
+      ;; post-prune the pipeline subsystem is just build-model — the merge/ingest
+      ;; machinery lives in canvas-source now, not duplicated here
+      (is (= ["build-model"]
+             (d/q '[:find [?n ...]
+                    :where [?m :entity/name "model.pipeline"] [?m :module/child ?c]
+                           [?c :structure/of :Stage] [?c :entity/name ?n]]
+                  db))
+          "model.pipeline declares exactly one stage — no stale duplicate merge/ingest")
+      ;; the seam: build-model's cross-module :calls resolves to canvas-source/build
+      (is (= ["build"]
+             (d/q '[:find [?bn ...]
+                    :where [?mp :entity/name "model.pipeline"] [?mp :module/child ?bm]
+                           [?bm :entity/name "build-model"]
+                           [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?b]
+                           [?cs :entity/name "canvas-source"] [?cs :module/child ?b]
+                           [?b :entity/name ?bn]]
+                  db))
+          "build-model calls canvas-source/build — the cross-module link resolves post-merge"))))
 
 (deftest canvas-source-model-shares-the-db-shape
   (testing "in the canvas_source self-model, the Db type-shape (4 uses) is one node"
