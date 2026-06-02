@@ -26,7 +26,14 @@
 
 (defstructure Probe
   "Reads the model through a Lens → a Finding. The model is unchanged (probe observes;
-   it does not re-present)."
+   it does not re-present).
+
+   A probe IS an operation (executably, target-model → finding), so it participates in
+   the SAME `:calls` relation as an op-vocab `Stage`: a probe that builds on a modelled
+   capability (e.g. the kernel's `check`) `:calls` it. There is no separate `composes`
+   relation — \"a probe composes a capability\" and \"a stage calls a stage\" are one act
+   (one operation invokes another), so they share the substrate's `:calls` edge."
   (slot :doc     (optional :String))
   (slot :through (one Lens))       ; the focus it reads through
-  (slot :yields  (one Finding)))   ; the observation it produces
+  (slot :yields  (one Finding))    ; the observation it produces
+  (slot :calls   (many Stage)))    ; modelled capabilities it invokes (reuses op's :calls)

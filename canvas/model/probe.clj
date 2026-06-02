@@ -27,6 +27,9 @@
       (Probe "consistency" (through (across "lens" "consistency")) (yields Consistency))
       (Probe "tar-pit"     (through (across "lens" "tar-pit"))     (yields TarPit))
       ;; inspects — probes whose finding gates
-      (Probe "integrity"   (through (across "lens" "integrity"))   (yields IntegrityReport))
+      ;; integrity COMPOSES the kernel's modelled `check` capability — the same :calls
+      ;; relation a Stage uses (1-on-1 with the projected code: probe-integrity calls check)
+      (Probe "integrity"   (through (across "lens" "integrity"))   (yields IntegrityReport)
+        (calls (across "core.structure" "check")))
       (Probe "coverage"    (through (across "lens" "coverage"))    (yields CoverageReport))
       (Probe "drift"       (through (across "lens" "drift"))       (yields DriftReport)))))
