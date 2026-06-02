@@ -21,24 +21,25 @@
       (Kind "EntityMap") (Kind "RefTx") (Kind "BuildCanvasFn")
 
       ;; discovery — scan canvas/ for *.clj and derive namespace symbols
-      (Stage "file->ns-segment"  (in [seg Str])      (out Str))
-      (Stage "file->ns-symbol"   (in [rel-path Str]) (out NsSymbol)
+      (Stage "file->ns-segment"  (in [seg Str])      (out Str))               ; pure
+      (Stage "file->ns-symbol"   (in [rel-path Str]) (out NsSymbol)           ; pure
         (calls file->ns-segment))
-      (Stage "canvas-root-dirs"  (out [File]))
+      (Stage "canvas-root-dirs"  (out [File]) (performs :io))                 ; classpath + fs
       (Stage "discover-canvas-files-in" (in [root File])
-        (out [{:root File :rel-path Str}]))
-      (Stage "discover-canvas-namespaces" (out [NsSymbol])
+        (out [{:root File :rel-path Str}]) (performs :io))                    ; file-seq
+      (Stage "discover-canvas-namespaces" (out [NsSymbol]) (performs :io :stderr)
         (calls canvas-root-dirs discover-canvas-files-in file->ns-symbol))
-      (Stage "load-and-resolve-build-canvas" (in [ns-sym NsSymbol]) (out BuildCanvasFn))
+      (Stage "load-and-resolve-build-canvas" (in [ns-sym NsSymbol]) (out BuildCanvasFn)
+        (performs :require :throws))                                          ; require + throw on load failure
       (Stage "canvas-namespaces" (out [NsSymbol])
-        (calls discover-canvas-namespaces))
+        (calls discover-canvas-namespaces))                                   ; pure delegation
 
       ;; merge — combine per-spec structure dbs into one
       (Stage "db->entity-maps" (in [db Db])
-        (out {:entity-maps [EntityMap] :ref-txs [RefTx]}))
-      (Stage "merge-dbs" (in [dbs [Db]]) (out Db)
+        (out {:entity-maps [EntityMap] :ref-txs [RefTx]}))                    ; pure (datascript)
+      (Stage "merge-dbs" (in [dbs [Db]]) (out Db)                             ; pure
         (calls db->entity-maps))
 
       ;; build — the model
-      (Stage "build" (out Db)
+      (Stage "build" (out Db) (performs :io :stderr :require)
         (calls discover-canvas-namespaces load-and-resolve-build-canvas merge-dbs)))))

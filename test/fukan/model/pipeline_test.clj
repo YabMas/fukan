@@ -53,3 +53,15 @@
                                     [?m :entity/name "canvas-source"] [?m :module/child ?t]]
                            db)))
           "Db appears in db->entity-maps in, merge-dbs in (nested) + out, build out → one node"))))
+
+(deftest canvas-source-effects-are-captured-and-value-identified
+  (testing "Stage effects are recorded; :io (performed by 4 stages) is one shared node"
+    (let [db (pipeline/build-model "src")]
+      (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of :Effect] [?e :val/name "io"]] db)))
+          "the :io effect is value-identified across every stage that performs it")
+      (is (seq (d/q '[:find ?r
+                      :where [?b :structure/of :Stage] [?b :entity/name "build"]
+                             [?r :rel/from ?b] [?r :rel/kind :performs] [?r :rel/to ?e]
+                             [?e :structure/of :Effect] [?e :val/name "io"]]
+                    db))
+          "build performs :io"))))
