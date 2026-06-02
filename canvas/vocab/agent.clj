@@ -1,26 +1,25 @@
 (ns canvas.vocab.agent
-  "The fukan-on-fukan model's COMPOSER layer — the Agent surface. The Agent is the
-   orchestrator: it answers a question by COMPOSING a Lens (focus) with an ACT — a
-   probe (read the model → a finding) or a projection (render it → an artifact). A
-   `Composition` is one composed, runnable unit (a saved view / capability); the agent
-   surface is the set of them.
-
-   This is the spine the agent operates on — it tests that the `lens ∘ act` algebra
-   composes up into the query surface, reusing the very lenses the probe and projection
-   views already use.
+  "The fukan-on-fukan model's COMPOSER layer — the Agent surface. The Agent composes its
+   OWN tools from the primitives fukan provides: lenses (focuses) and the two acts (probe
+   = read → finding, project = render → artifact). A `Tool` is a composed capability — it
+   probes some focuses and/or projects through some, BUNDLING several or CHAINING a probe
+   into a projection, into something no single faculty act is. This is the LLM-tool-use
+   surface inverted: instead of being handed hardcoded tools, the agent BUILDS its toolset
+   from model primitives.
 
    Vocab-only canvas spec (no build-canvas)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
-(defstructure Composition
-  "A composed, runnable unit the agent offers: a Lens focus put to an act, answering a
-   question. `:act` is \"probe\" (read → a finding) or \"project\" (render → an artifact)."
-  (slot :doc     (optional :String))
-  (slot :answers (one :String))    ; the question this saved view answers
-  (slot :through (one Lens))       ; the focus it composes (same :through relation as probe/projection)
-  (slot :act     (one :String))    ; "probe" | "project" — the act it puts the lens to
-  (law "a composition's act is probe or project"
-    :offenders '[?c]
-    :where '[[?c :val/act ?a]
-             [(clojure.core/contains? #{"probe" "project"} ?a) ?ok]
-             [(clojure.core/false? ?ok)]]))
+(defstructure Tool
+  "A capability the agent composes from primitives to answer a question — it probes some
+   focuses (read → findings) and/or projects through some (render → artifacts). Bundling
+   or chaining them is how the agent builds a tool the faculties don't provide alone."
+  (slot :doc      (optional :String))
+  (slot :answers  (one :String))      ; the question this tool answers
+  (slot :probes   (many Lens))        ; focuses it reads (observe → findings)
+  (slot :projects (many Lens))        ; focuses it renders through (→ artifacts)
+  ;; an empty tool composes nothing — a tool must put at least one primitive to work
+  (law "a tool composes at least one primitive"
+    :offenders '[?t]
+    :where '[(not [?r :rel/from ?t] [?r :rel/kind :probes])
+             (not [?r2 :rel/from ?t] [?r2 :rel/kind :projects])]))

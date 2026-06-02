@@ -161,7 +161,7 @@
    canvas.vocab.probe/Probe   hooks.fukan.structure/instance
    canvas.vocab.probe/Finding hooks.fukan.structure/instance
    canvas.vocab.projection/Projection hooks.fukan.structure/instance
-   canvas.vocab.agent/Composition     hooks.fukan.structure/instance
+   canvas.vocab.agent/Tool            hooks.fukan.structure/instance
    canvas.vocab.collab/Phase          hooks.fukan.structure/instance
    ;; test-only structures (test/fukan/canvas/core/structure_test.clj)
    fukan.canvas.core.structure-test/Type     hooks.fukan.structure/instance
