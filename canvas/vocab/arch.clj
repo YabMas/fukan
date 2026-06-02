@@ -23,4 +23,16 @@
   (law "no faculty is isolated"
     :offenders '[?f]
     :where '[(not [?ro :rel/from ?f])
-             (not [?ri :rel/to ?f])]))
+             (not [?ri :rel/to ?f])])
+  ;; realized-by has teeth on the USE side: a faculty that READS the Model claims a
+  ;; capability that operates on it, so it must be backed by a realizing module —
+  ;; you cannot have a model-reading faculty with no realization. (Input faculties
+  ;; that only :feed the Model are external — Canvas, Target — and outputs are
+  ;; produced, so neither is required to be realized. The realized-by TARGET's
+  ;; existence is already enforced at ingest: resolve-cross-refs throws on an
+  ;; unresolved reference; this law adds the REQUIREMENT to have one.)
+  (law "a model-reading faculty is realized by a module"
+    :offenders '[?f]
+    :where '[[?model :entity/name "Model"] [?model :structure/of :Faculty]
+             [?rd :rel/from ?f] [?rd :rel/kind :reads] [?rd :rel/to ?model]
+             (not [?rb :rel/from ?f] [?rb :rel/kind :realized-by])]))

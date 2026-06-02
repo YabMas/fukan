@@ -129,6 +129,29 @@
                  (Faculty "Loner")))]               ; connects to nothing
       (is (contains? (set (map :law (s/check db))) "no faculty is isolated")))))
 
+(deftest model-reading-faculty-without-realization-is-caught
+  (testing "a faculty that reads the Model but names no realizing module trips the realized-by law"
+    (let [db (s/with-structures
+               (s/within-module "f"
+                 (Faculty "Model")
+                 (Faculty "Realized" (reads Model) (realized-by (across "some-module"))) ; reads + claims realization → ok
+                 (Faculty "Bare" (reads Model))))                                         ; reads, no realization → caught
+          flagged (->> (s/check db)
+                       (filter #(= "a model-reading faculty is realized by a module" (:law %)))
+                       (mapcat :offenders) (map first) set)
+          eid (fn [n] (ffirst (d/q '[:find ?f :in $ ?n :where [?f :entity/name ?n]] db n)))]
+      (is (contains? flagged (eid "Bare"))
+          "a model-reading faculty with no realized-by is flagged")
+      (is (not (contains? flagged (eid "Realized")))
+          "a model-reading faculty that claims realization is not flagged"))))
+
+(deftest the-self-model-satisfies-the-realized-by-law
+  (testing "every model-reading faculty in the real overview is backed by a realizing module"
+    (let [db (pipeline/build-model "src")]
+      (is (not (contains? (set (map :law (s/check db)))
+                          "a model-reading faculty is realized by a module"))
+          "Lens/Probe/Projection/Agent each name a realizing module"))))
+
 (deftest cross-module-ref-resolves-post-merge
   (testing "overview's Structure faculty is realized-by → the core.structure module node"
     (let [db (pipeline/build-model "src")]
