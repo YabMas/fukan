@@ -151,11 +151,13 @@
  :hooks
  {:analyze-call
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
-   fukan.canvas.structures/Type     hooks.fukan.structure/instance
-   fukan.canvas.structures/Effect   hooks.fukan.structure/instance
-   fukan.canvas.structures/Event    hooks.fukan.structure/instance
-   fukan.canvas.structures/Function hooks.fukan.structure/instance
+   ;; fukan-on-fukan model vocabulary (canvas/vocab/**) — named structures only;
+   ;; value structures (Shape) are authored inline in dropped instance bodies.
+   canvas.vocab.shape/Kind  hooks.fukan.structure/instance
+   canvas.vocab.op/Stage    hooks.fukan.structure/instance
    ;; test-only structures (test/fukan/canvas/core/structure_test.clj)
+   fukan.canvas.core.structure-test/Type     hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Function hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Tree     hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/NonEmpty hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Plain    hooks.fukan.structure/instance
@@ -180,8 +182,4 @@
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Role       hooks.fukan.structure/instance
    demos.type-system.vocab.core/Field         hooks.fukan.structure/instance
-   demos.type-system.vocab.core/Type          hooks.fukan.structure/instance
-   ;; fukan self-spec vocabularies (canvas/**). Value structures (e.g. Shape) are
-   ;; authored inline inside an entity's clause body, which the hook drops — so
-   ;; only the named entity structures need registration.
-   canvas.pipeline.vocab/Stage                hooks.fukan.structure/instance}}}
+   demos.type-system.vocab.core/Type          hooks.fukan.structure/instance}}}

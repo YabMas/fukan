@@ -19,11 +19,10 @@
     (let [db (pipeline/build-model "src")]
       (is (contains? (names-of db :Module) "infra.model")
           "the canvas/infra/model spec is discovered and ingested")
-      ;; subset, not =: more specs (e.g. canvas/pipeline) now contribute too
-      (is (set/subset? #{"load-model" "get-model" "refresh-model"} (names-of db :Function)))
-      (is (set/subset? #{"Model" "Src"} (names-of db :Type)))
-      (is (<= 3 (count (d/q '[:find ?r :where [?r :rel/kind :gives]] db)))
-          "each Function's :gives relation is reified into the substrate")
+      ;; infra is now modelled with the fukan-on-fukan grammar (Stage/Kind), not
+      ;; the (evicted) base Function/Type vocab; subset since other specs add more
+      (is (set/subset? #{"load-model" "get-model" "refresh-model"} (names-of db :Stage)))
+      (is (set/subset? #{"Model" "Src"} (names-of db :Kind)))
       (is (empty? (s/check db))
           "the whole self-model satisfies every structure's laws"))))
 

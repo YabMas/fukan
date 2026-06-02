@@ -11,14 +11,14 @@
    discovery entry `{root: File, rel-path: Str}` and the extraction
    `{entity-maps: (list EntityMap), ref-txs: (list RefTx)}` are record shapes."
   (:require [fukan.canvas.core.structure :as s]
-            [fukan.canvas.structures :refer [Type]]
-            [canvas.pipeline.vocab :refer [Stage]]))
+            [canvas.vocab.shape :refer [Kind]]
+            [canvas.vocab.op :refer [Stage]]))
 
 (defn ^:export build-canvas []
   (s/with-structures
     (s/within-module "canvas-source"
-      (Type "Str") (Type "File") (Type "NsSymbol") (Type "Db")
-      (Type "EntityMap") (Type "RefTx") (Type "BuildCanvasFn")
+      (Kind "Str") (Kind "File") (Kind "NsSymbol") (Kind "Db")
+      (Kind "EntityMap") (Kind "RefTx") (Kind "BuildCanvasFn")
 
       ;; discovery — scan canvas/ for *.clj and derive namespace symbols
       (Stage "file->ns-segment"  (in [seg Str])      (out Str))

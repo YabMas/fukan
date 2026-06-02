@@ -4,13 +4,19 @@
    `check` runs them, including a recursive free law."
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]
-            ;; Use the real vocabulary (Type/Function) rather than redefining it —
-            ;; the structure registry is global-by-tag, so test redefinitions would
-            ;; collide with fukan.canvas.structures. Tree is test-only (unique tag).
-            [fukan.canvas.structures :refer [Type Function]]))
+            [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── structures under test ───────────────────────────────────────────────────
+;; The primitive's tests own their fixtures (the base vocab was evicted from core;
+;; the registry is global-by-tag, so these Type/Function tags are the test's now).
+
+(defstructure Type
+  "Test fixture: a named atomic type (a slot target).")
+
+(defstructure Function
+  "Test fixture: takes typed inputs, gives exactly one typed output."
+  (slot :takes (many Type) :label-as :param)
+  (slot :gives (one  Type)))
 
 (defstructure Tree
   "A self-referential structure."

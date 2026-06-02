@@ -1,22 +1,23 @@
 (ns canvas.infra.model
-  "Canvas spec for fukan's infra.model subsystem (the model lifecycle) — the
-   first spec authored in the lean-kernel defstructure vocabulary. Returns a
-   structure substrate db (the model is the db, design decision (ii))."
+  "Canvas spec for fukan's infra.model subsystem (the model lifecycle), modelled
+   with the fukan-on-fukan grammar (`canvas.vocab`) — its own vocabulary on the
+   core, no shared/base structures."
   (:require [fukan.canvas.core.structure :as s]
-            [fukan.canvas.structures :refer [Type Function]]))
+            [canvas.vocab.shape :refer [Kind]]
+            [canvas.vocab.op :refer [Stage]]))
 
 (defn ^:export build-canvas []
   (s/with-structures
     (s/within-module "infra.model"
-      (Type "Src")
-      (Type "Model")
-      (Function "load-model"
+      (Kind "Src")
+      (Kind "Model")
+      (Stage "load-model"
         (doc "Build (or reload) the held Model from a src path.")
-        (takes [src Src])
-        (gives Model))
-      (Function "get-model"
+        (in [src Src])
+        (out Model))
+      (Stage "get-model"
         (doc "The current held Model, or none.")
-        (gives Model))
-      (Function "refresh-model"
+        (out Model))
+      (Stage "refresh-model"
         (doc "Rebuild the Model from the last src path.")
-        (gives Model)))))
+        (out Model)))))

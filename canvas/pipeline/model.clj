@@ -9,16 +9,15 @@
    very same shared leaf. Authored separately from the vocabulary, mirroring the
    demos' vocab/model split."
   (:require [fukan.canvas.core.structure :as s]
-            [fukan.canvas.structures :refer [Type]]
-            ;; the vocab is required so its structures register (:Shape resolves at
-            ;; build); Shape is authored inline as data, so it is not referred.
-            [canvas.pipeline.vocab :refer [Stage]]))
+            ;; the fukan-on-fukan grammar; Shape is authored inline (data), not referred
+            [canvas.vocab.shape :refer [Kind]]
+            [canvas.vocab.op :refer [Stage]]))
 
 (defn ^:export build-canvas []
   (s/with-structures
     (s/within-module "model.pipeline"
-      (Type "SrcRoot")
-      (Type "StructureDb")
+      (Kind "SrcRoot")
+      (Kind "StructureDb")
 
       ;; merge-dbs : (list StructureDb) -> StructureDb
       (Stage "merge-dbs"
