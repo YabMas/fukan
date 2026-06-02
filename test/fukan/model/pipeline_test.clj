@@ -12,7 +12,8 @@
             ;; the kernel self-model's schema vocab (MetaSlot authored inline → not referred)
             [canvas.vocab.meta :refer [Concept]]
             [canvas.vocab.arch :refer [Faculty]]
-            [canvas.vocab.lens :refer [Lens View]]))
+            [canvas.vocab.lens :refer [Lens View]]
+            [canvas.vocab.inspect :refer [Check Signal]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t
@@ -166,3 +167,30 @@
                  (View "Orphan")
                  (Lens "x" (weighs "things") (yields Used))))]
       (is (contains? (set (map :law (s/check db))) "every view is yielded by some lens")))))
+
+(deftest inspect-subsystem-modelled-as-trust-checks
+  (testing "the inspect view: each check inspects an aspect and raises a signal"
+    (let [db (pipeline/build-model "src")]
+      (is (contains? (names-of db :Module) "inspect"))
+      (is (set/subset? #{"integrity" "coverage" "drift"} (names-of db :Check)))
+      (is (seq (d/q '[:find ?s
+                      :where [?c :structure/of :Check] [?c :entity/name "drift"]
+                             [?r :rel/from ?c] [?r :rel/kind :raises] [?r :rel/to ?s]
+                             [?s :entity/name "DriftReport"]]
+                    db))
+          "the drift check raises the DriftReport signal")
+      (is (seq (d/q '[:find ?m
+                      :where [?f :structure/of :Faculty] [?f :entity/name "Inspect"]
+                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
+                             [?m :structure/of :Module] [?m :entity/name "inspect"]]
+                    db))
+          "the Inspect faculty interlocks with the inspect view"))))
+
+(deftest orphan-signal-is-caught
+  (testing "a signal raised by no check trips the inspect law"
+    (let [db (s/with-structures
+               (s/within-module "i"
+                 (Signal "Used")
+                 (Signal "Orphan")
+                 (Check "x" (inspects "things") (raises Used))))]
+      (is (contains? (set (map :law (s/check db))) "every signal is raised by some check")))))
