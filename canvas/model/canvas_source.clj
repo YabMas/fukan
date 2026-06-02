@@ -1,4 +1,4 @@
-(ns canvas.source.model
+(ns canvas.model.canvas-source
   "Self-spec: fukan's canvas-ingestion subsystem (`fukan.canvas.projection.canvas-
    source`), modelled at expression-granularity with `canvas.pipeline.vocab`
    (Stage + value-identified Shape). Faithful to the source: every fn is a Stage

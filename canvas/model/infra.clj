@@ -1,4 +1,4 @@
-(ns canvas.infra.model
+(ns canvas.model.infra
   "Canvas spec for fukan's infra.model subsystem (the model lifecycle), modelled
    with the fukan-on-fukan grammar (`canvas.vocab`) — its own vocabulary on the
    core, no shared/base structures."

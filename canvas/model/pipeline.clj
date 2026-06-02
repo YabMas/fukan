@@ -1,4 +1,4 @@
-(ns canvas.pipeline.model
+(ns canvas.model.pipeline
   "Self-spec: fukan's model-build pipeline (`fukan.model.pipeline` +
    `canvas.projection.canvas-source`), modelled with `canvas.pipeline.vocab`.
 
