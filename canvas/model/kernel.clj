@@ -7,10 +7,19 @@
 
    First cut: it captures the composition + the slot's (cardinality, target). It
    deliberately omits value-identity / ordered / the reader / the scalar-type
-   registry — to be added only if the model is felt to want them."
+   registry — to be added only if the model is felt to want them.
+
+   The kernel also PROVIDES one operation — `check` (laws → violations), the
+   canonical integrity inspect. It is modelled here as a capability (an op `Stage`)
+   because code is a projection of the model 1-on-1: the agent's integrity probe
+   composes `check`, so `check` must exist in the model, not just in code."
   (:require [fukan.canvas.core.structure :as s]
             ;; MetaSlot is authored inline (a value), so required (registers it) but not referred
-            [canvas.vocab.meta :refer [Concept]]))
+            [canvas.vocab.meta :refer [Concept]]
+            ;; the kernel's `check` operation is modelled with the data + computation
+            ;; vocabs (Kind for its I/O leaves, Stage for the operation itself)
+            [canvas.vocab.shape :refer [Kind]]
+            [canvas.vocab.op :refer [Stage]]))
 
 (defn ^:export build-canvas []
   (s/with-structures
@@ -50,4 +59,15 @@
         (doc "The kernel's heart: a composition of Slots and Laws — the model IS this db.")
         (slot (MetaSlot (name "slot")  (cardinality "many")     (of Slot)))
         (slot (MetaSlot (name "law")   (cardinality "many")     (of Law)))
-        (slot (MetaSlot (name "value") (cardinality "optional") (of Bool)))))))
+        (slot (MetaSlot (name "value") (cardinality "optional") (of Bool))))
+
+      ;; the kernel's one OPERATION (modelled with the op vocab): check runs every
+      ;; structure's laws over the db and yields the violations that hold. This is
+      ;; the canonical integrity inspect — the capability the agent's integrity probe
+      ;; composes, so it lives in the model 1-on-1 with the code.
+      (Kind "StructureDb")
+      (Kind "Violation")
+      (Stage "check"
+        (doc "Run every structure's laws over the model db; yield the violations.")
+        (in [db StructureDb])
+        (out [Violation])))))
