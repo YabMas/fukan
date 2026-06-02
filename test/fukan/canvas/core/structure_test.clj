@@ -82,6 +82,19 @@
   "An entity holding Wrapped values authored via the Int literal."
   (slot :w (many Wrapped)))
 
+;; ordered composition: a sequence-bearing slot, authored with a vector.
+(defstructure Seq2
+  "An entity with an ordered slot (a sequence of Types)."
+  (slot :items (ordered Type)))
+
+(defstructure ^:value OrdVal
+  "A value whose ordered slot makes order part of its identity."
+  (slot :xs (ordered Type)))
+
+(defstructure HolderO
+  "An entity holding ordered values inline."
+  (slot :v (many OrdVal)))
+
 ;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
 ;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
 ;;  guard is exercised by registering such a law directly — see
@@ -374,6 +387,50 @@
       (is (= #{5 6} (set (map first (d/q '[:find ?n
                                            :where [?x :structure/of :Wrapped] [?x :val/v ?n]]
                                          db))))))))
+
+(deftest ordered-slot-captures-position
+  (testing "a vector-authored ordered slot records :rel/order, recovering the sequence"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Type "Int") (Type "Str")
+                 (Seq2 "s" (items [Int Str Int]))))]   ; Int repeats at 0 and 2
+      (is (= ["Int" "Str" "Int"]
+             (->> (d/q '[:find ?o ?n
+                         :where [?s :entity/name "s"] [?r :rel/from ?s] [?r :rel/kind :items]
+                                [?r :rel/order ?o] [?r :rel/to ?t] [?t :entity/name ?n]]
+                       db)
+                  (sort-by first) (mapv second)))
+          "sorting the :items relations by :rel/order recovers [Int Str Int]"))))
+
+(deftest ordered-two-element-vector-is-a-sequence-not-a-label
+  (testing "a 2-element ordered vector is two elements, not a [label target] form"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Type "Int") (Type "Str")
+                 (Seq2 "s" (items [Int Str]))))]
+      (is (= 2 (count (d/q '[:find ?r :where [?s :entity/name "s"]
+                                            [?r :rel/from ?s] [?r :rel/kind :items]] db)))))))
+
+(deftest ordered-value-identity-respects-order
+  (testing "order is part of a value's identity: [Int Str] ≠ [Str Int], and equals itself"
+    (let [db (s/with-structures
+               (s/within-module "demo"
+                 (Type "Int") (Type "Str")
+                 (HolderO "h"
+                   (v (OrdVal (xs [Int Str])))
+                   (v (OrdVal (xs [Str Int])))     ; reversed → distinct value
+                   (v (OrdVal (xs [Int Str]))))))] ; same as first → dedup
+      (is (= 2 (count-of db :OrdVal))))))
+
+(deftest ordered-rejects-scalar-slot
+  (testing "ordered is rejected on a scalar slot (scalar storage is cardinality-one)"
+    (let [msg (try (let [_ (macroexpand
+                            '(fukan.canvas.core.structure/defstructure BadOrd "d"
+                               (slot :xs (ordered :Int))))]
+                     "no throw")
+                   (catch Throwable e
+                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
+      (is (re-find #"must be \(one \.\.\.\) or \(optional \.\.\.\)" msg)))))
 
 ;; ── value-identity (content-deduped, inline-anonymous value nodes) ───────────
 

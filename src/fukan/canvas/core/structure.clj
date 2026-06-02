@@ -32,7 +32,8 @@
    :rel/kind     {:db/index true}
    :rel/to       {:db/valueType :db.type/ref}
    :rel/label    {}
-   :rel/wrap     {}})
+   :rel/wrap     {}
+   :rel/order    {}})                                         ; position in an (ordered ...) slot
 
 (defn create [] (d/empty-db schema))
 
@@ -120,7 +121,7 @@
 ;; instance node rather than emitting relations.
 (def ^:private builtin-clauses #{'doc})
 
-(declare resolve-target)
+(declare resolve-target clause->rels)
 
 (defn construct-value!
   "Construct (and dedup) a value-typed instance of `tag` from `clauses`. Identity
@@ -134,34 +135,53 @@
   (let [sdef    (structure-by-tag tag)
         db      @*store*
         scalar? (fn [c] (scalar-slot? (slot-for sdef (keyword (first c)))))
+        rels    (vec (mapcat #(clause->rels db sdef %)
+                             (for [c clauses :when (not (scalar? c))] c)))
         scalars (into (sorted-map)
                       (for [c clauses :when (scalar? c)]
                         [(keyword "val" (clojure.core/name (first c))) (second c)]))
-        rels    (vec (for [c clauses :when (not (scalar? c))
-                           arg (rest c)
-                           :let [{:keys [label target]} (parse-clause-arg arg)
-                                 tid (resolve-target db (:target (slot-for sdef (keyword (first c)))) target)]]
-                       (do (when-not tid
-                             (throw (ex-info (str (clojure.core/name tag) ": "
-                                                  (clojure.core/name (keyword (first c)))
-                                                  " references '" target "', which is not an"
-                                                  " entity in the enclosing module")
-                                             {:structure tag :rel (first c) :target target})))
-                           {:rk (keyword (first c)) :label label :tid tid})))
+        ;; :order enters the content key, so [A B] and [B A] are distinct values
         ckey    (pr-str [(clojure.core/name tag)
                          scalars
-                         (sort (map (fn [{:keys [rk label tid]}]
-                                      [(clojure.core/name rk) (str label) (str tid)])
+                         (sort (map (fn [{:keys [rk label order tid]}]
+                                      [(clojure.core/name rk) (str order) (str label) (str tid)])
                                     rels))])
         node-id (str "#val" ckey)]
     (transact! [(into {:entity/id node-id :structure/of tag} scalars)])
-    (doseq [{:keys [rk label tid]} rels]
-      (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk) "|" tid)
+    (doseq [{:keys [rk label order tid]} rels]
+      (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk) "|" order "|" tid)
                            :rel/from [:entity/id node-id]
                            :rel/kind rk
                            :rel/to   [:entity/id tid]}
-                    label (assoc :rel/label label))]))
+                    label (assoc :rel/label label)
+                    order (assoc :rel/order order))]))
     node-id))
+
+(defn- clause->rels
+  "Resolve one relation clause of an instance of `sdef` into relation specs
+   {:rk :label :order :tid}. An ORDERED slot splices its vector arg(s) and
+   position-indexes them (:order 0,1,…, no label); any other slot parses each arg
+   as `target` or `[label target]` (:order nil). Throws on an unresolved target."
+  [db sdef clause]
+  (let [rk   (keyword (first clause))
+        slot (slot-for sdef rk)
+        args (rest clause)]
+    (when-not slot
+      (throw (ex-info (str (clojure.core/name (:tag sdef)) ": `" (clojure.core/name rk)
+                           "` is not a slot")
+                      {:tag (:tag sdef) :rel rk})))
+    (let [resolve* (fn [target]
+                     (or (resolve-target db (:target slot) target)
+                         (throw (ex-info (str (clojure.core/name (:tag sdef)) ": "
+                                              (clojure.core/name rk) " references '" target
+                                              "', which is not an entity in the enclosing module")
+                                         {:structure (:tag sdef) :rel rk :target target}))))]
+      (if (= :ordered (:card slot))
+        (map-indexed (fn [i t] {:rk rk :label nil :order i :tid (resolve* t)})
+                     (mapcat #(if (vector? %) % [%]) args))
+        (for [a args
+              :let [{:keys [label target]} (parse-clause-arg a)]]
+          {:rk rk :label label :order nil :tid (resolve* target)})))))
 
 (defn- resolve-target
   "Resolve a relation clause target (for a slot whose declared target structure is
@@ -196,34 +216,22 @@
 
 (defn- emit-relations!
   "Resolve a queued instance's slot clauses against the now-declared module
-   entities and transact its reified relations. Resolution runs after the whole
-   module is declared (two-pass), so a target that still does not resolve is a
-   genuine error — a typo, or a forward/cross-module reference the by-name,
-   module-scoped resolver does not reach — and is thrown, not skipped."
-  [{:keys [tag name node-id clauses]}]
+   entities (or inline value forms) and transact its reified relations — carrying
+   :rel/order for ordered slots. Resolution runs after the whole module is declared
+   (two-pass), so a target that still does not resolve is a genuine error (thrown by
+   `clause->rels`), not skipped."
+  [{:keys [tag node-id clauses]}]
   (let [sdef (structure-by-tag tag)
         db   @*store*]
-    (doseq [clause clauses]
-      (let [rel  (keyword (first clause))
-            slot (slot-for sdef rel)
-            args (rest clause)]
-        (when-not slot
-          (throw (ex-info (str name ": `" (clojure.core/name rel)
-                               "` is not a slot of " tag)
-                          {:tag tag :rel rel})))
-        (doseq [arg args]
-          (let [{:keys [label target]} (parse-clause-arg arg)
-                target-id (resolve-target db (:target slot) target)]
-            (when-not target-id
-              (throw (ex-info (str name ": " (clojure.core/name rel) " references '" target
-                                   "', which is not an entity in the enclosing module")
-                              {:structure tag :instance name :rel rel :target target})))
-            (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rel)
-                                             "|" target-id "|" (random-uuid))
-                                 :rel/from [:entity/id node-id]
-                                 :rel/kind rel
-                                 :rel/to   [:entity/id target-id]}
-                          label (assoc :rel/label label))])))))))
+    (doseq [clause clauses
+            {:keys [rk label order tid]} (clause->rels db sdef clause)]
+      (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk)
+                                          "|" tid "|" (random-uuid))
+                           :rel/from [:entity/id node-id]
+                           :rel/kind rk
+                           :rel/to   [:entity/id tid]}
+                    label (assoc :rel/label label)
+                    order (assoc :rel/order order))]))))
 
 (defn flush-pending-relations!
   "Pass 2 (on `within-module` exit): emit the relations queued during the body,
@@ -363,7 +371,7 @@
         tag   (keyword (name sname))
         slots (mapv parse-slot (filter #(= 'slot (first %)) body))
         _     (doseq [s slots]
-                (when (and (scalar-slot? s) (#{:some :many} (:card s)))
+                (when (and (scalar-slot? s) (#{:some :many :ordered} (:card s)))
                   (throw (ex-info
                           (str "defstructure " sname ": scalar slot " (:rel s)
                                " must be (one ...) or (optional ...), not ("
