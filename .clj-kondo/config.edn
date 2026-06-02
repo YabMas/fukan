@@ -161,6 +161,7 @@
    canvas.vocab.lens/View    hooks.fukan.structure/instance
    canvas.vocab.inspect/Check  hooks.fukan.structure/instance
    canvas.vocab.inspect/Signal hooks.fukan.structure/instance
+   canvas.vocab.projection/Projection hooks.fukan.structure/instance
    ;; test-only structures (test/fukan/canvas/core/structure_test.clj)
    fukan.canvas.core.structure-test/Type     hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Function hooks.fukan.structure/instance

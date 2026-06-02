@@ -13,7 +13,8 @@
             [canvas.vocab.meta :refer [Concept]]
             [canvas.vocab.arch :refer [Faculty]]
             [canvas.vocab.lens :refer [Lens View]]
-            [canvas.vocab.inspect :refer [Check Signal]]))
+            [canvas.vocab.inspect :refer [Check Signal]]
+            [canvas.vocab.projection :refer [Projection]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t
@@ -194,3 +195,32 @@
                  (Signal "Orphan")
                  (Check "x" (inspects "things") (raises Used))))]
       (is (contains? (set (map :law (s/check db))) "every signal is raised by some check")))))
+
+(deftest projection-subsystem-modelled-as-target-representations
+  (testing "the projection view: the model is re-presented into a target (Blueprint) via source→artifact mappings"
+    (let [db (pipeline/build-model "src")]
+      (is (contains? (names-of db :Module) "projection"))
+      ;; Blueprint is one projection target (more — docs, diagrams — to come)
+      (is (contains? (names-of db :Projection) "Blueprint"))
+      ;; a projection is built from mappings (value-typed source→artifact pairs)
+      (is (seq (d/q '[:find ?mp
+                      :where [?p :structure/of :Projection] [?p :entity/name "Blueprint"]
+                             [?r :rel/from ?p] [?r :rel/kind :maps] [?r :rel/to ?mp]
+                             [?mp :structure/of :Mapping]
+                             [?mp :val/from "a function"] [?mp :val/to "a defn"]]
+                    db))
+          "the Blueprint projection maps a function → a defn")
+      (is (seq (d/q '[:find ?m
+                      :where [?f :structure/of :Faculty] [?f :entity/name "Projection"]
+                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
+                             [?m :structure/of :Module] [?m :entity/name "projection"]]
+                    db))
+          "the Projection faculty interlocks with the projection view"))))
+
+(deftest projection-with-no-mappings-is-caught
+  (testing "a projection that maps nothing trips the at-least-one-mapping law"
+    (let [db (s/with-structures
+               (s/within-module "p"
+                 (Projection "Empty")))]
+      (is (contains? (set (map :law (s/check db)))
+                     "Projection.maps requires at least one (found none)")))))
