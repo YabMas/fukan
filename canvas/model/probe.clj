@@ -6,18 +6,23 @@
    (Signals); survey/patterns/… yield non-gating Views. The overview's `Faculty
    \"Probe\"` is `realized-by` this module."
   (:require [fukan.canvas.core.structure :as s]
+            [canvas.vocab.shape :refer [Kind]]
             [canvas.vocab.probe :refer [Probe Finding]]))
 
 (defn ^:export build-canvas []
   (s/with-structures
     (s/within-module "probe"
+      (Kind "Str")   ; leaf for finding payload shapes (canvas-source pattern; avoids cross-module Kind refs)
       ;; non-gating findings — perspectives to reason with (Views)
       (Finding "Survey"      (gating false) (doc "A structural overview of the whole model."))
       (Finding "Patterns"    (gating false) (doc "Recurring structural patterns across the model."))
       (Finding "Consistency" (gating false) (doc "Where contracts and structure align — or drift."))
       (Finding "TarPit"      (gating false) (doc "Complexity hotspots — tangles worth attention."))
       ;; gating findings — trust verdicts (the inspect case → Signals)
-      (Finding "IntegrityReport" (gating true) (doc "Whether the model's structure holds together."))
+      (Finding "IntegrityReport" (gating true)
+        (doc "Whether the model's structure holds together.")
+        (shape [Str])                                                   ; payload: a list of violation strings
+        (holds "a model with no law violations yields no reported violations"))
       (Finding "CoverageReport"  (gating true) (doc "How much of the target's code is spec-covered."))
       (Finding "DriftReport"     (gating true) (doc "Where specifications and code have diverged."))
 
