@@ -18,14 +18,27 @@
       (Finding "Patterns"    (gating false)
         (doc "Recurring structural patterns across the model.")
         (shape [Str])
-        (holds "a model with no recurring structures yields no reported patterns"))
+        (holds "a model with no recurring structures yields no reported patterns"
+               (fn [result target-db]
+                 (or (empty? (:finding result))
+                     (seq (datascript.core/q
+                            '[:find ?ft ?k ?tt
+                              :where [?r1 :rel/from ?f1] [?r1 :rel/kind ?k] [?r1 :rel/to ?t1]
+                                     [?f1 :structure/of ?ft] [?t1 :structure/of ?tt]
+                                     [?r2 :rel/from ?f2] [?r2 :rel/kind ?k] [?r2 :rel/to ?t2]
+                                     [?f2 :structure/of ?ft] [?t2 :structure/of ?tt]
+                                     [(not= ?r1 ?r2)]]
+                            target-db))))))
       (Finding "Consistency" (gating false) (doc "Where contracts and structure align — or drift."))
       (Finding "TarPit"      (gating false) (doc "Complexity hotspots — tangles worth attention."))
       ;; gating findings — trust verdicts (the inspect case → Signals)
       (Finding "IntegrityReport" (gating true)
         (doc "Whether the model's structure holds together.")
         (shape [Str])                                                   ; payload: a list of violation strings
-        (holds "a model with no law violations yields no reported violations"))
+        (holds "a model with no law violations yields no reported violations"
+               (fn [result target-db]
+                 (or (empty? (:finding result))
+                     (seq (fukan.canvas.core.structure/check target-db))))))
       (Finding "CoverageReport"  (gating true) (doc "How much of the target's code is spec-covered."))
       (Finding "DriftReport"     (gating true) (doc "Where specifications and code have diverged."))
 

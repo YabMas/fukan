@@ -344,6 +344,18 @@
                  (Phase "Dangling" (next A))))]   ; Dangling is no phase's :next
       (is (contains? (set (map :law (s/check db))) "the loop closes — every phase is reached")))))
 
+(deftest findings-carry-inline-holds-predicates
+  (testing "Patterns and IntegrityReport carry an inline holds predicate form in the model"
+    (let [db (pipeline/build-model "src")
+          pred (fn [nm] (:val/holds-pred
+                          (d/entity db (ffirst (d/q '[:find ?f :in $ ?n
+                                                      :where [?f :entity/name ?n] [?f :structure/of :Finding]]
+                                                    db nm)))))]
+      (is (seq? (pred "Patterns")) "Patterns' holds predicate is a stored form")
+      (is (= 'fn (first (pred "Patterns"))) "it is a fn form")
+      (is (seq? (pred "IntegrityReport")) "IntegrityReport's holds predicate is a stored form")
+      (is (empty? (s/check db)) "the whole self-model still satisfies every law"))))
+
 (deftest empty-tool-is-caught
   (testing "a tool that composes no primitive (neither probes nor projects) trips the law"
     (let [db (s/with-structures

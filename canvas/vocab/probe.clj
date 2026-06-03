@@ -19,12 +19,14 @@
    perspective a human/LLM reasons with.
 
    A finding may carry a CONTRACT — a `shape` (its payload's structure, in the shape
-   grammar) and a `holds` invariant (prose). The projection turns the contract into a
-   runtime check on the finding (see the executable-agent sketch, Resolved #2)."
+   grammar) and a `holds` invariant (prose + an optional inline predicate
+   `(fn [result target-db] → ok?)` that the projection surfaces as a runtime check).
+   The projection turns the contract into a runtime check on the finding (see the
+   executable-agent sketch, Resolved #2)."
   (slot :doc    (optional :String))
   (slot :gating (one :Bool))       ; gating → a trust Signal (inspect); else a View
   (slot :shape  (optional Shape))  ; the finding payload's structure (shape grammar)
-  (slot :holds  (optional :String)) ; an acceptance invariant the finding must satisfy
+  (slot :holds  (optional :String) :payload :holds-pred) ; prose + an optional inline predicate form
   ;; a finding is meaningful only if some probe yields it
   (law "every finding is yielded by some probe"
     :offenders '[?f]
