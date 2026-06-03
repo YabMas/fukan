@@ -352,6 +352,17 @@
       (is (contains? (set (map :law (s/check db)))
                      "a tool composes at least one primitive")))))
 
+(deftest patterns-finding-carries-its-contract
+  (testing "the Patterns finding declares a shape + holds in the real model"
+    (let [db  (pipeline/build-model "src")
+          fid (ffirst (d/q '[:find ?f
+                             :where [?f :entity/name "Patterns"] [?f :structure/of :Finding]] db))]
+      (is (some? (:val/holds (d/entity db fid))) "Patterns has a holds invariant")
+      (is (seq (d/q '[:find ?sh :in $ ?f
+                      :where [?r :rel/from ?f] [?r :rel/kind :shape] [?r :rel/to ?sh]] db fid))
+          "Patterns has a shape")
+      (is (empty? (s/check db)) "the whole self-model still satisfies every law"))))
+
 (deftest integrity-finding-carries-its-contract
   (testing "the IntegrityReport finding declares a shape + holds in the real model"
     (let [db  (pipeline/build-model "src")
