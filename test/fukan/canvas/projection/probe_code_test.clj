@@ -81,3 +81,25 @@
           result (probe dirty)]
       (is (seq (:finding result)) "violations are reported")
       (is (every? string? (:finding result)) "each reported violation is a string"))))
+
+(deftest projects-fresh-probe-as-instruction
+  (testing "a fresh probe (no :calls) projects to an Instruction + contract, not a fn-form"
+    (let [db (cs/build)
+          {:keys [instruction contract-form fn-form]} (pc/project-probe db "patterns")]
+      (is (nil? fn-form) "a fresh probe emits no mechanical fn-form")
+      (is (string? instruction))
+      (is (re-find #"probe-patterns" instruction))
+      (is (re-find #"recurring structures across the model" instruction) "carries the lens focus")
+      (is (re-find #"a list of strings" instruction) "describes the [Str] finding shape")
+      (is (re-find #":gating false" instruction) "carries the modelled gating")
+      (is (re-find #"no recurring structures yields no reported patterns" instruction) "carries the holds")
+      (let [valid? (eval contract-form)]
+        (is (valid? {:finding ["x"]}))
+        (is (not (valid? {:finding [1]})))))))
+
+(deftest composing-probe-still-projects-fn-form
+  (testing "integrity (composing) is unchanged — still a mechanical fn-form, no instruction"
+    (let [db (cs/build)
+          {:keys [fn-form instruction]} (pc/project-probe db "integrity")]
+      (is (nil? instruction) "a composing probe emits no instruction")
+      (is (= 'fn (first fn-form))))))
