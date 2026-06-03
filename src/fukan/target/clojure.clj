@@ -1,50 +1,56 @@
 (ns fukan.target.clojure
-  "A trivial Clojure extractor — the seam proof for the extraction plug-point.
-   Reads `defn` top-level forms (no eval) and emits `Defn` code-structure instances.
-   Deliberately mechanical: no recognition; the plug-point is what's under test."
-  (:require [clojure.java.io :as io]
-            [fukan.canvas.core.structure :as s :refer [defstructure]])
-  (:import [java.io PushbackReader]))
+  "A Clojure code-structure extractor — fukan parsing its OWN `src/`.
 
-(defstructure Defn
-  "A function definition extracted from source — name (entity) + arity."
-  (slot :arity (one :Int)))
+   This is the PL-specific half of the extraction seam: it is the only place
+   that knows Clojure. It reads clj-kondo's `:analysis` output and maps Clojure
+   constructs onto fukan's architecture-level code vocabulary:
 
-(defstructure Capability
-  "An authored abstraction that should be realized by an extracted Defn (by name).
-   The cross-layer law is verifiable only on a graph holding both Capabilities (authored)
-   and Defns (extracted) — the value prop in miniature."
-  (slot :doc      (optional :String))
-  (slot :realizes (one :String))   ; the name of the Defn expected to realize it
-  (law "a capability is realized by an extracted defn"
-    :offenders '[?c]
-    :where '[[?c :val/realizes ?n]
-             (not [?d :structure/of :Defn] [?d :entity/name ?n])]))
+     ns               → Module      (a cohesion boundary — the substrate's own,
+                                      emitted by `within-module*`)
+     defn / defn-     → Operation   (a named unit of computation)
 
-(defn- read-forms
-  "Read all top-level forms from `path` as data (no eval)."
-  [path]
-  (binding [*read-eval* false]
-    (with-open [r (PushbackReader. (io/reader path))]
-      (loop [acc []]
-        (let [form (read {:eof ::eof} r)]
-          (if (= form ::eof) acc (recur (conj acc form))))))))
+   What it extracts INTO is architecture-characteristic and PL-blind — `Operation`
+   names no Clojure construct, and `Module` is the substrate's generic cohesion
+   boundary. Swap a different language's extractor in (Python `def`/module, …) and
+   the same vocab plus the same cross-layer correspondence law still hold; the
+   Clojure-ness stays confined here. clj-kondo is the wheel we don't reinvent."
+  (:require [clj-kondo.core :as kondo]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
-(defn- defn-form->entry
-  "A `(defn name [args] …)` form → {:name :arity}, else nil. Single-arity only."
-  [form]
-  (when (and (seq? form) (= 'defn (first form)))
-    (when-let [arglist (first (filter vector? form))]
-      {:name (str (second form)) :arity (count arglist)})))
+(defstructure Operation
+  "A named unit of computation owned by a Module — the architecture-level code
+   primitive fukan's functional core is built from. Realized in Clojure as a
+   `defn`/`defn-`; the vocab itself names no Clojure construct. `:private`
+   distinguishes a module's public surface from its internals."
+  (slot :private (one :Bool)))
+
+(def ^:private fn-defining
+  "clj-kondo `:defined-by` values that denote a computation unit (an Operation).
+   `def`, `defmacro`, `defmethod`, … are deliberately excluded — only functions."
+  #{'clojure.core/defn 'clojure.core/defn-})
+
+(defn- analyze
+  "Run clj-kondo over `paths` and return its `:analysis` — namespace + var
+   definitions. Reads source (and writes clj-kondo's cache); deterministic output."
+  [paths]
+  (:analysis (kondo/run! {:lint (vec paths)
+                          :config {:output {:analysis true}}})))
 
 (defn extract
-  "Extract a structure-db of `Defn` instances from the Clojure source at `path`.
-   Pure: builds the db via the substrate's programmatic emission API."
-  [path]
-  (let [entries (keep defn-form->entry (read-forms path))]
+  "Extract a structure-db of Modules (cohesion boundaries) and the Operations they
+   define from the Clojure source under `paths` (files or directories). Builds the
+   db via the substrate's programmatic emission API; each namespace becomes a
+   Module, each `defn`/`defn-` an Operation owned by it (`:module/child`)."
+  [& paths]
+  (let [{:keys [namespace-definitions var-definitions]} (analyze paths)
+        ops-by-ns    (group-by :ns (filter #(fn-defining (:defined-by %)) var-definitions))
+        module-names (distinct (concat (map :name namespace-definitions)
+                                       (keys ops-by-ns)))]
     (s/with-structures*
       (fn []
-        (s/within-module* (str "code:" path)
-          (fn []
-            (doseq [{:keys [name arity]} entries]
-              (s/instantiate! :Defn name (list (list 'arity arity))))))))))
+        (doseq [mname module-names]
+          (s/within-module* (str mname)
+            (fn []
+              (doseq [v (ops-by-ns mname)]
+                (s/instantiate! :Operation (str (:name v))
+                                (list (list 'private (boolean (:private v)))))))))))))
