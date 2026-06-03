@@ -10,6 +10,17 @@
   "A function definition extracted from source — name (entity) + arity."
   (slot :arity (one :Int)))
 
+(defstructure Capability
+  "An authored abstraction that should be realized by an extracted Defn (by name).
+   The cross-layer law is verifiable only on a graph holding both Capabilities (authored)
+   and Defns (extracted) — the value prop in miniature."
+  (slot :doc      (optional :String))
+  (slot :realizes (one :String))   ; the name of the Defn expected to realize it
+  (law "a capability is realized by an extracted defn"
+    :offenders '[?c]
+    :where '[[?c :val/realizes ?n]
+             (not [?d :structure/of :Defn] [?d :entity/name ?n])]))
+
 (defn- read-forms
   "Read all top-level forms from `path` as data (no eval)."
   [path]
