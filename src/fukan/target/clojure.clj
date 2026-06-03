@@ -22,7 +22,25 @@
    primitive fukan's functional core is built from. Realized in Clojure as a
    `defn`/`defn-`; the vocab itself names no Clojure construct. `:private`
    distinguishes a module's public surface from its internals."
-  (slot :private (one :Bool)))
+  (slot :private (one :Bool))
+  ;; The cross-layer correspondence — fukan's projection convention IS that an
+  ;; op-layer Stage named X is realized by a function named X, so the law matches
+  ;; purely by name across the altitude gap (no explicit `realizes` relation). It
+  ;; is verifiable ONLY on a graph holding both the authored self-model (Stages,
+  ;; from canvas/) and the extracted code (Operations, from src/) — the value prop
+  ;; in the large. The leading Operation clause guards it: with no code extracted
+  ;; the law is vacuous (correspondence is only assertable when both layers are
+  ;; present), so registering it never disturbs a model-only `check`.
+  ;; :global — this is a cross-structure law (offenders are Stages, not Operations),
+  ;; so it must opt out of the default self-scoping that would inject
+  ;; `[?s :structure/of :Operation]` and make it vacuous. The leading Operation
+  ;; clause is the real guard (vacuous only when no code is extracted).
+  (law "every modelled Stage is realized by an Operation of the same name"
+    :scope :global
+    :offenders '[?s]
+    :where '[[?o :structure/of :Operation]
+             [?s :structure/of :Stage] [?s :entity/name ?n]
+             (not [?o2 :structure/of :Operation] [?o2 :entity/name ?n])]))
 
 (def ^:private fn-defining
   "clj-kondo `:defined-by` values that denote a computation unit (an Operation).
