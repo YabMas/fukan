@@ -101,6 +101,10 @@
   "An entity holding ordered values inline."
   (slot :v (many OrdVal)))
 
+(defstructure Carry
+  "Test fixture: a scalar slot with a :payload companion."
+  (slot :text (optional :String) :payload :extra))
+
 ;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
 ;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
 ;;  guard is exercised by registering such a law directly — see
@@ -503,3 +507,20 @@
                                        (ty p))))))]                        ; ty targets a Plain, not a Type
       (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must be a Int"))
       (is (contains? (set (map :law (s/check bad-target))) "Boxed.ty target must be a Type")))))
+
+(deftest payload-slot-stores-companion-data
+  (testing "a scalar slot's 2nd clause arg is stored under its :payload attr"
+    (let [db (s/with-structures
+               (s/within-module "c"
+                 (Carry "c1" (text "hi" [:a :b]))
+                 (Carry "c2" (text "solo"))
+                 (Carry "c3" (text "hi" '(fn [x] x)))))
+          e1 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c1"]] db)))
+          e2 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c2"]] db)))
+          e3 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c3"]] db)))]
+      (is (= "hi" (:val/text e1)))
+      (is (= [:a :b] (:val/extra e1)) "the 2nd arg is captured as the payload")
+      (is (= "solo" (:val/text e2)))
+      (is (nil? (:val/extra e2)) "no 2nd arg → no payload")
+      (is (= '(fn [x] x) (:val/extra e3))
+          "a quoted payload form is stored unquoted (unquote-lit)"))))

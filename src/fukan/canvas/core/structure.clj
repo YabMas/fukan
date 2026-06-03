@@ -122,7 +122,7 @@
 ;; instance node rather than emitting relations.
 (def ^:private builtin-clauses #{'doc})
 
-(declare resolve-target clause->rels)
+(declare resolve-target clause->rels unquote-lit)
 
 (defn construct-value!
   "Construct (and dedup) a value-typed instance of `tag` from `clauses`. Identity
@@ -139,8 +139,15 @@
         rels    (vec (mapcat #(clause->rels db sdef %)
                              (for [c clauses :when (not (scalar? c))] c)))
         scalars (into (sorted-map)
-                      (for [c clauses :when (scalar? c)]
-                        [(keyword "val" (clojure.core/name (first c))) (second c)]))
+                      (mapcat (fn [c]
+                                (let [slot (slot-for sdef (keyword (first c)))]
+                                  (cond-> [[(keyword "val" (clojure.core/name (first c))) (second c)]]
+                                    ;; payload may be a quoted code form → unquote-lit; the primary
+                                    ;; scalar is a typed leaf stored raw
+                                    (and (:payload slot) (> (count c) 2))
+                                    (conj [(keyword "val" (clojure.core/name (:payload slot)))
+                                           (unquote-lit (nth c 2))]))))
+                              (for [c clauses :when (scalar? c)] c)))
         ;; :order enters the content key, so [A B] and [B A] are distinct values
         ckey    (pr-str [(clojure.core/name tag)
                          scalars
@@ -277,8 +284,14 @@
                   doc (assoc :entity/doc doc))])
     (register-child! node-id)
     (doseq [c val-clauses]
-      (transact! [{:entity/id node-id
-                   (keyword "val" (clojure.core/name (first c))) (second c)}]))
+      (let [slot (slot-for sdef (keyword (first c)))]
+        (transact! [(cond-> {:entity/id node-id
+                             (keyword "val" (clojure.core/name (first c))) (second c)}
+                      ;; payload may be a quoted code form → unquote-lit; the primary
+                      ;; scalar is a typed leaf stored raw
+                      (and (:payload slot) (> (count c) 2))
+                      (assoc (keyword "val" (clojure.core/name (:payload slot)))
+                             (unquote-lit (nth c 2))))])))
     (if *pending-relations*
       (swap! *pending-relations* conj pending)
       (emit-relations! pending))
