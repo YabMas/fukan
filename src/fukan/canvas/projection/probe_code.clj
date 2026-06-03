@@ -89,6 +89,15 @@
                 (list 'sequential? '(:finding result))
                 (list 'every? pred '(:finding result))))))
 
+(defn- finding-holds-pred
+  "The inline holds predicate FORM authored on the probe's yielded finding (or nil)."
+  [db probe-name]
+  (ffirst (d/q '[:find ?p :in $ ?pn
+                 :where [?pr :entity/name ?pn] [?pr :structure/of :Probe]
+                        [?r :rel/from ?pr] [?r :rel/kind :yields] [?r :rel/to ?f]
+                        [?f :structure/of :Finding] [?f :val/holds-pred ?p]]
+               db probe-name)))
+
 (defn- probe-focus
   "The focus prose of the lens a probe reads through."
   [db probe-name]
@@ -134,9 +143,9 @@
 
 (defn project-probe
   "Project the named probe.
-   Composing probe (it :calls a modelled capability) → {:fn-form <probe fn> :contract-form <pred>}
+   Composing probe (it :calls a modelled capability) → {:fn-form <probe fn> :contract-form <pred> :holds-check <holds predicate form or nil>}
    (mechanical, Cut 1).
-   Fresh probe (no :calls) → {:instruction <projected spec> :contract-form <pred>}: a spec for an
+   Fresh probe (no :calls) → {:instruction <projected spec> :contract-form <pred> :holds-check <holds predicate form or nil>}: a spec for an
    implementing LLM to write the leaf, plus the contract that gates the result."
   [db probe-name]
   (let [cap (probe-capability db probe-name)]
@@ -149,6 +158,8 @@
                         {:lens (probe-lens db probe-name)
                          :gating (probe-gating db probe-name)
                          :finding (list 'mapv 'str (list cap-var 'target-db))})
-         :contract-form (contract-form db probe-name)})
+         :contract-form (contract-form db probe-name)
+         :holds-check (finding-holds-pred db probe-name)})
       {:instruction (instruction db probe-name)
-       :contract-form (contract-form db probe-name)})))
+       :contract-form (contract-form db probe-name)
+       :holds-check (finding-holds-pred db probe-name)})))

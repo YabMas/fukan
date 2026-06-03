@@ -19,3 +19,24 @@
       (let [tiny (s/with-structures (s/within-module "tiny" (Kind "Solo")))]
         (is (empty? (:finding (probes/probe-patterns tiny)))
             "holds: a degenerate model (one unique structure) → no patterns")))))
+
+(deftest patterns-holds-law-gates-the-finding
+  (testing "the projected holds-check passes the real finding and fires on a bogus one"
+    (let [db     (cs/build)
+          holds? (eval (:holds-check (pc/project-probe db "patterns")))]
+      (is (holds? (probes/probe-patterns db) db)
+          "the real patterns finding satisfies its holds (the self-model recurs)")
+      (let [tiny (s/with-structures (s/within-module "tiny" (Kind "Solo")))]
+        (is (holds? {:lens "patterns" :gating false :finding []} tiny)
+            "empty finding over a degenerate model → holds")
+        (is (not (holds? {:lens "patterns" :gating false :finding ["bogus pattern"]} tiny))
+            "a reported pattern over a model with no recurrence → holds FIRES")))))
+
+(deftest integrity-holds-law-gates-the-finding
+  (testing "the projected holds-check for integrity passes real and fires on a bogus finding"
+    (let [db     (cs/build)
+          holds? (eval (:holds-check (pc/project-probe db "integrity")))]
+      (is (holds? {:lens "integrity" :gating true :finding []} db)
+          "empty finding over the clean self-model → holds")
+      (is (not (holds? {:lens "integrity" :gating true :finding ["bogus violation"]} db))
+          "a reported violation when the model is clean → holds FIRES"))))
