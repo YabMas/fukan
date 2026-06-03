@@ -16,9 +16,15 @@
 (defstructure Finding
   "What a probe yields — an observation ABOUT the model. A gating finding is a trust
    Signal that gates action (the inspect case); a non-gating finding is a View, a
-   perspective a human/LLM reasons with."
+   perspective a human/LLM reasons with.
+
+   A finding may carry a CONTRACT — a `shape` (its payload's structure, in the shape
+   grammar) and a `holds` invariant (prose). The projection turns the contract into a
+   runtime check on the finding (see the executable-agent sketch, Resolved #2)."
   (slot :doc    (optional :String))
   (slot :gating (one :Bool))       ; gating → a trust Signal (inspect); else a View
+  (slot :shape  (optional Shape))  ; the finding payload's structure (shape grammar)
+  (slot :holds  (optional :String)) ; an acceptance invariant the finding must satisfy
   ;; a finding is meaningful only if some probe yields it
   (law "every finding is yielded by some probe"
     :offenders '[?f]
