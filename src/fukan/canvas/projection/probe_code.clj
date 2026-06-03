@@ -10,6 +10,10 @@
   "Modelled capability name → the real var the projected code calls."
   {"check" 'fukan.canvas.core.structure/check})
 
+(def ^:private kind->pred
+  "Shape leaf Kind → the predicate the projected contract uses."
+  {"Str" 'clojure.core/string?})
+
 (defn- probe-lens
   "The name of the lens a probe reads through."
   [db probe-name]
@@ -42,8 +46,44 @@
                       {:probe probe-name :capabilities (mapv first results)})))
     (ffirst results)))
 
+(defn- finding-shape
+  "The probe's finding shape value node, or nil."
+  [db probe-name]
+  (ffirst (d/q '[:find ?sh :in $ ?pn
+                 :where [?p :entity/name ?pn] [?p :structure/of :Probe]
+                        [?ry :rel/from ?p] [?ry :rel/kind :yields] [?ry :rel/to ?f]
+                        [?rs :rel/from ?f] [?rs :rel/kind :shape] [?rs :rel/to ?sh]]
+               db probe-name)))
+
+(defn- list-of-kind
+  "If `shape-eid` is a list-of-<Kind> shape, return that Kind's name; else nil.
+   (Cut 1 handles exactly the list-of-leaf shape.)"
+  [db shape-eid]
+  (when (= "list" (:val/kind (d/entity db shape-eid)))
+    (ffirst (d/q '[:find ?kn :in $ ?sh
+                   :where [?of :rel/from ?sh] [?of :rel/kind :of] [?of :rel/to ?el]
+                          [?ty :rel/from ?el] [?ty :rel/kind :type] [?ty :rel/to ?k]
+                          [?k :entity/name ?kn]]
+                 db shape-eid))))
+
+(defn- contract-form
+  "A predicate over a probe RESULT: its :finding is a list whose elements satisfy the
+   shape leaf's predicate. Cut 1: the finding shape must be list-of-<Kind>."
+  [db probe-name]
+  (let [sh   (finding-shape db probe-name)
+        kind (some->> sh (list-of-kind db))
+        pred (kind->pred kind)]
+    (when-not pred
+      (throw (ex-info (str "cut-1 contract handles list-of-leaf findings only; got shape for "
+                           (pr-str probe-name))
+                      {:probe probe-name :kind kind})))
+    (list 'fn '[result]
+          (list 'and
+                (list 'sequential? '(:finding result))
+                (list 'every? pred '(:finding result))))))
+
 (defn project-probe
-  "Project the named probe to Clojure forms: {:fn-form … :contract-form …}.
+  "Project the named probe to Clojure forms: {:fn-form <probe fn> :contract-form <finding predicate>}.
    Cut 1: handles a composing probe (one that :calls a modelled capability) whose
    finding payload is a list of strings."
   [db probe-name]
@@ -58,4 +98,5 @@
     {:fn-form (list 'fn '[target-db]
                     {:lens lens
                      :gating gate
-                     :finding (list 'mapv 'str (list cap-var 'target-db))})}))
+                     :finding (list 'mapv 'str (list cap-var 'target-db))})
+     :contract-form (contract-form db probe-name)}))

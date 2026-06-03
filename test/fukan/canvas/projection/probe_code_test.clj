@@ -38,3 +38,18 @@
         (is (= '(mapv str (fukan.canvas.core.structure/check target-db))
                (:finding body))
             "the finding wraps the called capability's output as strings")))))
+
+(deftest projects-contract-predicate-from-shape
+  (testing "project-probe emits a contract predicate matching the finding's [Str] shape"
+    (let [db   (cs/build)
+          form (:contract-form (pc/project-probe db "integrity"))
+          pred (eval form)]
+      ;; the predicate takes a probe RESULT and checks its :finding against the shape
+      (is (pred {:lens "integrity" :gating true :finding []})
+          "an empty list of strings satisfies [Str]")
+      (is (pred {:lens "integrity" :gating true :finding ["a" "b"]})
+          "a list of strings satisfies [Str]")
+      (is (not (pred {:lens "integrity" :gating true :finding [1 2]}))
+          "a list of non-strings violates [Str]")
+      (is (not (pred {:lens "integrity" :gating true :finding "nope"}))
+          "a non-list violates [Str]"))))
