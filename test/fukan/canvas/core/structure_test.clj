@@ -508,6 +508,20 @@
       (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must be a Int"))
       (is (contains? (set (map :law (s/check bad-target))) "Boxed.ty target must be a Type")))))
 
+(deftest programmatic-emission-builds-a-db
+  (testing "with-structures*/within-module* fns let code emit instances from runtime data"
+    (let [db (s/with-structures*
+               (fn []
+                 (s/within-module* "prog"
+                   (fn []
+                     (doseq [n ["a" "b"]]
+                       (s/instantiate! :Carry n (list (list 'text n))))))))]
+      (is (= #{"a" "b"}
+             (set (map first (d/q '[:find ?n :where [?e :structure/of :Carry] [?e :entity/name ?n]] db))))
+          "both instances were emitted programmatically")
+      (is (= "a" (:val/text (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "a"]] db)))))
+          "scalar slot value stored"))))
+
 (deftest payload-slot-stores-companion-data
   (testing "a scalar slot's 2nd clause arg is stored under its :payload attr"
     (let [db (s/with-structures

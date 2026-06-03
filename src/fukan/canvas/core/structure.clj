@@ -65,26 +65,37 @@
   (when *enclosing-module*
     (transact! [[:db/add [:entity/id *enclosing-module*] :module/child [:entity/id child-id]]])))
 
+(declare flush-pending-relations!)
+
+(defn with-structures*
+  "Fn form of `with-structures`: bind *store* to a fresh db, run `thunk`, return the db."
+  [thunk]
+  (binding [*store* (atom (create))]
+    (thunk)
+    @*store*))
+
 (defmacro with-structures
   "Bind *store* to a fresh structure db, run body, return the db."
   [& body]
-  `(binding [*store* (atom (create))]
-     ~@body
-     @*store*))
+  `(with-structures* (fn [] ~@body)))
+
+(defn within-module*
+  "Fn form of `within-module`: declare module `mname`, run `thunk` with it enclosing,
+   flush queued relations on exit, return the module id."
+  [mname thunk]
+  (let [mid (random-uuid)]
+    (transact! [{:entity/id mid :entity/name mname :structure/of :Module}])
+    (binding [*enclosing-module*  mid
+              *pending-relations* (atom [])]
+      (thunk)
+      (flush-pending-relations!)
+      mid)))
 
 (defmacro within-module
   "Declare a module and run `body` with it as the enclosing container; children
-   register under it via :module/child. Two-pass: `body` declares the instances
-   (queuing their relations); on exit the queued relations are resolved and
-   emitted — so forward references and cycles between instances resolve."
+   register under it via :module/child. Two-pass (see within-module*)."
   [mname & body]
-  `(let [mid# (random-uuid)]
-     (transact! [{:entity/id mid# :entity/name ~mname :structure/of :Module}])
-     (binding [*enclosing-module*  mid#
-               *pending-relations* (atom [])]
-       ~@body
-       (flush-pending-relations!)
-       mid#)))
+  `(within-module* ~mname (fn [] ~@body)))
 
 (defn resolve-in-module
   "The :entity/id of the enclosing module's child named `nm`, or nil."
