@@ -53,3 +53,31 @@
           "a list of non-strings violates [Str]")
       (is (not (pred {:lens "integrity" :gating true :finding "nope"}))
           "a non-list violates [Str]"))))
+
+(deftest projected-integrity-probe-runs-and-honors-its-contract
+  (testing "the projected probe-integrity runs over a model and yields a contract-valid finding"
+    (let [db        (cs/build)
+          {:keys [fn-form contract-form]} (pc/project-probe db "integrity")
+          probe     (eval fn-form)
+          valid?    (eval contract-form)
+          ;; run the projected probe over the SELF-model (fukan checking itself)
+          result    (probe db)]
+      (is (= "integrity" (:lens result)))
+      (is (true? (:gating result)))
+      (is (valid? result) "the finding satisfies its [Str] shape")
+      ;; HOLDS: a model with no law violations yields no reported violations.
+      ;; The self-model satisfies every law, so the finding must be empty.
+      (is (empty? (:finding result))
+          "holds: clean model → no reported violations"))))
+
+(deftest projected-integrity-probe-surfaces-real-violations
+  (testing "over a model WITH a law violation, the finding is a non-empty list of strings"
+    (let [db    (cs/build)
+          probe (eval (:fn-form (pc/project-probe db "integrity")))
+          ;; a deliberately broken db: an orphan finding trips "every finding is yielded by some probe"
+          dirty (s/with-structures
+                  (s/within-module "broken"
+                    (Finding "Orphan" (gating false))))
+          result (probe dirty)]
+      (is (seq (:finding result)) "violations are reported")
+      (is (every? string? (:finding result)) "each reported violation is a string"))))
