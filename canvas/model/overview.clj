@@ -24,7 +24,8 @@
       (Faculty "Canvas" (doc "The reasoning surface; specs author structures into the model.")
         (feeds Model))
       (Faculty "Target" (doc "The analyzed codebase — implementation + specifications.")
-        (feeds Model))
+        (feeds Model)
+        (realized-by (across "target.clojure") (across "target.correspondence")))  ; extraction + correspondence
 
       ;; the cross-cutting FOCUS and the two ACTS that compose with it
       (Faculty "Lens" (doc "A focus over the model — which slice/aspect to attend to; composes with either act.")

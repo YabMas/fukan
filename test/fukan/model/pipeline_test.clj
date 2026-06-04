@@ -48,16 +48,26 @@
                            [?c :structure/of :Stage] [?c :entity/name ?n]]
                   db))
           "model.pipeline declares exactly one stage — no stale duplicate merge/ingest")
-      ;; the seam: build-model's cross-module :calls resolves to canvas-source/build
-      (is (= ["build"]
-             (d/q '[:find [?bn ...]
+      ;; the seams: build-model's cross-module :calls resolve to the canvas-source
+      ;; ingestion/merge stages and to the target extractor (design + code unified)
+      (is (= #{"build" "merge-dbs" "resolve-cross-refs"}
+             (set (d/q '[:find [?bn ...]
+                         :where [?mp :entity/name "model.pipeline"] [?mp :module/child ?bm]
+                                [?bm :entity/name "build-model"]
+                                [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?b]
+                                [?cs :entity/name "canvas-source"] [?cs :module/child ?b]
+                                [?b :entity/name ?bn]]
+                       db)))
+          "build-model calls canvas-source's build + merge-dbs + resolve-cross-refs — links resolve post-merge")
+      (is (= ["extract"]
+             (d/q '[:find [?en ...]
                     :where [?mp :entity/name "model.pipeline"] [?mp :module/child ?bm]
                            [?bm :entity/name "build-model"]
-                           [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?b]
-                           [?cs :entity/name "canvas-source"] [?cs :module/child ?b]
-                           [?b :entity/name ?bn]]
+                           [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?e]
+                           [?tc :entity/name "target.clojure"] [?tc :module/child ?e]
+                           [?e :entity/name ?en]]
                   db))
-          "build-model calls canvas-source/build — the cross-module link resolves post-merge"))))
+          "build-model calls target.clojure/extract — the design↔code seam"))))
 
 (deftest canvas-source-model-shares-the-db-shape
   (testing "in the canvas_source self-model, the Db type-shape (4 uses) is one node"
