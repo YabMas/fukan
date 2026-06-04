@@ -1,125 +1,101 @@
 # Fukan
 
-Fukan is a structural exploration workbench for the layer humans own as LLMs handle more of the low-level coding — module boundaries, contracts, invariants, behavioural intent, and the relationships between them.
+Fukan is a structural exploration tool for the layer humans own as LLMs handle
+more of the low-level coding — the composition of concepts in a system and the
+laws that must hold of it. The question it explores: as LLMs write more of the
+code, how do humans stay in control of high-level structure and collaborate with
+LLMs at that altitude?
 
-It analyses a target system to build a unified structural Model, then renders it as an interactive graph in the browser. Canvas specs, which describe a system's design in Clojure data, are projected onto the same Model as implementation code, so that what the system is meant to do and what it actually does appear together in one place.
+You **define** a system's structure, **model** abstractions over it, **verify**
+the whole as one assertable graph, and **project** it toward an implementation.
+Specification and implementation live on the *same* graph, so what a system is
+meant to be and what it actually is can be checked against each other.
 
-## Design surface
+> **Status: lean-kernel + modelling-exploration phase.** Fukan was radically pruned
+> and rebuilt around a single primitive, `defstructure`. The browser explorer that
+> is fukan's eventual vision is **deferred indefinitely** (parked under `.paused/`);
+> today fukan is a REPL-and-canvas tool, exercised by modelling. See
+> [CLAUDE.md](CLAUDE.md) for the current architecture in detail.
 
-**Canvas specs are fukan's primary spec authoring surface.** A canvas spec is a Clojure file that uses the canvas vocabulary to declare a module's structure:
+## The primitive
+
+Everything is a `defstructure`: a structure is a **composition of slots** plus the
+**datalog laws** that must hold of it. The core ships only this primitive and the
+ingestion/projection machinery — **no domain vocabulary**. Each modelling project
+authors its own grammar on the core.
 
 ```clojure
-(ns canvas.infra.server
-  (:require [fukan.canvas.construction :refer [function record exports]]
-            [fukan.canvas.vocab.behavioral :refer [invariant]]
-            [fukan.canvas.vocab.lifecycle :refer [getter]]))
+(require '[fukan.canvas.core.structure :as s :refer [defstructure]]
+         '[datascript.core :as d])
 
-(defn build-canvas []
-  (h/with-canvas
-    (h/within-module "infra.server"
-      (record "ServerOpts" "HTTP server configuration."
-        (field port (optional :Integer)))
-      (invariant "SingleServerInstance" "At most one HTTP server runs at a time."
-        (holds-that "at-most-one server is active"))
-      (function "start_server" "Start the HTTP server."
-        (takes [opts :ServerOpts])
-        (gives (optional :ServerInfo)))
-      (exports ServerOpts ServerInfo))))
+;; a tiny vocabulary
+(defstructure Task
+  "A unit of work that may depend on other tasks."
+  (slot :done? (one :Bool))
+  (slot :deps  (many Task))
+  (law "a task cannot depend on itself"
+    :offenders '[?t]
+    :where '[[?r :rel/from ?t] [?r :rel/kind :deps] [?r :rel/to ?t]]))
+
+;; a model authored against it
+(def db (s/with-structures
+          (s/within-module "plan"
+            (Task "spec"  (done? true))
+            (Task "build" (done? false) (deps spec)))))
+
+(s/check db)   ;; => []  (no law violations)
 ```
 
-Canvas specs live in `canvas/<subsystem>/<module>.clj`, mirroring the system structure. There are 62 canvas ports covering all of fukan's own modules. Each canvas file is on the classpath and participates in the REPL reload cycle — editing a canvas file and calling `(refresh)` updates the graph.
+`(slot :x (one :Bool))` stores a scalar leaf with an auto type-check law;
+slots whose target is another structure reify a relation. Cardinalities are
+`one` / `optional` / `many` / `some` / `ordered`. `^:value` structures are
+content-deduped anonymous nodes. See `canvas/vocab/*.clj` for fukan's own
+vocabulary and `demos/<domain>/` for worked examples.
 
-Legacy `.allium`/`.boundary` files are archived in `.legacy-allium/` (not on the classpath; read-only reference only).
+## Self-model and demos
 
-## For coding agents
-
-Fukan exposes its Model to coding agents through `bin/fukan`. When working on or with Fukan, prefer querying the spec graph over grepping the codebase.
-
-[AGENTS.md](AGENTS.md) is the primer — read it first. It covers the `fukan.agent.system` / `fukan.agent.api` surface, the L0/L1/L2 query layering, the edit→refresh→query loop, `.fukan/agent-views.clj`, and sandbox limits.
-
-### Install the CLI
-
-`bin/fukan` is a [babashka](https://babashka.org) script. Put it on `PATH`:
-
-```bash
-ln -s "$PWD/bin/fukan" /usr/local/bin/fukan      # or any dir on PATH
-export FUKAN_HOME="$PWD"                          # so `fukan primer` finds AGENTS.md
-```
-
-`FUKAN_URL` overrides the daemon address (default `http://127.0.0.1:8080`). `FUKAN_HOME` lets `fukan primer` print `AGENTS.md` from anywhere; without it, run `fukan primer` from the repo root.
-
-### Commands
-
-| Command | What it does |
-|---------|--------------|
-| `fukan status` | Daemon health + loaded-model summary |
-| `fukan eval '<expr>'` | Run an L0/L1/L2 query in the SCI sandbox |
-| `fukan primer` | Print `AGENTS.md` to stdout |
-| `fukan init` | Add a Fukan section to the current project's `AGENTS.md` |
-
-The daemon must be running (`clj -M:run …`) for `status` and `eval`.
-
-## Usage
-
-```
-clj -M:run --src /path/to/project/src --port 8080
-```
-
-Then open `http://localhost:8080` in a browser.
+Fukan models *itself*: `canvas/vocab/` holds its vocabulary (data / computation /
+schema / architecture / probe / projection layers) and `canvas/model/` holds the
+models of its subsystems. Canvas files under `canvas/**/*.clj` are auto-discovered
+and merged into one structure db — the model. `clj -M:demos` runs a corpus of
+standalone modelling demos (grammar, ER, workflow, access-control, type-system).
 
 ## Development
 
-Requires Clojure CLI (`clj`) and [clj-kondo](https://github.com/clj-kondo/clj-kondo) on PATH.
+Requires Clojure CLI (`clj`) and [clj-kondo](https://github.com/clj-kondo/clj-kondo)
+on PATH.
 
 ```bash
-# Start nREPL (port 7889)
-clj -M:dev:nrepl
-
-# In the REPL
-(start)          ; analyze + start server
-(refresh)        ; reload changed code + rebuild model
-(reset)          ; full server restart
-(status)         ; show server/model state
-
-# Run tests
-clj -M:test
+clj -M:dev:nrepl        # start an nREPL (port 7889)
+clj -M:test             # run the test suite
+clj -M:demos            # run the demo regressions
 ```
 
-The REPL cycle for canvas spec work: **edit a canvas file → `(refresh)` → browser refresh**.
+In the REPL (`clj -M:dev`):
+
+```clojure
+(go)        ; build the model (canvas specs + the Clojure extractor over src/)
+(refresh)   ; reload changed code + rebuild
+(status)    ; model state
+(drift)     ; modelled capabilities not yet realized in code
+```
 
 ## Project structure
 
 ```
-canvas/                  Canvas specs — the design surface for fukan-itself
-  infra/                 Infra subsystem specs
-  model/                 Model subsystem specs
-  web/                   Web subsystem specs
-  ...                    (62 modules total)
+canvas/vocab/      fukan-on-fukan's vocabulary (defstructure grammars)
+canvas/model/      fukan-on-fukan's subsystem models
+demos/             standalone modelling demos (vocab + model + regression)
 src/fukan/
-  canvas/                Canvas machinery (core, construction, vocab libraries)
-  model/                 Model construction — pipeline, build, schemas
-  projection/            Pure computation from model to visible subgraph
-  web/                   HTTP/SSE transport and view rendering
-  infra/                 Server and model lifecycle
-doc/
-  VISION.md              Framing and direction
-  DESIGN.md              Design principles (three-tier layering, ownership)
-  MODEL.md               Substrate spec (kernel, vocabulary mechanism)
-  plans/                 Design decision records (historical; do not modify)
-.legacy-allium/          Archived pre-canvas .allium/.boundary specs (read-only)
+  canvas/core/     the defstructure primitive, derived rules, lens evaluation
+  canvas/projection/  canvas ingestion + the probe surface
+  model/           build pipeline, extraction plug-point, materialize
+  target/          Clojure code extractor + model↔code correspondence laws
+  infra/           model lifecycle + composition root
+.paused/           the browser viewer stack (deferred indefinitely)
+.legacy-allium/    pre-canvas Allium/Boundary specs (read-only baseline)
+doc/               design-phase chapters and the decision trace (historical)
 ```
-
-## Navigating the graph
-
-The graph renders modules as compound nodes that contain affordances (functions, invariants, rules) and types. Navigation works at two levels: selection (inspecting within the current view) and navigation (changing what you're viewing).
-
-| Action | Effect |
-|--------|--------|
-| Click a node | Select it — sidebar shows details |
-| Double-click a module | Navigate into it |
-| Right-click a module | Expand/collapse children inline |
-| Click the background | Deselect |
-| Breadcrumb click | Navigate to an ancestor module |
 
 ## License
 

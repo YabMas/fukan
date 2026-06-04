@@ -1,207 +1,181 @@
 # Fukan
 
-Fukan is a structural exploration tool for codebases in the era of LLM-driven development. It analyzes a target codebase — implementation code and behavioral specifications — to build a unified structural model, then projects and renders that model as an interactive graph in the browser. The core question it explores: as LLMs handle more low-level coding, how do humans maintain control over high-level structure and collaborate with LLMs at that level of abstraction?
+Fukan is a structural exploration tool for codebases in the era of LLM-driven
+development. The core question it explores: as LLMs handle more low-level coding,
+how do humans maintain control over high-level structure and collaborate with LLMs
+at that level of abstraction? You define a system's *structure* — its composition
+of concepts plus the laws that must hold of it — model abstractions over that
+structure, verify the whole as one assertable graph, and project it down toward an
+implementation. Specification and implementation live on the **same** graph, so
+intended structure and actual structure can be checked against each other.
 
-The system is generic and pluggable: language analyzers (currently Clojure) register via multimethod dispatch, and the build pipeline is language-agnostic. Specifications and implementation are projected onto the same model so that intended structure (boundaries, contracts, guarantees) and actual structure (namespaces, functions, schemas) appear together. Documentation is a first-class input — it flows into the model to make the explorer meaningful, not just structural.
+The eventual vision is to render that graph as an interactive explorer in the
+browser — but that is **deferred indefinitely** (see below). Today fukan is a
+REPL-and-canvas tool exercised by modelling.
 
-The system follows a functional core / imperative shell architecture, enforced by canvas specs.
-
-## ⚠ Current state — lean kernel rebuilt; now in a modelling-exploration phase
+## ⚠ Current state — lean kernel rebuilt; in a modelling-exploration phase
 
 The radical prune and the rebuild around a single structure-definition primitive
 are **done**. `defstructure` is the heart of the kernel: *a structure = its
 composition of Nodes/Relations + the datalog laws that must hold of it.* The
-structure substrate **is** the model (no separate model-map). Much of the
-*detailed reference below this banner predates the rebuild and is stale* — trust
-this banner and the `canvas/core/structure` + `canvas/structures` source.
+structure substrate **is** the model (no separate model-map).
 
-**The lean kernel — 8 source files:**
-- `canvas/core/structure.clj` — the `defstructure` primitive (slots + laws, `check`)
-- `canvas/structures.clj` — base vocabulary (Type / Effect / Event / Function)
+**The lean kernel — `src/fukan/` (the only code on the classpath):**
+- `canvas/core/structure.clj` — the `defstructure` primitive (slots + laws,
+  `with-structures`, `within-module`, `check`, value-identity, the reader hook)
+- `canvas/core/rules.clj` — pure vocab-derived datalog rules (kind/relation/module
+  rules) auto-injected into every law so laws read at domain altitude
+- `canvas/core/lens.clj` — `evaluate-lens`: run a lens's selection query → its
+  focus sub-graph
 - `canvas/projection/canvas_source.clj` — ingestion: discover `canvas/**/*.clj`
-  defstructure specs → merge into one structure db
-- `model/pipeline.clj` → `build-model` returns that db; `infra/model` holds it
-- `core.clj`, `utils/files.clj`, `libs/coordinate.clj`
+  defstructure specs, build + merge into one structure db, resolve cross-module refs
+- `canvas/projection/probes.clj`, `probe_code.clj` — the probe surface (read the
+  model → findings; project a probe spec for an implementing LLM). Cut-1.
+- `model/pipeline.clj` → `build-model`; `model/extraction.clj` — the code→model
+  extractor plug-point; `model/materialize.clj` — model→implementation-spec projection
+- `target/clojure.clj` — the registered Clojure extractor (clj-kondo analysis);
+  `target/correspondence.clj` — the model↔code correspondence laws
+- `infra/model.clj` (composition root), `core.clj`, `utils/files.clj`,
+  `libs/coordinate.clj`
 
-**Parked under `.paused/`** (off-classpath; rebuilt on the structure substrate in
-their own future cycles, none scheduled): the browser explorer (`web/`, top-level
-`projection/`, `infra/server`), the agent query surface (`agent/*` + `bin/fukan`),
-the analysis tools (`canvas/{lens,inspect,instruct,project}`), the Clojure
-analyzer (`target/`), and `project_layer/`.
+**Parked under `.paused/`** (off-classpath): only the **browser explorer / viewer**
+(`web/`, top-level `projection/`, `infra/server`). The other once-parked subsystems
+(agent surface, old Clojure analyzer, lens substrate, inspect/instruct, code
+synthesis) were **removed** once the rebuild reborn their capabilities on the
+substrate — they live in git history. The pre-canvas Allium/Boundary specs remain
+in `.legacy-allium/` as the baseline to compare against once the transition closes.
 
 **The browser explorer / viewer is DEFERRED INDEFINITELY.** It is fukan's eventual
-vision (the intro above), but it is *not on the near roadmap and should not be
-proposed as a next step* — the core is being exercised extensively first. Do not
-re-suggest reviving it.
+vision, but it is *not on the near roadmap and should not be proposed as a next
+step* — the core is being exercised extensively first. Do not re-suggest reviving it.
 
 **Direction — exercise the core via modelling, not a premature middle layer.**
 The work now is authoring a wide variety of models directly on `defstructure`
-(canvas specs), to exercise and pressure-test the core in every way. We are
-**not** building a reusable methodology/middle layer (DDD/hexagonal/C4 vocabularies)
-yet — there's no purpose for one today. Keep the core *able* to grow such a layer
-later (the refinement mechanism — see decision #4), and prove that mechanism only
-when a concrete need arises; otherwise the focus is exploring modelling itself.
+(canvas specs + demos), to pressure-test the core in every way. We are **not**
+building a reusable methodology/middle layer (DDD/hexagonal/C4 vocabularies) yet —
+there's no purpose for one today. Keep the core *able* to grow such a layer later
+(the refinement mechanism), and prove that mechanism only when a concrete need
+arises; otherwise the focus is exploring modelling itself.
 
-**Feedback loop:** in-process REPL (`clj -M:dev`) — build a structure db with
-`with-structures`/`within-module` and the vocabulary macros, query it with `d/q`,
-run `(structure/check db)`. `build-model` ingests the `canvas/` specs into the
-model db; `dev/user.clj` keeps `(go)`/`(refresh)`/`(reset)`/`(status)` (no server).
+## The kernel ships mechanics only — no vocabulary
 
-The detailed sections below (agent querying, spec locations, vocabulary catalog,
-shape grammar, three-tier rules, …) describe the **pre-rebuild** architecture and
-are retained only for historical reference until rewritten.
+The core (`src/fukan/canvas/`) ships only the `defstructure` primitive and the
+ingestion/projection machinery. It ships **no domain vocabulary**: every modelling
+project authors its own grammar on the core. Fukan-on-fukan's vocabulary lives in
+`canvas/vocab/`; each demo owns its grammar under `demos/<domain>/vocab/`.
 
-## Querying the Model as an agent
+A `defstructure` is a composition of **slots** plus **laws**:
 
-Fukan exposes its Model to coding agents through `bin/fukan`. When working on or with Fukan, prefer querying the spec graph over grepping the codebase.
+- Slot cardinalities: `(one T)`, `(optional T)`, `(many T)`, `(some T)`,
+  `(ordered T)`. A slot whose target is a scalar (e.g. `(one :Bool)`) stores a
+  leaf value with an auto-generated type-check law; otherwise it reifies a relation.
+- Slot options: `:label-as` (label the reified relation), `:payload` (carry a
+  companion code-form), `(reader f)` (expand authoring data-literals — e.g. fukan's
+  Shape expands `Foo` / `[X]` / `{:f X}`).
+- `^:value` structures are content-deduped, inline-anonymous nodes (structurally
+  equal values collapse to one node) — used for nameless compound data.
+- `(law "desc" :offenders '[?x] :where '[…])` is a datalog constraint; `:scope
+  :global` opts a law out of self-scoping. `(structure/check db)` runs every law →
+  violations.
 
-- **Primer:** [AGENTS.md](AGENTS.md) — read it before the first agent query. Covers the `fukan.agent.system` / `fukan.agent.api` surface, L0/L1/L2 query layering, the edit→refresh→query loop, `.fukan/agent-views.clj`, and sandbox limits.
-- **Quick reference:** `fukan status` (daemon health), `fukan eval '<expr>'` (run a query), `fukan primer` (print AGENTS.md). Requires a running daemon (`clj -M:run …`).
-- **Live catalog:** inside `fukan eval`, call `(help)` for the current fn surface — trust it over `AGENTS.md` if they disagree.
+The current catalog is the source: read `canvas/vocab/*.clj` for fukan's own
+grammar (shape/op/meta/arch/probe/projection/agent/collab/lens) and the demo vocabs.
 
-## Spec Locations (source of truth)
+## Spec locations
 
-Canvas specs live at `canvas/<subsystem>/<module>.clj`. Canvas specs are the sole spec source as of Phase 3. 62 modules are ported across all subsystems.
+- `canvas/vocab/<layer>.clj` — fukan-on-fukan's vocabulary (vocab-only specs: a
+  `defstructure` grammar, no `build-canvas`).
+- `canvas/model/<subsystem>.clj` — fukan-on-fukan's models (each defines a
+  `^:export build-canvas` returning a structure db).
+- `demos/<domain>/{vocab,model}/…` + a regression test; run with `clj -M:demos`.
+- `.legacy-allium/` — pre-canvas Allium/Boundary specs (read-only archive; not on
+  the classpath; not loaded).
 
-Legacy `.allium` / `.boundary` files are archived in `.legacy-allium/` (read-only reference; not on the classpath; not loaded by the build pipeline).
+Canvas files under `canvas/**/*.clj` are **auto-discovered** — adding a spec is a
+single file drop (no registry edit).
 
-## Canvas tree layout
+## Cross-module references
 
-```
-canvas/                        Canvas specs — the design surface for fukan-itself
-  agent/                       Agent API + query engine specs
-  constraint/                  Constraint evaluation specs
-  infra/                       Infra subsystem specs (model lifecycle, server lifecycle)
-  libs/                        Vendored library specs (allium/parser, boundary/parser, coordinate)
-  model/                       Model subsystem specs (pipeline, build, effect, etc.)
-  project_layer/               Project layer specs (defaults, registry)
-  target/                      Clojure target analyzer specs
-  utils/                       Utility module specs
-  validation/                  Phase 4 validation specs
-  vocabulary/                  Vocabulary analyzer specs (legacy, ported for reference)
-  web/                         Web subsystem specs (handler, views)
+A model spec refers to entities in another module with `(across "<module>")` (the
+module node) or `(across "<module>" "<name>")` (a named child). These resolve
+*post-merge* in `canvas_source/resolve-cross-refs` (an unresolved ref throws). The
+structure registry is a **single global tag namespace**, so co-loaded projects
+can't share tag names (fukan's data layer is `Kind`, not `Type`, because a test
+fixture co-loads a `Type`) — eventual per-project namespacing is a standing finding.
 
-src/fukan/canvas/              Canvas machinery — the implementation
-  core/                        Substrate machinery (primitives, store, helpers, defconstructor, shape, check, defquery)
-  construction.clj             Non-opt-out lifts: function, record, value, exports
-  vocab/                       Opt-in methodology vocabularies
-    behavioral.clj             invariant, rule
-    lifecycle.clj              getter
-    validation.clj             checker
-  projection/
-    canvas_source.clj          Projects canvas datoms into the model map (Phase 0)
-```
+## Conventions
 
-## Canvas vocabulary catalog
+**Ownership-on-owner.** Module ownership flows via `:module/child` relations on the
+owner, not via back-references on the owned entity. The `within-module` helper in
+`core/structure.clj` emits `:module/child` automatically.
 
-**Always available** (`fukan.canvas.construction`):
+**`^:export` for dynamically-invoked vars.** Vars reached only through dynamic
+dispatch — every canvas module's `build-canvas` (registry discovery) and any var
+called from a law's `:where` clause (datalog predicate) — carry `^:export`. Both
+`.clj-kondo/config.edn` and `.lsp/config.edn` honor `:exclude-when-meta #{:export}`,
+so the metadata alone suffices. Prefer `^:export` over a per-namespace exemption.
 
-| Constructor | What it produces |
-|-------------|-----------------|
-| `function` | Affordance with arrow shape (`takes`/`gives`), role `:fukan.canvas.monolith/exposed-call` |
-| `record` | Type with `:record` kind and field pairs |
-| `value` | Type with `:atomic` kind (opaque named type) |
-| `exports` | Tags named declarations as `:exported` (module API closure) |
+**Per-namespace lint exemptions live in BOTH `.clj-kondo/config.edn` and
+`.lsp/config.edn`.** clojure-lsp doesn't honor clj-kondo's per-namespace config, so
+namespace-wide `unused-public-var` exemptions must be mirrored in both files. The
+only standing case is law-only test structures whose generated macro is never
+called. When adding a namespace to one file's list, add it to the other.
 
-**Opt-in** (`fukan.canvas.vocab.*`):
-
-| Namespace | Form | When to use |
-|-----------|------|-------------|
-| `vocab.behavioral` | `invariant` | Timeless behavioral commitment with a `holds-that` prose clause |
-| `vocab.behavioral` | `rule` | Reactive declaration with a `when` trigger signature |
-| `vocab.lifecycle` | `getter` | Zero-arg `Optional<T>` accessor; shape is baked in |
-| `vocab.validation` | `checker` | `(Model) -> [Violation]` entry point; shape is baked in |
-
-## Shape expression grammar
-
-Shape expressions appear in `takes`/`gives`/`field`/`getter` positions:
-
-| Expression | Meaning |
-|-----------|---------|
-| `:Keyword` | Atomic type (`:String`, `:Integer`, `:Unit`, etc.) |
-| `:ns/Name` | Cross-module reference (`:model/Model`, `:agent/Violation`) |
-| `(optional :T)` | Optional value |
-| `(list-of :T)` | Ordered list |
-| `(set-of :T)` | Unordered set |
-| `(sum-of :A :B ...)` | One-of sum type |
-| `(map-of :K :V)` | Key-value map |
-| `(ref-to :ns/Name)` | Explicit reference form |
-| `(record-of [:n :T]+)` | Inline anonymous record |
-
-**Cross-module ref convention:** `:model/Model` refers to an entity named `"Model"` in a module whose path contains `"model"`. The namespace portion is the last path segment of the canvas module that owns the type.
-
-**Short form vs. fully-qualified form.** The resolver accepts both `:cluster/NodeId` (short, last-segment match) and `:distributed.cluster/NodeId` (fully-qualified, exact module-name match). It tries exact match first, then falls back to segment match — so a fully-qualified ref is never accidentally shadowed by a segment collision. Prefer the fully-qualified form when a canvas has modules that share segments (e.g. `accounts.users` vs `users.accounts`); the short form remains the convenient default when segments are unique.
-
-## Three-tier inclusion rules
-
-| Tier | Module | May depend on |
-|------|--------|--------------|
-| `core/` | Substrate machinery | Nothing inside `canvas/` |
-| **construct-kit** (`vocab/registry`, `vocab/construct`) | Vocabulary *machinery*: the tag-definition registry (data) + the registry-driven `construct/build` interpreter | `core/` only |
-| `construction.clj` | Non-opt-out lifts | `core/` + construct-kit |
-| `vocab/*` | Opt-in vocabularies | `core/` + construct-kit; never `construction.clj`, never each other's methodology |
-
-The **construct-kit** is the one shared dependency `construction.clj` and `vocab/*` may take *beyond* `core/`. It is machinery for *declaring* vocabularies — the registry as data plus the generic interpreter that turns a tag-definition + payload into substrate datoms — not a methodology, so depending on it does not couple one methodology to another (which is what "never each other" protects). The interpreter is kind-agnostic (it reads tag-definitions; it hardcodes no kinds); the registry is the fukan-specific vocabulary data it consumes.
-
-Canvas ports (in `canvas/`) may require any combination of `construction` and `vocab.*` namespaces, plus `core/helpers` and `core/shape` directly when needed.
-
-## Ownership-on-owner principle
-
-Module ownership flows via `:module/child` Relations on the owner, not via back-references on the owned entity. Affordances, States, and Types carry no `:module` field. The `within-module` helper in `core/helpers.clj` emits `:module/child` datoms automatically.
-
-## Canvas conventions
-
-**Name+role disambiguation.** A canvas module may declare multiple entities with the same `:entity/name` provided they have distinct `:affordance/role` values. The canonical example is the rule + invariant pair in `canvas/validation/*` — a single behavioral commitment expressed from two angles: a reactive `(rule "X" ...)` (role `:canvas/rule`) and a timeless `(invariant "X" ...)` (role `:canvas/invariant`). Reference resolution disambiguates such pairs via the `(name, role)` tuple, where role is unambiguous from context (a `when`-trigger position resolves to the rule, a `holds-that` position to the invariant). `canvas-source/build-canvas-db` emits an informational stderr warning for each collision so the author can confirm the distinct roles are intentional; it never throws.
-
-**`^:export` for dynamically-invoked vars.** Vars that are reachable only through dynamic dispatch — the SCI sandbox surface (`fukan.agent.api`, `fukan.agent.system`) or registry-style discovery (every canvas module's `build-canvas`) — should carry `^:export` metadata. Both `.clj-kondo/config.edn` and `.lsp/config.edn` honor `:exclude-when-meta #{:export}`, so the metadata alone is enough; no per-namespace config edit needed. Prefer `^:export` over per-namespace exemption entries whenever the var-level claim is honest.
-
-**Per-namespace lint exemptions live in both `.clj-kondo/config.edn` AND `.lsp/config.edn`.** clojure-lsp doesn't honor clj-kondo's per-namespace config, so namespace-wide `unused-public-var` exemptions must be mirrored in both files. The cases that warrant a namespace-wide exemption rather than `^:export`: trial-run scaffolding (e.g. `fukan.distributed.*`), test fixtures, and the rare namespace where every public var is sandbox surface and decorating each one would be noisier than naming the namespace. When adding a namespace to one file's exemption list, add it to the other.
+**clj-kondo CLI is ground truth.** The defstructure DSL is taught to clj-kondo via
+`:hooks` (each new `defstructure` macro is registered there). Editor
+`not-a-function` / `unused-public-var` flashes on defstructure bodies are false
+positives without the hook cache; the canonical full-classpath
+`clojure -M -m clj-kondo.main --lint src test canvas demos` is authoritative.
 
 ## REPL workflow
 
-- **After editing a canvas spec**: use `(refresh)` — reloads changed code + rebuilds model (Phase 0–6).
-- **After editing handler/routes/infra**: use `(reset)` — full server restart (recreates handler).
-- **After adding a new canvas file**: use `(reset)` (or `bin/fukan reset`). Canvas files under `canvas/**/*.clj` are auto-discovered — no registry edit required.
-- **After adding a new projection/lens/scenario file** under `src/fukan/canvas/{project,lens,instruct}/`: edit the loader's `:require` list (the per-subsystem loader namespace) AND run `(reset)`. The reset path reloads dynamic-load loaders, so the new defmethod/var registers without a JVM restart.
-- **After adding a new agent-api fn** in `src/fukan/agent/api.clj`: run `(reset)`. The reset path reloads `fukan.agent.api` and rebuilds the SCI context so the new fn appears in `bin/fukan eval` calls without a JVM restart.
-- **`require :reload` caveat**: REMOVING a var (projection-defmethod, agent-api defn, etc.) requires a full JVM restart (`clj -M:run`). `require :reload` re-evaluates top-level forms but does NOT unmap removed defs — the var lingers in the namespace. Similarly, `defmulti` has defonce semantics — `(remove-method …)` is needed to clear a registration, and `(reset)` doesn't do that. Adding new vars/files is the supported case; removing/renaming is the JVM-restart case.
+The serving daemon is paused, so the loop is **in-process** (`clj -M:dev`), over the
+structure substrate which is the model:
+
+- `(go)` — load the model (`build-model`, defaults to a `"src"` code-root so the
+  Clojure extractor merges code onto the design graph).
+- `(refresh)` — reload changed code + rebuild the held model. Use after editing a
+  canvas spec or any `src/` code.
+- `(reset)` — reload + rebuild from scratch. Use after adding a new canvas file or
+  removing/renaming a var (a removed `defmethod`/`defn` lingers until a clean reset).
+- `(status)` — report model state. `(drift)` — report unrealized modelled
+  capabilities via the correspondence laws.
+- Build a db directly: `(s/with-structures (s/within-module "m" …))`, query with
+  `d/q`, run `(s/check db)`.
 - **Never** use `remove-ns`, `require :reload`, or `(reload/reload)` directly.
-- `(status)` shows server/model state.
-- nREPL runs on port 7889, web UI on port 8080.
 
-The REPL cycle for canvas work: **edit canvas file → `(refresh)` → browser refresh**.
-
-## Architecture
-
-- Handler fetches model per-request via `(infra-model/get-model)` — no restart needed for model changes.
-- `defonce` atoms in infra survive reloads — `remove-ns` destroys them and orphans servers.
-- clj-reload tracks file timestamps; `{:only :loaded}` forces reload regardless.
-- fukan analyzes itself: canvas files are both the design surface AND the analysis target.
+nREPL runs on port 7889 (`clj -M:nrepl`).
 
 ## Build pipeline
 
-Phase 0: canvas ingestion (`canvas-source/build`) → Phase 4: structural validation → Phase 5: constraint evaluation → Phase 6: Clojure analyzer.
-
-Legacy Allium/Boundary parse phases (1–3) are retired.
+`build-model code-root` (`model/pipeline.clj`): ingest the `canvas/` design specs
+(`canvas-source/build`); when a `code-root` exists AND an extractor is registered,
+merge the extracted code structures onto the same graph and re-resolve cross-refs.
+`(structure/check db)` then runs all laws — including the correspondence laws — so
+model↔code drift surfaces as violations. The legacy Allium/Boundary parse phases
+and the old Phase 4–6 analyzer are retired.
 
 ## Jujutsu workflow conventions
 
-This repo uses Jujutsu (jj). Always check `jj st` before starting work. If `@` has existing changes, run `jj new` to start clean. Commit per logical change:
+This repo uses Jujutsu (jj). Always check `jj st` before starting work. If `@` has
+existing changes, run `jj new` to start clean. Commit per logical change:
 
 ```
 jj desc -m "type(scope): short description"
 jj new
 ```
 
-Never use git commands directly — jj and git have different object models and mixing them corrupts history.
+Never use git commands directly — jj and git have different object models and
+mixing them corrupts history.
 
 ## Key Files
 
-- `dev/user.clj` — REPL helpers (start/stop/restart/refresh/status)
-- `src/fukan/infra/model.clj` — model lifecycle (load/refresh/get)
-- `src/fukan/infra/server.clj` — HTTP server lifecycle
-- `src/fukan/web/handler.clj` — Ring routes, creates handler at server start
-- `src/fukan/model/pipeline.clj` — build pipeline (Phase 0–6)
-- `src/fukan/canvas/projection/canvas_source.clj` — canvas ingestion + projection to model map
-- `src/fukan/canvas/construction.clj` — non-opt-out canvas lifts
-- `src/fukan/canvas/vocab/` — opt-in vocabulary libraries
+- `dev/user.clj` — REPL helpers (`go`/`refresh`/`reset`/`status`/`drift`)
+- `src/fukan/infra/model.clj` — model lifecycle + the composition root (registers
+  the Clojure extractor)
+- `src/fukan/model/pipeline.clj` — `build-model` (canvas ingestion + extraction merge)
+- `src/fukan/canvas/core/structure.clj` — the `defstructure` primitive + `check`
+- `src/fukan/canvas/projection/canvas_source.clj` — canvas discovery, merge, cross-refs
+- `src/fukan/model/materialize.clj` — model→implementation-spec projection
+- `src/fukan/target/{clojure,correspondence}.clj` — code extraction + correspondence laws
+- `canvas/vocab/`, `canvas/model/` — fukan-on-fukan's vocabulary and models
