@@ -63,3 +63,19 @@
          (mapcat :offenders) (map first)
          (map #(:entity/name (d/entity db %)))
          set)))
+
+(defn unrealized-operations
+  "The DUAL of unrealized-stages — extracted Operations in `db` with no modelling Stage
+   of the same name in a corresponding module, as a set of names: code not covered by
+   the model. A query, not a law — unmodelled code is a coverage signal, not a violation
+   (you don't model every function)."
+  [db]
+  (->> (d/q '[:find ?on
+              :where [?o :structure/of :Operation] [?o :entity/name ?on]
+                     [?km :module/child ?o] [?km :entity/name ?kmn]
+                     (not-join [?on ?kmn]
+                       [?s :structure/of :Stage] [?s :entity/name ?on]
+                       [?cm :module/child ?s] [?cm :entity/name ?cmn]
+                       [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]
+            db)
+       (map first) set))

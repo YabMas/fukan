@@ -5,8 +5,10 @@
    probe-patterns implements the Instruction projected from the `patterns` probe;
    probe-integrity realizes the modelled `integrity` probe by composing the kernel's
    `check`."
-  (:require [datascript.core :as d]
-            [fukan.canvas.core.structure :as structure]))
+  (:require [clojure.string :as str]
+            [datascript.core :as d]
+            [fukan.canvas.core.structure :as structure]
+            [fukan.target.correspondence :as corr]))
 
 (defn probe-patterns
   "Recurring structures across the model. Returns {:lens \"patterns\" :gating false
@@ -51,12 +53,82 @@
     :gating  true
     :finding (mapv str (structure/check target-db))}))
 
+(defn probe-survey
+  "A structural overview (a View): how many nodes of each structure kind, optionally
+   scoped to `focus`. Returns {:lens \"survey\" :gating false :finding [\"N Kind\" …]}."
+  ([target-db] (probe-survey target-db nil))
+  ([target-db focus]
+   (let [in? (if focus (set focus) (constantly true))]
+     {:lens    "survey"
+      :gating  false
+      :finding (->> (d/q '[:find ?e ?k :where [?e :structure/of ?k]] target-db)
+                    (filter (fn [[e _]] (in? e)))
+                    (map second) frequencies (sort-by val >)
+                    (mapv (fn [[k n]] (str n " " (name k)))))})))
+
+(defn probe-consistency
+  "Stage-name ambiguity (a View): Stage names borne by more than one module — a
+   consistency signal, since name-based correspondence resolves a Stage by (name,
+   module). Empty ⇔ every modelled Stage name is unambiguous. Scopable to `focus`."
+  ([target-db] (probe-consistency target-db nil))
+  ([target-db focus]
+   (let [in? (if focus (set focus) (constantly true))]
+     {:lens    "consistency"
+      :gating  false
+      :finding (->> (d/q '[:find ?s ?sn ?mn
+                           :where [?s :structure/of :Stage] [?s :entity/name ?sn]
+                                  [?m :module/child ?s] [?m :entity/name ?mn]] target-db)
+                    (filter (fn [[s _ _]] (in? s)))
+                    (reduce (fn [acc [_ sn mn]] (update acc sn (fnil conj #{}) mn)) {})
+                    (filter (fn [[_ mods]] (> (count mods) 1)))
+                    (sort-by key)
+                    (mapv (fn [[sn mods]] (str sn " in " (count mods) " modules: " (str/join ", " (sort mods))))))})))
+
+(defn probe-tar-pit
+  "Complexity hotspots (a View): the most-connected nodes by relation degree (in +
+   out), top 10. Tangles worth attention. Scopable to `focus`."
+  ([target-db] (probe-tar-pit target-db nil))
+  ([target-db focus]
+   (let [in?  (if focus (set focus) (constantly true))
+         out  (map second (d/q '[:find ?r ?e :where [?r :rel/from ?e]] target-db))
+         ins  (map second (d/q '[:find ?r ?e :where [?r :rel/to ?e]] target-db))]
+     {:lens    "tar-pit"
+      :gating  false
+      :finding (->> (frequencies (concat out ins))
+                    (filter (fn [[e _]] (in? e)))
+                    (sort-by val >) (take 10)
+                    (mapv (fn [[e n]]
+                            (let [ent (d/entity target-db e)]
+                              (str n " edges: " (or (:entity/name ent) "(value)")
+                                   " (" (name (:structure/of ent)) ")")))))})))
+
+(defn probe-coverage
+  "Spec ↔ code coverage (a gating Signal): extracted Operations not covered by a
+   modelling Stage (code→spec gaps). Surfaces correspondence/unrealized-operations.
+   Empty ⇔ every Operation is modelled. Global — `focus` is accepted but ignored."
+  ([target-db] (probe-coverage target-db nil))
+  ([target-db _focus]
+   {:lens "coverage" :gating true :finding (vec (sort (corr/unrealized-operations target-db)))}))
+
+(defn probe-drift
+  "Spec ↔ code divergence (a gating Signal): modelled Stages not realized by an
+   Operation (spec→code gaps). Surfaces correspondence/unrealized-stages. Empty ⇔ the
+   model is fully realized. Global — `focus` is accepted but ignored."
+  ([target-db] (probe-drift target-db nil))
+  ([target-db _focus]
+   {:lens "drift" :gating true :finding (vec (sort (corr/unrealized-stages target-db)))}))
+
 (def implemented
-  "The realized probe leaves: probe name -> (model-db -> finding). The live probe
-   surface. Other modelled probes (survey/consistency/tar-pit/coverage/drift) are
-   modelled but not yet implemented."
-  {"patterns"  probe-patterns
-   "integrity" probe-integrity})
+  "The realized probe leaves: probe name -> (model-db -> finding). The full implemented
+   probe surface — the four Views (survey/patterns/consistency/tar-pit) and the three
+   gating inspects (integrity/coverage/drift)."
+  {"survey"      probe-survey
+   "patterns"    probe-patterns
+   "consistency" probe-consistency
+   "tar-pit"     probe-tar-pit
+   "integrity"   probe-integrity
+   "coverage"    probe-coverage
+   "drift"       probe-drift})
 
 (defn run
   "Run the implemented probe `probe-name` against `target-db`, optionally scoped to

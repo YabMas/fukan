@@ -26,8 +26,15 @@
     (s/within-module "probes"
       (Kind "Db") (Kind "Finding") (Kind "ProbeName") (Kind "FindingMap")
       (Stage "probe-patterns"  (in [target-db Db]) (out Finding))                  ; pure (datascript): recurring structures
+      (Stage "probe-survey"    (in [target-db Db]) (out Finding))                  ; counts by structure kind
+      (Stage "probe-consistency" (in [target-db Db]) (out Finding))               ; Stage-name ambiguity across modules
+      (Stage "probe-tar-pit"   (in [target-db Db]) (out Finding))                  ; top nodes by relation degree
       (Stage "probe-integrity" (in [target-db Db]) (out Finding)                   ; the integrity inspect: composes check
         (calls (across "core.structure" "check")))
+      (Stage "probe-coverage"  (in [target-db Db]) (out Finding)                   ; code→spec gaps
+        (calls (across "target.correspondence" "unrealized-operations")))
+      (Stage "probe-drift"     (in [target-db Db]) (out Finding)                   ; spec→code gaps
+        (calls (across "target.correspondence" "unrealized-stages")))
       (Stage "run"     (in [target-db Db]) (in [probe-name ProbeName]) (out Finding) (performs :throws)
         (calls probe-patterns probe-integrity))                                    ; dispatch to a registered leaf
       (Stage "run-all" (in [target-db Db]) (out FindingMap)                        ; run every implemented leaf

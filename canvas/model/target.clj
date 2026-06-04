@@ -29,6 +29,7 @@
 
     ;; the model↔code correspondence — drift as a query over the unified graph
     (s/within-module "target.correspondence"
-      (Kind "StructureDb") (Kind "StageName")
-      (Stage "unrealized-stages" (in [db StructureDb]) (out [StageName])          ; pure (datascript)
-        (calls (across "core.structure" "check"))))))
+      (Kind "StructureDb") (Kind "StageName") (Kind "OperationName")
+      (Stage "unrealized-stages" (in [db StructureDb]) (out [StageName])          ; spec→code gaps (via the law)
+        (calls (across "core.structure" "check")))
+      (Stage "unrealized-operations" (in [db StructureDb]) (out [OperationName])))))  ; code→spec gaps (a query)

@@ -4,6 +4,7 @@
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.projection.probe-code :as pc]
             [fukan.canvas.projection.probes :as probes]
+            [fukan.target.clojure :as target]
             [canvas.vocab.shape :refer [Kind]]))
 
 (deftest probe-patterns-honors-its-contract-and-holds
@@ -60,14 +61,35 @@
       (is (empty? (:finding empty-foc)) "scoped to an empty focus: no relations, no patterns")
       (is (= empty-foc run-foc) "run passes the focus through to the leaf"))))
 
+(deftest the-full-probe-surface-runs
+  (testing "all seven leaves run over the self-model and yield list-of-string findings"
+    (let [db  (cs/build)
+          all (probes/run-all db)]
+      (is (= #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
+             (set (keys all))) "the full implemented probe surface")
+      (is (seq (:finding (all "survey")))  "survey: counts per structure kind")
+      (is (seq (:finding (all "tar-pit"))) "tar-pit: connected hotspots")
+      (is (false? (:gating (all "survey"))) "survey is a View")
+      (is (true?  (:gating (all "drift")))  "drift is a gating Signal")
+      (is (every? string? (mapcat :finding (vals all))) "every finding is a list of strings"))))
+
+(deftest coverage-and-drift-surface-correspondence
+  (testing "over a unified model (self-model + sample code), the gating probes surface the gaps"
+    (let [db    (cs/merge-dbs [(cs/build) (target/extract "test/fixtures/target/sample.clj")])
+          drift (probes/run db "drift")
+          cov   (probes/run db "coverage")]
+      (is (seq (:finding drift)) "modelled Stages drift — sample shares no corresponding module")
+      (is (= #{"alpha" "beta" "delta"} (set (:finding cov)))
+          "sample's Operations are uncovered by the model (the coverage dual)"))))
+
 (deftest run-and-run-all-are-the-live-probe-surface
   (testing "run dispatches a named probe; run-all runs every implemented leaf"
     (let [db (cs/build)]
       (is (= (probes/probe-integrity db) (probes/run db "integrity"))
           "run dispatches by name to the implemented leaf")
       (let [all (probes/run-all db)]
-        (is (= #{"patterns" "integrity"} (set (keys all))) "every implemented probe ran")
+        (is (= 7 (count all)) "run-all runs every implemented leaf")
         (is (= "patterns" (:lens (all "patterns"))))
         (is (= "integrity" (:lens (all "integrity")))))
-      (is (thrown? clojure.lang.ExceptionInfo (probes/run db "survey"))
-          "an unimplemented (modelled-only) probe throws"))))
+      (is (thrown? clojure.lang.ExceptionInfo (probes/run db "no-such-probe"))
+          "an unregistered probe name throws"))))
