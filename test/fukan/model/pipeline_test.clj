@@ -25,7 +25,7 @@
 
 (deftest build-model-ingests-canvas-specs-into-a-structure-db
   (testing "the model is the merged structure db over the canvas/ defstructure specs"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "infra.model")
           "the canvas/infra/model spec is discovered and ingested")
       ;; infra is now modelled with the fukan-on-fukan grammar (Stage/Kind), not
@@ -37,7 +37,7 @@
 
 (deftest pipeline-links-across-to-canvas-source
   (testing "build-model is a thin entry point that calls across to canvas-source/build"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "model.pipeline")
           "the canvas/pipeline/model spec is ingested")
       ;; post-prune the pipeline subsystem is just build-model — the merge/ingest
@@ -61,7 +61,7 @@
 
 (deftest canvas-source-model-shares-the-db-shape
   (testing "in the canvas_source self-model, the Db type-shape (4 uses) is one node"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?s
                              :where [?s :structure/of :Shape] [?s :val/kind "type"]
                                     [?r :rel/from ?s] [?r :rel/kind :type]
@@ -72,7 +72,7 @@
 
 (deftest canvas-source-effects-are-captured-and-value-identified
   (testing "Stage effects are recorded; :io (performed by 4 stages) is one shared node"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of :Effect] [?e :val/name "io"]] db)))
           "the :io effect is value-identified across every stage that performs it")
       (is (seq (d/q '[:find ?r
@@ -84,7 +84,7 @@
 
 (deftest kernel-meta-model-captures-structure-composition
   (testing "the reflexive kernel model: Structure is composed of Slot and Law"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "core.structure"))
       (is (= #{"slot" "law" "value"}
              (set (map first (d/q '[:find ?n
@@ -111,7 +111,7 @@
 
 (deftest overview-model-makes-the-model-the-hub
   (testing "the top-level overview: every faculty connects to the Model, which is the hub"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "fukan"))
       ;; the Model faculty has the most flow connections (everything orbits it)
       (is (<= 6 (count (d/q '[:find ?r
@@ -147,14 +147,14 @@
 
 (deftest the-self-model-satisfies-the-realized-by-law
   (testing "every model-reading faculty in the real overview is backed by a realizing module"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (not (contains? (set (map :law (s/check db)))
                           "a model-reading faculty is realized by a module"))
           "Lens/Probe/Projection/Agent each name a realizing module"))))
 
 (deftest cross-module-ref-resolves-post-merge
   (testing "overview's Structure faculty is realized-by → the core.structure module node"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
                       :where [?f :structure/of :Faculty] [?f :entity/name "Structure"]
                              [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
@@ -172,14 +172,14 @@
 
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "lens"))
       (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
                        (names-of db :Lens))))))
 
 (deftest probe-acts-read-through-a-lens-yielding-findings
   (testing "the probe view: a probe reads the model THROUGH a lens (cross-module) → a finding; inspect = gating"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "probe"))
       (is (set/subset? #{"survey" "patterns" "integrity" "drift"} (names-of db :Probe)))
       ;; lens ∘ act composition: the patterns probe reads through the patterns lens,
@@ -200,7 +200,7 @@
 
 (deftest overview-lens-and-probe-faculties-interlock-with-their-views
   (testing "the top-level Lens and Probe faculties are realized-by their modules (cross-ref interlock)"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
                       :where [?f :structure/of :Faculty] [?f :entity/name "Lens"]
                              [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
@@ -226,7 +226,7 @@
 
 (deftest projection-subsystem-modelled-as-target-representations
   (testing "the projection view: model re-presented into targets through a lens + source→artifact mappings"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "projection"))
       ;; Blueprint (code) + DriftClose (instructions — instruct ⊂ projection); more to come
       (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
@@ -254,7 +254,7 @@
 
 (deftest a-lens-is-reused-across-acts
   (testing "the payoff: ONE drift lens feeds BOTH the drift inspect-probe AND the drift-close projection"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :Lens] [?l :entity/name "drift"]] db)))
           "there is exactly one drift lens node")
       (is (seq (d/q '[:find ?l
@@ -276,7 +276,7 @@
 
 (deftest agent-composes-its-own-tools-from-primitives
   (testing "the agent view: each Tool is composed from primitive lenses+acts — bundling or chaining"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "agent"))
       (is (set/subset? #{"health-audit" "tangle-diagnosis" "audit-and-close" "contract-scaffold"}
                        (names-of db :Tool)))
@@ -302,7 +302,7 @@
 
 (deftest one-lens-feeds-probe-projection-and-composed-tools
   (testing "capstone: the single drift lens is used by an inspect-probe, a projection, AND a composed tool"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :Lens] [?l :entity/name "drift"]] db)))
           "there is exactly one drift lens node")
       (is (seq (d/q '[:find ?t
@@ -314,7 +314,7 @@
 
 (deftest collaboration-loop-modelled-as-a-closed-cycle
   (testing "the collab view: phases form a closed OODA cycle, each (mostly) exercising a faculty"
-    (let [db (pipeline/build-model "src")]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "collab"))
       (is (set/subset? #{"Intend" "Focus" "Observe" "Reason" "Apply" "Reinspect"}
                        (names-of db :Phase)))
@@ -346,7 +346,7 @@
 
 (deftest findings-carry-inline-holds-predicates
   (testing "Patterns and IntegrityReport carry an inline holds predicate form in the model"
-    (let [db (pipeline/build-model "src")
+    (let [db (pipeline/build-model nil)
           pred (fn [nm] (:val/holds-pred
                           (d/entity db (ffirst (d/q '[:find ?f :in $ ?n
                                                       :where [?f :entity/name ?n] [?f :structure/of :Finding]]
@@ -366,7 +366,7 @@
 
 (deftest patterns-finding-carries-its-contract
   (testing "the Patterns finding declares a shape + holds in the real model"
-    (let [db  (pipeline/build-model "src")
+    (let [db  (pipeline/build-model nil)
           fid (ffirst (d/q '[:find ?f
                              :where [?f :entity/name "Patterns"] [?f :structure/of :Finding]] db))]
       (is (some? (:val/holds (d/entity db fid))) "Patterns has a holds invariant")
@@ -377,7 +377,7 @@
 
 (deftest integrity-finding-carries-its-contract
   (testing "the IntegrityReport finding declares a shape + holds in the real model"
-    (let [db  (pipeline/build-model "src")
+    (let [db  (pipeline/build-model nil)
           fid (ffirst (d/q '[:find ?f
                              :where [?f :entity/name "IntegrityReport"]
                                     [?f :structure/of :Finding]] db))]
