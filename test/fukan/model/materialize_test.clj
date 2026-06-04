@@ -4,16 +4,25 @@
             [datascript.core :as d]
             [canvas.vocab.lens :refer [Lens]]
             [canvas.vocab.projection :refer [Projection]]
+            [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.model.materialize :as m]
-            [fukan.model.pipeline :as pipeline]))
+            [fukan.model.pipeline :as pipeline]
+            ;; loaded so the vocab-derived rules carry an Operation kind-rule (coverage /
+            ;; drift lenses reference it) and the drift lens's correspondence predicate
+            ;; resolves
+            [fukan.target.clojure :as target]
+            [fukan.target.correspondence :as corr]))
 
 ;; materialize is the pure LOWER direction — it projects the design model alone
 ;; (build-model nil = design-only, no extraction).
 
 (defn- by-name [db n]
   (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
+
+(defn- by-kind-name [db kind n]
+  (ffirst (d/q '[:find ?e :in $ ?k ?n :where [?e :structure/of ?k] [?e :entity/name ?n]] db kind n)))
 
 (deftest render-dispatches-per-projection-and-kind-and-composes-references
   (testing "render [Blueprint :Stage] composes its :Shape renders (via dispatch) into the signature"
@@ -77,6 +86,32 @@
           spec (m/materialize-focus db "Blueprint" '[(Stage ?n) (in-module ?n "materialize")])]
       (is (str/includes? spec "Implement `materialize-view`")
           "the materialize module's own modelled Stage is projected"))))
+
+(deftest shipped-lenses-with-queries-are-evaluable
+  (testing "every retrofitted self-model lens resolves to a node-set (no prose-only throw)"
+    (let [model (pipeline/build-model nil)
+          code  (target/extract "test/fixtures/target/sample.clj")   ; Operations, so coverage/drift resolve
+          db    (cs/merge-dbs [model code])]
+      ;; the predicate the drift lens query invokes
+      (is (corr/module-corresponds? "target.clojure" "fukan.target.clojure"))
+      (doseq [ln ["survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"]]
+        (let [focus (lens/evaluate-lens db (by-kind-name db :Lens ln))]
+          (is (set? focus) (str "lens " ln " evaluates to a node-set"))))
+      (is (seq (lens/evaluate-lens db (by-kind-name db :Lens "survey")))
+          "survey (whole model) is non-empty")
+      (is (seq (lens/evaluate-lens db (by-kind-name db :Lens "coverage")))
+          "coverage selects the extracted Operations"))))
+
+(deftest materialize-projection-runs-the-shipped-blueprint
+  (testing "Blueprint (through the now-query-bearing survey lens) materializes the model's Stages"
+    (let [db  (pipeline/build-model nil)
+          out (m/materialize-projection db (by-kind-name db :Projection "Blueprint"))]
+      ;; survey selects the whole model; compose renders only the kinds Blueprint covers
+      ;; (named Stages), not every node as a bare name
+      (is (str/includes? out "Implement `extract`"))
+      (is (str/includes? out "Implement `check`") "Stages from across modules are projected")
+      (is (> (count (re-seq #"This is an implementation specification" out)) 3)
+          "several Stages projected; bare Kinds/Concepts are not rendered standalone"))))
 
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"

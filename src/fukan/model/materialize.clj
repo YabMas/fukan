@@ -116,10 +116,22 @@
 
 ;; ── the views: compose a projection's renders over a focus ───────────────────
 
+(defn- renders?
+  "Whether `projection` has a SPECIFIC renderer for a node — it is named (anonymous
+   value shapes compose inline, never standalone) and `[projection kind]` resolves to
+   something other than the :default (name) method. So a whole-model focus through a
+   projection yields only the kinds that projection actually re-presents."
+  [db projection eid]
+  (let [e (d/entity db eid)]
+    (and (:entity/name e)
+         (not= (get-method render [projection (:structure/of e)])
+               (get-method render :default)))))
+
 (defn- compose
-  "Render every node in `nodes` (a set of eids) under `projection` and join."
+  "Render the focus `nodes` (a set of eids) `projection` actually covers, and join."
   [db projection nodes]
   (->> nodes
+       (filter #(renders? db projection %))
        (sort-by #(:entity/name (d/entity db %)))
        (map #(render db projection %))
        (str/join "\n\n")))
