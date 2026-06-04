@@ -20,28 +20,36 @@
 
    Each finding string is formatted as: \"<count>× <from-tag> -[<rel-kind>]-> <to-tag>\",
    sorted descending by occurrence count."
-  [target-db]
-  {:lens    "patterns"
-   :gating  false
-   :finding (->> (d/q '[:find ?ft ?rk ?tt (count ?r)
-                         :where [?r :rel/from ?f] [?r :rel/kind ?rk] [?r :rel/to ?t]
-                                [?f :structure/of ?ft] [?t :structure/of ?tt]]
-                       target-db)
-                 (filter #(> (last %) 1))
-                 (sort-by last >)
-                 (mapv (fn [[ft rk tt cnt]]
-                         (str cnt "× " ft " -[" rk "]-> " tt))))})
+  ([target-db] (probe-patterns target-db nil))
+  ([target-db focus]
+   (let [in?  (if focus (set focus) (constantly true))
+         rows (d/q '[:find ?r ?f ?ft ?rk ?t ?tt
+                     :where [?r :rel/from ?f] [?r :rel/kind ?rk] [?r :rel/to ?t]
+                            [?f :structure/of ?ft] [?t :structure/of ?tt]]
+                   target-db)]
+     {:lens    "patterns"
+      :gating  false
+      :finding (->> rows
+                    (filter (fn [[_r f _ft _rk t _tt]] (and (in? f) (in? t))))  ; scope to focus endpoints
+                    (map (fn [[_r _f ft rk _t tt]] [ft rk tt]))
+                    frequencies                                                  ; count relations per triplet
+                    (filter #(> (val %) 1))
+                    (sort-by val >)
+                    (mapv (fn [[[ft rk tt] cnt]]
+                            (str cnt "× " ft " -[" rk "]-> " tt))))})))
 
 (defn probe-integrity
   "The canonical integrity inspect: the kernel's `check` (laws -> violations) surfaced
    as a gating Finding. This realizes the modelled `integrity` probe — the same probe
    that `:calls` the modelled `check` capability. Returns {:lens \"integrity\"
    :gating true :finding <a list of violation strings>}; an empty finding means the
-   model's laws all hold."
-  [target-db]
-  {:lens    "integrity"
-   :gating  true
-   :finding (mapv str (structure/check target-db))})
+   model's laws all hold. Integrity is GLOBAL — laws span the whole model — so an
+   optional `focus` is accepted (for a uniform probe signature) but ignored."
+  ([target-db] (probe-integrity target-db nil))
+  ([target-db _focus]
+   {:lens    "integrity"
+    :gating  true
+    :finding (mapv str (structure/check target-db))}))
 
 (def implemented
   "The realized probe leaves: probe name -> (model-db -> finding). The live probe
@@ -51,13 +59,15 @@
    "integrity" probe-integrity})
 
 (defn run
-  "Run the implemented probe `probe-name` against `target-db`, returning its finding.
-   Throws if no leaf is implemented for that name."
-  [target-db probe-name]
-  (if-let [f (implemented probe-name)]
-    (f target-db)
-    (throw (ex-info (str "no implemented probe " (pr-str probe-name))
-                    {:probe probe-name :available (vec (keys implemented))}))))
+  "Run the implemented probe `probe-name` against `target-db`, optionally scoped to
+   `focus` (a node-set — the probe reads only that sub-graph), returning its finding.
+   So a refined focus chains into a probe. Throws if no leaf is implemented."
+  ([target-db probe-name] (run target-db probe-name nil))
+  ([target-db probe-name focus]
+   (if-let [f (implemented probe-name)]
+     (f target-db focus)
+     (throw (ex-info (str "no implemented probe " (pr-str probe-name))
+                     {:probe probe-name :available (vec (keys implemented))})))))
 
 (defn run-all
   "Run every implemented probe against `target-db` -> {probe-name finding}."

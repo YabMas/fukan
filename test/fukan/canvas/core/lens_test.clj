@@ -29,6 +29,21 @@
       (is (= #{"y" "z"} (names db (lens/evaluate-lens db (by-name db "x-links"))))
           "relation traversal — scope is just datalog in the one query, no second knob"))))
 
+(deftest refine-narrows-a-focus-to-members-also-matching-clauses
+  (testing "refine intersects a focus with a further query — lens-within-lens; acts chain over it"
+    (let [db    (s/with-structures
+                  (s/within-module "m"
+                    (Widget "x" (links y z)) (Widget "y") (Widget "z"))
+                  (s/within-module "other" (Widget "q")))
+          all   (lens/focus-nodes db '[(Widget ?n)])                 ; x y z q
+          in-m  (lens/refine db all '[(in-module ?n "m")])]          ; narrow to module m
+      (is (= #{"x" "y" "z" "q"} (names db all)))
+      (is (= #{"x" "y" "z"} (names db in-m)) "refined to module m")
+      ;; chaining: a focus refined again narrows further (here: x's links, then those in m)
+      (is (= #{"y" "z"} (names db (lens/refine db (lens/focus-nodes db '[(named ?r "x") (links ?r ?n)])
+                                               '[(in-module ?n "m")])))
+          "refine composes — a focus narrowed step by step"))))
+
 (deftest prose-only-lens-is-not-evaluable
   (testing "a lens with no selection query throws (prose focus alone isn't evaluable)"
     (let [db (s/with-structures

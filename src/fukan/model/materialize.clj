@@ -173,11 +173,18 @@
   [db lens-eid]
   (compose db "Blueprint" (lens/evaluate-lens db lens-eid)))
 
+(defn materialize-over
+  "Compose `projection` over an explicit `focus` (a node-set) — the focus-consuming
+   entry, so a REFINED focus (focus-nodes → refine → …) renders straight into a
+   projection. Chaining is plain composition."
+  [db projection focus]
+  (compose db projection focus))
+
 (defn materialize-focus
   "Compose `projection` over an ad-hoc focus: the nodes selected by datalog `clauses`
    (binding ?n). The lensless entry — no stored Lens required."
   [db projection clauses]
-  (compose db projection (lens/focus-nodes db clauses)))
+  (materialize-over db projection (lens/focus-nodes db clauses)))
 
 (defn materialize-module
   "Compose `projection` over the Stages owned by `module-name`. The live by-module entry."

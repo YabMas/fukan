@@ -37,4 +37,8 @@
         (calls (across "core.structure" "vocab-rules")))
       ;; read a stored lens's :val/query, then delegate to focus-nodes
       (Stage "evaluate-lens" (in [db Db]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
+        (calls focus-nodes))
+      ;; refined focus (lens-within-lens): narrow a focus to members also matching clauses —
+      ;; the composable step acts chain over
+      (Stage "refine" (in [db Db]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
         (calls focus-nodes)))))

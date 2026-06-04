@@ -10,7 +10,8 @@
    This is the generic mechanic; the `Lens` primitive that carries the query is the
    self-model's own vocab. No cycle: it depends on the kernel for `vocab-rules`, the
    kernel does not depend back."
-  (:require [datascript.core :as d]
+  (:require [clojure.set :as set]
+            [datascript.core :as d]
             [fukan.canvas.core.structure :as s]))
 
 (defn focus-nodes
@@ -31,3 +32,11 @@
       (throw (ex-info "lens has no selection query — not evaluable"
                       {:lens lens-eid})))
     (focus-nodes db clauses)))
+
+(defn refine
+  "Narrow a `focus` (a node-set) to its members that ALSO match `clauses` (binding `?n`,
+   evaluated with the vocab-derived rules) — lens-within-lens. The composable step: a
+   focus refined by a further query, so acts CHAIN by passing a refined focus forward
+   (e.g. focus-nodes → refine → materialize-over / a scoped probe)."
+  [db focus clauses]
+  (set/intersection (set focus) (focus-nodes db clauses)))

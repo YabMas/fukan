@@ -15,15 +15,18 @@
   (s/with-structures
     (s/within-module "materialize"
       (Kind "StructureDb") (Kind "Lens") (Kind "Instruction")
-      (Kind "Projection") (Kind "ProjectionName") (Kind "ModuleName") (Kind "Clause")
+      (Kind "Projection") (Kind "ProjectionName") (Kind "ModuleName") (Kind "Clause") (Kind "Eid")
       ;; render-base is a defmulti dispatching on [base-projection, kind] — the open
       ;; extension point, not modelled as a Stage (a defmulti isn't extracted as an
       ;; Operation). The four public entries compose its renders over a focus,
       ;; parameterized by the PROJECTION (a base, or a contextualization framing one):
       (Stage "materialize-view" (in [db StructureDb]) (in [lens Lens]) (out Instruction))  ; lens focus, Blueprint default
+      ;; the focus-consuming entry — a refined focus (core.lens/refine) renders straight in
+      (Stage "materialize-over" (in [db StructureDb]) (in [projection ProjectionName]) (in [focus [Eid]])
+        (out Instruction))
       (Stage "materialize-focus" (in [db StructureDb]) (in [projection ProjectionName]) (in [clauses [Clause]])
         (out Instruction)                                                                  ; ad-hoc focus
-        (calls (across "core.lens" "focus-nodes")))
+        (calls materialize-over (across "core.lens" "focus-nodes")))
       (Stage "materialize-module" (in [db StructureDb]) (in [projection ProjectionName]) (in [module ModuleName])
         (out Instruction)
         (calls materialize-focus))

@@ -145,6 +145,19 @@
       (is (str/includes? out "Implement `extract`")
           "and the body is Blueprint's specs — composed with zero Refactor-specific renderers"))))
 
+(deftest acts-chain-over-a-refined-focus
+  (testing "focus → refine → materialize-over composes by plain threading — no named Tool"
+    (let [db       (pipeline/build-model nil)
+          stages   (lens/focus-nodes db '[(Stage ?n)])                       ; every Stage
+          in-tc    (lens/refine db stages '[(in-module ?n "target.clojure")]) ; refined to one module
+          rendered (m/materialize-over db "Blueprint" in-tc)]                 ; project the refined focus
+      (is (set? stages) "focus-nodes / refine yield node-sets — the composable currency")
+      (is (< (count in-tc) (count stages)) "refine narrowed the focus")
+      (is (str/includes? rendered "Implement `analyze`"))
+      (is (str/includes? rendered "Implement `extract`"))
+      (is (not (str/includes? rendered "Implement `materialize-view`"))
+          "the refine step bounded the focus to target.clojure — other modules' Stages excluded"))))
+
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"
     (let [model    (pipeline/build-model nil)

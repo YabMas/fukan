@@ -50,6 +50,16 @@
       (is (every? string? (:finding result)) "violations rendered as [Str]")
       (is (empty? (:finding result)) "the self-model's laws all hold — no violations"))))
 
+(deftest probe-patterns-scopes-to-a-focus
+  (testing "a probe reads only its focus sub-graph — so a refined focus chains into a probe"
+    (let [db        (cs/build)
+          whole     (probes/probe-patterns db)
+          empty-foc (probes/probe-patterns db #{})            ; no nodes in focus → no relations
+          run-foc   (probes/run db "patterns" #{})]
+      (is (seq (:finding whole)) "unscoped: patterns across the whole model")
+      (is (empty? (:finding empty-foc)) "scoped to an empty focus: no relations, no patterns")
+      (is (= empty-foc run-foc) "run passes the focus through to the leaf"))))
+
 (deftest run-and-run-all-are-the-live-probe-surface
   (testing "run dispatches a named probe; run-all runs every implemented leaf"
     (let [db (cs/build)]
