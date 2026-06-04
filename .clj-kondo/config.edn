@@ -192,4 +192,5 @@
    demos.access-control.vocab.core/Role       hooks.fukan.structure/instance
    demos.type-system.vocab.core/Field         hooks.fukan.structure/instance
    demos.type-system.vocab.core/Type          hooks.fukan.structure/instance
-   fukan.canvas.core.rules-test/RuleThing     hooks.fukan.structure/instance}}}
+   fukan.canvas.core.rules-test/RuleThing     hooks.fukan.structure/instance
+   fukan.canvas.core.lens-test/Widget         hooks.fukan.structure/instance}}}
