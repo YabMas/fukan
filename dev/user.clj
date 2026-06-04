@@ -7,7 +7,10 @@
    with `d/q`, run constraints — all in-process. `refresh` reloads code and
    rebuilds the held model; `status` reports the model."
   (:require [clj-reload.core :as reload]
-            [fukan.infra.model :as infra-model]))
+            [fukan.infra.model :as infra-model]
+            ;; loads the model↔code correspondence laws into the dev session so a
+            ;; `check`/`(drift)` over the unified held model surfaces drift
+            [fukan.target.correspondence :as corr]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -43,6 +46,19 @@
         (println "Refreshed."))
     (println "No model loaded yet. Use (go) first.")))
 
+(defn drift
+  "Model↔code drift in the held (unified) model: modelled Stages with no realizing
+   function of the same name. Empty ⇔ the implementation fully realizes every
+   modelled capability. (Build with a code-root — `(go)` defaults to \"src\" — so
+   the held model carries the extracted code.)"
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [d (corr/unrealized-stages m)]
+      (if (empty? d)
+        (println "No drift — every modelled Stage is realized in code.")
+        (println "Drift —" (count d) "modelled Stage(s) with no realizing function:" d)))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn status []
   (println "Model:" (if-let [m (infra-model/get-model)]
                       (str (count (:primitives m)) " primitives, "
@@ -54,4 +70,5 @@
   (go {})
   (reset)
   (refresh)
+  (drift)
   (status))
