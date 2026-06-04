@@ -25,12 +25,13 @@ Everything reduces to three datom shapes:
   nodes carry no module back-reference).
 - **Reified relation** — a slot whose target is another structure becomes a relation
   *entity*: `:rel/from`, `:rel/kind` (the slot keyword), `:rel/to`. Optional
-  `:rel/label` (from `:label-as`), `:rel/order` (for `ordered` slots, position), and
-  a `:payload` (a companion code-form). A not-yet-resolved cross-module target is
-  held as `:rel/to-ref [module name]` and resolved post-merge.
+  `:rel/label` (from an authored `[label target]` clause) and `:rel/order` (for
+  `ordered` slots, position). A not-yet-resolved cross-module target is held as
+  `:rel/to-ref [module name]` and resolved post-merge.
 - **Scalar leaf** — a slot whose target is a scalar type (`:Bool`, `:String`, …)
   stores its value directly as `:val/<slot>` on the node, with an auto-generated
-  type-check law rather than a reified relation.
+  type-check law rather than a reified relation. A scalar slot's optional `:payload`
+  rides as a companion `:val/<payload>` datom on the same node.
 
 ## Value identity
 
@@ -83,11 +84,14 @@ throwing on an unresolved reference.
 - **`evaluate-lens`** runs a Lens's selection `:query` (a datalog `:where`
   clause-vector binding `?n`) against the vocab-derived rules → the focus node-set
   (the sub-graph being those nodes and their induced relations). One expression
-  handles both selection and traversal.
-- **`render` / `materialize-view`** (`model/materialize.clj`) project nodes down to
-  implementation-instruction text: `render` is a multimethod on `:structure/of`,
-  composing along references by re-dispatch; `materialize-view` composes the renders
-  over a lens's focus.
+  handles both selection and traversal; `refine` narrows a focus by a further query
+  (set-intersection) so a refined focus chains forward into a probe or materialize.
+- **`render-base` / `materialize-view`** (`model/materialize.clj`) project nodes down
+  to target text: `render-base` is a multimethod on `[base kind]` (the projection
+  base × the node's `:structure/of`), composing along references by re-dispatch under
+  the same base; a *contextualization* projection renders through a base and frames
+  its output. `compose` / `materialize-view` / `materialize-projection` compose the
+  renders over a lens's focus.
 
 ## The build pipeline
 

@@ -1,21 +1,20 @@
 (ns fukan.canvas.core.structure
-  "The lean-kernel structure primitive (Tier 2 of the rebuild).
+  "The lean-kernel structure primitive — the heart of the kernel.
 
-   `defstructure` fuses the three pruned half-languages (defconstructor +
-   registry/construct + check) into one form, on the insight that *a slot is a
-   relation with a law*: one slot declaration yields composition (a Relation),
-   authoring grammar (an instantiation clause), and a datalog constraint at once.
+   `defstructure` fuses composition, authoring grammar, and constraint into one
+   form, on the insight that *a slot is a relation with a law*: one slot declaration
+   yields composition (a Relation), authoring grammar (an instantiation clause), and
+   a datalog constraint at once. The structure substrate IS the model — no separate
+   model-map, no privileged kinds.
 
-   A structure instance is a Node tagged `:structure/of <Tag>`; a slot value is a
-   reified Relation (`:rel/from` → `:rel/to`, `:rel/kind`, optional `:rel/label` /
-   `:rel/wrap`) — so type combinators ride as a compact `:rel/wrap` annotation
-   (design decision 1b) and every cross-reference stays queryable. `check` runs
-   every structure's laws (slot-cardinality laws + free `law`s, recursive datalog
-   rules supported) over a db.
-
-   Standalone for now: its own minimal, classification-free schema. The Tier-2
-   build path rewires canvas_source/store onto this and deletes the old machinery.
-   See doc/specs/2026-05-31-defstructure-design.md."
+   A structure instance is a Node tagged `:structure/of <Tag>`. A slot whose target
+   is another structure reifies a Relation (`:rel/from` → `:rel/to`, `:rel/kind`,
+   optional `:rel/label` from an authored `[label target]` clause, `:rel/order` for
+   ordered slots) so every cross-reference stays queryable; a slot whose target is a
+   scalar stores a `:val/<slot>` leaf with an auto-generated type-check law. `check`
+   runs every structure's laws (slot-cardinality laws + free `law`s, recursive
+   datalog rules supported) over a db, injecting the vocab-derived rules so laws read
+   at domain altitude. The schema is minimal and classification-free."
   (:require [datascript.core :as d]
             [fukan.canvas.core.rules :as rules]))
 
@@ -27,13 +26,12 @@
    :entity/doc   {}                                            ; instance documentation (the (doc ...) clause)
    :structure/of {:db/index true}                              ; the structure tag of an instance
    :module/child {:db/cardinality :db.cardinality/many :db/valueType :db.type/ref}
-   ;; reified slot relations — the seam that carries :rel/label and :rel/wrap
+   ;; reified slot relations — the seam carrying :rel/label / :rel/order / cross-module :rel/to-ref
    :rel/id       {:db/unique :db.unique/identity}
    :rel/from     {:db/valueType :db.type/ref}
    :rel/kind     {:db/index true}
    :rel/to       {:db/valueType :db.type/ref}
    :rel/label    {}
-   :rel/wrap     {}
    :rel/order    {}                                           ; position in an (ordered ...) slot
    :rel/to-ref   {}})                                         ; deferred cross-module target [module] / [module name]
 
@@ -387,7 +385,7 @@
    the structure-definition and defines an instantiation macro named `sname`.
 
      (defstructure Function \"...\"
-       (slot :takes (many Type) :label-as :param)
+       (slot :takes (many Type))
        (slot :gives (one  Type))
        (law \"...\" :offenders '[?f] :where '[...] :rules '[...]?))
 

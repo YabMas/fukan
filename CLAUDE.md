@@ -69,9 +69,11 @@ A `defstructure` is a composition of **slots** plus **laws**:
 - Slot cardinalities: `(one T)`, `(optional T)`, `(many T)`, `(some T)`,
   `(ordered T)`. A slot whose target is a scalar (e.g. `(one :Bool)`) stores a
   leaf value with an auto-generated type-check law; otherwise it reifies a relation.
-- Slot options: `:label-as` (label the reified relation), `:payload` (carry a
-  companion code-form), `(reader f)` (expand authoring data-literals — e.g. fukan's
-  Shape expands `Foo` / `[X]` / `{:f X}`).
+- Slot options: `:payload` (carry a companion code-form alongside a scalar slot's
+  leaf, stored as a sibling `:val/` datom on the node), `(reader f)` (expand
+  authoring data-literals — e.g. fukan's Shape expands `Foo` / `[X]` / `{:f X}`). A
+  reified relation's label comes from an authored `[label target]` clause, not a slot
+  option.
 - `^:value` structures are content-deduped, inline-anonymous nodes (structurally
   equal values collapse to one node) — used for nameless compound data.
 - `(law "desc" :offenders '[?x] :where '[…])` is a datalog constraint; `:scope
@@ -79,7 +81,7 @@ A `defstructure` is a composition of **slots** plus **laws**:
   violations.
 
 The current catalog is the source: read `canvas/vocab/*.clj` for fukan's own
-grammar (shape/op/meta/arch/probe/projection/agent/collab/lens) and the demo vocabs.
+grammar (shape/op/meta/arch/probe/projection/collab/lens) and the demo vocabs.
 
 ## Spec locations
 

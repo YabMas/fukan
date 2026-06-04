@@ -23,7 +23,7 @@ modelling project authors its own grammar on the core:
 
 - **fukan-on-fukan's** vocabulary lives in `canvas/vocab/` (a data layer, a
   computation layer, a schema layer, an architecture layer, plus probe / projection
-  / agent / collaboration layers).
+  / collaboration / lens layers).
 - **Each demo** owns its grammar under `demos/<domain>/vocab/`.
 
 The core knows no kinds. This keeps the substrate a small, honest floor and forces
@@ -43,9 +43,11 @@ A structure is a *composition of slots* plus *datalog laws*.
   `(ordered T)`. A slot whose target is a scalar (`(one :Bool)`) stores a leaf value
   with an auto-generated type-check law; a slot whose target is another structure
   reifies a relation.
-- **Slot options:** `:label-as` labels the reified relation; `:payload` carries a
-  companion code-form alongside the relation; `(reader f)` lets a structure expand
-  authoring data-literals (fukan's `Shape` reads `Foo` / `[X]` / `{:f X}`).
+- **Slot options:** `:payload` carries a companion code-form alongside a scalar
+  slot's leaf value (stored as a sibling `:val/` datom on the node); `(reader f)`
+  lets a structure expand authoring data-literals (fukan's `Shape` reads `Foo` /
+  `[X]` / `{:f X}`). A reified relation's label comes from an authored `[label
+  target]` clause, not a slot option.
 - **`^:value` structures** are content-deduped, inline-anonymous nodes:
   structurally-equal values collapse to a single node (identity = a content hash).
   Used for nameless compound data — list/record/shape descriptions — where an
@@ -93,10 +95,15 @@ and implementation onto the same substrate, then checking them against each othe
   pipeline runs it over a code-root and merges the result. Fukan's own extractor
   (`target/clojure.clj`) reads clj-kondo analysis → Module + Operation structures.
 - **Materialize (model → code), down.** `model/materialize.clj` projects a modelled
-  primitive into an implementation specification. `render` is a multimethod
-  dispatching on `:structure/of` — each project supplies per-kind `defmethod`s (the
-  instruction text stays out of the pure vocabulary); composition along references
-  falls out of dispatch. `materialize-view` composes the renders over a lens's focus.
+  primitive into a target representation. `render-base` is a multimethod dispatching
+  on `[base kind]` (`[projection-base (:structure/of node)]`) — the base dimension
+  (Blueprint → impl specs, Docs → reference docs) re-presents the same focus per
+  target; each project supplies per-`[base, kind]` `defmethod`s (the instruction text
+  stays out of the pure vocabulary), and composition along references falls out of
+  re-dispatch under the same base. A projection is either a base or a
+  *contextualization* that renders THROUGH a base and frames its output (DriftClose =
+  Blueprint framed as drift-to-close). `compose` / `materialize-view` /
+  `materialize-projection` compose the renders over a lens's focus.
 - **Correspondence (verify).** `target/correspondence.clj` holds the laws that link
   the two — e.g. every modelled Stage is realized by an Operation of the same name
   in the corresponding module. Correspondence is its **own** concern, not a slot on
@@ -110,7 +117,9 @@ A **Lens** carries a `:focus` (prose) and an optional selection `:query` (one
 datalog `:where` clause-vector binding `?n`). `evaluate-lens` runs it against the
 vocab-derived rules → the focus **sub-graph** (a genuine sub-graph: the selected
 nodes and induced relations). Selection and traversal are one expression; there is
-no seed/closure split.
+no seed/closure split. A focus can be narrowed by a further query (`refine`,
+set-intersection) and the refined focus passed forward into a probe or materialize —
+acts chain over a refined focus rather than through a named orchestrator.
 
 A **Probe** reads the model through a lens and yields a Finding (inspect ⊂ probe: a
 finding that *gates* action is a trust signal; `check` is the canonical integrity

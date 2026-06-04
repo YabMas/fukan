@@ -3,9 +3,9 @@
    frame the subsystem models (kernel, pipeline, canvas_source, …) realize.
 
    The Model is the hub: a unified structure db of a Target codebase, built from
-   Structures authored on the Canvas surface; the thinking faculties (Lens,
-   Inspect, Projection, Instruct, Agent) read it and each yield something a human/LLM
-   reasons with."
+   Structures authored on the Canvas surface; a cross-cutting Lens (focus) and the
+   two acts that compose with it — Probe (read → finding) and Projection (re-present)
+   — read it and each yield something a human/LLM reasons with."
   (:require [fukan.canvas.core.structure :as s]
             [canvas.vocab.arch :refer [Faculty]]))
 

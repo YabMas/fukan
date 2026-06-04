@@ -92,10 +92,12 @@ not removing the decision.
 - **D10 — A lens is one selection expression.** A Lens's focus query is a single
   datalog `:where` clause-vector; `evaluate-lens` yields a genuine sub-graph. Selection
   and transitive closure are recursion *within* the one query — there is no
-  seed/closure split (a rejected earlier sketch). Lens **refinement**-composition
-  (lens-within-lens, lens as graph→graph) is deferred in full, to be explored properly
-  later — not the cheap set-algebra (union/intersect) now. `evaluate-lens` is a clean
-  seam, so composition is additive when it lands.
+  seed/closure split (a rejected earlier sketch). A minimal `refine` (narrow a focus to
+  the members also matching a further query — set-intersection) has since landed to
+  support act-chaining: a refined focus passes forward into a probe or materialize.
+  Fuller lens **refinement**-composition (lens-within-lens, lens as graph→graph)
+  remains deferred, to be explored properly later. `evaluate-lens` / `refine` are clean
+  seams, so richer composition is additive when it lands.
 
 - **D11 — Cross-module references are by-name and build-time.** Authored as
   `(across "module")` / `(across "module" "name")`, resolved post-merge. Compile-checked
