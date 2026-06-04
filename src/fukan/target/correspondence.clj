@@ -42,14 +42,14 @@
    The match is on name AND module: a Stage in canvas module C is realized only by a
    same-named Operation whose owning code module corresponds to C (module-corresponds?).
    A same-named function in an unrelated namespace no longer counts."
+  ;; Reads over the vocab-derived rules (check injects them) — domain altitude, not
+  ;; substrate triples: `(Operation …)`, `(Stage …)`, `(named …)`, `(in-module …)`.
   (law "every modelled Stage is realized by an Operation of the same name in the corresponding module"
     :scope :global
     :offenders '[?s]
-    :where '[[?o :structure/of :Operation]
-             [?s :structure/of :Stage] [?s :entity/name ?n]
-             [?cm :module/child ?s] [?cm :entity/name ?cmn]
-             (not [?o2 :structure/of :Operation] [?o2 :entity/name ?n]
-                  [?km :module/child ?o2] [?km :entity/name ?kmn]
+    :where '[(Operation ?o)
+             (Stage ?s) (named ?s ?n) (in-module ?s ?cmn)
+             (not (Operation ?o2) (named ?o2 ?n) (in-module ?o2 ?kmn)
                   [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]))
 
 (defn unrealized-stages
