@@ -1,10 +1,10 @@
 (ns fukan.target.clojure-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [fukan.canvas.core.structure :as s]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.model.pipeline :as pipeline]
-            [fukan.target.clojure :as tc]))
+            [fukan.target.clojure :as tc]
+            [fukan.target.correspondence :as corr]))
 
 (deftest extracts-functions-as-operations
   (testing "the clj-kondo extractor emits an Operation per defn/defn-, with privacy"
@@ -32,15 +32,10 @@
             and verify every modelled op-layer Stage is backed by a real function —
             the cross-layer correspondence is assertable only because the authored
             Stages (canvas/) and the extracted Operations (src/) share one graph"
-    (let [model     (pipeline/build-model "src")
-          extracted (tc/extract "src/fukan")
-          merged    (cs/resolve-cross-refs (cs/merge-dbs [model extracted]))
-          law       "every modelled Stage is realized by an Operation of the same name"
-          unrealized (->> (s/check merged)
-                          (filter #(= law (:law %)))
-                          (mapcat :offenders) (map first)
-                          (map #(:entity/name (d/entity merged %)))
-                          set)]
+    (let [model      (pipeline/build-model "src")
+          extracted  (tc/extract "src/fukan")
+          merged     (cs/resolve-cross-refs (cs/merge-dbs [model extracted]))
+          unrealized (corr/unrealized-stages merged)]
       ;; sanity: the merge actually brought both layers together
       (is (seq (d/q '[:find ?s :where [?s :structure/of :Stage]] merged)) "model has Stages")
       (is (seq (d/q '[:find ?o :where [?o :structure/of :Operation]] merged)) "src extracted to Operations")
