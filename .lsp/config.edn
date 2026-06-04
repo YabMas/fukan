@@ -13,75 +13,15 @@
  :linters
  {:clojure-lsp/unused-public-var
   {;; Vars marked with these metadata keys are intentionally exported for
-   ;; dynamic invocation (SCI sandbox, canvas registry lookup, agent api
-   ;; metadata discovery). clojure-lsp's static analysis can't see those
-   ;; call sites, so the unused-public-var lint is a false positive on them.
+   ;; dynamic invocation (canvas registry lookup of build-canvas, datalog
+   ;; predicates called from law :where clauses). clojure-lsp's static
+   ;; analysis can't see those call sites, so the unused-public-var lint is a
+   ;; false positive on them.
    :exclude-when-meta #{:export}
 
    ;; Namespace-wide exemptions. Mirrors `.clj-kondo/config.edn`'s
    ;; `:config-in-ns` entries — see that file for per-namespace rationale.
-   :exclude #{;; SCI sandbox surface — invoked dynamically via `bin/fukan eval`
-              ;; and the agent api's metadata-driven discovery. Static analysis
-              ;; cannot see those call paths.
-              fukan.agent.api
-              fukan.agent.system
-
-              ;; defstructure tests: law-only test structures (e.g. Auditor/Hang)
+   :exclude #{;; defstructure tests: law-only test structures (e.g. Auditor/Hang)
               ;; declare a macro that is never called — unused-public-var false
               ;; positive. Mirrors `.clj-kondo/config.edn`.
-              fukan.canvas.core.structure-test
-
-              ;; Canvas inspect/lens/project/instruct registries — entry points
-              ;; reached via multimethod dispatch and registry lookup, not
-              ;; direct calls.
-              fukan.canvas.inspect.integrity
-              fukan.canvas.inspect.coverage
-              fukan.canvas.inspect.drift
-              fukan.canvas.lens.core
-              fukan.canvas.lens.registry
-              fukan.canvas.lens.survey
-              fukan.canvas.lens.patterns
-              fukan.canvas.lens.consistency
-              fukan.canvas.lens.tar-pit
-              fukan.canvas.project.core
-              fukan.canvas.project.registry
-              fukan.canvas.project.render
-              fukan.canvas.project.clojure
-              fukan.canvas.project.clojure.value-to-def
-              fukan.canvas.project.clojure.type-to-malli
-              fukan.canvas.project.clojure.event-to-schema
-              fukan.canvas.project.clojure.function-to-defn
-              fukan.canvas.project.clojure.invariant-to-predicate
-              fukan.canvas.project.clojure.invariant-to-property-test
-              fukan.canvas.project.clojure.rule-to-predicate
-              fukan.canvas.project.clojure.getter-to-defn
-              fukan.canvas.project.clojure.checker-to-defn
-              fukan.canvas.project.clojure.handler-to-defn
-              fukan.canvas.instruct.core
-              fukan.canvas.instruct.registry
-              fukan.canvas.instruct.render
-              fukan.canvas.instruct.drift-close
-              fukan.canvas.instruct.cold-write
-
-              ;; Trial-run scaffolding. distributed.* is Phase 6/7 trial-run
-              ;; sandbox — code-side stubs whose entire purpose is to exist
-              ;; for the drift loop to find and weigh against canvas
-              ;; declarations. Never called by fukan-itself; the lint is
-              ;; right and the design is right. Until distributed.* graduates
-              ;; from trial-run to real implementation, exempt wholesale.
-              ;; distributed.cluster-test holds the Phase 8 Sprint 6
-              ;; property-test audit-trail skeletons (`defspec` vars
-              ;; discovered by the test runner, not statically called).
-              fukan.distributed.cluster
-              fukan.distributed.cluster-test
-              fukan.distributed.election
-              fukan.distributed.log
-
-              ;; Test fixtures — intentionally inert sample content.
-              fukan.test.fixture.sample
-              fukan.test.fixture.malli-options
-              fukan.test.fixture.defrecord-sample
-              fukan.test.fixture.non-record-defs
-              fukan.test.fixture.m-schema-wrapped
-              fukan.test.fixture.def-with-doc
-              fukan.test.fixture.optional-field}}}}
+              fukan.canvas.core.structure-test}}}}
