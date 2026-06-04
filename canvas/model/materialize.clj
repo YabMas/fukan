@@ -15,6 +15,17 @@
   (s/with-structures
     (s/within-module "materialize"
       (Kind "StructureDb") (Kind "Lens") (Kind "Instruction")
-      ;; materialize-view : (StructureDb, Lens) → Instruction ; render the lens's focus
-      ;; sub-graph by composing each focused primitive's `render` instruction
-      (Stage "materialize-view" (in [db StructureDb]) (in [lens Lens]) (out Instruction)))))
+      (Kind "Projection") (Kind "ProjectionName") (Kind "ModuleName") (Kind "Clause")
+      ;; render is a defmulti dispatching on [projection, kind] — the open extension
+      ;; point, not modelled as a Stage (a defmulti isn't extracted as an Operation).
+      ;; The four public entries compose its renders over a focus, parameterized by
+      ;; the PROJECTION (which target form):
+      (Stage "materialize-view" (in [db StructureDb]) (in [lens Lens]) (out Instruction))  ; lens focus, Blueprint default
+      (Stage "materialize-focus" (in [db StructureDb]) (in [projection ProjectionName]) (in [clauses [Clause]])
+        (out Instruction)                                                                  ; ad-hoc focus
+        (calls (across "core.lens" "focus-nodes")))
+      (Stage "materialize-module" (in [db StructureDb]) (in [projection ProjectionName]) (in [module ModuleName])
+        (out Instruction)
+        (calls materialize-focus))
+      (Stage "materialize-projection" (in [db StructureDb]) (in [proj Projection]) (out Instruction)  ; model-driven
+        (calls (across "core.lens" "evaluate-lens"))))))

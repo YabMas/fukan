@@ -77,16 +77,18 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn materialize
-  "Project the implementation spec for module `module-name` from the held model:
-   compose the render of every Stage that module owns (its :calls/Effects/Shapes
-   inline). E.g. (materialize \"target.clojure\")."
-  [module-name]
-  (if-let [m (infra-model/get-model)]
-    (let [spec (mat/materialize-module m module-name)]
-      (if (str/blank? spec)
-        (println "No Stages found in module" (pr-str module-name))
-        (println spec)))
-    (println "No model loaded yet. Use (go) first.")))
+  "Project module `module-name` from the held model under `projection` (default
+   \"Blueprint\" — implementation specs; \"Docs\" — reference documentation): compose
+   the render of every Stage that module owns. E.g. (materialize \"target.clojure\")
+   or (materialize \"target.clojure\" \"Docs\")."
+  ([module-name] (materialize module-name "Blueprint"))
+  ([module-name projection]
+   (if-let [m (infra-model/get-model)]
+     (let [spec (mat/materialize-module m projection module-name)]
+       (if (str/blank? spec)
+         (println "No Stages found in module" (pr-str module-name))
+         (println spec)))
+     (println "No model loaded yet. Use (go) first."))))
 
 (defn status []
   (if-let [m (infra-model/get-model)]
