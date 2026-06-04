@@ -13,6 +13,14 @@
   (:require [datascript.core :as d]
             [fukan.canvas.core.structure :as s]))
 
+(defn focus-nodes
+  "Run datalog `:where` `clauses` (binding `?n` as the focused node) with the
+   vocab-derived rules, returning the focus node-set (a set of eids). The shared
+   evaluation engine behind both a stored lens and any ad-hoc focus."
+  [db clauses]
+  (set (d/q (vec (concat '[:find [?n ...] :in $ %] [:where] clauses))
+            db (s/vocab-rules))))
+
 (defn evaluate-lens
   "Run lens `lens-eid`'s selection query (its `:val/query` — datalog `:where` clauses
    binding `?n`) with the vocab-derived rules, returning the focus node-set (a set of
@@ -22,5 +30,4 @@
     (when-not clauses
       (throw (ex-info "lens has no selection query — not evaluable"
                       {:lens lens-eid})))
-    (set (d/q (vec (concat '[:find [?n ...] :in $ %] [:where] clauses))
-              db (s/vocab-rules)))))
+    (focus-nodes db clauses)))

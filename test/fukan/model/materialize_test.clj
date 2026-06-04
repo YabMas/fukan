@@ -47,3 +47,21 @@
                       (Lens "none" (focus "nothing" '[(Stage ?n) (in-module ?n "no-such-module")]))))
           db      (cs/merge-dbs [model lens-db])]
       (is (= "" (m/materialize-view db (by-name db "none")))))))
+
+(deftest materialize-module-composes-a-modules-stages
+  (testing "materialize-module (the live by-module entry) renders a module's Stages — no stored lens"
+    (let [db   (pipeline/build-model nil)
+          spec (m/materialize-module db "target.clojure")]
+      (is (str/includes? spec "Implement `analyze`"))
+      (is (str/includes? spec "Implement `extract`"))
+      (is (str/includes? spec "paths: [Path]") "shapes rendered inline"))
+    (testing "an unknown module composes to the empty string"
+      (let [db (pipeline/build-model nil)]
+        (is (= "" (m/materialize-module db "no-such-module")))))))
+
+(deftest materialize-focus-takes-ad-hoc-clauses
+  (testing "materialize-focus renders the nodes an ad-hoc :where clause selects"
+    (let [db   (pipeline/build-model nil)
+          spec (m/materialize-focus db '[(Stage ?n) (in-module ?n "materialize")])]
+      (is (str/includes? spec "Implement `materialize-view`")
+          "the materialize module's own modelled Stage is projected"))))

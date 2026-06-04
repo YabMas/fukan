@@ -40,3 +40,24 @@
           "empty finding over the clean self-model → holds")
       (is (not (holds? {:lens "integrity" :gating true :finding ["bogus violation"]} db))
           "a reported violation when the model is clean → holds FIRES"))))
+
+(deftest probe-integrity-composes-check
+  (testing "probe-integrity surfaces the kernel's check as a gating finding"
+    (let [db     (cs/build)
+          result (probes/probe-integrity db)]
+      (is (= "integrity" (:lens result)))
+      (is (true? (:gating result)) "integrity is the gating inspect case")
+      (is (every? string? (:finding result)) "violations rendered as [Str]")
+      (is (empty? (:finding result)) "the self-model's laws all hold — no violations"))))
+
+(deftest run-and-run-all-are-the-live-probe-surface
+  (testing "run dispatches a named probe; run-all runs every implemented leaf"
+    (let [db (cs/build)]
+      (is (= (probes/probe-integrity db) (probes/run db "integrity"))
+          "run dispatches by name to the implemented leaf")
+      (let [all (probes/run-all db)]
+        (is (= #{"patterns" "integrity"} (set (keys all))) "every implemented probe ran")
+        (is (= "patterns" (:lens (all "patterns"))))
+        (is (= "integrity" (:lens (all "integrity")))))
+      (is (thrown? clojure.lang.ExceptionInfo (probes/run db "survey"))
+          "an unimplemented (modelled-only) probe throws"))))

@@ -86,13 +86,30 @@
 
 ;; ── the view: compose the renders over a lens's focus ────────────────────────
 
-(defn materialize-view
-  "Materialize the focus of lens `lens-eid` into a composed implementation spec:
-   render each primitive the lens selects (value shapes are absorbed inline by their
-   owners; named references — e.g. a Stage's :calls — print as names). The lens bounds
-   which primitives appear."
-  [db lens-eid]
-  (->> (lens/evaluate-lens db lens-eid)
+(defn- compose
+  "Render every node in `nodes` (a set of eids) and join — the shared composition step.
+   Value shapes are absorbed inline by their owners; named references (e.g. a Stage's
+   :calls) print as names."
+  [db nodes]
+  (->> nodes
        (sort-by #(:entity/name (d/entity db %)))
        (map #(render db %))
        (str/join "\n\n")))
+
+(defn materialize-view
+  "Materialize the focus of stored lens `lens-eid` into a composed implementation spec.
+   The lens bounds which primitives appear."
+  [db lens-eid]
+  (compose db (lens/evaluate-lens db lens-eid)))
+
+(defn materialize-focus
+  "Materialize an ad-hoc focus: compose the render of every node selected by datalog
+   `:where` `clauses` (binding `?n`). The lensless entry — no stored Lens required."
+  [db clauses]
+  (compose db (lens/focus-nodes db clauses)))
+
+(defn materialize-module
+  "Materialize the implementation spec for module `module-name`: compose the projected
+   render of every Stage that module owns. The live by-module entry point."
+  [db module-name]
+  (materialize-focus db [(list 'Stage '?n) (list 'in-module '?n module-name)]))
