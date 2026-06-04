@@ -59,15 +59,15 @@
                                 [?b :entity/name ?bn]]
                        db)))
           "build-model calls canvas-source's build + merge-dbs + resolve-cross-refs — links resolve post-merge")
-      (is (= ["extract"]
+      (is (= ["run-extractor"]
              (d/q '[:find [?en ...]
                     :where [?mp :entity/name "model.pipeline"] [?mp :module/child ?bm]
                            [?bm :entity/name "build-model"]
                            [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?e]
-                           [?tc :entity/name "target.clojure"] [?tc :module/child ?e]
+                           [?ex :entity/name "extraction"] [?ex :module/child ?e]
                            [?e :entity/name ?en]]
                   db))
-          "build-model calls target.clojure/extract — the design↔code seam"))))
+          "build-model calls extraction/run-extractor — the design↔code seam, via the plug-point"))))
 
 (deftest canvas-source-model-shares-the-db-shape
   (testing "in the canvas_source self-model, the Db type-shape (4 uses) is one node"

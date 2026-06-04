@@ -1,9 +1,19 @@
 (ns fukan.infra.model
   "Model lifecycle: hold the structure substrate db (the model — design decision
    (ii)), offering load / refresh / get. `load-model` invokes the build pipeline,
-   which ingests the defstructure canvas specs into one structure db."
+   which ingests the defstructure canvas specs into one structure db.
+
+   This is also fukan-on-itself's composition root for extraction: it registers
+   fukan's custom code extractor (the Clojure extractor over fukan's `src/`) at the
+   `fukan.model.extraction` plug-point, so the (generic) pipeline can run it without
+   naming it."
   (:require [datascript.core :as d]
-            [fukan.model.pipeline :as pipeline]))
+            [fukan.model.extraction :as extraction]
+            [fukan.model.pipeline :as pipeline]
+            [fukan.target.clojure :as target]))
+
+;; Register fukan's project extractor — its own Clojure source. One place names it.
+(extraction/register-extractor! target/extract)
 
 (defonce ^:private state (atom {:model nil :src nil}))
 

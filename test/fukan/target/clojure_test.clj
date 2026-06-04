@@ -1,9 +1,13 @@
 (ns fukan.target.clojure-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
+            [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
             [fukan.target.clojure :as tc]
             [fukan.target.correspondence :as corr]))
+
+;; Register fukan's extractor so build-model's unified build runs it (the proof).
+(extraction/register-extractor! tc/extract)
 
 (deftest extracts-functions-as-operations
   (testing "the clj-kondo extractor emits an Operation per defn/defn-, with privacy"

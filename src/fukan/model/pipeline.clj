@@ -9,20 +9,23 @@
    correspondence laws (which live in their own concern, `fukan.target.correspondence`,
    and run whenever they are loaded).
 
-   The extractor wired in here is fukan-on-itself's: a Clojure extractor over fukan's
-   own `src/`. A pluggable, per-target extractor registry is deferred."
+   The pipeline names no specific extractor: it runs whatever the project has
+   registered at the `fukan.model.extraction` plug-point (fukan-on-itself registers
+   its Clojure extractor over `src/` in `fukan.infra.model`)."
   (:require [clojure.java.io :as io]
             [fukan.canvas.projection.canvas-source :as canvas-source]
-            [fukan.target.clojure :as target]))
+            [fukan.model.extraction :as extraction]))
 
 (defn build-model
   "Build the model — the unified structure substrate db. Always ingests the canvas/
-   design specs; when `code-root` names an existing source tree, the code structures
-   extracted from it (`fukan.target.clojure/extract`) are merged onto the same graph
-   and cross-references re-resolved. Pass nil to build the design model alone."
+   design specs; when `code-root` names an existing source tree AND a project
+   extractor is registered, the code structures it yields are merged onto the same
+   graph and cross-references re-resolved. Pass nil (or build with no extractor
+   registered) for the design model alone."
   [code-root]
-  (let [design (canvas-source/build)]
-    (if (and code-root (.exists (io/file code-root)))
-      (canvas-source/resolve-cross-refs
-       (canvas-source/merge-dbs [design (target/extract code-root)]))
+  (let [design  (canvas-source/build)
+        code-db (when (and code-root (.exists (io/file code-root)))
+                  (extraction/run-extractor code-root))]
+    (if code-db
+      (canvas-source/resolve-cross-refs (canvas-source/merge-dbs [design code-db]))
       design)))
