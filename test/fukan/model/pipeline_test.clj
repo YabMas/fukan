@@ -276,13 +276,13 @@
                     db))
           "one drift focus, composed with two different acts"))))
 
-(deftest projection-with-no-mappings-is-caught
-  (testing "a projection that maps nothing trips the at-least-one-mapping law"
+(deftest projection-that-is-neither-base-nor-contextualization-is-caught
+  (testing "a projection with neither mappings nor a contextualized base trips the flavour law"
     (let [db (s/with-structures
                (s/within-module "p"
                  (Projection "Empty")))]
       (is (contains? (set (map :law (s/check db)))
-                     "Projection.maps requires at least one (found none)")))))
+                     "a projection is a base (declares mappings) or a contextualization (frames another)")))))
 
 (deftest agent-composes-its-own-tools-from-primitives
   (testing "the agent view: each Tool is composed from primitive lenses+acts — bundling or chaining"

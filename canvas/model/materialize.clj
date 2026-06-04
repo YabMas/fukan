@@ -16,10 +16,10 @@
     (s/within-module "materialize"
       (Kind "StructureDb") (Kind "Lens") (Kind "Instruction")
       (Kind "Projection") (Kind "ProjectionName") (Kind "ModuleName") (Kind "Clause")
-      ;; render is a defmulti dispatching on [projection, kind] — the open extension
-      ;; point, not modelled as a Stage (a defmulti isn't extracted as an Operation).
-      ;; The four public entries compose its renders over a focus, parameterized by
-      ;; the PROJECTION (which target form):
+      ;; render-base is a defmulti dispatching on [base-projection, kind] — the open
+      ;; extension point, not modelled as a Stage (a defmulti isn't extracted as an
+      ;; Operation). The four public entries compose its renders over a focus,
+      ;; parameterized by the PROJECTION (a base, or a contextualization framing one):
       (Stage "materialize-view" (in [db StructureDb]) (in [lens Lens]) (out Instruction))  ; lens focus, Blueprint default
       (Stage "materialize-focus" (in [db StructureDb]) (in [projection ProjectionName]) (in [clauses [Clause]])
         (out Instruction)                                                                  ; ad-hoc focus

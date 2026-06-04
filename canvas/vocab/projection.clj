@@ -17,12 +17,24 @@
   (slot :to   (one :String)))    ; the target artifact it becomes
 
 (defstructure Projection
-  "A projected representation of the model — a target we render it into. The
-   implementation Blueprint is one; more (docs, diagrams, instructions, …) as we add
-   them. Like a probe, a projection composes with a `Lens` — it renders THROUGH a focus
-   (the WHAT) and its mappings say HOW each focused source kind becomes a target
-   artifact. The same lens can feed a probe and a projection (e.g. the drift lens feeds
-   the drift inspect AND the drift-close projection)."
-  (slot :doc     (optional :String))
-  (slot :through (one Lens))     ; the focus it renders through (the WHAT)
-  (slot :maps    (some Mapping)))   ; ≥1 source→artifact mapping (the HOW)
+  "A projected representation of the model — a target we render it into. Two flavours,
+   composing:
+     a BASE projection renders source kinds directly — it `:maps` each focused kind to
+     a target artifact (Blueprint → implementation specs; Docs → documentation).
+     a CONTEXTUALIZATION renders THROUGH a base it `:contextualizes`, wrapping that base's
+     output in a framing `:context` (DriftClose = Blueprint framed as drift to close; the
+     same composes Blueprint with a 'new feature' or 'refactor' context). It adds no
+     mappings of its own — it reuses the base's, told differently.
+   Either flavour renders THROUGH a `Lens` (the WHAT). The same lens can feed a probe and
+   a projection (the drift lens feeds the drift inspect AND DriftClose)."
+  (slot :doc            (optional :String))
+  (slot :through        (one Lens))         ; the focus it renders through (the WHAT)
+  (slot :maps           (many Mapping))     ; a BASE's source→artifact mappings (the HOW)
+  (slot :contextualizes (optional Projection)) ; a CONTEXTUALIZATION's base projection
+  (slot :context        (optional :String)) ; the framing prose wrapped around the base render
+  ;; a projection is one flavour or the other — it declares mappings (base) or frames
+  ;; another (contextualization); neither would render nothing.
+  (law "a projection is a base (declares mappings) or a contextualization (frames another)"
+    :offenders '[?p]
+    :where '[(not-join [?p] [?m :rel/from ?p] [?m :rel/kind :maps])
+             (not-join [?p] [?c :rel/from ?p] [?c :rel/kind :contextualizes])]))

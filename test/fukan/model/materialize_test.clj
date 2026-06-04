@@ -113,16 +113,37 @@
       (is (> (count (re-seq #"This is an implementation specification" out)) 3)
           "several Stages projected; bare Kinds/Concepts are not rendered standalone"))))
 
-(deftest driftclose-renders-close-instructions-for-drifting-stages
-  (testing "the shipped DriftClose projection (through the drift lens) turns unrealized Stages into close-instructions"
+(deftest driftclose-contextualizes-blueprint-not-duplicates-it
+  (testing "DriftClose composes Blueprint — its specs framed by a drift context, not a parallel renderer"
     ;; design-only model: no extracted code → every modelled Stage drifts → the drift
-    ;; lens selects them all → DriftClose renders a close-instruction per Stage.
+    ;; lens selects them all → DriftClose = Blueprint's specs under a drift-closing context.
     (let [db  (pipeline/build-model nil)
           out (m/materialize-projection db (by-kind-name db :Projection "DriftClose"))]
-      (is (str/includes? out "Close drift: `extract`"))
-      (is (str/includes? out "is modelled in `target.clojure` but has no realizing function"))
-      (is (str/includes? out "Implement: (extract paths)"))
-      (is (str/includes? out "Add this function so the model and code correspond.")))))
+      (is (str/includes? out "modelled but have no realizing function") "the drift context preamble")
+      (is (str/includes? out "Implement `extract` in module `target.clojure`")
+          "the body IS Blueprint's spec — composed, not a bespoke close-instruction")
+      ;; delegation: a single node under DriftClose renders identically to under Blueprint
+      ;; (no DriftClose-specific renderer — the context is applied only at the view level)
+      (let [extract (by-kind-name db :Stage "extract")]
+        (is (= (m/render db "Blueprint" extract) (m/render db "DriftClose" extract))
+            "DriftClose delegates per-node rendering to its base Blueprint")))))
+
+(deftest a-context-composes-over-any-base
+  (testing "the same mechanism composes Blueprint with an arbitrary context — e.g. a refactor framing"
+    (let [model   (pipeline/build-model nil)
+          ;; an ad-hoc contextualization of the SHIPPED Blueprint — no Refactor renderer exists
+          proj-db (s/with-structures
+                    (s/within-module "v"
+                      (Lens "stages" (focus "x" '[(Stage ?n) (in-module ?n "target.clojure")]))
+                      (Projection "Refactor"
+                        (through stages)
+                        (contextualizes (across "projection" "Blueprint"))
+                        (context "Refactor the existing implementation to match these specs:"))))
+          db      (cs/resolve-cross-refs (cs/merge-dbs [model proj-db]))
+          out     (m/materialize-projection db (by-kind-name db :Projection "Refactor"))]
+      (is (str/includes? out "Refactor the existing implementation") "the refactor context frames the output")
+      (is (str/includes? out "Implement `extract`")
+          "and the body is Blueprint's specs — composed with zero Refactor-specific renderers"))))
 
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"

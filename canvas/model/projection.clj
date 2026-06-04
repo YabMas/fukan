@@ -20,14 +20,18 @@
         (maps (Mapping (from "a record structure") (to "a Malli schema")))
         (maps (Mapping (from "a function")         (to "a defn")))
         (maps (Mapping (from "a law")              (to "a predicate"))))
-      ;; instruct ⊂ projection: rendering the model into instructions an LLM acts on is
-      ;; just another projection target. DriftClose renders THROUGH the drift lens — the
-      ;; same focus the drift inspect-probe reads — turning drift into close-instructions.
+      ;; instruct ⊂ projection: DriftClose is a CONTEXTUALIZATION of Blueprint, not a new
+      ;; target — it renders Blueprint's specs through the drift lens (the unrealized
+      ;; Stages) and frames them with a drift-closing context. The same composing shape
+      ;; contextualizes Blueprint as a new feature, a refactor, etc. — just a different
+      ;; context over the same base.
       (Projection "DriftClose"
-        (doc "Drift rendered into instructions an LLM acts on to close it.")
+        (doc "Blueprint, framed as drift to close — the unrealized Stages as instructions to implement.")
+        (contextualizes Blueprint)
         (through (across "lens" "drift"))
-        (maps (Mapping (from "a drift item") (to "a close-instruction"))))
-      ;; future targets — each its own Projection of the same shape:
-      ;;   (Projection "Docs"    (through (across "lens" "survey")) (maps (Mapping (from "a module") (to "a doc page")) …))
-      ;;   (Projection "Diagram" (through (across "lens" "patterns")) (maps (Mapping (from "a relation") (to "an edge")) …))
+        (context "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:"))
+      ;; future targets — a BASE is its own Projection with :maps; a CONTEXTUALIZATION
+      ;; reuses a base via :contextualizes + :context:
+      ;;   (Projection "Docs"    (through (across "lens" "survey"))  (maps (Mapping (from "a module") (to "a doc page")) …))
+      ;;   (Projection "Feature" (contextualizes Blueprint) (through …) (context "Add this new feature:"))
       )))
