@@ -15,7 +15,6 @@
             [canvas.vocab.lens :refer [Lens]]
             [canvas.vocab.probe :refer [Probe Finding]]
             [canvas.vocab.projection :refer [Projection]]
-            [canvas.vocab.agent :refer [Tool]]
             [canvas.vocab.collab :refer [Phase]]))
 
 (defn- names-of [db tag]
@@ -284,44 +283,6 @@
       (is (contains? (set (map :law (s/check db)))
                      "a projection is a base (declares mappings) or a contextualization (frames another)")))))
 
-(deftest agent-composes-its-own-tools-from-primitives
-  (testing "the agent view: each Tool is composed from primitive lenses+acts — bundling or chaining"
-    (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "agent"))
-      (is (set/subset? #{"health-audit" "tangle-diagnosis" "audit-and-close" "contract-scaffold"}
-                       (names-of db :Tool)))
-      ;; a BUNDLE: health-audit probes three focuses at once — no single faculty act does
-      (is (= 3 (count (d/q '[:find ?l
-                             :where [?t :structure/of :Tool] [?t :entity/name "health-audit"]
-                                    [?r :rel/from ?t] [?r :rel/kind :probes] [?r :rel/to ?l]]
-                           db)))
-          "health-audit bundles three probe-focuses into one tool")
-      ;; a CHAIN: audit-and-close probes a focus AND projects through one
-      (is (seq (d/q '[:find ?t
-                      :where [?t :structure/of :Tool] [?t :entity/name "audit-and-close"]
-                             [?rp :rel/from ?t] [?rp :rel/kind :probes]   [?rp :rel/to _]
-                             [?rj :rel/from ?t] [?rj :rel/kind :projects] [?rj :rel/to _]]
-                    db))
-          "audit-and-close chains a probe and a projection")
-      (is (seq (d/q '[:find ?m
-                      :where [?f :structure/of :Faculty] [?f :entity/name "Agent"]
-                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
-                             [?m :structure/of :Module] [?m :entity/name "agent"]]
-                    db))
-          "the Agent faculty interlocks with the agent view"))))
-
-(deftest one-lens-feeds-probe-projection-and-composed-tools
-  (testing "capstone: the single drift lens is used by an inspect-probe, a projection, AND a composed tool"
-    (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :Lens] [?l :entity/name "drift"]] db)))
-          "there is exactly one drift lens node")
-      (is (seq (d/q '[:find ?t
-                      :where [?l :structure/of :Lens] [?l :entity/name "drift"]
-                             [?t :structure/of :Tool] [?t :entity/name "audit-and-close"]
-                             [?r :rel/from ?t] [?r :rel/to ?l]]
-                    db))
-          "the audit-and-close tool composes the same drift lens the inspect-probe + projection use"))))
-
 (deftest collaboration-loop-modelled-as-a-closed-cycle
   (testing "the collab view: phases form a closed OODA cycle, each (mostly) exercising a faculty"
     (let [db (pipeline/build-model nil)]
@@ -365,14 +326,6 @@
       (is (= 'fn (first (pred "Patterns"))) "it is a fn form")
       (is (seq? (pred "IntegrityReport")) "IntegrityReport's holds predicate is a stored form")
       (is (empty? (s/check db)) "the whole self-model still satisfies every law"))))
-
-(deftest empty-tool-is-caught
-  (testing "a tool that composes no primitive (neither probes nor projects) trips the law"
-    (let [db (s/with-structures
-               (s/within-module "a"
-                 (Tool "empty" (answers "?"))))]
-      (is (contains? (set (map :law (s/check db)))
-                     "a tool composes at least one primitive")))))
 
 (deftest patterns-finding-carries-its-contract
   (testing "the Patterns finding declares a shape + holds in the real model"

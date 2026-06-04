@@ -37,9 +37,9 @@
       (Faculty "Projection" (doc "Re-presents the model in a target form — blueprint, instructions, ….")
         (reads Model) (feeds Blueprint Instruction)                             ; instruct ⊂ projection (a target)
         (realized-by (across "projection") (across "probe-code")))              ; the projection view + the probe-spec projector
-      (Faculty "Agent"   (doc "Orchestrates lenses ∘ acts to serve an LLM/human — the next milestone.")
-        (reads Model) (feeds Finding Blueprint Instruction)
-        (realized-by (across "agent")))                                         ; the agent (composer) view
+      ;; (No Agent faculty: the agent is the human/LLM composing lenses ∘ acts, not a
+      ;; fukan entity. Composition is the acts chaining over a refined focus — ordinary
+      ;; composition, not a named orchestrator.)
 
       ;; the outputs reasoned-with
       (Faculty "Finding"     (doc "A probe's output — a View to reason with, or a gating Signal (inspect)."))
