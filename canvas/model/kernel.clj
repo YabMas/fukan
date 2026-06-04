@@ -67,7 +67,16 @@
       ;; composes, so it lives in the model 1-on-1 with the code.
       (Kind "StructureDb")
       (Kind "Violation")
+      (Kind "Rule")
+      ;; the rules-cut bridge: derive the datalog rules from the live vocabulary
+      ;; (delegating to core.rules) — the rules check + the lens engine inject so
+      ;; laws/lenses read at domain altitude.
+      (Stage "vocab-rules"
+        (doc "The datalog rules derived from the live vocabulary, injected into laws/lenses.")
+        (out [Rule])
+        (calls (across "core.rules" "derive-rules")))
       (Stage "check"
         (doc "Run every structure's laws over the model db; yield the violations.")
         (in [db StructureDb])
-        (out [Violation])))))
+        (out [Violation])
+        (calls vocab-rules)))))

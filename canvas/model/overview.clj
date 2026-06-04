@@ -20,7 +20,7 @@
       ;; subsystem models that realize them (interlocking views)
       (Faculty "Structure" (doc "The lean-core primitive: a composition of slots + laws.")
         (feeds Model)
-        (realized-by (across "core.structure")))          ; the kernel meta-model
+        (realized-by (across "core.structure") (across "core.rules")))  ; kernel meta-model + query-rule derivation
       (Faculty "Canvas" (doc "The reasoning surface; specs author structures into the model.")
         (feeds Model))
       (Faculty "Target" (doc "The analyzed codebase — implementation + specifications.")
@@ -30,13 +30,13 @@
       ;; the cross-cutting FOCUS and the two ACTS that compose with it
       (Faculty "Lens" (doc "A focus over the model — which slice/aspect to attend to; composes with either act.")
         (reads Model) (feeds Probe Projection)
-        (realized-by (across "lens")))                                          ; the lens (focus) view
+        (realized-by (across "lens") (across "core.lens")))                     ; the lens (focus) view + its engine
       (Faculty "Probe" (doc "Reads the model through a lens → a finding (inspect = a gating finding).")
         (reads Model) (feeds Finding)
-        (realized-by (across "probe")))                                         ; the probe (read) view
+        (realized-by (across "probe") (across "probes")))                       ; the probe (read) view + its leaves
       (Faculty "Projection" (doc "Re-presents the model in a target form — blueprint, instructions, ….")
         (reads Model) (feeds Blueprint Instruction)                             ; instruct ⊂ projection (a target)
-        (realized-by (across "projection")))                                    ; the projection (render) view
+        (realized-by (across "projection") (across "probe-code")))              ; the projection view + the probe-spec projector
       (Faculty "Agent"   (doc "Orchestrates lenses ∘ acts to serve an LLM/human — the next milestone.")
         (reads Model) (feeds Finding Blueprint Instruction)
         (realized-by (across "agent")))                                         ; the agent (composer) view
