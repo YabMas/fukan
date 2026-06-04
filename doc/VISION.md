@@ -2,100 +2,81 @@
 
 **Status:** Framing and direction — the *why*.
 
-**Reading order:** Start here for motivation and framing. [DESIGN.md](./DESIGN.md) carries the design principles (layering, ownership, constraint language). [MODEL.md](./MODEL.md) holds the substrate spec. [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace.
+**Reading order:** Start here for motivation. [DESIGN.md](./DESIGN.md) carries the
+design principles (the mechanics-only core, per-project vocabulary, the build
+pipeline). [MODEL.md](./MODEL.md) holds the substrate spec. [DECISIONS.md](./DECISIONS.md)
+preserves the decision trace.
 
 ---
 
-## What this chapter is about
+## What fukan is
 
-Fukan today is a canvas-driven structural exploration tool. Its Model is built from canvas specs — Clojure data files authored at design-vocabulary altitude — and from Clojure implementation code, projected onto the same substrate. Humans and LLMs navigate the result as an interactive graph.
+Fukan is a structural exploration tool for the layer humans own as LLMs handle more
+of the low-level coding — the *composition of a system's concepts and the laws that
+must hold of them*. The question it explores: as LLMs write more of the code, how
+do humans stay in control of high-level structure, and collaborate with LLMs at
+that altitude?
 
-The canvas-first shift is not a feature addition. It is a re-foundation. The same pixels render in the browser; the same `clj -M:run` starts the server. But what populates the graph changes — from "this is what the code does, here is some spec annotation" to "this is the design vocabulary the system was authored in, here is how the implementation maps to it."
+The loop fukan is built around is **define → model → verify → project**:
 
----
+> **Define** a system's structure — its concepts as a composition of slots, plus
+> the datalog laws that must hold of it.
+> **Model** abstractions over that structure (views, faculties, higher-level
+> concepts) on the same substrate.
+> **Verify** the whole as one assertable graph — laws run as checks; specification
+> and implementation, projected onto the same graph, are checkable against each other.
+> **Project** the model down toward an implementation specification.
 
-## Where fukan came from
+Specification and implementation live on the **same** graph. That is the thesis:
+intended structure and actual structure are not two artifacts to keep in sync by
+discipline, but one graph whose internal consistency a machine can check.
 
-Honest assessment of the prior state.
+## Why it matters
 
-The previous approach used two spec languages co-located with implementation code: `.allium` files describing behavioural intent, and `.boundary` files describing module API surfaces. Fukan's build pipeline parsed these alongside Clojure source to produce a unified Model.
+As LLMs absorb the low-level work, the human's value migrates upward — to the
+boundaries, the contracts, the invariants, the architectural composition. A tool
+for that layer needs primitives that *are* those things, not a code graph that
+merely annotates them. Fukan's primitive is the **structure**: a composition plus
+the laws that constrain it. Everything — a function's signature, an architectural
+faculty, a workflow, fukan's own kernel — is expressed as a structure, queried as
+one graph, and checked by running its laws.
 
-This worked for analysis but carried a tension: the spec languages were rich enough to express significant design vocabulary, but the coupling between spec files and implementation files made the design surface hard to reason about independently. The spec languages were also external to Clojure's tooling — no REPL participation, no namespace system, no standard editor support.
+The tool is REPL-native and agent-native by construction: models are Clojure data
+on the classpath, the model is a datascript db, and the whole is queryable by a
+human or an LLM with the same datalog.
 
-Phase 3 resolved the tension by moving to a canvas-first architecture. The `.allium`/`.boundary` files are archived in `.legacy-allium/`. The canvas — Clojure-embedded design declarations — is now the primary spec surface.
+## The foundation: `defstructure`
 
----
+Fukan was radically pruned and rebuilt around a single primitive. A `defstructure`
+declares a structure as a *composition of slots* plus the *datalog laws* that must
+hold of it. The structure substrate **is** the model — there is no separate
+model-map, no privileged kinds. The core ships only this primitive and the
+ingestion/projection machinery; it ships **no domain vocabulary**. Every modelling
+project authors its own grammar on the core.
 
-## The shift
+## The current phase
 
-Three sentences:
-
-> Previously fukan was a code graph that knew about specs.
-> The canvas chapter makes it a design-vocabulary graph that knows about code.
-> The Model's content is determined by what the canvas says exists; code joins as a Phase 6 projection layer, with per-entity drift edges.
-
-The reason this matters: as LLMs handle more low-level coding, the human's value migrates upward — to module boundaries, contracts, invariants, behavioural intent, architectural composition. A workbench for that level needs a Model whose primitives are *those things*, authored in a tool that integrates with the development environment natively.
-
-The canvas gives that: design declarations in `.clj` files, on the classpath, participating in the REPL, queryable by agents, rendered in the graph viewer.
-
----
-
-## The analysis-first strategic decision
-
-Phase 3's strategic frame: *analysis substrate before authoring tools*.
-
-The canvas exists primarily to be reasoned over; the graph viewer is fukan's current product surface. Phase 3 makes the canvas observable through that surface. Authoring (collaborative editing, LLM-assisted design conversations) is a later phase.
-
-This ordering is deliberate. Before investing in authoring ergonomics, the substrate must demonstrate it can represent the full vocabulary of a real codebase — modules, functions, records, invariants, rules, getters, checkers — and make that vocabulary navigable in the graph. Phase 3 validated this across 62 modules of fukan-itself.
-
-The bet paid off: with the substrate proven, subsequent work built on it without re-foundation — convention-resolved code projection with per-entity drift edges, a pluggable lens substrate for design-altitude analysis, and an agent query/authoring surface (`bin/fukan`, the `fukan-architect`/`fukan-reconciler` agents, the canvas-authoring system prompt). Authoring today is agent-driven through that surface and the REPL edit→`(refresh)`→query loop; an interactive *browser* authoring experience remains the open frontier (see *What is deferred*).
-
----
-
-## What this enables for users
-
-Concretely, in the canvas-first state:
-
-**Navigable design-vocabulary graph.** A team writes canvas specs. Fukan renders the canvas as a navigable graph: modules connected by `:references` edges, nodes tagged by kind (function, invariant, rule, getter, checker), record types with field structure. Each node is clickable; each relationship is followable. The explorer conveys design intent, not just code shape.
-
-**Spec and code on the same graph.** Canvas specs project through Phase 0 (canvas ingestion) into the same Model that Phase 6 (Clojure target analyzer) writes code artifacts into. The graph shows where canvas-declared affordances have corresponding Clojure implementations and where they don't — drift is a first-class visible property.
-
-**REPL-integrated workflow.** Canvas files are Clojure source files on the classpath. Editing a canvas spec and calling `(refresh)` in the REPL rebuilds the model and updates the graph on the next browser request. No separate compilation step, no external tooling, no round-trip to a different system.
-
-**Architecture-neutral substrate.** The substrate has two primitives — **Node** and **Relation** — and ships zero architectural vocabulary. A node is just an addressable thing; what *kind* of thing it is (a function call, an invariant, a reactive rule, a record type, a module) is an introspectable **tag-application**, defined by a vocabulary, not baked into a primitive. Architectural meaning — function call, invariant, reactive rule, lifecycle accessor, validation entry point — lives in vocabularies that projects opt into. Different architectural styles (monolith, CQRS, actor model) coexist in the same substrate without substrate revision.
-
-**Queryable by agents.** The same Model the graph renders is queryable via `bin/fukan`'s eval surface. Agents can ask "what affordances reference this type?" or "what invariants does this module declare?" without grepping source files. The canvas is the source of truth; the eval surface is the query layer over it.
-
----
-
-## What has landed since
-
-The canvas-first re-foundation has been extended substantially on the same substrate:
-
-**Drift detection.** The Clojure target analyzer resolves canonical code addresses by convention, so `projects` edges now carry meaningful per-entity `:validity` (`:valid` / `:stale` / `:absent` / `:unknown`) instead of the uniform `:absent` of the early UUID-id scheme. Bidirectional drift between intent and reality is a first-class, queryable signal (`(canvas-drift)`).
-
-**Lens substrate and agent surface.** A pluggable lens layer supports design-altitude analysis modes (new modes = drop a file), and the model is queryable by humans and agents through `bin/fukan` and the `fukan-architect` / `fukan-reconciler` agents.
-
-**Substrate unification.** The substrate was collapsed to its floor — **Node + Relation** — with all classification expressed as introspectable tag-applications, payloads de-blobbed into queryable datoms, and the vocabulary turned into **self-registering data**: each vocabulary declares its terms (tag-definitions) and a generic, registry-driven interpreter turns a term + payload into substrate datoms. A vocabulary is now a plugin — drop a file and its terms register; remove it and they are gone. The core knows no kinds; the kinds are vocabulary, and the vocabulary is data.
+Fukan is in a **modelling-exploration** phase: authoring a wide variety of models
+directly on `defstructure` — fukan's own self-model and a corpus of standalone
+demos — to pressure-test the core in every way. We are deliberately **not** building
+a reusable methodology/middle layer (DDD, hexagonal, C4 vocabularies) yet. The core
+is kept *able* to grow such a layer later (via the refinement mechanism), but that
+is proven only when a concrete need forces it. The focus today is exploring
+modelling itself.
 
 ## What is deferred
 
-**Interactive browser authoring.** Canvas is authored today as `.clj` files edited in the REPL loop, and agent-assisted through the query/authoring surface. An interactive *browser* authoring experience — in-graph editing, real-time feedback during design — is the open frontier (the explorer rewrite).
+**The interactive browser explorer.** Rendering the graph as a navigable,
+in-browser structural explorer is fukan's eventual vision and the origin of its
+name. It is **deferred indefinitely**: the core is being exercised extensively
+first, and the explorer is not on the near roadmap. Its code is parked under
+`.paused/`. Do not propose reviving it as a next step.
 
-**Vocabulary library expansion.** The current vocab libraries (`vocab.behavioral`, `vocab.lifecycle`, `vocab.validation`, plus the construction primitives) cover the fukan-itself corpus. Methodology libraries for other architectural styles (CQRS, actor model, event-driven microservices) arrive when real usage justifies them.
-
-**Canvas-authored constraint depth.** The `defquery` mechanism and `fc/check` constraint runner exist and run in the build pipeline. Richer constraint *authoring at the canvas level* — projects expressing their own architectural laws as canvas constraints — remains lighter than the substrate allows.
-
----
-
-## The pitch, refined
-
-**Fukan is the workbench for the structural layer of a system — the layer humans own, the layer that survives across LLM sessions, the layer that should drive what the LLMs build.**
-
-In the canvas chapter, "the structural layer" is expressed as canvas specs: Clojure data files over a deliberately minimal, architecture-neutral substrate — **Node + Relation** — extended entirely by vocabulary. The substrate is, in effect, a small virtual machine for structural models; a vocabulary is a *program* for it, declared as data; methodologies are *plugins* on top. The aim, in the lineage of stratified, grow-the-language design, is a shared middle layer others can build upon — vocabularies you can add, swap, or delete without disturbing the core. The graph viewer renders the canvas alongside Clojure implementation reality; the eval surface makes the whole thing queryable by humans and agents alike.
-
-Future work grows the language upward — derived classification and view layers over the substrate, more vocabulary libraries, richer drift analysis, the authoring loop, and a constraint-authoring surface — all as strata on the same Node+Relation core, without re-foundation.
+**A methodology/middle layer.** Reusable architectural vocabularies arrive only
+when real usage justifies them, and only after the refinement mechanism that would
+underpin them is proven on a concrete need.
 
 ---
 
-*See [DESIGN.md](./DESIGN.md) for the layering principle (core / construct-kit / vocabulary), the ownership-on-owner substrate principle, and the build pipeline. [MODEL.md](./MODEL.md) carries the substrate spec; [DECISIONS.md](./DECISIONS.md) preserves the design-phase decision trace.*
+*See [DESIGN.md](./DESIGN.md) for the design principles, [MODEL.md](./MODEL.md) for
+the substrate spec, and [DECISIONS.md](./DECISIONS.md) for the decision trace.*
