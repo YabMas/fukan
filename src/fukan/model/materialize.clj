@@ -1,94 +1,98 @@
 (ns fukan.model.materialize
-  "The materialize / LOWER direction — the inverse of extraction. Where extraction
-   LIFTS code into the model (code → Operations), materialize PROJECTS the model
-   down into implementation specifications (a modelled Stage → what an implementer
-   needs to realize it).
+  "The materialize / LOWER direction — composable. Where extraction LIFTS code into
+   the model, materialize PROJECTS the model down into implementation specifications.
 
-   Per fukan's thesis it produces INTENT, not pinned code: a Stage's name, module,
-   signature (params from `:in`, return from `:out`), effects (`:performs`) and
-   collaborators (`:calls`) — enough for an implementing LLM/human to write the
-   function, with the language-specific rendering left to them. So this projection
-   is PL-blind; no project-specific renderer is needed (the implementer is the
-   renderer). It pairs with `correspondence/unrealized-stages`: that reports WHICH
-   modelled Stages lack code; this projects WHAT to implement for each.
+   `render` is a MULTIMETHOD dispatching on a node's structure kind: each primitive
+   renders ITSELF to an implementation-instruction fragment (text — intent, not pinned
+   code). The defmulti is the open extension point; a project adds a defmethod per
+   primitive kind it models (fukan-on-itself's renders for :Stage / :Shape / :Kind are
+   here — the instruction itself stays out of the pure vocab,
+   [[feedback_pure_domains_separate_correspondence]] in spirit). Composition along
+   references falls out of dispatch: a :Stage's render calls `render` on its Shapes,
+   which dispatches to :Shape, which recurses on its children.
 
-   A pure projection of the model (it reads the design db; it is never read BY code)."
+   `materialize-view` composes the renders over a lens's focus sub-graph
+   (`evaluate-lens`) — the implementation specs for the primitives in the focus area.
+   It pairs with `correspondence/unrealized-stages`: that says WHICH Stages lack code,
+   this says WHAT to implement. A pure projection of the model."
   (:require [clojure.string :as str]
-            [datascript.core :as d]))
+            [datascript.core :as d]
+            [fukan.canvas.core.lens :as lens]))
 
-(defn- shape->str
-  "Render a Shape value-node to a readable type expression: a `type` leaf → its Kind
-   name; a `list` → `[child]`; a `record` → `{label: child, …}`."
-  [db eid]
-  (let [e (d/entity db eid)]
-    (case (:val/kind e)
-      "type"   (ffirst (d/q '[:find ?kn :in $ ?s
-                              :where [?r :rel/from ?s] [?r :rel/kind :type] [?r :rel/to ?k]
-                                     [?k :entity/name ?kn]]
-                            db eid))
-      "list"   (let [child (ffirst (d/q '[:find ?c :in $ ?s
-                                          :where [?r :rel/from ?s] [?r :rel/kind :of] [?r :rel/to ?c]]
-                                        db eid))]
-                 (str "[" (shape->str db child) "]"))
-      "record" (let [fields (d/q '[:find ?lbl ?c :in $ ?s
-                                   :where [?r :rel/from ?s] [?r :rel/kind :of] [?r :rel/to ?c]
-                                          [?r :rel/label ?lbl]]
-                                 db eid)]
-                 (str "{" (str/join ", " (map (fn [[l c]] (str l ": " (shape->str db c)))
-                                              (sort-by first fields))) "}"))
-      (str "<" (:val/kind e) ">"))))
+;; ── small query helpers over the substrate ──────────────────────────────────
 
-(defn- stage-eid [db stage-name]
-  (ffirst (d/q '[:find ?s :in $ ?n
-                 :where [?s :structure/of :Stage] [?s :entity/name ?n]]
-               db stage-name)))
+(defn- rel-target [db eid kind]
+  (ffirst (d/q '[:find ?to :in $ ?e ?k
+                 :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
+               db eid kind)))
 
-(defn- in-params [db sid]
-  (->> (d/q '[:find ?lbl ?to :in $ ?s
-              :where [?r :rel/from ?s] [?r :rel/kind :in] [?r :rel/to ?to] [?r :rel/label ?lbl]]
-            db sid)
-       (sort-by first)                                ; :in is unordered; label-sort for determinism
-       (mapv (fn [[lbl to]] {:label lbl :shape (shape->str db to)}))))
+(defn- labelled-targets [db eid kind]
+  (d/q '[:find ?lbl ?to :in $ ?e ?k
+         :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to] [?r :rel/label ?lbl]]
+       db eid kind))
 
-(defn- target-names [db sid kind name-attr]
-  (->> (d/q '[:find ?to :in $ ?s ?k
-              :where [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/to ?to]]
-            db sid kind)
+(defn- target-names [db eid kind name-attr]
+  (->> (d/q '[:find ?to :in $ ?e ?k
+              :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
+            db eid kind)
        (map (fn [[to]] (name-attr (d/entity db to))))
        sort vec))
 
-(defn materialize-stage
-  "Project the modelled Stage `stage-name` into an implementation specification:
-   `{:name :module :params [{:label :shape}] :returns :effects :calls :doc}`.
-   Returns nil if no such Stage. NOTE: `:in` is an unordered slot, so multi-param
-   signatures are label-sorted, not source-ordered (param-order fidelity would need
-   `:in` to be an ordered slot — a model enhancement)."
-  [db stage-name]
-  (when-let [sid (stage-eid db stage-name)]
-    (let [ent     (d/entity db sid)
-          module  (ffirst (d/q '[:find ?mn :in $ ?s
-                                 :where [?m :module/child ?s] [?m :entity/name ?mn]]
-                               db sid))
-          out-eid (ffirst (d/q '[:find ?to :in $ ?s
-                                 :where [?r :rel/from ?s] [?r :rel/kind :out] [?r :rel/to ?to]]
-                               db sid))]
-      {:name    stage-name
-       :module  module
-       :params  (in-params db sid)
-       :returns (when out-eid (shape->str db out-eid))
-       :effects (target-names db sid :performs :val/name)
-       :calls   (target-names db sid :calls :entity/name)
-       :doc     (:entity/doc ent)})))
+(defn- owning-module [db eid]
+  (ffirst (d/q '[:find ?mn :in $ ?e :where [?m :module/child ?e] [?m :entity/name ?mn]] db eid)))
 
-(defn instruction
-  "Render an implementation spec as a prose instruction an LLM/human can act on."
-  [{:keys [name module params returns effects calls doc]}]
-  (let [sig    (str "(" name (apply str (map #(str " " (:label %)) params)) ")")
-        ptypes (str/join ", " (map #(str (:label %) ": " (:shape %)) params))]
-    (str "Implement `" name "` in module `" module "`.\n"
-         (when doc (str "Intent: " doc "\n"))
-         "Signature: " sig (when (seq params) (str " where " ptypes)) " → " (or returns "Unit") "\n"
+;; ── render: each primitive renders itself; owners compose via `render` ───────
+
+(defmulti render
+  "Render node `eid` (an instance of its kind) to an implementation-instruction
+   fragment. Dispatches on `:structure/of`. Project-owned defmethods supply the
+   per-kind rendering and compose referenced primitives by calling `render` again."
+  (fn [db eid] (:structure/of (d/entity db eid))))
+
+(defmethod render :default [db eid]
+  (:entity/name (d/entity db eid)))
+
+(defmethod render :Kind [db eid]
+  (:entity/name (d/entity db eid)))
+
+(defmethod render :Shape [db eid]
+  (let [e (d/entity db eid)]
+    (case (:val/kind e)
+      "type"   (render db (rel-target db eid :type))                  ; → :Kind
+      "list"   (str "[" (render db (rel-target db eid :of)) "]")      ; → :Shape (child)
+      "record" (str "{" (str/join ", " (map (fn [[lbl to]] (str lbl ": " (render db to)))
+                                             (sort-by first (labelled-targets db eid :of)))) "}")
+      (str "<" (:val/kind e) ">"))))
+
+(defmethod render :Stage [db eid]
+  (let [e       (d/entity db eid)
+        nm      (:entity/name e)
+        module  (owning-module db eid)
+        params  (->> (labelled-targets db eid :in) (sort-by first)
+                     (mapv (fn [[lbl to]] {:label lbl :shape to})))
+        out-eid (rel-target db eid :out)
+        effects (target-names db eid :performs :val/name)
+        calls   (target-names db eid :calls :entity/name)
+        sig     (str "(" nm (apply str (map #(str " " (:label %)) params)) ")")
+        ptypes  (str/join ", " (map #(str (:label %) ": " (render db (:shape %))) params))]
+    (str "Implement `" nm "` in module `" module "`.\n"
+         (when (:entity/doc e) (str "Intent: " (:entity/doc e) "\n"))
+         "Signature: " sig (when (seq params) (str " where " ptypes))
+         " → " (if out-eid (render db out-eid) "Unit") "\n"
          (when (seq effects) (str "Effects: " (str/join ", " effects) "\n"))
          (when (seq calls) (str "Calls: " (str/join ", " calls) "\n"))
          "This is an implementation specification projected from the model — realize it "
          "as a function honoring this signature and intent.")))
+
+;; ── the view: compose the renders over a lens's focus ────────────────────────
+
+(defn materialize-view
+  "Materialize the focus of lens `lens-eid` into a composed implementation spec:
+   render each primitive the lens selects (value shapes are absorbed inline by their
+   owners; named references — e.g. a Stage's :calls — print as names). The lens bounds
+   which primitives appear."
+  [db lens-eid]
+  (->> (lens/evaluate-lens db lens-eid)
+       (sort-by #(:entity/name (d/entity db %)))
+       (map #(render db %))
+       (str/join "\n\n")))

@@ -1,42 +1,49 @@
 (ns fukan.model.materialize-test
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [datascript.core :as d]
+            [canvas.vocab.lens :refer [Lens]]
+            [fukan.canvas.core.structure :as s]
+            [fukan.canvas.projection.canvas-source :as cs]
             [fukan.model.materialize :as m]
             [fukan.model.pipeline :as pipeline]))
 
-;; materialize is the pure LOWER direction — it projects the design model alone,
-;; with no extraction needed (build-model nil = design-only).
+;; materialize is the pure LOWER direction — it projects the design model alone
+;; (build-model nil = design-only, no extraction).
 
-(deftest materializes-a-stage-into-an-implementation-spec
-  (testing "a modelled Stage projects to its implementation spec (signature + intent)"
-    (let [db (pipeline/build-model nil)]
-      (is (= {:name    "check"
-              :module  "core.structure"
-              :params  [{:label "db" :shape "StructureDb"}]
-              :returns "[Violation]"
-              :effects []
-              :calls   []}
-             (dissoc (m/materialize-stage db "check") :doc))
-          "check : (db: StructureDb) → [Violation]")
-      (is (= {:name    "extract"
-              :module  "target.clojure"
-              :params  [{:label "paths" :shape "[Path]"}]
-              :returns "StructureDb"
-              :effects ["io"]
-              :calls   ["analyze"]}
-             (dissoc (m/materialize-stage db "extract") :doc))
-          "extract : (paths: [Path]) → StructureDb, performs io, calls analyze"))))
+(defn- by-name [db n]
+  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
 
-(deftest renders-a-prose-implementation-instruction
-  (testing "the spec renders to an actionable instruction"
+(deftest render-dispatches-per-kind-and-composes-references
+  (testing "render :Stage composes its :Shape renders (via dispatch) into the signature"
     (let [db   (pipeline/build-model nil)
-          text (m/instruction (m/materialize-stage db "extract"))]
+          text (m/render db (by-name db "extract"))]
       (is (str/includes? text "Implement `extract` in module `target.clojure`"))
-      (is (str/includes? text "paths: [Path]"))
+      (is (str/includes? text "paths: [Path]") "the :in Shape rendered via render :Shape (list → [Kind])")
       (is (str/includes? text "→ StructureDb"))
       (is (str/includes? text "Effects: io"))
       (is (str/includes? text "Calls: analyze")))))
 
-(deftest unknown-stage-materializes-to-nil
-  (testing "materializing a non-existent Stage yields nil (no spec to project)"
-    (is (nil? (m/materialize-stage (pipeline/build-model nil) "no-such-stage")))))
+(deftest materialize-view-composes-a-lens-focus
+  (testing "materialize-view renders each primitive a lens selects — the focus area's specs"
+    (let [model   (pipeline/build-model nil)
+          lens-db (s/with-structures
+                    (s/within-module "v"
+                      (Lens "target" (focus "the target extractor's stages"
+                                            '[(Stage ?n) (in-module ?n "target.clojure")]))))
+          db      (cs/merge-dbs [model lens-db])
+          view    (m/materialize-view db (by-name db "target"))]
+      ;; the lens selects target.clojure's stages (analyze, extract) → both appear
+      (is (str/includes? view "Implement `analyze`"))
+      (is (str/includes? view "Implement `extract`"))
+      ;; composition along references is visible: shapes rendered inline
+      (is (str/includes? view "paths: [Path]")))))
+
+(deftest empty-focus-materializes-to-empty-string
+  (testing "a lens whose focus is empty composes to nothing"
+    (let [model   (pipeline/build-model nil)            ; loads the canvas vocab (the (Stage …) rule)
+          lens-db (s/with-structures
+                    (s/within-module "v"
+                      (Lens "none" (focus "nothing" '[(Stage ?n) (in-module ?n "no-such-module")]))))
+          db      (cs/merge-dbs [model lens-db])]
+      (is (= "" (m/materialize-view db (by-name db "none")))))))
