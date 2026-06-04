@@ -16,7 +16,8 @@
    Standalone for now: its own minimal, classification-free schema. The Tier-2
    build path rewires canvas_source/store onto this and deletes the old machinery.
    See doc/specs/2026-05-31-defstructure-design.md."
-  (:require [datascript.core :as d]))
+  (:require [datascript.core :as d]
+            [fukan.canvas.core.rules :as rules]))
 
 ;; ── substrate (minimal, lean — no node-kind / role / family / classification) ─
 
@@ -508,48 +509,59 @@
    interruptible), so it runs on until it finishes or the JVM exits."
   5000)
 
+(defn vocab-rules
+  "The datascript rules derived from the live vocabulary (one per kind + per relation
+   slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
+   at domain altitude: `(Stage ?s) (in-module ?s \"…\") (calls ?s ?c)`."
+  []
+  (rules/derive-rules (all-structures) scalar-slot?))
+
 (defn- run-query
   "Run a law's offender query, returning the offender rows (or nil if none).
-   Only laws with recursive `:rules` can diverge, so only they are run under the
-   *law-timeout-ms* guard (via a future); non-recursive laws run inline. Returns
-   ::timeout if a guarded query exceeds the budget."
-  [db q rules]
-  (if (seq rules)
+   Only laws with their OWN recursive `:rules` can diverge, so only they are run under
+   the *law-timeout-ms* guard (via a future); non-recursive laws run inline. Either
+   way the query gets `rules` (the vocab-derived rules merged with the law's own).
+   Returns ::timeout if a guarded query exceeds the budget."
+  [db q rules recursive?]
+  (if recursive?
     (let [fut     (future (d/q q db rules))
           results (deref fut *law-timeout-ms* ::timeout)]
       (if (= results ::timeout)
         (do (future-cancel fut) ::timeout)
         results))
-    (d/q q db [])))
+    (d/q q db rules)))
 
-(defn- run-law [db {:keys [offenders where rules] :as law}]
+(defn- run-law [db base-rules {:keys [offenders where rules] :as law}]
   (let [scope-tag (law-scope-tag law)
         where*    (if scope-tag
                     (vec (cons [(first offenders) :structure/of scope-tag] where))
                     where)
         q         (vec (concat [:find] offenders [:in '$ '%] [:where] where*))
-        results   (run-query db q rules)]
+        ;; vocab-derived rules are always available; a law's OWN rules signal recursion
+        results   (run-query db q (into (vec base-rules) rules) (boolean (seq rules)))]
     (cond
       (= results ::timeout) ::timeout
       (seq results)         (mapv vec results)
       :else                 nil)))
 
 (defn check
-  "Run every registered structure's laws (slot-cardinality + free) over `db`.
+  "Run every registered structure's laws (slot-cardinality + free) over `db`, with the
+   vocab-derived rules injected so law `:where`s can read at domain altitude.
    Returns a vector of result maps:
      {:structure :law :offenders [...]}        — a violation
      {:structure :law :timed-out? true :message …} — a (recursive) law that
         exceeded *law-timeout-ms* instead of completing."
   [db]
-  (vec
-   (for [{:keys [tag laws] :as sdef} (all-structures)
-         {:keys [desc] :as law} (concat (slot-laws sdef) laws)
-         :let [r (run-law db law)]
-         :when r]
+  (let [base (vocab-rules)]
+   (vec
+    (for [{:keys [tag laws] :as sdef} (all-structures)
+          {:keys [desc] :as law} (concat (slot-laws sdef) laws)
+          :let [r (run-law db base law)]
+          :when r]
      (if (= r ::timeout)
        {:structure tag :law desc :timed-out? true
         :message (str "law exceeded *law-timeout-ms* (" *law-timeout-ms* "ms) "
                       "without completing — likely unbounded recursion over a "
                       "cyclic/indirect graph (recursion must run over a direct "
                       "binary relation, not a rule-derived one)")}
-       {:structure tag :law desc :offenders r}))))
+       {:structure tag :law desc :offenders r})))))
