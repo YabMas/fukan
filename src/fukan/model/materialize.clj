@@ -114,6 +114,24 @@
          (when (seq effects) (str "- **Effects:** " (str/join ", " effects) "\n"))
          (when (seq calls) (str "- **Calls:** " (str/join ", " calls) "\n")))))
 
+;; ── projection: DriftClose — drifting Stages → close-instructions ────────────
+;; instruct ⊂ projection: the drift lens focuses the unrealized Stages; this turns
+;; each into an instruction an LLM acts on to close the drift.
+
+(defmethod render ["DriftClose" :Shape] [db p eid] (shape-str db p eid))
+
+(defmethod render ["DriftClose" :Stage] [db p eid]
+  (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)
+        sig    (str "(" nm (apply str (map #(str " " (:label %)) params)) ")")
+        ptypes (str/join ", " (map #(str (:label %) ": " (render db p (:shape %))) params))]
+    (str "Close drift: `" nm "` is modelled in `" module "` but has no realizing function.\n"
+         (when doc (str "Intent: " doc "\n"))
+         "Implement: " sig (when (seq params) (str " where " ptypes))
+         " → " (if out (render db p out) "Unit") "\n"
+         (when (seq effects) (str "Effects: " (str/join ", " effects) "\n"))
+         (when (seq calls) (str "Calls: " (str/join ", " calls) "\n"))
+         "Add this function so the model and code correspond.")))
+
 ;; ── the views: compose a projection's renders over a focus ───────────────────
 
 (defn- renders?

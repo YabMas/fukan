@@ -113,6 +113,17 @@
       (is (> (count (re-seq #"This is an implementation specification" out)) 3)
           "several Stages projected; bare Kinds/Concepts are not rendered standalone"))))
 
+(deftest driftclose-renders-close-instructions-for-drifting-stages
+  (testing "the shipped DriftClose projection (through the drift lens) turns unrealized Stages into close-instructions"
+    ;; design-only model: no extracted code → every modelled Stage drifts → the drift
+    ;; lens selects them all → DriftClose renders a close-instruction per Stage.
+    (let [db  (pipeline/build-model nil)
+          out (m/materialize-projection db (by-kind-name db :Projection "DriftClose"))]
+      (is (str/includes? out "Close drift: `extract`"))
+      (is (str/includes? out "is modelled in `target.clojure` but has no realizing function"))
+      (is (str/includes? out "Implement: (extract paths)"))
+      (is (str/includes? out "Add this function so the model and code correspond.")))))
+
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"
     (let [model    (pipeline/build-model nil)
