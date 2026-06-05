@@ -9,10 +9,10 @@
      home (an instance carries :name/:doc, slot relations, and now scalar VALUES).
      An attribute's `required?` / `unique?` ARE now expressible — as value slots
      (leaf :Bool values) — closing the gap this domain originally surfaced.
-   - Bidirectional / cyclic relationships (User⇄Order) ARE authorable now that
-     within-module resolves references in a second pass. The shop model is kept
-     acyclic on purpose (a cycle is a violation of the no-circular-dependency
-     law); the circular-dependency test authors a real cycle via forward refs."
+   - Bidirectional / cyclic relationships (User⇄Order) ARE authorable: a `declare`
+     plus var-capture lets one instance reference another defined later. The shop
+     model is kept acyclic on purpose (a cycle is a violation of the no-circular-
+     dependency law); the circular-dependency test authors a real cycle via forward refs."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
 (defstructure DataType

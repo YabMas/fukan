@@ -22,7 +22,7 @@
    - The reachability law's `derives` recursion INLINES its two-hop step (Symbol →
      Production → Symbol) — a recursive rule may not call a helper rule (datascript
      diverges on cyclic data otherwise) — so it terminates over a cyclic grammar.
-     Cyclic/left-recursive grammars are authorable (within-module's second pass
+     Cyclic/left-recursive grammars are authorable (a `declare` plus var-capture
      resolves forward references)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
