@@ -27,8 +27,12 @@
   "(Structure \"name\" & clauses) → (Structure \"name\"): keep the call to the
    (declared) structure var and its name; drop the slot-clause DSL (bare slot
    names + by-name target/label symbols) rather than lint it as code. Staying a
-   call avoids the unused-value flag a bare literal would draw in a body."
+   call avoids the unused-value flag a bare literal would draw in a body.
+
+   A `^:value` structure has NO name — its second child is already a clause
+   (`(Shp (kind \"leaf\"))`), so keep only the head unless the second child is a
+   string literal, else the clause body would be linted as code."
   [{:keys [node]}]
-  (let [[head name-node] (:children node)]
-    {:node (api/list-node
-            (if name-node [head name-node] [head]))}))
+  (let [[head x] (:children node)
+        name? (and x (api/token-node? x) (string? (api/sexpr x)))]
+    {:node (api/list-node (if name? [head x] [head]))}))

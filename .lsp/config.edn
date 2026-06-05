@@ -21,7 +21,41 @@
 
    ;; Namespace-wide exemptions. Mirrors `.clj-kondo/config.edn`'s
    ;; `:config-in-ns` entries — see that file for per-namespace rationale.
-   :exclude #{;; defstructure tests: law-only test structures (e.g. Auditor/Hang)
-              ;; declare a macro that is never called — unused-public-var false
-              ;; positive. Mirrors `.clj-kondo/config.edn`.
-              fukan.canvas.core.structure-test}}}}
+   :exclude #{;; Instance-bearing canvas/demo model + test namespaces: their public
+              ;; `def`s are reached only by the global assembler's reflective var
+              ;; scan (and cross-model var refs inside dropped defstructure clause
+              ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
+              canvas.model.canvas-source
+              canvas.model.collab
+              canvas.model.extraction
+              canvas.model.infra
+              canvas.model.kernel
+              canvas.model.lens
+              canvas.model.lens-engine
+              canvas.model.materialize
+              canvas.model.overview
+              canvas.model.pipeline
+              canvas.model.probe
+              canvas.model.probe-surface
+              canvas.model.projection
+              canvas.model.query-engine
+              canvas.model.target
+              demos.access-control.model.rbac
+              demos.access-control.access-control-test
+              demos.er.model.shop
+              demos.er.er-test
+              demos.grammar.model.key-value
+              demos.grammar.grammar-test
+              demos.type-system.model.lattice
+              demos.type-system.type-system-test
+              demos.workflow.model.fulfilment
+              demos.workflow.workflow-test
+              fukan.canvas.core.assemble-test
+              fukan.canvas.core.lens-test
+              fukan.canvas.core.rules-test
+              fukan.canvas.core.structure-test
+              fukan.canvas.core.value-authoring-test
+              fukan.canvas.projection.probe-code-test
+              fukan.canvas.projection.probes-test
+              fukan.model.materialize-test
+              fukan.model.pipeline-test}}}}

@@ -1,72 +1,238 @@
 {:config-in-ns
- {;; defstructure tests: law-only test structures (e.g. Auditor/Hang) declare a
-  ;; macro that is never called → unused-public-var false positive.
+ {;; Instance-bearing canvas/demo model + test namespaces: their public `def`s are
+  ;; reached only by the global assembler's reflective var scan, their cross-model
+  ;; requires + referred vars are used only inside defstructure clause bodies (which
+  ;; the hook drops), so unused-public-var / unused-namespace / unused-referred-var
+  ;; are false positives here. (clj-kondo CLI is ground truth — mirror in .lsp/config.edn.)
+  ;; the extractor test fixture deliberately holds an unused private defn- (delta),
+  ;; to prove the extractor surfaces a module's private surface
+  sample
+  {:linters {:unused-private-var {:level :off}}}
+  canvas.model.collab
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.projection
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.canvas-source
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.extraction
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.infra
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.kernel
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.lens
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.lens-engine
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.materialize
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.overview
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.pipeline
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.probe
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.probe-surface
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.query-engine
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.model.target
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.access-control.access-control-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.access-control.model.rbac
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.er.er-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.er.model.shop
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.grammar.grammar-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.grammar.model.key-value
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.type-system.model.lattice
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.type-system.type-system-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.workflow.model.fulfilment
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.workflow.workflow-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.canvas.core.assemble-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.canvas.core.lens-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.canvas.core.rules-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.canvas.core.structure-test
-  {:linters {:unused-public-var {:level :off}}}}
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.canvas.core.value-authoring-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.canvas.projection.probe-code-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.canvas.projection.probes-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.model.materialize-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.model.pipeline-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}}
 
  :linters
- {;; The canvas DSL's `rule` lift body uses (when TriggerName ...) as
-  ;; structural trigger syntax, which clj-kondo confuses for Clojure's
-  ;; `when` macro and complains is missing a body. Off project-wide because
-  ;; the canvas DSL is more pervasive than the Clojure `when`-bug-catch is
-  ;; valuable; restore if/when a hook teaches clj-kondo the DSL shape.
-  ;; (The old construction/vocab DSL excludes were removed with that code in
-  ;; the lean-kernel prune; the defstructure DSL is handled by :hooks below.)
+ {;; The canvas DSL's structural clause syntax confuses clj-kondo's `when` body check.
   :missing-body-in-when {:level :off}}
 
- ;; Teach clj-kondo about clojure.test.check macros it doesn't have
- ;; built-in shape for. `defspec` registers a named symbol; lint as def
- ;; so the symbol resolves and the first arg becomes a known var name.
  :lint-as
  {clojure.test.check.clojure-test/defspec clojure.core/def}
 
- ;; The defstructure DSL (fukan.canvas.core.structure): defstructure defines a
- ;; structure + a macro named for it (instance authoring). Both bodies are data
- ;; (slot/law forms; instance clauses with by-name symbols), so hooks rewrite
- ;; them to analyzable forms. Each generated instance macro is registered by its
- ;; fully-qualified name — add new structures here.
+ ;; The defstructure DSL: defstructure defines a structure + a macro named for it.
+ ;; Both bodies are data (slot/law forms; instance clauses with by-name symbols),
+ ;; so hooks rewrite them to analyzable forms. Each generated instance macro is
+ ;; registered by its fully-qualified name — add new structures here.
  :hooks
  {:analyze-call
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
-   ;; fukan-on-fukan model vocabulary (canvas/vocab/**) — named structures only;
-   ;; value structures (Shape) are authored inline in dropped instance bodies.
-   canvas.vocab.shape/Kind  hooks.fukan.structure/instance
-   canvas.vocab.op/Stage    hooks.fukan.structure/instance
-   canvas.vocab.meta/Concept hooks.fukan.structure/instance
    canvas.vocab.arch/Faculty hooks.fukan.structure/instance
-   canvas.vocab.lens/Lens     hooks.fukan.structure/instance
-   canvas.vocab.probe/Probe   hooks.fukan.structure/instance
+   canvas.vocab.arch/Module hooks.fukan.structure/instance
+   canvas.vocab.collab/Phase hooks.fukan.structure/instance
+   canvas.vocab.lens/Lens hooks.fukan.structure/instance
+   canvas.vocab.meta/Concept hooks.fukan.structure/instance
+   canvas.vocab.meta/MetaSlot hooks.fukan.structure/instance
+   canvas.vocab.op/Effect hooks.fukan.structure/instance
+   canvas.vocab.op/Stage hooks.fukan.structure/instance
    canvas.vocab.probe/Finding hooks.fukan.structure/instance
+   canvas.vocab.probe/Probe hooks.fukan.structure/instance
+   canvas.vocab.projection/Mapping hooks.fukan.structure/instance
    canvas.vocab.projection/Projection hooks.fukan.structure/instance
-   canvas.vocab.collab/Phase          hooks.fukan.structure/instance
-   ;; test-only structures (test/fukan/canvas/core/structure_test.clj)
-   fukan.canvas.core.structure-test/Type     hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Function hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Tree     hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/NonEmpty hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Plain    hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Tagged   hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Auditor  hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Box      hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Holder   hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Holder2  hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Seq2     hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/HolderO  hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/Carry    hooks.fukan.structure/instance
-   ;; demo vocabularies (demos/**) — each new demo's defstructure macros go here
-   demos.grammar.vocab.core/Symbol       hooks.fukan.structure/instance
-   demos.grammar.vocab.core/Grammar      hooks.fukan.structure/instance
-   demos.er.vocab.core/DataType          hooks.fukan.structure/instance
-   demos.er.vocab.core/Attribute         hooks.fukan.structure/instance
-   demos.er.vocab.core/Relationship      hooks.fukan.structure/instance
-   demos.er.vocab.core/Entity            hooks.fukan.structure/instance
-   demos.workflow.vocab.core/Step        hooks.fukan.structure/instance
-   demos.workflow.vocab.core/Workflow    hooks.fukan.structure/instance
-   demos.access-control.vocab.core/Action     hooks.fukan.structure/instance
-   demos.access-control.vocab.core/Resource   hooks.fukan.structure/instance
+   canvas.vocab.shape/Kind hooks.fukan.structure/instance
+   canvas.vocab.shape/Shape hooks.fukan.structure/instance
+   demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
-   demos.access-control.vocab.core/Role       hooks.fukan.structure/instance
-   demos.type-system.vocab.core/Field         hooks.fukan.structure/instance
-   demos.type-system.vocab.core/Type          hooks.fukan.structure/instance
-   fukan.canvas.core.rules-test/RuleThing     hooks.fukan.structure/instance
-   fukan.canvas.core.lens-test/Widget         hooks.fukan.structure/instance}}}
+   demos.access-control.vocab.core/Resource hooks.fukan.structure/instance
+   demos.access-control.vocab.core/Role hooks.fukan.structure/instance
+   demos.er.vocab.core/Attribute hooks.fukan.structure/instance
+   demos.er.vocab.core/DataType hooks.fukan.structure/instance
+   demos.er.vocab.core/Entity hooks.fukan.structure/instance
+   demos.er.vocab.core/Relationship hooks.fukan.structure/instance
+   demos.grammar.vocab.core/Grammar hooks.fukan.structure/instance
+   demos.grammar.vocab.core/Production hooks.fukan.structure/instance
+   demos.grammar.vocab.core/Symbol hooks.fukan.structure/instance
+   demos.type-system.vocab.core/Field hooks.fukan.structure/instance
+   demos.type-system.vocab.core/Type hooks.fukan.structure/instance
+   demos.workflow.vocab.core/Step hooks.fukan.structure/instance
+   demos.workflow.vocab.core/Workflow hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Holder hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Node2 hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Seq2 hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Sym2 hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Tag2 hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Thing hooks.fukan.structure/instance
+   fukan.canvas.core.lens-test/Grp hooks.fukan.structure/instance
+   fukan.canvas.core.lens-test/Widget hooks.fukan.structure/instance
+   fukan.canvas.core.rules-test/Mod hooks.fukan.structure/instance
+   fukan.canvas.core.rules-test/RuleThing hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Auditor hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Bad hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/BadOrd hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/BadRec hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/BadVal hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Box hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Boxed hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Carry hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Function hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Holder hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Holder2 hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/HolderO hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/NonEmpty hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/OrdVal hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Pair hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Plain hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Seq2 hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Tagged hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Tree hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Type hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Wrapped hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Attr hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Doc hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Ent hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/FocusT hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Grp hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/HoldT hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Lnk hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Prod hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/RKind hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/RShape hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/SHolder hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Shp hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Sym hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/WA hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/WB hooks.fukan.structure/instance}}}
