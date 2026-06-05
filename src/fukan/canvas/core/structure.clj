@@ -80,6 +80,8 @@
 
 ;; ── value-authoring: instance-form / value-form ──────────────────────────────
 
+(defn- unquote-lit [v] (if (and (seq? v) (= 'quote (first v))) (second v) v))
+
 (defn- ref-arg->form
   "Code for one relation-slot target: a symbol → (var sym); an inline (Tag ...) form
    → left to evaluate (it yields an InstanceValue)."
@@ -173,8 +175,13 @@
         doc     (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) body)
         clauses (remove #(contains? builtin-clauses (first %)) body)
         scalar? (fn [c] (let [s (slot-for sdef (keyword (first c)))] (and s (scalar-slot? s))))
-        scalars (into {} (for [c clauses :when (scalar? c)]
-                           [(keyword "val" (clojure.core/name (first c))) (second c)]))
+        scalars (into {} (for [c clauses :when (scalar? c)
+                               :let [slot (slot-for sdef (keyword (first c)))]
+                               pair (cond-> [[(keyword "val" (clojure.core/name (first c))) (second c)]]
+                                      (and (:payload slot) (>= (count c) 3))
+                                      (conj [(keyword "val" (clojure.core/name (:payload slot)))
+                                             (unquote-lit (nth c 2))]))]
+                           pair))
         rels    (mapv (fn [c]
                         (let [rk         (keyword (first c))
                               slot       (slot-for sdef rk)
@@ -232,8 +239,6 @@
             :card (keyword (first card-form))
             :target (keyword (name (second card-form)))}
            (apply hash-map opts))))
-
-(defn- unquote-lit [v] (if (and (seq? v) (= 'quote (first v))) (second v) v))
 
 (defn- parse-law
   "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?).
@@ -348,7 +353,9 @@
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 
 (defn- relation-slot-laws
-  "Cardinality + target-type laws for a RELATION slot (target is a structure)."
+  "Cardinality + target-type laws for a RELATION slot (target is a structure).
+   When `target` is `:Any` (the wildcard), the target-type law is skipped —
+   any node is accepted; only cardinality laws are emitted."
   [tag {:keys [rel card target]}]
   (let [tn (name tag) rn (name rel)
         target-law {:desc (str tn "." rn " target must be a " (name target))
@@ -369,7 +376,7 @@
                                ['?r1 :rel/from '?x] ['?r1 :rel/kind rel]
                                ['?r2 :rel/from '?x] ['?r2 :rel/kind rel]
                                [(list 'not= '?r1 '?r2)]]})]
-    (cond-> [target-law]
+    (cond-> (if (= target :Any) [] [target-law])
       (= card :one)      (conj (none-law "requires exactly one")
                                (several-law "requires exactly one"))
       (= card :some)     (conj (none-law "requires at least one"))

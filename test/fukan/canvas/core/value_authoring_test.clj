@@ -1,5 +1,7 @@
 (ns fukan.canvas.core.value-authoring-test
   (:require [clojure.test :refer [deftest is testing]]
+            [datascript.core :as d]
+            [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s]))
 
 (deftest instance-value-record-holds-composition
@@ -149,3 +151,53 @@
         (is (= {:val/kind "type"} (:scalars of-iv)))
         (let [type-clause (first (filter #(= :type (:rk %)) (:clauses of-iv)))]
           (is (= [#'Foo] (:targets type-clause)) "field type must be (var Foo)"))))))
+
+;; ── Change 1: wildcard Any slot ───────────────────────────────────────────────
+;; A slot declared (many Any) accepts nodes of any structure — no target-type
+;; constraint, only cardinality laws.
+
+(s/defstructure WA "a")
+(s/defstructure WB "b")
+(s/defstructure Grp "group" (slot :child (many Any)))
+
+(def wa (WA "a-node"))
+(def wb (WB "b-node"))
+(def grp (Grp "g" (child wa) (child wb)))
+
+(deftest wildcard-slot-accepts-any-type
+  (let [db (a/assemble-vars [#'wa #'wb #'grp])]
+    (is (empty? (s/check db))
+        "no target-type violation when child members are of heterogeneous structures")
+    (is (= 2 (count (d/q '[:find ?e
+                            :where [?r :rel/kind :child]
+                                   [?r :rel/from ?g] [?g :entity/name "g"]
+                                   [?r :rel/to ?e]]
+                          db)))
+        "two heterogeneous members are present")))
+
+;; ── Change 2: :payload support in build-instance-form ─────────────────────────
+;; A scalar slot with :payload stores a sibling :val/<payload> leaf alongside
+;; the primary :val/<slot> leaf when a 3rd clause element is present.
+
+(s/defstructure Doc "doc" (slot :note (one :String) :payload :extra))
+
+(def t-doc (Doc "d" (note "hello" [:a :b :c])))
+
+(deftest payload-stores-sibling-leaf
+  (is (= "hello" (:val/note (:scalars t-doc)))
+      "primary scalar leaf is present")
+  (is (= [:a :b :c] (:val/extra (:scalars t-doc)))
+      "payload sibling leaf is stored alongside the primary"))
+
+;; ── Change 3: generic in-module rule ─────────────────────────────────────────
+;; (in-module ?e ?mname) now resolves via :child relations, not :Module tag.
+;; The Grp + wa + wb assembled above: grp is named "g" and has :child rels to wa and wb.
+
+(deftest in-module-via-child-relation
+  (let [db      (a/assemble-vars [#'wa #'wb #'grp])
+        members (d/q '[:find [?e ...]
+                        :in $ %
+                        :where (in-module ?e "g")]
+                     db (s/vocab-rules))]
+    (is (= 2 (count members))
+        "(in-module ?e \"g\") via :child relation finds both heterogeneous members")))

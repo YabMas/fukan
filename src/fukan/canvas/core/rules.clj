@@ -9,8 +9,10 @@
    (in `check`) without a `structure ↔ rules` cycle.")
 
 (def substrate-rules
-  "Fixed rules for substrate relations that are not structure slots."
-  '[[(in-module ?e ?mname) [?m :structure/of :Module] [?m :entity/name ?mname] [?m :module/child ?e]]
+  "Fixed rules for substrate relations that are not structure slots.
+   `in-module` is generic: 'e is in module named mname' means some node m named mname
+   has a :child relation to e — no :Module tag, no :module/child attr required."
+  '[[(in-module ?e ?mname) [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
     [(named ?e ?n) [?e :entity/name ?n]]])
 
 (defn- rule-sym [kw] (symbol (name kw)))
