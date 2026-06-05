@@ -17,15 +17,15 @@
             [canvas.model.canvas-source :as canvas-source]
             [canvas.model.extraction :as extraction]))
 
-(def SrcRoot     (Kind "SrcRoot"))
-(def StructureDb (Kind "StructureDb"))
+(def SrcRoot     (Kind))
+(def StructureDb (Kind))
 
 ;; build-model : SrcRoot -> StructureDb ; ingests the design (canvas-source/build)
 ;; and, given a code-root, folds the registered project extractor's output
 ;; (extraction/run-extractor) onto the same graph via union-dbs. All collaborators
 ;; are cross-module links (the seams).
 (def build-model
-  (Stage "build-model"
+  (Stage
     (in [source SrcRoot])
     (out StructureDb)
     (calls canvas-source/build

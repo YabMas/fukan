@@ -16,49 +16,49 @@
             [canvas.vocab.op :refer [Stage]]
             [canvas.vocab.arch :refer [Module]]))
 
-(def Str       (Kind "Str"))
-(def File      (Kind "File"))
-(def NsSymbol  (Kind "NsSymbol"))
-(def Db        (Kind "Db"))
-(def EntityMap (Kind "EntityMap"))
-(def RefTx     (Kind "RefTx"))
-(def Eid       (Kind "Eid"))
-(def Unit      (Kind "Unit"))
+(def Str       (Kind))
+(def File      (Kind))
+(def NsSymbol  (Kind))
+(def Db        (Kind))
+(def EntityMap (Kind))
+(def RefTx     (Kind))
+(def Eid       (Kind))
+(def Unit      (Kind))
 
 ;; discovery — scan canvas/ for *.clj and derive namespace symbols
-(def file->ns-segment (Stage "file->ns-segment" (in [seg Str]) (out Str)))       ; pure
+(def file->ns-segment (Stage (in [seg Str]) (out Str)))       ; pure
 (def file->ns-symbol
-  (Stage "file->ns-symbol" (in [rel-path Str]) (out NsSymbol)                     ; pure
+  (Stage (in [rel-path Str]) (out NsSymbol)                     ; pure
     (calls file->ns-segment)))
-(def canvas-root-dirs (Stage "canvas-root-dirs" (out [File]) (performs :io)))     ; classpath + fs
+(def canvas-root-dirs (Stage (out [File]) (performs :io)))     ; classpath + fs
 (def discover-canvas-files-in
-  (Stage "discover-canvas-files-in" (in [root File])
+  (Stage (in [root File])
     (out [{:root File :rel-path Str}]) (performs :io)))                           ; file-seq
 (def discover-canvas-namespaces
-  (Stage "discover-canvas-namespaces" (out [NsSymbol]) (performs :io :stderr)
+  (Stage (out [NsSymbol]) (performs :io :stderr)
     (calls canvas-root-dirs discover-canvas-files-in file->ns-symbol)))
 (def require-canvas-namespace
-  (Stage "require-canvas-namespace" (in [ns-sym NsSymbol]) (out Unit)
+  (Stage (in [ns-sym NsSymbol]) (out Unit)
     (performs :require :throws)))                                                 ; require + throw on load failure
 (def canvas-namespaces
-  (Stage "canvas-namespaces" (out [NsSymbol])
+  (Stage (out [NsSymbol])
     (calls discover-canvas-namespaces)))                                          ; pure delegation
 
 ;; union — fold the extractor's code db onto the assembled design db
 (def db->entity-maps
-  (Stage "db->entity-maps" (in [db Db])
+  (Stage (in [db Db])
     (out {:entity-maps [EntityMap] :ref-txs [RefTx]})))                           ; pure (datascript)
 (def union-dbs
-  (Stage "union-dbs" (in [dbs [Db]]) (out Db)                                     ; pure
+  (Stage (in [dbs [Db]]) (out Db)                                     ; pure
     (calls db->entity-maps)))
 
 ;; build — discover + require + assemble → the model
 (def build
-  (Stage "build" (out Db) (performs :io :stderr :require)
+  (Stage (out Db) (performs :io :stderr :require)
     (calls discover-canvas-namespaces require-canvas-namespace)))
 
 (def canvas-source
-  (Module "canvas-source"
+  (Module
     (child Str File NsSymbol Db EntityMap RefTx Eid Unit
            file->ns-segment file->ns-symbol canvas-root-dirs discover-canvas-files-in
            discover-canvas-namespaces require-canvas-namespace canvas-namespaces

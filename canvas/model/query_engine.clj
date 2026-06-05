@@ -16,16 +16,16 @@
             [canvas.vocab.op :refer [Stage]]
             [canvas.vocab.arch :refer [Module]]))
 
-(def Keyword      (Kind "Keyword"))
-(def Symbol       (Kind "Symbol"))
-(def StructureDef (Kind "StructureDef"))
-(def Pred         (Kind "Pred"))
-(def Rule         (Kind "Rule"))
+(def Keyword      (Kind))
+(def Symbol       (Kind))
+(def StructureDef (Kind))
+(def Pred         (Kind))
+(def Rule         (Kind))
 
 (def rule-sym
-  (Stage "rule-sym" (in [kw Keyword]) (out Symbol)))                            ; pure: a tag → its rule head symbol
+  (Stage (in [kw Keyword]) (out Symbol)))                            ; pure: a tag → its rule head symbol
 (def derive-rules
-  (Stage "derive-rules" (in [structures [StructureDef]]) (in [scalar? Pred])    ; pure
+  (Stage (in [structures [StructureDef]]) (in [scalar? Pred])    ; pure
     (out [Rule])
     (calls rule-sym)))
 

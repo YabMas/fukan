@@ -11,18 +11,18 @@
             [canvas.vocab.op :refer [Stage]]
             [canvas.vocab.arch :refer [Module]]))
 
-(def Extractor   (Kind "Extractor"))
-(def Path        (Kind "Path"))
-(def StructureDb (Kind "StructureDb"))
-(def Unit        (Kind "Unit"))
+(def Extractor   (Kind))
+(def Path        (Kind))
+(def StructureDb (Kind))
+(def Unit        (Kind))
 
 ;; register the project's extractor (a fn Path → StructureDb) into the slot
 (def register-extractor!
-  (Stage "register-extractor!" (in [f Extractor]) (out Unit) (performs :state)))
+  (Stage (in [f Extractor]) (out Unit) (performs :state)))
 ;; run the registered extractor over a code-root → its structure db
 (def run-extractor
-  (Stage "run-extractor" (in [code-root Path]) (out StructureDb) (performs :state)))
+  (Stage (in [code-root Path]) (out StructureDb) (performs :state)))
 
 (def extraction
-  (Module "extraction" (child Extractor Path StructureDb Unit
+  (Module (child Extractor Path StructureDb Unit
                               register-extractor! run-extractor)))

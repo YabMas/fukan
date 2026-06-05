@@ -16,22 +16,22 @@
             [canvas.vocab.arch :refer [Module]]
             [canvas.model.kernel :as kernel]))
 
-(def Db     (Kind "Db"))
-(def Clause (Kind "Clause"))
-(def Eid    (Kind "Eid"))
+(def Db     (Kind))
+(def Clause (Kind))
+(def Eid    (Kind))
 
 ;; the shared engine: run :where clauses (binding ?n) WITH the vocab-derived rules
 (def focus-nodes
-  (Stage "focus-nodes" (in [db Db]) (in [clauses [Clause]]) (out [Eid])           ; pure (datascript + rules)
+  (Stage (in [db Db]) (in [clauses [Clause]]) (out [Eid])           ; pure (datascript + rules)
     (calls kernel/vocab-rules)))
 ;; read a stored lens's :val/query, then delegate to focus-nodes
 (def evaluate-lens
-  (Stage "evaluate-lens" (in [db Db]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
+  (Stage (in [db Db]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
     (calls focus-nodes)))
 ;; refined focus (lens-within-lens): narrow a focus to members also matching clauses —
 ;; the composable step acts chain over
 (def refine
-  (Stage "refine" (in [db Db]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
+  (Stage (in [db Db]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
     (calls focus-nodes)))
 
 (def core-lens

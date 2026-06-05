@@ -21,26 +21,26 @@
 
 ;; Actions
 (def read-action (Action "read"))
-(def submit      (Action "submit"))
-(def approve     (Action "approve"))
+(def submit      (Action))
+(def approve     (Action))
 
 ;; Resources
-(def Report (Resource "Report"))
-(def Budget (Resource "Budget"))
+(def Report (Resource))
+(def Budget (Resource))
 
 ;; Permissions — forward ref: submit-report declares conflicts-with approve-report
 ;; before approve-report is defined; var-capture resolves at assemble time.
 (declare approve-report)
-(def read-report    (Permission "read-report"    (action read-action) (resource Report)))
-(def read-budget    (Permission "read-budget"    (action read-action) (resource Budget)))
-(def submit-report  (Permission "submit-report"  (action submit)      (resource Report)
+(def read-report    (Permission (action read-action) (resource Report)))
+(def read-budget    (Permission (action read-action) (resource Budget)))
+(def submit-report  (Permission (action submit)      (resource Report)
                                                  (conflicts-with approve-report)))
-(def approve-report (Permission "approve-report" (action approve)     (resource Report)))
-(def approve-budget (Permission "approve-budget" (action approve)     (resource Budget)))
+(def approve-report (Permission (action approve)     (resource Report)))
+(def approve-budget (Permission (action approve)     (resource Budget)))
 
 ;; Roles — viewer is a diamond apex (inherited by both author and approver)
-(def viewer   (Role "viewer"   (grants read-report read-budget)))
-(def author   (Role "author"   (inherits viewer) (grants submit-report)))
-(def approver (Role "approver" (inherits viewer) (grants approve-report approve-budget)))
+(def viewer   (Role (grants read-report read-budget)))
+(def author   (Role (inherits viewer) (grants submit-report)))
+(def approver (Role (inherits viewer) (grants approve-report approve-budget)))
 
 (defn build [] (a/assemble ['demos.access-control.model.rbac]))

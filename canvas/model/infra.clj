@@ -9,20 +9,20 @@
             [canvas.vocab.op :refer [Stage]]
             [canvas.vocab.arch :refer [Module]]))
 
-(def Src   (Kind "Src"))
-(def Model (Kind "Model"))
+(def Src   (Kind))
+(def Model (Kind))
 
 (def load-model
-  (Stage "load-model"
+  (Stage
     (doc "Build (or reload) the held Model from a src path.")
     (in [src Src])
     (out Model)))
 (def get-model
-  (Stage "get-model"
+  (Stage
     (doc "The current held Model, or none.")
     (out Model)))
 (def refresh-model
-  (Stage "refresh-model"
+  (Stage
     (doc "Rebuild the Model from the last src path.")
     (out Model)))
 

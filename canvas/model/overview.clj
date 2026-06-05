@@ -27,45 +27,45 @@
 
 ;; the hub — realized by the subsystems that build and hold it
 (def Model
-  (Faculty "Model" (doc "The unified structure db — fukan's heart; everything orbits it.")
+  (Faculty (doc "The unified structure db — fukan's heart; everything orbits it.")
     (realized-by pipeline/model-pipeline canvas-source/canvas-source infra/infra-model)))
 
 ;; what the Model is built from / fed by — with cross-view links to the
 ;; subsystem models that realize them (interlocking views)
 (def Structure
-  (Faculty "Structure" (doc "The lean-core primitive: a composition of slots + laws.")
+  (Faculty (doc "The lean-core primitive: a composition of slots + laws.")
     (feeds Model)
     (realized-by kernel/core-structure query-engine/core-rules)))   ; kernel meta-model + query-rule derivation
 (def Canvas
-  (Faculty "Canvas" (doc "The reasoning surface; specs author structures into the model.")
+  (Faculty (doc "The reasoning surface; specs author structures into the model.")
     (feeds Model)))
 (def Target
-  (Faculty "Target" (doc "The analyzed codebase — implementation + specifications.")
+  (Faculty (doc "The analyzed codebase — implementation + specifications.")
     (feeds Model)
     (realized-by target/target-clojure target/target-correspondence)))  ; extraction + correspondence
 
 ;; the cross-cutting FOCUS and the two ACTS that compose with it
 (def Lens
-  (Faculty "Lens" (doc "A focus over the model — which slice/aspect to attend to; composes with either act.")
+  (Faculty (doc "A focus over the model — which slice/aspect to attend to; composes with either act.")
     (reads Model) (feeds Probe Projection)
     (realized-by lens/lens lens-engine/core-lens)))                     ; the lens (focus) view + its engine
 (def Probe
-  (Faculty "Probe" (doc "Reads the model through a lens → a finding (inspect = a gating finding).")
+  (Faculty (doc "Reads the model through a lens → a finding (inspect = a gating finding).")
     (reads Model) (feeds Finding)
     (realized-by probe/probe probe-surface/probes)))                    ; the probe (read) view + its leaves
 (def Projection
-  (Faculty "Projection" (doc "Re-presents the model in a target form — blueprint, instructions, ….")
+  (Faculty (doc "Re-presents the model in a target form — blueprint, instructions, ….")
     (reads Model) (feeds Blueprint Instruction)                         ; instruct ⊂ projection (a target)
     (realized-by projection/projection probe-surface/probe-code)))      ; the projection view + the probe-spec projector
 
 ;; the outputs reasoned-with
-(def Finding     (Faculty "Finding"     (doc "A probe's output — a View to reason with, or a gating Signal (inspect).")))
-(def Blueprint   (Faculty "Blueprint"   (doc "Implementation code projected from the model — one projection target.")))
-(def Instruction (Faculty "Instruction" (doc "Guidance an LLM acts on to build or close drift.")))
+(def Finding     (Faculty (doc "A probe's output — a View to reason with, or a gating Signal (inspect).")))
+(def Blueprint   (Faculty (doc "Implementation code projected from the model — one projection target.")))
+(def Instruction (Faculty (doc "Guidance an LLM acts on to build or close drift.")))
 
 ;; the "fukan" module groups the faculties — collab's phases reference its members
 ;; (e.g. (across "fukan" "Lens")) as ordinary var refs into this namespace.
 (def fukan
-  (Module "fukan"
+  (Module
     (child Model Structure Canvas Target Lens Probe Projection
            Finding Blueprint Instruction)))

@@ -13,33 +13,33 @@
 (declare Focus Observe Reason Apply Reinspect)
 
 (def Intend
-  (Phase "Intend"
+  (Phase
     (doc "A human/LLM forms a question or a goal for the system.")
     (next Focus)))
 (def Focus
-  (Phase "Focus"
+  (Phase
     (doc "Attend to the relevant slice of the model — pick a lens.")
     (via overview/Lens)
     (next Observe)))
 (def Observe
-  (Phase "Observe"
+  (Phase
     (doc "Probe the model through that focus → a finding to reason with.")
     (via overview/Probe)
     (next Reason)))
 (def Reason
-  (Phase "Reason"
+  (Phase
     (doc "The human/LLM reasons with the finding and decides a change.")
     (next Apply)))
 (def Apply
-  (Phase "Apply"
+  (Phase
     (doc "Make the change — project a blueprint, or the LLM edits code from it.")
     (via overview/Projection)
     (next Reinspect)))
 (def Reinspect
-  (Phase "Reinspect"
+  (Phase
     (doc "The edit drifts code from the model; re-inspecting (the drift probe) surfaces it, reopening the loop.")
     (via overview/Probe)
     (next Intend)))
 
 (def collab
-  (Module "collab" (child Intend Focus Observe Reason Apply Reinspect)))
+  (Module (child Intend Focus Observe Reason Apply Reinspect)))

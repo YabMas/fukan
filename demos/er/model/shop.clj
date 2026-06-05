@@ -15,18 +15,18 @@
 
 ;; User
 (def attr-name (Attribute "name"  (type StrType) (required true)))
-(def email     (Attribute "email" (type StrType) (required true) (unique? true)))
-(def User      (Entity "User" (attr attr-name) (attr email)))
+(def email     (Attribute (type StrType) (required true) (unique? true)))
+(def User      (Entity (attr attr-name) (attr email)))
 
 ;; Product
-(def title   (Attribute "title" (type StrType) (required true)))
-(def price   (Attribute "price" (type IntType) (required true)))
-(def Product (Entity "Product" (attr title) (attr price)))
+(def title   (Attribute (type StrType) (required true)))
+(def price   (Attribute (type IntType) (required true)))
+(def Product (Entity (attr title) (attr price)))
 
 ;; Order — references User and Product
-(def total     (Attribute "total" (type IntType)))
-(def placed-by (Relationship "placed-by" (target User)))
-(def contains  (Relationship "contains"  (target Product)))
-(def Order     (Entity "Order" (attr total) (rel placed-by) (rel contains)))
+(def total     (Attribute (type IntType)))
+(def placed-by (Relationship (target User)))
+(def contains  (Relationship (target Product)))
+(def Order     (Entity (attr total) (rel placed-by) (rel contains)))
 
 (defn build [] (a/assemble ['demos.er.model.shop]))

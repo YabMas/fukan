@@ -11,9 +11,9 @@
             [canvas.model.kernel :as kernel]))
 
 ;; non-gating findings — perspectives to reason with (Views)
-(def Survey   (Finding "Survey"   (gating false) (doc "A structural overview of the whole model.")))
+(def Survey   (Finding (gating false) (doc "A structural overview of the whole model.")))
 (def Patterns
-  (Finding "Patterns" (gating false)
+  (Finding (gating false)
     (doc "Recurring structural patterns across the model.")
     (holds "a model with no recurring structures yields no reported patterns"
            (fn [result target-db]
@@ -26,33 +26,33 @@
                                  [?f2 :structure/of ?ft] [?t2 :structure/of ?tt]
                                  [(not= ?r1 ?r2)]]
                         target-db)))))))
-(def Consistency (Finding "Consistency" (gating false) (doc "Where contracts and structure align — or drift.")))
-(def TarPit      (Finding "TarPit"      (gating false) (doc "Complexity hotspots — tangles worth attention.")))
+(def Consistency (Finding (gating false) (doc "Where contracts and structure align — or drift.")))
+(def TarPit      (Finding (gating false) (doc "Complexity hotspots — tangles worth attention.")))
 ;; gating findings — trust verdicts (the inspect case → Signals)
 (def IntegrityReport
-  (Finding "IntegrityReport" (gating true)
+  (Finding (gating true)
     (doc "Whether the model's structure holds together.")
     (holds "a model with no law violations yields no reported violations"
            (fn [result target-db]
              (or (empty? (:observations result))
                  (seq (fukan.canvas.core.structure/check target-db)))))))
-(def CoverageReport (Finding "CoverageReport" (gating true) (doc "How much of the target's code is spec-covered.")))
-(def DriftReport    (Finding "DriftReport"    (gating true) (doc "Where specifications and code have diverged.")))
+(def CoverageReport (Finding (gating true) (doc "How much of the target's code is spec-covered.")))
+(def DriftReport    (Finding (gating true) (doc "Where specifications and code have diverged.")))
 
 ;; probes — each reads through a lens → a finding
-(def survey      (Probe "survey"      (through lens/survey)      (yields Survey)))
-(def patterns    (Probe "patterns"    (through lens/patterns)    (yields Patterns)))
-(def consistency (Probe "consistency" (through lens/consistency) (yields Consistency)))
-(def tar-pit     (Probe "tar-pit"     (through lens/tar-pit)     (yields TarPit)))
+(def survey      (Probe (through lens/survey)      (yields Survey)))
+(def patterns    (Probe (through lens/patterns)    (yields Patterns)))
+(def consistency (Probe (through lens/consistency) (yields Consistency)))
+(def tar-pit     (Probe (through lens/tar-pit)     (yields TarPit)))
 ;; inspects — probes whose finding gates. integrity COMPOSES the kernel's modelled
 ;; `check` capability — the same :calls relation a Stage uses (1-on-1 with the
 ;; projected code: probe-integrity calls check).
-(def integrity   (Probe "integrity"   (through lens/integrity)   (yields IntegrityReport)
+(def integrity   (Probe (through lens/integrity)   (yields IntegrityReport)
                    (calls kernel/check)))
-(def coverage    (Probe "coverage"    (through lens/coverage)    (yields CoverageReport)))
-(def drift       (Probe "drift"       (through lens/drift)       (yields DriftReport)))
+(def coverage    (Probe (through lens/coverage)    (yields CoverageReport)))
+(def drift       (Probe (through lens/drift)       (yields DriftReport)))
 
 (def probe
-  (Module "probe"
+  (Module
     (child Survey Patterns Consistency TarPit IntegrityReport CoverageReport DriftReport
            survey patterns consistency tar-pit integrity coverage drift)))

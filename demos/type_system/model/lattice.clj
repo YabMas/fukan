@@ -23,14 +23,14 @@
 (def FloatT  (Type "Float" (subtype-of NumberT)))
 
 ;; Point { x: IntT, y: IntT }
-(def px    (Field "px" (fname "x") (type IntT)))
-(def py    (Field "py" (fname "y") (type IntT)))
-(def Point (Type "Point" (field px) (field py)))
+(def px    (Field (fname "x") (type IntT)))
+(def py    (Field (fname "y") (type IntT)))
+(def Point (Type (field px) (field py)))
 
 ;; Point3D <: Point — its own x/y Field nodes (distinct from Point's), plus z
-(def qx      (Field "qx" (fname "x") (type IntT)))
-(def qy      (Field "qy" (fname "y") (type IntT)))
-(def qz      (Field "qz" (fname "z") (type IntT)))
-(def Point3D (Type "Point3D" (field qx) (field qy) (field qz) (subtype-of Point)))
+(def qx      (Field (fname "x") (type IntT)))
+(def qy      (Field (fname "y") (type IntT)))
+(def qz      (Field (fname "z") (type IntT)))
+(def Point3D (Type (field qx) (field qy) (field qz) (subtype-of Point)))
 
 (defn build [] (a/assemble ['demos.type-system.model.lattice]))

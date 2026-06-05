@@ -67,20 +67,20 @@
 ;; structure's laws over the db and yields the violations that hold. This is
 ;; the canonical integrity inspect — the capability the agent's integrity probe
 ;; composes, so it lives in the model 1-on-1 with the code.
-(def StructureDb (Kind "StructureDb"))
-(def Violation   (Kind "Violation"))
-(def Rule        (Kind "Rule"))
+(def StructureDb (Kind))
+(def Violation   (Kind))
+(def Rule        (Kind))
 
 ;; the rules-cut bridge: derive the datalog rules from the live vocabulary
 ;; (delegating to core.rules) — the rules check + the lens engine inject so
 ;; laws/lenses read at domain altitude.
 (def vocab-rules
-  (Stage "vocab-rules"
+  (Stage
     (doc "The datalog rules derived from the live vocabulary, injected into laws/lenses.")
     (out [Rule])
     (calls query-engine/derive-rules)))
 (def check
-  (Stage "check"
+  (Stage
     (doc "Run every structure's laws over the model db; yield the violations.")
     (in [db StructureDb])
     (out [Violation])

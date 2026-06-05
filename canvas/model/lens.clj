@@ -16,20 +16,20 @@
             [canvas.vocab.arch :refer [Module]]))
 
 ;; focuses fed to reasoning probes (non-gating findings)
-(def survey      (Lens "survey"      (focus "the whole model's structure"
+(def survey      (Lens (focus "the whole model's structure"
                                             '[[?n :structure/of _]])))            ; every node
-(def patterns    (Lens "patterns"    (focus "recurring structures across the model"
+(def patterns    (Lens (focus "recurring structures across the model"
                                             '[[?r :rel/from ?n]])))               ; the relational fabric (relation sources)
-(def consistency (Lens "consistency" (focus "where contracts and structure align — or drift"
+(def consistency (Lens (focus "where contracts and structure align — or drift"
                                             '[(Stage ?n)])))                      ; the contract-bearing units
-(def tar-pit     (Lens "tar-pit"     (focus "complexity hotspots — tangles worth attention"
+(def tar-pit     (Lens (focus "complexity hotspots — tangles worth attention"
                                             '[(calls ?n ?callee)])))             ; the call graph (callers)
 ;; focuses fed to inspect probes (gating findings — trust verdicts)
-(def integrity   (Lens "integrity"   (focus "the model's structural integrity — laws, partitions"
+(def integrity   (Lens (focus "the model's structural integrity — laws, partitions"
                                             '[[?n :structure/of _]])))            ; the whole model (laws span it)
-(def coverage    (Lens "coverage"    (focus "spec ↔ code coverage"
+(def coverage    (Lens (focus "spec ↔ code coverage"
                                             '[(Operation ?n)])))                  ; the code surface
-(def drift       (Lens "drift"       (focus "spec ↔ code divergence"
+(def drift       (Lens (focus "spec ↔ code divergence"
                                             ;; the unrealized-Stage pattern — a Stage with no
                                             ;; same-named Operation in a corresponding module
                                             '[(Stage ?n) (named ?n ?nm) (in-module ?n ?cm)
@@ -37,4 +37,4 @@
                                                    [(fukan.target.correspondence/module-corresponds? ?cm ?km)])])))
 
 (def lens
-  (Module "lens" (child survey patterns consistency tar-pit integrity coverage drift)))
+  (Module (child survey patterns consistency tar-pit integrity coverage drift)))

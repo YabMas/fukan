@@ -10,7 +10,7 @@
             [canvas.model.lens :as lens]))
 
 (def Blueprint
-  (Projection "Blueprint"
+  (Projection
     (doc "The model projected to implementation code — the first projection target.")
     (through lens/survey)   ; renders through the whole-model focus (reused from the survey probe)
     (maps (Mapping (from "an atomic value")    (to "a def")))
@@ -24,11 +24,11 @@
 ;; contextualizes Blueprint as a new feature, a refactor, etc. — just a different
 ;; context over the same base.
 (def DriftClose
-  (Projection "DriftClose"
+  (Projection
     (doc "Blueprint, framed as drift to close — the unrealized Stages as instructions to implement.")
     (contextualizes Blueprint)
     (through lens/drift)
     (context "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:")))
 
 (def projection
-  (Module "projection" (child Blueprint DriftClose)))
+  (Module (child Blueprint DriftClose)))

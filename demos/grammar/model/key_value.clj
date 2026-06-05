@@ -17,10 +17,10 @@
             [demos.grammar.vocab.core :refer [Symbol Grammar Production]]))
 
 ;; terminals — no productions
-(def COLON  (Symbol "COLON"))
-(def IDENT  (Symbol "IDENT"))
-(def STRING (Symbol "STRING"))
-(def NUMBER (Symbol "NUMBER"))
+(def COLON  (Symbol))
+(def IDENT  (Symbol))
+(def STRING (Symbol))
+(def NUMBER (Symbol))
 
 ;; nonterminals — :produces one or more Production alternatives;
 ;; a Production's :rhs is an ordered sequence (vector)

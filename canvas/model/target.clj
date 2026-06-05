@@ -20,28 +20,28 @@
             [canvas.vocab.arch :refer [Module]]
             [canvas.model.kernel :as kernel]))
 
-(def Path        (Kind "Path"))
-(def Analysis    (Kind "Analysis"))
-(def StructureDb (Kind "StructureDb"))
+(def Path        (Kind))
+(def Analysis    (Kind))
+(def StructureDb (Kind))
 
 ;; the Clojure extractor — source paths → code structures merged into a db
-(def analyze (Stage "analyze" (in [paths [Path]]) (out Analysis) (performs :io)))   ; clj-kondo run!
+(def analyze (Stage (in [paths [Path]]) (out Analysis) (performs :io)))   ; clj-kondo run!
 (def extract
-  (Stage "extract" (in [paths [Path]]) (out StructureDb) (performs :io)             ; reads source (no eval)
+  (Stage (in [paths [Path]]) (out StructureDb) (performs :io)             ; reads source (no eval)
     (calls analyze)))
 
 (def target-clojure
   (Module "target.clojure" (child Path Analysis StructureDb analyze extract)))
 
 ;; the model↔code correspondence — drift as a query over the unified graph
-(def StageName     (Kind "StageName"))
-(def OperationName (Kind "OperationName"))
+(def StageName     (Kind))
+(def OperationName (Kind))
 
 (def unrealized-stages
-  (Stage "unrealized-stages" (in [db StructureDb]) (out [StageName])                ; spec→code gaps (via the law)
+  (Stage (in [db StructureDb]) (out [StageName])                ; spec→code gaps (via the law)
     (calls kernel/check)))
 (def unrealized-operations
-  (Stage "unrealized-operations" (in [db StructureDb]) (out [OperationName])))      ; code→spec gaps (a query)
+  (Stage (in [db StructureDb]) (out [OperationName])))      ; code→spec gaps (a query)
 
 (def target-correspondence
   (Module "target.correspondence"
