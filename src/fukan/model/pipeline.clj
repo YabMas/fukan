@@ -27,5 +27,5 @@
         code-db (when (and code-root (.exists (io/file code-root)))
                   (extraction/run-extractor code-root))]
     (if code-db
-      (canvas-source/resolve-cross-refs (canvas-source/merge-dbs [design code-db]))
+      (canvas-source/union-dbs [design code-db])
       design)))
