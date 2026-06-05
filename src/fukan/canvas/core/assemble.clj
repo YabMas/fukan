@@ -61,7 +61,8 @@
   "Scan `ns-syms` for instance-vars and build one structure db (nodes first, then rels).
    Transacts all nodes before any rels so datascript lookup-refs resolve across cycles."
   [ns-syms]
-  (let [[nodes rels] (reduce (fn [[nodes rels] [v iv]] (walk iv (s/var-id v) nodes rels))
+  (let [[nodes rels] (reduce (fn [[nodes rels] [v iv]]
+                               (walk iv (if (:value? iv) (s/value-content-key iv) (s/var-id v)) nodes rels))
                              [[] []]
                              (collect ns-syms))]
     (-> (s/create) (d/db-with nodes) (d/db-with rels))))
