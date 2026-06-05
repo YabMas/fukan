@@ -57,12 +57,20 @@
      [nodes rels]
      (:clauses iv))))
 
+(defn assemble-vars
+  "Build one structure db from an explicit collection of instance-bearing vars.
+   Useful for assembling ad-hoc models (e.g. in negative tests) without a namespace scan."
+  [vars]
+  (let [[nodes rels] (reduce (fn [[nodes rels] v]
+                               (let [iv (deref v)
+                                     id (if (:value? iv) (s/value-content-key iv) (s/var-id v))]
+                                 (walk iv id nodes rels)))
+                             [[] []]
+                             vars)]
+    (-> (s/create) (d/db-with nodes) (d/db-with rels))))
+
 (defn assemble
   "Scan `ns-syms` for instance-vars and build one structure db (nodes first, then rels).
    Transacts all nodes before any rels so datascript lookup-refs resolve across cycles."
   [ns-syms]
-  (let [[nodes rels] (reduce (fn [[nodes rels] [v iv]]
-                               (walk iv (if (:value? iv) (s/value-content-key iv) (s/var-id v)) nodes rels))
-                             [[] []]
-                             (collect ns-syms))]
-    (-> (s/create) (d/db-with nodes) (d/db-with rels))))
+  (assemble-vars (map first (collect ns-syms))))
