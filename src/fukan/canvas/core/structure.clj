@@ -318,6 +318,52 @@
       (emit-relations! pending))
     node-id))
 
+;; ── value-authoring: instance-form / defstructure* ──────────────────────────
+
+(defn- ref-arg->form
+  "Code for one relation-slot target: a symbol → (var sym); an inline (Tag ...) form
+   → left to evaluate (it yields an InstanceValue)."
+  [arg]
+  (if (symbol? arg) (list 'var arg) arg))
+
+(defn- rel-map-form
+  "Emits a form for a single relation-clause map.  `:targets` is a vector of
+   *code forms* (e.g. `(var User)`) so they evaluate to vars / InstanceValues
+   when the surrounding `->InstanceValue` call is evaluated."
+  [rk card targets]
+  ;; ~@targets splices the code forms into the vector literal — each form
+  ;; (e.g. (var User)) is real code, not quoted data.
+  `{:rk ~rk :card ~card :targets [~@targets]})
+
+(defn instance-form
+  "Macroexpansion-time: build the (->InstanceValue ...) form for an entity instance.
+   `name-form` is `(quote <name>)` so `(second name-form)` yields the raw name value."
+  [tag name-form body]
+  (let [sdef    (structure-by-tag tag)
+        _       (when-not sdef
+                  (throw (ex-info (str "defstructure*: unknown structure " tag) {:tag tag})))
+        doc     (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) body)
+        clauses (remove #(contains? builtin-clauses (first %)) body)
+        scalar? (fn [c] (let [s (slot-for sdef (keyword (first c)))] (and s (scalar-slot? s))))
+        scalars (into {} (for [c clauses :when (scalar? c)]
+                           [(keyword "val" (clojure.core/name (first c))) (second c)]))
+        rels    (mapv (fn [c]
+                        (let [rk   (keyword (first c))
+                              slot (slot-for sdef rk)]
+                          (when-not slot
+                            (throw (ex-info (str (clojure.core/name tag) ": `"
+                                                 (clojure.core/name rk) "` is not a slot")
+                                            {:tag tag :rel rk})))
+                          (rel-map-form rk (:card slot)
+                                        (mapv ref-arg->form (rest c)))))
+                      (remove scalar? clauses))]
+    `(->InstanceValue ~tag ~(str (second name-form)) ~doc ~scalars ~rels false)))
+
+(defn- value-form
+  "Minimal placeholder for ^:value structures (completed in Task 4)."
+  [tag body]
+  `(construct-value! ~tag '~body))
+
 ;; ── defstructure (the one form) ──────────────────────────────────────────────
 
 (defn- parse-slot
@@ -441,6 +487,43 @@
              (list 'fukan.canvas.core.structure/construct-value! ~tag (list 'quote body#)))
           `(defmacro ~sname ~docstring [name# & body#]
              (list 'fukan.canvas.core.structure/instantiate! ~tag name# (list 'quote body#)))))))
+
+(defmacro defstructure*
+  "Like `defstructure` but generates a VALUE-RETURNING constructor (no db, no side-effects).
+   The generated macro returns an `InstanceValue` record: scalar slots go into `:scalars`,
+   relation slots into `:clauses` as `{:rk :card :targets [...]}` where each symbol target
+   is captured as `(var sym)` (a deferred var reference, safe for forward/cyclic refs).
+
+   `defstructure*` and `defstructure` share the same structure registry, so a structure
+   defined with one can be referenced in the other."
+  [sname docstring & body]
+  (doseq [form body]
+    (when-not (and (seq? form) (#{'slot 'law 'reader} (first form)))
+      (throw (ex-info (str "defstructure* " sname ": unknown body form " (pr-str form)
+                           " — expected (slot ...), (law ...) or (reader ...)")
+                      {:structure sname :form form}))))
+  (let [value? (boolean (:value (meta sname)))
+        tag    (keyword (name sname))
+        slots  (mapv parse-slot (filter #(= 'slot (first %)) body))
+        _      (doseq [s slots]
+                 (when (and (scalar-slot? s) (#{:some :many :ordered} (:card s)))
+                   (throw (ex-info
+                           (str "defstructure* " sname ": scalar slot " (:rel s)
+                                " must be (one ...) or (optional ...), not ("
+                                (name (:card s)) " ...)")
+                           {:structure sname :slot (:rel s) :card (:card s)}))))
+        laws   (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
+        _      (doseq [law laws] (check-law-recursion! sname law))
+        reader-form (some (fn [f] (when (= 'reader (first f)) (second f)))
+                          (filter #(= 'reader (first %)) body))
+        sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?}]
+    `(do
+       (register-structure! ~(if reader-form `(assoc '~sdef :reader ~reader-form) `'~sdef))
+       ~(if value?
+          `(defmacro ~sname ~docstring [& body#]
+             (fukan.canvas.core.structure/value-form ~tag body#))
+          `(defmacro ~sname ~docstring [name# & body#]
+             (fukan.canvas.core.structure/instance-form ~tag (list 'quote name#) body#))))))
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 
