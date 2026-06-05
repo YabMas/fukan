@@ -53,8 +53,8 @@
 (deftest ordered-and-labelled-clauses
   ;; ordered vector splices in order — :targets holds both elements as vars
   (is (= [#'t3-x #'t3-y] (:targets (first (:clauses t3-p)))))
-  ;; [label target] form → :label key on the clause map
-  (is (= "edge" (:label (first (:clauses t3-l)))))
+  ;; [label target] form → per-target :labels on the clause map
+  (is (= ["edge"] (:labels (first (:clauses t3-l)))))
   ;; and the single target is captured as a var
   (is (= [#'t3-y] (:targets (first (:clauses t3-l))))))
 
@@ -146,7 +146,7 @@
       (let [of-clause (first (filter #(= :of (:rk %)) (:clauses shape-iv)))
             of-iv     (first (:targets of-clause))]
         (is (some? of-clause))
-        (is (= "f" (:label of-clause)) "record field label must be \"f\"")
+        (is (= ["f"] (:labels of-clause)) "record field label must be \"f\"")
         (is (s/instance-value? of-iv))
         (is (= {:val/kind "type"} (:scalars of-iv)))
         (let [type-clause (first (filter #(= :type (:rk %)) (:clauses of-iv)))]

@@ -87,16 +87,14 @@
   (if (symbol? arg) (list 'var arg) arg))
 
 (defn- reader-literal?
-  "True when `arg` is a data literal that a reader-slot should expand (not var-capture):
-   a symbol, a keyword (e.g. an Effect `:io`), a non-empty map, or a vector that is NOT
-   a 2-element symbol-headed `[label target]` form (those are parsed as labelled targets,
-   not bare literals)."
+  "True when `arg` is a data literal that a reader-slot should expand (rather than
+   var-capture). A reader takes a native literal — a symbol (Shape `Foo`), a keyword
+   (Effect `:io`), a number (Wrapped `5`), a string, a map (Shape record), or a vector
+   (Shape `[X]`). The only non-literals are an inline `(Tag …)` constructor seq and a
+   2-element symbol-headed `[label target]` form (parsed upstream as a labelled target)."
   [arg]
-  (or (symbol? arg)
-      (keyword? arg)
-      (map? arg)
-      (and (vector? arg)
-           (not (and (= 2 (count arg)) (symbol? (first arg)))))))
+  (and (not (seq? arg))
+       (not (and (vector? arg) (= 2 (count arg)) (symbol? (first arg))))))
 
 (declare value-form)
 
@@ -116,25 +114,28 @@
   "Emits a form for a single relation-clause map.  `:targets` is a vector of
    *code forms* (e.g. `(var User)`) so they evaluate to vars / InstanceValues
    when the surrounding `->InstanceValue` call is evaluated.
-   When `label` is non-nil, a `:label` key is added to the emitted map."
+   `labels` is a vector parallel to `:targets` (nil entries for unlabelled
+   targets) — a `:labels` key is added only when some target is labelled, so a
+   clause like `(takes [x Int] [y Str])` carries a per-target label."
   ([rk card targets]
    `{:rk ~rk :card ~card :targets [~@targets]})
-  ([rk card targets label]
-   (if label
-     `{:rk ~rk :card ~card :targets [~@targets] :label ~label}
+  ([rk card targets labels]
+   (if (some some? labels)
+     `{:rk ~rk :card ~card :targets [~@targets] :labels [~@labels]}
      `{:rk ~rk :card ~card :targets [~@targets]})))
 
 (defn- parse-clause-arg-forms
   "Given a slot's `:card`, its raw args (from the authored clause), and optionally
    the target structure's sdef (when it has a `:reader`), return
-   `[label target-forms]` where `target-forms` is a seq of code forms to splice
-   into `:targets`.
+   `[labels target-forms]` where `target-forms` is a seq of code forms to splice
+   into `:targets` and `labels` is a parallel vector (nil per unlabelled target),
+   or nil when there are no labels.
 
    - `:ordered` slot: the single arg is expected to be a vector; splice its
-     elements (each via `ref-arg->form` or `reader-arg->form`), in order. No label.
+     elements (each via `ref-arg->form` or `reader-arg->form`), in order. No labels.
    - Other slots: parse each arg — a 2-element, symbol-headed vector `[label t]`
-     contributes a `:label` string + a single target; a bare arg contributes
-     one unlabelled target. (Multiple bare args → multiple targets, no label.)
+     contributes a labelled single target; a bare arg contributes one unlabelled
+     target. (So `(takes [x Int] [y Str])` carries per-target labels.)
 
    When `target-sdef` has a `:reader`, data literals are expanded via the reader
    (§2.1 reader-slot exception). A `[label literal]` form for a reader-slot
@@ -155,9 +156,9 @@
                               {:label (str (first a)) :target (arg->form (second a))}
                               {:label nil :target (arg->form a)}))
                           args)
-             label  (some :label parsed)
+             labels (mapv :label parsed)
              forms  (mapv :target parsed)]
-         [label forms])))))
+         [labels forms])))))
 
 (defn- build-instance-form
   "Shared clause-walker for `instance-form` and `value-form`. Builds the
@@ -195,8 +196,8 @@
                             (throw (ex-info (str (clojure.core/name tag) ": `"
                                                  (clojure.core/name rk) "` is not a slot")
                                             {:tag tag :rel rk})))
-                          (let [[label target-forms] (parse-clause-arg-forms (:card slot) (rest c) target-sdef)]
-                            (rel-map-form rk (:card slot) target-forms label))))
+                          (let [[labels target-forms] (parse-clause-arg-forms (:card slot) (rest c) target-sdef)]
+                            (rel-map-form rk (:card slot) target-forms labels))))
                       (remove scalar? clauses))]
     `(->InstanceValue ~tag ~name-expr ~doc ~scalars ~rels ~value?-expr)))
 
@@ -227,9 +228,9 @@
                            (var? t)             (var-id t)
                            (instance? InstanceValue t) (value-content-key t)
                            :else                (pr-str t)))
-        rel-keys (mapv (fn [{:keys [rk targets label]}]
+        rel-keys (mapv (fn [{:keys [rk targets labels]}]
                          [(clojure.core/name rk)
-                          (when label label)
+                          labels
                           (mapv resolve-target targets)])
                        (:clauses iv))]
     (pr-str [tag-name scalars rel-keys])))

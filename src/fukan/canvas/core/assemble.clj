@@ -42,10 +42,11 @@
   [iv id nodes rels]
   (let [nodes (conj nodes (node-map id iv))]
     (reduce
-     (fn [[nodes rels] {:keys [rk label targets card]}]
+     (fn [[nodes rels] {:keys [rk labels targets card]}]
        (reduce
         (fn [[nodes rels] [idx t]]
-          (let [[tid nodes rels] (target-id+walk t id rk idx nodes rels)]
+          (let [[tid nodes rels] (target-id+walk t id rk idx nodes rels)
+                label (when labels (nth labels idx nil))]
             [nodes
              (conj rels (cond-> {:rel/id   (str id "|" (name rk) "|" idx "|" tid)
                                  :rel/from [:entity/id id] :rel/kind rk
