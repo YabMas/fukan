@@ -49,62 +49,6 @@
   [slot]
   (contains? scalar-types (:target slot)))
 
-(def ^:dynamic *store* nil)
-(def ^:dynamic *enclosing-module* nil)
-
-(def ^:dynamic *pending-relations*
-  "When bound (inside `within-module`), an atom collecting each instance's
-   relation clauses for a SECOND resolution pass — so forward references and
-   cycles between instances resolve once every instance in the module is declared."
-  nil)
-
-(defn transact! [tx] (swap! *store* d/db-with tx))
-
-(defn register-child! [child-id]
-  (when *enclosing-module*
-    (transact! [[:db/add [:entity/id *enclosing-module*] :module/child [:entity/id child-id]]])))
-
-(declare flush-pending-relations!)
-
-(defn with-structures*
-  "Fn form of `with-structures`: bind *store* to a fresh db, run `thunk`, return the db."
-  [thunk]
-  (binding [*store* (atom (create))]
-    (thunk)
-    @*store*))
-
-(defmacro with-structures
-  "Bind *store* to a fresh structure db, run body, return the db."
-  [& body]
-  `(with-structures* (fn [] ~@body)))
-
-(defn within-module*
-  "Fn form of `within-module`: declare module `mname`, run `thunk` with it enclosing,
-   flush queued relations on exit, return the module id."
-  [mname thunk]
-  (let [mid (random-uuid)]
-    (transact! [{:entity/id mid :entity/name mname :structure/of :Module}])
-    (binding [*enclosing-module*  mid
-              *pending-relations* (atom [])]
-      (thunk)
-      (flush-pending-relations!)
-      mid)))
-
-(defmacro within-module
-  "Declare a module and run `body` with it as the enclosing container; children
-   register under it via :module/child. Two-pass (see within-module*)."
-  [mname & body]
-  `(within-module* ~mname (fn [] ~@body)))
-
-(defn resolve-in-module
-  "The :entity/id of the enclosing module's child named `nm`, or nil."
-  [db nm]
-  (when *enclosing-module*
-    (ffirst
-     (d/q '[:find ?id :in $ ?mid ?n
-            :where [?m :entity/id ?mid] [?m :module/child ?e]
-                   [?e :entity/name ?n] [?e :entity/id ?id]]
-          db *enclosing-module* (str nm)))))
 
 ;; ── structure registry (vocabulary as data: slots + laws, no family/payload) ──
 
@@ -129,196 +73,12 @@
 
 (defn- slot-for [sdef rel] (first (filter #(= rel (:rel %)) (:slots sdef))))
 
-(defn- parse-clause-arg
-  "A slot clause arg is `[label target]` (a 2-element, symbol-headed vector) or a
-   bare `target`. A 1-element vector / map is NOT a label form — it is a data
-   literal target (e.g. a `[X]` list-shape or `{:k v}` record-shape) handed to the
-   target structure's :reader by `resolve-target`."
-  [arg]
-  (if (and (vector? arg) (= 2 (count arg)) (symbol? (first arg)))
-    {:label (str (first arg)) :target (second arg)}
-    {:label nil :target arg}))
-
 ;; Universal built-in clauses are not slots — they set scalar attributes on the
 ;; instance node rather than emitting relations.
 (def ^:private builtin-clauses #{'doc})
 
-(declare resolve-target clause->rels unquote-lit)
 
-(defn construct-value!
-  "Construct (and dedup) a value-typed instance of `tag` from `clauses`. Identity
-   is a deterministic function of composition (tag + scalar slot values + resolved
-   relation targets), so structurally-equal values collapse to one node via
-   datascript :entity/id uniqueness. Value nodes are anonymous (no :entity/name)
-   and ownerless (no :module/child) — a value exists only as a component. Runs in
-   the resolution pass; nested inline values recurse, entity targets resolve by
-   name. Returns the value node's content :entity/id."
-  [tag clauses]
-  (let [sdef    (structure-by-tag tag)
-        db      @*store*
-        scalar? (fn [c] (scalar-slot? (slot-for sdef (keyword (first c)))))
-        rels    (vec (mapcat #(clause->rels db sdef %)
-                             (for [c clauses :when (not (scalar? c))] c)))
-        scalars (into (sorted-map)
-                      (mapcat (fn [c]
-                                (let [slot (slot-for sdef (keyword (first c)))]
-                                  (cond-> [[(keyword "val" (clojure.core/name (first c))) (second c)]]
-                                    ;; payload may be a quoted code form → unquote-lit; the primary
-                                    ;; scalar is a typed leaf stored raw
-                                    (and (:payload slot) (> (count c) 2))
-                                    (conj [(keyword "val" (clojure.core/name (:payload slot)))
-                                           (unquote-lit (nth c 2))]))))
-                              (for [c clauses :when (scalar? c)] c)))
-        ;; :order enters the content key, so [A B] and [B A] are distinct values
-        ckey    (pr-str [(clojure.core/name tag)
-                         scalars
-                         (sort (map (fn [{:keys [rk label order tid ref]}]
-                                      [(clojure.core/name rk) (str order) (str label) (str (or tid ref))])
-                                    rels))])
-        node-id (str "#val" ckey)]
-    (transact! [(into {:entity/id node-id :structure/of tag} scalars)])
-    (doseq [{:keys [rk label order tid ref]} rels]
-      (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk) "|" order "|" (or tid ref))
-                           :rel/from [:entity/id node-id]
-                           :rel/kind rk}
-                    tid   (assoc :rel/to [:entity/id tid])
-                    ref   (assoc :rel/to-ref ref)
-                    label (assoc :rel/label label)
-                    order (assoc :rel/order order))]))
-    node-id))
-
-(defn- across-form?
-  "An `(across <module>)` / `(across <module> <name>)` clause arg — a deferred
-   CROSS-MODULE reference, resolved post-merge rather than in the local module."
-  [target]
-  (and (seq? target) (= 'across (first target))))
-
-(defn- clause->rels
-  "Resolve one relation clause of an instance of `sdef` into relation specs
-   {:rk :label :order (:tid | :ref)}. A local target resolves to a node (:tid); an
-   `(across …)` target is recorded symbolically (:ref [module] / [module name]) for
-   post-merge resolution. An ORDERED slot splices its vector arg(s) and
-   position-indexes them (no label); any other slot parses each arg as `target` or
-   `[label target]`. Throws on an unresolved local target."
-  [db sdef clause]
-  (let [rk   (keyword (first clause))
-        slot (slot-for sdef rk)
-        args (rest clause)]
-    (when-not slot
-      (throw (ex-info (str (clojure.core/name (:tag sdef)) ": `" (clojure.core/name rk)
-                           "` is not a slot")
-                      {:tag (:tag sdef) :rel rk})))
-    (let [resolve* (fn [target]
-                     (or (resolve-target db (:target slot) target)
-                         (throw (ex-info (str (clojure.core/name (:tag sdef)) ": "
-                                              (clojure.core/name rk) " references '" target
-                                              "', which is not an entity in the enclosing module")
-                                         {:structure (:tag sdef) :rel rk :target target}))))
-          spec     (fn [target order label]
-                     (if (across-form? target)
-                       {:rk rk :label label :order order :ref (mapv str (rest target))}
-                       {:rk rk :label label :order order :tid (resolve* target)}))]
-      (if (= :ordered (:card slot))
-        (map-indexed (fn [i t] (spec t i nil)) (mapcat #(if (vector? %) % [%]) args))
-        (for [a args
-              :let [{:keys [label target]} (parse-clause-arg a)]]
-          (spec target nil label))))))
-
-(defn- resolve-target
-  "Resolve a relation clause target (for a slot whose declared target structure is
-   `target-tag`) to a node id:
-   - an explicit value form `(ValueTag clause...)` → construct (and dedup) it;
-   - a data LITERAL (symbol / vector / map) when target-tag's structure declares a
-     `:reader` → expand the literal to clauses via the reader, then construct;
-   - otherwise a name (symbol) → the enclosing module's entity of that name (nil
-     if unresolved)."
-  [db target-tag target]
-  (let [sdef (structure-by-tag target-tag)]
-    (cond
-      (and (seq? target) (symbol? (first target)))
-      (let [vtag  (keyword (first target))
-            vsdef (structure-by-tag vtag)]
-        (when-not (:value? vsdef)
-          (throw (ex-info (str "inline construction of " vtag " — only ^:value structures"
-                               " may be authored inline")
-                          {:tag vtag :form target})))
-        (construct-value! vtag (rest target)))
-
-      (and (:value? sdef) (:reader sdef))
-      (construct-value! target-tag ((:reader sdef) target))
-
-      (symbol? target)
-      (resolve-in-module db target)
-
-      :else
-      (throw (ex-info (str "cannot resolve " (pr-str target) " as a " target-tag
-                           " — not a name, and " target-tag " declares no data-literal reader")
-                      {:target target :tag target-tag})))))
-
-(defn- emit-relations!
-  "Resolve a queued instance's slot clauses against the now-declared module
-   entities (or inline value forms) and transact its reified relations — carrying
-   :rel/order for ordered slots. Resolution runs after the whole module is declared
-   (two-pass), so a target that still does not resolve is a genuine error (thrown by
-   `clause->rels`), not skipped."
-  [{:keys [tag node-id clauses]}]
-  (let [sdef (structure-by-tag tag)
-        db   @*store*]
-    (doseq [clause clauses
-            {:keys [rk label order tid ref]} (clause->rels db sdef clause)]
-      (transact! [(cond-> {:rel/id   (str node-id "|" (clojure.core/name rk)
-                                          "|" (or tid ref) "|" (random-uuid))
-                           :rel/from [:entity/id node-id]
-                           :rel/kind rk}
-                    tid   (assoc :rel/to [:entity/id tid])
-                    ref   (assoc :rel/to-ref ref)        ; deferred cross-module target
-                    label (assoc :rel/label label)
-                    order (assoc :rel/order order))]))))
-
-(defn flush-pending-relations!
-  "Pass 2 (on `within-module` exit): emit the relations queued during the body,
-   now that every instance is declared — so forward references and cycles resolve."
-  []
-  (when *pending-relations*
-    (doseq [pending @*pending-relations*]
-      (emit-relations! pending))))
-
-(defn instantiate!
-  "Emit an instance of structure `tag` named `name` from `clauses` (slot-rel and
-   slot-value forms + the universal (doc \"...\") clause). VALUE clauses (scalar
-   target) are applied now — they need no name resolution. RELATION clauses are
-   queued for `flush-pending-relations!` (or emitted immediately when not inside a
-   `within-module` two-pass scope). Returns the instance :entity/id."
-  [tag name clauses]
-  (let [sdef        (structure-by-tag tag)
-        node-id     (random-uuid)
-        doc         (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) clauses)
-        non-builtin (remove #(contains? builtin-clauses (first %)) clauses)
-        value?      (fn [c] (let [slot (slot-for sdef (keyword (first c)))]
-                              (and slot (scalar-slot? slot))))
-        val-clauses (filter value? non-builtin)
-        rel-clauses (remove value? non-builtin)
-        pending     {:tag tag :name name :node-id node-id :clauses rel-clauses}]
-    (when-not sdef
-      (throw (ex-info (str "unknown structure " tag) {:tag tag})))
-    (transact! [(cond-> {:entity/id node-id :entity/name (str name) :structure/of tag}
-                  doc (assoc :entity/doc doc))])
-    (register-child! node-id)
-    (doseq [c val-clauses]
-      (let [slot (slot-for sdef (keyword (first c)))]
-        (transact! [(cond-> {:entity/id node-id
-                             (keyword "val" (clojure.core/name (first c))) (second c)}
-                      ;; payload may be a quoted code form → unquote-lit; the primary
-                      ;; scalar is a typed leaf stored raw
-                      (and (:payload slot) (> (count c) 2))
-                      (assoc (keyword "val" (clojure.core/name (:payload slot)))
-                             (unquote-lit (nth c 2))))])))
-    (if *pending-relations*
-      (swap! *pending-relations* conj pending)
-      (emit-relations! pending))
-    node-id))
-
-;; ── value-authoring: instance-form / defstructure* ──────────────────────────
+;; ── value-authoring: instance-form / value-form ──────────────────────────────
 
 (defn- ref-arg->form
   "Code for one relation-slot target: a symbol → (var sym); an inline (Tag ...) form
@@ -409,7 +169,7 @@
   [tag name-expr value?-expr body]
   (let [sdef    (structure-by-tag tag)
         _       (when-not sdef
-                  (throw (ex-info (str "defstructure*: unknown structure " tag) {:tag tag})))
+                  (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
         doc     (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) body)
         clauses (remove #(contains? builtin-clauses (first %)) body)
         scalar? (fn [c] (let [s (slot-for sdef (keyword (first c)))] (and s (scalar-slot? s))))
@@ -536,8 +296,11 @@
                     {:structure sname :law desc :rule hname}))))))))
 
 (defmacro defstructure
-  "Define a structure: its slots (relations-with-laws) and free laws. Registers
-   the structure-definition and defines an instantiation macro named `sname`.
+  "Define a structure: its slots (relations-with-laws) and free laws. Registers the
+   structure-definition and defines a VALUE-RETURNING instantiation macro named `sname`.
+   The generated macro returns an `InstanceValue` record: scalar slots go into `:scalars`,
+   relation slots into `:clauses` as `{:rk :card :targets [...]}` where each symbol target
+   is captured as `(var sym)` (a deferred var reference, safe for forward/cyclic refs).
 
      (defstructure Function \"...\"
        (slot :takes (many Type))
@@ -559,54 +322,13 @@
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
                            " — expected (slot ...), (law ...) or (reader ...)")
                       {:structure sname :form form}))))
-  (let [value? (boolean (:value (meta sname)))   ; ^:value → content-deduped value structure
-        tag   (keyword (name sname))
-        slots (mapv parse-slot (filter #(= 'slot (first %)) body))
-        _     (doseq [s slots]
-                (when (and (scalar-slot? s) (#{:some :many :ordered} (:card s)))
-                  (throw (ex-info
-                          (str "defstructure " sname ": scalar slot " (:rel s)
-                               " must be (one ...) or (optional ...), not ("
-                               (name (:card s)) " ...)")
-                          {:structure sname :slot (:rel s) :card (:card s)}))))
-        ;; stamp the owning structure tag onto each law so check can auto-scope it
-        laws  (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
-        _     (doseq [law laws] (check-law-recursion! sname law))
-        reader-form (some (fn [f] (when (= 'reader (first f)) (second f)))
-                          (filter #(= 'reader (first %)) body))
-        sdef  {:tag tag :doc docstring :slots slots :laws laws :value? value?}]
-    `(do
-       ;; a (reader fn) form injects a data-literal expander (fn) into the sdef
-       (register-structure! ~(if reader-form `(assoc '~sdef :reader ~reader-form) `'~sdef))
-       ;; A value structure is authored inline (anonymous, deduped) → its macro
-       ;; takes no name and constructs-and-dedups; an entity structure is named.
-       ~(if value?
-          `(defmacro ~sname ~docstring [& body#]
-             (list 'fukan.canvas.core.structure/construct-value! ~tag (list 'quote body#)))
-          `(defmacro ~sname ~docstring [name# & body#]
-             (list 'fukan.canvas.core.structure/instantiate! ~tag name# (list 'quote body#)))))))
-
-(defmacro defstructure*
-  "Like `defstructure` but generates a VALUE-RETURNING constructor (no db, no side-effects).
-   The generated macro returns an `InstanceValue` record: scalar slots go into `:scalars`,
-   relation slots into `:clauses` as `{:rk :card :targets [...]}` where each symbol target
-   is captured as `(var sym)` (a deferred var reference, safe for forward/cyclic refs).
-
-   `defstructure*` and `defstructure` share the same structure registry, so a structure
-   defined with one can be referenced in the other."
-  [sname docstring & body]
-  (doseq [form body]
-    (when-not (and (seq? form) (#{'slot 'law 'reader} (first form)))
-      (throw (ex-info (str "defstructure* " sname ": unknown body form " (pr-str form)
-                           " — expected (slot ...), (law ...) or (reader ...)")
-                      {:structure sname :form form}))))
   (let [value? (boolean (:value (meta sname)))
         tag    (keyword (name sname))
         slots  (mapv parse-slot (filter #(= 'slot (first %)) body))
         _      (doseq [s slots]
                  (when (and (scalar-slot? s) (#{:some :many :ordered} (:card s)))
                    (throw (ex-info
-                           (str "defstructure* " sname ": scalar slot " (:rel s)
+                           (str "defstructure " sname ": scalar slot " (:rel s)
                                 " must be (one ...) or (optional ...), not ("
                                 (name (:card s)) " ...)")
                            {:structure sname :slot (:rel s) :card (:card s)}))))

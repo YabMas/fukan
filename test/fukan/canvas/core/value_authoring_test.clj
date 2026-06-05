@@ -14,11 +14,11 @@
   (is (= "fukan.canvas.core.value-authoring-test/sample-iv"
          (s/var-id #'sample-iv))))
 
-;; Top-level vocab for the entity-constructor test: defstructure* is a macro so the
+;; Top-level vocab for the entity-constructor test: defstructure is a macro so the
 ;; generated constructor macros (Attr, Ent) must be defined at compile-time (top level)
 ;; for later forms in the same compilation unit to use them.
-(s/defstructure* Attr "an attribute" (slot :required (one :Bool)))
-(s/defstructure* Ent  "an entity"
+(s/defstructure Attr "an attribute" (slot :required (one :Bool)))
+(s/defstructure Ent  "an entity"
   (slot :attr (many Attr))
   (slot :links (one Ent)))
 
@@ -36,12 +36,12 @@
   (is (= [#'ev-test-User] (:targets (first (filter #(= :links (:rk %)) (:clauses ev-test-User)))))))
 
 ;; ── Task 3: ordered slots and [label target] clauses ─────────────────────────
-;; defstructure* and instance forms must be at top level (macro defined and used
+;; defstructure and instance forms must be at top level (macro defined and used
 ;; in the same compilation unit requires top-level definitions).
 
-(s/defstructure* Sym  "symbol")
-(s/defstructure* Prod "production" (slot :rhs (ordered Sym)))
-(s/defstructure* Lnk  "link" (slot :to (one Sym)))
+(s/defstructure Sym  "symbol")
+(s/defstructure Prod "production" (slot :rhs (ordered Sym)))
+(s/defstructure Lnk  "link" (slot :to (one Sym)))
 
 (def t3-x (Sym "x"))
 (def t3-y (Sym "y"))
@@ -58,7 +58,7 @@
 
 ;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
 
-(s/defstructure* ^:value Shp "a shape"
+(s/defstructure ^:value Shp "a shape"
   (slot :kind (one :String))
   (slot :of (many Shp)))
 
@@ -83,13 +83,13 @@
     (map?    data) (into [(list 'kind "record")]
                          (map (fn [[k v]] (list 'of [(symbol (name k)) v])) data))))
 
-(s/defstructure* RKind "kind")
-(s/defstructure* ^:value RShape "shape"
+(s/defstructure RKind "kind")
+(s/defstructure ^:value RShape "shape"
   (slot :kind (one :String))
   (slot :of   (many RShape))
   (slot :type (optional RKind))
   (reader t7b-read-shape))
-(s/defstructure* SHolder "h" (slot :shape (one RShape)))
+(s/defstructure SHolder "h" (slot :shape (one RShape)))
 
 (def Db  (RKind "Db"))
 (def Foo (RKind "Foo"))
