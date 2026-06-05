@@ -6,12 +6,11 @@
   (:require [clojure.set :as set]
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
+            [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s]
             [fukan.model.pipeline :as pipeline]
-            [fukan.canvas.projection.canvas-source :as canvas-source]
-            ;; the kernel self-model's schema vocab (MetaSlot authored inline → not referred)
-            [canvas.vocab.meta :refer [Concept]]
-            [canvas.vocab.arch :refer [Faculty]]
+            [canvas.vocab.meta :refer [Concept MetaSlot]]
+            [canvas.vocab.arch :refer [Faculty Module]]
             [canvas.vocab.lens :refer [Lens]]
             [canvas.vocab.probe :refer [Probe Finding]]
             [canvas.vocab.projection :refer [Projection]]
@@ -21,6 +20,38 @@
   (set (map first (d/q '[:find ?n :in $ ?t
                          :where [?e :structure/of ?t] [?e :entity/name ?n]]
                        db tag))))
+
+;; ── ad-hoc dbs built from top-level value defs (assembled per test) ──────────
+
+;; a MetaSlot with an unknown cardinality
+(def mc-T (Concept "T"))
+(def mc-X (Concept "X" (slot (MetaSlot (name "f") (cardinality "lots") (of mc-T)))))
+
+;; an isolated faculty
+(def of-Model  (Faculty "Model"))
+(def of-Reader (Faculty "Reader" (reads of-Model)))   ; Model gets an incoming edge; Reader an outgoing
+(def of-Loner  (Faculty "Loner"))                     ; connects to nothing
+
+;; a model-reading faculty with no realizing module
+(def mr-some-module (Module "some-module"))           ; a module to claim realization against
+(def mr-Model    (Faculty "Model"))
+(def mr-Realized (Faculty "Realized" (reads mr-Model) (realized-by mr-some-module)))  ; reads + claims realization → ok
+(def mr-Bare     (Faculty "Bare" (reads mr-Model)))                                   ; reads, no realization → caught
+
+;; a finding yielded by no probe
+(def of2-l      (Lens "l" (focus "things")))
+(def of2-Used   (Finding "Used" (gating false)))
+(def of2-Orphan (Finding "Orphan" (gating false)))
+(def of2-x      (Probe "x" (through of2-l) (yields of2-Used)))
+
+;; a projection that is neither a base nor a contextualization
+(def pe-Empty (Projection "Empty"))
+
+;; a dangling phase (reached by no other phase)
+(declare dp-B)
+(def dp-A        (Phase "A" (next dp-B)))
+(def dp-B        (Phase "B" (next dp-A)))
+(def dp-Dangling (Phase "Dangling" (next dp-A)))   ; Dangling is no phase's :next
 
 (deftest build-model-ingests-canvas-specs-into-a-structure-db
   (testing "the model is the merged structure db over the canvas/ defstructure specs"
@@ -35,49 +66,55 @@
           "the whole self-model satisfies every structure's laws"))))
 
 (deftest pipeline-links-across-to-canvas-source
-  (testing "build-model is a thin entry point that calls across to canvas-source/build"
+  (testing "build-model is a thin entry point whose :calls link to canvas-source/extraction"
     (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "model.pipeline")
           "the canvas/pipeline/model spec is ingested")
-      ;; post-prune the pipeline subsystem is just build-model — the merge/ingest
+      ;; post-prune the pipeline subsystem is just build-model — the ingest/union
       ;; machinery lives in canvas-source now, not duplicated here
       (is (= ["build-model"]
              (d/q '[:find [?n ...]
-                    :where [?m :entity/name "model.pipeline"] [?m :module/child ?c]
+                    :where [?m :entity/name "model.pipeline"]
+                           [?cr :rel/kind :child] [?cr :rel/from ?m] [?cr :rel/to ?c]
                            [?c :structure/of :Stage] [?c :entity/name ?n]]
                   db))
-          "model.pipeline declares exactly one stage — no stale duplicate merge/ingest")
+          "model.pipeline declares exactly one stage — no stale duplicate ingest")
       ;; the seams: build-model's cross-module :calls resolve to the canvas-source
-      ;; ingestion/merge stages and to the target extractor (design + code unified)
-      (is (= #{"build" "merge-dbs" "resolve-cross-refs"}
+      ;; ingest/union stages and to the target extractor (design + code unified)
+      (is (= #{"build" "union-dbs"}
              (set (d/q '[:find [?bn ...]
-                         :where [?mp :entity/name "model.pipeline"] [?mp :module/child ?bm]
+                         :where [?mp :entity/name "model.pipeline"]
+                                [?cm :rel/kind :child] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
                                 [?bm :entity/name "build-model"]
                                 [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?b]
-                                [?cs :entity/name "canvas-source"] [?cs :module/child ?b]
+                                [?cs :entity/name "canvas-source"]
+                                [?cc :rel/kind :child] [?cc :rel/from ?cs] [?cc :rel/to ?b]
                                 [?b :entity/name ?bn]]
                        db)))
-          "build-model calls canvas-source's build + merge-dbs + resolve-cross-refs — links resolve post-merge")
+          "build-model calls canvas-source's build + union-dbs")
       (is (= ["run-extractor"]
              (d/q '[:find [?en ...]
-                    :where [?mp :entity/name "model.pipeline"] [?mp :module/child ?bm]
+                    :where [?mp :entity/name "model.pipeline"]
+                           [?cm :rel/kind :child] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
                            [?bm :entity/name "build-model"]
                            [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?e]
-                           [?ex :entity/name "extraction"] [?ex :module/child ?e]
+                           [?ex :entity/name "extraction"]
+                           [?ec :rel/kind :child] [?ec :rel/from ?ex] [?ec :rel/to ?e]
                            [?e :entity/name ?en]]
                   db))
           "build-model calls extraction/run-extractor — the design↔code seam, via the plug-point"))))
 
 (deftest canvas-source-model-shares-the-db-shape
-  (testing "in the canvas_source self-model, the Db type-shape (4 uses) is one node"
+  (testing "in the canvas_source self-model, the Db type-shape is one node"
     (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?s
                              :where [?s :structure/of :Shape] [?s :val/kind "type"]
                                     [?r :rel/from ?s] [?r :rel/kind :type]
                                     [?r :rel/to ?t] [?t :entity/name "Db"]
-                                    [?m :entity/name "canvas-source"] [?m :module/child ?t]]
+                                    [?m :entity/name "canvas-source"]
+                                    [?cr :rel/kind :child] [?cr :rel/from ?m] [?cr :rel/to ?t]]
                            db)))
-          "Db appears in db->entity-maps in, merge-dbs in (nested) + out, build out → one node"))))
+          "Db appears in db->entity-maps in, union-dbs in + out, build out → one node"))))
 
 (deftest canvas-source-effects-are-captured-and-value-identified
   (testing "Stage effects are recorded; :io (performed by 4 stages) is one shared node"
@@ -111,10 +148,7 @@
 
 (deftest metaslot-cardinality-law-catches-unknown-cardinality
   (testing "a MetaSlot whose cardinality is outside the known set is caught"
-    (let [bad (s/with-structures
-                (s/within-module "k"
-                  (Concept "T")
-                  (Concept "X" (slot (MetaSlot (name "f") (cardinality "lots") (of T))))))]
+    (let [bad (a/assemble-vars [#'mc-T #'mc-X])]
       (is (contains? (set (map :law (s/check bad)))
                      "a slot's cardinality is one of the known cardinalities")))))
 
@@ -131,20 +165,12 @@
 
 (deftest orphan-faculty-is-caught
   (testing "a faculty with no flow edges trips the no-isolated-faculty law"
-    (let [db (s/with-structures
-               (s/within-module "f"
-                 (Faculty "Model")
-                 (Faculty "Reader" (reads Model))   ; Model gets an incoming edge; Reader an outgoing
-                 (Faculty "Loner")))]               ; connects to nothing
+    (let [db (a/assemble-vars [#'of-Model #'of-Reader #'of-Loner])]
       (is (contains? (set (map :law (s/check db))) "no faculty is isolated")))))
 
 (deftest model-reading-faculty-without-realization-is-caught
   (testing "a faculty that reads the Model but names no realizing module trips the realized-by law"
-    (let [db (s/with-structures
-               (s/within-module "f"
-                 (Faculty "Model")
-                 (Faculty "Realized" (reads Model) (realized-by (across "some-module"))) ; reads + claims realization → ok
-                 (Faculty "Bare" (reads Model))))                                         ; reads, no realization → caught
+    (let [db (a/assemble-vars [#'mr-Model #'mr-some-module #'mr-Realized #'mr-Bare])
           flagged (->> (s/check db)
                        (filter #(= "a model-reading faculty is realized by a module" (:law %)))
                        (mapcat :offenders) (map first) set)
@@ -161,7 +187,7 @@
                           "a model-reading faculty is realized by a module"))
           "Lens/Probe/Projection/Agent each name a realizing module"))))
 
-(deftest cross-module-ref-resolves-post-merge
+(deftest cross-module-ref-resolves
   (testing "overview's Structure faculty is realized-by → the core.structure module node"
     (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
@@ -169,15 +195,10 @@
                              [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
                              [?m :structure/of :Module] [?m :entity/name "core.structure"]]
                     db))
-          "the cross-ref resolved to the core.structure :Module node")
-      (is (empty? (d/q '[:find ?r :where [?r :rel/to-ref _] (not [?r :rel/to _])] db))
-          "every cross-ref in the merged model is resolved"))))
-
-(deftest unresolved-cross-ref-throws
-  (testing "a cross-ref to a non-existent module/node throws at resolution"
-    (let [db (d/db-with (s/create) [{:entity/id "r1" :rel/to-ref ["nope"]}])]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unresolved cross-module reference"
-                            (canvas-source/resolve-cross-refs db))))))
+          "the cross-ref (an ordinary var ref) resolved to the core.structure :Module node")
+      (is (every? #(some? (:rel/to (d/entity db (first %))))
+                  (d/q '[:find ?r :where [?r :rel/kind :realized-by]] db))
+          "every realized-by relation has a resolved target — no dangling refs"))))
 
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
@@ -225,12 +246,7 @@
 
 (deftest orphan-finding-is-caught
   (testing "a finding yielded by no probe trips the probe law"
-    (let [db (s/with-structures
-               (s/within-module "p"
-                 (Lens "l" (focus "things"))
-                 (Finding "Used"   (gating false))
-                 (Finding "Orphan" (gating false))
-                 (Probe "x" (through l) (yields Used))))]
+    (let [db (a/assemble-vars [#'of2-l #'of2-Used #'of2-Orphan #'of2-x])]
       (is (contains? (set (map :law (s/check db))) "every finding is yielded by some probe")))))
 
 (deftest projection-subsystem-modelled-as-target-representations
@@ -277,9 +293,7 @@
 
 (deftest projection-that-is-neither-base-nor-contextualization-is-caught
   (testing "a projection with neither mappings nor a contextualized base trips the flavour law"
-    (let [db (s/with-structures
-               (s/within-module "p"
-                 (Projection "Empty")))]
+    (let [db (a/assemble-vars [#'pe-Empty])]
       (is (contains? (set (map :law (s/check db)))
                      "a projection is a base (declares mappings) or a contextualization (frames another)")))))
 
@@ -308,11 +322,7 @@
 
 (deftest dangling-phase-is-caught
   (testing "a phase reached by no other phase trips the loop-closes law"
-    (let [db (s/with-structures
-               (s/within-module "c"
-                 (Phase "A" (next B))
-                 (Phase "B" (next A))
-                 (Phase "Dangling" (next A))))]   ; Dangling is no phase's :next
+    (let [db (a/assemble-vars [#'dp-A #'dp-B #'dp-Dangling])]
       (is (contains? (set (map :law (s/check db))) "the loop closes — every phase is reached")))))
 
 (deftest findings-carry-inline-holds-predicates

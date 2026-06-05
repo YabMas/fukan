@@ -3,13 +3,16 @@
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [canvas.vocab.lens :refer [Lens]]
-            [canvas.vocab.projection :refer [Projection]]
+            [canvas.vocab.projection :refer [Projection Mapping]]
+            [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
-            [fukan.canvas.core.structure :as s]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.projection.probes :as probes]
             [fukan.model.materialize :as m]
             [fukan.model.pipeline :as pipeline]
+            ;; the real self-model vars an ad-hoc contextualization composes over
+            [canvas.model.projection :as cm-proj]
+            [canvas.model.lens :as cm-lens]
             ;; loaded so the vocab-derived rules carry an Operation kind-rule (coverage /
             ;; drift lenses reference it) and the drift lens's correspondence predicate
             ;; resolves
@@ -17,7 +20,28 @@
             [fukan.target.correspondence :as corr]))
 
 ;; materialize is the pure LOWER direction — it projects the design model alone
-;; (build-model nil = design-only, no extraction).
+;; (build-model nil = design-only, no extraction). Ad-hoc lenses/projections are
+;; top-level value defs assembled and unioned onto the model.
+
+(def mvl-target (Lens "target" (focus "the target extractor's stages"
+                                      '[(Stage ?n) (in-module ?n "target.clojure")])))
+(def ef-none    (Lens "none" (focus "nothing" '[(Stage ?n) (in-module ?n "no-such-module")])))
+
+;; an ad-hoc contextualization of the SHIPPED Blueprint — no Refactor renderer exists.
+;; projection/Blueprint (+ its survey lens) is included in the assembled fragment so its
+;; var-ref resolves; union with the model then dedups it.
+(def acb-stages   (Lens "stages" (focus "x" '[(Stage ?n) (in-module ?n "target.clojure")])))
+(def acb-Refactor (Projection "Refactor"
+                    (through acb-stages)
+                    (contextualizes cm-proj/Blueprint)
+                    (context "Refactor the existing implementation to match these specs:")))
+
+;; an ad-hoc Docs projection whose name selects the Docs renderers
+(def mprd-stages (Lens "stages" (focus "target stages"
+                                       '[(Stage ?n) (in-module ?n "target.clojure")])))
+(def mprd-Docs   (Projection "Docs"
+                   (through mprd-stages)
+                   (maps (Mapping (from "a function") (to "a doc section")))))
 
 (defn- by-name [db n]
   (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
@@ -50,11 +74,8 @@
 (deftest materialize-view-composes-a-lens-focus-under-blueprint
   (testing "materialize-view renders each primitive a lens selects, under Blueprint (the default)"
     (let [model   (pipeline/build-model nil)
-          lens-db (s/with-structures
-                    (s/within-module "v"
-                      (Lens "target" (focus "the target extractor's stages"
-                                            '[(Stage ?n) (in-module ?n "target.clojure")]))))
-          db      (cs/merge-dbs [model lens-db])
+          lens-db (a/assemble-vars [#'mvl-target])
+          db      (cs/union-dbs [model lens-db])
           view    (m/materialize-view db (by-name db "target"))]
       (is (str/includes? view "Implement `analyze`"))
       (is (str/includes? view "Implement `extract`"))
@@ -63,10 +84,8 @@
 (deftest empty-focus-materializes-to-empty-string
   (testing "a lens whose focus is empty composes to nothing"
     (let [model   (pipeline/build-model nil)            ; loads the canvas vocab (the (Stage …) rule)
-          lens-db (s/with-structures
-                    (s/within-module "v"
-                      (Lens "none" (focus "nothing" '[(Stage ?n) (in-module ?n "no-such-module")]))))
-          db      (cs/merge-dbs [model lens-db])]
+          lens-db (a/assemble-vars [#'ef-none])
+          db      (cs/union-dbs [model lens-db])]
       (is (= "" (m/materialize-view db (by-name db "none")))))))
 
 (deftest materialize-module-composes-a-modules-stages
@@ -92,7 +111,7 @@
   (testing "every retrofitted self-model lens resolves to a node-set (no prose-only throw)"
     (let [model (pipeline/build-model nil)
           code  (target/extract "test/fixtures/target/sample.clj")   ; Operations, so coverage/drift resolve
-          db    (cs/merge-dbs [model code])]
+          db    (cs/union-dbs [model code])]
       ;; the predicate the drift lens query invokes
       (is (corr/module-corresponds? "target.clojure" "fukan.target.clojure"))
       (doseq [ln ["survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"]]
@@ -132,15 +151,10 @@
 (deftest a-context-composes-over-any-base
   (testing "the same mechanism composes Blueprint with an arbitrary context — e.g. a refactor framing"
     (let [model   (pipeline/build-model nil)
-          ;; an ad-hoc contextualization of the SHIPPED Blueprint — no Refactor renderer exists
-          proj-db (s/with-structures
-                    (s/within-module "v"
-                      (Lens "stages" (focus "x" '[(Stage ?n) (in-module ?n "target.clojure")]))
-                      (Projection "Refactor"
-                        (through stages)
-                        (contextualizes (across "projection" "Blueprint"))
-                        (context "Refactor the existing implementation to match these specs:"))))
-          db      (cs/resolve-cross-refs (cs/merge-dbs [model proj-db]))
+          ;; the fragment includes Blueprint (+ its survey lens) so the contextualizes
+          ;; var-ref resolves; union with the model then dedups them
+          proj-db (a/assemble-vars [#'acb-stages #'acb-Refactor #'cm-proj/Blueprint #'cm-lens/survey])
+          db      (cs/union-dbs [model proj-db])
           out     (m/materialize-projection db (by-kind-name db :Projection "Refactor"))]
       (is (str/includes? out "Refactor the existing implementation") "the refactor context frames the output")
       (is (str/includes? out "Implement `extract`")
@@ -164,14 +178,8 @@
     (let [model    (pipeline/build-model nil)
           ;; a Projection whose name selects the Docs renderers and whose :through lens
           ;; carries a selection query (the manifest's :maps are intent, not dispatched).
-          proj-db  (s/with-structures
-                     (s/within-module "v"
-                       (Lens "stages" (focus "target stages"
-                                             '[(Stage ?n) (in-module ?n "target.clojure")]))
-                       (Projection "Docs"
-                         (through stages)
-                         (maps (Mapping (from "a function") (to "a doc section"))))))
-          db       (cs/merge-dbs [model proj-db])
+          proj-db  (a/assemble-vars [#'mprd-stages #'mprd-Docs])
+          db       (cs/union-dbs [model proj-db])
           out      (m/materialize-projection db (by-name db "Docs"))]
       (is (str/includes? out "### analyze") "rendered under the projection's name (Docs)")
       (is (str/includes? out "### extract"))
