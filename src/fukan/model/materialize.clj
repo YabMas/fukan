@@ -42,7 +42,10 @@
        sort vec))
 
 (defn- owning-module [db eid]
-  (ffirst (d/q '[:find ?mn :in $ ?e :where [?m :module/child ?e] [?m :entity/name ?mn]] db eid)))
+  (ffirst (d/q '[:find ?mn :in $ ?e
+                 :where [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?e]
+                        [?m :entity/name ?mn]]
+               db eid)))
 
 (defn- stage-facts
   "The shaped facts a Stage renderer needs, projection-agnostic: name, doc, owning

@@ -68,7 +68,8 @@
    (let [in?     (if focus (set focus) (constantly true))
          rows    (->> (d/q '[:find ?s ?sn ?mn
                              :where [?s :structure/of :Stage] [?s :entity/name ?sn]
-                                    [?m :module/child ?s] [?m :entity/name ?mn]] db)
+                                    [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
+                                    [?m :entity/name ?mn]] db)
                       (filter (fn [[s _ _]] (in? s))))
          by-name (reduce (fn [acc [s sn mn]]
                            (-> acc (update-in [sn :nodes] (fnil conj #{}) s)
