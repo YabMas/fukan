@@ -30,9 +30,10 @@
      domain. A positive finding: the default fits whenever concurrency, not
      sequence, is the intent.
 
-   - Cycles (retry loops, rework edges) are authorable: within-module resolves
-     references in a second pass, so a step may :next a step declared later, or
-     back to an earlier one. The reachability law's `flows` recursion is INLINED
+   - Cycles (retry loops, rework edges) are authorable: var capture defers
+     reference resolution to assemble time, so a step may :next a step declared
+     later (via `declare`) or back to an earlier one. The reachability law's
+     `flows` recursion is INLINED
      (a recursive rule may not call a helper rule — datascript diverges on cyclic
      data otherwise), so it terminates over a looping workflow."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))

@@ -4,6 +4,7 @@
    sealed type, a non-boolean :sealed? flag — is caught. Run via `clj -M:demos`."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.assemble :as a]
             [demos.type-system.model.lattice :as lattice]
             [demos.type-system.vocab.core :refer [Field Type]]))
 
@@ -13,35 +14,47 @@
   (testing "the primitive chain + Point/Point3D width subtyping satisfies every law"
     (is (empty? (s/check (lattice/build))))))
 
+;; ── case 1: subtype cycle — A <: B, B <: A ───────────────────────────────────
+;; Both c1-A and c1-B are used as targets before their own defs, so both need
+;; forward declarations.  The var-capture mechanism means the captured vars are
+;; resolved at assemble time (when all defs are bound), not at construction time.
+
+(declare c1-A c1-B)
+(def c1-A (Type "A" (subtype-of c1-B)))   ; forward reference to c1-B
+(def c1-B (Type "B" (subtype-of c1-A)))   ; forward reference to c1-A
+
 (deftest subtype-cycle-is-caught
   (testing "a type that transitively subtypes itself trips the acyclic-lattice law"
-    (let [db (s/with-structures
-               (s/within-module "t"
-                 (Type "A" (subtype-of B))     ; forward ref; cycle authored via two-pass
-                 (Type "B" (subtype-of A))))]
+    (let [db (a/assemble-vars [#'c1-A #'c1-B])]
       (is (contains? (laws db) "no cycle in the subtype lattice")))))
+
+;; ── case 2: width-subtyping violation ────────────────────────────────────────
+
+(def c2-Prim  (Type "Prim"))
+(def c2-sid   (Field "sid" (fname "id") (type c2-Prim)))
+(def c2-Super (Type "Super" (field c2-sid)))
+(def c2-Sub   (Type "Sub" (subtype-of c2-Super)))   ; lacks a field named "id"
 
 (deftest width-subtyping-violation-is-caught
   (testing "a subtype that omits a field name its supertype declares is caught"
-    (let [db (s/with-structures
-               (s/within-module "t"
-                 (Type "Prim")
-                 (Field "sid" (fname "id") (type Prim))
-                 (Type "Super" (field sid))
-                 (Type "Sub" (subtype-of Super))))]   ; lacks a field named "id"
+    (let [db (a/assemble-vars [#'c2-Prim #'c2-sid #'c2-Super #'c2-Sub])]
       (is (contains? (laws db) "a subtype must declare every field name of its supertypes")))))
+
+;; ── case 3: subtyping a sealed type ──────────────────────────────────────────
+
+(def c3-Final (Type "Final" (sealed? true)))
+(def c3-Bad   (Type "Bad" (subtype-of c3-Final)))
 
 (deftest subtype-of-sealed-is-caught
   (testing "subtyping a sealed type is caught (a leaf-Bool value driving a law)"
-    (let [db (s/with-structures
-               (s/within-module "t"
-                 (Type "Final" (sealed? true))
-                 (Type "Bad" (subtype-of Final))))]
+    (let [db (a/assemble-vars [#'c3-Final #'c3-Bad])]
       (is (contains? (laws db) "nothing may be a subtype of a sealed type")))))
+
+;; ── case 4: non-boolean :sealed? flag ────────────────────────────────────────
+
+(def c4-T (Type "T" (sealed? "yes")))   ; not a Bool
 
 (deftest sealed-flag-must-be-boolean
   (testing "a non-boolean :sealed? value is caught by the value-type law"
-    (let [db (s/with-structures
-               (s/within-module "t"
-                 (Type "T" (sealed? "yes"))))]        ; not a Bool
+    (let [db (a/assemble-vars [#'c4-T])]
       (is (contains? (laws db) "Type.sealed? value must be a Bool")))))

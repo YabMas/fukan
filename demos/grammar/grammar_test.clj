@@ -5,23 +5,28 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.assemble :as a]
             [demos.grammar.model.key-value :as kv]
-            [demos.grammar.vocab.core :refer [Symbol Grammar]]))
+            [demos.grammar.vocab.core :refer [Symbol Grammar Production]]))
 
 (deftest key-value-grammar-is-well-formed
   (testing "the modelled key-value grammar builds and has no useless symbols"
     (is (empty? (s/check (kv/build))))))
 
+;; ── unreachable-symbol case ───────────────────────────────────────────────────
+;; Top-level defs prefixed with `g-` to avoid namespace collisions.
+;; `orphan` is an IDENT declared in the grammar but unreachable from `root`.
+
+(def g-IDENT  (Symbol "IDENT"))
+(def g-root   (Symbol "root" (produces (Production (rhs [g-IDENT])))))
+(def g-orphan (Symbol "orphan"))   ; in the grammar, but unreachable
+(def g-gram   (Grammar "g"
+                 (start g-root)
+                 (symbol g-root) (symbol g-IDENT) (symbol g-orphan)))
+
 (deftest unreachable-symbol-is-caught
   (testing "a symbol unreachable from the start trips the reachability law"
-    (let [db (s/with-structures
-               (s/within-module "g"
-                 (Symbol "IDENT")
-                 (Symbol "root" (produces (Production (rhs [IDENT]))))
-                 (Symbol "orphan")                       ; in the grammar, but unreachable
-                 (Grammar "g"
-                   (start root)
-                   (symbol root) (symbol IDENT) (symbol orphan))))]
+    (let [db (a/assemble-vars [#'g-IDENT #'g-root #'g-orphan #'g-gram])]
       (is (some #(= "every symbol is reachable from the start symbol" (:law %))
                 (s/check db))))))
 
