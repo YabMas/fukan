@@ -10,6 +10,7 @@
             [clj-reload.core :as reload]
             [datascript.core :as d]
             [fukan.infra.model :as infra-model]
+            [fukan.canvas.projection.finding :as pf]
             [fukan.canvas.projection.probes :as probe]
             [fukan.model.materialize :as mat]
             ;; loads the model↔code correspondence laws into the dev session so a
@@ -64,16 +65,15 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn probes
-  "Run the implemented probes against the held model, printing each finding.
-   patterns → recurring structures (a View); integrity → law violations (a gating
-   Signal: empty ⇔ the model's laws all hold)."
+  "Run the implemented probes against the held model, printing each finding."
   []
   (if-let [m (infra-model/get-model)]
     (doseq [[nm finding] (probe/run-all m)]
       (println (str "── probe " nm " (gating " (:gating finding) ") ──"))
-      (if (empty? (:finding finding))
-        (println "   (nothing)")
-        (doseq [x (:finding finding)] (println "  •" x))))
+      (let [lines (pf/finding->text finding)]
+        (if (empty? lines)
+          (println "  (nothing)")
+          (doseq [l lines] (println "  " l)))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn materialize
