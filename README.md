@@ -1,33 +1,32 @@
 # Fukan
 
-*Fukan* (俯瞰) — to take in a whole landscape from above. Fukan is a tool for the
-layer humans own as LLMs write more of the low-level code: the **composition of a
-system's concepts and the laws that must hold of them**. As the typing moves to the
-model, the human's work moves up — to the boundaries, the invariants, the
-architectural shape — and fukan is a place to hold, verify, and reason about that
-shape, together with an LLM, at that altitude.
+*Fukan* (俯瞰) — to take in a whole landscape from above.
+
+As LLMs write more of the low-level code, the work that stays human moves up — to the
+boundaries, the invariants, the architectural shape of a system. Fukan is a place to
+hold and reason about that shape — the **composition of a system's concepts and the
+laws that must hold of them** — together with an LLM, at that altitude.
 
 Its one thesis: **specification and implementation live on the same graph.** Intended
-structure and actual structure are not two artifacts kept in sync by discipline —
-they are one assertable graph whose internal consistency a machine checks. You
-**define** a system's structure, **model** abstractions over it, **verify** the whole
-by running its laws, and **project** it back down toward an implementation.
+structure and actual structure are not two artifacts kept in sync by discipline — they
+are one graph whose consistency a machine checks. You **define** a system's structure,
+**model** abstractions over it, **verify** the whole by running its laws, and **act**
+on it — probing what it is, projecting it toward an implementation.
 
-> **Status: lean-kernel + modelling-exploration phase.** Fukan was radically pruned
-> and rebuilt around a single primitive, `defstructure`. The interactive browser
-> explorer that gives fukan its name — the whole graph rendered as a navigable
-> bird's-eye view — is **deferred indefinitely** (parked under `.paused/`); today
-> fukan is a REPL-and-canvas tool, exercised by modelling. See
-> [doc/VISION.md](doc/VISION.md) for the why and [CLAUDE.md](CLAUDE.md) for the
-> architecture.
+> **Status: lean-kernel + modelling-exploration phase.** Fukan was radically pruned and
+> rebuilt around a single primitive, `defstructure`. The interactive browser explorer
+> that gives fukan its name — the whole graph rendered as a navigable bird's-eye view —
+> is **deferred indefinitely** (parked under `.paused/`); today fukan is a
+> REPL-and-canvas tool, exercised by modelling. See [doc/VISION.md](doc/VISION.md) for
+> the why and [CLAUDE.md](CLAUDE.md) for the architecture.
 
 ## Everything is a structure
 
-A `defstructure` declares a structure as a **composition of slots** plus the
-**datalog laws** that must hold of it — and that is the *only* primitive. The
-substrate **is** the model: no separate model-map, no privileged kinds. The core
-ships this primitive and the ingestion/projection machinery and **no domain
-vocabulary** — every project authors its own grammar on the core.
+A `defstructure` declares a structure as a **composition of slots** plus the **datalog
+laws** that must hold of it — and that is the *only* primitive. The substrate **is**
+the model: no separate model-map, no privileged kinds. The core ships this primitive
+and the ingestion/projection machinery and **no domain vocabulary** — every project
+authors its own grammar on the core.
 
 ```clojure
 (require '[fukan.canvas.core.structure :as s :refer [defstructure]])
@@ -53,11 +52,11 @@ vocabulary** — every project authors its own grammar on the core.
 A scalar slot (`(one :Bool)`) stores a leaf value with an auto type-check law; a slot
 whose target is another structure reifies a *queryable relation*. The model is a
 datascript db, so a human or an LLM interrogates it with the **same datalog** — fukan
-is REPL-native and agent-native by construction. Cardinalities are `one` / `optional`
-/ `many` / `some` / `ordered`; `^:value` structures are content-deduped anonymous
-nodes for nameless compound data.
+is REPL-native and agent-native by construction. Cardinalities are `one` / `optional` /
+`many` / `some` / `ordered`; `^:value` structures are content-deduped anonymous nodes
+for nameless compound data.
 
-## The payoff: one graph spanning spec and code
+## One graph spanning spec and code
 
 This is what the single graph buys. Fukan **extracts** your real code into the same
 substrate — fukan's own extractor reads clj-kondo analysis into `Module` and
@@ -78,53 +77,51 @@ substrate — fukan's own extractor reads clj-kondo analysis into `Module` and
 
 Run `(structure/check db)` and **drift surfaces as a law violation** — a modelled
 capability with no implementation, on the same footing as any other broken invariant.
-The dual query reports code not yet covered by the model. (Laws read in the
-vocabulary's own terms — `(Stage ?s)`, `(in-module …)` — because the core derives
-those rules from the live vocabulary.)
-
-Going the other direction, **`materialize`** projects a modelled node *down* into an
-implementation specification — a signature, intent, and contract that an implementing
-LLM realizes — so the model drives the code as well as checking it.
+The converse query reports the opposite gap: code the model doesn't yet cover. Laws
+read in the vocabulary's own terms — `(Stage ?s)`, `(in-module …)` — because the core
+derives those rules from the live vocabulary, so a law spans design and implementation
+without ever dropping to raw triples.
 
 ## Acts through a lens
 
-Fukan is one graph plus laws, and you act on it through a **lens**. There are two
-**complementary** acts — analysis and synthesis:
+You work the graph through a **lens** — a focus on some sub-graph — with two
+complementary acts:
 
-- A **Probe** *reads* the model and observes it, yielding a **Finding**: a list of
-  sub-graphs of interest (what holds, what's missing, what drifts).
-- A **Projection** *re-presents* the model in a target form — an implementation spec,
-  docs, a materialize output.
+- **Probe** — *read* the graph and observe it. A probe yields a **Finding**: a set of
+  sub-graphs of interest, each tagged with what it is — a recurring pattern, a law
+  violation, a coverage gap — and a note. Integrity, drift, and coverage are probes
+  whose findings gate action; surveys and pattern-scans are probes you reason with.
+- **Project** — *re-present* the graph in another form. A projection renders the model
+  into a target: an implementation spec an LLM can build from, reference docs, a
+  diagram. Materialize — turning a modelled node into a signature-and-intent an LLM
+  realizes — is one projection.
 
-They compose through a shared currency — the **focus** (a sub-graph): a probe
-surfaces foci, a projection consumes them. Probe until something is of interest;
-project it into a better shape; enact it.
+The two compose because they share one currency — the **focus**, a sub-graph. A probe
+surfaces foci; a projection consumes them. So you probe until something is worth acting
+on, project that sub-graph into a shape you can work from, and — optionally — hand it to
+an LLM to enact. Analysis and synthesis, over the same graph.
 
-(By association: the graph is a *structure* and its laws a *theory*; a projection
-is a *fold*; a probe an *observation* — named lightly, not laboured. The genuine
-duality here is extraction ⊣ projection — lifting code *in*, lowering the model
-*out*.)
+Both acts are open. Adding one is dropping a file: a probe is a `run-probe` method, a
+projection a `render-base` method. Nothing in the core privileges fukan's own probes
+and projections over the ones you write — which is the point. Fukan is a small set of
+ways to act on one graph, and a way to add more.
 
-Adding an act is dropping a file — a probe is `(defmethod run-probe "name" [db _ focus] …)`,
-a projection a `render-base` defmethod.
-
-Define → model → verify → project, all on one graph that holds both what the system
-is meant to be and what it actually is.
+Define → model → verify → act, all on one graph that holds both what the system is
+meant to be and what it actually is.
 
 ## Self-model and demos
 
-Fukan is exercised by modelling — including **modelling itself**: `canvas/vocab/`
-holds fukan's own vocabulary (data / computation / schema / architecture / probe /
-projection / collaboration / lens layers) and `canvas/model/` models its subsystems
-on that vocabulary. Canvas files under `canvas/**/*.clj` are auto-discovered and
-merged into one structure db — the model. `clj -M:demos` runs a corpus of standalone
-modelling demos (grammar, ER, workflow, access-control, type-system) that
-pressure-test the core.
+Fukan is exercised by modelling — including **modelling itself**: `canvas/vocab/` holds
+fukan's own vocabulary (data / computation / schema / architecture / probe / projection
+/ collaboration / lens layers) and `canvas/model/` models its subsystems on that
+vocabulary. Canvas files under `canvas/**/*.clj` are auto-discovered and merged into one
+structure db — the model. `clj -M:demos` runs a corpus of standalone modelling demos
+(grammar, ER, workflow, access-control, type-system) that pressure-test the core.
 
 ## Development
 
-Requires Clojure CLI (`clj`) and [clj-kondo](https://github.com/clj-kondo/clj-kondo)
-on PATH.
+Requires Clojure CLI (`clj`) and [clj-kondo](https://github.com/clj-kondo/clj-kondo) on
+PATH.
 
 ```bash
 clj -M:dev:nrepl        # start an nREPL (port 7889)
@@ -139,6 +136,7 @@ In the REPL (`clj -M:dev`):
 (refresh)   ; reload changed code + rebuild
 (status)    ; model state
 (drift)     ; modelled capabilities not yet realized in code
+(probes)    ; run every probe over the held model, printing each finding
 ```
 
 ## Project structure
