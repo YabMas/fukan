@@ -88,10 +88,12 @@
 
 (defn- reader-literal?
   "True when `arg` is a data literal that a reader-slot should expand (not var-capture):
-   a symbol, a non-empty map, or a vector that is NOT a 2-element symbol-headed
-   `[label target]` form (those are parsed as labelled targets, not bare literals)."
+   a symbol, a keyword (e.g. an Effect `:io`), a non-empty map, or a vector that is NOT
+   a 2-element symbol-headed `[label target]` form (those are parsed as labelled targets,
+   not bare literals)."
   [arg]
   (or (symbol? arg)
+      (keyword? arg)
       (map? arg)
       (and (vector? arg)
            (not (and (= 2 (count arg)) (symbol? (first arg)))))))
