@@ -79,19 +79,25 @@ lookup-refs in a second pass — so per-db eids never leak across the boundary.
 db (`[module]` → that Module node; `[module name]` → that module's named child),
 throwing on an unresolved reference.
 
-## Lens and materialize over the substrate
+## Acts through a lens — probe and projection
+
+Acts on the graph are **complementary** — analysis (probe) and synthesis (projection)
+— composing through a shared **focus** (sub-graph):
 
 - **`evaluate-lens`** runs a Lens's selection `:query` (a datalog `:where`
   clause-vector binding `?n`) against the vocab-derived rules → the focus node-set
   (the sub-graph being those nodes and their induced relations). One expression
   handles both selection and traversal; `refine` narrows a focus by a further query
-  (set-intersection) so a refined focus chains forward into a probe or materialize.
-- **`render-base` / `materialize-view`** (`model/materialize.clj`) project nodes down
-  to target text: `render-base` is a multimethod on `[base kind]` (the projection
-  base × the node's `:structure/of`), composing along references by re-dispatch under
-  the same base; a *contextualization* projection renders through a base and frames
-  its output. `compose` / `materialize-view` / `materialize-projection` compose the
-  renders over a lens's focus.
+  (set-intersection) so a refined focus chains forward into a probe or projection.
+- A **Probe** reads the graph through a lens and yields a **Finding** — a list of
+  sub-graphs of interest. Observations carry `{:focus … :as … :note …}`. `check` is
+  the canonical integrity probe.
+- **`render-base` / `materialize-view`** (`model/materialize.clj`) are the projection
+  surface: `render-base` is a multimethod on `[base kind]` (the projection base × the
+  node's `:structure/of`), composing along references by re-dispatch under the same
+  base; a *contextualization* projection renders through a base and frames its output.
+  `compose` / `materialize-view` / `materialize-projection` compose the renders over a
+  lens's focus.
 
 ## The build pipeline
 

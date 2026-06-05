@@ -111,20 +111,35 @@ and implementation onto the same substrate, then checking them against each othe
   "does the model realize in code" is orthogonal and lives apart (with `:scope
   :global` to escape self-scoping).
 
-## Lens and probe
+## Lens, probe, and projection — acts through a lens
 
 A **Lens** carries a `:focus` (prose) and an optional selection `:query` (one
 datalog `:where` clause-vector binding `?n`). `evaluate-lens` runs it against the
 vocab-derived rules → the focus **sub-graph** (a genuine sub-graph: the selected
 nodes and induced relations). Selection and traversal are one expression; there is
 no seed/closure split. A focus can be narrowed by a further query (`refine`,
-set-intersection) and the refined focus passed forward into a probe or materialize —
+set-intersection) and the refined focus passed forward into a probe or projection —
 acts chain over a refined focus rather than through a named orchestrator.
 
-A **Probe** reads the model through a lens and yields a Finding (inspect ⊂ probe: a
-finding that *gates* action is a trust signal; `check` is the canonical integrity
-probe). `projection/probe_code.clj` projects a probe's spec for an implementing LLM.
-This surface is at an early cut.
+There are two **complementary** acts on the graph — analysis and synthesis:
+
+- A **Probe** *reads* the model and observes it, yielding a **Finding**: a list of
+  sub-graphs of interest. Observations carry `{:focus …  :as …  :note …}`. `check`
+  is the canonical integrity probe (a finding that *gates* action is a trust signal).
+  `projection/probe_code.clj` projects a probe's spec for an implementing LLM.
+- A **Projection** *re-presents* the model in a target form — an implementation spec,
+  docs, a materialize output. `render-base` is the projection multimethod (see the
+  model↔code seam section above).
+
+They compose through the **focus** (a sub-graph): a probe surfaces foci, a projection
+consumes them. Probe until something is of interest; project it into a better shape;
+enact it. The genuine duality across the whole system is extraction ⊣ projection —
+lifting code *in*, lowering the model *out* — not probe vs projection, which are
+complementary (analysis vs synthesis) within the one graph.
+
+Adding an act is dropping a file: a probe is a `run-probe` defmethod
+(`(defmethod run-probe "name" [db _ focus] …)`); a projection is a `render-base`
+defmethod (`(defmethod render-base [base kind] [db base eid] …)`, dispatching on `[base kind]`).
 
 ## Conventions
 

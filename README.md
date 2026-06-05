@@ -86,6 +86,28 @@ Going the other direction, **`materialize`** projects a modelled node *down* int
 implementation specification — a signature, intent, and contract that an implementing
 LLM realizes — so the model drives the code as well as checking it.
 
+## Acts through a lens
+
+Fukan is one graph plus laws, and you act on it through a **lens**. There are two
+**complementary** acts — analysis and synthesis:
+
+- A **Probe** *reads* the model and observes it, yielding a **Finding**: a list of
+  sub-graphs of interest (what holds, what's missing, what drifts).
+- A **Projection** *re-presents* the model in a target form — an implementation spec,
+  docs, a materialize output.
+
+They compose through a shared currency — the **focus** (a sub-graph): a probe
+surfaces foci, a projection consumes them. Probe until something is of interest;
+project it into a better shape; enact it.
+
+(By association: the graph is a *structure* and its laws a *theory*; a projection
+is a *fold*; a probe an *observation* — named lightly, not laboured. The genuine
+duality here is extraction ⊣ projection — lifting code *in*, lowering the model
+*out*.)
+
+Adding an act is dropping a file — a probe is `(defmethod run-probe "name" [db _ focus] …)`,
+a projection a `render-base` defmethod.
+
 Define → model → verify → project, all on one graph that holds both what the system
 is meant to be and what it actually is.
 
