@@ -7,6 +7,7 @@
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.projection.canvas-source :as cs]
+            [fukan.canvas.projection.probes :as probes]
             [fukan.model.materialize :as m]
             [fukan.model.pipeline :as pipeline]
             ;; loaded so the vocab-derived rules carry an Operation kind-rule (coverage /
@@ -175,3 +176,12 @@
       (is (str/includes? out "### analyze") "rendered under the projection's name (Docs)")
       (is (str/includes? out "### extract"))
       (is (str/includes? out "**Module:** target.clojure")))))
+
+(deftest probe-foci-compose-into-a-projection
+  (testing "a probe's observation foci flow straight into a projection (the seam)"
+    (let [db      (cs/build)
+          finding (probes/probe-survey db)              ; whole-model View → foci = all nodes by kind
+          out     (m/materialize-finding db "Blueprint" finding)]
+      (is (string? out) "the projection renders the finding's union focus")
+      (is (str/includes? out "Implement")
+          "Blueprint emits implementation specs for the focused Stages"))))

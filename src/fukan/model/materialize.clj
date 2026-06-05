@@ -180,6 +180,13 @@
   [db projection focus]
   (compose db projection focus))
 
+(defn materialize-finding
+  "The probe→projection composition seam: project the UNION of a finding's
+   observation foci under `projection`. A probe emits foci; this renders them — so
+   `probe → project` is substitution on the shared focus currency, no glue."
+  [db projection finding]
+  (materialize-over db projection (reduce into #{} (map :focus (:observations finding)))))
+
 (defn materialize-focus
   "Compose `projection` over an ad-hoc focus: the nodes selected by datalog `clauses`
    (binding ?n). The lensless entry — no stored Lens required."
