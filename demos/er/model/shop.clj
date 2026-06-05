@@ -7,24 +7,26 @@
 
    Acyclic (Order references User and Product; neither references back) so it is
    authorable under forward-only resolution."
-  (:require [fukan.canvas.core.structure :as s]
+  (:require [fukan.canvas.core.assemble :as a]
             [demos.er.vocab.core :refer [DataType Attribute Relationship Entity]]))
 
-(defn build []
-  (s/with-structures
-    (s/within-module "shop"
-      (DataType "String")
-      (DataType "Int")
-      ;; User
-      (Attribute "name"  (type String) (required true))
-      (Attribute "email" (type String) (required true) (unique? true))
-      (Entity "User" (attr name) (attr email))
-      ;; Product
-      (Attribute "title" (type String) (required true))
-      (Attribute "price" (type Int)    (required true))
-      (Entity "Product" (attr title) (attr price))
-      ;; Order — references User and Product
-      (Attribute "total" (type Int))
-      (Relationship "placed-by" (target User))
-      (Relationship "contains"  (target Product))
-      (Entity "Order" (attr total) (rel placed-by) (rel contains)))))
+(def StrType (DataType "String"))
+(def IntType (DataType "Int"))
+
+;; User
+(def attr-name (Attribute "name"  (type StrType) (required true)))
+(def email     (Attribute "email" (type StrType) (required true) (unique? true)))
+(def User      (Entity "User" (attr attr-name) (attr email)))
+
+;; Product
+(def title   (Attribute "title" (type StrType) (required true)))
+(def price   (Attribute "price" (type IntType) (required true)))
+(def Product (Entity "Product" (attr title) (attr price)))
+
+;; Order — references User and Product
+(def total     (Attribute "total" (type IntType)))
+(def placed-by (Relationship "placed-by" (target User)))
+(def contains  (Relationship "contains"  (target Product)))
+(def Order     (Entity "Order" (attr total) (rel placed-by) (rel contains)))
+
+(defn build [] (a/assemble ['demos.er.model.shop]))
