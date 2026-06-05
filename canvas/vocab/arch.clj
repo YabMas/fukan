@@ -8,6 +8,14 @@
    Vocab-only canvas spec (no `build-canvas`)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
+(defstructure Module
+  "A named grouping of model instances — the unit a subsystem view occupies. `:child`
+   is a heterogeneous container (the `Any` wildcard) so a module groups Stages, Kinds,
+   Concepts, Faculties — whatever its members are. `in-module` resolves over these
+   `:child` relations (no privileged `:Module` tag in the kernel any more — a module is
+   ordinary vocab)."
+  (slot :child (many Any)))
+
 (defstructure Faculty
   "A core concept or capability of fukan, in the top-level flow view."
   (slot :doc   (optional :String))
@@ -29,8 +37,9 @@
   ;; you cannot have a model-reading faculty with no realization. (Input faculties
   ;; that only :feed the Model are external — Canvas, Target — and outputs are
   ;; produced, so neither is required to be realized. The realized-by TARGET's
-  ;; existence is already enforced at ingest: resolve-cross-refs throws on an
-  ;; unresolved reference; this law adds the REQUIREMENT to have one.)
+  ;; existence is already enforced by authoring: a `realized-by` clause references the
+  ;; Module's var directly, so a missing module is a var-resolution error at read time;
+  ;; this law adds the REQUIREMENT to have one.)
   (law "a model-reading faculty is realized by a module"
     :offenders '[?f]
     :where '[[?model :entity/name "Model"] [?model :structure/of :Faculty]

@@ -25,15 +25,13 @@
    :entity/name  {:db/index true}
    :entity/doc   {}                                            ; instance documentation (the (doc ...) clause)
    :structure/of {:db/index true}                              ; the structure tag of an instance
-   :module/child {:db/cardinality :db.cardinality/many :db/valueType :db.type/ref}
-   ;; reified slot relations — the seam carrying :rel/label / :rel/order / cross-module :rel/to-ref
+   ;; reified slot relations — the seam carrying :rel/label / :rel/order
    :rel/id       {:db/unique :db.unique/identity}
    :rel/from     {:db/valueType :db.type/ref}
    :rel/kind     {:db/index true}
    :rel/to       {:db/valueType :db.type/ref}
    :rel/label    {}
-   :rel/order    {}                                           ; position in an (ordered ...) slot
-   :rel/to-ref   {}})                                         ; deferred cross-module target [module] / [module name]
+   :rel/order    {}})                                         ; position in an (ordered ...) slot
 
 (defn create [] (d/empty-db schema))
 
