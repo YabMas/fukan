@@ -189,6 +189,26 @@
   (is (= [:a :b :c] (:val/extra (:scalars t-doc)))
       "payload sibling leaf is stored alongside the primary"))
 
+;; A payload carries a CODE-FORM (a datalog query, a predicate) — stored as DATA,
+;; not evaluated, so unbound symbols like ?n survive instead of resolving at runtime.
+(s/defstructure FocusT "f" (slot :focus (one :String) :payload :query))
+(s/defstructure HoldT  "h" (slot :holds (one :String) :payload :holds-pred))
+
+(def t-focus (FocusT "X" (focus "the whole model" '[[?n :structure/of _]])))
+(def t-hold  (HoldT  "Y" (holds "no violations" (fn [result _db] (empty? (:observations result))))))
+
+(deftest payload-stores-code-form-as-data
+  (is (= '[[?n :structure/of _]] (:val/query (:scalars t-focus)))
+      "a quoted datalog query payload is stored verbatim as data (not evaluated)")
+  (let [pred (:val/holds-pred (:scalars t-hold))]
+    (is (seq? pred) "a predicate payload is stored as a form")
+    (is (= 'fn (first pred)) "it is a (fn …) form, not an evaluated function"))
+  ;; and it survives assembly into the db unchanged
+  (let [db (a/assemble-vars [#'t-focus])]
+    (is (= '[[?n :structure/of _]]
+           (:val/query (d/entity db [:entity/id (s/var-id #'t-focus)])))
+        "the query form round-trips through assembly")))
+
 ;; ── Change 3: generic in-module rule ─────────────────────────────────────────
 ;; (in-module ?e ?mname) now resolves via :child relations, not :Module tag.
 ;; The Grp + wa + wb assembled above: grp is named "g" and has :child rels to wa and wb.

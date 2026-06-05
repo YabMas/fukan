@@ -177,8 +177,13 @@
                                :let [slot (slot-for sdef (keyword (first c)))]
                                pair (cond-> [[(keyword "val" (clojure.core/name (first c))) (second c)]]
                                       (and (:payload slot) (>= (count c) 3))
+                                      ;; A payload carries a companion CODE-FORM (a datalog
+                                      ;; query, a predicate `(fn …)`) — stored as DATA, not
+                                      ;; evaluated. Strip any authoring quote then re-quote so
+                                      ;; the leaf holds the form verbatim (symbols like ?n
+                                      ;; survive instead of resolving at runtime).
                                       (conj [(keyword "val" (clojure.core/name (:payload slot)))
-                                             (unquote-lit (nth c 2))]))]
+                                             (list 'quote (unquote-lit (nth c 2)))]))]
                            pair))
         rels    (mapv (fn [c]
                         (let [rk         (keyword (first c))
