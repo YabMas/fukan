@@ -363,10 +363,12 @@
           forms  (mapv :target parsed)]
       [label forms])))
 
-(defn instance-form
-  "Macroexpansion-time: build the (->InstanceValue ...) form for an entity instance.
-   `name-form` is `(quote <name>)` so `(second name-form)` yields the raw name value."
-  [tag name-form body]
+(defn- build-instance-form
+  "Shared clause-walker for `instance-form` and `value-form`. Builds the
+   `->InstanceValue` call with `name-expr` (a string form or nil-literal) and
+   `value?-expr` (true/false literal). Validates slot names; separates scalar
+   clauses from relation clauses; emits target-capture forms via `ref-arg->form`."
+  [tag name-expr value?-expr body]
   (let [sdef    (structure-by-tag tag)
         _       (when-not sdef
                   (throw (ex-info (str "defstructure*: unknown structure " tag) {:tag tag})))
@@ -385,12 +387,41 @@
                           (let [[label target-forms] (parse-clause-arg-forms (:card slot) (rest c))]
                             (rel-map-form rk (:card slot) target-forms label))))
                       (remove scalar? clauses))]
-    `(->InstanceValue ~tag ~(str (second name-form)) ~doc ~scalars ~rels false)))
+    `(->InstanceValue ~tag ~name-expr ~doc ~scalars ~rels ~value?-expr)))
 
-(defn- value-form
-  "Minimal placeholder for ^:value structures (completed in Task 4)."
+(defn instance-form
+  "Macroexpansion-time: build the (->InstanceValue ...) form for an entity instance.
+   `name-form` is `(quote <name>)` so `(second name-form)` yields the raw name value."
+  [tag name-form body]
+  (build-instance-form tag (str (second name-form)) false body))
+
+(defn value-form
+  "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance.
+   Anonymous (name=nil) and content-identified (value?=true)."
   [tag body]
-  `(construct-value! ~tag '~body))
+  (build-instance-form tag nil true body))
+
+(defn value-content-key
+  "A deterministic, purely structural identity for a ^:value InstanceValue.
+   Returns a pr-str over [tag-name scalars-map rel-key-seq] where each rel entry
+   is [rk-name [target-id...]] with targets resolved recursively:
+     - a Var → (var-id v)
+     - an InstanceValue → (value-content-key iv) (recurse)
+   Order within an ordered clause is preserved (so [A B] ≠ [B A])."
+  [^InstanceValue iv]
+  (let [tag-name (clojure.core/name (:tag iv))
+        scalars  (into (sorted-map) (:scalars iv))
+        resolve-target (fn resolve-target [t]
+                         (cond
+                           (var? t)             (var-id t)
+                           (instance? InstanceValue t) (value-content-key t)
+                           :else                (pr-str t)))
+        rel-keys (mapv (fn [{:keys [rk targets label]}]
+                         [(clojure.core/name rk)
+                          (when label label)
+                          (mapv resolve-target targets)])
+                       (:clauses iv))]
+    (pr-str [tag-name scalars rel-keys])))
 
 ;; ── defstructure (the one form) ──────────────────────────────────────────────
 

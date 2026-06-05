@@ -55,3 +55,17 @@
   (is (= "edge" (:label (first (:clauses t3-l)))))
   ;; and the single target is captured as a var
   (is (= [#'t3-y] (:targets (first (:clauses t3-l))))))
+
+;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
+
+(s/defstructure* ^:value Shp "a shape"
+  (slot :kind (one :String))
+  (slot :of (many Shp)))
+
+(def t4-s1 (Shp (kind "leaf")))
+(def t4-s2 (Shp (kind "leaf")))
+
+(deftest value-structures-dedupe-by-content
+  (is (:value? t4-s1))
+  ;; equal content → equal computed id (the assembler will stamp :entity/id from this)
+  (is (= (s/value-content-key t4-s1) (s/value-content-key t4-s2))))
