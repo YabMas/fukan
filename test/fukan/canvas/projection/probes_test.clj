@@ -1,12 +1,17 @@
 (ns fukan.canvas.projection.probes-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.assemble :as a]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.projection.probe-code :as pc]
             [fukan.canvas.projection.probes :as probes]
             [fukan.target.clojure :as target]
             [canvas.vocab.probe :refer [Finding]]
             [canvas.vocab.shape :refer [Kind]]))
+
+;; tiny degenerate models built from top-level value defs (assembled per use)
+(def solo (Kind "Solo"))
+(def broken-Str    (Kind "Str"))
+(def broken-Orphan (Finding "Orphan" (gating false)))   ; no probe yields it → a violation
 
 (deftest probe-patterns-yields-observations-with-foci
   (testing "patterns reports recurring structures as observations carrying foci"
@@ -20,7 +25,7 @@
         (is (seq (:focus o)) "the focus names the participating nodes")
         (is (= :pattern (:as o)))
         (is (string? (:note o))))
-      (let [tiny (s/with-structures (s/within-module "tiny" (Kind "Solo")))]
+      (let [tiny (a/assemble-vars [#'solo])]
         (is (empty? (:observations (probes/probe-patterns tiny)))
             "holds: a degenerate model → no patterns")))))
 
@@ -30,7 +35,7 @@
           holds? (eval (:holds-check (pc/project-probe db "patterns")))]
       (is (holds? (probes/probe-patterns db) db)
           "the real patterns finding satisfies its holds (the self-model recurs)")
-      (let [tiny (s/with-structures (s/within-module "tiny" (Kind "Solo")))]
+      (let [tiny (a/assemble-vars [#'solo])]
         (is (holds? {:lens "patterns" :gating false :observations []} tiny)
             "empty finding over a degenerate model → holds")
         (is (not (holds? {:lens "patterns" :gating false
@@ -54,9 +59,7 @@
       (is (= "integrity" (:lens result)))
       (is (true? (:gating result)) "integrity is the gating inspect case")
       (is (empty? (:observations result)) "the self-model's laws all hold — no violations")
-      (let [dirty (s/with-structures
-                    (s/within-module "broken" (Kind "Str")
-                      (Finding "Orphan" (gating false))))
+      (let [dirty (a/assemble-vars [#'broken-Str #'broken-Orphan])
             v     (probes/probe-integrity dirty)]
         (is (seq (:observations v)) "a broken model reports violations")
         (let [o (first (:observations v))]
@@ -91,7 +94,7 @@
 
 (deftest coverage-and-drift-surface-correspondence
   (testing "the gating probes surface gaps as observations over a unified model"
-    (let [db    (cs/merge-dbs [(cs/build) (target/extract "test/fixtures/target/sample.clj")])
+    (let [db    (cs/union-dbs [(cs/build) (target/extract "test/fixtures/target/sample.clj")])
           drift (probes/run db "drift")
           cov   (probes/run db "coverage")]
       (is (seq (:observations drift)) "modelled Stages drift")

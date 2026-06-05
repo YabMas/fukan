@@ -20,12 +20,12 @@
           "every defn/defn- becomes an Operation; the def (gamma) is ignored; defn- is private"))))
 
 (deftest operations-are-owned-by-their-module
-  (testing "each namespace becomes a Module that owns its Operations (:module/child)"
+  (testing "each namespace becomes a Module that owns its Operations (via :child relations)"
     (let [db    (tc/extract "test/fixtures/target/sample.clj")
           owned (d/q '[:find ?mn ?on
                        :where [?m :structure/of :Module] [?m :entity/name ?mn]
-                              [?m :module/child ?o] [?o :structure/of :Operation]
-                              [?o :entity/name ?on]]
+                              [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?o]
+                              [?o :structure/of :Operation] [?o :entity/name ?on]]
                      db)]
       (is (= #{["sample" "alpha"] ["sample" "beta"] ["sample" "delta"]} (set owned))
           "the `sample` namespace is a Module owning all three operations"))))

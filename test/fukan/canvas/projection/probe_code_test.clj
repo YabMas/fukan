@@ -1,9 +1,13 @@
 (ns fukan.canvas.projection.probe-code-test
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.assemble :as a]
             [canvas.vocab.probe :refer [Finding]]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.projection.probe-code :as pc]))
+
+;; a Finding with no probe yielding it → trips the "every finding is yielded by some
+;; probe" law (a broken model for the integrity probe to surface)
+(def orphan-finding (Finding "Orphan" (gating false)))
 
 (deftest projects-uniform-observations-contract
   (testing "the projected contract checks a result's observations are {focus tag note}"
@@ -32,7 +36,7 @@
   (testing "over a broken model the projected probe yields violation observations"
     (let [db    (cs/build)
           probe (eval (:fn-form (pc/project-probe db "integrity")))
-          dirty (s/with-structures (s/within-module "broken" (Finding "Orphan" (gating false))))
+          dirty (a/assemble-vars [#'orphan-finding])
           fdg   (probe dirty)]
       (is (seq (:observations fdg)) "violations are reported")
       (is (every? #(= :violation (:as %)) (:observations fdg)))
