@@ -326,6 +326,30 @@
   [arg]
   (if (symbol? arg) (list 'var arg) arg))
 
+(defn- reader-literal?
+  "True when `arg` is a data literal that a reader-slot should expand (not var-capture):
+   a symbol, a non-empty map, or a vector that is NOT a 2-element symbol-headed
+   `[label target]` form (those are parsed as labelled targets, not bare literals)."
+  [arg]
+  (or (symbol? arg)
+      (map? arg)
+      (and (vector? arg)
+           (not (and (= 2 (count arg)) (symbol? (first arg)))))))
+
+(declare value-form)
+
+(defn- reader-arg->form
+  "Like `ref-arg->form` but for a reader-slot: a data literal (symbol/vector/map,
+   NOT an inline `(Tag …)` seq) is expanded via the reader at macroexpansion time
+   and the resulting clauses are built into an inline value-form; an inline seq
+   form is left as-is (normal inline construction)."
+  [target-tag reader-fn arg]
+  (if (and (reader-literal? arg) (not (seq? arg)))
+    ;; data literal → expand via reader → build value-form at macroexpansion time
+    (value-form target-tag (reader-fn arg))
+    ;; inline (Tag …) form → leave to normal evaluation
+    (ref-arg->form arg)))
+
 (defn- rel-map-form
   "Emits a form for a single relation-clause map.  `:targets` is a vector of
    *code forms* (e.g. `(var User)`) so they evaluate to vars / InstanceValues
@@ -339,35 +363,49 @@
      `{:rk ~rk :card ~card :targets [~@targets]})))
 
 (defn- parse-clause-arg-forms
-  "Given a slot's `:card` and its raw args (from the authored clause), return
+  "Given a slot's `:card`, its raw args (from the authored clause), and optionally
+   the target structure's sdef (when it has a `:reader`), return
    `[label target-forms]` where `target-forms` is a seq of code forms to splice
    into `:targets`.
 
    - `:ordered` slot: the single arg is expected to be a vector; splice its
-     elements (each via `ref-arg->form`), in order. No label.
+     elements (each via `ref-arg->form` or `reader-arg->form`), in order. No label.
    - Other slots: parse each arg — a 2-element, symbol-headed vector `[label t]`
      contributes a `:label` string + a single target; a bare arg contributes
-     one unlabelled target. (Multiple bare args → multiple targets, no label.)"
-  [card args]
-  (if (= :ordered card)
-    ;; ordered: the arg vector is spliced — mirror clause->rels behaviour
-    (let [elems (mapcat #(if (vector? %) % [%]) args)]
-      [nil (mapv ref-arg->form elems)])
-    ;; non-ordered: parse each arg as [label target] or bare target
-    (let [parsed (mapv (fn [a]
-                         (if (and (vector? a) (= 2 (count a)) (symbol? (first a)))
-                           {:label (str (first a)) :target (ref-arg->form (second a))}
-                           {:label nil :target (ref-arg->form a)}))
-                       args)
-          label  (some :label parsed)
-          forms  (mapv :target parsed)]
-      [label forms])))
+     one unlabelled target. (Multiple bare args → multiple targets, no label.)
+
+   When `target-sdef` has a `:reader`, data literals are expanded via the reader
+   (§2.1 reader-slot exception). A `[label literal]` form for a reader-slot
+   extracts the label and reader-expands the target part."
+  ([card args] (parse-clause-arg-forms card args nil))
+  ([card args target-sdef]
+   (let [arg->form (if (and target-sdef (:reader target-sdef))
+                     (partial reader-arg->form (:tag target-sdef) (:reader target-sdef))
+                     ref-arg->form)]
+     (if (= :ordered card)
+       ;; ordered: the arg vector is spliced — mirror clause->rels behaviour
+       (let [elems (mapcat #(if (vector? %) % [%]) args)]
+         [nil (mapv arg->form elems)])
+       ;; non-ordered: parse each arg as [label target] or bare target
+       (let [parsed (mapv (fn [a]
+                            (if (and (vector? a) (= 2 (count a)) (symbol? (first a)))
+                              ;; [label target] form — for reader-slots, reader-expand the target
+                              {:label (str (first a)) :target (arg->form (second a))}
+                              {:label nil :target (arg->form a)}))
+                          args)
+             label  (some :label parsed)
+             forms  (mapv :target parsed)]
+         [label forms])))))
 
 (defn- build-instance-form
   "Shared clause-walker for `instance-form` and `value-form`. Builds the
    `->InstanceValue` call with `name-expr` (a string form or nil-literal) and
    `value?-expr` (true/false literal). Validates slot names; separates scalar
-   clauses from relation clauses; emits target-capture forms via `ref-arg->form`."
+   clauses from relation clauses; emits target-capture forms via `ref-arg->form`.
+
+   §2.1 reader-slot exception: when a slot's target structure declares a `:reader`,
+   data literals (symbol/vector/map, not inline `(Tag …)` seqs) in that slot are
+   expanded via the reader at macroexpansion time and inlined as value-forms."
   [tag name-expr value?-expr body]
   (let [sdef    (structure-by-tag tag)
         _       (when-not sdef
@@ -378,13 +416,14 @@
         scalars (into {} (for [c clauses :when (scalar? c)]
                            [(keyword "val" (clojure.core/name (first c))) (second c)]))
         rels    (mapv (fn [c]
-                        (let [rk   (keyword (first c))
-                              slot (slot-for sdef rk)]
+                        (let [rk         (keyword (first c))
+                              slot       (slot-for sdef rk)
+                              target-sdef (when slot (structure-by-tag (:target slot)))]
                           (when-not slot
                             (throw (ex-info (str (clojure.core/name tag) ": `"
                                                  (clojure.core/name rk) "` is not a slot")
                                             {:tag tag :rel rk})))
-                          (let [[label target-forms] (parse-clause-arg-forms (:card slot) (rest c))]
+                          (let [[label target-forms] (parse-clause-arg-forms (:card slot) (rest c) target-sdef)]
                             (rel-map-form rk (:card slot) target-forms label))))
                       (remove scalar? clauses))]
     `(->InstanceValue ~tag ~name-expr ~doc ~scalars ~rels ~value?-expr)))

@@ -1,5 +1,5 @@
 (ns fukan.canvas.core.value-authoring-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.structure :as s]))
 
 (deftest instance-value-record-holds-composition
@@ -69,3 +69,83 @@
   (is (:value? t4-s1))
   ;; equal content → equal computed id (the assembler will stamp :entity/id from this)
   (is (= (s/value-content-key t4-s1) (s/value-content-key t4-s2))))
+
+;; ── Task 7b: reader-slot expansion ───────────────────────────────────────────
+;; A ^:value structure that declares a (reader fn) allows slot args to be
+;; authored as data literals (symbol / vector / map). The constructor macro
+;; expands them at macroexpansion time via the reader and inlines the result as
+;; a nested value-form — so the outermost var-refs are resolved by normal rules.
+
+(defn t7b-read-shape [data]
+  (cond
+    (symbol? data) [(list 'kind "type") (list 'type data)]
+    (vector? data) [(list 'kind "list") (list 'of (first data))]
+    (map?    data) (into [(list 'kind "record")]
+                         (map (fn [[k v]] (list 'of [(symbol (name k)) v])) data))))
+
+(s/defstructure* RKind "kind")
+(s/defstructure* ^:value RShape "shape"
+  (slot :kind (one :String))
+  (slot :of   (many RShape))
+  (slot :type (optional RKind))
+  (reader t7b-read-shape))
+(s/defstructure* SHolder "h" (slot :shape (one RShape)))
+
+(def Db  (RKind "Db"))
+(def Foo (RKind "Foo"))
+
+;; symbol literal → "type" shape referencing the RKind named Db
+(def t7b-leaf (SHolder "leaf" (shape Db)))
+;; vector literal → "list" shape whose child is a "type" shape naming Db
+(def t7b-list (SHolder "list" (shape [Db])))
+;; map literal → "record" shape with field f naming Foo
+(def t7b-rec  (SHolder "rec"  (shape {:f Foo})))
+
+(deftest reader-slot-symbol-literal
+  ;; (shape Db) → inline RShape value-form with {:val/kind "type"} and :type → RKind "Db"
+  (testing "shape slot accepts a symbol literal and expands via reader"
+    ;; The InstanceValue for t7b-leaf should have a :shape clause whose target
+    ;; is itself an InstanceValue (RShape), not a Var.
+    (let [shape-clause (first (filter #(= :shape (:rk %)) (:clauses t7b-leaf)))
+          shape-iv     (first (:targets shape-clause))]
+      (is (some? shape-clause) "SHolder must have a :shape clause")
+      (is (s/instance-value? shape-iv) "the :shape target must be an inline InstanceValue (not a Var)")
+      (is (= :RShape (:tag shape-iv)) "the inline value must be tagged :RShape")
+      (is (= {:val/kind "type"} (:scalars shape-iv)) "kind scalar must be \"type\"")
+      ;; the :type rel must be a var-ref to the RKind var Db
+      (let [type-clause (first (filter #(= :type (:rk %)) (:clauses shape-iv)))]
+        (is (some? type-clause) "RShape must have a :type clause")
+        (is (= [#'Db] (:targets type-clause)) ":type target must be captured as (var Db)")))))
+
+(deftest reader-slot-vector-literal
+  ;; (shape [Db]) → "list" shape whose :of child is a reader-expanded "type" shape
+  (testing "shape slot accepts a vector literal and expands via reader"
+    (let [shape-clause (first (filter #(= :shape (:rk %)) (:clauses t7b-list)))
+          shape-iv     (first (:targets shape-clause))]
+      (is (s/instance-value? shape-iv))
+      (is (= {:val/kind "list"} (:scalars shape-iv)) "kind must be \"list\"")
+      ;; the :of clause's target should be an inline RShape with kind "type" naming Db
+      (let [of-clause (first (filter #(= :of (:rk %)) (:clauses shape-iv)))
+            of-iv     (first (:targets of-clause))]
+        (is (some? of-clause) "the list shape must have an :of clause")
+        (is (s/instance-value? of-iv) ":of child must be an inline InstanceValue")
+        (is (= {:val/kind "type"} (:scalars of-iv)) "child kind must be \"type\"")
+        (let [type-clause (first (filter #(= :type (:rk %)) (:clauses of-iv)))]
+          (is (= [#'Db] (:targets type-clause)) "child :type must be (var Db)"))))))
+
+(deftest reader-slot-map-literal
+  ;; (shape {:f Foo}) → "record" shape with labelled :of child naming Foo
+  (testing "shape slot accepts a map literal and expands via reader"
+    (let [shape-clause (first (filter #(= :shape (:rk %)) (:clauses t7b-rec)))
+          shape-iv     (first (:targets shape-clause))]
+      (is (s/instance-value? shape-iv))
+      (is (= {:val/kind "record"} (:scalars shape-iv)) "kind must be \"record\"")
+      ;; the :of clause must have label "f" and its target is a "type" shape naming Foo
+      (let [of-clause (first (filter #(= :of (:rk %)) (:clauses shape-iv)))
+            of-iv     (first (:targets of-clause))]
+        (is (some? of-clause))
+        (is (= "f" (:label of-clause)) "record field label must be \"f\"")
+        (is (s/instance-value? of-iv))
+        (is (= {:val/kind "type"} (:scalars of-iv)))
+        (let [type-clause (first (filter #(= :type (:rk %)) (:clauses of-iv)))]
+          (is (= [#'Foo] (:targets type-clause)) "field type must be (var Foo)"))))))
