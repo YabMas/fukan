@@ -329,11 +329,39 @@
 (defn- rel-map-form
   "Emits a form for a single relation-clause map.  `:targets` is a vector of
    *code forms* (e.g. `(var User)`) so they evaluate to vars / InstanceValues
-   when the surrounding `->InstanceValue` call is evaluated."
-  [rk card targets]
-  ;; ~@targets splices the code forms into the vector literal — each form
-  ;; (e.g. (var User)) is real code, not quoted data.
-  `{:rk ~rk :card ~card :targets [~@targets]})
+   when the surrounding `->InstanceValue` call is evaluated.
+   When `label` is non-nil, a `:label` key is added to the emitted map."
+  ([rk card targets]
+   `{:rk ~rk :card ~card :targets [~@targets]})
+  ([rk card targets label]
+   (if label
+     `{:rk ~rk :card ~card :targets [~@targets] :label ~label}
+     `{:rk ~rk :card ~card :targets [~@targets]})))
+
+(defn- parse-clause-arg-forms
+  "Given a slot's `:card` and its raw args (from the authored clause), return
+   `[label target-forms]` where `target-forms` is a seq of code forms to splice
+   into `:targets`.
+
+   - `:ordered` slot: the single arg is expected to be a vector; splice its
+     elements (each via `ref-arg->form`), in order. No label.
+   - Other slots: parse each arg — a 2-element, symbol-headed vector `[label t]`
+     contributes a `:label` string + a single target; a bare arg contributes
+     one unlabelled target. (Multiple bare args → multiple targets, no label.)"
+  [card args]
+  (if (= :ordered card)
+    ;; ordered: the arg vector is spliced — mirror clause->rels behaviour
+    (let [elems (mapcat #(if (vector? %) % [%]) args)]
+      [nil (mapv ref-arg->form elems)])
+    ;; non-ordered: parse each arg as [label target] or bare target
+    (let [parsed (mapv (fn [a]
+                         (if (and (vector? a) (= 2 (count a)) (symbol? (first a)))
+                           {:label (str (first a)) :target (ref-arg->form (second a))}
+                           {:label nil :target (ref-arg->form a)}))
+                       args)
+          label  (some :label parsed)
+          forms  (mapv :target parsed)]
+      [label forms])))
 
 (defn instance-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for an entity instance.
@@ -354,8 +382,8 @@
                             (throw (ex-info (str (clojure.core/name tag) ": `"
                                                  (clojure.core/name rk) "` is not a slot")
                                             {:tag tag :rel rk})))
-                          (rel-map-form rk (:card slot)
-                                        (mapv ref-arg->form (rest c)))))
+                          (let [[label target-forms] (parse-clause-arg-forms (:card slot) (rest c))]
+                            (rel-map-form rk (:card slot) target-forms label))))
                       (remove scalar? clauses))]
     `(->InstanceValue ~tag ~(str (second name-form)) ~doc ~scalars ~rels false)))
 

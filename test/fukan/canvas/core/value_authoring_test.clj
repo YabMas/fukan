@@ -34,3 +34,24 @@
   (is (= {:val/required true} (:scalars ev-test-name)))
   ;; the :links target is captured as the var, not deref'd yet
   (is (= [#'ev-test-User] (:targets (first (filter #(= :links (:rk %)) (:clauses ev-test-User)))))))
+
+;; ── Task 3: ordered slots and [label target] clauses ─────────────────────────
+;; defstructure* and instance forms must be at top level (macro defined and used
+;; in the same compilation unit requires top-level definitions).
+
+(s/defstructure* Sym  "symbol")
+(s/defstructure* Prod "production" (slot :rhs (ordered Sym)))
+(s/defstructure* Lnk  "link" (slot :to (one Sym)))
+
+(def t3-x (Sym "x"))
+(def t3-y (Sym "y"))
+(def t3-p (Prod "p" (rhs [t3-x t3-y])))
+(def t3-l (Lnk "l" (to [edge t3-y])))
+
+(deftest ordered-and-labelled-clauses
+  ;; ordered vector splices in order — :targets holds both elements as vars
+  (is (= [#'t3-x #'t3-y] (:targets (first (:clauses t3-p)))))
+  ;; [label target] form → :label key on the clause map
+  (is (= "edge" (:label (first (:clauses t3-l)))))
+  ;; and the single target is captured as a var
+  (is (= [#'t3-y] (:targets (first (:clauses t3-l))))))
