@@ -69,6 +69,17 @@
                              vars)]
     (-> (s/create) (d/db-with nodes) (d/db-with rels))))
 
+(defn assemble-instances
+  "Build one structure db from explicit `[id InstanceValue]` roots — programmatic
+   construction with no var scan, for builders that synthesize instances at runtime
+   (e.g. a code extractor). Inline-value children get owner-path ids; nodes are
+   transacted before rels so lookup-refs resolve."
+  [id+ivs]
+  (let [[nodes rels] (reduce (fn [[nodes rels] [id iv]] (walk iv id nodes rels))
+                             [[] []]
+                             id+ivs)]
+    (-> (s/create) (d/db-with nodes) (d/db-with rels))))
+
 (defn assemble
   "Scan `ns-syms` for instance-vars and build one structure db (nodes first, then rels).
    Transacts all nodes before any rels so datascript lookup-refs resolve across cycles."
