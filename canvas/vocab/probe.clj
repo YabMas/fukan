@@ -1,8 +1,8 @@
 (ns canvas.vocab.probe
   "The fukan-on-fukan model's PROBE layer — one of the two acts on the model. A `Probe`
    READS the model through a `Lens` and yields a `Finding`: it observes / extracts,
-   leaving the model unchanged (its dual, a `Projection`, RE-PRESENTS the model as a
-   target artifact).
+   leaving the model unchanged (its complement, a `Projection`, RE-PRESENTS the model as a
+   target artifact). Probe and Projection are complementary acts — analysis vs synthesis.
 
    INSPECT ⊂ PROBE: an inspect is just a probe whose finding GATES action (a trust /
    health verdict — a Signal). A non-gating finding is a View, a perspective to reason
@@ -18,14 +18,13 @@
    Signal that gates action (the inspect case); a non-gating finding is a View, a
    perspective a human/LLM reasons with.
 
-   A finding may carry a CONTRACT — a `shape` (its payload's structure, in the shape
-   grammar) and a `holds` invariant (prose + an optional inline predicate
-   `(fn [result target-db] → ok?)` that the projection surfaces as a runtime check).
-   The projection turns the contract into a runtime check on the finding (see the
-   executable-agent sketch, Resolved #2)."
+   A finding may carry a CONTRACT — a `holds` invariant (prose + an optional inline
+   predicate `(fn [result target-db] → ok?)` that the projection surfaces as a runtime
+   check). The projection turns the contract into a runtime check on the finding (see
+   the executable-agent sketch, Resolved #2). The complement of this observation act is
+   a `Projection` (synthesis)."
   (slot :doc    (optional :String))
   (slot :gating (one :Bool))       ; gating → a trust Signal (inspect); else a View
-  (slot :shape  (optional Shape))  ; the finding payload's structure (shape grammar)
   (slot :holds  (optional :String) :payload :holds-pred) ; prose + an optional inline predicate form
   ;; a finding is meaningful only if some probe yields it
   (law "every finding is yielded by some probe"

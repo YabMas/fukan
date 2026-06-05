@@ -31,18 +31,20 @@
       (is (holds? (probes/probe-patterns db) db)
           "the real patterns finding satisfies its holds (the self-model recurs)")
       (let [tiny (s/with-structures (s/within-module "tiny" (Kind "Solo")))]
-        (is (holds? {:lens "patterns" :gating false :finding []} tiny)
+        (is (holds? {:lens "patterns" :gating false :observations []} tiny)
             "empty finding over a degenerate model → holds")
-        (is (not (holds? {:lens "patterns" :gating false :finding ["bogus pattern"]} tiny))
+        (is (not (holds? {:lens "patterns" :gating false
+                          :observations [{:focus #{} :as :pattern :note "bogus pattern"}]} tiny))
             "a reported pattern over a model with no recurrence → holds FIRES")))))
 
 (deftest integrity-holds-law-gates-the-finding
   (testing "the projected holds-check for integrity passes real and fires on a bogus finding"
     (let [db     (cs/build)
           holds? (eval (:holds-check (pc/project-probe db "integrity")))]
-      (is (holds? {:lens "integrity" :gating true :finding []} db)
+      (is (holds? {:lens "integrity" :gating true :observations []} db)
           "empty finding over the clean self-model → holds")
-      (is (not (holds? {:lens "integrity" :gating true :finding ["bogus violation"]} db))
+      (is (not (holds? {:lens "integrity" :gating true
+                        :observations [{:focus #{} :as :violation :note "bogus violation"}]} db))
           "a reported violation when the model is clean → holds FIRES"))))
 
 (deftest probe-integrity-composes-check-into-observations

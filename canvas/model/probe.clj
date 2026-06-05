@@ -6,21 +6,18 @@
    (Signals); survey/patterns/… yield non-gating Views. The overview's `Faculty
    \"Probe\"` is `realized-by` this module."
   (:require [fukan.canvas.core.structure :as s]
-            [canvas.vocab.shape :refer [Kind]]
             [canvas.vocab.probe :refer [Probe Finding]]))
 
 (defn ^:export build-canvas []
   (s/with-structures
     (s/within-module "probe"
-      (Kind "Str")   ; leaf for finding payload shapes (canvas-source pattern; avoids cross-module Kind refs)
       ;; non-gating findings — perspectives to reason with (Views)
-      (Finding "Survey"      (gating false) (doc "A structural overview of the whole model.") (shape [Str]))
+      (Finding "Survey"      (gating false) (doc "A structural overview of the whole model."))
       (Finding "Patterns"    (gating false)
         (doc "Recurring structural patterns across the model.")
-        (shape [Str])
         (holds "a model with no recurring structures yields no reported patterns"
                (fn [result target-db]
-                 (or (empty? (:finding result))
+                 (or (empty? (:observations result))
                      (seq (datascript.core/q
                             '[:find ?ft ?k ?tt
                               :where [?r1 :rel/from ?f1] [?r1 :rel/kind ?k] [?r1 :rel/to ?t1]
@@ -29,18 +26,17 @@
                                      [?f2 :structure/of ?ft] [?t2 :structure/of ?tt]
                                      [(not= ?r1 ?r2)]]
                             target-db))))))
-      (Finding "Consistency" (gating false) (doc "Where contracts and structure align — or drift.") (shape [Str]))
-      (Finding "TarPit"      (gating false) (doc "Complexity hotspots — tangles worth attention.") (shape [Str]))
+      (Finding "Consistency" (gating false) (doc "Where contracts and structure align — or drift."))
+      (Finding "TarPit"      (gating false) (doc "Complexity hotspots — tangles worth attention."))
       ;; gating findings — trust verdicts (the inspect case → Signals)
       (Finding "IntegrityReport" (gating true)
         (doc "Whether the model's structure holds together.")
-        (shape [Str])                                                   ; payload: a list of violation strings
         (holds "a model with no law violations yields no reported violations"
                (fn [result target-db]
-                 (or (empty? (:finding result))
+                 (or (empty? (:observations result))
                      (seq (fukan.canvas.core.structure/check target-db))))))
-      (Finding "CoverageReport"  (gating true) (doc "How much of the target's code is spec-covered.") (shape [Str]))
-      (Finding "DriftReport"     (gating true) (doc "Where specifications and code have diverged.") (shape [Str]))
+      (Finding "CoverageReport"  (gating true) (doc "How much of the target's code is spec-covered."))
+      (Finding "DriftReport"     (gating true) (doc "Where specifications and code have diverged."))
 
       ;; probes — each reads through a lens (cross-module) → a finding
       (Probe "survey"      (through (across "lens" "survey"))      (yields Survey))

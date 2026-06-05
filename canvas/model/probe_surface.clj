@@ -44,8 +44,8 @@
     (s/within-module "probe-code"
       (Kind "Db") (Kind "ProbeName") (Kind "CapabilityName")
       (Kind "ContractForm") (Kind "Instruction") (Kind "ProbeArtifact")
-      (Stage "probe-capability" (in [db Db]) (in [probe-name ProbeName]) (out CapabilityName) (performs :throws))
-      (Stage "contract-form"    (in [db Db]) (in [probe-name ProbeName]) (out ContractForm)   (performs :throws))
-      (Stage "instruction"      (in [db Db]) (in [probe-name ProbeName]) (out Instruction))
-      (Stage "project-probe"    (in [db Db]) (in [probe-name ProbeName]) (out ProbeArtifact) (performs :throws)
-        (calls probe-capability contract-form instruction)))))
+      (Stage "probe-capability"      (in [db Db]) (in [probe-name ProbeName]) (out CapabilityName) (performs :throws))
+      (Stage "observations-contract" (out ContractForm))
+      (Stage "instruction"           (in [db Db]) (in [probe-name ProbeName]) (out Instruction))
+      (Stage "project-probe"         (in [db Db]) (in [probe-name ProbeName]) (out ProbeArtifact) (performs :throws)
+        (calls probe-capability observations-contract instruction)))))

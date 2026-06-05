@@ -4,8 +4,8 @@
    representation (the implementation blueprint is one; docs, diagrams, other
    realizations are future projections), built from source→artifact `Mapping`s.
 
-   NB this is conceptually distinct from a PROBE (lens/inspect, which read the model
-   and yield a finding): a projection RE-PRESENTS the model, it doesn't judge it.
+   NB this is the COMPLEMENT of a PROBE (analysis vs synthesis): a probe OBSERVES the
+   model and yields a finding; a projection RE-PRESENTS the model, it doesn't judge it.
 
    Vocab-only canvas spec (no build-canvas)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
