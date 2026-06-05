@@ -58,6 +58,22 @@
   ;; and the single target is captured as a var
   (is (= [#'t3-y] (:targets (first (:clauses t3-l))))))
 
+;; ── entity name defaults to the binding var's simple name ────────────────────
+(s/defstructure Named "n" (slot :doc (optional :String)))
+
+(def nm-derived  (Named))             ; no name → derived from the var
+(def nm-override (Named "explicit"))  ; explicit string → overrides the var
+
+(deftest entity-without-a-name-takes-the-vars-simple-name
+  (is (nil? (:name nm-derived)) "the InstanceValue carries no name until assembly")
+  (let [db (a/assemble-vars [#'nm-derived #'nm-override])]
+    (is (= "nm-derived"
+           (:entity/name (d/entity db [:entity/id (s/var-id #'nm-derived)])))
+        "the node is named after its binding var")
+    (is (= "explicit"
+           (:entity/name (d/entity db [:entity/id (s/var-id #'nm-override)])))
+        "an explicit string still overrides — for dotted module names / renamed vars")))
+
 ;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
 
 (s/defstructure ^:value Shp "a shape"

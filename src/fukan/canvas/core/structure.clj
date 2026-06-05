@@ -67,6 +67,12 @@
   [v]
   (let [m (meta v)] (str (ns-name (:ns m)) "/" (:name m))))
 
+(defn var-simple-name
+  "The simple (unqualified) name of an instance-bearing var, as a string — the
+   default `:entity/name` for an entity authored without an explicit name."
+  [v]
+  (name (:name (meta v))))
+
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
 (defn- slot-for [sdef rel] (first (filter #(= rel (:rel %)) (:slots sdef))))
@@ -203,9 +209,15 @@
 
 (defn instance-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for an entity instance.
-   `name-form` is `(quote <name>)` so `(second name-form)` yields the raw name value."
-  [tag name-form body]
-  (build-instance-form tag (str (second name-form)) false body))
+   An optional leading string literal is the entity's name. When it is absent the
+   name is nil and the assembler derives `:entity/name` from the binding var's simple
+   name — so `(def survey (Lens (focus …)))` names the node \"survey\" with no
+   redundant string. Pass a name only to override (e.g. a dotted module name, or a
+   var renamed to dodge a collision)."
+  [tag args]
+  (let [named? (string? (first args))]
+    (build-instance-form tag (when named? (first args)) false
+                         (if named? (rest args) args))))
 
 (defn value-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance.
@@ -353,8 +365,8 @@
        ~(if value?
           `(defmacro ~sname ~docstring [& body#]
              (fukan.canvas.core.structure/value-form ~tag body#))
-          `(defmacro ~sname ~docstring [name# & body#]
-             (fukan.canvas.core.structure/instance-form ~tag (list 'quote name#) body#))))))
+          `(defmacro ~sname ~docstring [& args#]
+             (fukan.canvas.core.structure/instance-form ~tag args#))))))
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 

@@ -228,6 +228,7 @@
    fukan.canvas.core.value-authoring-test/Grp hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/HoldT hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Lnk hooks.fukan.structure/instance
+   fukan.canvas.core.value-authoring-test/Named hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Prod hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/RKind hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/RShape hooks.fukan.structure/instance

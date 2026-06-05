@@ -63,7 +63,13 @@
    Useful for assembling ad-hoc models (e.g. in negative tests) without a namespace scan."
   [vars]
   (let [[nodes rels] (reduce (fn [[nodes rels] v]
-                               (let [iv (deref v)
+                               (let [iv0 (deref v)
+                                     ;; a named entity authored without an explicit name
+                                     ;; takes its :entity/name from the binding var's
+                                     ;; simple name (values stay anonymous)
+                                     iv (if (and (not (:value? iv0)) (nil? (:name iv0)))
+                                          (assoc iv0 :name (s/var-simple-name v))
+                                          iv0)
                                      id (if (:value? iv) (s/value-content-key iv) (s/var-id v))]
                                  (walk iv id nodes rels)))
                              [[] []]
