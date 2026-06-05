@@ -1,17 +1,21 @@
 (ns fukan.canvas.projection.canvas-source
   "Canvas ingestion: discover the defstructure-based canvas specs on the
-   classpath, call each spec's `build-canvas` (which returns a structure
-   substrate db), and merge them into one structure db — which IS the model
-   (design decision (ii): the structure substrate is the model; there is no
-   model-map projection and no Phase-6 analyzer here anymore).
+   classpath, require them (registering their vocabulary and interning their
+   instance `def`s), and assemble all those instance-vars into one structure db —
+   which IS the model (design decision (ii): the structure substrate is the model;
+   there is no model-map projection and no Phase-6 analyzer here anymore).
 
    Canvas namespaces are auto-discovered: any `canvas/**/*.clj` file on the
-   classpath is a canvas port expected to define a `build-canvas` fn returning a
-   `fukan.canvas.core.structure` db. Adding a port is a single file drop."
+   classpath is a canvas port. A spec authors instances as top-level `def`s holding
+   `InstanceValue`s; references between them are ordinary var references, resolved by
+   the global assembler (no `build-canvas`, no merge/cross-ref pass). Adding a port is
+   a single file drop. `union-dbs` remains only to fold an extractor's code db onto
+   the assembled design db."
   (:require
    [clojure.java.io :as io]
    [clojure.string :as str]
    [datascript.core :as d]
+   [fukan.canvas.core.assemble :as assemble]
    [fukan.canvas.core.structure :as structure]))
 
 ;; ---------------------------------------------------------------------------
@@ -74,18 +78,16 @@
                    "(lean-kernel rebuild phase)."))
         [])))
 
-(defn- load-and-resolve-build-canvas
-  "Require a canvas namespace (throwing on a load failure) and return its
-   build-canvas var, or nil when it defines none. A canvas spec without
-   build-canvas is a VOCAB-ONLY spec — it `defstructure`s a vocabulary for other
-   specs to author against, contributing no instances itself (mirroring the demos'
-   vocab-vs-model split). Requiring it still registers its structures."
+(defn- require-canvas-namespace
+  "Require a canvas namespace (throwing on a load failure). Loading it registers its
+   vocabulary (`defstructure`s) and interns its instance `def`s — both of which the
+   global assembler then reads. A vocab-only spec interns no instances and simply
+   contributes its grammar."
   [ns-sym]
   (try (require ns-sym)
        (catch Exception e
          (throw (ex-info (str "canvas-source: failed to load canvas namespace " ns-sym)
-                         {:namespace ns-sym} e))))
-  (ns-resolve (the-ns ns-sym) 'build-canvas))
+                         {:namespace ns-sym} e)))))
 
 (defn canvas-namespaces
   "The auto-discovered canvas namespace symbols (public for inspection)."
@@ -93,7 +95,7 @@
   (discover-canvas-namespaces))
 
 ;; ---------------------------------------------------------------------------
-;; Merge — combine per-spec structure dbs into one (schema-driven)
+;; Union — fold the extractor's code db onto the assembled design db (schema-driven)
 ;; ---------------------------------------------------------------------------
 
 (defn- db->entity-maps
@@ -131,11 +133,12 @@
                                  (d/datoms db :eavt eid)))
                          eid->id)}))
 
-(defn merge-dbs
-  "Merge a seq of per-spec structure dbs into one structure db. Entities keep
-   their stable identities; ref-typed attrs are translated to identity
-   lookup-refs (two passes: scalars first, then refs) so they resolve in the
-   merged db."
+(defn union-dbs
+  "Union a seq of structure dbs into one. Entities keep their stable identities
+   (`:entity/id` / `:rel/id`); ref-typed attrs are translated to identity lookup-refs
+   (two passes: scalars first, then refs) so they resolve in the unioned db. Used to
+   fold an extractor's code db onto the assembled design db (both carry globally
+   unique ids)."
   [dbs]
   (let [extractions (map db->entity-maps dbs)]
     (-> (structure/create)
@@ -143,49 +146,15 @@
         (d/db-with (mapcat :ref-txs extractions)))))
 
 ;; ---------------------------------------------------------------------------
-;; Cross-module references — resolve deferred `:rel/to-ref` post-merge
-;; ---------------------------------------------------------------------------
-
-(defn- resolve-ref
-  "Resolve a cross-module reference vector against the merged db, returning the
-   target eid (or nil): `[module]` → the :Module node of that name; `[module name]`
-   → that module's child of that name."
-  [db ref]
-  (case (count ref)
-    1 (ffirst (d/q '[:find ?m :in $ ?mn
-                     :where [?m :entity/name ?mn] [?m :structure/of :Module]]
-                   db (first ref)))
-    2 (ffirst (d/q '[:find ?c :in $ ?mn ?cn
-                     :where [?m :entity/name ?mn] [?m :structure/of :Module]
-                            [?m :module/child ?c] [?c :entity/name ?cn]]
-                   db (first ref) (second ref)))
-    nil))
-
-(defn resolve-cross-refs
-  "Resolve every deferred cross-module reference (`:rel/to-ref`, no `:rel/to`) in
-   the merged db to its actual target node. Throws on an unresolved reference — the
-   cross-module analogue of the local 'not an entity in the module' error."
-  [db]
-  (reduce (fn [db [r ref]]
-            (if-let [target (resolve-ref db ref)]
-              (d/db-with db [[:db/add r :rel/to target]])
-              (throw (ex-info (str "canvas-source: unresolved cross-module reference "
-                                   (pr-str ref) " — no such module/node in the model")
-                              {:ref ref :rel r}))))
-          db
-          (d/q '[:find ?r ?ref :where [?r :rel/to-ref ?ref] (not [?r :rel/to _])] db)))
-
-;; ---------------------------------------------------------------------------
 ;; Build — the model
 ;; ---------------------------------------------------------------------------
 
 (defn build
-  "Discover every canvas spec, load it (registering its vocabulary), call each
-   model spec's build-canvas (→ a structure db), merge them, and resolve deferred
-   cross-module references. Vocab-only specs (no build-canvas) are loaded but
-   contribute no instances. This db is the model."
+  "Discover every canvas spec, require it (registering its vocabulary and interning
+   its instance `def`s), and assemble all those instance-vars into one structure db.
+   References between instances are ordinary var references resolved by the assembler
+   — there is no separate merge/cross-ref pass. This db is the model."
   []
-  (->> (discover-canvas-namespaces)
-       (keep (fn [ns-sym] (when-let [bc (load-and-resolve-build-canvas ns-sym)] (bc))))
-       merge-dbs
-       resolve-cross-refs))
+  (let [nss (discover-canvas-namespaces)]
+    (doseq [ns-sym nss] (require-canvas-namespace ns-sym))
+    (assemble/assemble nss)))
