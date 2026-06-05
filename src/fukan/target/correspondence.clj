@@ -72,10 +72,12 @@
   [db]
   (->> (d/q '[:find ?on
               :where [?o :structure/of :Operation] [?o :entity/name ?on]
-                     [?km :module/child ?o] [?km :entity/name ?kmn]
+                     [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o]
+                     [?km :entity/name ?kmn]
                      (not-join [?on ?kmn]
                        [?s :structure/of :Stage] [?s :entity/name ?on]
-                       [?cm :module/child ?s] [?cm :entity/name ?cmn]
+                       [?cr :rel/kind :child] [?cr :rel/from ?cm] [?cr :rel/to ?s]
+                       [?cm :entity/name ?cmn]
                        [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]
             db)
        (map first) set))

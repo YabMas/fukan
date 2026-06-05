@@ -5,8 +5,8 @@
    that knows Clojure. It reads clj-kondo's `:analysis` output and maps Clojure
    constructs onto fukan's architecture-level code vocabulary:
 
-     ns               → Module      (a cohesion boundary — the substrate's own,
-                                      emitted by `within-module*`)
+     ns               → Module      (a cohesion boundary — the generic `:child`
+                                      grouping the design side uses)
      defn / defn-     → Operation   (a named unit of computation)
 
    What it extracts INTO is architecture-characteristic and PL-blind — `Operation`
@@ -15,6 +15,7 @@
    the same vocab plus the same cross-layer correspondence law still hold; the
    Clojure-ness stays confined here. clj-kondo is the wheel we don't reinvent."
   (:require [clj-kondo.core :as kondo]
+            [fukan.canvas.core.assemble :as assemble]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 (defstructure Operation
@@ -42,18 +43,20 @@
 (defn extract
   "Extract a structure-db of Modules (cohesion boundaries) and the Operations they
    define from the Clojure source under `paths` (files or directories). Builds the
-   db via the substrate's programmatic emission API; each namespace becomes a
-   Module, each `defn`/`defn-` an Operation owned by it (`:module/child`)."
+   db programmatically: each namespace becomes a `Module` whose `:child` Operations
+   are the `defn`/`defn-`s it defines (the same generic cohesion grouping the design
+   side uses). Operations are inline-value children of their Module — anonymous,
+   owner-path-identified, matched to design Stages by NAME via the correspondence laws."
   [& paths]
   (let [{:keys [namespace-definitions var-definitions]} (analyze paths)
         ops-by-ns    (group-by :ns (filter #(fn-defining (:defined-by %)) var-definitions))
         module-names (distinct (concat (map :name namespace-definitions)
                                        (keys ops-by-ns)))]
-    (s/with-structures*
-      (fn []
-        (doseq [mname module-names]
-          (s/within-module* (str mname)
-            (fn []
-              (doseq [v (ops-by-ns mname)]
-                (s/instantiate! :Operation (str (:name v))
-                                (list (list 'private (boolean (:private v)))))))))))))
+    (assemble/assemble-instances
+     (for [mname module-names
+           :let [ops (for [v (ops-by-ns mname)]
+                       (s/->InstanceValue :Operation (str (:name v)) nil
+                                          {:val/private (boolean (:private v))} [] false))]]
+       [(str mname)
+        (s/->InstanceValue :Module (str mname) nil {}
+                           [{:rk :child :card :many :targets (vec ops)}] false)]))))
