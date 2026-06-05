@@ -5,6 +5,7 @@
             [fukan.canvas.projection.probe-code :as pc]
             [fukan.canvas.projection.probes :as probes]
             [fukan.target.clojure :as target]
+            [canvas.vocab.probe :refer [Finding]]
             [canvas.vocab.shape :refer [Kind]]))
 
 (deftest probe-patterns-yields-observations-with-foci
@@ -44,14 +45,23 @@
       (is (not (holds? {:lens "integrity" :gating true :finding ["bogus violation"]} db))
           "a reported violation when the model is clean → holds FIRES"))))
 
-(deftest probe-integrity-composes-check
-  (testing "probe-integrity surfaces the kernel's check as a gating finding"
+(deftest probe-integrity-composes-check-into-observations
+  (testing "integrity surfaces each violation as an observation whose focus is its offenders"
     (let [db     (cs/build)
           result (probes/probe-integrity db)]
       (is (= "integrity" (:lens result)))
       (is (true? (:gating result)) "integrity is the gating inspect case")
-      (is (every? string? (:finding result)) "violations rendered as [Str]")
-      (is (empty? (:finding result)) "the self-model's laws all hold — no violations"))))
+      (is (empty? (:observations result)) "the self-model's laws all hold — no violations")
+      (let [dirty (s/with-structures
+                    (s/within-module "broken" (Kind "Str")
+                      (Finding "Orphan" (gating false))))
+            v     (probes/probe-integrity dirty)]
+        (is (seq (:observations v)) "a broken model reports violations")
+        (let [o (first (:observations v))]
+          (is (= :violation (:as o)))
+          (is (set? (:focus o)) "the focus is the offender node-set")
+          (is (seq (:focus o)) "offenders are named")
+          (is (string? (:note o))))))))
 
 (deftest probe-patterns-scopes-to-a-focus
   (testing "a probe reads only its focus sub-graph — so a refined focus chains in"
@@ -78,12 +88,13 @@
           "every observation is {focus tag note}"))))
 
 (deftest coverage-and-drift-surface-correspondence
-  (testing "over a unified model (self-model + sample code), the gating probes surface the gaps"
+  (testing "the gating probes surface gaps as observations over a unified model"
     (let [db    (cs/merge-dbs [(cs/build) (target/extract "test/fixtures/target/sample.clj")])
           drift (probes/run db "drift")
           cov   (probes/run db "coverage")]
-      (is (seq (:finding drift)) "modelled Stages drift — sample shares no corresponding module")
-      (is (= #{"alpha" "beta" "delta"} (set (:finding cov)))
+      (is (seq (:observations drift)) "modelled Stages drift")
+      (is (every? #(= :gap (:as %)) (:observations drift)) "drift gaps are tagged :gap")
+      (is (= #{"alpha" "beta" "delta"} (set (map :note (:observations cov))))
           "sample's Operations are uncovered by the model (the coverage dual)"))))
 
 (deftest run-and-run-all-are-the-live-probe-surface

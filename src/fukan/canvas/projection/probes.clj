@@ -36,17 +36,16 @@
                       (str (count rs) "× " ft " -[" rk "]-> " tt)))))))))
 
 (defn probe-integrity
-  "The canonical integrity inspect: the kernel's `check` (laws -> violations) surfaced
-   as a gating Finding. This realizes the modelled `integrity` probe — the same probe
-   that `:calls` the modelled `check` capability. Returns {:lens \"integrity\"
-   :gating true :finding <a list of violation strings>}; an empty finding means the
-   model's laws all hold. Integrity is GLOBAL — laws span the whole model — so an
-   optional `focus` is accepted (for a uniform probe signature) but ignored."
-  ([target-db] (probe-integrity target-db nil))
-  ([target-db _focus]
-   {:lens    "integrity"
-    :gating  true
-    :finding (mapv str (structure/check target-db))}))
+  "The integrity inspect (a gating Signal): the kernel's `check` (laws → violations),
+   each violation an observation whose focus is its offender node-set. Empty ⇔ every
+   law holds. Global — `focus` accepted for a uniform signature but ignored."
+  ([db] (probe-integrity db nil))
+  ([db _focus]
+   (f/finding "integrity" true
+     (mapv (fn [v]
+             (f/observation (into #{} (mapcat identity) (:offenders v))
+                            :violation (str v)))
+           (structure/check db)))))
 
 (defn probe-survey
   "A structural overview (a View): one observation per structure kind, its focus the
@@ -102,19 +101,33 @@
 
 (defn probe-coverage
   "Spec ↔ code coverage (a gating Signal): extracted Operations not covered by a
-   modelling Stage (code→spec gaps). Surfaces correspondence/unrealized-operations.
-   Empty ⇔ every Operation is modelled. Global — `focus` is accepted but ignored."
-  ([target-db] (probe-coverage target-db nil))
-  ([target-db _focus]
-   {:lens "coverage" :gating true :finding (vec (sort (corr/unrealized-operations target-db)))}))
+   Stage, each an observation whose focus is the uncovered Operation node(s). Empty ⇔
+   every Operation is modelled. Global — `focus` accepted but ignored."
+  ([db] (probe-coverage db nil))
+  ([db _focus]
+   (f/finding "coverage" true
+     (->> (sort (corr/unrealized-operations db))
+          (mapv (fn [n]
+                  (f/observation
+                    (->> (d/q '[:find ?o :in $ ?n
+                                :where [?o :structure/of :Operation] [?o :entity/name ?n]] db n)
+                         (map first) set)
+                    :gap n)))))))
 
 (defn probe-drift
   "Spec ↔ code divergence (a gating Signal): modelled Stages not realized by an
-   Operation (spec→code gaps). Surfaces correspondence/unrealized-stages. Empty ⇔ the
-   model is fully realized. Global — `focus` is accepted but ignored."
-  ([target-db] (probe-drift target-db nil))
-  ([target-db _focus]
-   {:lens "drift" :gating true :finding (vec (sort (corr/unrealized-stages target-db)))}))
+   Operation, each an observation whose focus is the unrealized Stage node(s). Empty ⇔
+   the model is fully realized. Global — `focus` accepted but ignored."
+  ([db] (probe-drift db nil))
+  ([db _focus]
+   (f/finding "drift" true
+     (->> (sort (corr/unrealized-stages db))
+          (mapv (fn [n]
+                  (f/observation
+                    (->> (d/q '[:find ?s :in $ ?n
+                                :where [?s :structure/of :Stage] [?s :entity/name ?n]] db n)
+                         (map first) set)
+                    :gap n)))))))
 
 (defmulti run-probe
   "The probe surface as a self-registering multimethod: dispatch on probe-name.
