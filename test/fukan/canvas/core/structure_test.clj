@@ -1,9 +1,13 @@
 (ns fukan.canvas.core.structure-test
   "Step-1 tests for the defstructure primitive: instantiation emits Node +
    reified slot Relations; slot cardinality + target-type compile to laws;
-   `check` runs them, including a recursive free law."
+   `check` runs them, including a recursive free law.
+
+   Instances are top-level value `def`s assembled with `assemble-vars` (the
+   var-capture surface); references between them are ordinary var refs."
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
+            [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── structures under test ───────────────────────────────────────────────────
@@ -132,17 +136,106 @@
 (defn- count-of [db tag]
   (count (d/q '[:find ?e :in $ ?t :where [?e :structure/of ?t]] db tag)))
 
+;; ── instances under test (top-level value defs, assembled per test) ──────────
+
+(def ie-Int (Type "Int"))
+(def ie-Str (Type "Str"))
+(def ie-f   (Function "f" (takes [x ie-Int] [y ie-Str]) (gives ie-Int)))
+
+(def wf-Int (Type "Int"))
+(def wf-f   (Function "f" (takes [x wf-Int]) (gives wf-Int)))
+
+(def dc-Int (Type "Int"))
+(def dc-f   (Function "f" (doc "Builds the thing.") (gives dc-Int)))
+
+(def co-Int     (Type "Int"))
+(def co-Str     (Type "Str"))
+(def co-none    (Function "none"))                  ; zero gives
+(def co-several (Function "several" (gives co-Int co-Str)))   ; two gives
+
+(def tt-Int    (Type "Int"))
+(def tt-callee (Function "callee" (gives tt-Int)))
+(def tt-bad    (Function "bad" (gives tt-callee)))  ; gives a Function, not a Type
+
+(def at-leaf (Tree "leaf"))
+(def at-mid  (Tree "mid"  (child at-leaf)))
+(def at-root (Tree "root" (child at-mid)))
+
+(declare frc-b)
+(def frc-a (Tree "a" (child frc-b)))   ; forward reference — frc-b declared below
+(def frc-b (Tree "b" (child frc-a)))   ; back reference — together an a→b→a cycle
+
+(def vs-b (Box "b" (open true) (label "hi") (size 3)))
+(def vf-b (Box "b" (open false) (size 3)))
+
+(def sc-z-Int (Type "Int"))
+(def sc-z     (NonEmpty "z"))                    ; zero items
+(def sc-o-Int (Type "Int"))
+(def sc-o     (NonEmpty "o" (item sc-o-Int)))    ; one item
+
+(def fl-Str (Type "Str"))
+(def fl-p   (Plain  "p" (field [secret fl-Str])))   ; matches the pattern but is NOT Tagged
+(def fl-t   (Tagged "t" (field [secret fl-Str])))   ; the genuine offender
+
+(def ls-Str   (Type "Str"))
+(def ls-guard (Auditor "guard"))
+(def ls-p     (Plain "p" (field [secret ls-Str])))
+
+(def vw-b (Box "b" (open true) (size 3)))     ; label optional, omitted
+(def vt-b (Box "b" (open "yes") (size 3)))    ; open is a String, not a Bool
+(def vo-b (Box "b" (size 3)))                 ; open absent
+(def fv-b (Box "b" (open true) (size 0)))     ; size 0 violates positivity
+
+(def dl-h (Holder2 "h" (w 5) (w 5) (w 6)))    ; 5 authored twice
+
+(def os-Int (Type "Int"))
+(def os-Str (Type "Str"))
+(def os-s   (Seq2 "s" (items [os-Int os-Str os-Int])))   ; Int repeats at 0 and 2
+
+(def o2-Int (Type "Int"))
+(def o2-Str (Type "Str"))
+(def o2-s   (Seq2 "s" (items [o2-Int o2-Str])))
+
+(def ov-Int (Type "Int"))
+(def ov-Str (Type "Str"))
+(def ov-h   (HolderO "h"
+              (v (OrdVal (xs [ov-Int ov-Str])))
+              (v (OrdVal (xs [ov-Str ov-Int])))     ; reversed → distinct value
+              (v (OrdVal (xs [ov-Int ov-Str])))))   ; same as first → dedup
+
+(def ev-h (Holder "h" (pair (Pair (fst 1) (snd 2)))
+                      (pair (Pair (fst 1) (snd 2)))))   ; same content
+
+(def dv-h (Holder "h" (pair (Pair (fst 1) (snd 2)))
+                      (pair (Pair (fst 3) (snd 4)))))
+
+(def vn-h (Holder "h" (pair (Pair (fst 1) (snd 2)))))
+
+(def vd-Int (Type "Int"))
+(def vd-h   (Holder "h"
+              (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty vd-Int)))
+              (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty vd-Int)))))
+
+(def de-Int (Type "Int"))
+(def de-Str (Type "Str"))
+(def de-h   (Holder "h"
+              (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty de-Int)))
+              (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty de-Str)))))
+
+(def lr-bad-scalar-h (Holder "h" (pair (Pair (fst "no") (snd 2)))))   ; fst not an Int
+(def lr-p            (Plain "p"))
+(def lr-bad-target-h (Holder "h" (box (Boxed (inner (Pair (fst 1) (snd 2)))
+                                             (ty lr-p)))))             ; ty targets a Plain, not a Type
+
+(def pl-c1 (Carry "c1" (text "hi" [:a :b])))
+(def pl-c2 (Carry "c2" (text "solo")))
+(def pl-c3 (Carry "c3" (text "hi" '(fn [x] x))))
+
 ;; ── tests ───────────────────────────────────────────────────────────────────
 
 (deftest instantiation-emits-node-and-reified-relations
   (testing "an instance is a tagged Node; slot values are reified relations with labels"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int")
-                 (Type "Str")
-                 (Function "f"
-                   (takes [x Int] [y Str])
-                   (gives Int))))]
+    (let [db (a/assemble-vars [#'ie-Int #'ie-Str #'ie-f])]
       (is (= #{"Int" "Str"} (names-of db :Type)))
       (is (= #{"f"} (names-of db :Function)))
       (is (= #{["Int" "x"] ["Str" "y"]} (rels-of db "f" :takes))
@@ -152,18 +245,12 @@
 
 (deftest well-formed-function-passes-check
   (testing "exactly one gives, all targets Types → no violations"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int")
-                 (Function "f" (takes [x Int]) (gives Int))))]
+    (let [db (a/assemble-vars [#'wf-Int #'wf-f])]
       (is (empty? (laws-firing db :Function))))))
 
 (deftest doc-clause-sets-instance-doc
   (testing "(doc ...) is a universal built-in clause → :entity/doc, not a slot"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int")
-                 (Function "f" (doc "Builds the thing.") (gives Int))))]
+    (let [db (a/assemble-vars [#'dc-Int #'dc-f])]
       (is (= "Builds the thing."
              (ffirst (d/q '[:find ?d :where [?e :entity/name "f"] [?e :entity/doc ?d]] db))))
       (is (empty? (laws-firing db :Function))
@@ -171,41 +258,29 @@
 
 (deftest cardinality-one-catches-zero-and-several
   (testing "gives (one Type): zero and several are both violations"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int")
-                 (Type "Str")
-                 (Function "none")                        ; zero gives
-                 (Function "several" (gives Int Str))))    ; two gives
+    (let [db (a/assemble-vars [#'co-Int #'co-Str #'co-none #'co-several])
           firing (laws-firing db :Function)]
       (is (contains? firing "Function.gives requires exactly one (found none)"))
       (is (contains? firing "Function.gives requires exactly one (found several)")))))
 
 (deftest target-type-law-catches-wrong-target
   (testing "a gives target that is not a Type is a violation"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int")
-                 (Function "callee" (gives Int))
-                 (Function "bad" (gives callee))))]        ; gives a Function, not a Type
+    (let [db (a/assemble-vars [#'tt-Int #'tt-callee #'tt-bad])]
       (is (contains? (laws-firing db :Function)
                      "Function.gives target must be a Type")))))
 
 (deftest acyclic-tree-passes-via-instantiation
   (testing "a forward-resolved child chain (leaf←mid←root) has no cycle violation"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Tree "leaf")
-                 (Tree "mid"  (child leaf))
-                 (Tree "root" (child mid))))]
+    (let [db (a/assemble-vars [#'at-leaf #'at-mid #'at-root])]
       (is (= #{"leaf" "mid" "root"} (names-of db :Tree)))
       (is (empty? (laws-firing db :Tree))
           "the recursive no-cycle law runs clean on an acyclic chain"))))
 
 (deftest recursive-law-catches-cycle
   (testing "the recursive no-cycle law detects a cycle in a hand-built db"
-    ;; Cycles aren't authorable under forward-only name resolution, so build the
-    ;; cyclic substrate directly — this exercises the recursive rule + offender.
+    ;; Cycles between named instances ARE authorable now (declare + var-capture), but
+    ;; build the cyclic substrate directly here to exercise the recursive rule + offender
+    ;; in isolation, decoupled from authoring.
     (let [tree-db (fn [nodes edges]
                     (-> (s/create)
                         (d/db-with (for [n nodes]
@@ -224,30 +299,24 @@
           "a self-loop s→s is caught"))))
 
 (deftest forward-references-and-cycles-resolve
-  (testing "two-pass within-module resolves forward references and cycles between instances"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Tree "a" (child b))     ; forward reference — b declared below
-                 (Tree "b" (child a))))]  ; back reference — together an a→b→a cycle
+  (testing "var-capture (declare) resolves forward references and cycles between instances"
+    (let [db (a/assemble-vars [#'frc-a #'frc-b])]
       (is (= 2 (count (d/q '[:find ?r :where [?r :rel/kind :child]] db)))
           "both :child relations resolved (the forward ref is no longer skipped)")
       (is (contains? (laws-firing db :Tree) "no cycle through :child")
           "the authored cycle is real — caught by the no-cycle law"))))
 
-(deftest unresolved-reference-is-an-error
-  (testing "a slot reference to a non-existent entity errors (not silently skipped)"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"not an entity in the enclosing module"
-          (s/with-structures
-            (s/within-module "demo"
-              (Type "Int")
-              (Function "f" (gives Nonexistent))))))))   ; Nonexistent is never declared
+(deftest unresolved-reference-is-a-compile-error
+  (testing "a slot reference to an undefined var is a compile error (not a silent skip)"
+    ;; var-capture means a typo'd reference fails to compile — the whole point of the
+    ;; reframe. `(gives totally-undefined-xyz)` expands to `(var totally-undefined-xyz)`.
+    (is (thrown? clojure.lang.Compiler$CompilerException
+          (eval '(fukan.canvas.core.structure-test/Function "f"
+                   (gives totally-undefined-xyz)))))))
 
 (deftest value-slot-stores-leaf-datom
   (testing "a scalar-typed slot stores a leaf :val/<key> datom on the node, not a relation"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Box "b" (open true) (label "hi") (size 3))))]
+    (let [db (a/assemble-vars [#'vs-b])]
       (is (= true  (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/open ?v]] db))))
       (is (= "hi"  (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/label ?v]] db))))
       (is (= 3     (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/size ?v]] db))))
@@ -258,9 +327,7 @@
 
 (deftest value-false-is-stored-not-absent
   (testing "a stored false Bool is a present value (no none-law), distinct from absent"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Box "b" (open false) (size 3))))]
+    (let [db (a/assemble-vars [#'vf-b])]
       (is (= false (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/open ?v]] db)))
           "false is stored as a real value, not dropped")
       (is (not (contains? (laws-firing db :Box) "Box.open requires exactly one (found none)"))
@@ -268,21 +335,15 @@
 
 (deftest some-cardinality-requires-at-least-one
   (testing "(some Type): zero is a violation, one or more is clean"
-    (let [zero (s/with-structures
-                 (s/within-module "demo" (Type "Int") (NonEmpty "z")))
-          one  (s/with-structures
-                 (s/within-module "demo" (Type "Int") (NonEmpty "o" (item Int))))]
+    (let [zero (a/assemble-vars [#'sc-z-Int #'sc-z])
+          one  (a/assemble-vars [#'sc-o-Int #'sc-o])]
       (is (contains? (laws-firing zero :NonEmpty)
                      "NonEmpty.item requires at least one (found none)"))
       (is (empty? (laws-firing one :NonEmpty))))))
 
 (deftest free-law-is-scoped-to-its-owning-structure
   (testing "a free law on Tagged flags only Tagged instances, not a Plain with the same data"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Str")
-                 (Plain  "p" (field [secret Str]))    ; matches the law's pattern but is NOT Tagged
-                 (Tagged "t" (field [secret Str]))))  ; the genuine offender
+    (let [db (a/assemble-vars [#'fl-Str #'fl-p #'fl-t])
           secret (filter #(= "no field labelled secret" (:law %)) (s/check db))]
       (is (= [:Tagged] (vec (distinct (map :structure secret)))))
       (is (= 1 (reduce + (map (comp count :offenders) secret)))
@@ -290,11 +351,7 @@
 
 (deftest law-scope-can-target-another-structure
   (testing ":scope <tag> aims a free law's subject at a different structure"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Str")
-                 (Auditor "guard")
-                 (Plain "p" (field [secret Str]))))]
+    (let [db (a/assemble-vars [#'ls-Str #'ls-guard #'ls-p])]
       (is (some #(= "no Plain has a secret field" (:law %)) (s/check db))
           "the Auditor law, scoped to :Plain, flags the Plain instance"))))
 
@@ -342,30 +399,22 @@
 
 (deftest value-slots-well-formed-passes-check
   (testing "valid scalar values (and an absent optional) trip no law"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Box "b" (open true) (size 3))))]   ; label optional, omitted
+    (let [db (a/assemble-vars [#'vw-b])]
       (is (empty? (laws-firing db :Box))))))
 
 (deftest value-type-law-catches-wrong-type
   (testing "a value whose literal fails its declared scalar type is caught"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Box "b" (open "yes") (size 3))))]   ; open is a String, not a Bool
+    (let [db (a/assemble-vars [#'vt-b])]
       (is (contains? (laws-firing db :Box) "Box.open value must be a Bool")))))
 
 (deftest value-one-cardinality-catches-missing
   (testing "a required (one :T) value that is absent trips the none-law"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Box "b" (size 3))))]                ; open absent
+    (let [db (a/assemble-vars [#'vo-b])]
       (is (contains? (laws-firing db :Box) "Box.open requires exactly one (found none)")))))
 
 (deftest free-law-over-a-value-fires
   (testing "an author free law can bind a stored value directly (predicates ride the engine)"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Box "b" (open true) (size 0))))]    ; size 0 violates positivity
+    (let [db (a/assemble-vars [#'fv-b])]
       (is (contains? (laws-firing db :Box) "size must be positive")))))
 
 (deftest unknown-body-form-is-rejected
@@ -390,9 +439,7 @@
 
 (deftest data-literal-reader-expands-and-dedups
   (testing "a value structure's :reader expands a literal arg into clauses; equal literals dedup"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Holder2 "h" (w 5) (w 5) (w 6))))]      ; 5 authored twice
+    (let [db (a/assemble-vars [#'dl-h])]
       (is (= 2 (count-of db :Wrapped)) "5, 5, 6 → two Wrapped nodes (the two 5s dedup)")
       (is (= #{5 6} (set (map first (d/q '[:find ?n
                                            :where [?x :structure/of :Wrapped] [?x :val/v ?n]]
@@ -400,10 +447,7 @@
 
 (deftest ordered-slot-captures-position
   (testing "a vector-authored ordered slot records :rel/order, recovering the sequence"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int") (Type "Str")
-                 (Seq2 "s" (items [Int Str Int]))))]   ; Int repeats at 0 and 2
+    (let [db (a/assemble-vars [#'os-Int #'os-Str #'os-s])]
       (is (= ["Int" "Str" "Int"]
              (->> (d/q '[:find ?o ?n
                          :where [?s :entity/name "s"] [?r :rel/from ?s] [?r :rel/kind :items]
@@ -414,22 +458,13 @@
 
 (deftest ordered-two-element-vector-is-a-sequence-not-a-label
   (testing "a 2-element ordered vector is two elements, not a [label target] form"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int") (Type "Str")
-                 (Seq2 "s" (items [Int Str]))))]
+    (let [db (a/assemble-vars [#'o2-Int #'o2-Str #'o2-s])]
       (is (= 2 (count (d/q '[:find ?r :where [?s :entity/name "s"]
                                             [?r :rel/from ?s] [?r :rel/kind :items]] db)))))))
 
 (deftest ordered-value-identity-respects-order
   (testing "order is part of a value's identity: [Int Str] ≠ [Str Int], and equals itself"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int") (Type "Str")
-                 (HolderO "h"
-                   (v (OrdVal (xs [Int Str])))
-                   (v (OrdVal (xs [Str Int])))     ; reversed → distinct value
-                   (v (OrdVal (xs [Int Str]))))))] ; same as first → dedup
+    (let [db (a/assemble-vars [#'ov-Int #'ov-Str #'ov-h])]
       (is (= 2 (count-of db :OrdVal))))))
 
 (deftest ordered-rejects-scalar-slot
@@ -446,76 +481,47 @@
 
 (deftest equal-value-instances-dedup-to-one-node
   (testing "two inline value instances with identical composition collapse to one node"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Holder "h" (pair (Pair (fst 1) (snd 2)))
-                             (pair (Pair (fst 1) (snd 2))))))]   ; same content
+    (let [db (a/assemble-vars [#'ev-h])]
       (is (= 1 (count-of db :Pair)) "the two structurally-equal Pairs are one node"))))
 
 (deftest distinct-value-instances-are-distinct-nodes
   (testing "value instances with different composition are different nodes"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Holder "h" (pair (Pair (fst 1) (snd 2)))
-                             (pair (Pair (fst 3) (snd 4))))))]
+    (let [db (a/assemble-vars [#'dv-h])]
       (is (= 2 (count-of db :Pair))))))
 
 (deftest value-nodes-are-anonymous-and-ownerless
-  (testing "a value node carries no :entity/name and is not a :module/child"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Holder "h" (pair (Pair (fst 1) (snd 2))))))
+  (testing "a value node carries no :entity/name and is not a :child of any module"
+    (let [db (a/assemble-vars [#'vn-h])
           pair-id (ffirst (d/q '[:find ?e :where [?e :structure/of :Pair]] db))]
       (is (empty? (d/q '[:find ?n :in $ ?e :where [?e :entity/name ?n]] db pair-id))
           "no :entity/name")
-      (is (empty? (d/q '[:find ?m :in $ ?e :where [?m :module/child ?e]] db pair-id))
-          "not owned by any module"))))
+      (is (empty? (d/q '[:find ?r :in $ ?e :where [?r :rel/kind :child] [?r :rel/to ?e]] db pair-id))
+          "not a :child of any module"))))
 
 (deftest value-dedup-folds-in-entity-identity-and-nesting
   (testing "Boxed over the same inner Pair + same Type entity dedups (recursively)"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int")
-                 (Holder "h"
-                   (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty Int)))
-                   (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty Int))))))]
+    (let [db (a/assemble-vars [#'vd-Int #'vd-h])]
       (is (= 1 (count-of db :Boxed)) "the two Boxeds collapse")
       (is (= 1 (count-of db :Pair))  "their inner Pairs collapse too"))))
 
 (deftest distinct-entity-target-makes-distinct-value
   (testing "same scalar composition but a different entity target → distinct value nodes"
-    (let [db (s/with-structures
-               (s/within-module "demo"
-                 (Type "Int")
-                 (Type "Str")
-                 (Holder "h"
-                   (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty Int)))
-                   (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty Str))))))]
+    (let [db (a/assemble-vars [#'de-Int #'de-Str #'de-h])]
       (is (= 2 (count-of db :Boxed)) "different :ty entity → different Boxed")
       (is (= 1 (count-of db :Pair))  "but the identical inner Pairs still share"))))
 
 (deftest laws-run-over-value-nodes
   (testing "slot laws fire on deduped value nodes (type-check + relation target-type)"
-    (let [bad-scalar (s/with-structures
-                       (s/within-module "demo"
-                         (Holder "h" (pair (Pair (fst "no") (snd 2))))))   ; fst not an Int
-          bad-target (s/with-structures
-                       (s/within-module "demo"
-                         (Plain "p")
-                         (Holder "h"
-                           (box (Boxed (inner (Pair (fst 1) (snd 2)))
-                                       (ty p))))))]                        ; ty targets a Plain, not a Type
+    (let [bad-scalar (a/assemble-vars [#'lr-bad-scalar-h])
+          bad-target (a/assemble-vars [#'lr-p #'lr-bad-target-h])]
       (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must be a Int"))
       (is (contains? (set (map :law (s/check bad-target))) "Boxed.ty target must be a Type")))))
 
 (deftest programmatic-emission-builds-a-db
-  (testing "with-structures*/within-module* fns let code emit instances from runtime data"
-    (let [db (s/with-structures*
-               (fn []
-                 (s/within-module* "prog"
-                   (fn []
-                     (doseq [n ["a" "b"]]
-                       (s/instantiate! :Carry n (list (list 'text n))))))))]
+  (testing "assemble-instances lets code emit instances from runtime data"
+    (let [db (a/assemble-instances
+               (for [n ["a" "b"]]
+                 [n (s/->InstanceValue :Carry n nil {:val/text n} [] false)]))]
       (is (= #{"a" "b"}
              (set (map first (d/q '[:find ?n :where [?e :structure/of :Carry] [?e :entity/name ?n]] db))))
           "both instances were emitted programmatically")
@@ -524,11 +530,7 @@
 
 (deftest payload-slot-stores-companion-data
   (testing "a scalar slot's 2nd clause arg is stored under its :payload attr"
-    (let [db (s/with-structures
-               (s/within-module "c"
-                 (Carry "c1" (text "hi" [:a :b]))
-                 (Carry "c2" (text "solo"))
-                 (Carry "c3" (text "hi" '(fn [x] x)))))
+    (let [db (a/assemble-vars [#'pl-c1 #'pl-c2 #'pl-c3])
           e1 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c1"]] db)))
           e2 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c2"]] db)))
           e3 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c3"]] db)))]
@@ -537,4 +539,4 @@
       (is (= "solo" (:val/text e2)))
       (is (nil? (:val/extra e2)) "no 2nd arg → no payload")
       (is (= '(fn [x] x) (:val/extra e3))
-          "a quoted payload form is stored unquoted (unquote-lit)"))))
+          "a payload code-form is stored as data (the quoted form)"))))
