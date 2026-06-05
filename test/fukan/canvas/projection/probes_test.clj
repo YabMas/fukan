@@ -7,19 +7,21 @@
             [fukan.target.clojure :as target]
             [canvas.vocab.shape :refer [Kind]]))
 
-(deftest probe-patterns-honors-its-contract-and-holds
-  (testing "the implemented probe-patterns satisfies its projected contract + holds"
+(deftest probe-patterns-yields-observations-with-foci
+  (testing "patterns reports recurring structures as observations carrying foci"
     (let [db     (cs/build)
-          valid? (eval (:contract-form (pc/project-probe db "patterns")))
           result (probes/probe-patterns db)]
-      (is (= "patterns" (:lens result)) "the modelled lens")
-      (is (false? (:gating result)) "the modelled gating (a non-gating View)")
-      (is (valid? result) "the finding satisfies the projected [Str] shape contract")
-      (is (seq (:finding result))
-          "the self-model has recurring structures, so patterns are reported")
+      (is (= "patterns" (:lens result)))
+      (is (false? (:gating result)))
+      (is (seq (:observations result)) "the self-model has recurring structures")
+      (let [o (first (:observations result))]
+        (is (set? (:focus o)) "each observation carries a node-set focus")
+        (is (seq (:focus o)) "the focus names the participating nodes")
+        (is (= :pattern (:as o)))
+        (is (string? (:note o))))
       (let [tiny (s/with-structures (s/within-module "tiny" (Kind "Solo")))]
-        (is (empty? (:finding (probes/probe-patterns tiny)))
-            "holds: a degenerate model (one unique structure) → no patterns")))))
+        (is (empty? (:observations (probes/probe-patterns tiny)))
+            "holds: a degenerate model → no patterns")))))
 
 (deftest patterns-holds-law-gates-the-finding
   (testing "the projected holds-check passes the real finding and fires on a bogus one"
@@ -52,26 +54,28 @@
       (is (empty? (:finding result)) "the self-model's laws all hold — no violations"))))
 
 (deftest probe-patterns-scopes-to-a-focus
-  (testing "a probe reads only its focus sub-graph — so a refined focus chains into a probe"
+  (testing "a probe reads only its focus sub-graph — so a refined focus chains in"
     (let [db        (cs/build)
           whole     (probes/probe-patterns db)
-          empty-foc (probes/probe-patterns db #{})            ; no nodes in focus → no relations
+          empty-foc (probes/probe-patterns db #{})
           run-foc   (probes/run db "patterns" #{})]
-      (is (seq (:finding whole)) "unscoped: patterns across the whole model")
-      (is (empty? (:finding empty-foc)) "scoped to an empty focus: no relations, no patterns")
+      (is (seq (:observations whole)) "unscoped: patterns across the whole model")
+      (is (empty? (:observations empty-foc)) "empty focus: no relations, no patterns")
       (is (= empty-foc run-foc) "run passes the focus through to the leaf"))))
 
 (deftest the-full-probe-surface-runs
-  (testing "all seven leaves run over the self-model and yield list-of-string findings"
+  (testing "all seven leaves run over the self-model and yield observation findings"
     (let [db  (cs/build)
           all (probes/run-all db)]
       (is (= #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
-             (set (keys all))) "the full implemented probe surface")
-      (is (seq (:finding (all "survey")))  "survey: counts per structure kind")
-      (is (seq (:finding (all "tar-pit"))) "tar-pit: connected hotspots")
+             (set (keys all))) "the full registered probe surface")
+      (is (seq (:observations (all "survey")))  "survey: counts per structure kind")
+      (is (seq (:observations (all "tar-pit"))) "tar-pit: connected hotspots")
       (is (false? (:gating (all "survey"))) "survey is a View")
       (is (true?  (:gating (all "drift")))  "drift is a gating Signal")
-      (is (every? string? (mapcat :finding (vals all))) "every finding is a list of strings"))))
+      (is (every? (fn [o] (and (set? (:focus o)) (keyword? (:as o)) (string? (:note o))))
+                  (mapcat :observations (vals all)))
+          "every observation is {focus tag note}"))))
 
 (deftest coverage-and-drift-surface-correspondence
   (testing "over a unified model (self-model + sample code), the gating probes surface the gaps"
