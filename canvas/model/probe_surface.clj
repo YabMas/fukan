@@ -12,40 +12,63 @@
                                                           an Instruction for an implementing LLM.
 
    This is the realization side of the forward-looking `probe` vocab view
-   (canvas.model.probe): there a Probe is a Lens + a Finding; here are the running leaves
-   and the projector that specs the not-yet-written ones. `probe-integrity` composes the
-   kernel's `check` (the modelled integrity inspect) — the same cross-module call the
-   `probe` view's integrity Probe declares. Modelled faithfully — each fn a Stage."
-  (:require [fukan.canvas.core.structure :as s]
-            [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]))
+   (canvas.model.probe). `probe-integrity` composes the kernel's `check`; `probe-coverage`
+   / `probe-drift` call the correspondence stages. Modelled faithfully — each fn a Stage.
+   The two modules share the `Db` and `ProbeName` Kinds."
+  (:require [canvas.vocab.shape :refer [Kind]]
+            [canvas.vocab.op :refer [Stage]]
+            [canvas.vocab.arch :refer [Module]]
+            [canvas.model.kernel :as kernel]
+            [canvas.model.target :as target]))
 
-(defn ^:export build-canvas []
-  (s/with-structures
-    ;; probes — the implemented leaves + the live runner
-    (s/within-module "probes"
-      (Kind "Db") (Kind "Finding") (Kind "ProbeName") (Kind "FindingMap")
-      (Stage "probe-patterns"  (in [target-db Db]) (out Finding))                  ; pure (datascript): recurring structures
-      (Stage "probe-survey"    (in [target-db Db]) (out Finding))                  ; counts by structure kind
-      (Stage "probe-consistency" (in [target-db Db]) (out Finding))               ; Stage-name ambiguity across modules
-      (Stage "probe-tar-pit"   (in [target-db Db]) (out Finding))                  ; top nodes by relation degree
-      (Stage "probe-integrity" (in [target-db Db]) (out Finding)                   ; the integrity inspect: composes check
-        (calls (across "core.structure" "check")))
-      (Stage "probe-coverage"  (in [target-db Db]) (out Finding)                   ; code→spec gaps
-        (calls (across "target.correspondence" "unrealized-operations")))
-      (Stage "probe-drift"     (in [target-db Db]) (out Finding)                   ; spec→code gaps
-        (calls (across "target.correspondence" "unrealized-stages")))
-      (Stage "run"     (in [target-db Db]) (in [probe-name ProbeName]) (out Finding) (performs :throws)
-        (calls probe-patterns probe-integrity))                                    ; dispatch to a registered leaf
-      (Stage "run-all" (in [target-db Db]) (out FindingMap)                        ; run every implemented leaf
-        (calls probe-patterns probe-integrity)))
+(def Db         (Kind "Db"))
+(def ProbeName  (Kind "ProbeName"))
 
-    ;; probe-code — project a probe's implementation spec from the model
-    (s/within-module "probe-code"
-      (Kind "Db") (Kind "ProbeName") (Kind "CapabilityName")
-      (Kind "ContractForm") (Kind "Instruction") (Kind "ProbeArtifact")
-      (Stage "probe-capability"      (in [db Db]) (in [probe-name ProbeName]) (out CapabilityName) (performs :throws))
-      (Stage "observations-contract" (out ContractForm))
-      (Stage "instruction"           (in [db Db]) (in [probe-name ProbeName]) (out Instruction))
-      (Stage "project-probe"         (in [db Db]) (in [probe-name ProbeName]) (out ProbeArtifact) (performs :throws)
-        (calls probe-capability observations-contract instruction)))))
+;; probes — the implemented leaves + the live runner
+(def Finding    (Kind "Finding"))
+(def FindingMap (Kind "FindingMap"))
+
+(def probe-patterns    (Stage "probe-patterns"    (in [target-db Db]) (out Finding)))   ; pure (datascript): recurring structures
+(def probe-survey      (Stage "probe-survey"      (in [target-db Db]) (out Finding)))   ; counts by structure kind
+(def probe-consistency (Stage "probe-consistency" (in [target-db Db]) (out Finding)))   ; Stage-name ambiguity across modules
+(def probe-tar-pit     (Stage "probe-tar-pit"     (in [target-db Db]) (out Finding)))   ; top nodes by relation degree
+(def probe-integrity
+  (Stage "probe-integrity" (in [target-db Db]) (out Finding)                            ; the integrity inspect: composes check
+    (calls kernel/check)))
+(def probe-coverage
+  (Stage "probe-coverage" (in [target-db Db]) (out Finding)                             ; code→spec gaps
+    (calls target/unrealized-operations)))
+(def probe-drift
+  (Stage "probe-drift" (in [target-db Db]) (out Finding)                                ; spec→code gaps
+    (calls target/unrealized-stages)))
+(def run
+  (Stage "run" (in [target-db Db]) (in [probe-name ProbeName]) (out Finding) (performs :throws)
+    (calls probe-patterns probe-integrity)))                                            ; dispatch to a registered leaf
+(def run-all
+  (Stage "run-all" (in [target-db Db]) (out FindingMap)                                 ; run every implemented leaf
+    (calls probe-patterns probe-integrity)))
+
+(def probes
+  (Module "probes"
+    (child Db ProbeName Finding FindingMap
+           probe-patterns probe-survey probe-consistency probe-tar-pit
+           probe-integrity probe-coverage probe-drift run run-all)))
+
+;; probe-code — project a probe's implementation spec from the model
+(def CapabilityName (Kind "CapabilityName"))
+(def ContractForm   (Kind "ContractForm"))
+(def Instruction    (Kind "Instruction"))
+(def ProbeArtifact  (Kind "ProbeArtifact"))
+
+(def probe-capability
+  (Stage "probe-capability" (in [db Db]) (in [probe-name ProbeName]) (out CapabilityName) (performs :throws)))
+(def observations-contract (Stage "observations-contract" (out ContractForm)))
+(def instruction (Stage "instruction" (in [db Db]) (in [probe-name ProbeName]) (out Instruction)))
+(def project-probe
+  (Stage "project-probe" (in [db Db]) (in [probe-name ProbeName]) (out ProbeArtifact) (performs :throws)
+    (calls probe-capability observations-contract instruction)))
+
+(def probe-code
+  (Module "probe-code"
+    (child Db ProbeName CapabilityName ContractForm Instruction ProbeArtifact
+           probe-capability observations-contract instruction project-probe)))

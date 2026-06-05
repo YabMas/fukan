@@ -1,44 +1,34 @@
 (ns canvas.model.query-engine
-  "Self-spec: fukan's KERNEL QUERY MACHINERY — the two namespaces that let laws and
-   lenses read at domain altitude over the substrate:
+  "Self-spec: fukan's RULE-DERIVATION machinery — `core.rules`
+   (`fukan.canvas.core.rules`): derive datalog rules from the live vocabulary (a kind
+   rule per structure, a relation rule per relation slot, plus fixed substrate rules),
+   so a law/lens names domain predicates, not raw triples.
 
-     core.rules  (fukan.canvas.core.rules)  — derive datalog rules from the live
-                                               vocabulary (a kind rule per structure,
-                                               a relation rule per relation slot, plus
-                                               fixed substrate rules), so a law/lens
-                                               names domain predicates, not raw triples.
-     core.lens   (fukan.canvas.core.lens)   — the lens ENGINE: run a selection query,
-                                               WITH those rules, to a focus node-set.
+   It is the upstream half of the kernel's query machinery: the kernel's `vocab-rules`
+   bridge (modelled in `canvas.model.kernel`) calls `derive-rules`, and the lens ENGINE
+   (`canvas.model.lens-engine`, module `core.lens`) evaluates queries against those
+   rules. `core.rules` references nothing else, so the dependency chain is acyclic
+   (lens-engine → kernel → query-engine).
 
-   The two interlock through the kernel's `vocab-rules` bridge (modelled in
-   canvas.model.kernel): `derive-rules` feeds it, and the lens engine evaluates a query
-   against it. Modelled faithfully like canvas-source/target — each fn is a Stage with
-   its shaped I/O + call edges. (The Lens *vocab* — the primitive that CARRIES a query —
-   is the forward-looking view in canvas.model.lens; this is the machinery that RUNS it.)"
-  (:require [fukan.canvas.core.structure :as s]
-            [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]))
+   Modelled faithfully like canvas-source/target — each fn a Stage with shaped I/O +
+   call edges."
+  (:require [canvas.vocab.shape :refer [Kind]]
+            [canvas.vocab.op :refer [Stage]]
+            [canvas.vocab.arch :refer [Module]]))
 
-(defn ^:export build-canvas []
-  (s/with-structures
-    ;; core.rules — the live vocabulary → datalog rules
-    (s/within-module "core.rules"
-      (Kind "Keyword") (Kind "Symbol") (Kind "StructureDef") (Kind "Pred") (Kind "Rule")
-      (Stage "rule-sym" (in [kw Keyword]) (out Symbol))                            ; pure: a tag → its rule head symbol
-      (Stage "derive-rules" (in [structures [StructureDef]]) (in [scalar? Pred])   ; pure
-        (out [Rule])
-        (calls rule-sym)))
+(def Keyword      (Kind "Keyword"))
+(def Symbol       (Kind "Symbol"))
+(def StructureDef (Kind "StructureDef"))
+(def Pred         (Kind "Pred"))
+(def Rule         (Kind "Rule"))
 
-    ;; core.lens — the lens engine: a selection query → its focus sub-graph
-    (s/within-module "core.lens"
-      (Kind "Db") (Kind "Clause") (Kind "Eid")
-      ;; the shared engine: run :where clauses (binding ?n) WITH the vocab-derived rules
-      (Stage "focus-nodes" (in [db Db]) (in [clauses [Clause]]) (out [Eid])         ; pure (datascript + rules)
-        (calls (across "core.structure" "vocab-rules")))
-      ;; read a stored lens's :val/query, then delegate to focus-nodes
-      (Stage "evaluate-lens" (in [db Db]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
-        (calls focus-nodes))
-      ;; refined focus (lens-within-lens): narrow a focus to members also matching clauses —
-      ;; the composable step acts chain over
-      (Stage "refine" (in [db Db]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
-        (calls focus-nodes)))))
+(def rule-sym
+  (Stage "rule-sym" (in [kw Keyword]) (out Symbol)))                            ; pure: a tag → its rule head symbol
+(def derive-rules
+  (Stage "derive-rules" (in [structures [StructureDef]]) (in [scalar? Pred])    ; pure
+    (out [Rule])
+    (calls rule-sym)))
+
+(def core-rules
+  (Module "core.rules" (child Keyword Symbol StructureDef Pred Rule
+                              rule-sym derive-rules)))

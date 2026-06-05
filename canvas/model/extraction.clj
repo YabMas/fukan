@@ -7,15 +7,22 @@
 
    Modelled faithfully like canvas-source — each fn a Stage with its shaped I/O.
    Both stages mutate/read the registry slot (`:state`)."
-  (:require [fukan.canvas.core.structure :as s]
-            [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]))
+  (:require [canvas.vocab.shape :refer [Kind]]
+            [canvas.vocab.op :refer [Stage]]
+            [canvas.vocab.arch :refer [Module]]))
 
-(defn ^:export build-canvas []
-  (s/with-structures
-    (s/within-module "extraction"
-      (Kind "Extractor") (Kind "Path") (Kind "StructureDb") (Kind "Unit")
-      ;; register the project's extractor (a fn Path → StructureDb) into the slot
-      (Stage "register-extractor!" (in [f Extractor]) (out Unit) (performs :state))
-      ;; run the registered extractor over a code-root → its structure db
-      (Stage "run-extractor" (in [code-root Path]) (out StructureDb) (performs :state)))))
+(def Extractor   (Kind "Extractor"))
+(def Path        (Kind "Path"))
+(def StructureDb (Kind "StructureDb"))
+(def Unit        (Kind "Unit"))
+
+;; register the project's extractor (a fn Path → StructureDb) into the slot
+(def register-extractor!
+  (Stage "register-extractor!" (in [f Extractor]) (out Unit) (performs :state)))
+;; run the registered extractor over a code-root → its structure db
+(def run-extractor
+  (Stage "run-extractor" (in [code-root Path]) (out StructureDb) (performs :state)))
+
+(def extraction
+  (Module "extraction" (child Extractor Path StructureDb Unit
+                              register-extractor! run-extractor)))

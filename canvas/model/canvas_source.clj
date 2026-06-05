@@ -1,50 +1,65 @@
 (ns canvas.model.canvas-source
   "Self-spec: fukan's canvas-ingestion subsystem (`fukan.canvas.projection.canvas-
-   source`), modelled at expression-granularity with `canvas.pipeline.vocab`
-   (Stage + value-identified Shape). Faithful to the source: every fn is a Stage
-   with its shaped input/output and call edges.
+   source`), modelled at expression-granularity with the fukan-on-fukan grammar
+   (`canvas.vocab.{shape,op}`: Stage + value-identified Shape). Faithful to the source:
+   every fn is a Stage with its shaped input/output and call edges.
+
+   `build` now discovers the canvas namespaces, requires them, and assembles their
+   interned instance-vars into one db — references between instances are ordinary var
+   refs resolved by the assembler, so there is no merge/cross-ref pass. `union-dbs`
+   remains only to fold an extractor's code db onto the assembled design db.
 
    This is where value-identity pays off in a real fukan subsystem: the same leaf
-   shapes recur across the discovery/merge pipeline and collapse to one node each —
-   `Db` (db->entity-maps, merge-dbs ×2, build), `NsSymbol` (file->ns-symbol,
-   discover-canvas-namespaces, load+resolve, canvas-namespaces), `File`, `Str`. The
-   discovery entry `{root: File, rel-path: Str}` and the extraction
-   `{entity-maps: (list EntityMap), ref-txs: (list RefTx)}` are record shapes."
-  (:require [fukan.canvas.core.structure :as s]
-            [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]))
+   shapes recur across the discovery/union pipeline and collapse to one node each —
+   `Db`, `NsSymbol`, `File`, `Str`."
+  (:require [canvas.vocab.shape :refer [Kind]]
+            [canvas.vocab.op :refer [Stage]]
+            [canvas.vocab.arch :refer [Module]]))
 
-(defn ^:export build-canvas []
-  (s/with-structures
-    (s/within-module "canvas-source"
-      (Kind "Str") (Kind "File") (Kind "NsSymbol") (Kind "Db")
-      (Kind "EntityMap") (Kind "RefTx") (Kind "BuildCanvasFn") (Kind "Eid")
+(def Str       (Kind "Str"))
+(def File      (Kind "File"))
+(def NsSymbol  (Kind "NsSymbol"))
+(def Db        (Kind "Db"))
+(def EntityMap (Kind "EntityMap"))
+(def RefTx     (Kind "RefTx"))
+(def Eid       (Kind "Eid"))
+(def Unit      (Kind "Unit"))
 
-      ;; discovery — scan canvas/ for *.clj and derive namespace symbols
-      (Stage "file->ns-segment"  (in [seg Str])      (out Str))               ; pure
-      (Stage "file->ns-symbol"   (in [rel-path Str]) (out NsSymbol)           ; pure
-        (calls file->ns-segment))
-      (Stage "canvas-root-dirs"  (out [File]) (performs :io))                 ; classpath + fs
-      (Stage "discover-canvas-files-in" (in [root File])
-        (out [{:root File :rel-path Str}]) (performs :io))                    ; file-seq
-      (Stage "discover-canvas-namespaces" (out [NsSymbol]) (performs :io :stderr)
-        (calls canvas-root-dirs discover-canvas-files-in file->ns-symbol))
-      (Stage "load-and-resolve-build-canvas" (in [ns-sym NsSymbol]) (out BuildCanvasFn)
-        (performs :require :throws))                                          ; require + throw on load failure
-      (Stage "canvas-namespaces" (out [NsSymbol])
-        (calls discover-canvas-namespaces))                                   ; pure delegation
+;; discovery — scan canvas/ for *.clj and derive namespace symbols
+(def file->ns-segment (Stage "file->ns-segment" (in [seg Str]) (out Str)))       ; pure
+(def file->ns-symbol
+  (Stage "file->ns-symbol" (in [rel-path Str]) (out NsSymbol)                     ; pure
+    (calls file->ns-segment)))
+(def canvas-root-dirs (Stage "canvas-root-dirs" (out [File]) (performs :io)))     ; classpath + fs
+(def discover-canvas-files-in
+  (Stage "discover-canvas-files-in" (in [root File])
+    (out [{:root File :rel-path Str}]) (performs :io)))                           ; file-seq
+(def discover-canvas-namespaces
+  (Stage "discover-canvas-namespaces" (out [NsSymbol]) (performs :io :stderr)
+    (calls canvas-root-dirs discover-canvas-files-in file->ns-symbol)))
+(def require-canvas-namespace
+  (Stage "require-canvas-namespace" (in [ns-sym NsSymbol]) (out Unit)
+    (performs :require :throws)))                                                 ; require + throw on load failure
+(def canvas-namespaces
+  (Stage "canvas-namespaces" (out [NsSymbol])
+    (calls discover-canvas-namespaces)))                                          ; pure delegation
 
-      ;; merge — combine per-spec structure dbs into one
-      (Stage "db->entity-maps" (in [db Db])
-        (out {:entity-maps [EntityMap] :ref-txs [RefTx]}))                    ; pure (datascript)
-      (Stage "merge-dbs" (in [dbs [Db]]) (out Db)                             ; pure
-        (calls db->entity-maps))
+;; union — fold the extractor's code db onto the assembled design db
+(def db->entity-maps
+  (Stage "db->entity-maps" (in [db Db])
+    (out {:entity-maps [EntityMap] :ref-txs [RefTx]})))                           ; pure (datascript)
+(def union-dbs
+  (Stage "union-dbs" (in [dbs [Db]]) (out Db)                                     ; pure
+    (calls db->entity-maps)))
 
-      ;; cross-module refs — resolve deferred :rel/to-ref post-merge
-      (Stage "resolve-ref" (in [db Db]) (in [ref [Str]]) (out Eid))           ; pure (datascript)
-      (Stage "resolve-cross-refs" (in [db Db]) (out Db) (performs :throws)    ; throws on unresolved ref
-        (calls resolve-ref))
+;; build — discover + require + assemble → the model
+(def build
+  (Stage "build" (out Db) (performs :io :stderr :require)
+    (calls discover-canvas-namespaces require-canvas-namespace)))
 
-      ;; build — the model
-      (Stage "build" (out Db) (performs :io :stderr :require)
-        (calls discover-canvas-namespaces load-and-resolve-build-canvas merge-dbs resolve-cross-refs)))))
+(def canvas-source
+  (Module "canvas-source"
+    (child Str File NsSymbol Db EntityMap RefTx Eid Unit
+           file->ns-segment file->ns-symbol canvas-root-dirs discover-canvas-files-in
+           discover-canvas-namespaces require-canvas-namespace canvas-namespaces
+           db->entity-maps union-dbs build)))
