@@ -83,13 +83,15 @@
           "sample's Operations are uncovered by the model (the coverage dual)"))))
 
 (deftest run-and-run-all-are-the-live-probe-surface
-  (testing "run dispatches a named probe; run-all runs every implemented leaf"
+  (testing "run dispatches a named probe via the multimethod; run-all runs every method"
     (let [db (cs/build)]
       (is (= (probes/probe-integrity db) (probes/run db "integrity"))
-          "run dispatches by name to the implemented leaf")
+          "run dispatches by name to the registered leaf")
       (let [all (probes/run-all db)]
-        (is (= 7 (count all)) "run-all runs every implemented leaf")
+        (is (= 7 (count all)) "run-all runs every registered method")
         (is (= "patterns" (:lens (all "patterns"))))
         (is (= "integrity" (:lens (all "integrity")))))
       (is (thrown? clojure.lang.ExceptionInfo (probes/run db "no-such-probe"))
-          "an unregistered probe name throws"))))
+          "an unregistered probe name throws via the :default method")
+      (is (contains? (set (keys (methods probes/run-probe))) "survey")
+          "leaves self-register as multimethod methods"))))

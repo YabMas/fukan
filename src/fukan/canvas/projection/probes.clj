@@ -1,7 +1,8 @@
 (ns fukan.canvas.projection.probes
   "Implemented probes — the LLM-authored leaves whose specs are projected from the model.
-   Each is a pure (model-db -> finding) reader. `implemented` registers the realized
-   leaves and `run`/`run-all` are the live entry: run a probe against the held model.
+   Each is a pure (model-db -> finding) reader. `run-probe` is the registry: each leaf
+   self-registers via `defmethod run-probe`, and `run`/`run-all` are the live entry:
+   run a probe against the held model.
    probe-patterns implements the Instruction projected from the `patterns` probe;
    probe-integrity realizes the modelled `integrity` probe by composing the kernel's
    `check`."
@@ -118,30 +119,36 @@
   ([target-db _focus]
    {:lens "drift" :gating true :finding (vec (sort (corr/unrealized-stages target-db)))}))
 
-(def implemented
-  "The realized probe leaves: probe name -> (model-db -> finding). The full implemented
-   probe surface — the four Views (survey/patterns/consistency/tar-pit) and the three
-   gating inspects (integrity/coverage/drift)."
-  {"survey"      probe-survey
-   "patterns"    probe-patterns
-   "consistency" probe-consistency
-   "tar-pit"     probe-tar-pit
-   "integrity"   probe-integrity
-   "coverage"    probe-coverage
-   "drift"       probe-drift})
+(defmulti run-probe
+  "The probe surface as a self-registering multimethod: dispatch on probe-name.
+   A probe leaf registers by `(defmethod run-probe \"<name>\" [db _ focus] …)`, so
+   adding a probe is dropping a method — symmetric with `render-base`. `focus` is a
+   node-set the leaf reads through (nil = the whole model)."
+  (fn [_db probe-name _focus] probe-name))
+
+(defmethod run-probe :default [_ probe-name _]
+  (throw (ex-info (str "no implemented probe " (pr-str probe-name))
+                  {:probe probe-name
+                   :available (vec (remove #{:default} (keys (methods run-probe))))})))
+
+(defmethod run-probe "survey"      [db _ focus] (probe-survey db focus))
+(defmethod run-probe "patterns"    [db _ focus] (probe-patterns db focus))
+(defmethod run-probe "consistency" [db _ focus] (probe-consistency db focus))
+(defmethod run-probe "tar-pit"     [db _ focus] (probe-tar-pit db focus))
+(defmethod run-probe "integrity"   [db _ focus] (probe-integrity db focus))
+(defmethod run-probe "coverage"    [db _ focus] (probe-coverage db focus))
+(defmethod run-probe "drift"       [db _ focus] (probe-drift db focus))
 
 (defn run
-  "Run the implemented probe `probe-name` against `target-db`, optionally scoped to
-   `focus` (a node-set — the probe reads only that sub-graph), returning its finding.
-   So a refined focus chains into a probe. Throws if no leaf is implemented."
+  "Run probe `probe-name` against `target-db`, optionally scoped to `focus`
+   (a node-set). Dispatches through `run-probe`; the :default method throws for an
+   unregistered name."
   ([target-db probe-name] (run target-db probe-name nil))
-  ([target-db probe-name focus]
-   (if-let [f (implemented probe-name)]
-     (f target-db focus)
-     (throw (ex-info (str "no implemented probe " (pr-str probe-name))
-                     {:probe probe-name :available (vec (keys implemented))})))))
+  ([target-db probe-name focus] (run-probe target-db probe-name focus)))
 
 (defn run-all
-  "Run every implemented probe against `target-db` -> {probe-name finding}."
+  "Run every registered probe leaf against `target-db` -> {probe-name finding}."
   [target-db]
-  (into (sorted-map) (map (fn [[n f]] [n (f target-db)])) implemented))
+  (into (sorted-map)
+        (for [pn (remove #{:default} (keys (methods run-probe)))]
+          [pn (run-probe target-db pn nil)])))
