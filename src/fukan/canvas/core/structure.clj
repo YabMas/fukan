@@ -114,6 +114,17 @@
 (defn all-structures [] (vals @structures))
 (defn structure-by-tag [tag] (get @structures tag))
 
+;; ── value-authoring: instances as values, references as vars ──────────────────
+
+(defrecord InstanceValue [tag name doc scalars clauses value?])
+
+(defn instance-value? [x] (instance? InstanceValue x))
+
+(defn var-id
+  "The fully-qualified-var-name id of an instance-bearing var."
+  [v]
+  (let [m (meta v)] (str (ns-name (:ns m)) "/" (:name m))))
+
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
 (defn- slot-for [sdef rel] (first (filter #(= rel (:rel %)) (:slots sdef))))
