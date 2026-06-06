@@ -383,6 +383,23 @@
           :else    `(defmacro ~sname ~docstring [& args#]
                       (fukan.canvas.core.structure/instance-form ~tag args#))))))
 
+(defmacro defrelation-coproduct
+  "Declare a relation as the COPRODUCT (union) of existing relation kinds:
+   `(V ?a ?b) ⇐ (kᵢ ?a ?b)` for each member kᵢ. Registers a vocab entry carrying
+   `:relation-coproduct`; `derive-rules` emits the union rules so laws/lenses can read
+   the umbrella relation `V` at domain altitude. It is the relation-level analogue of a
+   `realized-as` coproduct (one level up, over `:rel/kind` instead of node kinds): it has
+   no slots, laws, constructor, or instances. Members must be live relation kinds — i.e.
+   relation slots present somewhere in the loaded vocab — else the union rule references an
+   undefined rule.
+
+     (defrelation-coproduct :view-map \"cross-view mapping\" :via :realized-by :contextualizes)"
+  [rtag docstring & members]
+  (let [tag        (keyword (name rtag))
+        member-kws (mapv (comp keyword name) members)]
+    `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws [] :includes []
+                           :relation-coproduct ~member-kws})))
+
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 
 (defn- relation-slot-laws

@@ -22,10 +22,12 @@
      kind  K        → (K ?e)     ⇐ [?e :structure/of K]      (concrete structures only)
      incl  C⊇F      → (F ?e)     ⇐ (C ?e)                    (one per (includes F))
      real  R≔where  → (R ?e)     ⇐ <where…>                  (one per (realized-as …))
+     copr  V=k₁|k₂  → (V ?a ?b)  ⇐ (kᵢ ?a ?b)                (one per :relation-coproduct member)
      rel   slot R   → (R ?a ?b)  ⇐ [?r :rel/from ?a] …
-   plus the fixed substrate rules. `scalar?` splits relation slots from value slots."
+   plus the fixed substrate rules. `scalar?` splits relation slots from value slots.
+   Realized concepts and relation-coproducts carry no instances, so they get no kind-rule."
   [structures scalar?]
-  (let [concrete   (remove :realized-as structures)
+  (let [concrete   (remove #(or (:realized-as %) (:relation-coproduct %)) structures)
         kind-rules (for [{:keys [tag]} concrete]
                      [(list (rule-sym tag) '?e) ['?e :structure/of tag]])
         incl-rules (for [{:keys [tag includes]} structures
@@ -33,6 +35,9 @@
                      [(list (rule-sym f) '?e) (list (rule-sym tag) '?e)])
         real-rules (for [{:keys [tag realized-as]} structures :when realized-as]
                      (into [(list (rule-sym tag) '?e)] realized-as))
+        copr-rules (for [{:keys [tag relation-coproduct]} structures
+                         m relation-coproduct]
+                     [(list (rule-sym tag) '?a '?b) (list (rule-sym m) '?a '?b)])
         rel-kinds  (->> (mapcat :slots structures)
                         (remove scalar?)
                         (map :rel)
@@ -40,4 +45,4 @@
         rel-rules  (for [r rel-kinds]
                      [(list (rule-sym r) '?a '?b)
                       ['?r :rel/from '?a] ['?r :rel/kind r] ['?r :rel/to '?b]])]
-    (vec (concat kind-rules incl-rules real-rules rel-rules substrate-rules))))
+    (vec (concat kind-rules incl-rules real-rules copr-rules rel-rules substrate-rules))))
