@@ -2,7 +2,6 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.core.rules :as rules]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── product fixtures: a law-only facet + two includers ──────────────────────
@@ -103,3 +102,22 @@
                             :where (FlaggedHolder ?e) [?e :entity/name ?nm]]
                           db (s/vocab-rules)))]
       (is (= #{"hold-on"} names)))))
+
+;; ── coproduct fixtures: a closed sum + a totality law ───────────────────────
+(defstructure Sum
+  "A closed coproduct discriminated by :kind; totality asserted by a law."
+  (slot :kind (one :String))
+  (law "every Sum is a VariantA or a VariantB"
+    :offenders '[?s]
+    :where '[(not (VariantA ?s)) (not (VariantB ?s))]))
+(defstructure VariantA "Realized variant: kind = a." (realized-as '[(Sum ?e) [?e :val/kind "a"]]))
+(defstructure VariantB "Realized variant: kind = b." (realized-as '[(Sum ?e) [?e :val/kind "b"]]))
+
+(def sum-a (Sum (kind "a")))
+(def sum-b (Sum (kind "b")))
+(def sum-c (Sum (kind "c")))   ; neither variant → totality violation
+
+(deftest closed-sum-totality-has-teeth
+  (testing "a Sum matching no variant is caught by the totality law"
+    (let [db (a/assemble-vars [#'sum-a #'sum-b #'sum-c])]
+      (is (= #{"sum-c"} (offenders-of db "every Sum is a VariantA or a VariantB"))))))

@@ -112,6 +112,10 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  fukan.canvas.core.composition-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.canvas.core.lens-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -188,6 +192,11 @@
    demos.type-system.vocab.core/Type hooks.fukan.structure/instance
    demos.workflow.vocab.core/Step hooks.fukan.structure/instance
    demos.workflow.vocab.core/Workflow hooks.fukan.structure/instance
+   fukan.canvas.core.composition-test/Hub hooks.fukan.structure/instance
+   fukan.canvas.core.composition-test/Note hooks.fukan.structure/instance
+   fukan.canvas.core.composition-test/Holder hooks.fukan.structure/instance
+   fukan.canvas.core.composition-test/Spoke hooks.fukan.structure/instance
+   fukan.canvas.core.composition-test/Sum hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Holder hooks.fukan.structure/instance
