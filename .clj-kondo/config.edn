@@ -116,6 +116,10 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  fukan.canvas.core.view-map-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.canvas.core.lens-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -198,6 +202,9 @@
    fukan.canvas.core.composition-test/Holder hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Spoke hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Sum hooks.fukan.structure/instance
+   fukan.canvas.core.view-map-test/Mod hooks.fukan.structure/instance
+   fukan.canvas.core.view-map-test/Fac hooks.fukan.structure/instance
+   fukan.canvas.core.view-map-test/Step hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Holder hooks.fukan.structure/instance

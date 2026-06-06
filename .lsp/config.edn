@@ -52,6 +52,7 @@
               demos.workflow.workflow-test
               fukan.canvas.core.assemble-test
               fukan.canvas.core.composition-test
+              fukan.canvas.core.view-map-test
               fukan.canvas.core.lens-test
               fukan.canvas.core.rules-test
               fukan.canvas.core.structure-test
