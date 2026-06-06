@@ -121,3 +121,32 @@
   (testing "a Sum matching no variant is caught by the totality law"
     (let [db (a/assemble-vars [#'sum-a #'sum-b #'sum-c])]
       (is (= #{"sum-c"} (offenders-of db "every Sum is a VariantA or a VariantB"))))))
+
+;; ── realized-concept guard ──────────────────────────────────────────────────
+
+(defn- throws-realized-msg?
+  "True when evaluating `form` throws an exception (possibly wrapped in a
+   CompilerException) whose cause chain contains a message matching #\"realized\"."
+  [form]
+  (try (eval form) false
+       (catch Exception e
+         (boolean (some #(re-find #"realized" (or (.getMessage %) ""))
+                        (take-while some? (iterate #(.getCause %) e)))))))
+
+(deftest realized-concept-rejects-extra-clauses
+  (testing "(realized-as …) may not be combined with slots/laws/includes/reader/^:value"
+    (is (throws-realized-msg?
+          '(fukan.canvas.core.structure/defstructure BadRealized "d"
+             (realized-as '[(Note ?e)])
+             (slot :x (one :Bool))))
+        "realized-as + slot is rejected")
+    (is (throws-realized-msg?
+          '(fukan.canvas.core.structure/defstructure BadRealized2 "d"
+             (realized-as '[(Note ?e)])
+             (law "nope" :offenders '[?e] :where '[[?e :x 1]])))
+        "realized-as + law is rejected")
+    (is (throws-realized-msg?
+          '(fukan.canvas.core.structure/defstructure BadRealized3 "d"
+             (realized-as '[(Note ?e)])
+             (realized-as '[(Note ?e)])))
+        "multiple realized-as is rejected")))

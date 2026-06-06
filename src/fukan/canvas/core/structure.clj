@@ -363,6 +363,15 @@
                       (mapcat rest) (mapv (comp keyword name)))
         realized (some (fn [f] (when (= 'realized-as (first f)) (unquote-lit (second f))))
                        (filter #(= 'realized-as (first %)) body))
+        _      (when realized
+                 (when (or (seq slots) (seq laws) value? (seq includes) reader-form)
+                   (throw (ex-info (str "defstructure " sname
+                                        ": a realized concept (realized-as) is pure derived membership —"
+                                        " it may not also declare slots, laws, includes, a reader, or ^:value")
+                                   {:structure sname})))
+                 (when (> (count (filter #(and (seq? %) (= 'realized-as (first %))) body)) 1)
+                   (throw (ex-info (str "defstructure " sname ": multiple (realized-as …) forms")
+                                   {:structure sname}))))
         sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
                 :includes includes :realized-as realized}]
     `(do
