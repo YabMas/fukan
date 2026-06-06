@@ -19,14 +19,20 @@
 
 (defn derive-rules
   "Datascript rules derived from `structures` (a seq of structure defs):
-     kind  K      → (K ?e)     ⇐ [?e :structure/of K]
-     rel   slot R → (R ?a ?b)  ⇐ [?r :rel/from ?a] [?r :rel/kind R] [?r :rel/to ?b]
-   (relation rules deduped by rel across structures — the body is structure-agnostic),
-   plus the fixed substrate rules. `scalar?` splits relation slots from value slots;
-   value-slot rules are deferred."
+     kind  K        → (K ?e)     ⇐ [?e :structure/of K]      (concrete structures only)
+     incl  C⊇F      → (F ?e)     ⇐ (C ?e)                    (one per (includes F))
+     real  R≔where  → (R ?e)     ⇐ <where…>                  (one per (realized-as …))
+     rel   slot R   → (R ?a ?b)  ⇐ [?r :rel/from ?a] …
+   plus the fixed substrate rules. `scalar?` splits relation slots from value slots."
   [structures scalar?]
-  (let [kind-rules (for [{:keys [tag]} structures]
+  (let [concrete   (remove :realized-as structures)
+        kind-rules (for [{:keys [tag]} concrete]
                      [(list (rule-sym tag) '?e) ['?e :structure/of tag]])
+        incl-rules (for [{:keys [tag includes]} structures
+                         f includes]
+                     [(list (rule-sym f) '?e) (list (rule-sym tag) '?e)])
+        real-rules (for [{:keys [tag realized-as]} structures :when realized-as]
+                     (into [(list (rule-sym tag) '?e)] realized-as))
         rel-kinds  (->> (mapcat :slots structures)
                         (remove scalar?)
                         (map :rel)
@@ -34,4 +40,4 @@
         rel-rules  (for [r rel-kinds]
                      [(list (rule-sym r) '?a '?b)
                       ['?r :rel/from '?a] ['?r :rel/kind r] ['?r :rel/to '?b]])]
-    (vec (concat kind-rules rel-rules substrate-rules))))
+    (vec (concat kind-rules incl-rules real-rules rel-rules substrate-rules))))

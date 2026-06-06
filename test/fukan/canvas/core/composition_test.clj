@@ -26,3 +26,9 @@
     (is (= [:Linked] (:includes (s/structure-by-tag :Hub))))
     (is (= [:Linked] (:includes (s/structure-by-tag :Spoke))))
     (is (= []        (:includes (s/structure-by-tag :Linked))) "no includes → empty")))
+
+(deftest derives-inclusion-rules
+  (testing "each (includes Facet) yields a rule (Facet ?e) ⇐ (Concept ?e)"
+    (let [rs (s/vocab-rules)]
+      (is (some #(= % '[(Linked ?e) (Hub ?e)])   rs) "Hub includer rule")
+      (is (some #(= % '[(Linked ?e) (Spoke ?e)]) rs) "Spoke includer rule"))))
