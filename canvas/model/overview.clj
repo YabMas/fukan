@@ -23,25 +23,26 @@
             [canvas.model.projection :as projection]))
 
 ;; faculties referenced before they are defined (the flow has forward edges)
-(declare Probe Projection Finding Blueprint Instruction)
+(declare Structure Probe Projection Finding Blueprint Instruction)
 
-;; the hub — realized by the subsystems that build and hold it
+;; the hub — realized by the subsystems that build and hold it; BUILT ON the Structure
+;; primitive (foundation, not dataflow)
 (def Model
   (Faculty (doc "The unified structure db — fukan's heart; everything orbits it.")
+    (builds-on Structure)
     (realized-by pipeline/model-pipeline canvas-source/canvas-source infra/infra-model)))
 
-;; what the Model is built from / fed by — with cross-view links to the
-;; subsystem models that realize them (interlocking views)
+;; the foundation + the external inputs the Model rests on / is supplied by — with
+;; cross-view links to the subsystem models that realize them (interlocking views)
 (def Structure
-  (Faculty (doc "The lean-core primitive: a composition of slots + laws.")
-    (feeds Model)
+  (Faculty (doc "The lean-core primitive: a composition of slots + laws — the Model is built on it.")
     (realized-by kernel/core-structure query-engine/core-rules)))   ; kernel meta-model + query-rule derivation
 (def Canvas
   (Faculty (doc "The reasoning surface; specs author structures into the model.")
-    (feeds Model)))
+    (supplies Model)))                                              ; external input (authored in)
 (def Target
   (Faculty (doc "The analyzed codebase — implementation + specifications.")
-    (feeds Model)
+    (supplies Model)                                                ; external input (extracted via the decoupled plug-point)
     (realized-by target/target-clojure target/target-correspondence)))  ; extraction + correspondence
 
 ;; the cross-cutting FOCUS and the two ACTS that compose with it

@@ -24,13 +24,23 @@
     :where '[(not [?o :rel/from ?n]) (not [?i :rel/to ?n])]))
 
 (defstructure Faculty
-  "A core concept or capability of fukan, in the top-level flow view."
+  "A core concept or capability of fukan, in the top-level flow view. THREE kinds of
+   contribution edge — distinguished because they MATERIALIZE differently:
+     :feeds     — internal dataflow (a capability produces into another). The
+                  materialization functoriality (canvas.vocab.view) checks it lands in code.
+     :builds-on — foundation: this faculty is built upon another (Model builds-on the
+                  Structure primitive). A rests-on relation, not a runtime connection.
+     :supplies  — external input through a DECOUPLED seam (Canvas authors specs in; Target
+                  is extracted via the vocab-blind plug-point). Intentionally not statically
+                  connected, so the materialization law rightly does not apply.
+   `:reads` is what it operates on."
   (includes Connected)
   (slot :doc   (optional :String))
-  (slot :feeds (many Faculty))     ; produces into / contributes to
-  (slot :reads (many Faculty))     ; operates on / consumes
-  ;; cross-VIEW link: the subsystem views (modules) that realize this concept —
-  ;; authored with `(realized-by (across "<module>"))`, resolved post-merge
+  (slot :feeds       (many Faculty))   ; internal dataflow — materialization-checked
+  (slot :builds-on   (many Faculty))   ; foundation — built upon
+  (slot :supplies    (many Faculty))   ; external input through a decoupled seam
+  (slot :reads       (many Faculty))   ; operates on / consumes
+  ;; cross-VIEW link: the subsystem views (modules) that realize this concept
   (slot :realized-by (many Module))
   ;; (the "no faculty is isolated" law is now Connected's, inherited via (includes Connected))
   ;; realized-by has teeth on the USE side: a faculty that READS the Model claims a
