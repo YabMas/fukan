@@ -44,3 +44,16 @@
   (slot :through (one Lens))       ; the focus it reads through
   (slot :yields  (one Finding))    ; the observation it produces
   (slot :calls   (many Stage)))    ; modelled capabilities it invokes (reuses op's :calls)
+
+(defstructure Signal
+  "A gating Finding — an inspect's trust verdict. Realized: derived, not instantiated."
+  (realized-as '[(Finding ?e) [?e :val/gating true]]))
+
+(defstructure View
+  "A non-gating Finding — a perspective to reason with. Realized."
+  (realized-as '[(Finding ?e) [?e :val/gating false]]))
+
+(defstructure Inspect
+  "A Probe whose Finding gates action (Signal). Realized — 'inspect ⊂ probe' as a derived
+   concept, not a separate structure (matches the long-standing prose)."
+  (realized-as '[(Probe ?e) [?r :rel/from ?e] [?r :rel/kind :yields] [?r :rel/to ?f] (Signal ?f)]))
