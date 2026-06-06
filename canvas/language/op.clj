@@ -1,6 +1,6 @@
-(ns canvas.vocab.op
+(ns canvas.language.op
   "The fukan-on-fukan model's COMPUTATION layer, built on the data layer
-   (`canvas.vocab.shape`): a `Stage` consumes input Shapes, produces an output
+   (`canvas.language.shape`): a `Stage` consumes input Shapes, produces an output
    Shape, performs Effects, and calls downstream Stages.
 
    Vocab-only canvas spec (no `build-canvas`)."

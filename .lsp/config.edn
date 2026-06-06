@@ -25,21 +25,21 @@
               ;; `def`s are reached only by the global assembler's reflective var
               ;; scan (and cross-model var refs inside dropped defstructure clause
               ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
-              canvas.model.canvas-source
-              canvas.model.collab
-              canvas.model.extraction
-              canvas.model.infra
-              canvas.model.kernel
-              canvas.model.lens
-              canvas.model.lens-engine
-              canvas.model.materialize
+              canvas.materialize.canvas-source
+              canvas.perspectives.collab-model
+              canvas.materialize.extraction
+              canvas.materialize.infra
+              canvas.materialize.kernel
+              canvas.essence.lens-model
+              canvas.materialize.lens-engine
+              canvas.materialize.materialize
               canvas.essence.overview
-              canvas.model.pipeline
-              canvas.perspectives.probe-acts
+              canvas.materialize.pipeline
+              canvas.essence.probe-acts
               canvas.materialize.probe-surface
-              canvas.model.projection
-              canvas.model.query-engine
-              canvas.model.target
+              canvas.essence.projection-model
+              canvas.materialize.query-engine
+              canvas.materialize.target
               demos.access-control.model.rbac
               demos.access-control.access-control-test
               demos.er.model.shop

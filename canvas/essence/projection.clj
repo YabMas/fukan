@@ -1,4 +1,4 @@
-(ns canvas.vocab.projection
+(ns canvas.essence.projection
   "The fukan-on-fukan model's PROJECTION layer. Projecting is a core abstract act:
    re-presenting the model in some target form. A `Projection` is one such projected
    representation (the implementation blueprint is one; docs, diagrams, other

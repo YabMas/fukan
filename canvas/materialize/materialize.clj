@@ -1,4 +1,4 @@
-(ns canvas.model.materialize
+(ns canvas.materialize.materialize
   "Self-spec: fukan's materialize / LOWER layer (`fukan.model.materialize`) — the
    inverse of the target layer's extraction. It composes per-primitive `render`
    instructions (a multimethod — not modelled as a Stage, it's the open extension
@@ -7,11 +7,11 @@
    correspondence concern (which reports which Stages lack code).
 
    Modelled faithfully like canvas-source — the public fn as a Stage with shaped I/O.
-   `core.lens` lives in `canvas.model.lens-engine`."
-  (:require [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]
-            [canvas.vocab.arch :refer [Module]]
-            [canvas.model.lens-engine :as lens-engine]))
+   `core.lens` lives in `canvas.materialize.lens-engine`."
+  (:require [canvas.language.shape :refer [Kind]]
+            [canvas.language.op :refer [Stage]]
+            [canvas.language.grouping :refer [Module]]
+            [canvas.materialize.lens-engine :as lens-engine]))
 
 (def StructureDb     (Kind))
 (def Lens            (Kind))

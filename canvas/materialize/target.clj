@@ -1,4 +1,4 @@
-(ns canvas.model.target
+(ns canvas.materialize.target
   "Self-spec: fukan's TARGET layer — how an analyzed codebase's structure is
    extracted INTO the Model, and how the Model's realization in that code is
    verified. Two namespaces, two modules:
@@ -15,10 +15,10 @@
    faithfully like canvas-source: every fn is a Stage with its shaped I/O + calls.
    The two modules share the `StructureDb` Kind (one node, the unified graph both
    produce and read)."
-  (:require [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]
-            [canvas.vocab.arch :refer [Module]]
-            [canvas.model.kernel :as kernel]))
+  (:require [canvas.language.shape :refer [Kind]]
+            [canvas.language.op :refer [Stage]]
+            [canvas.language.grouping :refer [Module]]
+            [canvas.materialize.kernel :as kernel]))
 
 (def Path        (Kind))
 (def Analysis    (Kind))

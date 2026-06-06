@@ -1,6 +1,6 @@
-(ns canvas.model.kernel
+(ns canvas.materialize.kernel
   "Self-spec: fukan's defstructure KERNEL (`fukan.canvas.core.structure`), modelled
-   reflexively with the schema vocab (`canvas.vocab.meta`). The deepest self-
+   reflexively with the schema vocab (`canvas.language.meta`). The deepest self-
    reference in the corpus — the model describes the very primitive that defines
    it: the substrate (Node, reified Relation), the defstructure layer (Slot, Law),
    and at its heart `Structure` = a composition of Slots + Laws.
@@ -16,11 +16,11 @@
 
    (Concept instance vars are `c-`-prefixed so they don't shadow the `Concept`
    constructor — fukan's own kernel modelled in fukan's own meta-vocab.)"
-  (:require [canvas.vocab.meta :refer [Concept MetaSlot]]
-            [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]
-            [canvas.vocab.arch :refer [Module]]
-            [canvas.model.query-engine :as query-engine]))
+  (:require [canvas.language.meta :refer [Concept MetaSlot]]
+            [canvas.language.shape :refer [Kind]]
+            [canvas.language.op :refer [Stage]]
+            [canvas.language.grouping :refer [Module]]
+            [canvas.materialize.query-engine :as query-engine]))
 
 ;; leaf concepts — scalar types, the substrate's atoms, and (reflexively) the
 ;; meta-type Concept itself

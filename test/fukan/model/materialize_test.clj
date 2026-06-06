@@ -2,8 +2,8 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [canvas.vocab.lens :refer [Lens]]
-            [canvas.vocab.projection :refer [Projection Mapping]]
+            [canvas.essence.lens :refer [Lens]]
+            [canvas.essence.projection :refer [Projection Mapping]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.projection.canvas-source :as cs]
@@ -11,8 +11,8 @@
             [fukan.model.materialize :as m]
             [fukan.model.pipeline :as pipeline]
             ;; the real self-model vars an ad-hoc contextualization composes over
-            [canvas.model.projection :as cm-proj]
-            [canvas.model.lens :as cm-lens]
+            [canvas.essence.projection-model :as cm-proj]
+            [canvas.essence.lens-model :as cm-lens]
             ;; loaded so the vocab-derived rules carry an Operation kind-rule (coverage /
             ;; drift lenses reference it) and the drift lens's correspondence predicate
             ;; resolves

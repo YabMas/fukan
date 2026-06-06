@@ -1,7 +1,7 @@
 (ns fukan.canvas.projection.probe-code-test
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.assemble :as a]
-            [canvas.perspectives.probe :refer [Finding]]
+            [canvas.essence.probe :refer [Finding]]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.projection.probe-code :as pc]))
 

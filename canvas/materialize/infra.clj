@@ -1,13 +1,13 @@
-(ns canvas.model.infra
+(ns canvas.materialize.infra
   "Canvas spec for fukan's infra.model subsystem (the model lifecycle), modelled
    with the fukan-on-fukan grammar (`canvas.vocab`) — its own vocabulary on the
    core, no shared/base structures.
 
    Instances are top-level `def`s; the global assembler ingests them (no
    `build-canvas`). `infra-model` groups them as the subsystem module."
-  (:require [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]
-            [canvas.vocab.arch :refer [Module]]))
+  (:require [canvas.language.shape :refer [Kind]]
+            [canvas.language.op :refer [Stage]]
+            [canvas.language.grouping :refer [Module]]))
 
 (def Src   (Kind))
 (def Model (Kind))

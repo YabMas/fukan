@@ -9,18 +9,19 @@
 
    Each Faculty's `realized-by` references the actual subsystem Module vars across the
    model (interlocking views)."
-  (:require [canvas.vocab.arch :refer [Faculty Module]]
-            [canvas.model.pipeline :as pipeline]
-            [canvas.model.canvas-source :as canvas-source]
-            [canvas.model.infra :as infra]
-            [canvas.model.kernel :as kernel]
-            [canvas.model.query-engine :as query-engine]
-            [canvas.model.target :as target]
-            [canvas.model.lens :as lens]
-            [canvas.model.lens-engine :as lens-engine]
-            [canvas.perspectives.probe-acts :as probe]
+  (:require [canvas.essence.faculty :refer [Faculty]]
+            [canvas.language.grouping :refer [Module]]
+            [canvas.materialize.pipeline :as pipeline]
+            [canvas.materialize.canvas-source :as canvas-source]
+            [canvas.materialize.infra :as infra]
+            [canvas.materialize.kernel :as kernel]
+            [canvas.materialize.query-engine :as query-engine]
+            [canvas.materialize.target :as target]
+            [canvas.essence.lens-model :as lens]
+            [canvas.materialize.lens-engine :as lens-engine]
+            [canvas.essence.probe-acts :as probe]
             [canvas.materialize.probe-surface :as probe-surface]
-            [canvas.model.projection :as projection]))
+            [canvas.essence.projection-model :as projection]))
 
 ;; faculties referenced before they are defined (the flow has forward edges)
 (declare Structure Probe Projection Finding Blueprint Instruction)

@@ -1,7 +1,7 @@
-(ns canvas.model.canvas-source
+(ns canvas.materialize.canvas-source
   "Self-spec: fukan's canvas-ingestion subsystem (`fukan.canvas.projection.canvas-
    source`), modelled at expression-granularity with the fukan-on-fukan grammar
-   (`canvas.vocab.{shape,op}`: Stage + value-identified Shape). Faithful to the source:
+   (`canvas.language.{shape,op}`: Stage + value-identified Shape). Faithful to the source:
    every fn is a Stage with its shaped input/output and call edges.
 
    `build` now discovers the canvas namespaces, requires them, and assembles their
@@ -12,9 +12,9 @@
    This is where value-identity pays off in a real fukan subsystem: the same leaf
    shapes recur across the discovery/union pipeline and collapse to one node each —
    `Db`, `NsSymbol`, `File`, `Str`."
-  (:require [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]
-            [canvas.vocab.arch :refer [Module]]))
+  (:require [canvas.language.shape :refer [Kind]]
+            [canvas.language.op :refer [Stage]]
+            [canvas.language.grouping :refer [Module]]))
 
 (def Str       (Kind))
 (def File      (Kind))

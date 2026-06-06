@@ -1,4 +1,4 @@
-(ns canvas.vocab.meta
+(ns canvas.language.meta
   "The fukan-on-fukan model's SCHEMA layer — a grammar for describing a data MODEL
    of concepts (a third vocab layer alongside the data layer `shape` and the
    computation layer `op`). Used to model fukan's own kernel reflexively.

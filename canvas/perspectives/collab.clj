@@ -1,4 +1,4 @@
-(ns canvas.vocab.collab
+(ns canvas.perspectives.collab
   "The fukan-on-fukan model's COLLABORATION-LOOP layer — fukan's PURPOSE view, the
    companion to the static faculty map. It shows the faculties IN MOTION: the human⊗AI
    cycle by which the model is used — intend → focus → observe → reason → apply →

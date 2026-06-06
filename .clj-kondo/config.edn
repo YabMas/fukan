@@ -8,39 +8,39 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  canvas.model.collab
+  canvas.perspectives.collab-model
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.projection
+  canvas.essence.projection-model
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.canvas-source
+  canvas.materialize.canvas-source
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.extraction
+  canvas.materialize.extraction
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.infra
+  canvas.materialize.infra
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.kernel
+  canvas.materialize.kernel
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.lens
+  canvas.essence.lens-model
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.lens-engine
+  canvas.materialize.lens-engine
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.materialize
+  canvas.materialize.materialize
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -48,11 +48,11 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.pipeline
+  canvas.materialize.pipeline
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.perspectives.probe-acts
+  canvas.essence.probe-acts
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -60,11 +60,11 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.query-engine
+  canvas.materialize.query-engine
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.target
+  canvas.materialize.target
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -167,21 +167,21 @@
  :hooks
  {:analyze-call
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
-   canvas.vocab.arch/Connected hooks.fukan.structure/instance
-   canvas.vocab.arch/Faculty hooks.fukan.structure/instance
-   canvas.vocab.arch/Module hooks.fukan.structure/instance
-   canvas.vocab.collab/Phase hooks.fukan.structure/instance
-   canvas.vocab.lens/Lens hooks.fukan.structure/instance
-   canvas.vocab.meta/Concept hooks.fukan.structure/instance
-   canvas.vocab.meta/MetaSlot hooks.fukan.structure/instance
-   canvas.vocab.op/Effect hooks.fukan.structure/instance
-   canvas.vocab.op/Stage hooks.fukan.structure/instance
-   canvas.perspectives.probe/Finding hooks.fukan.structure/instance
-   canvas.perspectives.probe/Probe hooks.fukan.structure/instance
-   canvas.vocab.projection/Mapping hooks.fukan.structure/instance
-   canvas.vocab.projection/Projection hooks.fukan.structure/instance
-   canvas.vocab.shape/Kind hooks.fukan.structure/instance
-   canvas.vocab.shape/Shape hooks.fukan.structure/instance
+   canvas.language.grouping/Connected hooks.fukan.structure/instance
+   canvas.essence.faculty/Faculty hooks.fukan.structure/instance
+   canvas.language.grouping/Module hooks.fukan.structure/instance
+   canvas.perspectives.collab/Phase hooks.fukan.structure/instance
+   canvas.essence.lens/Lens hooks.fukan.structure/instance
+   canvas.language.meta/Concept hooks.fukan.structure/instance
+   canvas.language.meta/MetaSlot hooks.fukan.structure/instance
+   canvas.language.op/Effect hooks.fukan.structure/instance
+   canvas.language.op/Stage hooks.fukan.structure/instance
+   canvas.essence.probe/Finding hooks.fukan.structure/instance
+   canvas.essence.probe/Probe hooks.fukan.structure/instance
+   canvas.essence.projection/Mapping hooks.fukan.structure/instance
+   canvas.essence.projection/Projection hooks.fukan.structure/instance
+   canvas.language.shape/Kind hooks.fukan.structure/instance
+   canvas.language.shape/Shape hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance

@@ -1,6 +1,6 @@
-(ns canvas.model.pipeline
+(ns canvas.materialize.pipeline
   "Self-spec: fukan's model-build pipeline (`fukan.model.pipeline`), modelled with
-   the fukan-on-fukan grammar (`canvas.vocab.{shape,op}`).
+   the fukan-on-fukan grammar (`canvas.language.{shape,op}`).
 
    `build-model` is the single public entry point. It ingests the canvas design
    specs (canvas-source/build, which discovers + assembles them) and, given a
@@ -11,11 +11,11 @@
    machinery lives in canvas-source and the runner in `extraction`, so this spec
    doesn't redeclare them — it LINKS across to each realizing stage with
    `(calls …)`. Those cross-module calls are the seams."
-  (:require [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]
-            [canvas.vocab.arch :refer [Module]]
-            [canvas.model.canvas-source :as canvas-source]
-            [canvas.model.extraction :as extraction]))
+  (:require [canvas.language.shape :refer [Kind]]
+            [canvas.language.op :refer [Stage]]
+            [canvas.language.grouping :refer [Module]]
+            [canvas.materialize.canvas-source :as canvas-source]
+            [canvas.materialize.extraction :as extraction]))
 
 (def SrcRoot     (Kind))
 (def StructureDb (Kind))

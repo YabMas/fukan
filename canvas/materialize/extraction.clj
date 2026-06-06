@@ -1,4 +1,4 @@
-(ns canvas.model.extraction
+(ns canvas.materialize.extraction
   "Self-spec: fukan's extraction PLUG-POINT (`fukan.model.extraction`) — the slot
    where a project registers its one custom code extractor (a fn `Path → StructureDb`).
    `build-model` runs the registered extractor via `run-extractor` WITHOUT naming
@@ -7,9 +7,9 @@
 
    Modelled faithfully like canvas-source — each fn a Stage with its shaped I/O.
    Both stages mutate/read the registry slot (`:state`)."
-  (:require [canvas.vocab.shape :refer [Kind]]
-            [canvas.vocab.op :refer [Stage]]
-            [canvas.vocab.arch :refer [Module]]))
+  (:require [canvas.language.shape :refer [Kind]]
+            [canvas.language.op :refer [Stage]]
+            [canvas.language.grouping :refer [Module]]))
 
 (def Extractor   (Kind))
 (def Path        (Kind))

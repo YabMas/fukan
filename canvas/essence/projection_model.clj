@@ -1,13 +1,13 @@
-(ns canvas.model.projection
+(ns canvas.essence.projection-model
   "Self-spec: fukan's PROJECTION subsystem — re-presenting the model in target forms.
    Forward-looking (the parked projection tier). The implementation Blueprint is the
    first projection target; more (docs, diagrams, other realizations) are projections
    we add as we go. Each projection is built from the source→artifact mappings that
    turn model elements into that target's content. The overview's `Faculty
    \"Projection\"` is `realized-by` this module."
-  (:require [canvas.vocab.projection :refer [Projection Mapping]]
-            [canvas.vocab.arch :refer [Module]]
-            [canvas.model.lens :as lens]))
+  (:require [canvas.essence.projection :refer [Projection Mapping]]
+            [canvas.language.grouping :refer [Module]]
+            [canvas.essence.lens-model :as lens]))
 
 (def Blueprint
   (Projection

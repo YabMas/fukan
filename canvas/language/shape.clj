@@ -1,4 +1,4 @@
-(ns canvas.vocab.shape
+(ns canvas.language.shape
   "The fukan-on-fukan model's DATA layer — its own grammar, built directly on the
    core primitive (no shared/base vocabulary; canvas exposes mechanics only). A
    `Kind` is a named atomic type; a `Shape` is a structural type-expression over
