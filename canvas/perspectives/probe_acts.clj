@@ -1,11 +1,11 @@
-(ns canvas.model.probe
+(ns canvas.perspectives.probe-acts
   "Self-spec: fukan's PROBE acts — reading the model through a lens to yield a finding.
    Forward-looking (the tier is parked under `.paused/`). Each probe reads THROUGH a
    lens (the `lens` view's Lens instances — interlocking) and yields a finding.
    INSPECT ⊂ PROBE: integrity/coverage/drift are probes whose findings GATE action
    (Signals); survey/patterns/… yield non-gating Views. The overview's `Faculty
    \"Probe\"` is `realized-by` this module."
-  (:require [canvas.vocab.probe :refer [Probe Finding]]
+  (:require [canvas.perspectives.probe :refer [Probe Finding]]
             [canvas.vocab.arch :refer [Module]]
             [canvas.model.lens :as lens]
             [canvas.model.kernel :as kernel]))

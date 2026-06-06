@@ -12,7 +12,7 @@
             [canvas.vocab.meta :refer [Concept MetaSlot]]
             [canvas.vocab.arch :refer [Faculty Module]]
             [canvas.vocab.lens :refer [Lens]]
-            [canvas.vocab.probe :refer [Probe Finding]]
+            [canvas.perspectives.probe :refer [Probe Finding]]
             [canvas.vocab.projection :refer [Projection]]
             [canvas.vocab.collab :refer [Phase]]))
 

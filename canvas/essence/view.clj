@@ -1,4 +1,4 @@
-(ns canvas.vocab.view
+(ns canvas.essence.view
   "The fukan-on-fukan model's CROSS-VIEW layer — how the interlocking views map onto
    each other. `view-map` is a relation-COPRODUCT (a `defrelation-coproduct`): the union
    of the cross-view link relations the subsystem models already author —

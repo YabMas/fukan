@@ -27,7 +27,7 @@
   "A core concept or capability of fukan, in the top-level flow view. THREE kinds of
    contribution edge — distinguished because they MATERIALIZE differently:
      :feeds     — internal dataflow (a capability produces into another). The
-                  materialization functoriality (canvas.vocab.view) checks it lands in code.
+                  materialization functoriality (canvas.essence.view) checks it lands in code.
      :builds-on — foundation: this faculty is built upon another (Model builds-on the
                   Structure primitive). A rests-on relation, not a runtime connection.
      :supplies  — external input through a DECOUPLED seam (Canvas authors specs in; Target

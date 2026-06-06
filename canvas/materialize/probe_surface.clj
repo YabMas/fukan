@@ -1,4 +1,4 @@
-(ns canvas.model.probe-surface
+(ns canvas.materialize.probe-surface
   "Self-spec: fukan's PROBE IMPLEMENTATION — the realized probe leaves and their
    projector. Two namespaces, two modules:
 
@@ -11,8 +11,8 @@
                                                           fn-form + contract; a fresh probe →
                                                           an Instruction for an implementing LLM.
 
-   This is the realization side of the forward-looking `probe` vocab view
-   (canvas.model.probe). `probe-integrity` composes the kernel's `check`; `probe-coverage`
+   This is the realization side of the `probe` act perspective
+   (canvas.perspectives.probe-acts). `probe-integrity` composes the kernel's `check`; `probe-coverage`
    / `probe-drift` call the correspondence stages. Modelled faithfully — each fn a Stage.
    The two modules share the `Db` and `ProbeName` Kinds."
   (:require [canvas.vocab.shape :refer [Kind]]

@@ -5,7 +5,7 @@
             [fukan.canvas.projection.probe-code :as pc]
             [fukan.canvas.projection.probes :as probes]
             [fukan.target.clojure :as target]
-            [canvas.vocab.probe :refer [Finding]]
+            [canvas.perspectives.probe :refer [Finding]]
             [canvas.vocab.shape :refer [Kind]]))
 
 ;; tiny degenerate models built from top-level value defs (assembled per use)

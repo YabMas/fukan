@@ -1,4 +1,4 @@
-(ns canvas.model.overview
+(ns canvas.essence.overview
   "Self-spec: fukan's CORE CONCEPTS and how they flow — the top-level view, the
    frame the subsystem models (kernel, pipeline, canvas_source, …) realize.
 
@@ -18,8 +18,8 @@
             [canvas.model.target :as target]
             [canvas.model.lens :as lens]
             [canvas.model.lens-engine :as lens-engine]
-            [canvas.model.probe :as probe]
-            [canvas.model.probe-surface :as probe-surface]
+            [canvas.perspectives.probe-acts :as probe]
+            [canvas.materialize.probe-surface :as probe-surface]
             [canvas.model.projection :as projection]))
 
 ;; faculties referenced before they are defined (the flow has forward edges)

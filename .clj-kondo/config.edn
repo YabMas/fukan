@@ -44,7 +44,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.overview
+  canvas.essence.overview
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -52,11 +52,11 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.probe
+  canvas.perspectives.probe-acts
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.model.probe-surface
+  canvas.materialize.probe-surface
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -176,8 +176,8 @@
    canvas.vocab.meta/MetaSlot hooks.fukan.structure/instance
    canvas.vocab.op/Effect hooks.fukan.structure/instance
    canvas.vocab.op/Stage hooks.fukan.structure/instance
-   canvas.vocab.probe/Finding hooks.fukan.structure/instance
-   canvas.vocab.probe/Probe hooks.fukan.structure/instance
+   canvas.perspectives.probe/Finding hooks.fukan.structure/instance
+   canvas.perspectives.probe/Probe hooks.fukan.structure/instance
    canvas.vocab.projection/Mapping hooks.fukan.structure/instance
    canvas.vocab.projection/Projection hooks.fukan.structure/instance
    canvas.vocab.shape/Kind hooks.fukan.structure/instance

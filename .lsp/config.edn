@@ -33,10 +33,10 @@
               canvas.model.lens
               canvas.model.lens-engine
               canvas.model.materialize
-              canvas.model.overview
+              canvas.essence.overview
               canvas.model.pipeline
-              canvas.model.probe
-              canvas.model.probe-surface
+              canvas.perspectives.probe-acts
+              canvas.materialize.probe-surface
               canvas.model.projection
               canvas.model.query-engine
               canvas.model.target

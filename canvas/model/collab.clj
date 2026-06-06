@@ -7,7 +7,7 @@
    faculties are what each phase puts to work."
   (:require [canvas.vocab.collab :refer [Phase]]
             [canvas.vocab.arch :refer [Module]]
-            [canvas.model.overview :as overview]))
+            [canvas.essence.overview :as overview]))
 
 ;; the loop is a cycle — every phase's :next is defined after it (except Reinspect's)
 (declare Focus Observe Reason Apply Reinspect)
