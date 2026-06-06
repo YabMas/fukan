@@ -474,7 +474,7 @@
 (defn- run-law [db base-rules {:keys [offenders where rules] :as law}]
   (let [scope-tag (law-scope-tag law)
         where*    (if scope-tag
-                    (vec (cons [(first offenders) :structure/of scope-tag] where))
+                    (vec (cons (list (symbol (name scope-tag)) (first offenders)) where))
                     where)
         q         (vec (concat [:find] offenders [:in '$ '%] [:where] where*))
         ;; vocab-derived rules are always available; a law's OWN rules signal recursion

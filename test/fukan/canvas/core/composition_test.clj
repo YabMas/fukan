@@ -32,3 +32,28 @@
     (let [rs (s/vocab-rules)]
       (is (some #(= % '[(Linked ?e) (Hub ?e)])   rs) "Hub includer rule")
       (is (some #(= % '[(Linked ?e) (Spoke ?e)]) rs) "Spoke includer rule"))))
+
+(def lk-spoke (Spoke))                  ; pointed at by lk-hub → has incoming → connected
+(def lk-hub   (Hub (spokes lk-spoke)))  ; has outgoing → connected
+(def lk-iso   (Hub))                    ; no edges → isolated → OFFENDER of Linked's law
+
+(defn- offenders-of [db law-desc]
+  (->> (s/check db)
+       (filter #(= law-desc (:law %)))
+       (mapcat :offenders) (map first)
+       (map #(:entity/name (d/entity db %)))
+       set))
+
+(deftest facet-law-ranges-over-includers
+  (testing "a law on the Linked facet fires over Hub AND Spoke instances, via the inclusion rule"
+    (let [db (a/assemble-vars [#'lk-spoke #'lk-hub #'lk-iso])]
+      (is (= #{"lk-iso"} (offenders-of db "no isolated node"))
+          "only the edge-less Hub is isolated; the connected Hub and the pointed-at Spoke are not"))))
+
+(deftest facet-membership-is-entailed
+  (testing "(Linked ?e) entails over every includer instance"
+    (let [db    (a/assemble-vars [#'lk-spoke #'lk-hub #'lk-iso])
+          names (set (d/q '[:find [?nm ...] :in $ %
+                            :where (Linked ?e) [?e :entity/name ?nm]]
+                          db (s/vocab-rules)))]
+      (is (= #{"lk-spoke" "lk-hub" "lk-iso"} names)))))
