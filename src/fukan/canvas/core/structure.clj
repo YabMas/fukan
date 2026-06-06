@@ -341,9 +341,9 @@
    shape (rejected here; the *law-timeout-ms* guard backstops the rest)."
   [sname docstring & body]
   (doseq [form body]
-    (when-not (and (seq? form) (#{'slot 'law 'reader 'includes} (first form)))
+    (when-not (and (seq? form) (#{'slot 'law 'reader 'includes 'realized-as} (first form)))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected (slot ...), (law ...), (reader ...) or (includes ...)")
+                           " — expected (slot ...), (law ...), (reader ...), (includes ...) or (realized-as ...)")
                       {:structure sname :form form}))))
   (let [value? (boolean (:value (meta sname)))
         tag    (keyword (name sname))
@@ -361,15 +361,18 @@
                           (filter #(= 'reader (first %)) body))
         includes (->> body (filter #(= 'includes (first %)))
                       (mapcat rest) (mapv (comp keyword name)))
+        realized (some (fn [f] (when (= 'realized-as (first f)) (unquote-lit (second f))))
+                       (filter #(= 'realized-as (first %)) body))
         sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
-                :includes includes}]
+                :includes includes :realized-as realized}]
     `(do
        (register-structure! ~(if reader-form `(assoc '~sdef :reader ~reader-form) `'~sdef))
-       ~(if value?
-          `(defmacro ~sname ~docstring [& body#]
-             (fukan.canvas.core.structure/value-form ~tag body#))
-          `(defmacro ~sname ~docstring [& args#]
-             (fukan.canvas.core.structure/instance-form ~tag args#))))))
+       ~(cond
+          realized nil                                   ; realized concept: no constructor
+          value?   `(defmacro ~sname ~docstring [& body#]
+                      (fukan.canvas.core.structure/value-form ~tag body#))
+          :else    `(defmacro ~sname ~docstring [& args#]
+                      (fukan.canvas.core.structure/instance-form ~tag args#))))))
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 

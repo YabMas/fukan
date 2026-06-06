@@ -57,3 +57,19 @@
                             :where (Linked ?e) [?e :entity/name ?nm]]
                           db (s/vocab-rules)))]
       (is (= #{"lk-spoke" "lk-hub" "lk-iso"} names)))))
+
+;; ── realization fixtures ────────────────────────────────────────────────────
+(defstructure Note
+  "A base concept with a Bool discriminant."
+  (slot :flag (one :Bool)))
+
+(defstructure Flagged
+  "A realized concept: a Note whose flag is true — derived membership, NO constructor."
+  (realized-as '[(Note ?e) [?e :val/flag true]]))
+
+(deftest realized-as-parsed-and-no-constructor
+  (testing "(realized-as …) registers the where-clauses and emits no constructor var"
+    (is (= '[(Note ?e) [?e :val/flag true]]
+           (:realized-as (s/structure-by-tag :Flagged))))
+    (is (not (contains? (ns-interns 'fukan.canvas.core.composition-test) 'Flagged))
+        "a realized concept defines no constructor (it is never instantiated)")))
