@@ -73,3 +73,33 @@
            (:realized-as (s/structure-by-tag :Flagged))))
     (is (not (contains? (ns-interns 'fukan.canvas.core.composition-test) 'Flagged))
         "a realized concept defines no constructor (it is never instantiated)")))
+
+(def nt-on  (Note (flag true)))
+(def nt-off (Note (flag false)))
+
+(deftest realized-membership-is-derived
+  (testing "(Flagged ?e) returns exactly the flag=true Notes"
+    (let [db    (a/assemble-vars [#'nt-on #'nt-off])
+          names (set (d/q '[:find [?nm ...] :in $ %
+                            :where (Flagged ?e) [?e :entity/name ?nm]]
+                          db (s/vocab-rules)))]
+      (is (= #{"nt-on"} names)))))
+
+;; compound: a realized concept whose rule references another realized rule (the Inspect shape)
+(defstructure Holder
+  "A base concept holding a Note."
+  (slot :holds (one Note)))
+(defstructure FlaggedHolder
+  "Realized: a Holder holding a Flagged Note — a rule that references another realized rule."
+  (realized-as '[(Holder ?e) [?r :rel/from ?e] [?r :rel/kind :holds] [?r :rel/to ?n] (Flagged ?n)]))
+
+(def hold-on  (Holder (holds nt-on)))
+(def hold-off (Holder (holds nt-off)))
+
+(deftest realized-rule-references-another-realized-rule
+  (testing "FlaggedHolder realizes via Flagged — the inspect-over-signal composition"
+    (let [db    (a/assemble-vars [#'nt-on #'nt-off #'hold-on #'hold-off])
+          names (set (d/q '[:find [?nm ...] :in $ %
+                            :where (FlaggedHolder ?e) [?e :entity/name ?nm]]
+                          db (s/vocab-rules)))]
+      (is (= #{"hold-on"} names)))))
