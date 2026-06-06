@@ -341,9 +341,9 @@
    shape (rejected here; the *law-timeout-ms* guard backstops the rest)."
   [sname docstring & body]
   (doseq [form body]
-    (when-not (and (seq? form) (#{'slot 'law 'reader} (first form)))
+    (when-not (and (seq? form) (#{'slot 'law 'reader 'includes} (first form)))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected (slot ...), (law ...) or (reader ...)")
+                           " — expected (slot ...), (law ...), (reader ...) or (includes ...)")
                       {:structure sname :form form}))))
   (let [value? (boolean (:value (meta sname)))
         tag    (keyword (name sname))
@@ -359,7 +359,10 @@
         _      (doseq [law laws] (check-law-recursion! sname law))
         reader-form (some (fn [f] (when (= 'reader (first f)) (second f)))
                           (filter #(= 'reader (first %)) body))
-        sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?}]
+        includes (->> body (filter #(= 'includes (first %)))
+                      (mapcat rest) (mapv (comp keyword name)))
+        sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
+                :includes includes}]
     `(do
        (register-structure! ~(if reader-form `(assoc '~sdef :reader ~reader-form) `'~sdef))
        ~(if value?
