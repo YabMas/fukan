@@ -163,6 +163,7 @@
  :hooks
  {:analyze-call
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
+   canvas.vocab.arch/Connected hooks.fukan.structure/instance
    canvas.vocab.arch/Faculty hooks.fukan.structure/instance
    canvas.vocab.arch/Module hooks.fukan.structure/instance
    canvas.vocab.collab/Phase hooks.fukan.structure/instance

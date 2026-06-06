@@ -164,9 +164,9 @@
           "many faculties feed or read the Model"))))
 
 (deftest orphan-faculty-is-caught
-  (testing "a faculty with no flow edges trips the no-isolated-faculty law"
+  (testing "a faculty with no flow edges trips the no-isolated-node law (via the Connected facet)"
     (let [db (a/assemble-vars [#'of-Model #'of-Reader #'of-Loner])]
-      (is (contains? (set (map :law (s/check db))) "no faculty is isolated")))))
+      (is (contains? (set (map :law (s/check db))) "no isolated node")))))
 
 (deftest model-reading-faculty-without-realization-is-caught
   (testing "a faculty that reads the Model but names no realizing module trips the realized-by law"

@@ -16,22 +16,23 @@
    ordinary vocab)."
   (slot :child (many Any)))
 
+(defstructure Connected
+  "Facet: a node that participates in the directed graph over its own kind — it is not
+   isolated (has some incoming or outgoing relation)."
+  (law "no isolated node"
+    :offenders '[?n]
+    :where '[(not [?o :rel/from ?n]) (not [?i :rel/to ?n])]))
+
 (defstructure Faculty
   "A core concept or capability of fukan, in the top-level flow view."
+  (includes Connected)
   (slot :doc   (optional :String))
   (slot :feeds (many Faculty))     ; produces into / contributes to
   (slot :reads (many Faculty))     ; operates on / consumes
   ;; cross-VIEW link: the subsystem views (modules) that realize this concept —
   ;; authored with `(realized-by (across "<module>"))`, resolved post-merge
   (slot :realized-by (many Module))
-  ;; No isolated faculty — every concept participates in the flow (has an incoming
-  ;; or outgoing edge). A bounded invariant; the Model's hub-ness is evident in the
-  ;; model's shape (it has the most connections) rather than enforced by a (cyclic,
-  ;; divergence-prone) undirected-reachability law.
-  (law "no faculty is isolated"
-    :offenders '[?f]
-    :where '[(not [?ro :rel/from ?f])
-             (not [?ri :rel/to ?f])])
+  ;; (the "no faculty is isolated" law is now Connected's, inherited via (includes Connected))
   ;; realized-by has teeth on the USE side: a faculty that READS the Model claims a
   ;; capability that operates on it, so it must be backed by a realizing module —
   ;; you cannot have a model-reading faculty with no realization. (Input faculties

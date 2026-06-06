@@ -21,6 +21,7 @@
 (defstructure Stage
   "A computation stage: consumes input shapes, produces exactly one output shape,
    performs effects, and may call downstream stages."
+  (includes Connected)
   (slot :in       (many Shape))
   (slot :out      (one  Shape))
   (slot :performs (many Effect))
