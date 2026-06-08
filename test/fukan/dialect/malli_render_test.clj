@@ -64,7 +64,7 @@
 
 (deftest renders-ref
   (let [d* (db)]
-    (is (= 'Socket (typing/render-type d* (root d* "ref"))))))
+    (is (= :Socket (typing/render-type d* (root d* "ref"))))))
 
 (deftest renders-or
   (let [d* (db)]
