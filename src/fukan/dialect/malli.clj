@@ -46,5 +46,5 @@
             (map (fn [ceid] (keyword (:val/value (d/entity db ceid))))
                  (children db eid :choice)))
       "ref"
-      (symbol (:val/to ent))
+      (symbol (:entity/name (d/entity db (first (children db eid :names)))))
       (throw (ex-info (str "cannot render schema kind: " kind) {:eid eid :kind kind})))))

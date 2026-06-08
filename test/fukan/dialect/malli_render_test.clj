@@ -7,7 +7,9 @@
             ;; fukan.dialect.malli referred for its render fn (registered per-test below)
             [fukan.dialect.malli :as malli]
             ;; Schema referred so clj-kondo resolves its instance-macro hook
-            [canvas.dialects.malli :refer [Schema]]))
+            [canvas.dialects.malli :refer [Schema]]
+            ;; Kind — the named type a `ref` schema points at via :names.
+            [canvas.materialize.vocab :refer [Kind]]))
 
 (use-fixtures :each
   (fn [t] (typing/register-type-dialect! {:render malli/render}) (t)))
@@ -16,7 +18,7 @@
   "Test fixture: carries one Schema so the reader expands native malli literals."
   (slot :schema (one Schema)))
 
-(declare Socket)
+(def Socket (Kind "Socket"))
 
 (def h-port  (RenderHolder "h-port"  (schema [:int {:min 1 :max 65535}])))
 (def h-addr  (RenderHolder "h-addr"  (schema [:map [:street :string] [:zip {:optional true} :string]])))
@@ -27,7 +29,7 @@
 (def h-or    (RenderHolder "h-or"    (schema [:or :int :string])))
 (def h-tup   (RenderHolder "h-tup"   (schema [:tuple :string :int :keyword])))
 
-(defn- db [] (a/assemble-vars [#'h-port #'h-addr #'h-color #'h-tags #'h-kw #'h-ref #'h-or #'h-tup]))
+(defn- db [] (a/assemble-vars [#'Socket #'h-port #'h-addr #'h-color #'h-tags #'h-kw #'h-ref #'h-or #'h-tup]))
 (defn- root [db kind] (ffirst (d/q '[:find ?s :in $ ?k :where [?s :val/kind ?k]] db kind)))
 
 (deftest renders-scalar-with-constraints

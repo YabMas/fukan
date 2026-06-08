@@ -5,7 +5,9 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; SchemaField/SchemaChoice are referred (though only Schema is called
             ;; directly) so clj-kondo resolves their instance-macro hooks.
-            [canvas.dialects.malli :refer [Schema SchemaField SchemaChoice]]))
+            [canvas.dialects.malli :refer [Schema SchemaField SchemaChoice]]
+            ;; Kind — the named type a `ref`/`[X]`/`{}` schema points at via :names.
+            [canvas.materialize.vocab :refer [Kind]]))
 
 ;; A thin holder lets us exercise reader-expansion (Schema has a reader, so
 ;; when it's a slot target, native malli literals are expanded at macroexpand time).
@@ -20,15 +22,20 @@
 (def tags  (SchemaHolder "tags"  (schema [:vector :keyword])))
 (def addr  (SchemaHolder "addr"  (schema [:map [:street :string] [:zip {:optional true} :string]])))
 (def color (SchemaHolder "color" (schema [:enum :red :green :blue])))
-;; Socket is a reader literal (a symbol passed to read-malli → :ref "Socket"), not a var.
-;; Declare it to suppress the clj-kondo unresolved-symbol false positive.
-(declare Socket)
-(def ref-k (SchemaHolder "ref-k" (schema Socket)))  ; bare symbol -> :ref schema naming "Socket"
+;; A real named Kind — a ref schema names it via a :names edge (var-captured here).
+(def sock  (Kind "Socket"))
+(def ref-k (SchemaHolder "ref-k" (schema sock)))  ; bare symbol -> :ref schema naming the Socket Kind
 (def combo (SchemaHolder "combo" (schema [:or :int :string])))
 (def tup   (SchemaHolder "tup"   (schema [:tuple :int :int :string])))
 
+;; ── fukan's [X] / {} shorthands (Schema as a superset of the old Shape) ──
+(def file-k (Kind "File"))
+(def lst    (SchemaHolder "lst" (schema [file-k])))        ; [X] → vector of ref(File)
+(def rec    (SchemaHolder "rec" (schema {:a [file-k]})))   ; {:a [X]} → map of field a: vector-of-ref(File)
+
 (defn- build []
-  (a/assemble-vars [#'port #'email #'tags #'addr #'color #'ref-k #'combo #'tup]))
+  (a/assemble-vars [#'port #'email #'tags #'addr #'color #'sock #'ref-k #'combo #'tup
+                    #'file-k #'lst #'rec]))
 
 ;; A ref Schema built INLINE (an `(Schema …)` seq bypasses the reader, so no :to
 ;; is produced) — exercises the "ref must name a target" law.
@@ -54,9 +61,13 @@
              (set (d/q '[:find ?re :where [?s :val/kind "string"] [?s :val/regex ?re]] db)))))))
 
 (deftest collection-element-is-a-ref
+  ;; scoped through the `tags` holder so the new [X]-shorthand fixtures (which also
+  ;; produce `vector` schemas) don't pollute the assertion.
   (let [db (build)]
     (is (= #{["keyword"]}
            (set (d/q '[:find ?ek :where
+                       [?h :entity/name "tags"]
+                       [?hr :rel/from ?h] [?hr :rel/kind :schema] [?hr :rel/to ?s]
                        [?s :val/kind "vector"]
                        [?r :rel/from ?s] [?r :rel/kind :of] [?r :rel/to ?e]
                        [?e :val/kind ?ek]]
@@ -64,9 +75,11 @@
 
 (deftest map-fields-are-queryable
   (let [db (build)]
-    (testing "every field key on the addr map"
+    (testing "every field key on the addr map (scoped through the `addr` holder)"
       (is (= #{["street"] ["zip"]}
              (set (d/q '[:find ?k :where
+                         [?h :entity/name "addr"]
+                         [?hr :rel/from ?h] [?hr :rel/kind :schema] [?hr :rel/to ?s]
                          [?s :val/kind "map"]
                          [?r :rel/from ?s] [?r :rel/kind :field] [?r :rel/to ?f]
                          [?f :val/key ?k]]
@@ -87,9 +100,43 @@
                      db))))))
 
 (deftest bare-symbol-is-a-ref
+  ;; a bare symbol → a ref schema whose :names edge resolves to the named Kind
   (let [db (build)]
-    (is (= #{["Socket"]}
-           (set (d/q '[:find ?to :where [?s :val/kind "ref"] [?s :val/to ?to]] db))))))
+    (is (contains?
+          (set (d/q '[:find ?n :where
+                      [?s :val/kind "ref"]
+                      [?r :rel/from ?s] [?r :rel/kind :names] [?r :rel/to ?k]
+                      [?k :entity/name ?n]]
+                    db))
+          ["Socket"]))))
+
+(deftest list-shorthand-is-a-vector-of-ref
+  ;; fukan's [X] → a `vector` schema whose single :of child is a ref naming File
+  (let [db (build)]
+    (is (= #{["File"]}
+           (set (d/q '[:find ?n :where
+                       [?v :val/kind "vector"]
+                       [?r :rel/from ?v] [?r :rel/kind :of] [?r :rel/to ?e]
+                       [?e :val/kind "ref"]
+                       [?nr :rel/from ?e] [?nr :rel/kind :names] [?nr :rel/to ?k]
+                       [?k :entity/name ?n]]
+                     db))))))
+
+(deftest map-shorthand-is-a-required-field-map
+  ;; fukan's {:a [X]} → a `map` schema with a required field a: vector-of-ref(File)
+  (let [db (build)]
+    (is (= #{["a" false "File"]}
+           (set (d/q '[:find ?key ?opt ?n :where
+                       [?m :val/kind "map"]
+                       [?fr :rel/from ?m] [?fr :rel/kind :field] [?fr :rel/to ?f]
+                       [?f :val/key ?key] [?f :val/optional ?opt]
+                       [?sr :rel/from ?f] [?sr :rel/kind :schema] [?sr :rel/to ?v]
+                       [?v :val/kind "vector"]
+                       [?vr :rel/from ?v] [?vr :rel/kind :of] [?vr :rel/to ?e]
+                       [?e :val/kind "ref"]
+                       [?nr :rel/from ?e] [?nr :rel/kind :names] [?nr :rel/to ?k]
+                       [?k :entity/name ?n]]
+                     db))))))
 
 (deftest or-alternatives-are-ordered-children
   (let [db (build)]
