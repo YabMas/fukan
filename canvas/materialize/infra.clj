@@ -5,26 +5,24 @@
 
    Instances are top-level `def`s; the global assembler ingests them (no
    `build-canvas`). `infra-model` groups them as the subsystem module."
-  (:require [canvas.language.shape :refer [Kind]]
-            [canvas.language.op :refer [Stage]]
-            [canvas.language.grouping :refer [Module]]))
+  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]))
 
 (def Src   (Kind))
 (def Model (Kind))
 
 (def load-model
-  (Stage
+  (Operation
     (doc "Build (or reload) the held Model from a src path.")
     (in [src Src])
     (out Model)))
 (def get-model
-  (Stage
+  (Operation
     (doc "The current held Model, or none.")
     (out Model)))
 (def refresh-model
-  (Stage
+  (Operation
     (doc "Rebuild the Model from the last src path.")
     (out Model)))
 
 (def infra-model
-  (Module "infra.model" (child Src Model load-model get-model refresh-model)))
+  (Subsystem "infra.model" (child Src Model load-model get-model refresh-model)))

@@ -7,17 +7,15 @@
                              source via clj-kondo (no eval) and emits code
                              structures (Operations owned by Modules) into a db.
      target.correspondence — the model↔code correspondence (fukan.target.correspondence):
-                             `unrealized-stages` queries the unified graph for
-                             modelled Stages with no realizing Operation (drift),
+                             `drifted-operations` queries the unified graph for
+                             modelled Operations with no realizing Operation (drift),
                              calling the kernel's `check`.
 
    This is the layer that realizes the overview's `Target` faculty. Modelled
-   faithfully like canvas-source: every fn is a Stage with its shaped I/O + calls.
+   faithfully like canvas-source: every fn is an Operation with its shaped I/O + calls.
    The two modules share the `StructureDb` Kind (one node, the unified graph both
    produce and read)."
-  (:require [canvas.language.shape :refer [Kind]]
-            [canvas.language.op :refer [Stage]]
-            [canvas.language.grouping :refer [Module]]
+  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
             [canvas.materialize.kernel :as kernel]))
 
 (def Path        (Kind))
@@ -25,24 +23,23 @@
 (def StructureDb (Kind))
 
 ;; the Clojure extractor — source paths → code structures merged into a db
-(def analyze (Stage (in [paths [Path]]) (out Analysis) (performs :io)))   ; clj-kondo run!
+(def analyze (Operation (in [paths [Path]]) (out Analysis) (performs :io)))   ; clj-kondo run!
 (def extract
-  (Stage (in [paths [Path]]) (out StructureDb) (performs :io)             ; reads source (no eval)
+  (Operation (in [paths [Path]]) (out StructureDb) (performs :io)             ; reads source (no eval)
     (calls analyze)))
 
 (def target-clojure
-  (Module "target.clojure" (child Path Analysis StructureDb analyze extract)))
+  (Subsystem "target.clojure" (child Path Analysis StructureDb analyze extract)))
 
 ;; the model↔code correspondence — drift as a query over the unified graph
-(def StageName     (Kind))
 (def OperationName (Kind))
 
-(def unrealized-stages
-  (Stage (in [db StructureDb]) (out [StageName])                ; spec→code gaps (via the law)
+(def drifted-operations
+  (Operation (in [db StructureDb]) (out [OperationName])             ; spec→code gaps (via the law)
     (calls kernel/check)))
-(def unrealized-operations
-  (Stage (in [db StructureDb]) (out [OperationName])))      ; code→spec gaps (a query)
+(def uncovered-operations
+  (Operation (in [db StructureDb]) (out [OperationName])))           ; code→spec gaps (a query)
 
 (def target-correspondence
-  (Module "target.correspondence"
-    (child StructureDb StageName OperationName unrealized-stages unrealized-operations)))
+  (Subsystem "target.correspondence"
+    (child StructureDb OperationName drifted-operations uncovered-operations)))

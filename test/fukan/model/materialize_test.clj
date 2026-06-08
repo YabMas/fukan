@@ -26,17 +26,17 @@
 
 (def mvl-target     (Lens "target" (focus "the target extractor's stages")))
 (def mvl-target-sel (LensSelection (realizes mvl-target)
-                      (selects "target stages" '[(Stage ?n) (in-module ?n "target.clojure")])))
+                      (selects "target stages" '[(Operation ?n) (in-module ?n "target.clojure")])))
 (def ef-none     (Lens "none" (focus "nothing")))
 (def ef-none-sel (LensSelection (realizes ef-none)
-                   (selects "nothing" '[(Stage ?n) (in-module ?n "no-such-module")])))
+                   (selects "nothing" '[(Operation ?n) (in-module ?n "no-such-module")])))
 
 ;; an ad-hoc contextualization of the SHIPPED Blueprint — no Refactor renderer exists.
 ;; projection/Blueprint (+ its survey lens) is included in the assembled fragment so its
 ;; var-ref resolves; union with the model then dedups it.
 (def acb-stages     (Lens "stages" (focus "x")))
 (def acb-stages-sel (LensSelection (realizes acb-stages)
-                      (selects "target stages" '[(Stage ?n) (in-module ?n "target.clojure")])))
+                      (selects "target stages" '[(Operation ?n) (in-module ?n "target.clojure")])))
 (def acb-Refactor (Projection "Refactor"
                     (through acb-stages)
                     (contextualizes cm-proj/Blueprint)
@@ -45,7 +45,7 @@
 ;; an ad-hoc Docs projection whose name selects the Docs renderers
 (def mprd-stages     (Lens "stages" (focus "target stages")))
 (def mprd-stages-sel (LensSelection (realizes mprd-stages)
-                       (selects "target stages" '[(Stage ?n) (in-module ?n "target.clojure")])))
+                       (selects "target stages" '[(Operation ?n) (in-module ?n "target.clojure")])))
 (def mprd-Docs   (Projection "Docs"
                    (through mprd-stages)
                    (maps (Mapping (from "a function") (to "a doc section")))))
@@ -57,7 +57,7 @@
   (ffirst (d/q '[:find ?e :in $ ?k ?n :where [?e :structure/of ?k] [?e :entity/name ?n]] db kind n)))
 
 (deftest render-dispatches-per-projection-and-kind-and-composes-references
-  (testing "render [Blueprint :Stage] composes its :Shape renders (via dispatch) into the signature"
+  (testing "render [Blueprint :Operation] composes its :Shape renders (via dispatch) into the signature"
     (let [db   (pipeline/build-model nil)
           text (m/render db "Blueprint" (by-name db "extract"))]
       (is (str/includes? text "Implement `extract` in module `target.clojure`"))
@@ -90,13 +90,13 @@
 
 (deftest empty-focus-materializes-to-empty-string
   (testing "a lens whose focus is empty composes to nothing"
-    (let [model   (pipeline/build-model nil)            ; loads the canvas vocab (the (Stage …) rule)
+    (let [model   (pipeline/build-model nil)            ; loads the canvas vocab (the (Operation …) rule)
           lens-db (a/assemble-vars [#'ef-none #'ef-none-sel])
           db      (cs/union-dbs [model lens-db])]
       (is (= "" (m/materialize-view db (by-name db "none")))))))
 
 (deftest materialize-module-composes-a-modules-stages
-  (testing "materialize-module renders a module's Stages under a projection — no stored lens"
+  (testing "materialize-module renders a module's Operations under a projection — no stored lens"
     (let [db (pipeline/build-model nil)]
       (let [bp (m/materialize-module db "Blueprint" "target.clojure")]
         (is (str/includes? bp "Implement `analyze`"))
@@ -110,9 +110,9 @@
 (deftest materialize-focus-takes-ad-hoc-clauses
   (testing "materialize-focus renders the nodes an ad-hoc :where clause selects, under a projection"
     (let [db   (pipeline/build-model nil)
-          spec (m/materialize-focus db "Blueprint" '[(Stage ?n) (in-module ?n "materialize")])]
+          spec (m/materialize-focus db "Blueprint" '[(Operation ?n) (in-module ?n "materialize")])]
       (is (str/includes? spec "Implement `materialize-view`")
-          "the materialize module's own modelled Stage is projected"))))
+          "the materialize module's own modelled Operation is projected"))))
 
 (deftest shipped-lenses-with-queries-are-evaluable
   (testing "every retrofitted self-model lens resolves to a node-set (no prose-only throw)"
@@ -130,19 +130,19 @@
           "coverage selects the extracted Operations"))))
 
 (deftest materialize-projection-runs-the-shipped-blueprint
-  (testing "Blueprint (through the now-query-bearing survey lens) materializes the model's Stages"
+  (testing "Blueprint (through the now-query-bearing survey lens) materializes the model's Operations"
     (let [db  (pipeline/build-model nil)
           out (m/materialize-projection db (by-kind-name db :Projection "Blueprint"))]
       ;; survey selects the whole model; compose renders only the kinds Blueprint covers
-      ;; (named Stages), not every node as a bare name
+      ;; (named Operations), not every node as a bare name
       (is (str/includes? out "Implement `extract`"))
-      (is (str/includes? out "Implement `check`") "Stages from across modules are projected")
+      (is (str/includes? out "Implement `check`") "Operations from across modules are projected")
       (is (> (count (re-seq #"This is an implementation specification" out)) 3)
-          "several Stages projected; bare Kinds/Concepts are not rendered standalone"))))
+          "several Operations projected; bare Kinds/Concepts are not rendered standalone"))))
 
 (deftest driftclose-contextualizes-blueprint-not-duplicates-it
   (testing "DriftClose composes Blueprint — its specs framed by a drift context, not a parallel renderer"
-    ;; design-only model: no extracted code → every modelled Stage drifts → the drift
+    ;; design-only model: no extracted code → every modelled Operation drifts → the drift
     ;; lens selects them all → DriftClose = Blueprint's specs under a drift-closing context.
     (let [db  (pipeline/build-model nil)
           out (m/materialize-projection db (by-kind-name db :Projection "DriftClose"))]
@@ -151,7 +151,7 @@
           "the body IS Blueprint's spec — composed, not a bespoke close-instruction")
       ;; delegation: a single node under DriftClose renders identically to under Blueprint
       ;; (no DriftClose-specific renderer — the context is applied only at the view level)
-      (let [extract (by-kind-name db :Stage "extract")]
+      (let [extract (by-kind-name db :Operation "extract")]
         (is (= (m/render db "Blueprint" extract) (m/render db "DriftClose" extract))
             "DriftClose delegates per-node rendering to its base Blueprint")))))
 
@@ -170,7 +170,7 @@
 (deftest acts-chain-over-a-refined-focus
   (testing "focus → refine → materialize-over composes by plain threading — no named Tool"
     (let [db       (pipeline/build-model nil)
-          stages   (lens/focus-nodes db '[(Stage ?n)])                       ; every Stage
+          stages   (lens/focus-nodes db '[(Operation ?n)])                       ; every Operation
           in-tc    (lens/refine db stages '[(in-module ?n "target.clojure")]) ; refined to one module
           rendered (m/materialize-over db "Blueprint" in-tc)]                 ; project the refined focus
       (is (set? stages) "focus-nodes / refine yield node-sets — the composable currency")
@@ -178,7 +178,7 @@
       (is (str/includes? rendered "Implement `analyze`"))
       (is (str/includes? rendered "Implement `extract`"))
       (is (not (str/includes? rendered "Implement `materialize-view`"))
-          "the refine step bounded the focus to target.clojure — other modules' Stages excluded"))))
+          "the refine step bounded the focus to target.clojure — other modules' Operations excluded"))))
 
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"
@@ -199,4 +199,4 @@
           out     (m/materialize-finding db "Blueprint" finding)]
       (is (string? out) "the projection renders the finding's union focus")
       (is (str/includes? out "Implement")
-          "Blueprint emits implementation specs for the focused Stages"))))
+          "Blueprint emits implementation specs for the focused Operations"))))

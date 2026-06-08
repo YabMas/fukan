@@ -20,12 +20,12 @@
 
 ;; instruct ⊂ projection: DriftClose is a CONTEXTUALIZATION of Blueprint, not a new
 ;; target — it renders Blueprint's specs through the drift lens (the unrealized
-;; Stages) and frames them with a drift-closing context. The same composing shape
+;; Operations) and frames them with a drift-closing context. The same composing shape
 ;; contextualizes Blueprint as a new feature, a refactor, etc. — just a different
 ;; context over the same base.
 (def DriftClose
   (Projection
-    (doc "Blueprint, framed as drift to close — the unrealized Stages as instructions to implement.")
+    (doc "Blueprint, framed as drift to close — the unrealized Operations as instructions to implement.")
     (contextualizes Blueprint)
     (through lens/drift)
     (context "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:")))

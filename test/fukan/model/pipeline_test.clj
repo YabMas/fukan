@@ -59,11 +59,11 @@
 (deftest build-model-ingests-canvas-specs-into-a-structure-db
   (testing "the model is the merged structure db over the canvas/ defstructure specs"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "infra.model")
+      (is (contains? (names-of db :Subsystem) "infra.model")
           "the canvas/infra/model spec is discovered and ingested")
-      ;; infra is now modelled with the fukan-on-fukan grammar (Stage/Kind), not
+      ;; infra is now modelled with the fukan-on-fukan grammar (Operation/Kind), not
       ;; the (evicted) base Function/Type vocab; subset since other specs add more
-      (is (set/subset? #{"load-model" "get-model" "refresh-model"} (names-of db :Stage)))
+      (is (set/subset? #{"load-model" "get-model" "refresh-model"} (names-of db :Operation)))
       (is (set/subset? #{"Model" "Src"} (names-of db :Kind)))
       (is (empty? (s/check db))
           "the whole self-model satisfies every structure's laws"))))
@@ -71,7 +71,7 @@
 (deftest pipeline-links-across-to-canvas-source
   (testing "build-model is a thin entry point whose :calls link to canvas-source/extraction"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "model.pipeline")
+      (is (contains? (names-of db :Subsystem) "model.pipeline")
           "the canvas/pipeline/model spec is ingested")
       ;; post-prune the pipeline subsystem is just build-model — the ingest/union
       ;; machinery lives in canvas-source now, not duplicated here
@@ -79,7 +79,7 @@
              (d/q '[:find [?n ...]
                     :where [?m :entity/name "model.pipeline"]
                            [?cr :rel/kind :child] [?cr :rel/from ?m] [?cr :rel/to ?c]
-                           [?c :structure/of :Stage] [?c :entity/name ?n]]
+                           [?c :structure/of :Operation] [?c :entity/name ?n]]
                   db))
           "model.pipeline declares exactly one stage — no stale duplicate ingest")
       ;; the seams: build-model's cross-module :calls resolve to the canvas-source
@@ -120,12 +120,12 @@
           "Db appears in db->entity-maps in, union-dbs in + out, build out → one node"))))
 
 (deftest canvas-source-effects-are-captured-and-value-identified
-  (testing "Stage effects are recorded; :io (performed by 4 stages) is one shared node"
+  (testing "Operation effects are recorded; :io (performed by 4 stages) is one shared node"
     (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of :Effect] [?e :val/name "io"]] db)))
           "the :io effect is value-identified across every stage that performs it")
       (is (seq (d/q '[:find ?r
-                      :where [?b :structure/of :Stage] [?b :entity/name "build"]
+                      :where [?b :structure/of :Operation] [?b :entity/name "build"]
                              [?r :rel/from ?b] [?r :rel/kind :performs] [?r :rel/to ?e]
                              [?e :structure/of :Effect] [?e :val/name "io"]]
                     db))
@@ -134,7 +134,7 @@
 (deftest kernel-meta-model-captures-structure-composition
   (testing "the reflexive kernel model: Structure is composed of Slot and Law"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "core.structure"))
+      (is (contains? (names-of db :Subsystem) "core.structure"))
       (is (= #{"slot" "law" "value"}
              (set (map first (d/q '[:find ?n
                                     :where [?st :structure/of :Concept] [?st :entity/name "Structure"]
@@ -198,7 +198,7 @@
                              [?rz :structure/of :FacultyRealization]
                              [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
                              [?b :rel/from ?rz] [?b :rel/kind :realizer] [?b :rel/to ?m]
-                             [?m :structure/of :Module] [?m :entity/name "core.structure"]]
+                             [?m :structure/of :Subsystem] [?m :entity/name "core.structure"]]
                     db))
           "the cross-refs (ordinary var refs) resolved through the Realization node")
       (is (every? #(some? (:rel/to (d/entity db (first %))))

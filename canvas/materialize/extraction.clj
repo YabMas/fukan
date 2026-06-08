@@ -5,11 +5,9 @@
    it, which keeps the pipeline generic; the project's composition root (infra.model)
    supplies the extractor with `register-extractor!`.
 
-   Modelled faithfully like canvas-source — each fn a Stage with its shaped I/O.
+   Modelled faithfully like canvas-source — each fn an Operation with its shaped I/O.
    Both stages mutate/read the registry slot (`:state`)."
-  (:require [canvas.language.shape :refer [Kind]]
-            [canvas.language.op :refer [Stage]]
-            [canvas.language.grouping :refer [Module]]))
+  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]))
 
 (def Extractor   (Kind))
 (def Path        (Kind))
@@ -18,11 +16,11 @@
 
 ;; register the project's extractor (a fn Path → StructureDb) into the slot
 (def register-extractor!
-  (Stage (in [f Extractor]) (out Unit) (performs :state)))
+  (Operation (in [f Extractor]) (out Unit) (performs :state)))
 ;; run the registered extractor over a code-root → its structure db
 (def run-extractor
-  (Stage (in [code-root Path]) (out StructureDb) (performs :state)))
+  (Operation (in [code-root Path]) (out StructureDb) (performs :state)))
 
 (def extraction
-  (Module (child Extractor Path StructureDb Unit
+  (Subsystem (child Extractor Path StructureDb Unit
                               register-extractor! run-extractor)))

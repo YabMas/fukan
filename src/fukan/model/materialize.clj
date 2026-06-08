@@ -5,7 +5,7 @@
 
    `render-base` is a MULTIMETHOD dispatching on `[base-projection structure-kind]`: each
    node renders to a fragment of that base's target form. The base dimension is what makes
-   the same focus re-present differently per target (a Stage → an impl spec under
+   the same focus re-present differently per target (an Operation → an impl spec under
    Blueprint, a doc section under Docs).
 
    A projection may be a BASE (it has its own per-kind renderers, e.g. Blueprint / Docs)
@@ -48,7 +48,7 @@
                db eid)))
 
 (defn- stage-facts
-  "The shaped facts a Stage renderer needs, projection-agnostic: name, doc, owning
+  "The shaped facts an Operation renderer needs, projection-agnostic: name, doc, owning
    module, labelled params (with their shape eids), output shape eid, effects, calls."
   [db eid]
   (let [e (d/entity db eid)]
@@ -88,7 +88,7 @@
 
 (defmethod render-base ["Blueprint" :Shape] [db b eid] (shape-str db b eid))
 
-(defmethod render-base ["Blueprint" :Stage] [db b eid]
+(defmethod render-base ["Blueprint" :Operation] [db b eid]
   (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)
         sig    (str "(" nm (apply str (map #(str " " (:label %)) params)) ")")
         ptypes (str/join ", " (map #(str (:label %) ": " (render-base db b (:shape %))) params))]
@@ -105,7 +105,7 @@
 
 (defmethod render-base ["Docs" :Shape] [db b eid] (shape-str db b eid))
 
-(defmethod render-base ["Docs" :Stage] [db b eid]
+(defmethod render-base ["Docs" :Operation] [db b eid]
   (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)]
     (str "### " nm "\n"
          (or doc "_No description._") "\n\n"
@@ -197,9 +197,9 @@
   (materialize-over db projection (lens/focus-nodes db clauses)))
 
 (defn materialize-module
-  "Compose `projection` over the Stages owned by `module-name`. The live by-module entry."
+  "Compose `projection` over the Operations owned by `module-name`. The live by-module entry."
   [db projection module-name]
-  (materialize-focus db projection [(list 'Stage '?n) (list 'in-module '?n module-name)]))
+  (materialize-focus db projection [(list 'Operation '?n) (list 'in-module '?n module-name)]))
 
 (defn materialize-projection
   "The model-driven entry: materialize the modelled `Projection` node `proj-eid` — render

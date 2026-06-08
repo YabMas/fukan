@@ -186,14 +186,15 @@
    canvas.domain.lens/Lens hooks.fukan.structure/instance
    canvas.language.meta/Concept hooks.fukan.structure/instance
    canvas.language.meta/MetaSlot hooks.fukan.structure/instance
-   canvas.language.op/Effect hooks.fukan.structure/instance
-   canvas.language.op/Stage hooks.fukan.structure/instance
+   canvas.materialize.vocab/Effect hooks.fukan.structure/instance
+   canvas.materialize.vocab/Operation hooks.fukan.structure/instance
+   canvas.materialize.vocab/Kind hooks.fukan.structure/instance
+   canvas.materialize.vocab/Shape hooks.fukan.structure/instance
+   canvas.materialize.vocab/Subsystem hooks.fukan.structure/instance
    canvas.domain.probe/Finding hooks.fukan.structure/instance
    canvas.domain.probe/Probe hooks.fukan.structure/instance
    canvas.domain.projection/Mapping hooks.fukan.structure/instance
    canvas.domain.projection/Projection hooks.fukan.structure/instance
-   canvas.language.shape/Kind hooks.fukan.structure/instance
-   canvas.language.shape/Shape hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance

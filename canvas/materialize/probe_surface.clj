@@ -13,11 +13,9 @@
 
    This is the realization side of the `probe` act perspective
    (canvas.domain.probe-acts). `probe-integrity` composes the kernel's `check`; `probe-coverage`
-   / `probe-drift` call the correspondence stages. Modelled faithfully — each fn a Stage.
+   / `probe-drift` call the correspondence stages. Modelled faithfully — each fn an Operation.
    The two modules share the `Db` and `ProbeName` Kinds."
-  (:require [canvas.language.shape :refer [Kind]]
-            [canvas.language.op :refer [Stage]]
-            [canvas.language.grouping :refer [Module]]
+  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
             [canvas.materialize.kernel :as kernel]
             [canvas.materialize.target :as target]))
 
@@ -28,28 +26,28 @@
 (def Finding    (Kind))
 (def FindingMap (Kind))
 
-(def probe-patterns    (Stage (in [target-db Db]) (out Finding)))   ; pure (datascript): recurring structures
-(def probe-survey      (Stage (in [target-db Db]) (out Finding)))   ; counts by structure kind
-(def probe-consistency (Stage (in [target-db Db]) (out Finding)))   ; Stage-name ambiguity across modules
-(def probe-tar-pit     (Stage (in [target-db Db]) (out Finding)))   ; top nodes by relation degree
+(def probe-patterns    (Operation (in [target-db Db]) (out Finding)))   ; pure (datascript): recurring structures
+(def probe-survey      (Operation (in [target-db Db]) (out Finding)))   ; counts by structure kind
+(def probe-consistency (Operation (in [target-db Db]) (out Finding)))   ; Operation-name ambiguity across modules
+(def probe-tar-pit     (Operation (in [target-db Db]) (out Finding)))   ; top nodes by relation degree
 (def probe-integrity
-  (Stage (in [target-db Db]) (out Finding)                            ; the integrity inspect: composes check
+  (Operation (in [target-db Db]) (out Finding)                            ; the integrity inspect: composes check
     (calls kernel/check)))
 (def probe-coverage
-  (Stage (in [target-db Db]) (out Finding)                             ; code→spec gaps
-    (calls target/unrealized-operations)))
+  (Operation (in [target-db Db]) (out Finding)                             ; code→spec gaps
+    (calls target/uncovered-operations)))
 (def probe-drift
-  (Stage (in [target-db Db]) (out Finding)                                ; spec→code gaps
-    (calls target/unrealized-stages)))
+  (Operation (in [target-db Db]) (out Finding)                                ; spec→code gaps
+    (calls target/drifted-operations)))
 (def run
-  (Stage (in [target-db Db]) (in [probe-name ProbeName]) (out Finding) (performs :throws)
+  (Operation (in [target-db Db]) (in [probe-name ProbeName]) (out Finding) (performs :throws)
     (calls probe-patterns probe-integrity)))                                            ; dispatch to a registered leaf
 (def run-all
-  (Stage (in [target-db Db]) (out FindingMap)                                 ; run every implemented leaf
+  (Operation (in [target-db Db]) (out FindingMap)                                 ; run every implemented leaf
     (calls probe-patterns probe-integrity)))
 
 (def probes
-  (Module
+  (Subsystem
     (child Db ProbeName Finding FindingMap
            probe-patterns probe-survey probe-consistency probe-tar-pit
            probe-integrity probe-coverage probe-drift run run-all)))
@@ -61,14 +59,14 @@
 (def ProbeArtifact  (Kind))
 
 (def probe-capability
-  (Stage (in [db Db]) (in [probe-name ProbeName]) (out CapabilityName) (performs :throws)))
-(def observations-contract (Stage (out ContractForm)))
-(def instruction (Stage (in [db Db]) (in [probe-name ProbeName]) (out Instruction)))
+  (Operation (in [db Db]) (in [probe-name ProbeName]) (out CapabilityName) (performs :throws)))
+(def observations-contract (Operation (out ContractForm)))
+(def instruction (Operation (in [db Db]) (in [probe-name ProbeName]) (out Instruction)))
 (def project-probe
-  (Stage (in [db Db]) (in [probe-name ProbeName]) (out ProbeArtifact) (performs :throws)
+  (Operation (in [db Db]) (in [probe-name ProbeName]) (out ProbeArtifact) (performs :throws)
     (calls probe-capability observations-contract instruction)))
 
 (def probe-code
-  (Module
+  (Subsystem
     (child Db ProbeName CapabilityName ContractForm Instruction ProbeArtifact
            probe-capability observations-contract instruction project-probe)))

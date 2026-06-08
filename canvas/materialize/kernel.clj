@@ -10,16 +10,14 @@
    registry — to be added only if the model is felt to want them.
 
    The kernel also PROVIDES one operation — `check` (laws → violations), the
-   canonical integrity inspect. It is modelled here as a capability (an op `Stage`)
+   canonical integrity inspect. It is modelled here as a capability (an op `Operation`)
    because code is a projection of the model 1-on-1: the agent's integrity probe
    composes `check`, so `check` must exist in the model, not just in code.
 
    (Concept instance vars are `c-`-prefixed so they don't shadow the `Concept`
    constructor — fukan's own kernel modelled in fukan's own meta-vocab.)"
   (:require [canvas.language.meta :refer [Concept MetaSlot]]
-            [canvas.language.shape :refer [Kind]]
-            [canvas.language.op :refer [Stage]]
-            [canvas.language.grouping :refer [Module]]
+            [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
             [canvas.materialize.query-engine :as query-engine]))
 
 ;; leaf concepts — scalar types, the substrate's atoms, and (reflexively) the
@@ -75,19 +73,19 @@
 ;; (delegating to core.rules) — the rules check + the lens engine inject so
 ;; laws/lenses read at domain altitude.
 (def vocab-rules
-  (Stage
+  (Operation
     (doc "The datalog rules derived from the live vocabulary, injected into laws/lenses.")
     (out [Rule])
     (calls query-engine/derive-rules)))
 (def check
-  (Stage
+  (Operation
     (doc "Run every structure's laws over the model db; yield the violations.")
     (in [db StructureDb])
     (out [Violation])
     (calls vocab-rules)))
 
 (def core-structure
-  (Module "core.structure"
+  (Subsystem "core.structure"
     (child c-Keyword c-String c-Bool c-Int c-Concept c-Node c-Cardinality
            c-Relation c-Slot c-Law c-Structure
            StructureDb Violation Rule vocab-rules check)))

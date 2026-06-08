@@ -61,7 +61,7 @@
                               [?rz :rel/kind :realizes] [?rz :rel/to ?p]
                               [?rz :rel/from ?pc] [?pc :structure/of :ProbeComposition]
                               [?cr :rel/from ?pc] [?cr :rel/kind :calls] [?cr :rel/to ?c]
-                              [?c :structure/of :Stage] [?c :entity/name ?cn]]
+                              [?c :structure/of :Operation] [?c :entity/name ?cn]]
                      db probe-name)]
     (when (> (count results) 1)
       (throw (ex-info "cut-1 projector handles a single :calls edge only"

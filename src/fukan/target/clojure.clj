@@ -5,28 +5,19 @@
    that knows Clojure. It reads clj-kondo's `:analysis` output and maps Clojure
    constructs onto fukan's architecture-level code vocabulary:
 
-     ns               → Module      (a cohesion boundary — the generic `:child`
-                                      grouping the design side uses)
-     defn / defn-     → Operation   (a named unit of computation)
+     ns               → Subsystem   (a cohesion boundary)
+     defn / defn-     → Operation   (a named unit of computation, `:extracted true`)
 
-   What it extracts INTO is architecture-characteristic and PL-blind — `Operation`
-   names no Clojure construct, and `Module` is the substrate's generic cohesion
-   boundary. Swap a different language's extractor in (Python `def`/module, …) and
-   the same vocab plus the same cross-layer correspondence law still hold; the
-   Clojure-ness stays confined here. clj-kondo is the wheel we don't reinvent."
+   The extractor OWNS no vocabulary — `Operation`/`Subsystem` are defined in
+   `canvas.materialize.vocab`; this plug-point only EMITS instances of them by tag
+   (stamping `:extracted true` so an extracted Operation is distinguished from an
+   authored one), and they meet that grammar at merge. Swap a different language's
+   extractor in (Python `def`/module, …) and the same vocab plus the same cross-layer
+   correspondence law still hold; the Clojure-ness stays confined here. clj-kondo is
+   the wheel we don't reinvent."
   (:require [clj-kondo.core :as kondo]
             [fukan.canvas.core.assemble :as assemble]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]))
-
-(defstructure Operation
-  "A named unit of computation owned by a Module — the architecture-level code
-   primitive fukan's functional core is built from. Realized in Clojure as a
-   `defn`/`defn-`; the vocab itself names no Clojure construct. `:private`
-   distinguishes a module's public surface from its internals."
-  ;; Code-domain only — `Operation`'s laws (if any) concern code constraints. The
-  ;; model↔code correspondence ("a Stage is realized by an Operation") is an
-  ;; orthogonal concern and lives in `fukan.target.correspondence`, not here.
-  (slot :private (one :Bool)))
+            [fukan.canvas.core.structure :as s]))
 
 (def ^:private fn-defining
   "clj-kondo `:defined-by` values that denote a computation unit (an Operation).
@@ -41,12 +32,12 @@
                           :config {:output {:analysis true}}})))
 
 (defn extract
-  "Extract a structure-db of Modules (cohesion boundaries) and the Operations they
+  "Extract a structure-db of Subsystems (cohesion boundaries) and the Operations they
    define from the Clojure source under `paths` (files or directories). Builds the
-   db programmatically: each namespace becomes a `Module` whose `:child` Operations
-   are the `defn`/`defn-`s it defines (the same generic cohesion grouping the design
-   side uses). Operations are inline-value children of their Module — anonymous,
-   owner-path-identified, matched to design Stages by NAME via the correspondence laws."
+   db programmatically: each namespace becomes a `Subsystem` whose `:child` Operations
+   are the `defn`/`defn-`s it defines. Operations are inline-value children of their
+   Subsystem — anonymous, owner-path-identified, stamped `:extracted true`, matched to
+   authored Operations by NAME via the correspondence law."
   [& paths]
   (let [{:keys [namespace-definitions var-definitions]} (analyze paths)
         ops-by-ns    (group-by :ns (filter #(fn-defining (:defined-by %)) var-definitions))
@@ -56,7 +47,8 @@
      (for [mname module-names
            :let [ops (for [v (ops-by-ns mname)]
                        (s/->InstanceValue :Operation (str (:name v)) nil
-                                          {:val/private (boolean (:private v))} [] false))]]
+                                          {:val/private (boolean (:private v))
+                                           :val/extracted true} [] false))]]
        [(str mname)
-        (s/->InstanceValue :Module (str mname) nil {}
+        (s/->InstanceValue :Subsystem (str mname) nil {}
                            [{:rk :child :card :many :targets (vec ops)}] false)]))))

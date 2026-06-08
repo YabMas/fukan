@@ -10,10 +10,8 @@
    cycle. (The Lens *vocab* — the primitive that CARRIES a query — is the forward-
    looking view in `canvas.domain.lens-model`; this is the machinery that RUNS it.)
 
-   Modelled faithfully — each fn a Stage with its shaped I/O + call edges."
-  (:require [canvas.language.shape :refer [Kind]]
-            [canvas.language.op :refer [Stage]]
-            [canvas.language.grouping :refer [Module]]
+   Modelled faithfully — each fn an Operation with its shaped I/O + call edges."
+  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
             [canvas.materialize.kernel :as kernel]))
 
 (def Db     (Kind))
@@ -22,17 +20,17 @@
 
 ;; the shared engine: run :where clauses (binding ?n) WITH the vocab-derived rules
 (def focus-nodes
-  (Stage (in [db Db]) (in [clauses [Clause]]) (out [Eid])           ; pure (datascript + rules)
+  (Operation (in [db Db]) (in [clauses [Clause]]) (out [Eid])           ; pure (datascript + rules)
     (calls kernel/vocab-rules)))
 ;; read a stored lens's :val/query, then delegate to focus-nodes
 (def evaluate-lens
-  (Stage (in [db Db]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
+  (Operation (in [db Db]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
     (calls focus-nodes)))
 ;; refined focus (lens-within-lens): narrow a focus to members also matching clauses —
 ;; the composable step acts chain over
 (def refine
-  (Stage (in [db Db]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
+  (Operation (in [db Db]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
     (calls focus-nodes)))
 
 (def core-lens
-  (Module "core.lens" (child Db Clause Eid focus-nodes evaluate-lens refine)))
+  (Subsystem "core.lens" (child Db Clause Eid focus-nodes evaluate-lens refine)))

@@ -61,13 +61,13 @@
             (mapv (fn [[k es]] (f/observation es :count (str (count es) " " (name k))))))))))
 
 (defn probe-consistency
-  "Stage-name ambiguity (a View): one observation per Stage name borne by more than
-   one module; the focus is the ambiguous Stage nodes. Scopable to `focus`."
+  "Operation-name ambiguity (a View): one observation per Operation name borne by more than
+   one module; the focus is the ambiguous Operation nodes. Scopable to `focus`."
   ([db] (probe-consistency db nil))
   ([db focus]
    (let [in?     (if focus (set focus) (constantly true))
          rows    (->> (d/q '[:find ?s ?sn ?mn
-                             :where [?s :structure/of :Stage] [?s :entity/name ?sn]
+                             :where [?s :structure/of :Operation] [?s :entity/name ?sn]
                                     [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
                                     [?m :entity/name ?mn]] db)
                       (filter (fn [[s _ _]] (in? s))))
@@ -102,12 +102,12 @@
 
 (defn probe-coverage
   "Spec ↔ code coverage (a gating Signal): extracted Operations not covered by a
-   Stage, each an observation whose focus is the uncovered Operation node(s). Empty ⇔
+   Operation, each an observation whose focus is the uncovered Operation node(s). Empty ⇔
    every Operation is modelled. Global — `focus` accepted but ignored."
   ([db] (probe-coverage db nil))
   ([db _focus]
    (f/finding "coverage" true
-     (->> (sort (corr/unrealized-operations db))
+     (->> (sort (corr/uncovered-operations db))
           (mapv (fn [n]
                   (f/observation
                     (->> (d/q '[:find ?o :in $ ?n
@@ -116,17 +116,17 @@
                     :gap n)))))))
 
 (defn probe-drift
-  "Spec ↔ code divergence (a gating Signal): modelled Stages not realized by an
-   Operation, each an observation whose focus is the unrealized Stage node(s). Empty ⇔
+  "Spec ↔ code divergence (a gating Signal): modelled Operations not realized by an
+   Operation, each an observation whose focus is the unrealized Operation node(s). Empty ⇔
    the model is fully realized. Global — `focus` accepted but ignored."
   ([db] (probe-drift db nil))
   ([db _focus]
    (f/finding "drift" true
-     (->> (sort (corr/unrealized-stages db))
+     (->> (sort (corr/drifted-operations db))
           (mapv (fn [n]
                   (f/observation
                     (->> (d/q '[:find ?s :in $ ?n
-                                :where [?s :structure/of :Stage] [?s :entity/name ?n]] db n)
+                                :where [?s :structure/of :Operation] [?s :entity/name ?n]] db n)
                          (map first) set)
                     :gap n)))))))
 

@@ -15,7 +15,7 @@
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [canvas.domain.lens :refer [Lens]]
             [canvas.domain.probe :refer [Probe Finding]]
-            [canvas.language.op :refer [Stage]]
+            [canvas.materialize.vocab :refer [Operation]]
             [canvas.language.grouping :refer [Module]]
             [canvas.domain.lens-model :as lens]
             [canvas.domain.probe-acts :as probe]
@@ -37,9 +37,9 @@
 
 (defstructure ProbeComposition
   "The modelled kernel capability a `Probe` invokes when run (e.g. the integrity probe composes
-   the kernel's `check`). The same `:calls` relation an op `Stage` uses — a probe IS an operation."
+   the kernel's `check`). The same `:calls` relation an op `Operation` uses — a probe IS an operation."
   (slot :realizes (one Probe))
-  (slot :calls    (many Stage)))
+  (slot :calls    (many Operation)))
 
 ;; ── lens selections ──────────────────────────────────────────────────────────
 (def s-survey      (LensSelection (realizes lens/survey)
@@ -47,17 +47,19 @@
 (def s-patterns    (LensSelection (realizes lens/patterns)
                      (selects "every relation source" '[[?r :rel/from ?n]])))
 (def s-consistency (LensSelection (realizes lens/consistency)
-                     (selects "the contract-bearing Stages" '[(Stage ?n)])))
+                     (selects "the contract-bearing authored operations"
+                       '[(Operation ?n) (not [?n :val/extracted true])])))
 (def s-tar-pit     (LensSelection (realizes lens/tar-pit)
                      (selects "the call-graph callers" '[(calls ?n ?callee)])))
 (def s-integrity   (LensSelection (realizes lens/integrity)
                      (selects "the whole model" '[[?n :structure/of _]])))
 (def s-coverage    (LensSelection (realizes lens/coverage)
-                     (selects "the code Operations" '[(Operation ?n)])))
+                     (selects "the extracted code operations"
+                       '[(Operation ?n) [?n :val/extracted true]])))
 (def s-drift       (LensSelection (realizes lens/drift)
-                     (selects "Stages with no corresponding Operation"
-                       '[(Stage ?n) (named ?n ?nm) (in-module ?n ?cm)
-                         (not (Operation ?o) (named ?o ?nm) (in-module ?o ?km)
+                     (selects "authored operations with no extracted twin"
+                       '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)
+                         (not (Operation ?o) [?o :val/extracted true] (named ?o ?nm) (in-module ?o ?km)
                               [(fukan.target.correspondence/module-corresponds? ?cm ?km)])])))
 
 ;; ── finding checks (the executable holds) ────────────────────────────────────

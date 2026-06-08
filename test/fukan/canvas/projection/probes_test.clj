@@ -6,7 +6,7 @@
             [fukan.canvas.projection.probes :as probes]
             [fukan.target.clojure :as target]
             [canvas.domain.probe :refer [Finding]]
-            [canvas.language.shape :refer [Kind]]))
+            [canvas.materialize.vocab :refer [Kind]]))
 
 ;; tiny degenerate models built from top-level value defs (assembled per use)
 (def solo (Kind "Solo"))
@@ -97,7 +97,7 @@
     (let [db    (cs/union-dbs [(cs/build) (target/extract "test/fixtures/target/sample.clj")])
           drift (probes/run db "drift")
           cov   (probes/run db "coverage")]
-      (is (seq (:observations drift)) "modelled Stages drift")
+      (is (seq (:observations drift)) "modelled Operations drift")
       (is (every? #(= :gap (:as %)) (:observations drift)) "drift gaps are tagged :gap")
       (is (= #{"alpha" "beta" "delta"} (set (map :note (:observations cov))))
           "sample's Operations are uncovered by the model (the coverage dual)"))))

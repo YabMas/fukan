@@ -1,6 +1,6 @@
 (ns fukan.target.correspondence
   "The model↔code CORRESPONDENCE concern — deliberately separate from BOTH the
-   abstract modelling domain (canvas/, e.g. `Stage`) and the code-structure domain
+   abstract modelling domain (canvas/, e.g. `Operation`) and the code-structure domain
    (`Operation`). A domain definition's laws should concern only that domain's own
    behaviour and constraints; HOW the model is realized in code is an orthogonal
    question. Keeping it here means each can be reasoned about — and evolved — in
@@ -8,10 +8,10 @@
    implementation/correspondence question without touching the domains.
 
    It holds fukan's self-correspondence. fukan's projection convention is that an
-   op-layer `Stage` named X in a canvas module is realized by a function named X in
+   op-layer `Operation` named X in a canvas module is realized by a function named X in
    the CORRESPONDING code module — so the law matches on name AND module placement
-   across the altitude gap between authored Stages (canvas/) and extracted Operations
-   (src/), no `realizes` relation needed. The law references `:Stage` and `:Operation`
+   across the altitude gap between authored Operations (canvas/) and extracted Operations
+   (src/), no `realizes` relation needed. The law references `:Operation` and `:Operation`
    only as data (structure tags resolved at check-time over the merged graph), so this
    concern takes no code dependency on either domain."
   (:require [clojure.string :as str]
@@ -32,28 +32,30 @@
   "A law-holder for the model↔code correspondence — it has no instances of its own;
    it exists to carry the cross-layer assertion in its own concern.
 
-   `:scope :global` opts out of the default self-scoping (which would inject
-   `[?s :structure/of :Realization]` and make the law vacuous, since its offenders
-   are Stages, not Realizations). The leading Operation clause is the real guard:
-   the law is vacuous when no code is extracted — correspondence is only assertable
-   when both layers share the graph — so registering it never disturbs a model-only
-   `check`.
+   `:scope :global` opts out of the default self-scoping (its offenders are Operations,
+   not Realizations). The leading extracted-Operation clause is the real guard: the law
+   is vacuous when no code is extracted — correspondence is only assertable when both
+   layers share the graph — so registering it never disturbs a model-only `check`.
 
-   The match is on name AND module: a Stage in canvas module C is realized only by a
-   same-named Operation whose owning code module corresponds to C (module-corresponds?).
-   A same-named function in an unrelated namespace no longer counts."
-  ;; Reads over the vocab-derived rules (check injects them) — domain altitude, not
-  ;; substrate triples: `(Operation …)`, `(Stage …)`, `(named …)`, `(in-module …)`.
-  (law "every modelled Stage is realized by an Operation of the same name in the corresponding module"
+   AUTHORED and EXTRACTED operations are both `Operation`s now — provenance (`:extracted`),
+   not tag, distinguishes them. The match is on name AND module: an authored Operation in
+   canvas module C is realized only by an extracted Operation of the same name whose code
+   module corresponds to C (module-corresponds?)."
+  ;; Reads over the vocab-derived rules (check injects them) — domain altitude:
+  ;; `(Operation …)`, `(named …)`, `(in-module …)`; `:val/extracted` splits the two sides.
+  (law "every authored operation is realized by an extracted operation of the same name in the corresponding module"
     :scope :global
     :offenders '[?s]
-    :where '[(Operation ?o)
-             (Stage ?s) (named ?s ?n) (in-module ?s ?cmn)
-             (not (Operation ?o2) (named ?o2 ?n) (in-module ?o2 ?kmn)
-                  [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]))
+    :where '[(Operation ?x) [?x :val/extracted true]                  ; guard: some code is extracted
+             (Operation ?s) (not [?s :val/extracted true])            ; an authored operation
+             (named ?s ?n) (in-module ?s ?cmn)
+             (not-join [?n ?cmn]
+               (Operation ?o) [?o :val/extracted true]
+               (named ?o ?n) (in-module ?o ?kmn)
+               [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]))
 
-(defn unrealized-stages
-  "The modelled Stages in `db` with no same-named extracted Operation, as a set of
+(defn drifted-operations
+  "The AUTHORED operations in `db` with no same-named extracted operation, as a set of
    names. Empty ⇔ the model is fully realized in code. The focusable surface of the
    correspondence concern; reads the single source of truth (the registered law)."
   [db]
@@ -64,18 +66,18 @@
          (map #(:entity/name (d/entity db %)))
          set)))
 
-(defn unrealized-operations
-  "The DUAL of unrealized-stages — extracted Operations in `db` with no modelling Stage
-   of the same name in a corresponding module, as a set of names: code not covered by
-   the model. A query, not a law — unmodelled code is a coverage signal, not a violation
-   (you don't model every function)."
+(defn uncovered-operations
+  "The DUAL of drifted-operations — EXTRACTED operations in `db` with no authored operation
+   of the same name in a corresponding module, as a set of names: code not covered by the
+   model. A query, not a law — unmodelled code is a coverage signal, not a violation (you
+   don't model every function)."
   [db]
   (->> (d/q '[:find ?on
-              :where [?o :structure/of :Operation] [?o :entity/name ?on]
+              :where [?o :structure/of :Operation] [?o :val/extracted true] [?o :entity/name ?on]
                      [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o]
                      [?km :entity/name ?kmn]
                      (not-join [?on ?kmn]
-                       [?s :structure/of :Stage] [?s :entity/name ?on]
+                       [?s :structure/of :Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
                        [?cr :rel/kind :child] [?cr :rel/from ?cm] [?cr :rel/to ?s]
                        [?cm :entity/name ?cmn]
                        [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]

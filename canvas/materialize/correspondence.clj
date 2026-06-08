@@ -34,7 +34,7 @@
    Authored from here (the seam), never on the domain — this node holds both endpoints,
    so the Faculty stays pure (it never names what realizes it)."
   (slot :realizes (one Faculty))     ; the domain concept being realized
-  (slot :realizer (many Module)))    ; the subsystem view(s) that realize it
+  (slot :realizer (many Any)))       ; the realizing view(s) — code Subsystems and/or model Modules
 
 ;; the realization mapping — lifted out of the structural perspective, inverted so the
 ;; correspondence (not the domain) owns it

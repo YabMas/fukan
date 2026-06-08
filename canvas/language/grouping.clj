@@ -10,7 +10,7 @@
 
 (defstructure Module
   "A named grouping of model instances — the unit a subsystem view occupies. `:child`
-   is a heterogeneous container (the `Any` wildcard) so a module groups Stages, Kinds,
+   is a heterogeneous container (the `Any` wildcard) so a module groups Operations, Kinds,
    Concepts, Faculties — whatever its members are. `in-module` resolves over these
    `:child` relations (no privileged `:Module` tag in the kernel — a module is ordinary vocab)."
   (slot :child (many Any)))
