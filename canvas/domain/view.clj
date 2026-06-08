@@ -1,4 +1,4 @@
-(ns canvas.essence.view
+(ns canvas.domain.view
   "The fukan-on-fukan model's CROSS-VIEW layer — how the interlocking views map onto
    each other. `view-map` is a relation-COPRODUCT (a `defrelation-coproduct`): the union
    of the cross-view link relations the subsystem models already author —
@@ -13,7 +13,7 @@
 
    It also hosts the MATERIALIZATION FUNCTORIALITY law: an internal dataflow `:feeds`
    between two realized faculties must land as a real connection between their realizing
-   modules — the essence-view's flow, checked against the materialization-view's structure.
+   modules — the flow perspective's dataflow, checked against the materialization structure.
 
    Vocab-only canvas spec (no build-canvas): it declares grammar, ingests no instances."
   (:require [fukan.canvas.core.structure :refer [defrelation-coproduct defstructure]]))
@@ -26,7 +26,7 @@
   "Law-host: the materialization functoriality. An internal dataflow `:feeds` from faculty A
    to B — where BOTH are realized — must materialize: some member of A's realizing module(s)
    relates to some member of B's (in either direction; `:feeds` and the realizing `:through`/
-   `:calls` often point opposite ways). It surfaces drift where the essence claims a dataflow
+   `:calls` often point opposite ways). It surfaces drift where the domain claims a dataflow
    the subsystems don't realize. `:builds-on` (foundation) and `:supplies` (decoupled external
    input) are deliberately excluded — they materialize differently, not as a module link."
   (law "a dataflow feed materializes as a module connection"

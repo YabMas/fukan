@@ -1,6 +1,8 @@
-(ns canvas.essence.overview
-  "Self-spec: fukan's CORE CONCEPTS and how they flow — the top-level view, the
-   frame the subsystem models (kernel, pipeline, canvas_source, …) realize.
+(ns canvas.perspectives.structure.overview
+  "The STRUCTURAL perspective: fukan's core concepts and how they compose — the
+   top-level frame the subsystem models (kernel, pipeline, canvas_source, …) realize.
+   One of the authored views `canvas.domain.view` maps between (its sibling is the
+   flow perspective, `canvas.perspectives.flow.collab`).
 
    The Model is the hub: a unified structure db of a Target codebase, built from
    Structures authored on the Canvas surface; a cross-cutting Lens (focus) and the
@@ -9,7 +11,7 @@
 
    Each Faculty's `realized-by` references the actual subsystem Module vars across the
    model (interlocking views)."
-  (:require [canvas.essence.faculty :refer [Faculty]]
+  (:require [canvas.domain.faculty :refer [Faculty]]
             [canvas.language.grouping :refer [Module]]
             [canvas.materialize.pipeline :as pipeline]
             [canvas.materialize.canvas-source :as canvas-source]
@@ -17,11 +19,11 @@
             [canvas.materialize.kernel :as kernel]
             [canvas.materialize.query-engine :as query-engine]
             [canvas.materialize.target :as target]
-            [canvas.essence.lens-model :as lens]
+            [canvas.domain.lens-model :as lens]
             [canvas.materialize.lens-engine :as lens-engine]
-            [canvas.essence.probe-acts :as probe]
+            [canvas.domain.probe-acts :as probe]
             [canvas.materialize.probe-surface :as probe-surface]
-            [canvas.essence.projection-model :as projection]))
+            [canvas.domain.projection-model :as projection]))
 
 ;; faculties referenced before they are defined (the flow has forward edges)
 (declare Structure Probe Projection Finding Blueprint Instruction)

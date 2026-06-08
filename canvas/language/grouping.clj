@@ -2,8 +2,8 @@
   "Shared modelling vocabulary — the domain-agnostic structural primitives used across
    every layer: `Module` (a named grouping a subsystem view occupies) and `Connected`
    (the facet for a node that participates in the directed graph over its own kind).
-   These are LANGUAGE, not fukan-specific essence: any model groups things and any flow
-   node is connected.
+   These are LANGUAGE, not fukan-specific domain concepts: any model groups things and any
+   flow node is connected.
 
    Vocab-only canvas spec (no build-canvas)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))

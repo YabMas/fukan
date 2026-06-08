@@ -12,7 +12,7 @@
                                                           an Instruction for an implementing LLM.
 
    This is the realization side of the `probe` act perspective
-   (canvas.essence.probe-acts). `probe-integrity` composes the kernel's `check`; `probe-coverage`
+   (canvas.domain.probe-acts). `probe-integrity` composes the kernel's `check`; `probe-coverage`
    / `probe-drift` call the correspondence stages. Modelled faithfully — each fn a Stage.
    The two modules share the `Db` and `ProbeName` Kinds."
   (:require [canvas.language.shape :refer [Kind]]

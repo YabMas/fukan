@@ -10,12 +10,12 @@
             [fukan.canvas.core.structure :as s]
             [fukan.model.pipeline :as pipeline]
             [canvas.language.meta :refer [Concept MetaSlot]]
-            [canvas.essence.faculty :refer [Faculty]]
+            [canvas.domain.faculty :refer [Faculty]]
             [canvas.language.grouping :refer [Module]]
-            [canvas.essence.lens :refer [Lens]]
-            [canvas.essence.probe :refer [Probe Finding]]
-            [canvas.essence.projection :refer [Projection]]
-            [canvas.perspectives.collab :refer [Phase]]))
+            [canvas.domain.lens :refer [Lens]]
+            [canvas.domain.probe :refer [Probe Finding]]
+            [canvas.domain.projection :refer [Projection]]
+            [canvas.perspectives.flow.collab :refer [Phase]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t

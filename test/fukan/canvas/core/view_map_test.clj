@@ -29,7 +29,7 @@
   (slot :via  (one Fac)))
 
 ;; the cross-view link as a relation-coproduct — now a VOCAB-DERIVED relation.
-;; (named `xview` to avoid colliding with the real `view-map` in canvas/essence/view.clj,
+;; (named `xview` to avoid colliding with the real `view-map` in canvas/domain/view.clj,
 ;;  since the structure registry is a single global tag namespace.)
 (s/defrelation-coproduct :xview "test coproduct: the cross-view link relations" :via :realized-by)
 

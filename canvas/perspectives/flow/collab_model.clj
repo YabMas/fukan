@@ -1,13 +1,13 @@
-(ns canvas.perspectives.collab-model
+(ns canvas.perspectives.flow.collab-model
   "Self-spec: fukan's COLLABORATION LOOP — the human⊗AI OODA cycle that gives the
    faculties their purpose. The companion overview to `model/overview`: where the
    overview is the static map of faculties, this is them in motion. Each phase flows
    into the next and (most) exercise a faculty (the overview's Faculty vars), so the
    loop interlocks with the whole faculty map. The human⊗AI drives the loop; the
    faculties are what each phase puts to work."
-  (:require [canvas.perspectives.collab :refer [Phase]]
+  (:require [canvas.perspectives.flow.collab :refer [Phase]]
             [canvas.language.grouping :refer [Module]]
-            [canvas.essence.overview :as overview]))
+            [canvas.perspectives.structure.overview :as overview]))
 
 ;; the loop is a cycle — every phase's :next is defined after it (except Reinspect's)
 (declare Focus Observe Reason Apply Reinspect)

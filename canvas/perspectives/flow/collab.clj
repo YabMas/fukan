@@ -1,6 +1,6 @@
-(ns canvas.perspectives.collab
-  "The fukan-on-fukan model's COLLABORATION-LOOP layer — fukan's PURPOSE view, the
-   companion to the static faculty map. It shows the faculties IN MOTION: the human⊗AI
+(ns canvas.perspectives.flow.collab
+  "The FLOW perspective (collaboration-loop) — fukan's purpose in motion, the dynamic
+   companion to the structural faculty map. It shows the faculties IN MOTION: the human⊗AI
    cycle by which the model is used — intend → focus → observe → reason → apply →
    re-inspect → (drift) → intend. A `Phase` is one step; `:via` is the faculty it
    exercises (some phases are pure human/LLM judgement, with no faculty); `:next` is the

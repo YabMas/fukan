@@ -1,4 +1,4 @@
-(ns canvas.essence.lens
+(ns canvas.domain.lens
   "The fukan-on-fukan model's FOCUS layer. A `Lens` is a focus over the model — which
    slice / aspect / framing it brings into view and weighs as salient. It names WHAT to
    attend to, not what to DO with it, so it is cross-cutting: it composes with any act

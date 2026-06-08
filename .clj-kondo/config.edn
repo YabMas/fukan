@@ -8,11 +8,11 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  canvas.perspectives.collab-model
+  canvas.perspectives.flow.collab-model
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.essence.projection-model
+  canvas.domain.projection-model
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -32,7 +32,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.essence.lens-model
+  canvas.domain.lens-model
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -44,7 +44,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.essence.overview
+  canvas.perspectives.structure.overview
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -52,7 +52,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.essence.probe-acts
+  canvas.domain.probe-acts
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -168,18 +168,18 @@
  {:analyze-call
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
    canvas.language.grouping/Connected hooks.fukan.structure/instance
-   canvas.essence.faculty/Faculty hooks.fukan.structure/instance
+   canvas.domain.faculty/Faculty hooks.fukan.structure/instance
    canvas.language.grouping/Module hooks.fukan.structure/instance
-   canvas.perspectives.collab/Phase hooks.fukan.structure/instance
-   canvas.essence.lens/Lens hooks.fukan.structure/instance
+   canvas.perspectives.flow.collab/Phase hooks.fukan.structure/instance
+   canvas.domain.lens/Lens hooks.fukan.structure/instance
    canvas.language.meta/Concept hooks.fukan.structure/instance
    canvas.language.meta/MetaSlot hooks.fukan.structure/instance
    canvas.language.op/Effect hooks.fukan.structure/instance
    canvas.language.op/Stage hooks.fukan.structure/instance
-   canvas.essence.probe/Finding hooks.fukan.structure/instance
-   canvas.essence.probe/Probe hooks.fukan.structure/instance
-   canvas.essence.projection/Mapping hooks.fukan.structure/instance
-   canvas.essence.projection/Projection hooks.fukan.structure/instance
+   canvas.domain.probe/Finding hooks.fukan.structure/instance
+   canvas.domain.probe/Probe hooks.fukan.structure/instance
+   canvas.domain.projection/Mapping hooks.fukan.structure/instance
+   canvas.domain.projection/Projection hooks.fukan.structure/instance
    canvas.language.shape/Kind hooks.fukan.structure/instance
    canvas.language.shape/Shape hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance

@@ -1,4 +1,4 @@
-(ns canvas.essence.lens-model
+(ns canvas.domain.lens-model
   "Self-spec: fukan's LENSES — the focuses over the model. A lens names WHAT to attend
    to AND carries the datalog selection query that resolves that focus to a genuine
    sub-graph (its `:query` payload, binding `?n`; evaluated by the lens engine
@@ -12,7 +12,7 @@
    does the heavy computation (probe-patterns counts recurrences; correspondence
    computes actual drift). So the queries are honest focuses, not the analyses
    themselves; some overlap (consistency and drift both attend to Stages, differently)."
-  (:require [canvas.essence.lens :refer [Lens]]
+  (:require [canvas.domain.lens :refer [Lens]]
             [canvas.language.grouping :refer [Module]]))
 
 ;; focuses fed to reasoning probes (non-gating findings)

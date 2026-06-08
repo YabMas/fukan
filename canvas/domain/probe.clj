@@ -1,4 +1,4 @@
-(ns canvas.essence.probe
+(ns canvas.domain.probe
   "The fukan-on-fukan model's PROBE layer — one of the two acts on the model. A `Probe`
    READS the model through a `Lens` and yields a `Finding`: it observes / extracts,
    leaving the model unchanged (its complement, a `Projection`, RE-PRESENTS the model as a

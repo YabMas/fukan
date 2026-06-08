@@ -8,7 +8,7 @@
    the kernel's `vocab-rules` bridge (`core.structure/vocab-rules`), which in turn
    calls `core.rules/derive-rules` — a chain lens-engine → kernel → query-engine, not a
    cycle. (The Lens *vocab* — the primitive that CARRIES a query — is the forward-
-   looking view in `canvas.essence.lens-model`; this is the machinery that RUNS it.)
+   looking view in `canvas.domain.lens-model`; this is the machinery that RUNS it.)
 
    Modelled faithfully — each fn a Stage with its shaped I/O + call edges."
   (:require [canvas.language.shape :refer [Kind]]
