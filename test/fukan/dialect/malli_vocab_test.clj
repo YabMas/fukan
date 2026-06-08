@@ -5,8 +5,9 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; SchemaField/SchemaChoice are referred (though only Schema is called
             ;; directly) so clj-kondo resolves their instance-macro hooks.
-            [canvas.dialects.malli :refer [Schema SchemaField SchemaChoice]]
-            ;; Kind — the named type a `ref`/`[X]`/`{}` schema points at via :names.
+            [canvas.dialects.malli :as malli :refer [Schema SchemaField SchemaChoice]]
+            ;; Kind — the named type a `ref`/`[:vector …]`/`[:map …]` schema points
+            ;; at via :names.
             [canvas.materialize.vocab :refer [Kind]]))
 
 ;; A thin holder lets us exercise reader-expansion (Schema has a reader, so
@@ -28,10 +29,10 @@
 (def combo (SchemaHolder "combo" (schema [:or :int :string])))
 (def tup   (SchemaHolder "tup"   (schema [:tuple :int :int :string])))
 
-;; ── fukan's [X] / {} shorthands (Schema as a superset of the old Shape) ──
+;; ── collection / map schemas over a named Kind ──
 (def file-k (Kind "File"))
-(def lst    (SchemaHolder "lst" (schema [file-k])))        ; [X] → vector of ref(File)
-(def rec    (SchemaHolder "rec" (schema {:a [file-k]})))   ; {:a [X]} → map of field a: vector-of-ref(File)
+(def lst    (SchemaHolder "lst" (schema [:vector file-k])))           ; vector of ref(File)
+(def rec    (SchemaHolder "rec" (schema [:map [:a [:vector file-k]]]))) ; map of field a: vector-of-ref(File)
 
 (defn- build []
   (a/assemble-vars [#'port #'email #'tags #'addr #'color #'sock #'ref-k #'combo #'tup
@@ -61,7 +62,7 @@
              (set (d/q '[:find ?re :where [?s :val/kind "string"] [?s :val/regex ?re]] db)))))))
 
 (deftest collection-element-is-a-ref
-  ;; scoped through the `tags` holder so the new [X]-shorthand fixtures (which also
+  ;; scoped through the `tags` holder so the other [:vector …] fixtures (which also
   ;; produce `vector` schemas) don't pollute the assertion.
   (let [db (build)]
     (is (= #{["keyword"]}
@@ -110,8 +111,8 @@
                     db))
           ["Socket"]))))
 
-(deftest list-shorthand-is-a-vector-of-ref
-  ;; fukan's [X] → a `vector` schema whose single :of child is a ref naming File
+(deftest vector-element-is-a-ref
+  ;; [:vector File] → a `vector` schema whose single :of child is a ref naming File
   (let [db (build)]
     (is (= #{["File"]}
            (set (d/q '[:find ?n :where
@@ -122,8 +123,8 @@
                        [?k :entity/name ?n]]
                      db))))))
 
-(deftest map-shorthand-is-a-required-field-map
-  ;; fukan's {:a [X]} → a `map` schema with a required field a: vector-of-ref(File)
+(deftest map-with-a-required-vector-field
+  ;; [:map [:a [:vector File]]] → a `map` schema with a required field a: vector-of-ref(File)
   (let [db (build)]
     (is (= #{["a" false "File"]}
            (set (d/q '[:find ?key ?opt ?n :where
@@ -164,3 +165,10 @@
   ;; the "ref must name a target" law must fire.
   (let [db (a/assemble-vars [#'bad])]
     (is (seq (s/check db)) "ref schema lacking :to is caught by check")))
+
+(deftest non-malli-shorthands-are-rejected
+  ;; The dialect accepts only valid malli structural syntax — the old [X] / {} sugar throws.
+  (testing "a vector with a non-keyword head is not a malli schema"
+    (is (thrown? clojure.lang.ExceptionInfo (malli/read-malli '[File]))))
+  (testing "a map literal is not a malli schema (records are [:map …])"
+    (is (thrown? clojure.lang.ExceptionInfo (malli/read-malli {:a :int})))))

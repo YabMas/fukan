@@ -78,13 +78,13 @@
 (def vocab-rules
   (Operation
     (doc "The datalog rules derived from the live vocabulary, injected into laws/lenses.")
-    -> [Rule]
+    -> [:vector Rule]
     (calls query-engine/derive-rules)))
 (def check
   (Operation
     (doc "Run every structure's laws over the model db; yield the violations.")
     [db StructureDb]
-    -> [Violation]
+    -> [:vector Violation]
     (calls vocab-rules)))
 
 (def core-structure

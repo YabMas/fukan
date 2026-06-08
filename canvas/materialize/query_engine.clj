@@ -20,5 +20,5 @@
   (Operation ^:private rule-sym "A tag → its rule head symbol."
     [kw Keyword] -> Symbol)                                                   ; internal
   (Operation derive-rules "Derive the datalog rules from the live structure defs."
-    [structures [StructureDef]] [scalar? Pred] -> [Rule]
+    [structures [:vector StructureDef]] [scalar? Pred] -> [:vector Rule]
     (calls rule-sym)))                                                        ; the exposed capability

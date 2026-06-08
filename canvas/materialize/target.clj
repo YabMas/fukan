@@ -11,16 +11,16 @@
   (Kind Path)
   (Kind Analysis)
   (Operation ^:private analyze "Run clj-kondo over the paths."
-    [paths [Path]] -> Analysis (performs :io))
+    [paths [:vector Path]] -> Analysis (performs :io))
   (Operation extract "Extract code structures from source paths into the shared StructureDb."
-    [paths [Path]] -> kernel/StructureDb (performs :io)
+    [paths [:vector Path]] -> kernel/StructureDb (performs :io)
     (calls analyze)))
 
 (Subsystem target-correspondence
   "The model↔code correspondence — drift and coverage as queries over the unified graph."
   (Kind OperationName)
   (Operation drifted-operations "Modelled operations with no realizing function (spec→code gaps)."
-    [db kernel/StructureDb] -> [OperationName]
+    [db kernel/StructureDb] -> [:vector OperationName]
     (calls kernel/check))
   (Operation uncovered-operations "Extracted operations with no model (code→spec gaps)."
-    [db kernel/StructureDb] -> [OperationName]))
+    [db kernel/StructureDb] -> [:vector OperationName]))
