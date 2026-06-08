@@ -19,16 +19,16 @@
 
 ;; the shared engine: run :where clauses (binding ?n) WITH the vocab-derived rules
 (def focus-nodes
-  (Operation (in [db kernel/StructureDb]) (in [clauses [Clause]]) (out [Eid])           ; pure (datascript + rules)
+  (Operation [db kernel/StructureDb] [clauses [Clause]] -> [Eid]           ; pure (datascript + rules)
     (calls kernel/vocab-rules)))
 ;; read a stored lens's :val/query, then delegate to focus-nodes
 (def evaluate-lens
-  (Operation (in [db kernel/StructureDb]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
+  (Operation [db kernel/StructureDb] [lens-eid Eid] -> [Eid] (performs :throws)
     (calls focus-nodes)))
 ;; refined focus (lens-within-lens): narrow a focus to members also matching clauses —
 ;; the composable step acts chain over
 (def refine
-  (Operation (in [db kernel/StructureDb]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
+  (Operation [db kernel/StructureDb] [focus [Eid]] [clauses [Clause]] -> [Eid]
     (calls focus-nodes)))
 
 (def core-lens

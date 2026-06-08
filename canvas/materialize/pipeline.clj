@@ -22,8 +22,8 @@
 ;; links (the seams). The source root is the shared `extraction/Path` Kind.
 (def build-model
   (Operation
-    (in [source extraction/Path])
-    (out kernel/StructureDb)
+    [source extraction/Path]
+    -> kernel/StructureDb
     (calls canvas-source/build
            extraction/run-extractor
            canvas-source/union-dbs)))

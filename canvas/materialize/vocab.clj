@@ -56,6 +56,20 @@
   (slot :name (one :String))
   (reader read-effect))
 
+(defn ^:export op-arrow
+  "Operation's authoring sugar (the `(syntax …)` hook): a signature `[in-binding]… -> Out` mixed
+   among the clauses becomes `(in …)`/`(out …)`. Vectors before the `->` are input bindings (each
+   `[name Type]`); the token after `->` is the output shape. Plain clauses (`(doc …)`, `(calls …)`,
+   `(performs …)`) pass through unchanged — as do explicit `(in …)`/`(out …)` clauses (they're seqs),
+   so the arrow and the clause form coexist. Lives here, in the vocab — `->` never touches core."
+  [body]
+  (let [clauses     (filter seq? body)               ; (doc …) (calls …) (performs …) [(in …)/(out …)]
+        sig         (remove seq? body)               ; [in…] -> Out
+        [ins after] (split-with #(not= '-> %) sig)]
+    (concat clauses
+            (map #(list 'in %) ins)
+            (when (= '-> (first after)) [(list 'out (second after))]))))
+
 (defstructure Operation
   "A named unit of computation — the UNIFIED computational unit. An `Operation` is either
    AUTHORED (a self-model's intent: input/output Shapes, Effects, intended calls) or
@@ -63,10 +77,11 @@
    actual calls). A modelled Operation corresponds 1-on-1 (by name + corresponding Subsystem)
    to its extracted twin; the two stay distinct nodes so spec and actual remain checkable.
 
-   (Replaces the old `Stage` and the extractor's private `Operation` — one vocab, owned here,
-   the extractor produces into it by tag. Slots are mostly optional so one grammar fits both
-   the rich authored side and the thin extracted side.)"
+   Authored with an arrow signature: `(Operation (doc …) [in-binding]… -> Out (calls …))` — the
+   `(syntax op-arrow)` hook rewrites it to `:in`/`:out` clauses. (Replaces the old `Stage` and the
+   extractor's private `Operation` — one vocab, owned here, the extractor produces into it by tag.)"
   (includes Connected)
+  (syntax op-arrow)                   ; [in…] -> Out authoring sugar (vocab-owned)
   (slot :in        (many Shape))      ; input shapes
   (slot :out       (optional Shape))  ; output shape (authored ops declare one; extracted may not)
   (slot :performs  (many Effect))     ; side effects

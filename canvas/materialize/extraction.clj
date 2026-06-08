@@ -19,10 +19,10 @@
 
 ;; register the project's extractor (a fn Path → StructureDb) into the slot
 (def register-extractor!
-  (Operation (in [f Extractor]) (out Unit) (performs :state)))
+  (Operation [f Extractor] -> Unit (performs :state)))
 ;; run the registered extractor over a code-root → its structure db
 (def run-extractor
-  (Operation (in [code-root Path]) (out kernel/StructureDb) (performs :state)))
+  (Operation [code-root Path] -> kernel/StructureDb (performs :state)))
 
 (def extraction
   (Subsystem

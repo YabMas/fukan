@@ -11,18 +11,14 @@
             [canvas.materialize.extraction :as extraction]))
 
 (def load-model
-  (Operation
-    (doc "Build (or reload) the held Model from a src path.")
-    (in [src extraction/Path])
-    (out kernel/StructureDb)))
+  (Operation (doc "Build (or reload) the held Model from a src path.")
+    [src extraction/Path] -> kernel/StructureDb))
 (def get-model
-  (Operation
-    (doc "The current held Model, or none.")
-    (out kernel/StructureDb)))
+  (Operation (doc "The current held Model, or none.")
+    -> kernel/StructureDb))
 (def refresh-model
-  (Operation
-    (doc "Rebuild the Model from the last src path.")
-    (out kernel/StructureDb)))
+  (Operation (doc "Rebuild the Model from the last src path.")
+    -> kernel/StructureDb))
 
 (def infra-model
   (Subsystem

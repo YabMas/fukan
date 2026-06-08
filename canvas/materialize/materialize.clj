@@ -24,21 +24,21 @@
 ;; extension point, not modelled as an Operation. The entries compose its renders over a
 ;; focus, parameterized by the PROJECTION (a base, or a contextualization framing one):
 (def materialize-view
-  (Operation (in [db kernel/StructureDb]) (in [lens Lens]) (out Instruction)))  ; lens focus, Blueprint default
+  (Operation [db kernel/StructureDb] [lens Lens] -> Instruction))  ; lens focus, Blueprint default
 ;; the focus-consuming entry — a refined focus (core.lens/refine) renders straight in
 (def materialize-over
-  (Operation (in [db kernel/StructureDb]) (in [projection ProjectionName]) (in [focus [Eid]])
-    (out Instruction)))
+  (Operation [db kernel/StructureDb] [projection ProjectionName] [focus [Eid]]
+    -> Instruction))
 (def materialize-focus
-  (Operation (in [db kernel/StructureDb]) (in [projection ProjectionName]) (in [clauses [Clause]])
-    (out Instruction)                                                                   ; ad-hoc focus
+  (Operation [db kernel/StructureDb] [projection ProjectionName] [clauses [Clause]]
+    -> Instruction                                                                   ; ad-hoc focus
     (calls materialize-over lens-engine/focus-nodes)))
 (def materialize-module
-  (Operation (in [db kernel/StructureDb]) (in [projection ProjectionName]) (in [module ModuleName])
-    (out Instruction)
+  (Operation [db kernel/StructureDb] [projection ProjectionName] [module ModuleName]
+    -> Instruction
     (calls materialize-focus)))
 (def materialize-projection
-  (Operation (in [db kernel/StructureDb]) (in [proj Projection]) (out Instruction)  ; model-driven
+  (Operation [db kernel/StructureDb] [proj Projection] -> Instruction  ; model-driven
     (calls lens-engine/evaluate-lens)))
 
 (def materialize

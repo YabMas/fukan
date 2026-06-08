@@ -215,9 +215,14 @@
    redundant string. Pass a name only to override (e.g. a dotted module name, or a
    var renamed to dodge a collision)."
   [tag args]
-  (let [named? (string? (first args))]
-    (build-instance-form tag (when named? (first args)) false
-                         (if named? (rest args) args))))
+  (let [named?    (string? (first args))
+        name-expr (when named? (first args))
+        body      (if named? (rest args) args)
+        ;; a structure may own instance-level authoring sugar via (syntax f): f rewrites the
+        ;; body before clause-parsing (e.g. Operation's `[in] -> out` → (in …)/(out …)). The
+        ;; transform lives in the vocab; core just invokes it.
+        body      (if-let [syn (:syntax (structure-by-tag tag))] (syn body) body)]
+    (build-instance-form tag name-expr false body)))
 
 (defn value-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance.
@@ -341,9 +346,9 @@
    shape (rejected here; the *law-timeout-ms* guard backstops the rest)."
   [sname docstring & body]
   (doseq [form body]
-    (when-not (and (seq? form) (#{'slot 'law 'reader 'includes 'realized-as} (first form)))
+    (when-not (and (seq? form) (#{'slot 'law 'reader 'syntax 'includes 'realized-as} (first form)))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected (slot ...), (law ...), (reader ...), (includes ...) or (realized-as ...)")
+                           " — expected (slot ...), (law ...), (reader ...), (syntax ...), (includes ...) or (realized-as ...)")
                       {:structure sname :form form}))))
   (let [value? (boolean (:value (meta sname)))
         tag    (keyword (name sname))
@@ -359,6 +364,11 @@
         _      (doseq [law laws] (check-law-recursion! sname law))
         reader-form (some (fn [f] (when (= 'reader (first f)) (second f)))
                           (filter #(= 'reader (first %)) body))
+        ;; an instance-level authoring-syntax fn (the reader's analogue, raised from a single
+        ;; slot's literal to the whole instance arg-tail): applied to the body before clause
+        ;; parsing, so a structure owns its surface sugar (e.g. Operation's `->`) — NOT core.
+        syntax-form (some (fn [f] (when (= 'syntax (first f)) (second f)))
+                          (filter #(= 'syntax (first %)) body))
         includes (->> body (filter #(= 'includes (first %)))
                       (mapcat rest) (mapv (comp keyword name)))
         realized (some (fn [f] (when (= 'realized-as (first f)) (unquote-lit (second f))))
@@ -375,7 +385,9 @@
         sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
                 :includes includes :realized-as realized}]
     `(do
-       (register-structure! ~(if reader-form `(assoc '~sdef :reader ~reader-form) `'~sdef))
+       (register-structure! (cond-> '~sdef
+                              ~reader-form (assoc :reader ~reader-form)
+                              ~syntax-form (assoc :syntax ~syntax-form)))
        ~(cond
           realized nil                                   ; realized concept: no constructor
           value?   `(defmacro ~sname ~docstring [& body#]

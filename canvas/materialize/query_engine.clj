@@ -21,10 +21,10 @@
 (def Rule         (Kind))
 
 (def rule-sym
-  (Operation (in [kw Keyword]) (out Symbol)))                            ; pure: a tag → its rule head symbol
+  (Operation [kw Keyword] -> Symbol))                            ; pure: a tag → its rule head symbol
 (def derive-rules
-  (Operation (in [structures [StructureDef]]) (in [scalar? Pred])    ; pure
-    (out [Rule])
+  (Operation [structures [StructureDef]] [scalar? Pred]    ; pure
+    -> [Rule]
     (calls rule-sym)))
 
 (def core-rules

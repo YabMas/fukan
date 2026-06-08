@@ -25,24 +25,24 @@
 (def Finding    (Kind))
 (def FindingMap (Kind))
 
-(def probe-patterns    (Operation (in [target-db kernel/StructureDb]) (out Finding)))   ; pure (datascript): recurring structures
-(def probe-survey      (Operation (in [target-db kernel/StructureDb]) (out Finding)))   ; counts by structure kind
-(def probe-consistency (Operation (in [target-db kernel/StructureDb]) (out Finding)))   ; Operation-name ambiguity across modules
-(def probe-tar-pit     (Operation (in [target-db kernel/StructureDb]) (out Finding)))   ; top nodes by relation degree
+(def probe-patterns    (Operation [target-db kernel/StructureDb] -> Finding))   ; pure (datascript): recurring structures
+(def probe-survey      (Operation [target-db kernel/StructureDb] -> Finding))   ; counts by structure kind
+(def probe-consistency (Operation [target-db kernel/StructureDb] -> Finding))   ; Operation-name ambiguity across modules
+(def probe-tar-pit     (Operation [target-db kernel/StructureDb] -> Finding))   ; top nodes by relation degree
 (def probe-integrity
-  (Operation (in [target-db kernel/StructureDb]) (out Finding)                            ; the integrity inspect: composes check
+  (Operation [target-db kernel/StructureDb] -> Finding                            ; the integrity inspect: composes check
     (calls kernel/check)))
 (def probe-coverage
-  (Operation (in [target-db kernel/StructureDb]) (out Finding)                             ; code→spec gaps
+  (Operation [target-db kernel/StructureDb] -> Finding                             ; code→spec gaps
     (calls target/uncovered-operations)))
 (def probe-drift
-  (Operation (in [target-db kernel/StructureDb]) (out Finding)                                ; spec→code gaps
+  (Operation [target-db kernel/StructureDb] -> Finding                                ; spec→code gaps
     (calls target/drifted-operations)))
 (def run
-  (Operation (in [target-db kernel/StructureDb]) (in [probe-name ProbeName]) (out Finding) (performs :throws)
+  (Operation [target-db kernel/StructureDb] [probe-name ProbeName] -> Finding (performs :throws)
     (calls probe-patterns probe-integrity)))                                            ; dispatch to a registered leaf
 (def run-all
-  (Operation (in [target-db kernel/StructureDb]) (out FindingMap)                                 ; run every implemented leaf
+  (Operation [target-db kernel/StructureDb] -> FindingMap                                 ; run every implemented leaf
     (calls probe-patterns probe-integrity)))
 
 (def probes
@@ -59,11 +59,11 @@
 (def ProbeArtifact  (Kind))
 
 (def probe-capability
-  (Operation (in [db kernel/StructureDb]) (in [probe-name ProbeName]) (out CapabilityName) (performs :throws)))
-(def observations-contract (Operation (out ContractForm)))
-(def instruction (Operation (in [db kernel/StructureDb]) (in [probe-name ProbeName]) (out Instruction)))
+  (Operation [db kernel/StructureDb] [probe-name ProbeName] -> CapabilityName (performs :throws)))
+(def observations-contract (Operation -> ContractForm))
+(def instruction (Operation [db kernel/StructureDb] [probe-name ProbeName] -> Instruction))
 (def project-probe
-  (Operation (in [db kernel/StructureDb]) (in [probe-name ProbeName]) (out ProbeArtifact) (performs :throws)
+  (Operation [db kernel/StructureDb] [probe-name ProbeName] -> ProbeArtifact (performs :throws)
     (calls probe-capability observations-contract instruction)))
 
 (def probe-code

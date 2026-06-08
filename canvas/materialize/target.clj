@@ -23,9 +23,9 @@
 
 ;; the Clojure extractor — source paths → code structures merged into the shared
 ;; StructureDb (owned by core.structure — referenced, not redeclared)
-(def analyze (Operation (in [paths [Path]]) (out Analysis) (performs :io)))   ; clj-kondo run!
+(def analyze (Operation [paths [Path]] -> Analysis (performs :io)))   ; clj-kondo run!
 (def extract
-  (Operation (in [paths [Path]]) (out kernel/StructureDb) (performs :io)      ; reads source (no eval)
+  (Operation [paths [Path]] -> kernel/StructureDb (performs :io)      ; reads source (no eval)
     (calls analyze)))
 
 (def target-clojure
@@ -38,10 +38,10 @@
 (def OperationName (Kind))
 
 (def drifted-operations
-  (Operation (in [db kernel/StructureDb]) (out [OperationName])      ; spec→code gaps (via the law)
+  (Operation [db kernel/StructureDb] -> [OperationName]      ; spec→code gaps (via the law)
     (calls kernel/check)))
 (def uncovered-operations
-  (Operation (in [db kernel/StructureDb]) (out [OperationName])))    ; code→spec gaps (a query)
+  (Operation [db kernel/StructureDb] -> [OperationName]))    ; code→spec gaps (a query)
 
 (def target-correspondence
   (Subsystem
