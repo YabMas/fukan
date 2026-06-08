@@ -1,25 +1,20 @@
 (ns canvas.materialize.infra
   "Canvas spec for fukan's infra.model subsystem (the model lifecycle), modelled with the
-   materialize code vocab (`canvas.materialize.vocab`). It exposes the model-lifecycle API
-   (load/get/refresh); the model it produces is the kernel's shared `StructureDb` (the domain
-   `Model` faculty's data realization) and the source path is the shared `extraction/Path` —
-   both referenced, not redeclared.
+   materialize code vocab. It exposes the model-lifecycle API (load/get/refresh); the model it
+   produces is the kernel's shared `StructureDb` (the domain `Model` faculty's data realization)
+   and the source path is the shared `extraction/Path` — both referenced, not redeclared.
 
-   Instances are top-level `def`s; the global assembler ingests them (no `build-canvas`)."
+   Authored as one nested `Subsystem` form: the operations live inside it (no separate `def`s),
+   each interned as a var by the def-emitting macro so cross-refs stay var-refs."
   (:require [canvas.materialize.vocab :refer [Operation Subsystem]]
             [canvas.materialize.kernel :as kernel]
             [canvas.materialize.extraction :as extraction]))
 
-(def load-model
-  (Operation (doc "Build (or reload) the held Model from a src path.")
-    [src extraction/Path] -> kernel/StructureDb))
-(def get-model
-  (Operation (doc "The current held Model, or none.")
-    -> kernel/StructureDb))
-(def refresh-model
-  (Operation (doc "Rebuild the Model from the last src path.")
-    -> kernel/StructureDb))
-
-(def infra-model
-  (Subsystem
-    (exposes load-model get-model refresh-model)))   ; the model-lifecycle API
+(Subsystem infra-model
+  "The model lifecycle — load / get / refresh the held Model from a source path."
+  (Operation load-model    "Build (or reload) the held Model from a src path."
+    [src extraction/Path] -> kernel/StructureDb)
+  (Operation get-model     "The current held Model, or none."
+    [] -> kernel/StructureDb)
+  (Operation refresh-model "Rebuild the Model from the last src path."
+    [] -> kernel/StructureDb))

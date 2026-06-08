@@ -64,10 +64,10 @@
    so the arrow and the clause form coexist. Lives here, in the vocab — `->` never touches core."
   [body]
   (let [clauses     (filter seq? body)               ; (doc …) (calls …) (performs …) [(in …)/(out …)]
-        sig         (remove seq? body)               ; [in…] -> Out
+        sig         (remove seq? body)               ; [in…] -> Out  (an empty [] = no inputs)
         [ins after] (split-with #(not= '-> %) sig)]
     (concat clauses
-            (map #(list 'in %) ins)
+            (map #(list 'in %) (filter seq ins))     ; non-empty input vectors → :in ([] = none)
             (when (= '-> (first after)) [(list 'out (second after))]))))
 
 (defstructure Operation

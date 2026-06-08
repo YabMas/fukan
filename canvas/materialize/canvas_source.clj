@@ -28,18 +28,18 @@
 (def file->ns-symbol
   (Operation [rel-path Str] -> NsSymbol                     ; pure
     (calls file->ns-segment)))
-(def canvas-root-dirs (Operation -> [File] (performs :io)))     ; classpath + fs
+(def canvas-root-dirs (Operation [] -> [File] (performs :io)))     ; classpath + fs
 (def discover-canvas-files-in
   (Operation [root File]
     -> [{:root File :rel-path Str}] (performs :io)))                           ; file-seq
 (def discover-canvas-namespaces
-  (Operation -> [NsSymbol] (performs :io :stderr)
+  (Operation [] -> [NsSymbol] (performs :io :stderr)
     (calls canvas-root-dirs discover-canvas-files-in file->ns-symbol)))
 (def require-canvas-namespace
   (Operation [ns-sym NsSymbol] -> Unit
     (performs :require :throws)))                                                 ; require + throw on load failure
 (def canvas-namespaces
-  (Operation -> [NsSymbol]
+  (Operation [] -> [NsSymbol]
     (calls discover-canvas-namespaces)))                                          ; pure delegation
 
 ;; union — fold the extractor's code db onto the assembled design db
@@ -52,7 +52,7 @@
 
 ;; build — discover + require + assemble → the model
 (def build
-  (Operation -> kernel/StructureDb (performs :io :stderr :require)
+  (Operation [] -> kernel/StructureDb (performs :io :stderr :require)
     (calls discover-canvas-namespaces require-canvas-namespace)))
 
 (def canvas-source

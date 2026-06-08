@@ -14,21 +14,11 @@
    call edges."
   (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]))
 
-(def Keyword      (Kind))
-(def Symbol       (Kind))
-(def StructureDef (Kind))
-(def Pred         (Kind))
-(def Rule         (Kind))
-
-(def rule-sym
-  (Operation [kw Keyword] -> Symbol))                            ; pure: a tag → its rule head symbol
-(def derive-rules
-  (Operation [structures [StructureDef]] [scalar? Pred]    ; pure
-    -> [Rule]
-    (calls rule-sym)))
-
-(def core-rules
-  (Subsystem
-    (exposes derive-rules)                         ; the rule-derivation capability
-    (owns Keyword Symbol StructureDef Pred Rule)
-    (child rule-sym)))
+(Subsystem core-rules
+  "Derive datalog rules from the live vocabulary so laws/lenses read at domain altitude."
+  (Kind Keyword) (Kind Symbol) (Kind StructureDef) (Kind Pred) (Kind Rule)   ; owned data-shapes
+  (Operation ^:private rule-sym "A tag → its rule head symbol."
+    [kw Keyword] -> Symbol)                                                   ; internal
+  (Operation derive-rules "Derive the datalog rules from the live structure defs."
+    [structures [StructureDef]] [scalar? Pred] -> [Rule]
+    (calls rule-sym)))                                                        ; the exposed capability

@@ -230,6 +230,53 @@
   [tag body]
   (build-instance-form tag nil true body))
 
+;; ── nesting: a container instance lifts nested named instances to sibling defs ──
+;; `(Subsystem infra-model "doc" (Operation load-model …) …)` is a TOP-LEVEL def-emitting form:
+;; the leading symbol is the name AND the var; nested `(Tag sym …)` instances become sibling
+;; `def`s (so cross-refs stay VAR-refs) and route by target-type into the container's slots.
+
+(defn- nested-instance?
+  "A body form `(Tag sym …)` where Tag is a registered structure and sym a symbol — a nested
+   named instance to lift (vs a slot/law clause, or an inline ^:value form)."
+  [f]
+  (and (seq? f) (symbol? (first f)) (>= (count f) 2) (symbol? (second f))
+       (structure-by-tag (keyword (name (first f))))))
+
+(defn- route-slot
+  "Which slot a nested instance of `kid-tag` routes to in `sdef`: the slot whose target IS that
+   tag (the role slot — an Operation → :exposes, a Kind → :owns), unless `private?`, then the
+   `Any`-targeting fallback (the internal :child slot)."
+  [sdef kid-tag private?]
+  (or (when-not private?
+        (some #(when (= (:target %) kid-tag) (:rel %)) (:slots sdef)))
+      (some #(when (= (:target %) :Any) (:rel %)) (:slots sdef))))
+
+(declare expand-instance)
+
+(defn expand-instance
+  "Def-emitting + nesting expansion of `(sym \"doc\"? body…)` for structure `tag`. Returns
+   {:defs [forms] :sym :tag}: nested named instances are lifted to sibling `def`s (cross-refs stay
+   var-refs) and routed by target-type into the container's slots; this instance's `def` is last.
+   The leading symbol is the name AND the var; a bare string after it is the doc."
+  [tag args]
+  (let [sym   (first args)
+        more  (rest args)
+        doc   (when (string? (first more)) (first more))
+        body  (if doc (rest more) more)
+        sdef  (structure-by-tag tag)
+        body  (if-let [syn (:syntax sdef)] (syn body) body)
+        nests (filter nested-instance? body)
+        cls   (remove nested-instance? body)
+        kids  (mapv (fn [nf] (assoc (expand-instance (keyword (name (first nf))) (rest nf))
+                                    :private? (boolean (:private (meta (second nf)))))) nests)
+        routed (->> kids
+                    (group-by #(route-slot sdef (:tag %) (:private? %)))
+                    (map (fn [[rel ks]] (cons (symbol (name rel)) (map :sym ks)))))
+        clauses (concat (when doc [(list 'doc doc)]) cls routed)
+        value   (build-instance-form tag (name sym) false clauses)]
+    {:defs (concat (mapcat :defs kids) [(list 'def sym value)])
+     :sym sym :tag tag}))
+
 (defn value-content-key
   "A deterministic, purely structural identity for a ^:value InstanceValue.
    Returns a pr-str over [tag-name scalars-map rel-key-seq] where each rel entry
@@ -393,7 +440,11 @@
           value?   `(defmacro ~sname ~docstring [& body#]
                       (fukan.canvas.core.structure/value-form ~tag body#))
           :else    `(defmacro ~sname ~docstring [& args#]
-                      (fukan.canvas.core.structure/instance-form ~tag args#))))))
+                      (if (symbol? (first args#))
+                        ;; def-emitting + nesting: `(Tag sym …)` interns the var, lifts nested
+                        (cons 'do (:defs (fukan.canvas.core.structure/expand-instance ~tag args#)))
+                        ;; value form: `(def x (Tag …))` / `(Tag "name" …)`
+                        (fukan.canvas.core.structure/instance-form ~tag args#)))))))
 
 (defmacro defrelation-coproduct
   "Declare a relation as the COPRODUCT (union) of existing relation kinds:

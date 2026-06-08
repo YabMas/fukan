@@ -60,7 +60,7 @@
 
 (def probe-capability
   (Operation [db kernel/StructureDb] [probe-name ProbeName] -> CapabilityName (performs :throws)))
-(def observations-contract (Operation -> ContractForm))
+(def observations-contract (Operation [] -> ContractForm))
 (def instruction (Operation [db kernel/StructureDb] [probe-name ProbeName] -> Instruction))
 (def project-probe
   (Operation [db kernel/StructureDb] [probe-name ProbeName] -> ProbeArtifact (performs :throws)
