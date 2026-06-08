@@ -76,6 +76,9 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  canvas.materialize.vocab
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   demos.access-control.access-control-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -201,7 +204,6 @@
    canvas.dialects.malli/Schema hooks.fukan.structure/instance
    canvas.dialects.malli/SchemaField hooks.fukan.structure/instance
    canvas.dialects.malli/SchemaChoice hooks.fukan.structure/instance
-   canvas.materialize.vocab/Shape hooks.fukan.structure/instance
    canvas.materialize.vocab/Subsystem hooks.fukan.structure/instance
    canvas.domain.probe/Finding hooks.fukan.structure/instance
    canvas.domain.probe/Probe hooks.fukan.structure/instance

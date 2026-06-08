@@ -57,11 +57,11 @@
   (ffirst (d/q '[:find ?e :in $ ?k ?n :where [?e :structure/of ?k] [?e :entity/name ?n]] db kind n)))
 
 (deftest render-dispatches-per-projection-and-kind-and-composes-references
-  (testing "render [Blueprint :Operation] composes its :Shape renders (via dispatch) into the signature"
+  (testing "render [Blueprint :Operation] composes its :Schema renders (via dispatch) into the signature"
     (let [db   (pipeline/build-model nil)
           text (m/render db "Blueprint" (by-name db "extract"))]
       (is (str/includes? text "Implement `extract` in module `target-clojure`"))
-      (is (str/includes? text "paths: [Path]") "the :in Shape rendered via render :Shape (list → [Kind])")
+      (is (str/includes? text "paths: [Path]") "the :in Schema rendered via render :Schema (vector → [Kind])")
       (is (str/includes? text "→ StructureDb"))
       (is (str/includes? text "Effects: io"))
       (is (str/includes? text "Calls: analyze")))))

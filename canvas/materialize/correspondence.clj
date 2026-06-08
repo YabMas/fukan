@@ -118,7 +118,7 @@
                (or-join [?op ?sh]
                  (and [?o :rel/from ?op] [?o :rel/kind :out] [?o :rel/to ?sh])
                  (and [?i :rel/from ?op] [?i :rel/kind :in]  [?i :rel/to ?sh]))
-               [?ty :rel/from ?sh] [?ty :rel/kind :type] [?ty :rel/to ?k])]))
+               [?ty :rel/from ?sh] [?ty :rel/kind :names] [?ty :rel/to ?k])]))
 
 (def correspondence
   (Module (child r-model r-structure r-target r-lens r-probe r-projection

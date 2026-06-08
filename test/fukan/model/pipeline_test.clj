@@ -120,11 +120,11 @@
                   db))
           "core.structure is its sole owner")
       (is (= 1 (count (d/q '[:find ?s
-                             :where [?s :structure/of :Shape] [?s :val/kind "type"]
-                                    [?r :rel/from ?s] [?r :rel/kind :type] [?r :rel/to ?k]
+                             :where [?s :structure/of :Schema] [?s :val/kind "ref"]
+                                    [?r :rel/from ?s] [?r :rel/kind :names] [?r :rel/to ?k]
                                     [?k :entity/name "StructureDb"]]
                            db)))
-          "the type-shape naming it is one value-identified node, reused across every subsystem"))))
+          "the ref-schema naming it is one value-identified node, reused across every subsystem"))))
 
 (deftest faculties-link-to-their-code-data-forms
   (testing "designed faculties have real, followable links to the Kinds they're realized as, and

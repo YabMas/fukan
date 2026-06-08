@@ -75,20 +75,27 @@
 (defmethod render-base :default [db _ eid]
   (:entity/name (d/entity db eid)))
 
-;; shared structural shape rendering (target-agnostic): type leaf → its Kind (recurses
-;; to the base's :Kind/:default), list → [child], record → {label: child}.
-(defn- shape-str [db base eid]
+;; shared structural schema rendering (target-agnostic): ref → its named Kind
+;; (recurses to the base's :Kind/:default), vector/set/sequential → [child],
+;; map → {key: child}; other kinds (scalars/enum) → the kind name. NOTE tuple/or/and
+;; fall through to the bare combinator name and LOSE their children here — signature-only,
+;; not round-trippable (use the dialect's `render` for a faithful form).
+(defn- schema-str [db base eid]
   (let [e (d/entity db eid)]
     (case (:val/kind e)
-      "type"   (render-base db base (rel-target db eid :type))
-      "list"   (str "[" (render-base db base (rel-target db eid :of)) "]")
-      "record" (str "{" (str/join ", " (map (fn [[lbl to]] (str lbl ": " (render-base db base to)))
-                                             (sort-by first (labelled-targets db eid :of)))) "}")
-      (str "<" (:val/kind e) ">"))))
+      "ref"  (render-base db base (rel-target db eid :names))
+      ("vector" "set" "sequential") (str "[" (render-base db base (rel-target db eid :of)) "]")
+      "map"  (str "{" (str/join ", "
+                       (for [feid (map first (d/q '[:find ?f :in $ ?m :where
+                                                    [?r :rel/from ?m] [?r :rel/kind :field] [?r :rel/to ?f]]
+                                                  db eid))
+                             :let [f (d/entity db feid)]]
+                         (str (:val/key f) ": " (render-base db base (rel-target db feid :schema))))) "}")
+      (str (:val/kind e)))))
 
 ;; ── base: Blueprint — the model projected to implementation specs ────────────
 
-(defmethod render-base ["Blueprint" :Shape] [db b eid] (shape-str db b eid))
+(defmethod render-base ["Blueprint" :Schema] [db b eid] (schema-str db b eid))
 
 (defmethod render-base ["Blueprint" :Operation] [db b eid]
   (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)
@@ -105,7 +112,7 @@
 
 ;; ── base: Docs — the model projected to reference documentation ──────────────
 
-(defmethod render-base ["Docs" :Shape] [db b eid] (shape-str db b eid))
+(defmethod render-base ["Docs" :Schema] [db b eid] (schema-str db b eid))
 
 (defmethod render-base ["Docs" :Operation] [db b eid]
   (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)]

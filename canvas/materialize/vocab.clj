@@ -6,41 +6,13 @@
    describe code.)
 
    Vocab-only canvas spec (no build-canvas)."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]))
+  (:require [fukan.canvas.core.structure :refer [defstructure]]
+            [canvas.dialects.malli :refer [Schema]]))
 
 ;; ── data types ───────────────────────────────────────────────────────────────
 
 (defstructure Kind
-  "A named atomic type — a leaf in a Shape (e.g. Db, NsSymbol, File).")
-
-(defn ^:export read-shape
-  "Expand a data-LITERAL shape into Shape construction clauses — one level; nested
-   literals are re-expanded by the interpreter:
-     Foo        (symbol)        → a \"type\" leaf naming the Kind Foo
-     [X]        (1-elem vector) → a \"list\" of shape X
-     {:f X, …}  (map)           → a \"record\" with fields f: X, …"
-  [data]
-  (cond
-    (symbol? data) [(list 'kind "type") (list 'type data)]
-    (vector? data) [(list 'kind "list") (list 'of (first data))]
-    (map?    data) (into [(list 'kind "record")]
-                         (map (fn [[k v]] (list 'of [(symbol (name k)) v])) data))
-    :else (throw (ex-info (str "not a shape literal: " (pr-str data)) {:data data}))))
-
-(defstructure ^:value Shape
-  "A structural type-shape, value-identified. `:kind` is the combinator — \"type\"
-   (a leaf naming a Kind), \"list\" (a homogeneous sequence of its child shape), or
-   \"record\" (labelled child shapes); `:of` are child shapes (recursive); `:type`
-   names the referenced Kind for a \"type\" leaf. Author as data: `Db`, `[Db]`,
-   `{:entity-maps [EntityMap] :ref-txs [RefTx]}`."
-  (slot :kind (one :String))
-  (slot :of   (many Shape))
-  (slot :type (optional Kind))
-  (reader read-shape)
-  (law "a \"type\" shape must name a Kind"
-    :offenders '[?s]
-    :where '[[?s :val/kind "type"]
-             (not-join [?s] [?r :rel/from ?s] [?r :rel/kind :type])]))
+  "A named atomic type — a leaf in a Schema (e.g. Db, NsSymbol, File).")
 
 ;; ── computation ──────────────────────────────────────────────────────────────
 
@@ -82,8 +54,8 @@
    extractor's private `Operation` — one vocab, owned here, the extractor produces into it by tag.)"
   (includes Connected)
   (syntax op-arrow)                   ; [in…] -> Out authoring sugar (vocab-owned)
-  (slot :in        (many Shape))      ; input shapes
-  (slot :out       (optional Shape))  ; output shape (authored ops declare one; extracted may not)
+  (slot :in        (many Schema))     ; input schemas
+  (slot :out       (optional Schema)) ; output schema (authored ops declare one; extracted may not)
   (slot :performs  (many Effect))     ; side effects
   (slot :calls     (many Operation))  ; downstream operations it invokes
   (slot :private   (optional :Bool))  ; public/internal — the module's surface (from extraction)
