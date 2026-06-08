@@ -64,7 +64,7 @@
       ;; infra is now modelled with the fukan-on-fukan grammar (Operation/Kind), not
       ;; the (evicted) base Function/Type vocab; subset since other specs add more
       (is (set/subset? #{"load-model" "get-model" "refresh-model"} (names-of db :Operation)))
-      (is (set/subset? #{"StructureDb" "Src"} (names-of db :Kind)))
+      (is (set/subset? #{"StructureDb" "Path"} (names-of db :Kind)))
       (is (empty? (s/check db))
           "the whole self-model satisfies every structure's laws"))))
 

@@ -16,15 +16,13 @@
             [canvas.materialize.canvas-source :as canvas-source]
             [canvas.materialize.extraction :as extraction]))
 
-(def SrcRoot     (Kind))
-
-;; build-model : SrcRoot -> StructureDb ; ingests the design (canvas-source/build)
-;; and, given a code-root, folds the registered project extractor's output
-;; (extraction/run-extractor) onto the same graph via union-dbs. All collaborators
-;; are cross-module links (the seams).
+;; build-model : Path -> StructureDb ; ingests the design (canvas-source/build) and,
+;; given a code-root, folds the registered project extractor's output (extraction/
+;; run-extractor) onto the same graph via union-dbs. All collaborators are cross-module
+;; links (the seams). The source root is the shared `extraction/Path` Kind.
 (def build-model
   (Operation
-    (in [source SrcRoot])
+    (in [source extraction/Path])
     (out kernel/StructureDb)
     (calls canvas-source/build
            extraction/run-extractor
@@ -32,5 +30,4 @@
 
 (def model-pipeline
   (Subsystem "model.pipeline"
-    (exposes build-model)                          ; the build entry point
-    (owns SrcRoot)))
+    (exposes build-model)))                        ; the build entry point

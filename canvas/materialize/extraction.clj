@@ -11,7 +11,10 @@
             [canvas.materialize.kernel :as kernel]))
 
 (def Extractor   (Kind))
-(def Path        (Kind))
+(def Path
+  (Kind (doc "A filesystem path to the source ROOT — the code root a project's extractor reads.
+              The single source-root Kind: `build-model` and `load-model` adopt it (the same
+              value flows in from the CLI → build-model → run-extractor).")))
 (def Unit        (Kind))
 
 ;; register the project's extractor (a fn Path → StructureDb) into the slot
