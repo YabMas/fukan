@@ -62,4 +62,6 @@
               fukan.canvas.projection.probe-code-test
               fukan.canvas.projection.probes-test
               fukan.model.materialize-test
-              fukan.model.pipeline-test}}}}
+              fukan.model.pipeline-test
+              canvas.dialects.malli
+              fukan.dialect.malli-vocab-test}}}}

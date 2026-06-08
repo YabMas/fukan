@@ -159,6 +159,11 @@
   fukan.model.pipeline-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.dialects.malli
+  {:linters {:unused-public-var {:level :off}}}
+  fukan.dialect.malli-vocab-test
+  {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}}
 
  :linters
@@ -190,6 +195,9 @@
    canvas.materialize.vocab/Effect hooks.fukan.structure/instance
    canvas.materialize.vocab/Operation hooks.fukan.structure/instance
    canvas.materialize.vocab/Kind hooks.fukan.structure/instance
+   canvas.dialects.malli/Schema hooks.fukan.structure/instance
+   canvas.dialects.malli/SchemaField hooks.fukan.structure/instance
+   canvas.dialects.malli/SchemaChoice hooks.fukan.structure/instance
    canvas.materialize.vocab/Shape hooks.fukan.structure/instance
    canvas.materialize.vocab/Subsystem hooks.fukan.structure/instance
    canvas.domain.probe/Finding hooks.fukan.structure/instance
@@ -267,4 +275,5 @@
    fukan.canvas.core.value-authoring-test/Shp hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Sym hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/WA hooks.fukan.structure/instance
-   fukan.canvas.core.value-authoring-test/WB hooks.fukan.structure/instance}}}
+   fukan.canvas.core.value-authoring-test/WB hooks.fukan.structure/instance
+   fukan.dialect.malli-vocab-test/SchemaHolder hooks.fukan.structure/instance}}}
