@@ -15,6 +15,7 @@
             [canvas.domain.lens :refer [Lens]]
             [canvas.domain.probe :refer [Probe Finding]]
             [canvas.domain.projection :refer [Projection]]
+            [canvas.materialize.correspondence :refer [FacultyRealization]]
             [canvas.perspectives.flow.collab :refer [Phase]]))
 
 (defn- names-of [db tag]
@@ -36,8 +37,9 @@
 ;; a model-reading faculty with no realizing module
 (def mr-some-module (Module "some-module"))           ; a module to claim realization against
 (def mr-Model    (Faculty "Model"))
-(def mr-Realized (Faculty "Realized" (reads mr-Model) (realized-by mr-some-module)))  ; reads + claims realization → ok
-(def mr-Bare     (Faculty "Bare" (reads mr-Model)))                                   ; reads, no realization → caught
+(def mr-Realized (Faculty "Realized" (reads mr-Model)))  ; reads + a Realization names it → ok
+(def mr-Bare     (Faculty "Bare" (reads mr-Model)))      ; reads, no realization → caught
+(def mr-real     (FacultyRealization (realizes mr-Realized) (realizer mr-some-module)))
 
 ;; a finding yielded by no probe
 (def of2-l      (Lens "l" (focus "things")))
@@ -170,36 +172,38 @@
       (is (contains? (set (map :law (s/check db))) "no isolated node")))))
 
 (deftest model-reading-faculty-without-realization-is-caught
-  (testing "a faculty that reads the Model but names no realizing module trips the realized-by law"
-    (let [db (a/assemble-vars [#'mr-Model #'mr-some-module #'mr-Realized #'mr-Bare])
+  (testing "a faculty that reads the Model but has no Realization trips the completeness law"
+    (let [db (a/assemble-vars [#'mr-Model #'mr-some-module #'mr-Realized #'mr-Bare #'mr-real])
           flagged (->> (s/check db)
-                       (filter #(= "a model-reading faculty is realized by a module" (:law %)))
+                       (filter #(= "a model-reading faculty has a realization" (:law %)))
                        (mapcat :offenders) (map first) set)
           eid (fn [n] (ffirst (d/q '[:find ?f :in $ ?n :where [?f :entity/name ?n]] db n)))]
       (is (contains? flagged (eid "Bare"))
-          "a model-reading faculty with no realized-by is flagged")
+          "a model-reading faculty with no Realization is flagged")
       (is (not (contains? flagged (eid "Realized")))
-          "a model-reading faculty that claims realization is not flagged"))))
+          "a model-reading faculty named by a Realization is not flagged"))))
 
-(deftest the-self-model-satisfies-the-realized-by-law
-  (testing "every model-reading faculty in the real overview is backed by a realizing module"
+(deftest the-self-model-satisfies-the-realization-completeness-law
+  (testing "every model-reading faculty in the real overview is backed by a Realization"
     (let [db (pipeline/build-model nil)]
       (is (not (contains? (set (map :law (s/check db)))
-                          "a model-reading faculty is realized by a module"))
-          "Lens/Probe/Projection/Agent each name a realizing module"))))
+                          "a model-reading faculty has a realization"))
+          "Lens/Probe/Projection each have a realizing Realization"))))
 
 (deftest cross-module-ref-resolves
-  (testing "overview's Structure faculty is realized-by → the core.structure module node"
+  (testing "the Structure faculty is realized by → the core.structure module, via a Realization"
     (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
                       :where [?f :structure/of :Faculty] [?f :entity/name "Structure"]
-                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
+                             [?rz :structure/of :FacultyRealization]
+                             [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
+                             [?b :rel/from ?rz] [?b :rel/kind :realizer] [?b :rel/to ?m]
                              [?m :structure/of :Module] [?m :entity/name "core.structure"]]
                     db))
-          "the cross-ref (an ordinary var ref) resolved to the core.structure :Module node")
+          "the cross-refs (ordinary var refs) resolved through the Realization node")
       (is (every? #(some? (:rel/to (d/entity db (first %))))
-                  (d/q '[:find ?r :where [?r :rel/kind :realized-by]] db))
-          "every realized-by relation has a resolved target — no dangling refs"))))
+                  (d/q '[:find ?r :where [?r :rel/kind :realizer]] db))
+          "every realizer relation has a resolved target — no dangling refs"))))
 
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
@@ -230,20 +234,18 @@
           "drift is an inspect — a probe whose finding gates"))))
 
 (deftest overview-lens-and-probe-faculties-interlock-with-their-views
-  (testing "the top-level Lens and Probe faculties are realized-by their modules (cross-ref interlock)"
-    (let [db (pipeline/build-model nil)]
-      (is (seq (d/q '[:find ?m
-                      :where [?f :structure/of :Faculty] [?f :entity/name "Lens"]
-                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
-                             [?m :structure/of :Module] [?m :entity/name "lens"]]
-                    db))
-          "the Lens faculty links to the lens view")
-      (is (seq (d/q '[:find ?m
-                      :where [?f :structure/of :Faculty] [?f :entity/name "Probe"]
-                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
-                             [?m :structure/of :Module] [?m :entity/name "probe"]]
-                    db))
-          "the Probe faculty links to the probe view"))))
+  (testing "the Lens and Probe faculties are realized by their modules (via Realization nodes)"
+    (let [db (pipeline/build-model nil)
+          realizer-of (fn [fac-name mod-name]
+                        (seq (d/q '[:find ?m :in $ ?fn ?mn
+                                    :where [?f :structure/of :Faculty] [?f :entity/name ?fn]
+                                           [?rz :structure/of :FacultyRealization]
+                                           [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
+                                           [?b :rel/from ?rz] [?b :rel/kind :realizer] [?b :rel/to ?m]
+                                           [?m :structure/of :Module] [?m :entity/name ?mn]]
+                                  db fac-name mod-name)))]
+      (is (realizer-of "Lens" "lens") "the Lens faculty links to the lens view")
+      (is (realizer-of "Probe" "probe") "the Probe faculty links to the probe view"))))
 
 (deftest orphan-finding-is-caught
   (testing "a finding yielded by no probe trips the probe law"
@@ -273,10 +275,12 @@
           "the Blueprint projection maps a function → a defn")
       (is (seq (d/q '[:find ?m
                       :where [?f :structure/of :Faculty] [?f :entity/name "Projection"]
-                             [?r :rel/from ?f] [?r :rel/kind :realized-by] [?r :rel/to ?m]
+                             [?rz :structure/of :FacultyRealization]
+                             [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
+                             [?b :rel/from ?rz] [?b :rel/kind :realizer] [?b :rel/to ?m]
                              [?m :structure/of :Module] [?m :entity/name "projection"]]
                     db))
-          "the Projection faculty interlocks with the projection view"))))
+          "the Projection faculty is realized by the projection view (via a Realization)"))))
 
 (deftest a-lens-is-reused-across-acts
   (testing "the payoff: ONE drift lens feeds BOTH the drift inspect-probe AND the drift-close projection"

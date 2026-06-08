@@ -26,6 +26,7 @@
               ;; scan (and cross-model var refs inside dropped defstructure clause
               ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
               canvas.materialize.canvas-source
+              canvas.materialize.correspondence
               canvas.perspectives.flow.collab-model
               canvas.materialize.extraction
               canvas.materialize.infra

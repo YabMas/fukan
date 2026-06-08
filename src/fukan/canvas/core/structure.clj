@@ -393,7 +393,7 @@
    relation slots present somewhere in the loaded vocab — else the union rule references an
    undefined rule.
 
-     (defrelation-coproduct :view-map \"cross-view mapping\" :via :realized-by :contextualizes)"
+     (defrelation-coproduct :view-map \"cross-view mapping\" :via :contextualizes)"
   [rtag docstring & members]
   (let [tag        (keyword (name rtag))
         member-kws (mapv (comp keyword name) members)]

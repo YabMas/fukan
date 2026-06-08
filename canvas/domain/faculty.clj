@@ -9,26 +9,19 @@
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
 (defstructure Faculty
-  "A core concept or capability of fukan. THREE kinds of
-   contribution edge — distinguished because they MATERIALIZE differently:
-     :feeds     — internal dataflow (a capability produces into another). The
-                  materialization functoriality (canvas.domain.view) checks it lands in code.
-     :builds-on — foundation: this faculty is built upon another (Model builds-on the
-                  Structure primitive). A rests-on relation, not a runtime connection.
-     :supplies  — external input through a DECOUPLED seam (Canvas authors specs in; Target
-                  is extracted via the vocab-blind plug-point). Intentionally not statically
-                  connected, so the materialization law rightly does not apply.
-   `:reads` is what it operates on."
+  "A core concept or capability of fukan, related to other faculties by THREE kinds of
+   contribution edge:
+     :feeds     — internal dataflow: a capability produces into another (Lens feeds Probe).
+     :builds-on — foundation: this faculty rests on another (Model builds-on Structure).
+     :supplies  — external input through a decoupled seam (Canvas supplies the Model).
+   `:reads` is what it operates on.
+
+   The domain stays pure — a Faculty names only other faculties, never what realizes it in
+   code. That model↔code mapping (and the law that a `:feeds` must land as a module link)
+   is the correspondence concern, in `canvas.materialize.correspondence`."
   (includes Connected)
-  (slot :doc   (optional :String))
-  (slot :feeds       (many Faculty))   ; internal dataflow — materialization-checked
-  (slot :builds-on   (many Faculty))   ; foundation — built upon
-  (slot :supplies    (many Faculty))   ; external input through a decoupled seam
-  (slot :reads       (many Faculty))   ; operates on / consumes
-  ;; cross-VIEW link: the subsystem views (modules) that realize this concept
-  (slot :realized-by (many Module))
-  (law "a model-reading faculty is realized by a module"
-    :offenders '[?f]
-    :where '[[?model :entity/name "Model"] [?model :structure/of :Faculty]
-             [?rd :rel/from ?f] [?rd :rel/kind :reads] [?rd :rel/to ?model]
-             (not [?rb :rel/from ?f] [?rb :rel/kind :realized-by])]))
+  (slot :doc       (optional :String))
+  (slot :feeds     (many Faculty))   ; internal dataflow
+  (slot :builds-on (many Faculty))   ; foundation — built upon
+  (slot :supplies  (many Faculty))   ; external input through a decoupled seam
+  (slot :reads     (many Faculty)))  ; operates on / consumes
