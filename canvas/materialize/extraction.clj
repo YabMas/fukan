@@ -22,5 +22,6 @@
   (Operation (in [code-root Path]) (out StructureDb) (performs :state)))
 
 (def extraction
-  (Subsystem (child Extractor Path StructureDb Unit
-                              register-extractor! run-extractor)))
+  (Subsystem
+    (exposes register-extractor! run-extractor)    ; the extraction plug-point API
+    (child Extractor Path StructureDb Unit)))

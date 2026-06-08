@@ -43,6 +43,6 @@
 
 (def materialize
   (Subsystem
-    (child StructureDb Lens Instruction Projection ProjectionName ModuleName Clause Eid
-           materialize-view materialize-over materialize-focus materialize-module
-           materialize-projection)))
+    (exposes materialize-view materialize-over materialize-focus materialize-module
+             materialize-projection)               ; the materialize API
+    (child StructureDb Lens Instruction Projection ProjectionName ModuleName Clause Eid)))

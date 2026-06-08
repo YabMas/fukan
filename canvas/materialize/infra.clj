@@ -25,4 +25,6 @@
     (out Model)))
 
 (def infra-model
-  (Subsystem "infra.model" (child Src Model load-model get-model refresh-model)))
+  (Subsystem "infra.model"
+    (exposes load-model get-model refresh-model)   ; the model-lifecycle API
+    (child Src Model)))

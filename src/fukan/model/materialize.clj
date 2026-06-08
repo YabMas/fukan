@@ -42,8 +42,10 @@
        sort vec))
 
 (defn- owning-module [db eid]
+  ;; membership is :child (generic) or, for a Subsystem, :exposes / :owns
   (ffirst (d/q '[:find ?mn :in $ ?e
-                 :where [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?e]
+                 :where [?r :rel/from ?m] [?r :rel/to ?e] [?r :rel/kind ?k]
+                        [(contains? #{:child :exposes :owns} ?k)]
                         [?m :entity/name ?mn]]
                db eid)))
 

@@ -78,31 +78,31 @@
       (is (= ["build-model"]
              (d/q '[:find [?n ...]
                     :where [?m :entity/name "model.pipeline"]
-                           [?cr :rel/kind :child] [?cr :rel/from ?m] [?cr :rel/to ?c]
+                           [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
                            [?c :structure/of :Operation] [?c :entity/name ?n]]
                   db))
-          "model.pipeline declares exactly one stage — no stale duplicate ingest")
+          "model.pipeline exposes exactly one operation — no stale duplicate ingest")
       ;; the seams: build-model's cross-module :calls resolve to the canvas-source
       ;; ingest/union stages and to the target extractor (design + code unified)
       (is (= #{"build" "union-dbs"}
              (set (d/q '[:find [?bn ...]
                          :where [?mp :entity/name "model.pipeline"]
-                                [?cm :rel/kind :child] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
+                                [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
                                 [?bm :entity/name "build-model"]
                                 [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?b]
                                 [?cs :entity/name "canvas-source"]
-                                [?cc :rel/kind :child] [?cc :rel/from ?cs] [?cc :rel/to ?b]
+                                [?cc :rel/kind :exposes] [?cc :rel/from ?cs] [?cc :rel/to ?b]
                                 [?b :entity/name ?bn]]
                        db)))
-          "build-model calls canvas-source's build + union-dbs")
+          "build-model calls canvas-source's build + union-dbs (its exposed API)")
       (is (= ["run-extractor"]
              (d/q '[:find [?en ...]
                     :where [?mp :entity/name "model.pipeline"]
-                           [?cm :rel/kind :child] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
+                           [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
                            [?bm :entity/name "build-model"]
                            [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?e]
                            [?ex :entity/name "extraction"]
-                           [?ec :rel/kind :child] [?ec :rel/from ?ex] [?ec :rel/to ?e]
+                           [?ec :rel/kind :exposes] [?ec :rel/from ?ex] [?ec :rel/to ?e]
                            [?e :entity/name ?en]]
                   db))
           "build-model calls extraction/run-extractor — the design↔code seam, via the plug-point"))))

@@ -48,9 +48,10 @@
 
 (def probes
   (Subsystem
+    (exposes run run-all)                          ; the probe dispatch surface
     (child Db ProbeName Finding FindingMap
            probe-patterns probe-survey probe-consistency probe-tar-pit
-           probe-integrity probe-coverage probe-drift run run-all)))
+           probe-integrity probe-coverage probe-drift)))
 
 ;; probe-code — project a probe's implementation spec from the model
 (def CapabilityName (Kind))
@@ -68,5 +69,6 @@
 
 (def probe-code
   (Subsystem
+    (exposes project-probe)                        ; the probe-spec projector
     (child Db ProbeName CapabilityName ContractForm Instruction ProbeArtifact
-           probe-capability observations-contract instruction project-probe)))
+           probe-capability observations-contract instruction)))

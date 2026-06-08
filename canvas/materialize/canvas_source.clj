@@ -57,7 +57,8 @@
 
 (def canvas-source
   (Subsystem
+    (exposes build union-dbs)                      ; the canvas-source API (pipeline calls these)
     (child Str File NsSymbol Db EntityMap RefTx Eid Unit
            file->ns-segment file->ns-symbol canvas-root-dirs discover-canvas-files-in
            discover-canvas-namespaces require-canvas-namespace canvas-namespaces
-           db->entity-maps union-dbs build)))
+           db->entity-maps)))

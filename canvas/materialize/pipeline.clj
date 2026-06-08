@@ -31,4 +31,6 @@
            canvas-source/union-dbs)))
 
 (def model-pipeline
-  (Subsystem "model.pipeline" (child SrcRoot StructureDb build-model)))
+  (Subsystem "model.pipeline"
+    (exposes build-model)                          ; the build entry point
+    (child SrcRoot StructureDb)))
