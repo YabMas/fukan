@@ -1,7 +1,11 @@
 (ns fukan.target.correspondence-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            ;; loading infra.model is the composition root — it registers fukan's
+            ;; malli dialect AND its Clojure extractor, and offers build/load of the model
+            [fukan.infra.model :as infra-model]
             [fukan.dialect.malli :as malli]
-            [fukan.model.typing :as typing]))
+            [fukan.model.typing :as typing]
+            [fukan.target.correspondence :as corr]))
 
 ;; register the project dialect (malli render + sigs-adhere?) for the `type-adheres?` path
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
@@ -30,3 +34,18 @@
                                       '[:=> [:cat :Path] :StructureDb])))
     (is (false? (typing/type-adheres? '[:=> [:cat :Path] :StructureDb]
                                       '[:=> [:cat :Str] :StructureDb])))))
+
+(deftest annotated-infra-functions-adhere
+  (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/) with the
+            code extracted from src/ on one graph; the three infra functions annotated with
+            :malli/schema adhere to their modelled types, so type-drift EXCLUDES them. (We
+            assert these three specifically rather than global emptiness, which is fragile as
+            more functions get annotated. The false-cases above prove DETECTION fires.)"
+    (let [model   (infra-model/load-model "src")
+          drifted (corr/type-drifted-operations model)]
+      (is (not (contains? drifted "load-model"))
+          (str "load-model's :malli/schema should adhere to its model; drifted: " drifted))
+      (is (not (contains? drifted "get-model"))
+          (str "get-model's :malli/schema should adhere to its model; drifted: " drifted))
+      (is (not (contains? drifted "refresh-model"))
+          (str "refresh-model's :malli/schema should adhere to its model; drifted: " drifted)))))

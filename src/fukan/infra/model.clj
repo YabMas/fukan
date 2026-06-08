@@ -22,7 +22,7 @@
 
 (defonce ^:private state (atom {:model nil :src nil}))
 
-(defn load-model
+(defn ^{:malli/schema [:=> [:cat :Path] :StructureDb]} load-model
   "Build (or reload) the model — the merged structure substrate db — for `src`."
   [src]
   (let [db (pipeline/build-model src)]
@@ -32,14 +32,14 @@
              (count (d/q '[:find ?r :where [?r :rel/kind _]] db)) "relations")
     db))
 
-(defn get-model
+(defn ^{:malli/schema [:=> [:cat] :StructureDb]} get-model
   "The current model (structure substrate db), or nil if not loaded."
   []
   (:model @state))
 
 (defn get-src [] (:src @state))
 
-(defn refresh-model
+(defn ^{:malli/schema [:=> [:cat] :StructureDb]} refresh-model
   "Rebuild the model from the last src path."
   []
   (if-let [src (:src @state)]
