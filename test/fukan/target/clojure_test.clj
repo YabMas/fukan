@@ -19,6 +19,16 @@
       (is (= {"alpha" false "beta" false "delta" true} ops)
           "every defn/defn- becomes an Operation; the def (gamma) is ignored; defn- is private"))))
 
+(deftest lifts-malli-schema-into-sig
+  (testing "an annotated defn's :malli/schema metadata is stamped as the Operation's :val/sig"
+    (let [db  (tc/extract "test/fixtures/target/sample.clj")
+          sig (ffirst (d/q '[:find ?s
+                             :where [?e :structure/of :Operation] [?e :entity/name "alpha"]
+                                    [?e :val/sig ?s]]
+                           db))]
+      (is (= "[:=> [:cat :int] :int]" sig)
+          "alpha's malli/schema metadata is lifted, pr-str'd, onto :val/sig"))))
+
 (deftest operations-are-owned-by-their-subsystem
   (testing "each namespace becomes a Subsystem that owns its Operations (via :child relations)"
     (let [db    (tc/extract "test/fixtures/target/sample.clj")

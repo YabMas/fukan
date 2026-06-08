@@ -59,7 +59,10 @@
   (slot :performs  (many Effect))     ; side effects
   (slot :calls     (many Operation))  ; downstream operations it invokes
   (slot :private   (optional :Bool))  ; public/internal — the module's surface (from extraction)
-  (slot :extracted (optional :Bool))) ; provenance: true ⇒ from code; absent/false ⇒ authored
+  (slot :extracted (optional :Bool))  ; provenance: true ⇒ from code; absent/false ⇒ authored
+  ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
+  ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
+  (slot :sig       (optional :String)))
 
 ;; ── code subsystem (boundary + ownership) ────────────────────────────────────
 

@@ -29,7 +29,7 @@
    definitions. Reads source (and writes clj-kondo's cache); deterministic output."
   [paths]
   (:analysis (kondo/run! {:lint (vec paths)
-                          :config {:output {:analysis true}}})))
+                          :config {:output {:analysis {:var-definitions {:meta true}}}}})))
 
 (defn extract
   "Extract a structure-db of Subsystems (cohesion boundaries) and the Operations they
@@ -47,8 +47,11 @@
      (for [mname module-names
            :let [ops (for [v (ops-by-ns mname)]
                        (s/->InstanceValue :Operation (str (:name v)) nil
-                                          {:val/private (boolean (:private v))
-                                           :val/extracted true} [] false))]]
+                                          (cond-> {:val/private (boolean (:private v))
+                                                   :val/extracted true}
+                                            (:malli/schema (:meta v))
+                                            (assoc :val/sig (pr-str (:malli/schema (:meta v)))))
+                                          [] false))]]
        [(str mname)
         (s/->InstanceValue :Subsystem (str mname) nil {}
                            [{:rk :child :card :many :targets (vec ops)}] false)]))))

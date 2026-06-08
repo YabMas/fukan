@@ -1,6 +1,6 @@
 (ns sample)
 
-(defn alpha [x] x)
+(defn ^{:malli/schema [:=> [:cat :int] :int]} alpha [x] x)
 
 (defn beta [x y] (+ x y))
 
