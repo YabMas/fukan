@@ -330,14 +330,15 @@
     (let [db (a/assemble-vars [#'dp-A #'dp-B #'dp-Dangling])]
       (is (contains? (set (map :law (s/check db))) "the loop closes — every phase is reached")))))
 
-(deftest findings-carry-inline-holds-predicates
-  (testing "Patterns and IntegrityReport carry an inline holds predicate form in the model"
+(deftest findings-carry-realization-holds-predicates
+  (testing "Patterns and IntegrityReport have a FindingCheck carrying an inline holds predicate"
     (let [db (pipeline/build-model nil)
-          pred (fn [nm] (:val/holds-pred
-                          (d/entity db (ffirst (d/q '[:find ?f :in $ ?n
-                                                      :where [?f :entity/name ?n] [?f :structure/of :Finding]]
-                                                    db nm)))))]
-      (is (seq? (pred "Patterns")) "Patterns' holds predicate is a stored form")
+          pred (fn [nm] (ffirst (d/q '[:find ?p :in $ ?n
+                                       :where [?f :entity/name ?n] [?f :structure/of :Finding]
+                                              [?r :rel/kind :realizes] [?r :rel/to ?f]
+                                              [?r :rel/from ?fc] [?fc :val/pred ?p]]
+                                     db nm)))]
+      (is (seq? (pred "Patterns")) "Patterns' holds predicate is a stored form on its FindingCheck")
       (is (= 'fn (first (pred "Patterns"))) "it is a fn form")
       (is (seq? (pred "IntegrityReport")) "IntegrityReport's holds predicate is a stored form")
       (is (empty? (s/check db)) "the whole self-model still satisfies every law"))))

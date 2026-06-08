@@ -13,14 +13,10 @@
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
 (defstructure Lens
-  "A focus over the model — what it brings into view / weighs as salient.
-
-   `:focus` is prose (the human description of the slice). It may carry a companion
-   SELECTION QUERY as its payload: a single datalog `:where` expression (authored as
-   quoted data) binding `?n` as the focused node — the executable form of the focus.
-   `evaluate-lens` runs it (with the vocab-derived rules, so it reads at domain
-   altitude — `(Stage ?n) (in-module ?n \"…\")`) to yield the focus sub-graph.
-   Transitive scope is just recursion in that one query; there is no separate closure
-   knob. Prose-only lenses (no query) remain valid — they simply aren't evaluable."
+  "A focus over the model — what it brings into view / weighs as salient. `:focus` is the
+   prose description of the slice; that's all the domain states. The executable form of the
+   focus (the datalog selection that resolves it to a sub-graph) is realization mechanism —
+   a `LensSelection` in `canvas.materialize.realization`, read by `core.lens/evaluate-lens`.
+   A lens with no LensSelection is prose-only (not evaluable)."
   (slot :doc   (optional :String))
-  (slot :focus (one :String) :payload :query))   ; prose + an optional datalog selection query
+  (slot :focus (one :String)))   ; the prose description of the slice

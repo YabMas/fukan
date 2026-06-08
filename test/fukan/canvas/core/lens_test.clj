@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [canvas.domain.lens :refer [Lens]]
+            [canvas.materialize.realization :refer [LensSelection]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
@@ -29,13 +30,17 @@
 (def w-q     (Widget "q"))
 (def w-other (Grp "other" (child w-q)))
 
-(def lns-in-m    (Lens "in-m"    (focus "widgets in m" '[(Widget ?n) (in-module ?n "m")])))
-(def lns-x-links (Lens "x-links" (focus "what x links to" '[(named ?root "x") (links ?root ?n)])))
+(def lns-in-m    (Lens "in-m"    (focus "widgets in m")))
+(def lns-x-links (Lens "x-links" (focus "what x links to")))
 (def lns-prose   (Lens "prose"   (focus "just words")))
+;; the executable selections that realize them (live in the realization view)
+(def sel-in-m    (LensSelection (realizes lns-in-m)    (selects "widgets in m" '[(Widget ?n) (in-module ?n "m")])))
+(def sel-x-links (LensSelection (realizes lns-x-links) (selects "x's links" '[(named ?root "x") (links ?root ?n)])))
 
 (deftest evaluates-a-lens-selection-query-to-its-focus-node-set
-  (testing "a lens's single datalog query (over the vocab rules) yields the focus nodes"
-    (let [db (a/assemble-vars [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other #'lns-in-m #'lns-x-links])]
+  (testing "a lens's realizing selection query (over the vocab rules) yields the focus nodes"
+    (let [db (a/assemble-vars [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other
+                               #'lns-in-m #'lns-x-links #'sel-in-m #'sel-x-links])]
       (is (= #{"x" "y" "z"} (names db (lens/evaluate-lens db (by-name db "in-m"))))
           "kind + module selection, at domain altitude")
       (is (= #{"y" "z"} (names db (lens/evaluate-lens db (by-name db "x-links"))))

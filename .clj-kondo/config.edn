@@ -24,6 +24,10 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  canvas.materialize.realization
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   canvas.materialize.extraction
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -175,6 +179,9 @@
    canvas.domain.faculty/Faculty hooks.fukan.structure/instance
    canvas.language.grouping/Module hooks.fukan.structure/instance
    canvas.materialize.correspondence/FacultyRealization hooks.fukan.structure/instance
+   canvas.materialize.realization/LensSelection hooks.fukan.structure/instance
+   canvas.materialize.realization/FindingCheck hooks.fukan.structure/instance
+   canvas.materialize.realization/ProbeComposition hooks.fukan.structure/instance
    canvas.perspectives.flow.collab/Phase hooks.fukan.structure/instance
    canvas.domain.lens/Lens hooks.fukan.structure/instance
    canvas.language.meta/Concept hooks.fukan.structure/instance

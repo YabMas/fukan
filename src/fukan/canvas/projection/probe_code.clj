@@ -43,16 +43,24 @@
                db probe-name)))
 
 (defn- finding-holds-pred [db probe-name]
+  ;; the executable holds-predicate lives on the FindingCheck that :realizes the finding
+  ;; (the realization view), not on the domain Finding itself
   (ffirst (d/q '[:find ?p :in $ ?pn
                  :where [?pr :entity/name ?pn] [?pr :structure/of :Probe]
-                        [?r :rel/from ?pr] [?r :rel/kind :yields] [?r :rel/to ?f]
-                        [?f :structure/of :Finding] [?f :val/holds-pred ?p]]
+                        [?y :rel/from ?pr] [?y :rel/kind :yields] [?y :rel/to ?f]
+                        [?f :structure/of :Finding]
+                        [?rz :rel/kind :realizes] [?rz :rel/to ?f]
+                        [?rz :rel/from ?fc] [?fc :val/pred ?p]]
                db probe-name)))
 
 (defn- probe-capability [db probe-name]
+  ;; the kernel capability a probe invokes lives on the ProbeComposition that :realizes
+  ;; the probe (the realization view), not on the domain Probe itself
   (let [results (d/q '[:find ?cn :in $ ?pn
                        :where [?p :entity/name ?pn] [?p :structure/of :Probe]
-                              [?r :rel/from ?p] [?r :rel/kind :calls] [?r :rel/to ?c]
+                              [?rz :rel/kind :realizes] [?rz :rel/to ?p]
+                              [?rz :rel/from ?pc] [?pc :structure/of :ProbeComposition]
+                              [?cr :rel/from ?pc] [?cr :rel/kind :calls] [?cr :rel/to ?c]
                               [?c :structure/of :Stage] [?c :entity/name ?cn]]
                      db probe-name)]
     (when (> (count results) 1)

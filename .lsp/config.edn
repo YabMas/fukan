@@ -27,6 +27,7 @@
               ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
               canvas.materialize.canvas-source
               canvas.materialize.correspondence
+              canvas.materialize.realization
               canvas.perspectives.flow.collab-model
               canvas.materialize.extraction
               canvas.materialize.infra

@@ -18,14 +18,14 @@
    Signal that gates action (the inspect case); a non-gating finding is a View, a
    perspective a human/LLM reasons with.
 
-   A finding may carry a CONTRACT — a `holds` invariant (prose + an optional inline
-   predicate `(fn [result target-db] → ok?)` that the projection surfaces as a runtime
-   check). The projection turns the contract into a runtime check on the finding (see
-   the executable-agent sketch, Resolved #2). The complement of this observation act is
-   a `Projection` (synthesis)."
+   A finding may STATE a CONTRACT — a `:holds` invariant (the human's correctness spec for
+   the probe's output). The executable check of that invariant (a `(fn [result target-db] →
+   ok?)`) is realization mechanism — a `FindingCheck` in `canvas.materialize.realization`,
+   surfaced by the projector as a runtime gate. The complement of this observation act is a
+   `Projection` (synthesis)."
   (slot :doc    (optional :String))
   (slot :gating (one :Bool))       ; gating → a trust Signal (inspect); else a View
-  (slot :holds  (optional :String) :payload :holds-pred) ; prose + an optional inline predicate form
+  (slot :holds  (optional :String)) ; the stated invariant (its executable check lives in the realization view)
   ;; a finding is meaningful only if some probe yields it
   (law "every finding is yielded by some probe"
     :offenders '[?f]
@@ -35,15 +35,13 @@
   "Reads the model through a Lens → a Finding. The model is unchanged (probe observes;
    it does not re-present).
 
-   A probe IS an operation (executably, target-model → finding), so it participates in
-   the SAME `:calls` relation as an op-vocab `Stage`: a probe that builds on a modelled
-   capability (e.g. the kernel's `check`) `:calls` it. There is no separate `composes`
-   relation — \"a probe composes a capability\" and \"a stage calls a stage\" are one act
-   (one operation invokes another), so they share the substrate's `:calls` edge."
+   The domain probe states only what it reads (`:through` a Lens) and produces (`:yields` a
+   Finding). Which kernel capability it invokes when run (e.g. the integrity probe composes
+   the kernel's `check`) is realization mechanism — a `ProbeComposition` in
+   `canvas.materialize.realization`."
   (slot :doc     (optional :String))
   (slot :through (one Lens))       ; the focus it reads through
-  (slot :yields  (one Finding))    ; the observation it produces
-  (slot :calls   (many Stage)))    ; modelled capabilities it invokes (reuses op's :calls)
+  (slot :yields  (one Finding)))   ; the observation it produces
 
 (defstructure Signal
   "A gating Finding — an inspect's trust verdict. Realized: derived, not instantiated."
