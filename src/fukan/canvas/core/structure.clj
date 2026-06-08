@@ -274,7 +274,12 @@
                     (map (fn [[rel ks]] (cons (symbol (name rel)) (map :sym ks)))))
         clauses (concat (when doc [(list 'doc doc)]) cls routed)
         value   (build-instance-form tag (name sym) false clauses)]
-    {:defs (concat (mapcat :defs kids) [(list 'def sym value)])
+    ;; forward-declare the nested syms so they may cross-reference each other (and the parent
+    ;; reference them) in any authoring order — `(var X)` captures the var; its value is read
+    ;; later, at assemble time, once every def has run.
+    {:defs (concat (when (seq kids) [(cons 'declare (map :sym kids))])
+                   (mapcat :defs kids)
+                   [(list 'def sym value)])
      :sym sym :tag tag}))
 
 (defn value-content-key

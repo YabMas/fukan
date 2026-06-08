@@ -1,30 +1,19 @@
 (ns canvas.materialize.extraction
-  "Self-spec: fukan's extraction PLUG-POINT (`fukan.model.extraction`) — the slot
-   where a project registers its one custom code extractor (a fn `Path → StructureDb`).
-   `build-model` runs the registered extractor via `run-extractor` WITHOUT naming
-   it, which keeps the pipeline generic; the project's composition root (infra.model)
-   supplies the extractor with `register-extractor!`.
-
-   Modelled faithfully like canvas-source — each fn an Operation with its shaped I/O.
-   Both stages mutate/read the registry slot (`:state`)."
+  "Self-spec: fukan's extraction PLUG-POINT (`fukan.model.extraction`) — the slot where a project
+   registers its one custom code extractor (a fn `Path → StructureDb`). `build-model` runs it via
+   `run-extractor` WITHOUT naming it (keeps the pipeline generic); the composition root supplies it
+   with `register-extractor!`. Both operations mutate/read the registry slot (`:state`)."
   (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
             [canvas.materialize.kernel :as kernel]))
 
-(def Extractor   (Kind))
-(def Path
-  (Kind (doc "A filesystem path to the source ROOT — the code root a project's extractor reads.
-              The single source-root Kind: `build-model` and `load-model` adopt it (the same
-              value flows in from the CLI → build-model → run-extractor).")))
-(def Unit        (Kind))
-
-;; register the project's extractor (a fn Path → StructureDb) into the slot
-(def register-extractor!
-  (Operation [f Extractor] -> Unit (performs :state)))
-;; run the registered extractor over a code-root → its structure db
-(def run-extractor
-  (Operation [code-root Path] -> kernel/StructureDb (performs :state)))
-
-(def extraction
-  (Subsystem
-    (exposes register-extractor! run-extractor)    ; the extraction plug-point API
-    (owns Extractor Path Unit)))
+(Subsystem extraction
+  "The extraction plug-point — register and run the project's code extractor."
+  (Kind Extractor)
+  (Kind Path "A filesystem path to the source ROOT — the code root a project's extractor reads.
+              The single source-root Kind: `build-model` and `load-model` adopt it (the same value
+              flows in from the CLI → build-model → run-extractor).")
+  (Kind Unit)
+  (Operation register-extractor! "Register the project's extractor (a fn Path → StructureDb)."
+    [f Extractor] -> Unit (performs :state))
+  (Operation run-extractor "Run the registered extractor over a code-root → its structure db."
+    [code-root Path] -> kernel/StructureDb (performs :state)))

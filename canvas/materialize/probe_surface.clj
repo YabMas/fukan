@@ -1,73 +1,46 @@
 (ns canvas.materialize.probe-surface
-  "Self-spec: fukan's PROBE IMPLEMENTATION — the realized probe leaves and their
-   projector. Two namespaces, two modules:
-
-     probes      (fukan.canvas.projection.probes)      — the implemented probe leaves
-                                                          (each a model-db → finding reader)
-                                                          plus the live run/run-all surface.
-     probe-code  (fukan.canvas.projection.probe-code)  — projects a probe's SPEC from the
-                                                          model: a composing probe (it :calls
-                                                          a modelled capability) → a mechanical
-                                                          fn-form + contract; a fresh probe →
-                                                          an Instruction for an implementing LLM.
-
-   This is the realization side of the `probe` act perspective
-   (canvas.domain.probe-acts). `probe-integrity` composes the kernel's `check`; `probe-coverage`
-   / `probe-drift` call the correspondence stages. Modelled faithfully — each fn an Operation.
-   The two modules share the `ProbeName` Kind (and read the kernel's `StructureDb`)."
+  "Self-spec: fukan's PROBE IMPLEMENTATION — the realized probe leaves and their projector.
+   `probes` (`fukan.canvas.projection.probes`) — the implemented probe leaves (each a model-db →
+   finding reader) + the live run/run-all surface. `probe-code` (`fukan.canvas.projection.probe-code`)
+   — projects a probe's SPEC from the model. Realizes the `probe` act perspective. The two read the
+   kernel's shared `StructureDb`."
   (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
             [canvas.materialize.kernel :as kernel]
             [canvas.materialize.target :as target]))
 
-(def ProbeName  (Kind))
-
-;; probes — the implemented leaves + the live runner
-(def Finding    (Kind))
-(def FindingMap (Kind))
-
-(def probe-patterns    (Operation [target-db kernel/StructureDb] -> Finding))   ; pure (datascript): recurring structures
-(def probe-survey      (Operation [target-db kernel/StructureDb] -> Finding))   ; counts by structure kind
-(def probe-consistency (Operation [target-db kernel/StructureDb] -> Finding))   ; Operation-name ambiguity across modules
-(def probe-tar-pit     (Operation [target-db kernel/StructureDb] -> Finding))   ; top nodes by relation degree
-(def probe-integrity
-  (Operation [target-db kernel/StructureDb] -> Finding                            ; the integrity inspect: composes check
-    (calls kernel/check)))
-(def probe-coverage
-  (Operation [target-db kernel/StructureDb] -> Finding                             ; code→spec gaps
-    (calls target/uncovered-operations)))
-(def probe-drift
-  (Operation [target-db kernel/StructureDb] -> Finding                                ; spec→code gaps
-    (calls target/drifted-operations)))
-(def run
-  (Operation [target-db kernel/StructureDb] [probe-name ProbeName] -> Finding (performs :throws)
-    (calls probe-patterns probe-integrity)))                                            ; dispatch to a registered leaf
-(def run-all
-  (Operation [target-db kernel/StructureDb] -> FindingMap                                 ; run every implemented leaf
+(Subsystem probes
+  "The implemented probe leaves + the live run/run-all dispatch surface."
+  (Kind ProbeName) (Kind Finding) (Kind FindingMap)
+  (Operation ^:private probe-patterns "Recurring structures (a View)."
+    [target-db kernel/StructureDb] -> Finding)
+  (Operation ^:private probe-survey "Counts by structure kind (a View)."
+    [target-db kernel/StructureDb] -> Finding)
+  (Operation ^:private probe-consistency "Operation-name ambiguity across modules (a View)."
+    [target-db kernel/StructureDb] -> Finding)
+  (Operation ^:private probe-tar-pit "Complexity hotspots — top nodes by degree (a View)."
+    [target-db kernel/StructureDb] -> Finding)
+  (Operation ^:private probe-integrity "The integrity inspect — composes the kernel's check."
+    [target-db kernel/StructureDb] -> Finding (calls kernel/check))
+  (Operation ^:private probe-coverage "Code→spec gaps (coverage Signal)."
+    [target-db kernel/StructureDb] -> Finding (calls target/uncovered-operations))
+  (Operation ^:private probe-drift "Spec→code gaps (drift Signal)."
+    [target-db kernel/StructureDb] -> Finding (calls target/drifted-operations))
+  (Operation run "Dispatch a named probe over a target db → a finding."
+    [target-db kernel/StructureDb] [probe-name ProbeName] -> Finding (performs :throws)
+    (calls probe-patterns probe-integrity))
+  (Operation run-all "Run every implemented probe leaf → a map of findings."
+    [target-db kernel/StructureDb] -> FindingMap
     (calls probe-patterns probe-integrity)))
 
-(def probes
-  (Subsystem
-    (exposes run run-all)                          ; the probe dispatch surface
-    (owns ProbeName Finding FindingMap)
-    (child probe-patterns probe-survey probe-consistency probe-tar-pit
-           probe-integrity probe-coverage probe-drift)))
-
-;; probe-code — project a probe's implementation spec from the model
-(def CapabilityName (Kind))
-(def ContractForm   (Kind))
-(def Instruction    (Kind))
-(def ProbeArtifact  (Kind))
-
-(def probe-capability
-  (Operation [db kernel/StructureDb] [probe-name ProbeName] -> CapabilityName (performs :throws)))
-(def observations-contract (Operation [] -> ContractForm))
-(def instruction (Operation [db kernel/StructureDb] [probe-name ProbeName] -> Instruction))
-(def project-probe
-  (Operation [db kernel/StructureDb] [probe-name ProbeName] -> ProbeArtifact (performs :throws)
+(Subsystem probe-code
+  "Project a probe's implementation spec from the model. (ProbeName is owned by `probes`.)"
+  (Kind CapabilityName) (Kind ContractForm) (Kind Instruction) (Kind ProbeArtifact)
+  (Operation ^:private probe-capability "The kernel capability a composing probe :calls."
+    [db kernel/StructureDb] [probe-name ProbeName] -> CapabilityName (performs :throws))
+  (Operation ^:private observations-contract "The uniform finding contract form."
+    [] -> ContractForm)
+  (Operation ^:private instruction "A projected Instruction for a fresh probe's leaf."
+    [db kernel/StructureDb] [probe-name ProbeName] -> Instruction)
+  (Operation project-probe "Project a probe's runnable spec (fn-form or Instruction) from the model."
+    [db kernel/StructureDb] [probe-name ProbeName] -> ProbeArtifact (performs :throws)
     (calls probe-capability observations-contract instruction)))
-
-(def probe-code
-  (Subsystem
-    (exposes project-probe)                        ; the probe-spec projector
-    (owns CapabilityName ContractForm Instruction ProbeArtifact)   ; ProbeName is owned by `probes`
-    (child probe-capability observations-contract instruction)))
