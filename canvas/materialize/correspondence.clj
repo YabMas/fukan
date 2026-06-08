@@ -96,7 +96,9 @@
   (slot :concept (one Faculty))
   (slot :form    (one Kind)))
 
-(def model-data-form (DataForm (concept ov/Model) (form kernel/StructureDb)))
+(def model-data-form      (DataForm (concept ov/Model)      (form kernel/StructureDb)))      ; the model IS a structure db
+(def probe-data-form      (DataForm (concept ov/Probe)      (form probe-surface/Finding)))    ; a probe yields a Finding
+(def projection-data-form (DataForm (concept ov/Projection) (form probe-surface/Instruction))) ; a projection renders an Instruction
 
 (defstructure DataFormAdherence
   "Law-host: a designed concept's data form must be present in its realizing CODE — every
@@ -119,4 +121,5 @@
                [?ty :rel/from ?sh] [?ty :rel/kind :type] [?ty :rel/to ?k])]))
 
 (def correspondence
-  (Module (child r-model r-structure r-target r-lens r-probe r-projection model-data-form)))
+  (Module (child r-model r-structure r-target r-lens r-probe r-projection
+                 model-data-form probe-data-form projection-data-form)))

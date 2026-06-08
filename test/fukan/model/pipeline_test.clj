@@ -126,20 +126,20 @@
                            db)))
           "the type-shape naming it is one value-identified node, reused across every subsystem"))))
 
-(deftest model-faculty-links-to-its-code-data-form
-  (testing "the designed Model faculty has a real, followable link to the StructureDb Kind it's
-            realized as, and the adherence law asserts its realizing subsystems traffic in it"
+(deftest faculties-link-to-their-code-data-forms
+  (testing "designed faculties have real, followable links to the Kinds they're realized as, and
+            the adherence law asserts their realizing subsystems traffic in those Kinds"
     (let [db (pipeline/build-model nil)]
-      (is (= #{["Model" "StructureDb"]}
+      (is (= #{["Model" "StructureDb"] ["Probe" "Finding"] ["Projection" "Instruction"]}
              (set (d/q '[:find ?fac ?kind
                          :where [?df :structure/of :DataForm]
                                 [?c :rel/from ?df] [?c :rel/kind :concept] [?c :rel/to ?f] [?f :entity/name ?fac]
                                 [?fm :rel/from ?df] [?fm :rel/kind :form] [?fm :rel/to ?k] [?k :entity/name ?kind]]
                        db)))
-          "Model faculty → StructureDb data form — a queryable edge from concept to code structure")
+          "each faculty → its data-form Kind: a queryable edge from concept to code structure")
       (is (not (contains? (set (map :law (s/check db)))
                           "a subsystem realizing a faculty traffics in the faculty's data form"))
-          "every subsystem realizing the Model faculty produces/consumes StructureDb (structural adherence holds)"))))
+          "every realizing subsystem produces/consumes its faculty's data form (structural adherence holds)"))))
 
 (deftest canvas-source-effects-are-captured-and-value-identified
   (testing "Operation effects are recorded; :io (performed by 4 stages) is one shared node"
