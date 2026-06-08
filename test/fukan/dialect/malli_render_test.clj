@@ -3,14 +3,14 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.model.schema :as schema]
+            [fukan.model.typing :as typing]
             ;; fukan.dialect.malli referred for its render fn (registered per-test below)
             [fukan.dialect.malli :as malli]
             ;; Schema referred so clj-kondo resolves its instance-macro hook
             [canvas.dialects.malli :refer [Schema]]))
 
 (use-fixtures :each
-  (fn [t] (schema/register-schema-dialect! {:render malli/render}) (t)))
+  (fn [t] (typing/register-type-dialect! {:render malli/render}) (t)))
 
 (defstructure RenderHolder
   "Test fixture: carries one Schema so the reader expands native malli literals."
@@ -34,15 +34,15 @@
   (let [d*  (db)
         ;; pick the constrained int specifically — h-or contributes a bare :int
         eid (ffirst (d/q '[:find ?s :where [?s :val/kind "int"] [?s :val/min _]] d*))]
-    (is (= [:int {:min 1 :max 65535}] (schema/render-schema d* eid)))))
+    (is (= [:int {:min 1 :max 65535}] (typing/render-type d* eid)))))
 
 (deftest renders-collection
   (let [d* (db)]
-    (is (= [:vector :keyword] (schema/render-schema d* (root d* "vector"))))))
+    (is (= [:vector :keyword] (typing/render-type d* (root d* "vector"))))))
 
 (deftest renders-map-with-optional
   (let [d*   (db)
-        form (schema/render-schema d* (root d* "map"))]
+        form (typing/render-type d* (root d* "map"))]
     (testing "map renders to a :map head"
       (is (= :map (first form))))
     (testing "fields (an unordered `many` slot) compared as a set"
@@ -50,7 +50,7 @@
 
 (deftest renders-enum
   (let [d*   (db)
-        form (schema/render-schema d* (root d* "enum"))]
+        form (typing/render-type d* (root d* "enum"))]
     (testing "enum renders to an :enum head"
       (is (= :enum (first form))))
     (testing "choices (an unordered `many` slot) compared as a set"
@@ -58,18 +58,18 @@
 
 (deftest scalar-without-constraints-renders-bare
   (let [d* (db)]
-    (is (= :keyword (schema/render-schema d* (root d* "keyword"))))))
+    (is (= :keyword (typing/render-type d* (root d* "keyword"))))))
 
 (deftest renders-ref
   (let [d* (db)]
-    (is (= 'Socket (schema/render-schema d* (root d* "ref"))))))
+    (is (= 'Socket (typing/render-type d* (root d* "ref"))))))
 
 (deftest renders-or
   (let [d* (db)]
-    (is (= [:or :int :string] (schema/render-schema d* (root d* "or"))))))
+    (is (= [:or :int :string] (typing/render-type d* (root d* "or"))))))
 
 (deftest renders-tuple
   ;; :of is ordered and now deterministic — the tuple must round-trip EXACTLY,
   ;; element order preserved (a buggy reader scrambled/collapsed these).
   (let [d* (db)]
-    (is (= [:tuple :string :int :keyword] (schema/render-schema d* (root d* "tuple"))))))
+    (is (= [:tuple :string :int :keyword] (typing/render-type d* (root d* "tuple"))))))
