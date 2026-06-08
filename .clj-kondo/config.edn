@@ -164,6 +164,9 @@
   {:linters {:unused-public-var {:level :off}}}
   fukan.dialect.malli-vocab-test
   {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.dialect.malli-render-test
+  {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}}
 
  :linters
@@ -276,4 +279,5 @@
    fukan.canvas.core.value-authoring-test/Sym hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/WA hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/WB hooks.fukan.structure/instance
-   fukan.dialect.malli-vocab-test/SchemaHolder hooks.fukan.structure/instance}}}
+   fukan.dialect.malli-vocab-test/SchemaHolder hooks.fukan.structure/instance
+   fukan.dialect.malli-render-test/RenderHolder hooks.fukan.structure/instance}}}

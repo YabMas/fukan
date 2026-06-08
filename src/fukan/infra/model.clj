@@ -3,17 +3,22 @@
    (ii)), offering load / refresh / get. `load-model` invokes the build pipeline,
    which ingests the defstructure canvas specs into one structure db.
 
-   This is also fukan-on-itself's composition root for extraction: it registers
+   This is also fukan-on-itself's composition root for its dialects: it registers
    fukan's custom code extractor (the Clojure extractor over fukan's `src/`) at the
-   `fukan.model.extraction` plug-point, so the (generic) pipeline can run it without
-   naming it."
+   `fukan.model.extraction` plug-point and fukan's schema dialect (malli) at the
+   `fukan.model.schema` plug-point, so the (generic) pipeline can use them without
+   naming them."
   (:require [datascript.core :as d]
+            [fukan.dialect.malli :as malli]
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
+            [fukan.model.schema :as schema]
             [fukan.target.clojure :as target]))
 
-;; Register fukan's project extractor — its own Clojure source. One place names it.
+;; Register fukan's project extractor — its own Clojure source.
 (extraction/register-extractor! target/extract)
+;; Register fukan's project schema dialect — malli.
+(schema/register-schema-dialect! {:render malli/render})
 
 (defonce ^:private state (atom {:model nil :src nil}))
 
