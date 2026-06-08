@@ -45,4 +45,4 @@
   (Subsystem
     (exposes materialize-view materialize-over materialize-focus materialize-module
              materialize-projection)               ; the materialize API
-    (child Lens Instruction Projection ProjectionName ModuleName Clause Eid)))
+    (owns Lens Instruction Projection ProjectionName ModuleName Clause Eid)))

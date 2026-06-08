@@ -31,7 +31,8 @@
 (def target-clojure
   (Subsystem "target.clojure"
      (exposes extract)                              ; the extractor entry point
-     (child Path Analysis analyze)))
+     (owns Path Analysis)
+     (child analyze)))
 
 ;; the model↔code correspondence — drift as a query over the unified graph
 (def OperationName (Kind))
@@ -45,4 +46,4 @@
 (def target-correspondence
   (Subsystem "target.correspondence"
     (exposes drifted-operations uncovered-operations)   ; the drift / coverage queries
-    (child OperationName)))
+    (owns OperationName)))

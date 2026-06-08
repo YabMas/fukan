@@ -30,4 +30,5 @@
 (def core-rules
   (Subsystem "core.rules"
     (exposes derive-rules)                         ; the rule-derivation capability
-    (child Keyword Symbol StructureDef Pred Rule rule-sym)))
+    (owns Keyword Symbol StructureDef Pred Rule)
+    (child rule-sym)))

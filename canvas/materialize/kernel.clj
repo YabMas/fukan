@@ -65,7 +65,10 @@
 ;; structure's laws over the db and yields the violations that hold. This is
 ;; the canonical integrity inspect — the capability the agent's integrity probe
 ;; composes, so it lives in the model 1-on-1 with the code.
-(def StructureDb (Kind))
+(def StructureDb
+  (Kind (doc "The unified structure db — the data realization of the domain `Model` faculty
+              (canvas.perspectives.structure.overview): a datascript db of structure instances +
+              their reified relations. Owned here; every subsystem adopts this one Kind.")))
 (def Violation   (Kind))
 (def Rule        (Kind))
 

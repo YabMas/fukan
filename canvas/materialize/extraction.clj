@@ -24,4 +24,4 @@
 (def extraction
   (Subsystem
     (exposes register-extractor! run-extractor)    ; the extraction plug-point API
-    (child Extractor Path Unit)))
+    (owns Extractor Path Unit)))

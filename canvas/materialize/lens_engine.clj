@@ -34,4 +34,4 @@
 (def core-lens
   (Subsystem "core.lens"
      (exposes focus-nodes evaluate-lens refine)     ; the lens-evaluation API
-     (child Clause Eid)))
+     (owns Clause Eid)))

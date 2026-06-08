@@ -48,8 +48,8 @@
 (def probes
   (Subsystem
     (exposes run run-all)                          ; the probe dispatch surface
-    (child ProbeName Finding FindingMap
-           probe-patterns probe-survey probe-consistency probe-tar-pit
+    (owns ProbeName Finding FindingMap)
+    (child probe-patterns probe-survey probe-consistency probe-tar-pit
            probe-integrity probe-coverage probe-drift)))
 
 ;; probe-code — project a probe's implementation spec from the model
@@ -69,5 +69,5 @@
 (def probe-code
   (Subsystem
     (exposes project-probe)                        ; the probe-spec projector
-    (child ProbeName CapabilityName ContractForm Instruction ProbeArtifact
-           probe-capability observations-contract instruction)))
+    (owns CapabilityName ContractForm Instruction ProbeArtifact)   ; ProbeName is owned by `probes`
+    (child probe-capability observations-contract instruction)))

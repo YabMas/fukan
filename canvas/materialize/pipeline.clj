@@ -33,4 +33,4 @@
 (def model-pipeline
   (Subsystem "model.pipeline"
     (exposes build-model)                          ; the build entry point
-    (child SrcRoot)))
+    (owns SrcRoot)))
