@@ -7,11 +7,11 @@
 
    Modelled faithfully like canvas-source — each fn an Operation with its shaped I/O.
    Both stages mutate/read the registry slot (`:state`)."
-  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]))
+  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
+            [canvas.materialize.kernel :as kernel]))
 
 (def Extractor   (Kind))
 (def Path        (Kind))
-(def StructureDb (Kind))
 (def Unit        (Kind))
 
 ;; register the project's extractor (a fn Path → StructureDb) into the slot
@@ -19,9 +19,9 @@
   (Operation (in [f Extractor]) (out Unit) (performs :state)))
 ;; run the registered extractor over a code-root → its structure db
 (def run-extractor
-  (Operation (in [code-root Path]) (out StructureDb) (performs :state)))
+  (Operation (in [code-root Path]) (out kernel/StructureDb) (performs :state)))
 
 (def extraction
   (Subsystem
     (exposes register-extractor! run-extractor)    ; the extraction plug-point API
-    (child Extractor Path StructureDb Unit)))
+    (child Extractor Path Unit)))

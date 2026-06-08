@@ -11,13 +11,13 @@
 
    This is where value-identity pays off in a real fukan subsystem: the same leaf
    shapes recur across the discovery/union pipeline and collapse to one node each —
-   `Db`, `NsSymbol`, `File`, `Str`."
-  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]))
+   `NsSymbol`, `File`, `Str` (the structure db it builds is the kernel's `StructureDb`)."
+  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
+            [canvas.materialize.kernel :as kernel]))
 
 (def Str       (Kind))
 (def File      (Kind))
 (def NsSymbol  (Kind))
-(def Db        (Kind))
 (def EntityMap (Kind))
 (def RefTx     (Kind))
 (def Eid       (Kind))
@@ -44,21 +44,21 @@
 
 ;; union — fold the extractor's code db onto the assembled design db
 (def db->entity-maps
-  (Operation (in [db Db])
+  (Operation (in [db kernel/StructureDb])
     (out {:entity-maps [EntityMap] :ref-txs [RefTx]})))                           ; pure (datascript)
 (def union-dbs
-  (Operation (in [dbs [Db]]) (out Db)                                     ; pure
+  (Operation (in [dbs [kernel/StructureDb]]) (out kernel/StructureDb)                                     ; pure
     (calls db->entity-maps)))
 
 ;; build — discover + require + assemble → the model
 (def build
-  (Operation (out Db) (performs :io :stderr :require)
+  (Operation (out kernel/StructureDb) (performs :io :stderr :require)
     (calls discover-canvas-namespaces require-canvas-namespace)))
 
 (def canvas-source
   (Subsystem
     (exposes build union-dbs)                      ; the canvas-source API (pipeline calls these)
-    (child Str File NsSymbol Db EntityMap RefTx Eid Unit
+    (child Str File NsSymbol EntityMap RefTx Eid Unit
            file->ns-segment file->ns-symbol canvas-root-dirs discover-canvas-files-in
            discover-canvas-namespaces require-canvas-namespace canvas-namespaces
            db->entity-maps)))

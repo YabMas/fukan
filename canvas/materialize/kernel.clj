@@ -87,6 +87,6 @@
 (def core-structure
   (Subsystem "core.structure"
     (exposes check vocab-rules)                    ; the kernel capabilities others compose
+    (owns StructureDb Violation Rule)              ; the data-shapes core.structure decides (others adopt StructureDb)
     (child c-Keyword c-String c-Bool c-Int c-Concept c-Node c-Cardinality
-           c-Relation c-Slot c-Law c-Structure
-           StructureDb Violation Rule)))
+           c-Relation c-Slot c-Law c-Structure)))

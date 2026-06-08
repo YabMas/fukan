@@ -9,9 +9,9 @@
    Modelled faithfully like canvas-source — the public fn as an Operation with shaped I/O.
    `core.lens` lives in `canvas.materialize.lens-engine`."
   (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
+            [canvas.materialize.kernel :as kernel]
             [canvas.materialize.lens-engine :as lens-engine]))
 
-(def StructureDb     (Kind))
 (def Lens            (Kind))
 (def Instruction     (Kind))
 (def Projection      (Kind))
@@ -24,25 +24,25 @@
 ;; extension point, not modelled as an Operation. The entries compose its renders over a
 ;; focus, parameterized by the PROJECTION (a base, or a contextualization framing one):
 (def materialize-view
-  (Operation (in [db StructureDb]) (in [lens Lens]) (out Instruction)))  ; lens focus, Blueprint default
+  (Operation (in [db kernel/StructureDb]) (in [lens Lens]) (out Instruction)))  ; lens focus, Blueprint default
 ;; the focus-consuming entry — a refined focus (core.lens/refine) renders straight in
 (def materialize-over
-  (Operation (in [db StructureDb]) (in [projection ProjectionName]) (in [focus [Eid]])
+  (Operation (in [db kernel/StructureDb]) (in [projection ProjectionName]) (in [focus [Eid]])
     (out Instruction)))
 (def materialize-focus
-  (Operation (in [db StructureDb]) (in [projection ProjectionName]) (in [clauses [Clause]])
+  (Operation (in [db kernel/StructureDb]) (in [projection ProjectionName]) (in [clauses [Clause]])
     (out Instruction)                                                                   ; ad-hoc focus
     (calls materialize-over lens-engine/focus-nodes)))
 (def materialize-module
-  (Operation (in [db StructureDb]) (in [projection ProjectionName]) (in [module ModuleName])
+  (Operation (in [db kernel/StructureDb]) (in [projection ProjectionName]) (in [module ModuleName])
     (out Instruction)
     (calls materialize-focus)))
 (def materialize-projection
-  (Operation (in [db StructureDb]) (in [proj Projection]) (out Instruction)  ; model-driven
+  (Operation (in [db kernel/StructureDb]) (in [proj Projection]) (out Instruction)  ; model-driven
     (calls lens-engine/evaluate-lens)))
 
 (def materialize
   (Subsystem
     (exposes materialize-view materialize-over materialize-focus materialize-module
              materialize-projection)               ; the materialize API
-    (child StructureDb Lens Instruction Projection ProjectionName ModuleName Clause Eid)))
+    (child Lens Instruction Projection ProjectionName ModuleName Clause Eid)))

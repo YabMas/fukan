@@ -20,29 +20,29 @@
 
 (def Path        (Kind))
 (def Analysis    (Kind))
-(def StructureDb (Kind))
 
-;; the Clojure extractor — source paths → code structures merged into a db
+;; the Clojure extractor — source paths → code structures merged into the shared
+;; StructureDb (owned by core.structure — referenced, not redeclared)
 (def analyze (Operation (in [paths [Path]]) (out Analysis) (performs :io)))   ; clj-kondo run!
 (def extract
-  (Operation (in [paths [Path]]) (out StructureDb) (performs :io)             ; reads source (no eval)
+  (Operation (in [paths [Path]]) (out kernel/StructureDb) (performs :io)      ; reads source (no eval)
     (calls analyze)))
 
 (def target-clojure
   (Subsystem "target.clojure"
      (exposes extract)                              ; the extractor entry point
-     (child Path Analysis StructureDb analyze)))
+     (child Path Analysis analyze)))
 
 ;; the model↔code correspondence — drift as a query over the unified graph
 (def OperationName (Kind))
 
 (def drifted-operations
-  (Operation (in [db StructureDb]) (out [OperationName])             ; spec→code gaps (via the law)
+  (Operation (in [db kernel/StructureDb]) (out [OperationName])      ; spec→code gaps (via the law)
     (calls kernel/check)))
 (def uncovered-operations
-  (Operation (in [db StructureDb]) (out [OperationName])))           ; code→spec gaps (a query)
+  (Operation (in [db kernel/StructureDb]) (out [OperationName])))    ; code→spec gaps (a query)
 
 (def target-correspondence
   (Subsystem "target.correspondence"
     (exposes drifted-operations uncovered-operations)   ; the drift / coverage queries
-    (child StructureDb OperationName)))
+    (child OperationName)))

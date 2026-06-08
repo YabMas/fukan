@@ -64,7 +64,7 @@
       ;; infra is now modelled with the fukan-on-fukan grammar (Operation/Kind), not
       ;; the (evicted) base Function/Type vocab; subset since other specs add more
       (is (set/subset? #{"load-model" "get-model" "refresh-model"} (names-of db :Operation)))
-      (is (set/subset? #{"Model" "Src"} (names-of db :Kind)))
+      (is (set/subset? #{"StructureDb" "Src"} (names-of db :Kind)))
       (is (empty? (s/check db))
           "the whole self-model satisfies every structure's laws"))))
 
@@ -107,17 +107,24 @@
                   db))
           "build-model calls extraction/run-extractor — the design↔code seam, via the plug-point"))))
 
-(deftest canvas-source-model-shares-the-db-shape
-  (testing "in the canvas_source self-model, the Db type-shape is one node"
+(deftest the-structuredb-kind-is-one-shared-owned-node
+  (testing "after consolidation the StructureDb Kind is a single node owned by core.structure;
+            subsystems reference it (no per-subsystem Model/Db redeclaration)"
     (let [db (pipeline/build-model nil)]
+      (is (= 1 (count (d/q '[:find ?k :where [?k :structure/of :Kind] [?k :entity/name "StructureDb"]] db)))
+          "exactly one StructureDb Kind node")
+      (is (= ["core.structure"]
+             (d/q '[:find [?mn ...]
+                    :where [?k :entity/name "StructureDb"] [?k :structure/of :Kind]
+                           [?r :rel/kind :owns] [?r :rel/from ?m] [?r :rel/to ?k] [?m :entity/name ?mn]]
+                  db))
+          "core.structure is its sole owner")
       (is (= 1 (count (d/q '[:find ?s
                              :where [?s :structure/of :Shape] [?s :val/kind "type"]
-                                    [?r :rel/from ?s] [?r :rel/kind :type]
-                                    [?r :rel/to ?t] [?t :entity/name "Db"]
-                                    [?m :entity/name "canvas-source"]
-                                    [?cr :rel/kind :child] [?cr :rel/from ?m] [?cr :rel/to ?t]]
+                                    [?r :rel/from ?s] [?r :rel/kind :type] [?r :rel/to ?k]
+                                    [?k :entity/name "StructureDb"]]
                            db)))
-          "Db appears in db->entity-maps in, union-dbs in + out, build out → one node"))))
+          "the type-shape naming it is one value-identified node, reused across every subsystem"))))
 
 (deftest canvas-source-effects-are-captured-and-value-identified
   (testing "Operation effects are recorded; :io (performed by 4 stages) is one shared node"

@@ -12,11 +12,11 @@
    doesn't redeclare them — it LINKS across to each realizing stage with
    `(calls …)`. Those cross-module calls are the seams."
   (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
+            [canvas.materialize.kernel :as kernel]
             [canvas.materialize.canvas-source :as canvas-source]
             [canvas.materialize.extraction :as extraction]))
 
 (def SrcRoot     (Kind))
-(def StructureDb (Kind))
 
 ;; build-model : SrcRoot -> StructureDb ; ingests the design (canvas-source/build)
 ;; and, given a code-root, folds the registered project extractor's output
@@ -25,7 +25,7 @@
 (def build-model
   (Operation
     (in [source SrcRoot])
-    (out StructureDb)
+    (out kernel/StructureDb)
     (calls canvas-source/build
            extraction/run-extractor
            canvas-source/union-dbs)))
@@ -33,4 +33,4 @@
 (def model-pipeline
   (Subsystem "model.pipeline"
     (exposes build-model)                          ; the build entry point
-    (child SrcRoot StructureDb)))
+    (child SrcRoot)))

@@ -14,25 +14,24 @@
   (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
             [canvas.materialize.kernel :as kernel]))
 
-(def Db     (Kind))
 (def Clause (Kind))
 (def Eid    (Kind))
 
 ;; the shared engine: run :where clauses (binding ?n) WITH the vocab-derived rules
 (def focus-nodes
-  (Operation (in [db Db]) (in [clauses [Clause]]) (out [Eid])           ; pure (datascript + rules)
+  (Operation (in [db kernel/StructureDb]) (in [clauses [Clause]]) (out [Eid])           ; pure (datascript + rules)
     (calls kernel/vocab-rules)))
 ;; read a stored lens's :val/query, then delegate to focus-nodes
 (def evaluate-lens
-  (Operation (in [db Db]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
+  (Operation (in [db kernel/StructureDb]) (in [lens-eid Eid]) (out [Eid]) (performs :throws)
     (calls focus-nodes)))
 ;; refined focus (lens-within-lens): narrow a focus to members also matching clauses —
 ;; the composable step acts chain over
 (def refine
-  (Operation (in [db Db]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
+  (Operation (in [db kernel/StructureDb]) (in [focus [Eid]]) (in [clauses [Clause]]) (out [Eid])
     (calls focus-nodes)))
 
 (def core-lens
   (Subsystem "core.lens"
      (exposes focus-nodes evaluate-lens refine)     ; the lens-evaluation API
-     (child Db Clause Eid)))
+     (child Clause Eid)))
