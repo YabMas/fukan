@@ -86,5 +86,37 @@
              [?rd :rel/from ?f] [?rd :rel/kind :reads] [?rd :rel/to ?model]
              (not-join [?f] [?rz :structure/of :FacultyRealization] (realizes ?rz ?f))]))
 
+;; ── a concept's DATA FORM — the real, followable link from a designed Faculty to the
+;;    code data-type that embodies it (distinct from FacultyRealization, which names the
+;;    subsystems that BUILD it). The `Model` faculty's data form is the kernel's StructureDb.
+(defstructure DataForm
+  "A domain `Faculty` realized as a code data-type — the concept's data FORM. A real queryable
+   edge (Faculty → Kind), so you can follow from the designed concept to the code structure that
+   embodies it, and ASSERT that the subsystems realizing the concept actually traffic in it."
+  (slot :concept (one Faculty))
+  (slot :form    (one Kind)))
+
+(def model-data-form (DataForm (concept ov/Model) (form kernel/StructureDb)))
+
+(defstructure DataFormAdherence
+  "Law-host: a designed concept's data form must be present in its realizing CODE — every
+   `Subsystem` realizing a faculty that has a data form must own an `Operation` whose input or
+   output IS that data-form Kind. The structural bridge: the code that realizes the `Model`
+   concept must actually produce/consume the `StructureDb` it is. (Modelled Operations are in
+   turn asserted against real functions by the op-layer correspondence law, so this reaches the
+   code transitively.)"
+  (law "a subsystem realizing a faculty traffics in the faculty's data form"
+    :scope :global
+    :offenders '[?fac ?sub]
+    :where '[[?df :structure/of :DataForm] (concept ?df ?fac) (form ?df ?k)
+             [?fr :structure/of :FacultyRealization] (realizes ?fr ?fac) (realizer ?fr ?sub)
+             [?sub :structure/of :Subsystem] (named ?sub ?sn)
+             (not-join [?sub ?sn ?k]
+               [?op :structure/of :Operation] (in-module ?op ?sn)
+               (or-join [?op ?sh]
+                 (and [?o :rel/from ?op] [?o :rel/kind :out] [?o :rel/to ?sh])
+                 (and [?i :rel/from ?op] [?i :rel/kind :in]  [?i :rel/to ?sh]))
+               [?ty :rel/from ?sh] [?ty :rel/kind :type] [?ty :rel/to ?k])]))
+
 (def correspondence
-  (Module (child r-model r-structure r-target r-lens r-probe r-projection)))
+  (Module (child r-model r-structure r-target r-lens r-probe r-projection model-data-form)))

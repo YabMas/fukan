@@ -179,6 +179,7 @@
    canvas.domain.faculty/Faculty hooks.fukan.structure/instance
    canvas.language.grouping/Module hooks.fukan.structure/instance
    canvas.materialize.correspondence/FacultyRealization hooks.fukan.structure/instance
+   canvas.materialize.correspondence/DataForm hooks.fukan.structure/instance
    canvas.materialize.realization/LensSelection hooks.fukan.structure/instance
    canvas.materialize.realization/FindingCheck hooks.fukan.structure/instance
    canvas.materialize.realization/ProbeComposition hooks.fukan.structure/instance
