@@ -26,7 +26,7 @@
 
 (def mvl-target     (Lens "target" (focus "the target extractor's stages")))
 (def mvl-target-sel (LensSelection (realizes mvl-target)
-                      (selects "target stages" '[(Operation ?n) (in-module ?n "target.clojure")])))
+                      (selects "target stages" '[(Operation ?n) (in-module ?n "target-clojure")])))
 (def ef-none     (Lens "none" (focus "nothing")))
 (def ef-none-sel (LensSelection (realizes ef-none)
                    (selects "nothing" '[(Operation ?n) (in-module ?n "no-such-module")])))
@@ -36,7 +36,7 @@
 ;; var-ref resolves; union with the model then dedups it.
 (def acb-stages     (Lens "stages" (focus "x")))
 (def acb-stages-sel (LensSelection (realizes acb-stages)
-                      (selects "target stages" '[(Operation ?n) (in-module ?n "target.clojure")])))
+                      (selects "target stages" '[(Operation ?n) (in-module ?n "target-clojure")])))
 (def acb-Refactor (Projection "Refactor"
                     (through acb-stages)
                     (contextualizes cm-proj/Blueprint)
@@ -45,7 +45,7 @@
 ;; an ad-hoc Docs projection whose name selects the Docs renderers
 (def mprd-stages     (Lens "stages" (focus "target stages")))
 (def mprd-stages-sel (LensSelection (realizes mprd-stages)
-                       (selects "target stages" '[(Operation ?n) (in-module ?n "target.clojure")])))
+                       (selects "target stages" '[(Operation ?n) (in-module ?n "target-clojure")])))
 (def mprd-Docs   (Projection "Docs"
                    (through mprd-stages)
                    (maps (Mapping (from "a function") (to "a doc section")))))
@@ -60,7 +60,7 @@
   (testing "render [Blueprint :Operation] composes its :Shape renders (via dispatch) into the signature"
     (let [db   (pipeline/build-model nil)
           text (m/render db "Blueprint" (by-name db "extract"))]
-      (is (str/includes? text "Implement `extract` in module `target.clojure`"))
+      (is (str/includes? text "Implement `extract` in module `target-clojure`"))
       (is (str/includes? text "paths: [Path]") "the :in Shape rendered via render :Shape (list → [Kind])")
       (is (str/includes? text "→ StructureDb"))
       (is (str/includes? text "Effects: io"))
@@ -74,7 +74,7 @@
           docs      (m/render db "Docs" extract)]
       (is (str/includes? blueprint "Implement `extract`") "Blueprint → an implementation spec")
       (is (str/includes? docs "### extract") "Docs → a reference doc section")
-      (is (str/includes? docs "**Module:** target.clojure"))
+      (is (str/includes? docs "**Module:** target-clojure"))
       (is (str/includes? docs "**Takes:** paths") "shapes still compose via dispatch under Docs")
       (is (not= blueprint docs) "same node, different artifact per projection"))))
 
@@ -98,11 +98,11 @@
 (deftest materialize-module-composes-a-modules-stages
   (testing "materialize-module renders a module's Operations under a projection — no stored lens"
     (let [db (pipeline/build-model nil)]
-      (let [bp (m/materialize-module db "Blueprint" "target.clojure")]
+      (let [bp (m/materialize-module db "Blueprint" "target-clojure")]
         (is (str/includes? bp "Implement `analyze`"))
         (is (str/includes? bp "Implement `extract`"))
         (is (str/includes? bp "paths: [Path]") "shapes rendered inline"))
-      (let [docs (m/materialize-module db "Docs" "target.clojure")]
+      (let [docs (m/materialize-module db "Docs" "target-clojure")]
         (is (str/includes? docs "### analyze"))
         (is (str/includes? docs "### extract")))
       (is (= "" (m/materialize-module db "Blueprint" "no-such-module")) "unknown module → empty"))))
@@ -120,7 +120,7 @@
           code  (target/extract "test/fixtures/target/sample.clj")   ; Operations, so coverage/drift resolve
           db    (cs/union-dbs [model code])]
       ;; the predicate the drift lens query invokes
-      (is (corr/module-corresponds? "target.clojure" "fukan.target.clojure"))
+      (is (corr/module-corresponds? "target-clojure" "fukan.target.clojure"))
       (doseq [ln ["survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"]]
         (let [focus (lens/evaluate-lens db (by-kind-name db :Lens ln))]
           (is (set? focus) (str "lens " ln " evaluates to a node-set"))))
@@ -147,7 +147,7 @@
     (let [db  (pipeline/build-model nil)
           out (m/materialize-projection db (by-kind-name db :Projection "DriftClose"))]
       (is (str/includes? out "modelled but have no realizing function") "the drift context preamble")
-      (is (str/includes? out "Implement `extract` in module `target.clojure`")
+      (is (str/includes? out "Implement `extract` in module `target-clojure`")
           "the body IS Blueprint's spec — composed, not a bespoke close-instruction")
       ;; delegation: a single node under DriftClose renders identically to under Blueprint
       ;; (no DriftClose-specific renderer — the context is applied only at the view level)
@@ -171,14 +171,14 @@
   (testing "focus → refine → materialize-over composes by plain threading — no named Tool"
     (let [db       (pipeline/build-model nil)
           stages   (lens/focus-nodes db '[(Operation ?n)])                       ; every Operation
-          in-tc    (lens/refine db stages '[(in-module ?n "target.clojure")]) ; refined to one module
+          in-tc    (lens/refine db stages '[(in-module ?n "target-clojure")]) ; refined to one module
           rendered (m/materialize-over db "Blueprint" in-tc)]                 ; project the refined focus
       (is (set? stages) "focus-nodes / refine yield node-sets — the composable currency")
       (is (< (count in-tc) (count stages)) "refine narrowed the focus")
       (is (str/includes? rendered "Implement `analyze`"))
       (is (str/includes? rendered "Implement `extract`"))
       (is (not (str/includes? rendered "Implement `materialize-view`"))
-          "the refine step bounded the focus to target.clojure — other modules' Operations excluded"))))
+          "the refine step bounded the focus to target-clojure — other modules' Operations excluded"))))
 
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"
@@ -190,7 +190,7 @@
           out      (m/materialize-projection db (by-name db "Docs"))]
       (is (str/includes? out "### analyze") "rendered under the projection's name (Docs)")
       (is (str/includes? out "### extract"))
-      (is (str/includes? out "**Module:** target.clojure")))))
+      (is (str/includes? out "**Module:** target-clojure")))))
 
 (deftest probe-foci-compose-into-a-projection
   (testing "a probe's observation foci flow straight into a projection (the seam)"

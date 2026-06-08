@@ -19,14 +19,16 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 (defn ^:export module-corresponds?
-  "True when code module `km` realizes canvas module `cm`. fukan's convention: the
-   code namespace equals, or ends on a dot boundary with, the canvas module name
-   (canvas `core.structure` ← code `fukan.canvas.core.structure`; canvas `extraction`
-   ← code `fukan.model.extraction`). The canvas name is the meaningful tail of the
-   realizing namespace."
+  "True when code namespace `km` realizes canvas module `cm`. Deterministic, separator-agnostic:
+   split both on `[-.]` into segments; the canvas name's segments must be a SUFFIX of the code
+   namespace's. So `infra-model` ← `fukan.infra.model`, `canvas-source` ←
+   `fukan.canvas.projection.canvas-source`, `core-structure` ← `fukan.canvas.core.structure`.
+   (Canvas module names are hyphenated and equal their vars; the code path is dotted — this rule
+   bridges the two without the model authoring a second name string.)"
   [cm km]
-  (or (= cm km)
-      (str/ends-with? km (str "." cm))))
+  (let [segs #(str/split % #"[-.]")
+        c    (segs cm)]
+    (= c (take-last (count c) (segs km)))))
 
 (defstructure Realization
   "A law-holder for the model↔code correspondence — it has no instances of its own;

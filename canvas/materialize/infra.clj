@@ -25,5 +25,5 @@
     (out kernel/StructureDb)))
 
 (def infra-model
-  (Subsystem "infra.model"
+  (Subsystem
     (exposes load-model get-model refresh-model)))   ; the model-lifecycle API

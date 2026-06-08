@@ -59,7 +59,7 @@
 (deftest build-model-ingests-canvas-specs-into-a-structure-db
   (testing "the model is the merged structure db over the canvas/ defstructure specs"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Subsystem) "infra.model")
+      (is (contains? (names-of db :Subsystem) "infra-model")
           "the canvas/infra/model spec is discovered and ingested")
       ;; infra is now modelled with the fukan-on-fukan grammar (Operation/Kind), not
       ;; the (evicted) base Function/Type vocab; subset since other specs add more
@@ -71,13 +71,13 @@
 (deftest pipeline-links-across-to-canvas-source
   (testing "build-model is a thin entry point whose :calls link to canvas-source/extraction"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Subsystem) "model.pipeline")
+      (is (contains? (names-of db :Subsystem) "model-pipeline")
           "the canvas/pipeline/model spec is ingested")
       ;; post-prune the pipeline subsystem is just build-model — the ingest/union
       ;; machinery lives in canvas-source now, not duplicated here
       (is (= ["build-model"]
              (d/q '[:find [?n ...]
-                    :where [?m :entity/name "model.pipeline"]
+                    :where [?m :entity/name "model-pipeline"]
                            [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
                            [?c :structure/of :Operation] [?c :entity/name ?n]]
                   db))
@@ -86,7 +86,7 @@
       ;; ingest/union stages and to the target extractor (design + code unified)
       (is (= #{"build" "union-dbs"}
              (set (d/q '[:find [?bn ...]
-                         :where [?mp :entity/name "model.pipeline"]
+                         :where [?mp :entity/name "model-pipeline"]
                                 [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
                                 [?bm :entity/name "build-model"]
                                 [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?b]
@@ -97,7 +97,7 @@
           "build-model calls canvas-source's build + union-dbs (its exposed API)")
       (is (= ["run-extractor"]
              (d/q '[:find [?en ...]
-                    :where [?mp :entity/name "model.pipeline"]
+                    :where [?mp :entity/name "model-pipeline"]
                            [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
                            [?bm :entity/name "build-model"]
                            [?r :rel/from ?bm] [?r :rel/kind :calls] [?r :rel/to ?e]
@@ -113,7 +113,7 @@
     (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?k :where [?k :structure/of :Kind] [?k :entity/name "StructureDb"]] db)))
           "exactly one StructureDb Kind node")
-      (is (= ["core.structure"]
+      (is (= ["core-structure"]
              (d/q '[:find [?mn ...]
                     :where [?k :entity/name "StructureDb"] [?k :structure/of :Kind]
                            [?r :rel/kind :owns] [?r :rel/from ?m] [?r :rel/to ?k] [?m :entity/name ?mn]]
@@ -156,7 +156,7 @@
 (deftest kernel-meta-model-captures-structure-composition
   (testing "the reflexive kernel model: Structure is composed of Slot and Law"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Subsystem) "core.structure"))
+      (is (contains? (names-of db :Subsystem) "core-structure"))
       (is (= #{"slot" "law" "value"}
              (set (map first (d/q '[:find ?n
                                     :where [?st :structure/of :Concept] [?st :entity/name "Structure"]
@@ -220,7 +220,7 @@
                              [?rz :structure/of :FacultyRealization]
                              [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
                              [?b :rel/from ?rz] [?b :rel/kind :realizer] [?b :rel/to ?m]
-                             [?m :structure/of :Subsystem] [?m :entity/name "core.structure"]]
+                             [?m :structure/of :Subsystem] [?m :entity/name "core-structure"]]
                     db))
           "the cross-refs (ordinary var refs) resolved through the Realization node")
       (is (every? #(some? (:rel/to (d/entity db (first %))))

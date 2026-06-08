@@ -29,7 +29,7 @@
     (calls analyze)))
 
 (def target-clojure
-  (Subsystem "target.clojure"
+  (Subsystem
      (exposes extract)                              ; the extractor entry point
      (owns Path Analysis)
      (child analyze)))
@@ -44,6 +44,6 @@
   (Operation (in [db kernel/StructureDb]) (out [OperationName])))    ; code→spec gaps (a query)
 
 (def target-correspondence
-  (Subsystem "target.correspondence"
+  (Subsystem
     (exposes drifted-operations uncovered-operations)   ; the drift / coverage queries
     (owns OperationName)))

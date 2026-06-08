@@ -29,5 +29,5 @@
            canvas-source/union-dbs)))
 
 (def model-pipeline
-  (Subsystem "model.pipeline"
+  (Subsystem
     (exposes build-model)))                        ; the build entry point

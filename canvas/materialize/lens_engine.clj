@@ -32,6 +32,6 @@
     (calls focus-nodes)))
 
 (def core-lens
-  (Subsystem "core.lens"
+  (Subsystem
      (exposes focus-nodes evaluate-lens refine)     ; the lens-evaluation API
      (owns Clause Eid)))

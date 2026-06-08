@@ -88,7 +88,7 @@
     (calls vocab-rules)))
 
 (def core-structure
-  (Subsystem "core.structure"
+  (Subsystem
     (exposes check vocab-rules)                    ; the kernel capabilities others compose
     (owns StructureDb Violation Rule)              ; the data-shapes core.structure decides (others adopt StructureDb)
     (child c-Keyword c-String c-Bool c-Int c-Concept c-Node c-Cardinality
