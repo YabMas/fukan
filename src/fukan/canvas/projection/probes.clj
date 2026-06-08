@@ -130,6 +130,22 @@
                          (map first) set)
                     :gap n)))))))
 
+(defn probe-type-drift
+  "Spec ↔ code TYPE divergence (a gating Signal): modelled Operations whose type disagrees
+   with the realizing function's declared `:malli/schema`, each an observation whose focus is
+   the type-drifted Operation node(s). Only checked where the code carries an annotation. Empty
+   ⇔ every annotated function adheres to its model. Global — `focus` accepted but ignored."
+  ([db] (probe-type-drift db nil))
+  ([db _focus]
+   (f/finding "type-drift" true
+     (->> (sort (corr/type-drifted-operations db))
+          (mapv (fn [n]
+                  (f/observation
+                    (->> (d/q '[:find ?s :in $ ?n
+                                :where [?s :structure/of :Operation] [?s :entity/name ?n]] db n)
+                         (map first) set)
+                    :gap n)))))))
+
 (defmulti run-probe
   "The probe surface as a self-registering multimethod: dispatch on probe-name.
    A probe leaf registers by `(defmethod run-probe \"<name>\" [db _ focus] …)`, so
@@ -149,6 +165,7 @@
 (defmethod run-probe "integrity"   [db _ focus] (probe-integrity db focus))
 (defmethod run-probe "coverage"    [db _ focus] (probe-coverage db focus))
 (defmethod run-probe "drift"       [db _ focus] (probe-drift db focus))
+(defmethod run-probe "type-drift"  [db _ focus] (probe-type-drift db focus))
 
 (defn run
   "Run probe `probe-name` against `target-db`, optionally scoped to `focus`

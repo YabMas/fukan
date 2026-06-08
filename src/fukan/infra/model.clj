@@ -18,7 +18,7 @@
 ;; Register fukan's project extractor — its own Clojure source.
 (extraction/register-extractor! target/extract)
 ;; Register fukan's project type dialect — malli.
-(typing/register-type-dialect! {:render malli/render})
+(typing/register-type-dialect! {:render malli/render :adheres? malli/sigs-adhere?})
 
 (defonce ^:private state (atom {:model nil :src nil}))
 

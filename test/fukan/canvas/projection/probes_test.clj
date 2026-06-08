@@ -79,10 +79,10 @@
       (is (= empty-foc run-foc) "run passes the focus through to the leaf"))))
 
 (deftest the-full-probe-surface-runs
-  (testing "all seven leaves run over the self-model and yield observation findings"
+  (testing "all eight leaves run over the self-model and yield observation findings"
     (let [db  (cs/build)
           all (probes/run-all db)]
-      (is (= #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
+      (is (= #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift" "type-drift"}
              (set (keys all))) "the full registered probe surface")
       (is (seq (:observations (all "survey")))  "survey: counts per structure kind")
       (is (seq (:observations (all "tar-pit"))) "tar-pit: connected hotspots")
@@ -108,7 +108,7 @@
       (is (= (probes/probe-integrity db) (probes/run db "integrity"))
           "run dispatches by name to the registered leaf")
       (let [all (probes/run-all db)]
-        (is (= 7 (count all)) "run-all runs every registered method")
+        (is (= 8 (count all)) "run-all runs every registered method")
         (is (= "patterns" (:lens (all "patterns"))))
         (is (= "integrity" (:lens (all "integrity")))))
       (is (thrown? clojure.lang.ExceptionInfo (probes/run db "no-such-probe"))
