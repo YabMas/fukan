@@ -75,12 +75,14 @@
   "Render the AUTHORED Operation at `op-eid` to a malli function-schema
    `[:=> [:cat <each :in schema>] <:out schema, or :nil if none>]`, each `:in`/`:out`
    Schema rendered via the type dialect (`typing/render-type`). The `:in` targets are
-   collected in any order — the adherence comparison treats inputs as a set."
+   ordered/positional — rendered in `:rel/order` order — so the adherence comparison
+   checks argument order and arity."
   [db op-eid]
-  (let [ins  (->> (d/q '[:find ?to :in $ ?from
-                         :where [?r :rel/from ?from] [?r :rel/kind :in] [?r :rel/to ?to]]
+  (let [ins  (->> (d/q '[:find ?ord ?to :in $ ?from
+                         :where [?r :rel/from ?from] [?r :rel/kind :in] [?r :rel/to ?to] [?r :rel/order ?ord]]
                        db op-eid)
-                  (mapv (fn [[to]] (typing/render-type db to))))
+                  (sort-by first)
+                  (mapv (fn [[_ to]] (typing/render-type db to))))
         out  (ffirst (d/q '[:find ?to :in $ ?from
                             :where [?r :rel/from ?from] [?r :rel/kind :out] [?r :rel/to ?to]]
                           db op-eid))]

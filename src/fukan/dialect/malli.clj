@@ -50,25 +50,23 @@
       (throw (ex-info (str "cannot render schema kind: " kind) {:eid eid :kind kind})))))
 
 (defn- normalize-fn-schema
-  "Normalize a malli function-schema `[:=> [:cat IN…] OUT]` to `{:in #{IN…} :out OUT}`
-   (the empty `[:cat]` yields `:in #{}`), or `nil` when `form` is not a well-formed
-   `[:=> [:cat …] OUT]`. Returning `nil` for malformed input means two malformed forms
-   never compare equal — a malformed signature adheres to nothing."
+  "Normalize a malli function-schema `[:=> [:cat IN…] OUT]` to `{:in [IN…] :out OUT}`
+   (the empty `[:cat]` yields `:in []`), or `nil` when `form` is not a well-formed
+   `[:=> [:cat …] OUT]`. The `:in` is a VECTOR (a sequence) so order and arity are
+   preserved. Returning `nil` for malformed input means two malformed forms never
+   compare equal — a malformed signature adheres to nothing."
   [form]
   (when (and (vector? form) (= :=> (first form)) (>= (count form) 3)
              (vector? (second form)) (= :cat (first (second form))))
-    {:in (set (rest (second form))) :out (nth form 2)}))
+    {:in (vec (rest (second form))) :out (nth form 2)}))
 
 (defn sigs-adhere?
   "Whether a code function-schema ADHERES to a modelled Operation's type. Both are
    malli `[:=> [:cat IN…] OUT]` forms; they adhere iff both are well-formed AND their
-   OUT types are equal AND their sets of IN types are equal.
-
-   v1 LIMITATION: inputs are compared as a SET, not a sequence — `:in` is an unordered
-   `many` slot on the modelled Operation, so neither argument ORDER nor MULTIPLICITY/
-   ARITY is fidelity-checked: `[:=> [:cat :A :B] :R]` adheres to `[:=> [:cat :B :A] :R]`,
-   and a 2-arg `[:cat :int :int]` adheres to a 1-arg `[:cat :int]`. Full positional
-   fidelity needs an ordered `:in` slot — a follow-up."
+   OUT types are equal AND their input type SEQUENCES (order + arity) are equal.
+   `:in` is an ordered slot on the modelled Operation, so argument ORDER and ARITY are
+   both fidelity-checked: `[:=> [:cat :A :B] :R]` does NOT adhere to `[:=> [:cat :B :A] :R]`,
+   and a 2-arg `[:cat :int :int]` does NOT adhere to a 1-arg `[:cat :int]`."
   [model-form code-form]
   (let [m (normalize-fn-schema model-form)
         c (normalize-fn-schema code-form)]

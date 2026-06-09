@@ -30,16 +30,20 @@
 
 (defn ^:export op-arrow
   "Operation's authoring sugar (the `(syntax …)` hook): a signature `[in-binding]… -> Out` mixed
-   among the clauses becomes `(in …)`/`(out …)`. Vectors before the `->` are input bindings (each
-   `[name Type]`); the token after `->` is the output shape. Plain clauses (`(doc …)`, `(calls …)`,
-   `(performs …)`) pass through unchanged — as do explicit `(in …)`/`(out …)` clauses (they're seqs),
-   so the arrow and the clause form coexist. Lives here, in the vocab — `->` never touches core."
+   among the clauses becomes a single ordered `(in …)` clause + an `(out …)`. Vectors before the
+   `->` are input bindings (each `[name Type]`); the token after `->` is the output shape. The
+   inputs collapse into ONE ordered `:in` clause `(in [[name Type]…])` — positional, each labelled
+   with its param name — so adherence checks argument order and arity. Plain clauses (`(doc …)`,
+   `(calls …)`, `(performs …)`) pass through unchanged — as do explicit `(in …)`/`(out …)` clauses
+   (they're seqs), so the arrow and the clause form coexist. A no-input `[] -> Out` emits no `:in`
+   clause. Lives here, in the vocab — `->` never touches core."
   [body]
   (let [clauses     (filter seq? body)               ; (doc …) (calls …) (performs …) [(in …)/(out …)]
         sig         (remove seq? body)               ; [in…] -> Out  (an empty [] = no inputs)
-        [ins after] (split-with #(not= '-> %) sig)]
+        [ins after] (split-with #(not= '-> %) sig)
+        real-ins    (filter seq ins)]
     (concat clauses
-            (map #(list 'in %) (filter seq ins))     ; non-empty input vectors → :in ([] = none)
+            (when (seq real-ins) [(list 'in (vec real-ins))])   ; one ordered :in clause carrying [name Type] bindings
             (when (= '-> (first after)) [(list 'out (second after))]))))
 
 (defstructure Operation
@@ -54,7 +58,7 @@
    extractor's private `Operation` — one vocab, owned here, the extractor produces into it by tag.)"
   (includes Connected)
   (syntax op-arrow)                   ; [in…] -> Out authoring sugar (vocab-owned)
-  (slot :in        (many Schema))     ; input schemas
+  (slot :in        (ordered Schema))  ; ordered input shapes — positional, each labelled with its param name
   (slot :out       (optional Schema)) ; output schema (authored ops declare one; extracted may not)
   (slot :performs  (many Effect))     ; side effects
   (slot :calls     (many Operation))  ; downstream operations it invokes

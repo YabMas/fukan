@@ -12,8 +12,8 @@
 (use-fixtures :each
   (fn [t] (typing/register-type-dialect! {:render malli/render :adheres? malli/sigs-adhere?}) (t)))
 
-(deftest sigs-adhere-out-and-in-set
-  (testing "adherence is OUT-equality AND IN-set-equality on malli function-schemas"
+(deftest sigs-adhere-out-and-in-sequence
+  (testing "adherence is OUT-equality AND IN-SEQUENCE-equality (order + arity) on malli function-schemas"
     (is (malli/sigs-adhere? '[:=> [:cat :Path] :StructureDb]
                             '[:=> [:cat :Path] :StructureDb])
         "identical schemas adhere")
@@ -23,10 +23,14 @@
     (is (not (malli/sigs-adhere? '[:=> [:cat :Path] :StructureDb]
                                  '[:=> [:cat :Path] :Other]))
         "an output mismatch breaks adherence")
-    (testing "inputs compared as a SET — order is not checked (documented v1 limitation)"
-      (is (malli/sigs-adhere? '[:=> [:cat :A :B] :R]
-                              '[:=> [:cat :B :A] :R])
-          "reordered inputs still adhere (set semantics)"))))
+    (testing "inputs compared as a SEQUENCE — order IS checked"
+      (is (not (malli/sigs-adhere? '[:=> [:cat :A :B] :R]
+                                   '[:=> [:cat :B :A] :R]))
+          "reordered inputs do NOT adhere (order matters)"))
+    (testing "inputs compared as a SEQUENCE — arity IS checked"
+      (is (not (malli/sigs-adhere? '[:=> [:cat :A :B] :R]
+                                   '[:=> [:cat :A] :R]))
+          "a dropped argument does NOT adhere (arity matters)"))))
 
 (deftest type-adheres-dispatches-through-the-dialect
   (testing "type-adheres? routes both forms through the registered :adheres? bridge"

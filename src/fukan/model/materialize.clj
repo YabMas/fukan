@@ -29,11 +29,6 @@
                  :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
                db eid kind)))
 
-(defn- labelled-targets [db eid kind]
-  (d/q '[:find ?lbl ?to :in $ ?e ?k
-         :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to] [?r :rel/label ?lbl]]
-       db eid kind))
-
 (defn- target-names [db eid kind name-attr]
   (->> (d/q '[:find ?to :in $ ?e ?k
               :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
@@ -57,8 +52,12 @@
     {:nm      (:entity/name e)
      :doc     (:entity/doc e)
      :module  (owning-module db eid)
-     :params  (->> (labelled-targets db eid :in) (sort-by first)
-                   (mapv (fn [[lbl to]] {:label lbl :shape to})))
+     :params  (->> (d/q '[:find ?ord ?to ?lbl :in $ ?e
+                          :where [?r :rel/from ?e] [?r :rel/kind :in] [?r :rel/to ?to]
+                                 [?r :rel/order ?ord] [(get-else $ ?r :rel/label "") ?lbl]]
+                        db eid)
+                   (sort-by first)
+                   (mapv (fn [[_ to lbl]] {:label lbl :shape to})))
      :out     (rel-target db eid :out)
      :effects (target-names db eid :performs :val/name)
      :calls   (target-names db eid :calls :entity/name)}))
