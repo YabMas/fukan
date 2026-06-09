@@ -58,6 +58,45 @@
   ;; and the single target is captured as a var
   (is (= [#'t3-y] (:targets (first (:clauses t3-l))))))
 
+;; ── ordered slot WITH per-element labels: order + label both carried ──────────
+;; reuses Prod (slot :rhs (ordered Sym)) — exercises an ordered slot both ways.
+
+;; bare ordered: order only, no labels
+(def op-bare (Prod "bare" (rhs [t3-x t3-y])))
+;; labelled ordered: each element is a [label target]
+(def op-lbl  (Prod "lbl"  (rhs [[a t3-x] [b t3-y]])))
+
+(deftest ordered-slot-carries-order-and-labels
+  ;; the labelled ordered clause parses each [label target] → parallel :labels + :targets
+  (is (= ["a" "b"] (:labels (first (:clauses op-lbl)))))
+  (is (= [#'t3-x #'t3-y] (:targets (first (:clauses op-lbl)))))
+  ;; bare ordered → no labels on the clause (existing behaviour pinned)
+  (is (nil? (:labels (first (:clauses op-bare)))))
+  (is (= [#'t3-x #'t3-y] (:targets (first (:clauses op-bare)))))
+  ;; assembled: each reified :rhs relation carries :rel/order (0,1 in authoring
+  ;; order) AND the matching :rel/label
+  (let [db   (a/assemble-vars [#'op-lbl #'t3-x #'t3-y])
+        rels (->> (d/q '[:find ?ord ?lbl ?tn :in $ ?from
+                         :where [?r :rel/from ?from] [?r :rel/kind :rhs]
+                                [?r :rel/order ?ord] [?r :rel/label ?lbl]
+                                [?r :rel/to ?to] [?to :entity/name ?tn]]
+                       db [:entity/id (s/var-id #'op-lbl)])
+                  (sort-by first))]
+    (is (= [[0 "a" "x"] [1 "b" "y"]] rels)))
+  ;; bare ordered assembles with :rel/order but no :rel/label
+  (let [db (a/assemble-vars [#'op-bare #'t3-x #'t3-y])
+        rels (->> (d/q '[:find ?ord ?tn :in $ ?from
+                         :where [?r :rel/from ?from] [?r :rel/kind :rhs]
+                                [?r :rel/order ?ord]
+                                [?r :rel/to ?to] [?to :entity/name ?tn]]
+                       db [:entity/id (s/var-id #'op-bare)])
+                  (sort-by first))
+        labels (d/q '[:find ?lbl :in $ ?from
+                      :where [?r :rel/from ?from] [?r :rel/kind :rhs] [?r :rel/label ?lbl]]
+                    db [:entity/id (s/var-id #'op-bare)])]
+    (is (= [[0 "x"] [1 "y"]] rels))
+    (is (empty? labels) "bare ordered slot carries no :rel/label")))
+
 ;; ── entity name defaults to the binding var's simple name ────────────────────
 (s/defstructure Named "n" (slot :doc (optional :String)))
 

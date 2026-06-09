@@ -137,8 +137,10 @@
    into `:targets` and `labels` is a parallel vector (nil per unlabelled target),
    or nil when there are no labels.
 
-   - `:ordered` slot: the single arg is expected to be a vector; splice its
-     elements (each via `ref-arg->form` or `reader-arg->form`), in order. No labels.
+   - `:ordered` slot: the single arg is expected to be a vector; its elements are
+     spliced in order, each parsed for an optional `[label target]` shape — so an
+     ordered slot's reified relations carry `:rel/order` AND (when labelled)
+     `:rel/label`. An all-bare ordered vector yields nil labels (order only).
    - Other slots: parse each arg — a 2-element, symbol-headed vector `[label t]`
      contributes a labelled single target; a bare arg contributes one unlabelled
      target. (So `(takes [x Int] [y Str])` carries per-target labels.)
@@ -148,23 +150,23 @@
    extracts the label and reader-expands the target part."
   ([card args] (parse-clause-arg-forms card args nil))
   ([card args target-sdef]
-   (let [arg->form (if (and target-sdef (:reader target-sdef))
-                     (partial reader-arg->form (:tag target-sdef) (:reader target-sdef))
-                     ref-arg->form)]
-     (if (= :ordered card)
-       ;; ordered: the arg vector is spliced — mirror clause->rels behaviour
-       (let [elems (mapcat #(if (vector? %) % [%]) args)]
-         [nil (mapv arg->form elems)])
-       ;; non-ordered: parse each arg as [label target] or bare target
-       (let [parsed (mapv (fn [a]
-                            (if (and (vector? a) (= 2 (count a)) (symbol? (first a)))
-                              ;; [label target] form — for reader-slots, reader-expand the target
-                              {:label (str (first a)) :target (arg->form (second a))}
-                              {:label nil :target (arg->form a)}))
-                          args)
-             labels (mapv :label parsed)
-             forms  (mapv :target parsed)]
-         [labels forms])))))
+   (let [arg->form  (if (and target-sdef (:reader target-sdef))
+                      (partial reader-arg->form (:tag target-sdef) (:reader target-sdef))
+                      ref-arg->form)
+         ;; a 2-element, symbol-headed vector is a [label target]; anything else is a bare target.
+         ;; (Malli forms are keyword-headed and bare Kind refs are symbols, so this never
+         ;; misfires on a Schema `:of` element or a grammar `:rhs` symbol.)
+         parse-elem (fn [a]
+                      (if (and (vector? a) (= 2 (count a)) (symbol? (first a)))
+                        {:label (str (first a)) :target (arg->form (second a))}
+                        {:label nil :target (arg->form a)}))
+         elems      (if (= :ordered card)
+                      ;; ordered: the clause's single vector arg is spliced to its elements
+                      (mapcat #(if (vector? %) % [%]) args)
+                      ;; non-ordered: each clause arg is itself an element
+                      args)
+         parsed     (mapv parse-elem elems)]
+     [(mapv :label parsed) (mapv :target parsed)])))
 
 (defn- build-instance-form
   "Shared clause-walker for `instance-form` and `value-form`. Builds the
