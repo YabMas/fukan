@@ -7,7 +7,7 @@
    a projection renders through it (Blueprint, DriftClose). The probes that consume these
    lenses live in the `probe` view."
   (:require [canvas.vocabulary.lens :refer [Lens]]
-            [lib.grouping :refer [Module]]))
+            [lib.grouping :refer [Grouping]]))
 
 ;; focuses fed to reasoning probes (non-gating findings) — prose only; the executable
 ;; selections live in canvas.realization.acts (LensSelection)
@@ -21,4 +21,4 @@
 (def drift       (Lens (focus "spec ↔ code divergence")))
 
 (def lens
-  (Module (child survey patterns consistency tar-pit integrity coverage drift)))
+  (Grouping (child survey patterns consistency tar-pit integrity coverage drift)))

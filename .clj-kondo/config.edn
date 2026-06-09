@@ -196,7 +196,7 @@
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
    lib.grouping/Connected hooks.fukan.structure/instance
    canvas.vocabulary.faculty/Faculty hooks.fukan.structure/instance
-   lib.grouping/Module hooks.fukan.structure/instance
+   lib.grouping/Grouping hooks.fukan.structure/instance
    canvas.correspondence/FacultyRealization hooks.fukan.structure/instance
    canvas.correspondence/DataForm hooks.fukan.structure/instance
    canvas.realization.acts/LensSelection hooks.fukan.structure/instance
@@ -212,7 +212,7 @@
    lib.type.malli/Schema hooks.fukan.structure/instance
    lib.type.malli/SchemaField hooks.fukan.structure/instance
    lib.type.malli/SchemaChoice hooks.fukan.structure/instance
-   lib.code/Subsystem hooks.fukan.structure/instance
+   lib.code/Module hooks.fukan.structure/instance
    canvas.vocabulary.probe/Finding hooks.fukan.structure/instance
    canvas.vocabulary.probe/Probe hooks.fukan.structure/instance
    canvas.vocabulary.projection/Mapping hooks.fukan.structure/instance

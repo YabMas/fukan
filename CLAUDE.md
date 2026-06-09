@@ -68,9 +68,13 @@ Reusable, domain-general vocabulary — vocab that is *not* unique to any one pr
 lives in an **opt-in stdlib** at `lib/` (namespaces `lib.*`, reachable via the `.`
 classpath root, parallel to `canvas.*`). It is **required, not auto-discovered**, so it
 contributes grammar only when a model opts in. Current entries: `lib.code` (Kind / Effect
-/ Operation / Subsystem — standard code-structures), `lib.grouping` (Module / Connected —
-structural primitives), `lib.type.malli` (the malli type dialect — first entry in the
-`lib.type.*` pluggable type-authoring surface). This keeps `canvas/vocabulary/` focused on
+/ Operation / Module — standard code-structures, where a `Module` is one code namespace:
+an API surface + owned types), `lib.grouping` (Grouping — the most abstract membership
+primitive — and Connected), `lib.type.malli` (the malli type dialect — first entry in the
+`lib.type.*` pluggable type-authoring surface). The grouping ladder is deliberately
+levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace) ⊂ `Subsystem` (a
+cluster of modules realizing a capability — reserved, not yet defined). This keeps
+`canvas/vocabulary/` focused on
 what is genuinely fukan-specific. The stdlib is deliberately *not* a methodology/middle
 layer (DDD/hexagonal/C4) — it's primitive, reusable structures, grown only on real need
 (e.g. add a `lib.code` batch like `in-process`/`event-driven` when a second consumer needs

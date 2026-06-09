@@ -5,10 +5,10 @@
    that knows Clojure. It reads clj-kondo's `:analysis` output and maps Clojure
    constructs onto fukan's architecture-level code vocabulary:
 
-     ns               → Subsystem   (a cohesion boundary)
+     ns               → Module   (a cohesion boundary)
      defn / defn-     → Operation   (a named unit of computation, `:extracted true`)
 
-   The extractor OWNS no vocabulary — `Operation`/`Subsystem` are defined in
+   The extractor OWNS no vocabulary — `Operation`/`Module` are defined in
    `lib.code`; this plug-point only EMITS instances of them by tag
    (stamping `:extracted true` so an extracted Operation is distinguished from an
    authored one), and they meet that grammar at merge. Swap a different language's
@@ -32,11 +32,11 @@
                           :config {:output {:analysis {:var-definitions {:meta true}}}}})))
 
 (defn extract
-  "Extract a structure-db of Subsystems (cohesion boundaries) and the Operations they
+  "Extract a structure-db of Modules (cohesion boundaries) and the Operations they
    define from the Clojure source under `paths` (files or directories). Builds the
-   db programmatically: each namespace becomes a `Subsystem` whose `:child` Operations
+   db programmatically: each namespace becomes a `Module` whose `:child` Operations
    are the `defn`/`defn-`s it defines. Operations are inline-value children of their
-   Subsystem — anonymous, owner-path-identified, stamped `:extracted true`, matched to
+   Module — anonymous, owner-path-identified, stamped `:extracted true`, matched to
    authored Operations by NAME via the correspondence law."
   [& paths]
   (let [{:keys [namespace-definitions var-definitions]} (analyze paths)
@@ -53,5 +53,5 @@
                                             (assoc :val/sig (pr-str (:malli/schema (:meta v)))))
                                           [] false))]]
        [(str mname)
-        (s/->InstanceValue :Subsystem (str mname) nil {}
+        (s/->InstanceValue :Module (str mname) nil {}
                            [{:rk :child :card :many :targets (vec ops)}] false)]))))

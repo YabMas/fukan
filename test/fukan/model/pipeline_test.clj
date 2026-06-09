@@ -11,7 +11,7 @@
             [fukan.model.pipeline :as pipeline]
             [canvas.vocabulary.meta :refer [Concept MetaSlot]]
             [canvas.vocabulary.faculty :refer [Faculty]]
-            [lib.grouping :refer [Module]]
+            [lib.grouping :refer [Grouping]]
             [canvas.vocabulary.lens :refer [Lens]]
             [canvas.vocabulary.probe :refer [Probe Finding]]
             [canvas.vocabulary.projection :refer [Projection]]
@@ -35,7 +35,7 @@
 (def of-Loner  (Faculty "Loner"))                     ; connects to nothing
 
 ;; a model-reading faculty with no realizing module
-(def mr-some-module (Module "some-module"))           ; a module to claim realization against
+(def mr-some-module (Grouping "some-module"))           ; a module to claim realization against
 (def mr-Model    (Faculty "Model"))
 (def mr-Realized (Faculty "Realized" (reads mr-Model)))  ; reads + a Realization names it → ok
 (def mr-Bare     (Faculty "Bare" (reads mr-Model)))      ; reads, no realization → caught
@@ -59,7 +59,7 @@
 (deftest build-model-ingests-canvas-specs-into-a-structure-db
   (testing "the model is the merged structure db over the canvas/ defstructure specs"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Subsystem) "infra-model")
+      (is (contains? (names-of db :Module) "infra-model")
           "the canvas/infra/model spec is discovered and ingested")
       ;; infra is now modelled with the fukan-on-fukan grammar (Operation/Kind), not
       ;; the (evicted) base Function/Type vocab; subset since other specs add more
@@ -71,7 +71,7 @@
 (deftest pipeline-links-across-to-canvas-source
   (testing "build-model is a thin entry point whose :calls link to canvas-source/extraction"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Subsystem) "model-pipeline")
+      (is (contains? (names-of db :Module) "model-pipeline")
           "the canvas/pipeline/model spec is ingested")
       ;; post-prune the pipeline subsystem is just build-model — the ingest/union
       ;; machinery lives in canvas-source now, not duplicated here
@@ -156,7 +156,7 @@
 (deftest kernel-meta-model-captures-structure-composition
   (testing "the reflexive kernel model: Structure is composed of Slot and Law"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Subsystem) "core-structure"))
+      (is (contains? (names-of db :Module) "core-structure"))
       (is (= #{"slot" "law" "value"}
              (set (map first (d/q '[:find ?n
                                     :where [?st :structure/of :Concept] [?st :entity/name "Structure"]
@@ -180,7 +180,7 @@
 (deftest overview-model-makes-the-model-the-hub
   (testing "the top-level overview: every faculty connects to the Model, which is the hub"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "fukan"))
+      (is (contains? (names-of db :Grouping) "fukan"))
       ;; the Model faculty has the most flow connections (everything orbits it)
       (is (<= 6 (count (d/q '[:find ?r
                               :where [?m :structure/of :Faculty] [?m :entity/name "Model"]
@@ -220,7 +220,7 @@
                              [?rz :structure/of :FacultyRealization]
                              [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
                              [?b :rel/from ?rz] [?b :rel/kind :realizer] [?b :rel/to ?m]
-                             [?m :structure/of :Subsystem] [?m :entity/name "core-structure"]]
+                             [?m :structure/of :Module] [?m :entity/name "core-structure"]]
                     db))
           "the cross-refs (ordinary var refs) resolved through the Realization node")
       (is (every? #(some? (:rel/to (d/entity db (first %))))
@@ -230,14 +230,14 @@
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "lens"))
+      (is (contains? (names-of db :Grouping) "lens"))
       (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
                        (names-of db :Lens))))))
 
 (deftest probe-acts-read-through-a-lens-yielding-findings
   (testing "the probe view: a probe reads the model THROUGH a lens (cross-module) → a finding; inspect = gating"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "probe"))
+      (is (contains? (names-of db :Grouping) "probe"))
       (is (set/subset? #{"survey" "patterns" "integrity" "drift"} (names-of db :Probe)))
       ;; lens ∘ act composition: the patterns probe reads through the patterns lens,
       ;; resolved cross-module to the lens node
@@ -264,7 +264,7 @@
                                            [?rz :structure/of :FacultyRealization]
                                            [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
                                            [?b :rel/from ?rz] [?b :rel/kind :realizer] [?b :rel/to ?m]
-                                           [?m :structure/of :Module] [?m :entity/name ?mn]]
+                                           [?m :structure/of :Grouping] [?m :entity/name ?mn]]
                                   db fac-name mod-name)))]
       (is (realizer-of "Lens" "lens") "the Lens faculty links to the lens view")
       (is (realizer-of "Probe" "probe") "the Probe faculty links to the probe view"))))
@@ -277,7 +277,7 @@
 (deftest projection-subsystem-modelled-as-target-representations
   (testing "the projection view: model re-presented into targets through a lens + source→artifact mappings"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "projection"))
+      (is (contains? (names-of db :Grouping) "projection"))
       ;; Blueprint (code) + DriftClose (instructions — instruct ⊂ projection); more to come
       (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
       ;; a projection composes lens ∘ act too: Blueprint renders THROUGH the survey lens
@@ -300,7 +300,7 @@
                              [?rz :structure/of :FacultyRealization]
                              [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
                              [?b :rel/from ?rz] [?b :rel/kind :realizer] [?b :rel/to ?m]
-                             [?m :structure/of :Module] [?m :entity/name "projection"]]
+                             [?m :structure/of :Grouping] [?m :entity/name "projection"]]
                     db))
           "the Projection faculty is realized by the projection view (via a Realization)"))))
 
@@ -327,7 +327,7 @@
 (deftest collaboration-loop-modelled-as-a-closed-cycle
   (testing "the collab view: phases form a closed OODA cycle, each (mostly) exercising a faculty"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Module) "collab"))
+      (is (contains? (names-of db :Grouping) "collab"))
       (is (set/subset? #{"Intend" "Focus" "Observe" "Reason" "Apply" "Reinspect"}
                        (names-of db :Phase)))
       ;; a phase exercises a faculty cross-module: observe → the Probe faculty (interlock)

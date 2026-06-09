@@ -120,10 +120,10 @@ sitting between the two as the seam that asserts they agree. Canvas files under
 `canvas/**/*.clj` are auto-discovered and merged into one structure db — the model.
 
 Reusable, domain-general vocabulary lives in a separate opt-in stdlib, `lib/` — code
-structures (`lib.code`: Operation / Effect / Kind / Subsystem), structural primitives
-(`lib.grouping`), and a pluggable type-authoring surface (`lib.type.malli`). It is
-required, not auto-discovered, so fukan's own canvas vocab stays focused on what is unique
-to fukan. `clj -M:demos` runs a corpus of standalone modelling demos (grammar, ER,
+structures (`lib.code`: Operation / Effect / Kind / Module, where a Module is one code
+namespace), structural primitives (`lib.grouping`: Grouping / Connected), and a pluggable
+type-authoring surface (`lib.type.malli`). It is required, not auto-discovered, so fukan's
+own canvas vocab stays focused on what is unique to fukan. `clj -M:demos` runs a corpus of standalone modelling demos (grammar, ER,
 workflow, access-control, type-system) that pressure-test the core.
 
 ## Development

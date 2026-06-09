@@ -16,7 +16,7 @@
             [canvas.vocabulary.lens :refer [Lens]]
             [canvas.vocabulary.probe :refer [Probe Finding]]
             [lib.code :refer [Operation]]
-            [lib.grouping :refer [Module]]
+            [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]
             [canvas.domain.probe :as probe]
             [canvas.realization.kernel :as kernel]))
@@ -87,5 +87,5 @@
 (def k-integrity (ProbeComposition (realizes probe/integrity) (calls kernel/check)))
 
 (def realization
-  (Module (child s-survey s-patterns s-consistency s-tar-pit s-integrity s-coverage s-drift
+  (Grouping (child s-survey s-patterns s-consistency s-tar-pit s-integrity s-coverage s-drift
                  c-patterns c-integrity k-integrity)))

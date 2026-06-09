@@ -2,7 +2,7 @@
   "Domain grammar — what a `Faculty` IS: a core concept/capability of fukan. The
    vocabulary the structural perspective (`canvas.domain.faculties`) is
    written in. (Split out of the old `canvas.vocab.arch`: `Faculty` is a fukan-specific
-   domain concept and lives here; the generic `Module`/`Connected` primitives moved to
+   domain concept and lives here; the generic `Grouping`/`Connected` primitives moved to
    `lib.grouping`.)
 
    Vocab-only canvas spec (no build-canvas)."

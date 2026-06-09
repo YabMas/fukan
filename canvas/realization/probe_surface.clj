@@ -4,11 +4,11 @@
    finding reader) + the live run/run-all surface. `probe-code` (`fukan.canvas.projection.probe-code`)
    — projects a probe's SPEC from the model. Realizes the `probe` act perspective. The two read the
    kernel's shared `StructureDb`."
-  (:require [lib.code :refer [Kind Operation Subsystem]]
+  (:require [lib.code :refer [Kind Operation Module]]
             [canvas.realization.kernel :as kernel]
             [canvas.realization.target :as target]))
 
-(Subsystem probes
+(Module probes
   "The implemented probe leaves + the live run/run-all dispatch surface."
   (Kind ProbeName) (Kind Finding) (Kind FindingMap)
   (Operation ^:private probe-patterns "Recurring structures (a View)."
@@ -32,7 +32,7 @@
     (signature [:=> [:catn [:target-db kernel/StructureDb]] FindingMap])
     (calls probe-patterns probe-integrity)))
 
-(Subsystem probe-code
+(Module probe-code
   "Project a probe's implementation spec from the model. (ProbeName is owned by `probes`.)"
   (Kind CapabilityName) (Kind ContractForm) (Kind Instruction) (Kind ProbeArtifact)
   (Operation ^:private probe-capability "The kernel capability a composing probe :calls."

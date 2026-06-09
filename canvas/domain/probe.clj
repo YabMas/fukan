@@ -6,7 +6,7 @@
    (Signals); survey/patterns/… yield non-gating Views. The overview's `Faculty
    \"Probe\"` is `realized-by` this module."
   (:require [canvas.vocabulary.probe :refer [Probe Finding]]
-            [lib.grouping :refer [Module]]
+            [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]))
 
 ;; non-gating findings — perspectives to reason with (Views). Each STATES its `holds`
@@ -38,6 +38,6 @@
 (def drift       (Probe (through lens/drift)       (yields DriftReport)))
 
 (def probe
-  (Module
+  (Grouping
     (child Survey Patterns Consistency TarPit IntegrityReport CoverageReport DriftReport
            survey patterns consistency tar-pit integrity coverage drift)))

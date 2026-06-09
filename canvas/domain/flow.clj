@@ -6,7 +6,7 @@
    loop interlocks with the whole faculty map. The human⊗AI drives the loop; the
    faculties are what each phase puts to work."
   (:require [canvas.vocabulary.phase :refer [Phase]]
-            [lib.grouping :refer [Module]]
+            [lib.grouping :refer [Grouping]]
             [canvas.domain.faculties :as overview]))
 
 ;; the loop is a cycle — every phase's :next is defined after it (except Reinspect's)
@@ -42,4 +42,4 @@
     (next Intend)))
 
 (def collab
-  (Module (child Intend Focus Observe Reason Apply Reinspect)))
+  (Grouping (child Intend Focus Observe Reason Apply Reinspect)))

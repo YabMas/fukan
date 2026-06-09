@@ -37,7 +37,7 @@
        sort vec))
 
 (defn- owning-module [db eid]
-  ;; membership is :child (generic) or, for a Subsystem, :exposes / :owns
+  ;; membership is :child (generic) or, for a Module, :exposes / :owns
   (ffirst (d/q '[:find ?mn :in $ ?e
                  :where [?r :rel/from ?m] [?r :rel/to ?e] [?r :rel/kind ?k]
                         [(contains? #{:child :exposes :owns} ?k)]
@@ -117,7 +117,7 @@
   (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)]
     (str "### " nm "\n"
          (or doc "_No description._") "\n\n"
-         "- **Module:** " module "\n"
+         "- **Grouping:** " module "\n"
          (when (seq params)
            (str "- **Takes:** "
                 (str/join ", " (map #(str (:label %) " (" (render-base db b (:shape %)) ")") params)) "\n"))

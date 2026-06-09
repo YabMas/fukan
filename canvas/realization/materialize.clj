@@ -4,11 +4,11 @@
    open extension point, not modelled as an Operation) over a Lens's focus, projecting the model
    into an implementation specification. `materialize-view` is the public entry. `core.lens` lives
    in `canvas.realization.lens-engine`."
-  (:require [lib.code :refer [Kind Operation Subsystem]]
+  (:require [lib.code :refer [Kind Operation Module]]
             [canvas.realization.kernel :as kernel]
             [canvas.realization.lens-engine :as lens-engine]))
 
-(Subsystem materialize
+(Module materialize
   "Project the model down into an implementation spec, through a Lens focus + a Projection."
   (Kind Lens) (Kind Instruction) (Kind Projection) (Kind ProjectionName) (Kind ModuleName)
   (Kind Clause) (Kind Eid)

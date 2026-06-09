@@ -233,7 +233,7 @@
   (build-instance-form tag nil true body))
 
 ;; ── nesting: a container instance lifts nested named instances to sibling defs ──
-;; `(Subsystem infra-model "doc" (Operation load-model …) …)` is a TOP-LEVEL def-emitting form:
+;; `(Module infra-model "doc" (Operation load-model …) …)` is a TOP-LEVEL def-emitting form:
 ;; the leading symbol is the name AND the var; nested `(Tag sym …)` instances become sibling
 ;; `def`s (so cross-refs stay VAR-refs) and route by target-type into the container's slots.
 

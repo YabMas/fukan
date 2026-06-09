@@ -5,10 +5,10 @@
    instance-vars into one db — references between instances are ordinary var-refs resolved by the
    assembler, so there is no merge/cross-ref pass. `union-dbs` folds an extractor's code db onto
    the assembled design db. The db it builds is the kernel's shared `StructureDb`."
-  (:require [lib.code :refer [Kind Operation Subsystem]]
+  (:require [lib.code :refer [Kind Operation Module]]
             [canvas.realization.kernel :as kernel]))
 
-(Subsystem canvas-source
+(Module canvas-source
   "Discover canvas specs, require + assemble them into the model db; fold extracted code in."
   (Kind Str) (Kind File) (Kind NsSymbol) (Kind EntityMap) (Kind RefTx) (Kind Eid) (Kind Unit)
 

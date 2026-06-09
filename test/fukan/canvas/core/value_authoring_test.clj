@@ -265,7 +265,7 @@
         "the query form round-trips through assembly")))
 
 ;; ── Change 3: generic in-module rule ─────────────────────────────────────────
-;; (in-module ?e ?mname) now resolves via :child relations, not :Module tag.
+;; (in-module ?e ?mname) now resolves via :child relations, not :Grouping tag.
 ;; The Grp + wa + wb assembled above: grp is named "g" and has :child rels to wa and wb.
 
 (deftest in-module-via-child-relation

@@ -1,6 +1,6 @@
 (ns lib.code
   "Shared-lib vocabulary — the grammar for describing CODE: `Kind` (atomic type),
-   `Effect`, `Operation` (a unit of computation) and `Subsystem` (a code boundary).
+   `Effect`, `Operation` (a unit of computation) and `Module` (a code boundary).
    These are standard code-structures, NOT unique to fukan — so they live in the
    reusable `lib/` stdlib, not in fukan's own canvas vocab. A consumer (a self-model
    or a demo) opts in by requiring this namespace; the extractor `extract` produces
@@ -64,7 +64,7 @@
   "A named unit of computation — the UNIFIED computational unit. An `Operation` is either
    AUTHORED (a self-model's intent: input/output Shapes, Effects, intended calls) or
    EXTRACTED from code (`:extracted true`, stamped by the plug-point — name + privacy, and
-   actual calls). A modelled Operation corresponds 1-on-1 (by name + corresponding Subsystem)
+   actual calls). A modelled Operation corresponds 1-on-1 (by name + corresponding Module)
    to its extracted twin; the two stay distinct nodes so spec and actual remain checkable.
 
    Authored with a malli signature: `(Operation (doc …) (signature [:=> [:catn [:name Type] …] Out]) (calls …))`
@@ -83,20 +83,25 @@
   ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
   (slot :sig       (optional :String)))
 
-;; ── code subsystem (boundary + ownership) ────────────────────────────────────
+;; ── code module (boundary + ownership) ───────────────────────────────────────
 
-(defstructure Subsystem
-  "A subsystem of code — a cohesion boundary (a namespace/module). Unlike the generic
-   grouping `Module` (which groups CONCEPTS), a Subsystem describes CODE: it has an explicit
-   API boundary and owns the data-shapes it is the source of truth for.
+(defstructure Module
+  "A code module — one cohesion boundary (a namespace). Like a `Grouping` it collects members
+   (`:child`), but it ALSO carries code semantics: an explicit API surface (`:exposes`) and the
+   data-shapes it is the source of truth for (`:owns`). Conceptually a Module IS-A Grouping;
+   making that an explicit `(includes Grouping)` waits until slot type-checks honor
+   `includes`-satisfaction (so `FacultyRealization.realizer` can tighten from `Any` to
+   `Grouping`) — deferred theory-composition work. (A Module is NOT a `Subsystem`: that level —
+   a cluster of modules realizing a capability — is reserved and undefined for now; today every
+   code namespace is a Module.)
 
    `:exposes` is the public surface (the Operations callers depend on); `:owns` are the Kinds
-   this subsystem DECIDES — others adopt them, they don't redefine them; `:child` is the full
+   this module DECIDES — others adopt them, they don't redefine them; `:child` is the full
    membership / ownership backbone (`in-module` resolves over it)."
   (slot :exposes (many Operation))   ; the public API surface
   (slot :owns    (many Kind))        ; the Kinds it is the source of truth for
   (slot :child   (many Any))         ; internal members + ownership backbone
-  (law "a Kind is owned by at most one Subsystem"
+  (law "a Kind is owned by at most one Module"
     :offenders '[?k]
     :where '[[?k :structure/of :Kind]
              [?r1 :rel/from ?s1] [?r1 :rel/kind :owns] [?r1 :rel/to ?k]

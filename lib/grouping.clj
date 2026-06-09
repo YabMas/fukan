@@ -1,5 +1,5 @@
 (ns lib.grouping
-  "Shared-lib vocabulary — the domain-agnostic structural primitives: `Module` (a named
+  "Shared-lib vocabulary — the domain-agnostic structural primitives: `Grouping` (a named
    grouping) and `Connected` (the facet for a node that participates in the directed graph
    over its own kind). These are LANGUAGE, not fukan-specific domain concepts: any model
    groups things and any flow node is connected — so they live in the reusable `lib/`
@@ -8,11 +8,13 @@
    Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
-(defstructure Module
-  "A named grouping of model instances — the unit a subsystem view occupies. `:child`
-   is a heterogeneous container (the `Any` wildcard) so a module groups Operations, Kinds,
-   Concepts, Faculties — whatever its members are. `in-module` resolves over these
-   `:child` relations (no privileged `:Module` tag in the kernel — a module is ordinary vocab)."
+(defstructure Grouping
+  "The most abstract grouping — a named bag of model instances, pure membership and nothing
+   more. `:child` is a heterogeneous container (the `Any` wildcard) so a Grouping collects
+   Operations, Kinds, Concepts, Faculties — whatever its members are. It carries no API or
+   ownership semantics; a code `Module` (`lib.code`) is a Grouping that adds those.
+   `in-module` resolves over these `:child` relations (no privileged `:Grouping` tag in the
+   kernel — a grouping is ordinary vocab)."
   (slot :child (many Any)))
 
 (defstructure Connected

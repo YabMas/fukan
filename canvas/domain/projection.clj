@@ -6,7 +6,7 @@
    turn model elements into that target's content. The overview's `Faculty
    \"Projection\"` is `realized-by` this module."
   (:require [canvas.vocabulary.projection :refer [Projection Mapping]]
-            [lib.grouping :refer [Module]]
+            [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]))
 
 (def Blueprint
@@ -31,4 +31,4 @@
     (context "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:")))
 
 (def projection
-  (Module (child Blueprint DriftClose)))
+  (Grouping (child Blueprint DriftClose)))

@@ -17,7 +17,7 @@
    (Concept instance vars are `c-`-prefixed so they don't shadow the `Concept`
    constructor — fukan's own kernel modelled in fukan's own meta-vocab.)"
   (:require [canvas.vocabulary.meta :refer [Concept MetaSlot]]
-            [lib.code :refer [Kind Operation Subsystem]]
+            [lib.code :refer [Kind Operation Module]]
             [canvas.realization.query-engine :as query-engine]))
 
 ;; leaf concepts — scalar types, the substrate's atoms, and (reflexively) the
@@ -87,7 +87,7 @@
     (calls vocab-rules)))
 
 (def core-structure
-  (Subsystem
+  (Module
     (exposes check vocab-rules)                    ; the kernel capabilities others compose
     (owns StructureDb Violation Rule)              ; the data-shapes core.structure decides (others adopt StructureDb)
     (child c-Keyword c-String c-Bool c-Int c-Concept c-Node c-Cardinality

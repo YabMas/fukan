@@ -30,15 +30,15 @@
           "alpha's malli/schema metadata is lifted, pr-str'd, onto :val/sig"))))
 
 (deftest operations-are-owned-by-their-subsystem
-  (testing "each namespace becomes a Subsystem that owns its Operations (via :child relations)"
+  (testing "each namespace becomes a Module that owns its Operations (via :child relations)"
     (let [db    (tc/extract "test/fixtures/target/sample.clj")
           owned (d/q '[:find ?mn ?on
-                       :where [?m :structure/of :Subsystem] [?m :entity/name ?mn]
+                       :where [?m :structure/of :Module] [?m :entity/name ?mn]
                               [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?o]
                               [?o :structure/of :Operation] [?o :entity/name ?on]]
                      db)]
       (is (= #{["sample" "alpha"] ["sample" "beta"] ["sample" "delta"]} (set owned))
-          "the `sample` namespace is a Subsystem owning all three operations"))))
+          "the `sample` namespace is a Module owning all three operations"))))
 
 (deftest every-modelled-stage-is-realized-in-src
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/)

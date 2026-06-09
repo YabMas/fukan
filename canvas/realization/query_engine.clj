@@ -12,9 +12,9 @@
 
    Modelled faithfully like canvas-source/target — each fn an Operation with shaped I/O +
    call edges."
-  (:require [lib.code :refer [Kind Operation Subsystem]]))
+  (:require [lib.code :refer [Kind Operation Module]]))
 
-(Subsystem core-rules
+(Module core-rules
   "Derive datalog rules from the live vocabulary so laws/lenses read at domain altitude."
   (Kind Keyword) (Kind Symbol) (Kind StructureDef) (Kind Pred) (Kind Rule)   ; owned data-shapes
   (Operation ^:private rule-sym "A tag → its rule head symbol."

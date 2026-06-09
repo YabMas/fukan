@@ -11,8 +11,8 @@
 (def substrate-rules
   "Fixed rules for substrate relations that are not structure slots.
    `in-module` is generic: 'e is in module named mname' means some node m named mname
-   contains e — via `:child` (generic membership), or, for a `Subsystem`, via `:exposes`
-   (a public Operation) or `:owns` (an owned Kind). No :Module tag / :module/child needed."
+   contains e — via `:child` (generic membership), or, for a `Module`, via `:exposes`
+   (a public Operation) or `:owns` (an owned Kind). No :Grouping tag / :module/child needed."
   '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
     [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
     [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]

@@ -74,7 +74,7 @@
           docs      (m/render db "Docs" extract)]
       (is (str/includes? blueprint "Implement `extract`") "Blueprint → an implementation spec")
       (is (str/includes? docs "### extract") "Docs → a reference doc section")
-      (is (str/includes? docs "**Module:** target-clojure"))
+      (is (str/includes? docs "**Grouping:** target-clojure"))
       (is (str/includes? docs "**Takes:** paths") "shapes still compose via dispatch under Docs")
       (is (not= blueprint docs) "same node, different artifact per projection"))))
 
@@ -190,7 +190,7 @@
           out      (m/materialize-projection db (by-name db "Docs"))]
       (is (str/includes? out "### analyze") "rendered under the projection's name (Docs)")
       (is (str/includes? out "### extract"))
-      (is (str/includes? out "**Module:** target-clojure")))))
+      (is (str/includes? out "**Grouping:** target-clojure")))))
 
 (deftest probe-foci-compose-into-a-projection
   (testing "a probe's observation foci flow straight into a projection (the seam)"

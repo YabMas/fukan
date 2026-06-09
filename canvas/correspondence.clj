@@ -2,8 +2,8 @@
   "The model↔code correspondence SEAM — kept OFF the domain. Code is a projection of the
    model, so the model must not reference what realizes it; the dependency runs the other
    way. A `FacultyRealization` reifies that mapping: it carries BOTH endpoints (a domain `Faculty`
-   and the subsystem `Module`s that realize it), so neither the pure domain `Faculty` nor
-   the generic language `Module` references the other.
+   and the `Grouping`s that realize it — code Modules and/or model Groupings), so neither the
+   pure domain `Faculty` nor the generic language `Grouping` references the other.
 
    This view also hosts the model↔code laws (`:scope :global`, escaping self-scoping —
    the tell that they aren't about any single concept):
@@ -15,7 +15,7 @@
    faculties) and the subsystem modules (the realizers)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [canvas.vocabulary.faculty :refer [Faculty]]
-            [lib.grouping :refer [Module]]
+            [lib.grouping :refer [Grouping]]
             [canvas.domain.faculties :as ov]
             [canvas.realization.pipeline :as pipeline]
             [canvas.realization.canvas-source :as canvas-source]
@@ -30,11 +30,13 @@
             [canvas.domain.projection :as projection-model]))
 
 (defstructure FacultyRealization
-  "Model↔code correspondence: the subsystem `Module`s that realize a domain `Faculty`.
+  "Model↔code correspondence: the `Grouping`s that realize a domain `Faculty`.
    Authored from here (the seam), never on the domain — this node holds both endpoints,
    so the Faculty stays pure (it never names what realizes it)."
   (slot :realizes (one Faculty))     ; the domain concept being realized
-  (slot :realizer (many Any)))       ; the realizing view(s) — code Subsystems and/or model Modules
+  (slot :realizer (many Any)))       ; the realizing view(s) — code Modules and/or model Groupings
+                                     ; (stays `Any`: tightening to `(many Grouping)` needs slot
+                                     ; type-checks to honor `includes`-satisfaction — deferred)
 
 ;; the realization mapping — lifted out of the structural perspective, inverted so the
 ;; correspondence (not the domain) owns it
@@ -102,7 +104,7 @@
 
 (defstructure DataFormAdherence
   "Law-host: a designed concept's data form must be present in its realizing CODE — every
-   `Subsystem` realizing a faculty that has a data form must own an `Operation` whose input or
+   `Module` realizing a faculty that has a data form must own an `Operation` whose input or
    output IS that data-form Kind. The structural bridge: the code that realizes the `Model`
    concept must actually produce/consume the `StructureDb` it is. (Modelled Operations are in
    turn asserted against real functions by the op-layer correspondence law, so this reaches the
@@ -112,7 +114,7 @@
     :offenders '[?fac ?sub]
     :where '[[?df :structure/of :DataForm] (concept ?df ?fac) (form ?df ?k)
              [?fr :structure/of :FacultyRealization] (realizes ?fr ?fac) (realizer ?fr ?sub)
-             [?sub :structure/of :Subsystem] (named ?sub ?sn)
+             [?sub :structure/of :Module] (named ?sub ?sn)
              (not-join [?sub ?sn ?k]
                [?op :structure/of :Operation] (in-module ?op ?sn)
                (or-join [?op ?sh]
@@ -121,5 +123,5 @@
                [?ty :rel/from ?sh] [?ty :rel/kind :names] [?ty :rel/to ?k])]))
 
 (def correspondence
-  (Module (child r-model r-structure r-target r-lens r-probe r-projection
+  (Grouping (child r-model r-structure r-target r-lens r-probe r-projection
                  model-data-form probe-data-form projection-data-form)))

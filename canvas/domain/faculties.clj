@@ -13,7 +13,7 @@
    off this perspective in `canvas.correspondence` — the domain and its
    perspectives never point down at their realizers.)"
   (:require [canvas.vocabulary.faculty :refer [Faculty]]
-            [lib.grouping :refer [Module]]))
+            [lib.grouping :refer [Grouping]]))
 
 ;; faculties referenced before they are defined (the flow has forward edges)
 (declare Structure Probe Projection Finding Blueprint Instruction)
@@ -52,6 +52,6 @@
 ;; the "fukan" module groups the faculties — collab's phases reference its members
 ;; (e.g. (across "fukan" "Lens")) as ordinary var refs into this namespace.
 (def fukan
-  (Module
+  (Grouping
     (child Model Structure Canvas Target Lens Probe Projection
            Finding Blueprint Instruction)))
