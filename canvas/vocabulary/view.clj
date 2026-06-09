@@ -1,4 +1,4 @@
-(ns canvas.domain.view
+(ns canvas.vocabulary.view
   "The fukan-on-fukan model's CROSS-VIEW layer — how the interlocking perspectives map onto
    each other. `view-map` is a relation-COPRODUCT (a `defrelation-coproduct`): the union of
    the cross-view link relations the perspectives already author —
@@ -11,7 +11,7 @@
    concept across views.
 
    (The model↔code materialization is NOT a view-map member — it is the correspondence
-   concern, kept off the domain in `canvas.materialize.correspondence`.)
+   concern, kept off the domain in `canvas.correspondence`.)
 
    Vocab-only canvas spec (no build-canvas): it declares grammar, ingests no instances."
   (:require [fukan.canvas.core.structure :refer [defrelation-coproduct]]))

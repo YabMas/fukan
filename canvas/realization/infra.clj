@@ -1,4 +1,4 @@
-(ns canvas.materialize.infra
+(ns canvas.realization.infra
   "Canvas spec for fukan's infra.model subsystem (the model lifecycle), modelled with the
    materialize code vocab. It exposes the model-lifecycle API (load/get/refresh); the model it
    produces is the kernel's shared `StructureDb` (the domain `Model` faculty's data realization)
@@ -6,9 +6,9 @@
 
    Authored as one nested `Subsystem` form: the operations live inside it (no separate `def`s),
    each interned as a var by the def-emitting macro so cross-refs stay var-refs."
-  (:require [canvas.materialize.vocab :refer [Operation Subsystem]]
-            [canvas.materialize.kernel :as kernel]
-            [canvas.materialize.extraction :as extraction]))
+  (:require [lib.code :refer [Operation Subsystem]]
+            [canvas.realization.kernel :as kernel]
+            [canvas.realization.extraction :as extraction]))
 
 (Subsystem infra-model
   "The model lifecycle — load / get / refresh the held Model from a source path."

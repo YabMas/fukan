@@ -1,57 +1,43 @@
 (ns canvas.domain.probe
-  "The fukan-on-fukan model's PROBE layer — one of the two acts on the model. A `Probe`
-   READS the model through a `Lens` and yields a `Finding`: it observes / extracts,
-   leaving the model unchanged (its complement, a `Projection`, RE-PRESENTS the model as a
-   target artifact). Probe and Projection are complementary acts — analysis vs synthesis.
+  "Self-spec: fukan's PROBE acts — reading the model through a lens to yield a finding.
+   Forward-looking (the tier is parked under `.paused/`). Each probe reads THROUGH a
+   lens (the `lens` view's Lens instances — interlocking) and yields a finding.
+   INSPECT ⊂ PROBE: integrity/coverage/drift are probes whose findings GATE action
+   (Signals); survey/patterns/… yield non-gating Views. The overview's `Faculty
+   \"Probe\"` is `realized-by` this module."
+  (:require [canvas.vocabulary.probe :refer [Probe Finding]]
+            [lib.grouping :refer [Module]]
+            [canvas.domain.lens :as lens]))
 
-   INSPECT ⊂ PROBE: an inspect is just a probe whose finding GATES action (a trust /
-   health verdict — a Signal). A non-gating finding is a View, a perspective to reason
-   with. So inspect is not a separate structure — it is a probe whose `Finding` has
-   `:gating true`, queryable as data. (The kernel already ships one such probe:
-   `structure/check`, laws → violations, is the canonical integrity inspect.)
+;; non-gating findings — perspectives to reason with (Views). Each STATES its `holds`
+;; invariant in prose; the executable check lives in canvas.realization.acts.
+(def Survey   (Finding (gating false) (doc "A structural overview of the whole model.")))
+(def Patterns (Finding (gating false)
+                (doc "Recurring structural patterns across the model.")
+                (holds "a model with no recurring structures yields no reported patterns")))
+(def Consistency (Finding (gating false) (doc "Where contracts and structure align — or drift.")))
+(def TarPit      (Finding (gating false) (doc "Complexity hotspots — tangles worth attention.")))
+;; gating findings — trust verdicts (the inspect case → Signals)
+(def IntegrityReport
+  (Finding (gating true)
+    (doc "Whether the model's structure holds together.")
+    (holds "a model with no law violations yields no reported violations")))
+(def CoverageReport (Finding (gating true) (doc "How much of the target's code is spec-covered.")))
+(def DriftReport    (Finding (gating true) (doc "Where specifications and code have diverged.")))
 
-   Vocab-only canvas spec (no build-canvas)."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]))
+;; probes — each reads through a lens → a finding. (Which kernel capability a probe
+;; invokes when run — e.g. integrity composes `check` — is a ProbeComposition in the
+;; realization view, not stated here.)
+(def survey      (Probe (through lens/survey)      (yields Survey)))
+(def patterns    (Probe (through lens/patterns)    (yields Patterns)))
+(def consistency (Probe (through lens/consistency) (yields Consistency)))
+(def tar-pit     (Probe (through lens/tar-pit)     (yields TarPit)))
+;; inspects — probes whose finding gates
+(def integrity   (Probe (through lens/integrity)   (yields IntegrityReport)))
+(def coverage    (Probe (through lens/coverage)    (yields CoverageReport)))
+(def drift       (Probe (through lens/drift)       (yields DriftReport)))
 
-(defstructure Finding
-  "What a probe yields — an observation ABOUT the model. A gating finding is a trust
-   Signal that gates action (the inspect case); a non-gating finding is a View, a
-   perspective a human/LLM reasons with.
-
-   A finding may STATE a CONTRACT — a `:holds` invariant (the human's correctness spec for
-   the probe's output). The executable check of that invariant (a `(fn [result target-db] →
-   ok?)`) is realization mechanism — a `FindingCheck` in `canvas.materialize.realization`,
-   surfaced by the projector as a runtime gate. The complement of this observation act is a
-   `Projection` (synthesis)."
-  (slot :doc    (optional :String))
-  (slot :gating (one :Bool))       ; gating → a trust Signal (inspect); else a View
-  (slot :holds  (optional :String)) ; the stated invariant (its executable check lives in the realization view)
-  ;; a finding is meaningful only if some probe yields it
-  (law "every finding is yielded by some probe"
-    :offenders '[?f]
-    :where '[(not [?r :rel/kind :yields] [?r :rel/to ?f])]))
-
-(defstructure Probe
-  "Reads the model through a Lens → a Finding. The model is unchanged (probe observes;
-   it does not re-present).
-
-   The domain probe states only what it reads (`:through` a Lens) and produces (`:yields` a
-   Finding). Which kernel capability it invokes when run (e.g. the integrity probe composes
-   the kernel's `check`) is realization mechanism — a `ProbeComposition` in
-   `canvas.materialize.realization`."
-  (slot :doc     (optional :String))
-  (slot :through (one Lens))       ; the focus it reads through
-  (slot :yields  (one Finding)))   ; the observation it produces
-
-(defstructure Signal
-  "A gating Finding — an inspect's trust verdict. Realized: derived, not instantiated."
-  (realized-as '[(Finding ?e) [?e :val/gating true]]))
-
-(defstructure View
-  "A non-gating Finding — a perspective to reason with. Realized."
-  (realized-as '[(Finding ?e) [?e :val/gating false]]))
-
-(defstructure Inspect
-  "A Probe whose Finding gates action (Signal). Realized — 'inspect ⊂ probe' as a derived
-   concept, not a separate structure (matches the long-standing prose)."
-  (realized-as '[(Probe ?e) [?r :rel/from ?e] [?r :rel/kind :yields] [?r :rel/to ?f] (Signal ?f)]))
+(def probe
+  (Module
+    (child Survey Patterns Consistency TarPit IntegrityReport CoverageReport DriftReport
+           survey patterns consistency tar-pit integrity coverage drift)))

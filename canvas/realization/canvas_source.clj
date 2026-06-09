@@ -1,12 +1,12 @@
-(ns canvas.materialize.canvas-source
+(ns canvas.realization.canvas-source
   "Self-spec: fukan's canvas-ingestion subsystem (`fukan.canvas.projection.canvas-source`).
 
    `build` discovers the canvas namespaces, requires them, and assembles their interned
    instance-vars into one db — references between instances are ordinary var-refs resolved by the
    assembler, so there is no merge/cross-ref pass. `union-dbs` folds an extractor's code db onto
    the assembled design db. The db it builds is the kernel's shared `StructureDb`."
-  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
-            [canvas.materialize.kernel :as kernel]))
+  (:require [lib.code :refer [Kind Operation Subsystem]]
+            [canvas.realization.kernel :as kernel]))
 
 (Subsystem canvas-source
   "Discover canvas specs, require + assemble them into the model db; fold extracted code in."

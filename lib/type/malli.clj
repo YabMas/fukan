@@ -1,13 +1,15 @@
-(ns canvas.dialects.malli
-  "The malli schema DIALECT — fukan-the-project's chosen type language.
+(ns lib.type.malli
+  "The malli type DIALECT — one entry in the shared-lib's pluggable type-authoring
+   surface (`lib.type.*`). A consuming model selects it by requiring this namespace; it
+   is generic, not fukan-specific, so it lives in the reusable `lib/` stdlib rather than
+   fukan's canvas vocab.
 
-   A richer Shape: malli's grammar modelled as content-deduped `^:value`
-   structures, so a schema is a queryable subgraph (plain `d/q`), never a
-   `pr-str` blob. The core stays blind — it sees an opaque schema reference;
-   this dialect, and its src/-side bridges (render now; parse/adheres? later),
-   own all interpretation.
+   A richer Shape: malli's grammar modelled as content-deduped `^:value` structures, so a
+   schema is a queryable subgraph (plain `d/q`), never a `pr-str` blob. The core stays
+   blind — it sees an opaque schema reference; this dialect, and its src/-side bridges
+   (render now; parse/adheres? later), own all interpretation.
 
-   Vocab-only canvas spec (no build-canvas); auto-discovered under canvas/**."
+   Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
 (defn ^:export read-choice

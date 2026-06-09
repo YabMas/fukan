@@ -1,9 +1,9 @@
-(ns canvas.domain.faculty
+(ns canvas.vocabulary.faculty
   "Domain grammar — what a `Faculty` IS: a core concept/capability of fukan. The
-   vocabulary the structural perspective (`canvas.perspectives.structure.overview`) is
+   vocabulary the structural perspective (`canvas.domain.faculties`) is
    written in. (Split out of the old `canvas.vocab.arch`: `Faculty` is a fukan-specific
    domain concept and lives here; the generic `Module`/`Connected` primitives moved to
-   `canvas.language.grouping`.)
+   `lib.grouping`.)
 
    Vocab-only canvas spec (no build-canvas)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
@@ -18,7 +18,7 @@
 
    The domain stays pure — a Faculty names only other faculties, never what realizes it in
    code. That model↔code mapping (and the law that a `:feeds` must land as a module link)
-   is the correspondence concern, in `canvas.materialize.correspondence`."
+   is the correspondence concern, in `canvas.correspondence`."
   (includes Connected)
   (slot :doc       (optional :String))
   (slot :feeds     (many Faculty))   ; internal dataflow

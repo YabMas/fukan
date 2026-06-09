@@ -1,11 +1,11 @@
-(ns canvas.language.grouping
-  "Shared modelling vocabulary — the domain-agnostic structural primitives used across
-   every layer: `Module` (a named grouping a subsystem view occupies) and `Connected`
-   (the facet for a node that participates in the directed graph over its own kind).
-   These are LANGUAGE, not fukan-specific domain concepts: any model groups things and any
-   flow node is connected.
+(ns lib.grouping
+  "Shared-lib vocabulary — the domain-agnostic structural primitives: `Module` (a named
+   grouping) and `Connected` (the facet for a node that participates in the directed graph
+   over its own kind). These are LANGUAGE, not fukan-specific domain concepts: any model
+   groups things and any flow node is connected — so they live in the reusable `lib/`
+   stdlib. (`lib.code`'s `Operation` includes `Connected`.)
 
-   Vocab-only canvas spec (no build-canvas)."
+   Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
 (defstructure Module

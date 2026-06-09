@@ -8,75 +8,75 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  canvas.perspectives.flow.collab-model
+  canvas.domain.flow
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.domain.projection-model
+  canvas.domain.projection
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.canvas-source
+  canvas.realization.canvas-source
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.correspondence
+  canvas.correspondence
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.realization
+  canvas.realization.acts
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.extraction
+  canvas.realization.extraction
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.infra
+  canvas.realization.infra
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.kernel
+  canvas.realization.kernel
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.domain.lens-model
+  canvas.domain.lens
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.lens-engine
+  canvas.realization.lens-engine
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.materialize
+  canvas.realization.materialize
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.perspectives.structure.overview
+  canvas.domain.faculties
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.pipeline
+  canvas.realization.pipeline
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.domain.probe-acts
+  canvas.domain.probe
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.probe-surface
+  canvas.realization.probe-surface
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.query-engine
+  canvas.realization.query-engine
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.target
+  canvas.realization.target
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.materialize.vocab
+  lib.code
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   demos.access-control.access-control-test
@@ -171,7 +171,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.dialects.malli
+  lib.type.malli
   {:linters {:unused-public-var {:level :off}}}
   fukan.dialect.malli-vocab-test
   {:linters {:unused-namespace {:level :off}
@@ -194,29 +194,29 @@
  :hooks
  {:analyze-call
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
-   canvas.language.grouping/Connected hooks.fukan.structure/instance
-   canvas.domain.faculty/Faculty hooks.fukan.structure/instance
-   canvas.language.grouping/Module hooks.fukan.structure/instance
-   canvas.materialize.correspondence/FacultyRealization hooks.fukan.structure/instance
-   canvas.materialize.correspondence/DataForm hooks.fukan.structure/instance
-   canvas.materialize.realization/LensSelection hooks.fukan.structure/instance
-   canvas.materialize.realization/FindingCheck hooks.fukan.structure/instance
-   canvas.materialize.realization/ProbeComposition hooks.fukan.structure/instance
-   canvas.perspectives.flow.collab/Phase hooks.fukan.structure/instance
-   canvas.domain.lens/Lens hooks.fukan.structure/instance
-   canvas.language.meta/Concept hooks.fukan.structure/instance
-   canvas.language.meta/MetaSlot hooks.fukan.structure/instance
-   canvas.materialize.vocab/Effect hooks.fukan.structure/instance
-   canvas.materialize.vocab/Operation hooks.fukan.structure/instance
-   canvas.materialize.vocab/Kind hooks.fukan.structure/instance
-   canvas.dialects.malli/Schema hooks.fukan.structure/instance
-   canvas.dialects.malli/SchemaField hooks.fukan.structure/instance
-   canvas.dialects.malli/SchemaChoice hooks.fukan.structure/instance
-   canvas.materialize.vocab/Subsystem hooks.fukan.structure/instance
-   canvas.domain.probe/Finding hooks.fukan.structure/instance
-   canvas.domain.probe/Probe hooks.fukan.structure/instance
-   canvas.domain.projection/Mapping hooks.fukan.structure/instance
-   canvas.domain.projection/Projection hooks.fukan.structure/instance
+   lib.grouping/Connected hooks.fukan.structure/instance
+   canvas.vocabulary.faculty/Faculty hooks.fukan.structure/instance
+   lib.grouping/Module hooks.fukan.structure/instance
+   canvas.correspondence/FacultyRealization hooks.fukan.structure/instance
+   canvas.correspondence/DataForm hooks.fukan.structure/instance
+   canvas.realization.acts/LensSelection hooks.fukan.structure/instance
+   canvas.realization.acts/FindingCheck hooks.fukan.structure/instance
+   canvas.realization.acts/ProbeComposition hooks.fukan.structure/instance
+   canvas.vocabulary.phase/Phase hooks.fukan.structure/instance
+   canvas.vocabulary.lens/Lens hooks.fukan.structure/instance
+   canvas.vocabulary.meta/Concept hooks.fukan.structure/instance
+   canvas.vocabulary.meta/MetaSlot hooks.fukan.structure/instance
+   lib.code/Effect hooks.fukan.structure/instance
+   lib.code/Operation hooks.fukan.structure/instance
+   lib.code/Kind hooks.fukan.structure/instance
+   lib.type.malli/Schema hooks.fukan.structure/instance
+   lib.type.malli/SchemaField hooks.fukan.structure/instance
+   lib.type.malli/SchemaChoice hooks.fukan.structure/instance
+   lib.code/Subsystem hooks.fukan.structure/instance
+   canvas.vocabulary.probe/Finding hooks.fukan.structure/instance
+   canvas.vocabulary.probe/Probe hooks.fukan.structure/instance
+   canvas.vocabulary.projection/Mapping hooks.fukan.structure/instance
+   canvas.vocabulary.projection/Projection hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance

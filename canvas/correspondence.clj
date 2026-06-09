@@ -1,4 +1,4 @@
-(ns canvas.materialize.correspondence
+(ns canvas.correspondence
   "The model↔code correspondence SEAM — kept OFF the domain. Code is a projection of the
    model, so the model must not reference what realizes it; the dependency runs the other
    way. A `FacultyRealization` reifies that mapping: it carries BOTH endpoints (a domain `Faculty`
@@ -14,20 +14,20 @@
    It is the seam, so it knows both sides — it requires the structural perspective (for the
    faculties) and the subsystem modules (the realizers)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.domain.faculty :refer [Faculty]]
-            [canvas.language.grouping :refer [Module]]
-            [canvas.perspectives.structure.overview :as ov]
-            [canvas.materialize.pipeline :as pipeline]
-            [canvas.materialize.canvas-source :as canvas-source]
-            [canvas.materialize.infra :as infra]
-            [canvas.materialize.kernel :as kernel]
-            [canvas.materialize.query-engine :as query-engine]
-            [canvas.materialize.target :as target]
-            [canvas.domain.lens-model :as lens-model]
-            [canvas.materialize.lens-engine :as lens-engine]
-            [canvas.domain.probe-acts :as probe-acts]
-            [canvas.materialize.probe-surface :as probe-surface]
-            [canvas.domain.projection-model :as projection-model]))
+            [canvas.vocabulary.faculty :refer [Faculty]]
+            [lib.grouping :refer [Module]]
+            [canvas.domain.faculties :as ov]
+            [canvas.realization.pipeline :as pipeline]
+            [canvas.realization.canvas-source :as canvas-source]
+            [canvas.realization.infra :as infra]
+            [canvas.realization.kernel :as kernel]
+            [canvas.realization.query-engine :as query-engine]
+            [canvas.realization.target :as target]
+            [canvas.domain.lens :as lens-model]
+            [canvas.realization.lens-engine :as lens-engine]
+            [canvas.domain.probe :as probe-acts]
+            [canvas.realization.probe-surface :as probe-surface]
+            [canvas.domain.projection :as projection-model]))
 
 (defstructure FacultyRealization
   "Model↔code correspondence: the subsystem `Module`s that realize a domain `Faculty`.

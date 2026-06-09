@@ -61,8 +61,22 @@ arises; otherwise the focus is exploring modelling itself.
 
 The core (`src/fukan/canvas/`) ships only the `defstructure` primitive and the
 ingestion/projection machinery. It ships **no domain vocabulary**: every modelling
-project authors its own grammar on the core. Fukan-on-fukan's vocabulary lives in
-`canvas/vocab/`; each demo owns its grammar under `demos/<domain>/vocab/`.
+project authors its own grammar on the core. Fukan-on-fukan's *unique* vocabulary lives
+in `canvas/vocabulary/`; each demo owns its grammar under `demos/<domain>/vocab/`.
+
+Reusable, domain-general vocabulary — vocab that is *not* unique to any one project —
+lives in an **opt-in stdlib** at `lib/` (namespaces `lib.*`, reachable via the `.`
+classpath root, parallel to `canvas.*`). It is **required, not auto-discovered**, so it
+contributes grammar only when a model opts in. Current entries: `lib.code` (Kind / Effect
+/ Operation / Subsystem — standard code-structures), `lib.grouping` (Module / Connected —
+structural primitives), `lib.type.malli` (the malli type dialect — first entry in the
+`lib.type.*` pluggable type-authoring surface). This keeps `canvas/vocabulary/` focused on
+what is genuinely fukan-specific. The stdlib is deliberately *not* a methodology/middle
+layer (DDD/hexagonal/C4) — it's primitive, reusable structures, grown only on real need
+(e.g. add a `lib.code` batch like `in-process`/`event-driven` when a second consumer needs
+it). NB: tags are still a single global namespace — a shared `lib` tag is safe only while
+every consumer uses the same one; per-project namespaced tags are deferred until a
+consumer needs to diverge.
 
 A `defstructure` is a composition of **slots** plus **laws**:
 
@@ -80,15 +94,26 @@ A `defstructure` is a composition of **slots** plus **laws**:
   :global` opts a law out of self-scoping. `(structure/check db)` runs every law →
   violations.
 
-The current catalog is the source: read `canvas/vocab/*.clj` for fukan's own
-grammar (shape/op/meta/arch/probe/projection/collab/lens) and the demo vocabs.
+The current catalog is the source: read `canvas/vocabulary/*.clj` for fukan's own
+grammar (faculty/lens/probe/projection/view/phase/meta), `lib/*.clj` for the reusable
+stdlib (code/grouping/type.malli), and the demo vocabs.
 
 ## Spec locations
 
-- `canvas/vocab/<layer>.clj` — fukan-on-fukan's vocabulary (vocab-only specs: a
-  `defstructure` grammar, no `build-canvas`).
-- `canvas/model/<subsystem>.clj` — fukan-on-fukan's models (each defines a
-  `^:export build-canvas` returning a structure db).
+The self-model is laid out by **altitude**, not by pipeline role:
+
+- `lib/<grammar>.clj` (ns `lib.*`) — the opt-in reusable stdlib: domain-general vocab
+  (`lib.code`, `lib.grouping`, `lib.type.malli`). Required by consumers, not
+  auto-discovered.
+- `canvas/vocabulary/<grammar>.clj` — the grammars *unique to fukan* (vocab-only specs:
+  a `defstructure` grammar, ingests no instances).
+- `canvas/domain/<concept>.clj` — fukan as an *abstract* system: the `Faculty` hub
+  (`faculties.clj`) and the use-side act instances (`lens`/`probe`/`projection`/`flow`).
+- `canvas/realization/<subsystem>.clj` — fukan as a *built* system: one self-spec per
+  implementation subsystem (`kernel`/`pipeline`/`infra`/`target`/…), plus `acts.clj`
+  (the mechanism that runs the modelled acts).
+- `canvas/correspondence.clj` — the seam between the two altitudes: the laws asserting
+  each domain faculty is realized by its subsystem(s). It alone sits at the canvas root.
 - `demos/<domain>/{vocab,model}/…` + a regression test; run with `clj -M:demos`.
 - `.legacy-allium/` — pre-canvas Allium/Boundary specs (read-only archive; not on
   the classpath; not loaded).
@@ -180,4 +205,6 @@ mixing them corrupts history.
 - `src/fukan/canvas/projection/canvas_source.clj` — canvas discovery, merge, cross-refs
 - `src/fukan/model/materialize.clj` — model→implementation-spec projection
 - `src/fukan/target/{clojure,correspondence}.clj` — code extraction + correspondence laws
-- `canvas/vocab/`, `canvas/model/` — fukan-on-fukan's vocabulary and models
+- `lib/` (ns `lib.*`) — the opt-in reusable stdlib vocab (code / grouping / type.malli)
+- `canvas/{vocabulary,domain,realization}/` + `canvas/correspondence.clj` —
+  fukan-on-fukan's unique grammars, abstract model, subsystem self-specs, and the seam

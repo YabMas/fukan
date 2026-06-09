@@ -111,12 +111,20 @@ meant to be and what it actually is.
 
 ## Self-model and demos
 
-Fukan is exercised by modelling — including **modelling itself**: `canvas/vocab/` holds
-fukan's own vocabulary (data / computation / schema / architecture / probe / projection
-/ collaboration / lens layers) and `canvas/model/` models its subsystems on that
-vocabulary. Canvas files under `canvas/**/*.clj` are auto-discovered and merged into one
-structure db — the model. `clj -M:demos` runs a corpus of standalone modelling demos
-(grammar, ER, workflow, access-control, type-system) that pressure-test the core.
+Fukan is exercised by modelling — including **modelling itself**. The self-model is laid
+out by altitude: `canvas/vocabulary/` holds the grammars *unique to fukan* (faculty /
+lens / probe / projection / view / phase / meta), `canvas/domain/` models fukan as an
+abstract system (its faculties and the use-side acts), and `canvas/realization/` models
+fukan as a built system (its subsystem self-specs) — with `canvas/correspondence.clj`
+sitting between the two as the seam that asserts they agree. Canvas files under
+`canvas/**/*.clj` are auto-discovered and merged into one structure db — the model.
+
+Reusable, domain-general vocabulary lives in a separate opt-in stdlib, `lib/` — code
+structures (`lib.code`: Operation / Effect / Kind / Subsystem), structural primitives
+(`lib.grouping`), and a pluggable type-authoring surface (`lib.type.malli`). It is
+required, not auto-discovered, so fukan's own canvas vocab stays focused on what is unique
+to fukan. `clj -M:demos` runs a corpus of standalone modelling demos (grammar, ER,
+workflow, access-control, type-system) that pressure-test the core.
 
 ## Development
 
@@ -142,8 +150,11 @@ In the REPL (`clj -M:dev`):
 ## Project structure
 
 ```
-canvas/vocab/      fukan-on-fukan's vocabulary (defstructure grammars)
-canvas/model/      fukan-on-fukan's subsystem models
+lib/                 reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.type.malli
+canvas/vocabulary/   the grammars unique to fukan (defstructure grammars)
+canvas/domain/       fukan as an abstract system (faculties + the use-side acts)
+canvas/realization/  fukan as a built system (subsystem self-specs)
+canvas/correspondence.clj  the seam asserting domain ↔ realization agree
 demos/             standalone modelling demos (vocab + model + regression)
 src/fukan/
   canvas/core/     the defstructure primitive, derived rules, lens evaluation

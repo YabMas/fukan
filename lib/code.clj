@@ -1,13 +1,15 @@
-(ns canvas.materialize.vocab
-  "The materialize layer's own VOCABULARY — the grammar for describing CODE, which is what
-   this layer corresponds the model to. Owned here, not by the extractor: `extract` produces
-   instances of these by tag, the self-models author instances of them, and they meet at
-   merge. (Moved out of `language/`: `op` and `shape` were never domain-agnostic — they
-   describe code.)
+(ns lib.code
+  "Shared-lib vocabulary — the grammar for describing CODE: `Kind` (atomic type),
+   `Effect`, `Operation` (a unit of computation) and `Subsystem` (a code boundary).
+   These are standard code-structures, NOT unique to fukan — so they live in the
+   reusable `lib/` stdlib, not in fukan's own canvas vocab. A consumer (a self-model
+   or a demo) opts in by requiring this namespace; the extractor `extract` produces
+   instances of these by tag, the model authors instances of them, and they meet at
+   merge.
 
-   Vocab-only canvas spec (no build-canvas)."
+   Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.dialects.malli :refer [Schema]]))
+            [lib.type.malli :refer [Schema]]))
 
 ;; ── data types ───────────────────────────────────────────────────────────────
 

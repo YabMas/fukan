@@ -7,9 +7,9 @@
             ;; fukan.dialect.malli referred for its render fn (registered per-test below)
             [fukan.dialect.malli :as malli]
             ;; Schema referred so clj-kondo resolves its instance-macro hook
-            [canvas.dialects.malli :refer [Schema]]
+            [lib.type.malli :refer [Schema]]
             ;; Kind — the named type a `ref` schema points at via :names.
-            [canvas.materialize.vocab :refer [Kind]]))
+            [lib.code :refer [Kind]]))
 
 (use-fixtures :each
   (fn [t] (typing/register-type-dialect! {:render malli/render}) (t)))

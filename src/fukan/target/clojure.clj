@@ -9,7 +9,7 @@
      defn / defn-     → Operation   (a named unit of computation, `:extracted true`)
 
    The extractor OWNS no vocabulary — `Operation`/`Subsystem` are defined in
-   `canvas.materialize.vocab`; this plug-point only EMITS instances of them by tag
+   `lib.code`; this plug-point only EMITS instances of them by tag
    (stamping `:extracted true` so an extracted Operation is distinguished from an
    authored one), and they meet that grammar at merge. Swap a different language's
    extractor in (Python `def`/module, …) and the same vocab plus the same cross-layer

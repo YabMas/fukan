@@ -1,4 +1,4 @@
-(ns canvas.perspectives.flow.collab
+(ns canvas.vocabulary.phase
   "The FLOW perspective (collaboration-loop) — fukan's purpose in motion, the dynamic
    companion to the structural faculty map. It shows the faculties IN MOTION: the human⊗AI
    cycle by which the model is used — intend → focus → observe → reason → apply →

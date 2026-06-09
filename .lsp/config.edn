@@ -25,23 +25,23 @@
               ;; `def`s are reached only by the global assembler's reflective var
               ;; scan (and cross-model var refs inside dropped defstructure clause
               ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
-              canvas.materialize.canvas-source
-              canvas.materialize.correspondence
-              canvas.materialize.realization
-              canvas.perspectives.flow.collab-model
-              canvas.materialize.extraction
-              canvas.materialize.infra
-              canvas.materialize.kernel
-              canvas.domain.lens-model
-              canvas.materialize.lens-engine
-              canvas.materialize.materialize
-              canvas.perspectives.structure.overview
-              canvas.materialize.pipeline
-              canvas.domain.probe-acts
-              canvas.materialize.probe-surface
-              canvas.domain.projection-model
-              canvas.materialize.query-engine
-              canvas.materialize.target
+              canvas.realization.canvas-source
+              canvas.correspondence
+              canvas.realization.acts
+              canvas.domain.flow
+              canvas.realization.extraction
+              canvas.realization.infra
+              canvas.realization.kernel
+              canvas.domain.lens
+              canvas.realization.lens-engine
+              canvas.realization.materialize
+              canvas.domain.faculties
+              canvas.realization.pipeline
+              canvas.domain.probe
+              canvas.realization.probe-surface
+              canvas.domain.projection
+              canvas.realization.query-engine
+              canvas.realization.target
               demos.access-control.model.rbac
               demos.access-control.access-control-test
               demos.atlas.model.auth
@@ -65,6 +65,7 @@
               fukan.canvas.projection.probes-test
               fukan.model.materialize-test
               fukan.model.pipeline-test
-              canvas.dialects.malli
+              lib.type.malli
+              lib.code
               fukan.dialect.malli-vocab-test
               fukan.dialect.malli-render-test}}}}

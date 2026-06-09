@@ -1,40 +1,34 @@
 (ns canvas.domain.projection
-  "The fukan-on-fukan model's PROJECTION layer. Projecting is a core abstract act:
-   re-presenting the model in some target form. A `Projection` is one such projected
-   representation (the implementation blueprint is one; docs, diagrams, other
-   realizations are future projections), built from source→artifact `Mapping`s.
+  "Self-spec: fukan's PROJECTION subsystem — re-presenting the model in target forms.
+   Forward-looking (the parked projection tier). The implementation Blueprint is the
+   first projection target; more (docs, diagrams, other realizations) are projections
+   we add as we go. Each projection is built from the source→artifact mappings that
+   turn model elements into that target's content. The overview's `Faculty
+   \"Projection\"` is `realized-by` this module."
+  (:require [canvas.vocabulary.projection :refer [Projection Mapping]]
+            [lib.grouping :refer [Module]]
+            [canvas.domain.lens :as lens]))
 
-   NB this is the COMPLEMENT of a PROBE (analysis vs synthesis): a probe OBSERVES the
-   model and yields a finding; a projection RE-PRESENTS the model, it doesn't judge it.
+(def Blueprint
+  (Projection
+    (doc "The model projected to implementation code — the first projection target.")
+    (through lens/survey)   ; renders through the whole-model focus (reused from the survey probe)
+    (maps (Mapping (from "an atomic value")    (to "a def")))
+    (maps (Mapping (from "a record structure") (to "a Malli schema")))
+    (maps (Mapping (from "a function")         (to "a defn")))
+    (maps (Mapping (from "a law")              (to "a predicate")))))
 
-   Vocab-only canvas spec (no build-canvas)."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]))
+;; instruct ⊂ projection: DriftClose is a CONTEXTUALIZATION of Blueprint, not a new
+;; target — it renders Blueprint's specs through the drift lens (the unrealized
+;; Operations) and frames them with a drift-closing context. The same composing shape
+;; contextualizes Blueprint as a new feature, a refactor, etc. — just a different
+;; context over the same base.
+(def DriftClose
+  (Projection
+    (doc "Blueprint, framed as drift to close — the unrealized Operations as instructions to implement.")
+    (contextualizes Blueprint)
+    (through lens/drift)
+    (context "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:")))
 
-(defstructure ^:value Mapping
-  "One source-kind → target-artifact rule within a projection — value-identified by
-   its (from, to)."
-  (slot :from (one :String))     ; the source structure kind
-  (slot :to   (one :String)))    ; the target artifact it becomes
-
-(defstructure Projection
-  "A projected representation of the model — a target we render it into. Two flavours,
-   composing:
-     a BASE projection renders source kinds directly — it `:maps` each focused kind to
-     a target artifact (Blueprint → implementation specs; Docs → documentation).
-     a CONTEXTUALIZATION renders THROUGH a base it `:contextualizes`, wrapping that base's
-     output in a framing `:context` (DriftClose = Blueprint framed as drift to close; the
-     same composes Blueprint with a 'new feature' or 'refactor' context). It adds no
-     mappings of its own — it reuses the base's, told differently.
-   Either flavour renders THROUGH a `Lens` (the WHAT). The same lens can feed a probe and
-   a projection (the drift lens feeds the drift inspect AND DriftClose)."
-  (slot :doc            (optional :String))
-  (slot :through        (one Lens))         ; the focus it renders through (the WHAT)
-  (slot :maps           (many Mapping))     ; a BASE's source→artifact mappings (the HOW)
-  (slot :contextualizes (optional Projection)) ; a CONTEXTUALIZATION's base projection
-  (slot :context        (optional :String)) ; the framing prose wrapped around the base render
-  ;; a projection is one flavour or the other — it declares mappings (base) or frames
-  ;; another (contextualization); neither would render nothing.
-  (law "a projection is a base (declares mappings) or a contextualization (frames another)"
-    :offenders '[?p]
-    :where '[(not-join [?p] [?m :rel/from ?p] [?m :rel/kind :maps])
-             (not-join [?p] [?c :rel/from ?p] [?c :rel/kind :contextualizes])]))
+(def projection
+  (Module (child Blueprint DriftClose)))

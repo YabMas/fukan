@@ -5,10 +5,10 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; SchemaField/SchemaChoice are referred (though only Schema is called
             ;; directly) so clj-kondo resolves their instance-macro hooks.
-            [canvas.dialects.malli :as malli :refer [Schema SchemaField SchemaChoice]]
+            [lib.type.malli :as malli :refer [Schema SchemaField SchemaChoice]]
             ;; Kind — the named type a `ref`/`[:vector …]`/`[:map …]` schema points
             ;; at via :names.
-            [canvas.materialize.vocab :refer [Kind]]))
+            [lib.code :refer [Kind]]))
 
 ;; A thin holder lets us exercise reader-expansion (Schema has a reader, so
 ;; when it's a slot target, native malli literals are expanded at macroexpand time).

@@ -1,6 +1,6 @@
-(ns canvas.materialize.kernel
+(ns canvas.realization.kernel
   "Self-spec: fukan's defstructure KERNEL (`fukan.canvas.core.structure`), modelled
-   reflexively with the schema vocab (`canvas.language.meta`). The deepest self-
+   reflexively with the schema vocab (`canvas.vocabulary.meta`). The deepest self-
    reference in the corpus — the model describes the very primitive that defines
    it: the substrate (Node, reified Relation), the defstructure layer (Slot, Law),
    and at its heart `Structure` = a composition of Slots + Laws.
@@ -16,9 +16,9 @@
 
    (Concept instance vars are `c-`-prefixed so they don't shadow the `Concept`
    constructor — fukan's own kernel modelled in fukan's own meta-vocab.)"
-  (:require [canvas.language.meta :refer [Concept MetaSlot]]
-            [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
-            [canvas.materialize.query-engine :as query-engine]))
+  (:require [canvas.vocabulary.meta :refer [Concept MetaSlot]]
+            [lib.code :refer [Kind Operation Subsystem]]
+            [canvas.realization.query-engine :as query-engine]))
 
 ;; leaf concepts — scalar types, the substrate's atoms, and (reflexively) the
 ;; meta-type Concept itself
@@ -67,7 +67,7 @@
 ;; composes, so it lives in the model 1-on-1 with the code.
 (def StructureDb
   (Kind (doc "The unified structure db — the data realization of the domain `Model` faculty
-              (canvas.perspectives.structure.overview): a datascript db of structure instances +
+              (canvas.domain.faculties): a datascript db of structure instances +
               their reified relations. Owned here; every subsystem adopts this one Kind.")))
 (def Violation   (Kind))
 (def Rule        (Kind))

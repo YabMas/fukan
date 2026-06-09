@@ -9,14 +9,14 @@
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s]
             [fukan.model.pipeline :as pipeline]
-            [canvas.language.meta :refer [Concept MetaSlot]]
-            [canvas.domain.faculty :refer [Faculty]]
-            [canvas.language.grouping :refer [Module]]
-            [canvas.domain.lens :refer [Lens]]
-            [canvas.domain.probe :refer [Probe Finding]]
-            [canvas.domain.projection :refer [Projection]]
-            [canvas.materialize.correspondence :refer [FacultyRealization]]
-            [canvas.perspectives.flow.collab :refer [Phase]]))
+            [canvas.vocabulary.meta :refer [Concept MetaSlot]]
+            [canvas.vocabulary.faculty :refer [Faculty]]
+            [lib.grouping :refer [Module]]
+            [canvas.vocabulary.lens :refer [Lens]]
+            [canvas.vocabulary.probe :refer [Probe Finding]]
+            [canvas.vocabulary.projection :refer [Projection]]
+            [canvas.correspondence :refer [FacultyRealization]]
+            [canvas.vocabulary.phase :refer [Phase]]))
 
 (defn- names-of [db tag]
   (set (map first (d/q '[:find ?n :in $ ?t

@@ -1,8 +1,8 @@
-(ns canvas.perspectives.structure.overview
+(ns canvas.domain.faculties
   "The STRUCTURAL perspective: fukan's core concepts and how they compose — the
    top-level frame the subsystem models (kernel, pipeline, canvas_source, …) realize.
-   One of the authored views `canvas.domain.view` maps between (its sibling is the
-   flow perspective, `canvas.perspectives.flow.collab`).
+   One of the authored views `canvas.vocabulary.view` maps between (its sibling is the
+   flow perspective, `canvas.vocabulary.phase`).
 
    The Model is the hub: a unified structure db of a Target codebase, built from
    Structures authored on the Canvas surface; a cross-cutting Lens (focus) and the
@@ -10,10 +10,10 @@
    — read it and each yield something a human/LLM reasons with.
 
    (Which subsystem modules realize each faculty is the correspondence concern, authored
-   off this perspective in `canvas.materialize.correspondence` — the domain and its
+   off this perspective in `canvas.correspondence` — the domain and its
    perspectives never point down at their realizers.)"
-  (:require [canvas.domain.faculty :refer [Faculty]]
-            [canvas.language.grouping :refer [Module]]))
+  (:require [canvas.vocabulary.faculty :refer [Faculty]]
+            [lib.grouping :refer [Module]]))
 
 ;; faculties referenced before they are defined (the flow has forward edges)
 (declare Structure Probe Projection Finding Blueprint Instruction)

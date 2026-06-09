@@ -1,12 +1,12 @@
-(ns canvas.materialize.probe-surface
+(ns canvas.realization.probe-surface
   "Self-spec: fukan's PROBE IMPLEMENTATION — the realized probe leaves and their projector.
    `probes` (`fukan.canvas.projection.probes`) — the implemented probe leaves (each a model-db →
    finding reader) + the live run/run-all surface. `probe-code` (`fukan.canvas.projection.probe-code`)
    — projects a probe's SPEC from the model. Realizes the `probe` act perspective. The two read the
    kernel's shared `StructureDb`."
-  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
-            [canvas.materialize.kernel :as kernel]
-            [canvas.materialize.target :as target]))
+  (:require [lib.code :refer [Kind Operation Subsystem]]
+            [canvas.realization.kernel :as kernel]
+            [canvas.realization.target :as target]))
 
 (Subsystem probes
   "The implemented probe leaves + the live run/run-all dispatch surface."

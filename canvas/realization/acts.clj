@@ -1,4 +1,4 @@
-(ns canvas.materialize.realization
+(ns canvas.realization.acts
   "Executable realizations of the use-side domain acts — the MECHANISM that RUNS a modelled
    concept, kept OFF the domain (which states only focus/invariant/purpose + its laws). Each
    node `:realizes` a domain concept and carries the executable form the engines/projector
@@ -13,13 +13,13 @@
    run. Like `correspondence`, this is a seam — it knows the domain concepts and the realizing
    code."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.domain.lens :refer [Lens]]
-            [canvas.domain.probe :refer [Probe Finding]]
-            [canvas.materialize.vocab :refer [Operation]]
-            [canvas.language.grouping :refer [Module]]
-            [canvas.domain.lens-model :as lens]
-            [canvas.domain.probe-acts :as probe]
-            [canvas.materialize.kernel :as kernel]))
+            [canvas.vocabulary.lens :refer [Lens]]
+            [canvas.vocabulary.probe :refer [Probe Finding]]
+            [lib.code :refer [Operation]]
+            [lib.grouping :refer [Module]]
+            [canvas.domain.lens :as lens]
+            [canvas.domain.probe :as probe]
+            [canvas.realization.kernel :as kernel]))
 
 (defstructure LensSelection
   "The datalog `:where` selection (binding `?n` as the focused node) that resolves a `Lens`'s

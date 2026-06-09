@@ -1,10 +1,10 @@
-(ns canvas.materialize.target
+(ns canvas.realization.target
   "Self-spec: fukan's TARGET layer — how an analyzed codebase's structure is extracted INTO the
    Model, and how the Model's realization in that code is verified. Two namespaces, two subsystems:
    `target.clojure` (the clj-kondo extractor) and `target.correspondence` (drift / coverage queries).
    Realizes the overview's `Target` faculty; both read/produce the kernel's shared `StructureDb`."
-  (:require [canvas.materialize.vocab :refer [Kind Operation Subsystem]]
-            [canvas.materialize.kernel :as kernel]))
+  (:require [lib.code :refer [Kind Operation Subsystem]]
+            [canvas.realization.kernel :as kernel]))
 
 (Subsystem target-clojure
   "The Clojure extractor — reads source via clj-kondo (no eval) and emits code structures into a db."
