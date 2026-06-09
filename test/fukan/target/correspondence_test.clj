@@ -1,5 +1,6 @@
 (ns fukan.target.correspondence-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [datascript.core :as d]
             ;; loading infra.model is the composition root — it registers fukan's
             ;; malli dialect AND its Clojure extractor, and offers build/load of the model
             [fukan.infra.model :as infra-model]
@@ -53,3 +54,26 @@
           (str "get-model's :malli/schema should adhere to its model; drifted: " drifted))
       (is (not (contains? drifted "refresh-model"))
           (str "refresh-model's :malli/schema should adhere to its model; drifted: " drifted)))))
+
+(deftest multi-arg-order-and-arity-adheres-end-to-end
+  (testing "materialize-over is a real MULTI-ARG function whose :malli/schema matches its
+            modelled ordered :in — same types, SAME ORDER, SAME ARITY — so it is NOT type-drifted,
+            and the comparison fires on a reordered / dropped-arg code signature."
+    (let [model (infra-model/load-model "src")
+          op    (ffirst (d/q '[:find ?e
+                               :where [?e :structure/of :Operation] (not [?e :val/extracted true])
+                                      [?e :entity/name "materialize-over"]]
+                             model))
+          sig   (corr/operation-sig model op)]
+      ;; integration: multi-arg, in order → adheres → absent from type-drift
+      (is (not (contains? (corr/type-drifted-operations model) "materialize-over"))
+          "materialize-over's annotation matches its modelled ordered signature")
+      ;; the model renders :in positionally, in order
+      (is (= [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Instruction] sig)
+          "modelled :in renders in :rel/order order")
+      ;; detection: a REORDERED code-sig does NOT adhere (order fires)
+      (is (false? (typing/type-adheres? sig '[:=> [:cat :ProjectionName :StructureDb [:vector :Eid]] :Instruction]))
+          "reordered inputs do not adhere")
+      ;; detection: a DROPPED-arg code-sig does NOT adhere (arity fires)
+      (is (false? (typing/type-adheres? sig '[:=> [:cat :StructureDb :ProjectionName] :Instruction]))
+          "dropped argument does not adhere"))))

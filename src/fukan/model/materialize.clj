@@ -184,7 +184,8 @@
   [db lens-eid]
   (compose db "Blueprint" (lens/evaluate-lens db lens-eid)))
 
-(defn materialize-over
+(defn ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Instruction]}
+  materialize-over
   "Compose `projection` over an explicit `focus` (a node-set) — the focus-consuming
    entry, so a REFINED focus (focus-nodes → refine → …) renders straight into a
    projection. Chaining is plain composition."
