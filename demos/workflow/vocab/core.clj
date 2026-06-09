@@ -59,7 +59,7 @@
              [(flows ?a ?b)
               [?r :rel/from ?a] [?r :rel/kind :next] [?r :rel/to ?m]
               (flows ?m ?b)]]
-    :scope :Step
+    :scope ::Step
     :offenders '[?s]
     :where '[[?rg :rel/from ?w] [?rg :rel/kind :step]  [?rg :rel/to ?s]
              [?ri :rel/from ?w] [?ri :rel/kind :start] [?ri :rel/to ?start]
@@ -70,7 +70,7 @@
   ;; start would re-enter the whole workflow — almost always a modelling error
   ;; (a loop should re-enter a step *after* the start, not the entry itself).
   (law "the start step has no incoming transition"
-    :scope :Step
+    :scope ::Step
     :offenders '[?start]
     :where '[[?ri :rel/from ?w] [?ri :rel/kind :start] [?ri :rel/to ?start]
              [?rn :rel/kind :next] [?rn :rel/to ?start]])
@@ -79,7 +79,7 @@
   ;; can end. Offender is the workflow itself; it fires when every one of its
   ;; steps has an outgoing transition (the graph can only loop forever).
   (law "the workflow has at least one terminal step (a step with no outgoing transition)"
-    :scope :Workflow
+    :scope ::Workflow
     :offenders '[?w]
     :where '[[?rs0 :rel/from ?w] [?rs0 :rel/kind :step]
              (not-join [?w]

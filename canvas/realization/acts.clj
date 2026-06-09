@@ -13,8 +13,7 @@
    run. Like `correspondence`, this is a seam — it knows the domain concepts and the realizing
    code."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.vocabulary.lens :refer [Lens]]
-            [canvas.vocabulary.probe :refer [Probe Finding]]
+            [canvas.vocabulary.act :refer [Lens Probe Finding]]
             [lib.code :refer [Operation]]
             [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]

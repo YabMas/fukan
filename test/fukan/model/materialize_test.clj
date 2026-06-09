@@ -2,9 +2,8 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [canvas.vocabulary.lens :refer [Lens]]
+            [canvas.vocabulary.act :refer [Lens Projection Mapping]]
             [canvas.realization.acts :refer [LensSelection]]
-            [canvas.vocabulary.projection :refer [Projection Mapping]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.projection.canvas-source :as cs]
@@ -53,13 +52,15 @@
 (defn- by-name [db n]
   (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
 
+;; tags are ns-qualified; tests pass a short kind handle and match by its name
 (defn- by-kind-name [db kind n]
-  (ffirst (d/q '[:find ?e :in $ ?k ?n :where [?e :structure/of ?k] [?e :entity/name ?n]] db kind n)))
+  (->> (d/q '[:find ?e ?k :in $ ?n :where [?e :structure/of ?k] [?e :entity/name ?n]] db n)
+       (filter (fn [[_ k]] (= (name kind) (name k)))) ffirst))
 
 (deftest render-dispatches-per-projection-and-kind-and-composes-references
   (testing "render [Blueprint :Operation] composes its :Schema renders (via dispatch) into the signature"
     (let [db   (pipeline/build-model nil)
-          text (m/render db "Blueprint" (by-name db "extract"))]
+          text (m/render db "Blueprint" (by-kind-name db :Operation "extract"))]
       (is (str/includes? text "Implement `extract` in module `target-clojure`"))
       (is (str/includes? text "paths: [Path]") "the :in Schema rendered via render :Schema (vector → [Kind])")
       (is (str/includes? text "→ StructureDb"))
@@ -69,7 +70,7 @@
 (deftest the-same-node-renders-differently-per-projection
   (testing "Blueprint and Docs are distinct targets over the same focus — the generalization"
     (let [db        (pipeline/build-model nil)
-          extract   (by-name db "extract")
+          extract   (by-kind-name db :Operation "extract")
           blueprint (m/render db "Blueprint" extract)
           docs      (m/render db "Docs" extract)]
       (is (str/includes? blueprint "Implement `extract`") "Blueprint → an implementation spec")

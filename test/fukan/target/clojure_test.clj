@@ -13,7 +13,7 @@
   (testing "the clj-kondo extractor emits an Operation per defn/defn-, with privacy"
     (let [db  (tc/extract "test/fixtures/target/sample.clj")
           ops (into {} (d/q '[:find ?n ?p
-                              :where [?e :structure/of :Operation]
+                              :where [?e :structure/of :lib.code/Operation]
                                      [?e :entity/name ?n] [?e :val/private ?p]]
                             db))]
       (is (= {"alpha" false "beta" false "delta" true} ops)
@@ -23,7 +23,7 @@
   (testing "an annotated defn's :malli/schema metadata is stamped as the Operation's :val/sig"
     (let [db  (tc/extract "test/fixtures/target/sample.clj")
           sig (ffirst (d/q '[:find ?s
-                             :where [?e :structure/of :Operation] [?e :entity/name "alpha"]
+                             :where [?e :structure/of :lib.code/Operation] [?e :entity/name "alpha"]
                                     [?e :val/sig ?s]]
                            db))]
       (is (= "[:=> [:cat :int] :int]" sig)
@@ -33,9 +33,9 @@
   (testing "each namespace becomes a Module that owns its Operations (via :child relations)"
     (let [db    (tc/extract "test/fixtures/target/sample.clj")
           owned (d/q '[:find ?mn ?on
-                       :where [?m :structure/of :Module] [?m :entity/name ?mn]
+                       :where [?m :structure/of :lib.code/Module] [?m :entity/name ?mn]
                               [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?o]
-                              [?o :structure/of :Operation] [?o :entity/name ?on]]
+                              [?o :structure/of :lib.code/Operation] [?o :entity/name ?on]]
                      db)]
       (is (= #{["sample" "alpha"] ["sample" "beta"] ["sample" "delta"]} (set owned))
           "the `sample` namespace is a Module owning all three operations"))))
@@ -48,8 +48,8 @@
     (let [model      (pipeline/build-model "src")        ; design + extracted code, unified
           unrealized (corr/drifted-operations model)]
       ;; sanity: build-model actually brought both layers together
-      (is (seq (d/q '[:find ?s :where [?s :structure/of :Operation]] model)) "model has Operations")
-      (is (seq (d/q '[:find ?o :where [?o :structure/of :Operation]] model)) "build-model extracted code into Operations")
+      (is (seq (d/q '[:find ?s :where [?s :structure/of :lib.code/Operation]] model)) "model has Operations")
+      (is (seq (d/q '[:find ?o :where [?o :structure/of :lib.code/Operation]] model)) "build-model extracted code into Operations")
       (is (empty? unrealized)
           (str "every modelled Operation should map to a same-named extracted function; "
                "unrealized (drift): " unrealized)))))

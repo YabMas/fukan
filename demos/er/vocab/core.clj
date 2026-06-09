@@ -45,6 +45,6 @@
               [?rr :rel/from ?a]   [?rr :rel/kind :rel]    [?rr :rel/to ?rel]
               [?rt :rel/from ?rel] [?rt :rel/kind :target] [?rt :rel/to ?m]
               (refs* ?m ?b)]]
-    :scope :Entity
+    :scope ::Entity
     :offenders '[?e]
     :where '[(refs* ?e ?e)]))

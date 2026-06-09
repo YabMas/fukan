@@ -68,7 +68,7 @@
              [(inh* ?a ?b)
               [?r :rel/from ?a] [?r :rel/kind :inherits] [?r :rel/to ?m]
               (inh* ?m ?b)]]
-    :scope :Role
+    :scope ::Role
     :offenders '[?role]
     :where '[(inh* ?role ?role)])
 
@@ -82,7 +82,7 @@
              [(grants* ?role ?p)
               [?ri :rel/from ?role] [?ri :rel/kind :inherits] [?ri :rel/to ?mid]
               (grants* ?mid ?p)]]
-    :scope :Role
+    :scope ::Role
     :offenders '[?role ?p1 ?p2]
     :where '[(grants* ?role ?p1)
              (grants* ?role ?p2)

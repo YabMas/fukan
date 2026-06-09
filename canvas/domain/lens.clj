@@ -6,7 +6,7 @@
    different acts — a probe reads through it (patterns → a view, integrity → a trust signal),
    a projection renders through it (Blueprint, DriftClose). The probes that consume these
    lenses live in the `probe` view."
-  (:require [canvas.vocabulary.lens :refer [Lens]]
+  (:require [canvas.vocabulary.act :refer [Lens]]
             [lib.grouping :refer [Grouping]]))
 
 ;; focuses fed to reasoning probes (non-gating findings) — prose only; the executable

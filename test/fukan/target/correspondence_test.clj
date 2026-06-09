@@ -61,7 +61,7 @@
             and the comparison fires on a reordered / dropped-arg code signature."
     (let [model (infra-model/load-model "src")
           op    (ffirst (d/q '[:find ?e
-                               :where [?e :structure/of :Operation] (not [?e :val/extracted true])
+                               :where [?e :structure/of :lib.code/Operation] (not [?e :val/extracted true])
                                       [?e :entity/name "materialize-over"]]
                              model))
           sig   (corr/operation-sig model op)]

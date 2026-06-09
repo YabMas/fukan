@@ -22,9 +22,9 @@
 
 (deftest includes-parsed-onto-sdef
   (testing "(includes …) collects facet tags onto the structure def"
-    (is (= [:Linked] (:includes (s/structure-by-tag :Hub))))
-    (is (= [:Linked] (:includes (s/structure-by-tag :Spoke))))
-    (is (= []        (:includes (s/structure-by-tag :Linked))) "no includes → empty")))
+    (is (= [::Linked] (:includes (s/structure-by-tag ::Hub))))
+    (is (= [::Linked] (:includes (s/structure-by-tag ::Spoke))))
+    (is (= []         (:includes (s/structure-by-tag ::Linked))) "no includes → empty")))
 
 (deftest derives-inclusion-rules
   (testing "each (includes Facet) yields a rule (Facet ?e) ⇐ (Concept ?e)"
@@ -69,7 +69,7 @@
 (deftest realized-as-parsed-and-no-constructor
   (testing "(realized-as …) registers the where-clauses and emits no constructor var"
     (is (= '[(Note ?e) [?e :val/flag true]]
-           (:realized-as (s/structure-by-tag :Flagged))))
+           (:realized-as (s/structure-by-tag ::Flagged))))
     (is (not (contains? (ns-interns 'fukan.canvas.core.composition-test) 'Flagged))
         "a realized concept defines no constructor (it is never instantiated)")))
 

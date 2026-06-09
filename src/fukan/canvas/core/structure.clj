@@ -237,12 +237,25 @@
 ;; the leading symbol is the name AND the var; nested `(Tag sym …)` instances become sibling
 ;; `def`s (so cross-refs stay VAR-refs) and route by target-type into the container's slots.
 
+(defn- resolve-struct-tag
+  "Resolve a slot/nesting target SYMBOL to its ns-qualified structure tag — the structure's
+   identity is its defining namespace + name (a qualified keyword), mirroring its constructor var,
+   so co-loaded structures that share a short name no longer collide in one global registry.
+   `Any` is the bare wildcard. A symbol that does not resolve yet — a self-reference (`Step` →
+   `Step`) or a same-ns forward ref — is assumed to live in the current ns."
+  [sym]
+  (cond
+    (= 'Any sym) :Any
+    :else (if-let [v (resolve sym)]
+            (keyword (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
+            (keyword (str (ns-name *ns*)) (name sym)))))
+
 (defn- nested-instance?
   "A body form `(Tag sym …)` where Tag is a registered structure and sym a symbol — a nested
    named instance to lift (vs a slot/law clause, or an inline ^:value form)."
   [f]
   (and (seq? f) (symbol? (first f)) (>= (count f) 2) (symbol? (second f))
-       (structure-by-tag (keyword (name (first f))))))
+       (structure-by-tag (resolve-struct-tag (first f)))))
 
 (defn- route-slot
   "Which slot a nested instance of `kid-tag` routes to in `sdef`: the slot whose target IS that
@@ -269,7 +282,7 @@
         body  (if-let [syn (:syntax sdef)] (syn body) body)
         nests (filter nested-instance? body)
         cls   (remove nested-instance? body)
-        kids  (mapv (fn [nf] (assoc (expand-instance (keyword (name (first nf))) (rest nf))
+        kids  (mapv (fn [nf] (assoc (expand-instance (resolve-struct-tag (first nf)) (rest nf))
                                     :private? (boolean (:private (meta (second nf)))))) nests)
         routed (->> kids
                     (group-by #(route-slot sdef (:tag %) (:private? %)))
@@ -292,7 +305,7 @@
      - an InstanceValue → (value-content-key iv) (recurse)
    Order within an ordered clause is preserved (so [A B] ≠ [B A])."
   [^InstanceValue iv]
-  (let [tag-name (clojure.core/name (:tag iv))
+  (let [tag-name (clojure.core/str (:tag iv))   ; qualified — value identity is ns-distinct
         scalars  (into (sorted-map) (:scalars iv))
         resolve-target (fn resolve-target [t]
                          (cond
@@ -309,12 +322,14 @@
 ;; ── defstructure (the one form) ──────────────────────────────────────────────
 
 (defn- parse-slot
-  "(slot :rel (card Target) & opts) → {:rel :card :target & opts}."
+  "(slot :rel (card Target) & opts) → {:rel :card :target & opts}. A symbol target resolves to its
+   ns-qualified tag; a keyword target (a scalar type like `:String`, or `:Any`) stays bare."
   [form]
-  (let [[_ rel card-form & opts] form]
+  (let [[_ rel card-form & opts] form
+        t (second card-form)]
     (merge {:rel rel
             :card (keyword (first card-form))
-            :target (keyword (name (second card-form)))}
+            :target (if (symbol? t) (resolve-struct-tag t) (keyword (name t)))}
            (apply hash-map opts))))
 
 (defn- parse-law
@@ -405,7 +420,7 @@
                            " — expected (slot ...), (law ...), (reader ...), (syntax ...), (includes ...) or (realized-as ...)")
                       {:structure sname :form form}))))
   (let [value? (boolean (:value (meta sname)))
-        tag    (keyword (name sname))
+        tag    (keyword (str (ns-name *ns*)) (name sname))   ; identity = defining ns + name
         slots  (mapv parse-slot (filter #(= 'slot (first %)) body))
         _      (doseq [s slots]
                  (when (and (scalar-slot? s) (#{:some :many :ordered} (:card s)))
@@ -424,7 +439,7 @@
         syntax-form (some (fn [f] (when (= 'syntax (first f)) (second f)))
                           (filter #(= 'syntax (first %)) body))
         includes (->> body (filter #(= 'includes (first %)))
-                      (mapcat rest) (mapv (comp keyword name)))
+                      (mapcat rest) (mapv resolve-struct-tag))
         realized (some (fn [f] (when (= 'realized-as (first f)) (unquote-lit (second f))))
                        (filter #(= 'realized-as (first %)) body))
         _      (when realized
@@ -571,6 +586,13 @@
     (d/q q db rules)))
 
 (defn- run-law [db base-rules {:keys [offenders where rules] :as law}]
+  ;; Scope via the structure's RULE predicate `(Foo ?o)` (its short name) — this rides the
+  ;; kind-rule for concrete structures AND the inclusion/realized-as rules for facets and derived
+  ;; concepts, so an `includes`-member is correctly in scope. KNOWN EDGE: the predicate head is the
+  ;; short name, so two same-short-named structures co-loaded from different namespaces share one
+  ;; scope predicate — a law on one would range over the other's instances too. The registry and
+  ;; `:structure/of` storage are ns-qualified (so defs/instances never collide), but law-scoping is
+  ;; not yet ns-precise; harmless until same-named structures WITH laws are deliberately co-loaded.
   (let [scope-tag (law-scope-tag law)
         where*    (if scope-tag
                     (vec (cons (list (symbol (name scope-tag)) (first offenders)) where))

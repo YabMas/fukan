@@ -8,10 +8,6 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  canvas.domain.flow
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
   canvas.domain.projection
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -52,7 +48,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.domain.faculties
+  canvas.domain.subject
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -127,6 +123,14 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  demos.self.model.fukan
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.self.self-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.canvas.core.assemble-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -144,6 +148,10 @@
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   fukan.canvas.core.rules-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.canvas.core.namespacing-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -195,15 +203,13 @@
  {:analyze-call
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
    lib.grouping/Connected hooks.fukan.structure/instance
-   canvas.vocabulary.faculty/Faculty hooks.fukan.structure/instance
    lib.grouping/Grouping hooks.fukan.structure/instance
-   canvas.correspondence/FacultyRealization hooks.fukan.structure/instance
-   canvas.correspondence/DataForm hooks.fukan.structure/instance
+   canvas.correspondence/SubjectRealization hooks.fukan.structure/instance
+   canvas.correspondence/SubjectCompleteness hooks.fukan.structure/instance
    canvas.realization.acts/LensSelection hooks.fukan.structure/instance
    canvas.realization.acts/FindingCheck hooks.fukan.structure/instance
    canvas.realization.acts/ProbeComposition hooks.fukan.structure/instance
-   canvas.vocabulary.phase/Phase hooks.fukan.structure/instance
-   canvas.vocabulary.lens/Lens hooks.fukan.structure/instance
+   canvas.vocabulary.act/Lens hooks.fukan.structure/instance
    canvas.vocabulary.meta/Concept hooks.fukan.structure/instance
    canvas.vocabulary.meta/MetaSlot hooks.fukan.structure/instance
    lib.code/Effect hooks.fukan.structure/instance
@@ -213,10 +219,17 @@
    lib.type.malli/SchemaField hooks.fukan.structure/instance
    lib.type.malli/SchemaChoice hooks.fukan.structure/instance
    lib.code/Module hooks.fukan.structure/instance
-   canvas.vocabulary.probe/Finding hooks.fukan.structure/instance
-   canvas.vocabulary.probe/Probe hooks.fukan.structure/instance
-   canvas.vocabulary.projection/Mapping hooks.fukan.structure/instance
-   canvas.vocabulary.projection/Projection hooks.fukan.structure/instance
+   canvas.vocabulary.act/Finding hooks.fukan.structure/instance
+   canvas.vocabulary.act/Probe hooks.fukan.structure/instance
+   canvas.vocabulary.act/Mapping hooks.fukan.structure/instance
+   canvas.vocabulary.act/Projection hooks.fukan.structure/instance
+   canvas.vocabulary.subject/Primitive hooks.fukan.structure/instance
+   canvas.vocabulary.subject/Model hooks.fukan.structure/instance
+   canvas.vocabulary.subject/Output hooks.fukan.structure/instance
+   canvas.vocabulary.subject/Lens hooks.fukan.structure/instance
+   canvas.vocabulary.subject/Source hooks.fukan.structure/instance
+   canvas.vocabulary.subject/Act hooks.fukan.structure/instance
+   canvas.vocabulary.subject/Correspondence hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance
@@ -239,6 +252,13 @@
    demos.type-system.vocab.core/Type hooks.fukan.structure/instance
    demos.workflow.vocab.core/Step hooks.fukan.structure/instance
    demos.workflow.vocab.core/Workflow hooks.fukan.structure/instance
+   demos.self.vocab.core/Primitive hooks.fukan.structure/instance
+   demos.self.vocab.core/Model hooks.fukan.structure/instance
+   demos.self.vocab.core/Lens hooks.fukan.structure/instance
+   demos.self.vocab.core/Output hooks.fukan.structure/instance
+   demos.self.vocab.core/Source hooks.fukan.structure/instance
+   demos.self.vocab.core/Act hooks.fukan.structure/instance
+   demos.self.vocab.core/Correspondence hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Hub hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Note hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Holder hooks.fukan.structure/instance
@@ -258,6 +278,7 @@
    fukan.canvas.core.lens-test/Grp hooks.fukan.structure/instance
    fukan.canvas.core.lens-test/Widget hooks.fukan.structure/instance
    fukan.canvas.core.rules-test/Mod hooks.fukan.structure/instance
+   fukan.canvas.core.namespacing-test/Kind hooks.fukan.structure/instance
    fukan.canvas.core.rules-test/RuleThing hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Auditor hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Bad hooks.fukan.structure/instance

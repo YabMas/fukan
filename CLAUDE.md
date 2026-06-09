@@ -99,7 +99,8 @@ A `defstructure` is a composition of **slots** plus **laws**:
   violations.
 
 The current catalog is the source: read `canvas/vocabulary/*.clj` for fukan's own
-grammar (faculty/lens/probe/projection/view/phase/meta), `lib/*.clj` for the reusable
+grammar (`perspective` = Faculty + Phase + view-map; `act` = Lens + Probe + Projection;
+`meta` = the reflexive schema layer), `lib/*.clj` for the reusable
 stdlib (code/grouping/type.malli), and the demo vocabs.
 
 ## Spec locations

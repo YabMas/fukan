@@ -32,7 +32,7 @@
 
 (deftest entity-constructor-returns-value-with-var-refs
   (is (s/instance-value? ev-test-User))
-  (is (= :Ent (:tag ev-test-User)))
+  (is (= ::Ent (:tag ev-test-User)))
   (is (= {:val/required true} (:scalars ev-test-name)))
   ;; the :links target is captured as the var, not deref'd yet
   (is (= [#'ev-test-User] (:targets (first (filter #(= :links (:rk %)) (:clauses ev-test-User)))))))
@@ -167,7 +167,7 @@
           shape-iv     (first (:targets shape-clause))]
       (is (some? shape-clause) "SHolder must have a :shape clause")
       (is (s/instance-value? shape-iv) "the :shape target must be an inline InstanceValue (not a Var)")
-      (is (= :RShape (:tag shape-iv)) "the inline value must be tagged :RShape")
+      (is (= ::RShape (:tag shape-iv)) "the inline value must be tagged :RShape")
       (is (= {:val/kind "type"} (:scalars shape-iv)) "kind scalar must be \"type\"")
       ;; the :type rel must be a var-ref to the RKind var Db
       (let [type-clause (first (filter #(= :type (:rk %)) (:clauses shape-iv)))]

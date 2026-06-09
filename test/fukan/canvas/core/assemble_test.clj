@@ -24,7 +24,7 @@
 (deftest assembles-a-cycle-into-one-db
   (let [db (a/assemble ['fukan.canvas.core.assemble-test])
         edges (d/q '[:find ?fn ?tn :where [?r :rel/from ?f] [?r :rel/to ?t]
-                     [?f :structure/of :Box]
+                     [?f :structure/of ::Box]
                      [?f :entity/name ?fn] [?t :entity/name ?tn]] db)]
     (is (= #{["A" "B"] ["B" "A"]} (set edges)))
     (is (seq (d/q '[:find ?e :in $ ?id :where [?e :entity/id ?id]]
@@ -53,11 +53,11 @@
 
 (deftest value-dedup-inline
   (let [db (a/assemble ['fukan.canvas.core.assemble-test])]
-    (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of :Tag2] [?e :val/n "x"]] db))))))
+    (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of ::Tag2] [?e :val/n "x"]] db))))))
 
 (deftest value-dedup-top-level
   (let [db (a/assemble ['fukan.canvas.core.assemble-test])]
-    (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of :Tag2] [?e :val/n "z"]] db))))))
+    (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of ::Tag2] [?e :val/n "z"]] db))))))
 
 (deftest ordered-emits-rel-order
   (let [db (a/assemble ['fukan.canvas.core.assemble-test])

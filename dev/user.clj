@@ -11,6 +11,7 @@
             [datascript.core :as d]
             [fukan.infra.model :as infra-model]
             [fukan.canvas.projection.finding :as pf]
+            [fukan.canvas.projection.overview :as overview]
             [fukan.canvas.projection.probes :as probe]
             [fukan.model.materialize :as mat]
             ;; loads the model↔code correspondence laws into the dev session so a
@@ -51,17 +52,26 @@
         (println "Refreshed."))
     (println "No model loaded yet. Use (go) first.")))
 
+(defn overview
+  "Print the projected SYSTEM OVERVIEW — the canvas's front door: the faculty map
+   (each tagged with the modules that realize it) + the flow loop, derived live from
+   the held model. Read this instead of `ls canvas/` to grasp fukan's shape."
+  []
+  (if-let [m (infra-model/get-model)]
+    (println (overview/system-overview m))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn drift
-  "Model↔code drift in the held (unified) model: modelled Stages with no realizing
+  "Model↔code drift in the held (unified) model: modelled Operations with no realizing
    function of the same name. Empty ⇔ the implementation fully realizes every
    modelled capability. (Build with a code-root — `(go)` defaults to \"src\" — so
    the held model carries the extracted code.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [d (corr/unrealized-stages m)]
+    (let [d (corr/drifted-operations m)]
       (if (empty? d)
-        (println "No drift — every modelled Stage is realized in code.")
-        (println "Drift —" (count d) "modelled Stage(s) with no realizing function:" d)))
+        (println "No drift — every modelled Operation is realized in code.")
+        (println "Drift —" (count d) "modelled Operation(s) with no realizing function:" (sort d))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn probes
@@ -102,6 +112,7 @@
   (go {})
   (reset)
   (refresh)
+  (overview)
   (drift)
   (probes)
   (materialize "target.clojure")

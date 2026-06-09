@@ -75,7 +75,7 @@
              [(over* ?hi ?lo)
               [?r :rel/from ?hi] [?r :rel/kind :over] [?r :rel/to ?m]
               (over* ?m ?lo)]]
-    :scope :ExecutionFunction
+    :scope ::ExecutionFunction
     :offenders '[?f ?g]
     :where '[[?d  :rel/from ?f] [?d  :rel/kind :deps] [?d  :rel/to ?g]
              [?tf :rel/from ?f] [?tf :rel/kind :tier] [?tf :rel/to ?ft]
@@ -99,7 +99,7 @@
   (slot :deps    (many Faceted))
 
   (law "an entity carries at most one aspect per axis"
-    :scope :Faceted
+    :scope ::Faceted
     :offenders '[?e ?a1 ?a2]
     :where '[[?r1 :rel/from ?e]  [?r1 :rel/kind :aspects] [?r1 :rel/to ?a1]
              [?r2 :rel/from ?e]  [?r2 :rel/kind :aspects] [?r2 :rel/to ?a2]

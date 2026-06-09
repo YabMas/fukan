@@ -67,7 +67,7 @@
   ([db focus]
    (let [in?     (if focus (set focus) (constantly true))
          rows    (->> (d/q '[:find ?s ?sn ?mn
-                             :where [?s :structure/of :Operation] [?s :entity/name ?sn]
+                             :where [?s :structure/of :lib.code/Operation] [?s :entity/name ?sn]
                                     [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
                                     [?m :entity/name ?mn]] db)
                       (filter (fn [[s _ _]] (in? s))))
@@ -111,7 +111,7 @@
           (mapv (fn [n]
                   (f/observation
                     (->> (d/q '[:find ?o :in $ ?n
-                                :where [?o :structure/of :Operation] [?o :entity/name ?n]] db n)
+                                :where [?o :structure/of :lib.code/Operation] [?o :entity/name ?n]] db n)
                          (map first) set)
                     :gap n)))))))
 
@@ -126,7 +126,7 @@
           (mapv (fn [n]
                   (f/observation
                     (->> (d/q '[:find ?s :in $ ?n
-                                :where [?s :structure/of :Operation] [?s :entity/name ?n]] db n)
+                                :where [?s :structure/of :lib.code/Operation] [?s :entity/name ?n]] db n)
                          (map first) set)
                     :gap n)))))))
 
@@ -142,7 +142,7 @@
           (mapv (fn [n]
                   (f/observation
                     (->> (d/q '[:find ?s :in $ ?n
-                                :where [?s :structure/of :Operation] [?s :entity/name ?n]] db n)
+                                :where [?s :structure/of :lib.code/Operation] [?s :entity/name ?n]] db n)
                          (map first) set)
                     :gap n)))))))
 

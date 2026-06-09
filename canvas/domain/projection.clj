@@ -5,7 +5,7 @@
    we add as we go. Each projection is built from the source→artifact mappings that
    turn model elements into that target's content. The overview's `Faculty
    \"Projection\"` is `realized-by` this module."
-  (:require [canvas.vocabulary.projection :refer [Projection Mapping]]
+  (:require [canvas.vocabulary.act :refer [Projection Mapping]]
             [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]))
 

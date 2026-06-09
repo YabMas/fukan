@@ -16,39 +16,39 @@
 
 (defn- probe-lens [db probe-name]
   (ffirst (d/q '[:find ?ln :in $ ?pn
-                 :where [?p :entity/name ?pn] [?p :structure/of :Probe]
+                 :where [?p :entity/name ?pn] [?p :structure/of :canvas.vocabulary.act/Probe]
                         [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
-                        [?l :structure/of :Lens] [?l :entity/name ?ln]]
+                        [?l :structure/of :canvas.vocabulary.act/Lens] [?l :entity/name ?ln]]
                db probe-name)))
 
 (defn- probe-gating [db probe-name]
   (ffirst (d/q '[:find ?g :in $ ?pn
-                 :where [?p :entity/name ?pn] [?p :structure/of :Probe]
+                 :where [?p :entity/name ?pn] [?p :structure/of :canvas.vocabulary.act/Probe]
                         [?r :rel/from ?p] [?r :rel/kind :yields] [?r :rel/to ?f]
-                        [?f :structure/of :Finding] [?f :val/gating ?g]]
+                        [?f :structure/of :canvas.vocabulary.act/Finding] [?f :val/gating ?g]]
                db probe-name)))
 
 (defn- probe-focus [db probe-name]
   (ffirst (d/q '[:find ?fc :in $ ?pn
-                 :where [?p :entity/name ?pn] [?p :structure/of :Probe]
+                 :where [?p :entity/name ?pn] [?p :structure/of :canvas.vocabulary.act/Probe]
                         [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
-                        [?l :structure/of :Lens] [?l :val/focus ?fc]]
+                        [?l :structure/of :canvas.vocabulary.act/Lens] [?l :val/focus ?fc]]
                db probe-name)))
 
 (defn- finding-holds [db probe-name]
   (ffirst (d/q '[:find ?h :in $ ?pn
-                 :where [?p :entity/name ?pn] [?p :structure/of :Probe]
+                 :where [?p :entity/name ?pn] [?p :structure/of :canvas.vocabulary.act/Probe]
                         [?r :rel/from ?p] [?r :rel/kind :yields] [?r :rel/to ?f]
-                        [?f :structure/of :Finding] [?f :val/holds ?h]]
+                        [?f :structure/of :canvas.vocabulary.act/Finding] [?f :val/holds ?h]]
                db probe-name)))
 
 (defn- finding-holds-pred [db probe-name]
   ;; the executable holds-predicate lives on the FindingCheck that :realizes the finding
   ;; (the realization view), not on the domain Finding itself
   (ffirst (d/q '[:find ?p :in $ ?pn
-                 :where [?pr :entity/name ?pn] [?pr :structure/of :Probe]
+                 :where [?pr :entity/name ?pn] [?pr :structure/of :canvas.vocabulary.act/Probe]
                         [?y :rel/from ?pr] [?y :rel/kind :yields] [?y :rel/to ?f]
-                        [?f :structure/of :Finding]
+                        [?f :structure/of :canvas.vocabulary.act/Finding]
                         [?rz :rel/kind :realizes] [?rz :rel/to ?f]
                         [?rz :rel/from ?fc] [?fc :val/pred ?p]]
                db probe-name)))
@@ -57,11 +57,11 @@
   ;; the kernel capability a probe invokes lives on the ProbeComposition that :realizes
   ;; the probe (the realization view), not on the domain Probe itself
   (let [results (d/q '[:find ?cn :in $ ?pn
-                       :where [?p :entity/name ?pn] [?p :structure/of :Probe]
+                       :where [?p :entity/name ?pn] [?p :structure/of :canvas.vocabulary.act/Probe]
                               [?rz :rel/kind :realizes] [?rz :rel/to ?p]
-                              [?rz :rel/from ?pc] [?pc :structure/of :ProbeComposition]
+                              [?rz :rel/from ?pc] [?pc :structure/of :canvas.realization.acts/ProbeComposition]
                               [?cr :rel/from ?pc] [?cr :rel/kind :calls] [?cr :rel/to ?c]
-                              [?c :structure/of :Operation] [?c :entity/name ?cn]]
+                              [?c :structure/of :lib.code/Operation] [?c :entity/name ?cn]]
                      db probe-name)]
     (when (> (count results) 1)
       (throw (ex-info "cut-1 projector handles a single :calls edge only"

@@ -46,12 +46,12 @@
     (assemble/assemble-instances
      (for [mname module-names
            :let [ops (for [v (ops-by-ns mname)]
-                       (s/->InstanceValue :Operation (str (:name v)) nil
+                       (s/->InstanceValue :lib.code/Operation (str (:name v)) nil
                                           (cond-> {:val/private (boolean (:private v))
                                                    :val/extracted true}
                                             (:malli/schema (:meta v))
                                             (assoc :val/sig (pr-str (:malli/schema (:meta v)))))
                                           [] false))]]
        [(str mname)
-        (s/->InstanceValue :Module (str mname) nil {}
+        (s/->InstanceValue :lib.code/Module (str mname) nil {}
                            [{:rk :child :card :many :targets (vec ops)}] false)]))))

@@ -94,9 +94,9 @@
 
 ;; ── base: Blueprint — the model projected to implementation specs ────────────
 
-(defmethod render-base ["Blueprint" :Schema] [db b eid] (schema-str db b eid))
+(defmethod render-base ["Blueprint" :lib.type.malli/Schema] [db b eid] (schema-str db b eid))
 
-(defmethod render-base ["Blueprint" :Operation] [db b eid]
+(defmethod render-base ["Blueprint" :lib.code/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)
         sig    (str "(" nm (apply str (map #(str " " (:label %)) params)) ")")
         ptypes (str/join ", " (map #(str (:label %) ": " (render-base db b (:shape %))) params))]
@@ -111,9 +111,9 @@
 
 ;; ── base: Docs — the model projected to reference documentation ──────────────
 
-(defmethod render-base ["Docs" :Schema] [db b eid] (schema-str db b eid))
+(defmethod render-base ["Docs" :lib.type.malli/Schema] [db b eid] (schema-str db b eid))
 
-(defmethod render-base ["Docs" :Operation] [db b eid]
+(defmethod render-base ["Docs" :lib.code/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)]
     (str "### " nm "\n"
          (or doc "_No description._") "\n\n"
@@ -130,7 +130,7 @@
 (defn- proj-node
   "The Projection node named `projection` (nil if none — a bare base name has no node)."
   [db projection]
-  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :structure/of :Projection] [?e :entity/name ?n]] db projection)))
+  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :structure/of :canvas.vocabulary.act/Projection] [?e :entity/name ?n]] db projection)))
 
 (defn- base-of
   "The base a `projection` renders through: the name of the Projection it

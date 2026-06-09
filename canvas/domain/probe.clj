@@ -5,7 +5,7 @@
    INSPECT ⊂ PROBE: integrity/coverage/drift are probes whose findings GATE action
    (Signals); survey/patterns/… yield non-gating Views. The overview's `Faculty
    \"Probe\"` is `realized-by` this module."
-  (:require [canvas.vocabulary.probe :refer [Probe Finding]]
+  (:require [canvas.vocabulary.act :refer [Probe Finding]]
             [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]))
 

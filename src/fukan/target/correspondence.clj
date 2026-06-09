@@ -64,7 +64,7 @@
    names. Empty ⇔ the model is fully realized in code. The focusable surface of the
    correspondence concern; reads the single source of truth (the registered law)."
   [db]
-  (let [desc (-> (s/structure-by-tag :Realization) :laws first :desc)]
+  (let [desc (-> (s/structure-by-tag ::Realization) :laws first :desc)]
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)
@@ -97,10 +97,10 @@
    to the twin's realized signature."
   [db]
   (->> (d/q '[:find ?s ?sn ?o
-              :where [?s :structure/of :Operation] (not [?s :val/extracted true]) [?s :entity/name ?sn]
+              :where [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?sn]
                      [?cr :rel/kind :child] [?cr :rel/from ?cm] [?cr :rel/to ?s]
                      [?cm :entity/name ?cmn]
-                     [?o :structure/of :Operation] [?o :val/extracted true] [?o :entity/name ?sn]
+                     [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?sn]
                      [?o :val/sig _]
                      [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o]
                      [?km :entity/name ?kmn]
@@ -119,11 +119,11 @@
    don't model every function)."
   [db]
   (->> (d/q '[:find ?on
-              :where [?o :structure/of :Operation] [?o :val/extracted true] [?o :entity/name ?on]
+              :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                      [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o]
                      [?km :entity/name ?kmn]
                      (not-join [?on ?kmn]
-                       [?s :structure/of :Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
+                       [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
                        [?cr :rel/kind :child] [?cr :rel/from ?cm] [?cr :rel/to ?s]
                        [?cm :entity/name ?cmn]
                        [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]

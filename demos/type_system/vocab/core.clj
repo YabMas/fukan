@@ -60,7 +60,7 @@
              [(sub* ?a ?b)
               [?r :rel/from ?a] [?r :rel/kind :subtype-of] [?r :rel/to ?m]
               (sub* ?m ?b)]]
-    :scope :Type
+    :scope ::Type
     :offenders '[?t]
     :where '[(sub* ?t ?t)])
 
@@ -68,7 +68,7 @@
   ;; its supertypes declare. Matched by `:val/fname` string equality — a workaround
   ;; for the absence of value-identity on Field nodes (see the namespace docstring).
   (law "a subtype must declare every field name of its supertypes"
-    :scope :Type
+    :scope ::Type
     :offenders '[?t ?fname]
     :where '[[?r :rel/from ?t]    [?r :rel/kind :subtype-of] [?r :rel/to ?s]
              [?sr :rel/from ?s]   [?sr :rel/kind :field]      [?sr :rel/to ?sf]
@@ -80,7 +80,7 @@
   ;; Sealed-type protection: nothing may subtype a type whose :sealed? value is
   ;; true. A leaf-Bool value slot driving a structural law.
   (law "nothing may be a subtype of a sealed type"
-    :scope :Type
+    :scope ::Type
     :offenders '[?t ?s]
     :where '[[?r :rel/from ?t] [?r :rel/kind :subtype-of] [?r :rel/to ?s]
              [?s :val/sealed? true]]))

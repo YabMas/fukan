@@ -50,7 +50,7 @@
 (defstructure Auditor
   "A free law whose subject is a *different* structure, via :scope."
   (law "no Plain has a secret field"
-    :scope :Plain
+    :scope ::Plain
     :offenders '[?p]
     :where '[[?r :rel/from ?p] [?r :rel/kind :field] [?r :rel/label "secret"]]))
 
@@ -116,10 +116,10 @@
 
 ;; ── helpers ─────────────────────────────────────────────────────────────────
 
+;; tags are ns-qualified; tests pass a short handle and match by its name (unique within a test db)
 (defn- names-of [db tag]
-  (set (map first (d/q '[:find ?n :in $ ?tag
-                         :where [?e :structure/of ?tag] [?e :entity/name ?n]]
-                       db tag))))
+  (->> (d/q '[:find ?n ?t :where [?e :structure/of ?t] [?e :entity/name ?n]] db)
+       (filter (fn [[_ t]] (= (name tag) (name t)))) (map first) set))
 
 (defn- rels-of [db from-name kind]
   (set (d/q '[:find ?to-name ?label
@@ -131,10 +131,11 @@
             db from-name kind)))
 
 (defn- laws-firing [db tag]
-  (set (map :law (filter #(= tag (:structure %)) (s/check db)))))
+  (set (map :law (filter #(= (name tag) (some-> (:structure %) name)) (s/check db)))))
 
 (defn- count-of [db tag]
-  (count (d/q '[:find ?e :in $ ?t :where [?e :structure/of ?t]] db tag)))
+  (->> (d/q '[:find ?e ?t :where [?e :structure/of ?t]] db)
+       (filter (fn [[_ t]] (= (name tag) (name t)))) count))
 
 ;; ── instances under test (top-level value defs, assembled per test) ──────────
 
@@ -284,7 +285,7 @@
     (let [tree-db (fn [nodes edges]
                     (-> (s/create)
                         (d/db-with (for [n nodes]
-                                     {:entity/id n :entity/name (name n) :structure/of :Tree}))
+                                     {:entity/id n :entity/name (name n) :structure/of ::Tree}))
                         (d/db-with (for [[from to] edges]
                                      {:rel/id (str from "->" to)
                                       :rel/from [:entity/id from] :rel/kind :child
@@ -345,7 +346,7 @@
   (testing "a free law on Tagged flags only Tagged instances, not a Plain with the same data"
     (let [db (a/assemble-vars [#'fl-Str #'fl-p #'fl-t])
           secret (filter #(= "no field labelled secret" (:law %)) (s/check db))]
-      (is (= [:Tagged] (vec (distinct (map :structure secret)))))
+      (is (= [::Tagged] (vec (distinct (map :structure secret)))))
       (is (= 1 (reduce + (map (comp count :offenders) secret)))
           "auto-scoping excludes the Plain; only the Tagged instance is flagged"))))
 
@@ -442,7 +443,7 @@
     (let [db (a/assemble-vars [#'dl-h])]
       (is (= 2 (count-of db :Wrapped)) "5, 5, 6 → two Wrapped nodes (the two 5s dedup)")
       (is (= #{5 6} (set (map first (d/q '[:find ?n
-                                           :where [?x :structure/of :Wrapped] [?x :val/v ?n]]
+                                           :where [?x :structure/of ::Wrapped] [?x :val/v ?n]]
                                          db))))))))
 
 (deftest ordered-slot-captures-position
@@ -492,7 +493,7 @@
 (deftest value-nodes-are-anonymous-and-ownerless
   (testing "a value node carries no :entity/name and is not a :child of any module"
     (let [db (a/assemble-vars [#'vn-h])
-          pair-id (ffirst (d/q '[:find ?e :where [?e :structure/of :Pair]] db))]
+          pair-id (ffirst (d/q '[:find ?e :where [?e :structure/of ::Pair]] db))]
       (is (empty? (d/q '[:find ?n :in $ ?e :where [?e :entity/name ?n]] db pair-id))
           "no :entity/name")
       (is (empty? (d/q '[:find ?r :in $ ?e :where [?r :rel/kind :child] [?r :rel/to ?e]] db pair-id))
@@ -521,9 +522,9 @@
   (testing "assemble-instances lets code emit instances from runtime data"
     (let [db (a/assemble-instances
                (for [n ["a" "b"]]
-                 [n (s/->InstanceValue :Carry n nil {:val/text n} [] false)]))]
+                 [n (s/->InstanceValue ::Carry n nil {:val/text n} [] false)]))]
       (is (= #{"a" "b"}
-             (set (map first (d/q '[:find ?n :where [?e :structure/of :Carry] [?e :entity/name ?n]] db))))
+             (set (map first (d/q '[:find ?n :where [?e :structure/of ::Carry] [?e :entity/name ?n]] db))))
           "both instances were emitted programmatically")
       (is (= "a" (:val/text (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "a"]] db)))))
           "scalar slot value stored"))))

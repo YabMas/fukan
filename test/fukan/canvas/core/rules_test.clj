@@ -43,7 +43,7 @@
                                  :where (RuleThing ?s) (in-module ?s "t") (named ?s ?n)]
                                db rs))
           via-substrate (sort (d/q '[:find [?n ...]
-                                     :where [?s :structure/of :RuleThing]
+                                     :where [?s :structure/of ::RuleThing]
                                             [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
                                             [?m :entity/name "t"] [?s :entity/name ?n]]
                                    db))]

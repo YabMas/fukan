@@ -28,14 +28,12 @@
               canvas.realization.canvas-source
               canvas.correspondence
               canvas.realization.acts
-              canvas.domain.flow
               canvas.realization.extraction
               canvas.realization.infra
               canvas.realization.kernel
               canvas.domain.lens
               canvas.realization.lens-engine
               canvas.realization.materialize
-              canvas.domain.faculties
               canvas.realization.pipeline
               canvas.domain.probe
               canvas.realization.probe-surface
@@ -54,11 +52,15 @@
               demos.type-system.type-system-test
               demos.workflow.model.fulfilment
               demos.workflow.workflow-test
+              demos.self.model.fukan
+              demos.self.self-test
+              canvas.domain.subject
               fukan.canvas.core.assemble-test
               fukan.canvas.core.composition-test
               fukan.canvas.core.view-map-test
               fukan.canvas.core.lens-test
               fukan.canvas.core.rules-test
+              fukan.canvas.core.namespacing-test
               fukan.canvas.core.structure-test
               fukan.canvas.core.value-authoring-test
               fukan.canvas.projection.probe-code-test

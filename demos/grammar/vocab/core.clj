@@ -51,7 +51,7 @@
               [?rp :rel/from ?a]    [?rp :rel/kind :produces] [?rp :rel/to ?prod]
               [?rr :rel/from ?prod] [?rr :rel/kind :rhs]      [?rr :rel/to ?m]
               (derives ?m ?b)]]
-    :scope :Symbol
+    :scope ::Symbol
     :offenders '[?s]
     :where '[[?rg :rel/from ?g] [?rg :rel/kind :symbol] [?rg :rel/to ?s]
              [?ri :rel/from ?g] [?ri :rel/kind :start]  [?ri :rel/to ?start]

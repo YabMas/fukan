@@ -1,7 +1,7 @@
 (ns fukan.canvas.core.lens-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [canvas.vocabulary.lens :refer [Lens]]
+            [canvas.vocabulary.act :refer [Lens]]
             [canvas.realization.acts :refer [LensSelection]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
