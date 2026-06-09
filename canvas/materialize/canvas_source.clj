@@ -14,26 +14,26 @@
 
   ;; discovery — scan canvas/ for *.clj and derive namespace symbols (internal)
   (Operation ^:private file->ns-segment "A path segment → its namespace segment."
-    [seg Str] -> Str)
+    (signature [:=> [:catn [:seg Str]] Str]))
   (Operation ^:private file->ns-symbol "A relative path → its namespace symbol."
-    [rel-path Str] -> NsSymbol (calls file->ns-segment))
+    (signature [:=> [:catn [:rel-path Str]] NsSymbol]) (calls file->ns-segment))
   (Operation ^:private canvas-root-dirs "The canvas/ root dirs on the classpath + fs."
-    [] -> [:vector File] (performs :io))
+    (signature [:=> [:cat] [:vector File]]) (performs :io))
   (Operation ^:private discover-canvas-files-in "The *.clj files under a root."
-    [root File] -> [:vector [:map [:root File] [:rel-path Str]]] (performs :io))
+    (signature [:=> [:catn [:root File]] [:vector [:map [:root File] [:rel-path Str]]]]) (performs :io))
   (Operation ^:private discover-canvas-namespaces "All canvas namespace symbols."
-    [] -> [:vector NsSymbol] (performs :io :stderr)
+    (signature [:=> [:cat] [:vector NsSymbol]]) (performs :io :stderr)
     (calls canvas-root-dirs discover-canvas-files-in file->ns-symbol))
   (Operation ^:private require-canvas-namespace "Require a namespace (throws on load failure)."
-    [ns-sym NsSymbol] -> Unit (performs :require :throws))
+    (signature [:=> [:catn [:ns-sym NsSymbol]] Unit]) (performs :require :throws))
   (Operation ^:private canvas-namespaces "The canvas namespaces (pure delegation)."
-    [] -> [:vector NsSymbol] (calls discover-canvas-namespaces))
+    (signature [:=> [:cat] [:vector NsSymbol]]) (calls discover-canvas-namespaces))
   (Operation ^:private db->entity-maps "A db → its entity-maps + ref-txs (for union)."
-    [db kernel/StructureDb] -> [:map [:entity-maps [:vector EntityMap]] [:ref-txs [:vector RefTx]]])
+    (signature [:=> [:catn [:db kernel/StructureDb]] [:map [:entity-maps [:vector EntityMap]] [:ref-txs [:vector RefTx]]]]))
 
   ;; the public API
   (Operation union-dbs "Fold the extractor's code db onto the assembled design db."
-    [dbs [:vector kernel/StructureDb]] -> kernel/StructureDb (calls db->entity-maps))
+    (signature [:=> [:catn [:dbs [:vector kernel/StructureDb]]] kernel/StructureDb]) (calls db->entity-maps))
   (Operation build "Discover + require + assemble the canvas specs → the model db."
-    [] -> kernel/StructureDb (performs :io :stderr :require)
+    (signature [:=> [:cat] kernel/StructureDb]) (performs :io :stderr :require)
     (calls discover-canvas-namespaces require-canvas-namespace)))

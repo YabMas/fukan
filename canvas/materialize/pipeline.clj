@@ -14,5 +14,5 @@
 (Subsystem model-pipeline
   "The model-build pipeline — the single build entry point."
   (Operation build-model "Ingest the design specs + fold extracted code onto one StructureDb."
-    [source extraction/Path] -> kernel/StructureDb
+    (signature [:=> [:catn [:source extraction/Path]] kernel/StructureDb])
     (calls canvas-source/build extraction/run-extractor canvas-source/union-dbs)))

@@ -28,23 +28,35 @@
   (slot :name (one :String))
   (reader read-effect))
 
-(defn ^:export op-arrow
-  "Operation's authoring sugar (the `(syntax …)` hook): a signature `[in-binding]… -> Out` mixed
-   among the clauses becomes a single ordered `(in …)` clause + an `(out …)`. Vectors before the
-   `->` are input bindings (each `[name Type]`); the token after `->` is the output shape. The
-   inputs collapse into ONE ordered `:in` clause `(in [[name Type]…])` — positional, each labelled
-   with its param name — so adherence checks argument order and arity. Plain clauses (`(doc …)`,
-   `(calls …)`, `(performs …)`) pass through unchanged — as do explicit `(in …)`/`(out …)` clauses
-   (they're seqs), so the arrow and the clause form coexist. A no-input `[] -> Out` emits no `:in`
-   clause. Lives here, in the vocab — `->` never touches core."
+(defn ^:export signature->clauses
+  "Operation's authoring syntax (the `(syntax …)` hook): a `(signature <malli-fn-schema>)`
+   clause is rewritten into the ordered+labelled `:in` and the `:out` clauses. The schema is a
+   malli function schema `[:=> INPUT OUTPUT]`; INPUT is `[:catn [:name Type] …]` (named params →
+   ordered + labelled) or `[:cat]` (nullary). A `[:cat Type …]` (positional, unnamed) is REJECTED —
+   name your parameters. The Types are ordinary malli, expanded by the Schema reader (a bare symbol
+   is a var-ref to a Kind). Lives in the vocab — malli never touches core."
   [body]
-  (let [clauses     (filter seq? body)               ; (doc …) (calls …) (performs …) [(in …)/(out …)]
-        sig         (remove seq? body)               ; [in…] -> Out  (an empty [] = no inputs)
-        [ins after] (split-with #(not= '-> %) sig)
-        real-ins    (filter seq ins)]
-    (concat clauses
-            (when (seq real-ins) [(list 'in (vec real-ins))])   ; one ordered :in clause carrying [name Type] bindings
-            (when (= '-> (first after)) [(list 'out (second after))]))))
+  (let [sig (some #(when (and (seq? %) (= 'signature (first %))) %) body)]
+    (if-not sig
+      body
+      (let [form (second sig)]
+        (when-not (and (vector? form) (= :=> (first form)) (= 3 (count form)))
+          (throw (ex-info (str "signature must be a malli function schema [:=> INPUT OUTPUT]: " (pr-str form)) {:form form})))
+        (let [[_ input output] form]
+          (when-not (vector? input)
+            (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))
+          (let [[in-op & in-args] input
+                in-clause (case in-op
+                            :catn (when (seq in-args)
+                                    [(list 'in (mapv (fn [pair]
+                                                       (when-not (and (vector? pair) (= 2 (count pair)) (keyword? (first pair)))
+                                                         (throw (ex-info (str ":catn entry must be [:name Type]: " (pr-str pair)) {:form form})))
+                                                       [(symbol (name (first pair))) (second pair)])
+                                                     in-args))])
+                            :cat  (when (seq in-args)
+                                    (throw (ex-info (str "name your parameters — use [:catn [:name Type] …], not [:cat …]: " (pr-str input)) {:form form})))
+                            (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))]
+            (concat (remove #(= % sig) body) in-clause [(list 'out output)])))))))
 
 (defstructure Operation
   "A named unit of computation — the UNIFIED computational unit. An `Operation` is either
@@ -53,11 +65,12 @@
    actual calls). A modelled Operation corresponds 1-on-1 (by name + corresponding Subsystem)
    to its extracted twin; the two stay distinct nodes so spec and actual remain checkable.
 
-   Authored with an arrow signature: `(Operation (doc …) [in-binding]… -> Out (calls …))` — the
-   `(syntax op-arrow)` hook rewrites it to `:in`/`:out` clauses. (Replaces the old `Stage` and the
-   extractor's private `Operation` — one vocab, owned here, the extractor produces into it by tag.)"
+   Authored with a malli signature: `(Operation (doc …) (signature [:=> [:catn [:name Type] …] Out]) (calls …))`
+   — the `(syntax signature->clauses)` hook rewrites it to `:in`/`:out` clauses. (Replaces the old
+   `Stage` and the extractor's private `Operation` — one vocab, owned here, the extractor produces
+   into it by tag.)"
   (includes Connected)
-  (syntax op-arrow)                   ; [in…] -> Out authoring sugar (vocab-owned)
+  (syntax signature->clauses)         ; (signature [:=> [:catn …] Out]) authoring form (vocab-owned)
   (slot :in        (ordered Schema))  ; ordered input shapes — positional, each labelled with its param name
   (slot :out       (optional Schema)) ; output schema (authored ops declare one; extracted may not)
   (slot :performs  (many Effect))     ; side effects

@@ -18,7 +18,7 @@
   "Derive datalog rules from the live vocabulary so laws/lenses read at domain altitude."
   (Kind Keyword) (Kind Symbol) (Kind StructureDef) (Kind Pred) (Kind Rule)   ; owned data-shapes
   (Operation ^:private rule-sym "A tag → its rule head symbol."
-    [kw Keyword] -> Symbol)                                                   ; internal
+    (signature [:=> [:catn [:kw Keyword]] Symbol]))                           ; internal
   (Operation derive-rules "Derive the datalog rules from the live structure defs."
-    [structures [:vector StructureDef]] [scalar? Pred] -> [:vector Rule]
+    (signature [:=> [:catn [:structures [:vector StructureDef]] [:scalar? Pred]] [:vector Rule]])
     (calls rule-sym)))                                                        ; the exposed capability
