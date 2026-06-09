@@ -44,6 +44,8 @@
               canvas.materialize.target
               demos.access-control.model.rbac
               demos.access-control.access-control-test
+              demos.atlas.model.auth
+              demos.atlas.atlas-test
               demos.er.model.shop
               demos.er.er-test
               demos.grammar.model.key-value

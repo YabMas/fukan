@@ -87,6 +87,14 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  demos.atlas.atlas-test
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  demos.atlas.model.auth
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   demos.er.er-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -213,6 +221,13 @@
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance
    demos.access-control.vocab.core/Role hooks.fukan.structure/instance
+   demos.atlas.vocab.core/Aspect hooks.fukan.structure/instance
+   demos.atlas.vocab.core/Axis hooks.fukan.structure/instance
+   demos.atlas.vocab.core/Domain hooks.fukan.structure/instance
+   demos.atlas.vocab.core/ExecutionFunction hooks.fukan.structure/instance
+   demos.atlas.vocab.core/Faceted hooks.fukan.structure/instance
+   demos.atlas.vocab.core/Operation hooks.fukan.structure/instance
+   demos.atlas.vocab.core/Tier hooks.fukan.structure/instance
    demos.er.vocab.core/Attribute hooks.fukan.structure/instance
    demos.er.vocab.core/DataType hooks.fukan.structure/instance
    demos.er.vocab.core/Entity hooks.fukan.structure/instance
