@@ -10,18 +10,15 @@
    describing itself.
 
    Vocab-only canvas spec (no `build-canvas`)."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]))
+  (:require [fukan.canvas.core.structure :refer [defstructure]]
+            ;; refined slot targets ([:enum …]) check through the malli type dialect
+            [lib.type.malli]))
 
 (defstructure ^:value MetaSlot
   "A slot of a Concept — value-identified by its (name, cardinality, target)."
   (slot :name        (one :String))
-  (slot :cardinality (one :String))     ; one | some | many | optional | ordered
-  (slot :of          (one Concept))     ; the target concept
-  (law "a slot's cardinality is one of the known cardinalities"
-    :offenders '[?s]
-    :where '[[?s :val/cardinality ?c]
-             [(clojure.core/contains? #{"one" "some" "many" "optional" "ordered"} ?c) ?ok]
-             [(clojure.core/false? ?ok)]]))
+  (slot :cardinality (one [:enum "one" "some" "many" "optional" "ordered"]))
+  (slot :of          (one Concept)))    ; the target concept
 
 (defstructure Concept
   "A concept (type) in a modelled data model — a defstructure structure, a reified

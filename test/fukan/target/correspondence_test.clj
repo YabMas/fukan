@@ -5,7 +5,7 @@
             ;; malli dialect AND its Clojure extractor, and offers build/load of the model
             [fukan.infra.model :as infra-model]
             [fukan.dialect.malli :as malli]
-            [fukan.model.typing :as typing]
+            [fukan.canvas.core.typing :as typing]
             [fukan.target.correspondence :as corr]))
 
 ;; register the project dialect (malli render + sigs-adhere?) for the `type-adheres?` path

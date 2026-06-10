@@ -18,7 +18,9 @@
    `Act` has `:through Lens`, `Source` has no pivot.)
 
    Vocab-only canvas spec (no build-canvas)."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]))
+  (:require [fukan.canvas.core.structure :refer [defstructure]]
+            ;; refined slot targets ([:enum …]) check through the malli type dialect
+            [lib.type.malli]))
 
 (defstructure Primitive
   "What the Model is made of: `defstructure` = a composition of slots + datalog laws. The reflexive
@@ -51,12 +53,7 @@
    is a read-side query the write side has nothing to apply yet."
   (slot :doc      (optional :String))
   (slot :into     (one Model))
-  (slot :polarity (one :String))                ; "design-down" | "code-up"
-  (law "a source's polarity is design-down or code-up"
-    :offenders '[?s]
-    :where '[[?s :val/polarity ?p]
-             [(clojure.core/contains? #{"design-down" "code-up"} ?p) ?ok]
-             [(clojure.core/false? ?ok)]])
+  (slot :polarity (one [:enum "design-down" "code-up"]))
   (law "the loop closes — every code-up source is matched by a correspondence"
     :rules '[[(corresponded ?src)
               [?c :structure/of :canvas.vocabulary.subject/Correspondence]
@@ -72,13 +69,8 @@
   (slot :doc     (optional :String))
   (slot :reads   (one Model))
   (slot :through (one Lens))
-  (slot :mode    (one :String))                 ; "analyse" | "synthesise"
-  (slot :yields  (one Output))
-  (law "an act's mode is analyse or synthesise"
-    :offenders '[?a]
-    :where '[[?a :val/mode ?m]
-             [(clojure.core/contains? #{"analyse" "synthesise"} ?m) ?ok]
-             [(clojure.core/false? ?ok)]]))
+  (slot :mode    (one [:enum "analyse" "synthesise"]))
+  (slot :yields  (one Output)))
 
 (defstructure Correspondence
   "#4, EMERGENT — the recognition that one Source and one Act are inverse over the one Model. It

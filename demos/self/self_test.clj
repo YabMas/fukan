@@ -36,7 +36,7 @@
 (deftest in-dual-is-enforced
   (testing "a source whose polarity is neither design-down nor code-up is caught"
     (let [db (a/assemble-vars [#'prim #'mdl #'bad-source])]
-      (is (contains? (laws db) "a source's polarity is design-down or code-up")))))
+      (is (contains? (laws db) "Source.polarity value must satisfy [:enum \"design-down\" \"code-up\"]")))))
 
 ;; case: OUT-dual — an act with a bogus mode
 (def bad-act (Act "bad" (reads mdl) (through lns) (mode "ponder") (yields out)))
@@ -44,7 +44,7 @@
 (deftest out-dual-is-enforced
   (testing "an act whose mode is neither analyse nor synthesise is caught"
     (let [db (a/assemble-vars [#'prim #'mdl #'lns #'out #'bad-act])]
-      (is (contains? (laws db) "an act's mode is analyse or synthesise")))))
+      (is (contains? (laws db) "Act.mode value must satisfy [:enum \"analyse\" \"synthesise\"]")))))
 
 ;; case: #4 enforced from the in-side — a code-up source with no correspondence
 (def orphan-extract (Source "extract" (into mdl) (polarity "code-up")))

@@ -11,7 +11,10 @@
    is another structure reifies a Relation (`:rel/from` → `:rel/to`, `:rel/kind`,
    optional `:rel/label` from an authored `[label target]` clause, `:rel/order` for
    ordered slots) so every cross-reference stays queryable; a slot whose target is a
-   scalar stores a `:val/<slot>` leaf with an auto-generated type-check law. `check`
+   scalar stores a `:val/<slot>` leaf with an auto-generated type-check law — a
+   vector target (`[:enum \"a\" \"b\"]`, `[:int {:min 1}]`) is a REFINED scalar whose
+   law checks values through the registered type dialect (the core stores the type
+   form verbatim and never interprets it). `check`
    runs every structure's laws (slot-cardinality laws + free `law`s, recursive
    datalog rules supported) over a db, injecting the vocab-derived rules so laws read
    at domain altitude. The schema is minimal and classification-free."
@@ -43,9 +46,11 @@
 (def scalar-types {:Int 'clojure.core/integer?, :String 'clojure.core/string?, :Bool 'clojure.core/boolean?})
 
 (defn- scalar-slot?
-  "True when a parsed slot's target is a registered scalar type."
+  "True when a parsed slot's target is a registered scalar type, or a refined scalar
+   (a vector type form for the registered type dialect)."
   [slot]
-  (contains? scalar-types (:target slot)))
+  (or (contains? scalar-types (:target slot))
+      (vector? (:target slot))))
 
 
 ;; ── structure registry (vocabulary as data: slots + laws, no family/payload) ──
@@ -323,13 +328,19 @@
 
 (defn- parse-slot
   "(slot :rel (card Target) & opts) → {:rel :card :target & opts}. A symbol target resolves to its
-   ns-qualified tag; a keyword target (a scalar type like `:String`, or `:Any`) stays bare."
+   ns-qualified tag; a keyword target (a scalar type like `:String`, or `:Any`) stays bare; a
+   VECTOR target (e.g. `[:enum \"a\" \"b\"]`, `[:int {:min 1}]`) is a REFINED scalar — a type form
+   stored verbatim, never interpreted by the core: the slot's generated law checks values through
+   the registered type dialect (`fukan.canvas.core.typing/value-valid?`)."
   [form]
   (let [[_ rel card-form & opts] form
         t (second card-form)]
     (merge {:rel rel
             :card (keyword (first card-form))
-            :target (if (symbol? t) (resolve-struct-tag t) (keyword (name t)))}
+            :target (cond
+                      (symbol? t) (resolve-struct-tag t)
+                      (vector? t) t
+                      :else       (keyword (name t)))}
            (apply hash-map opts))))
 
 (defn- parse-law
@@ -519,17 +530,26 @@
 
 (defn- value-slot-laws
   "Type-check (+ none for `one`) laws for a VALUE slot (target is a scalar type).
-   No 'found several' law: plain :val/<key> storage is cardinality-one."
+   A REFINED slot (vector type form) gets a law that checks values through the
+   registered type dialect instead of a core predicate — the form is passed verbatim;
+   the core never interprets it. No 'found several' law: plain :val/<key> storage is
+   cardinality-one."
   [tag {:keys [rel card target]}]
   (let [tn (name tag) rn (name rel)
         val-attr (keyword "val" (name rel))
-        pred     (scalar-types target)
-        type-law {:desc (str tn "." rn " value must be a " (name target))
-                  :offenders '[?x]
-                  :where [['?x :structure/of tag]
-                          ['?x val-attr '?v]
-                          [(list pred '?v) '?ok]
-                          [(list 'false? '?ok)]]}
+        type-law (if (vector? target)
+                   {:desc (str tn "." rn " value must satisfy " (pr-str target))
+                    :offenders '[?x]
+                    :where [['?x :structure/of tag]
+                            ['?x val-attr '?v]
+                            [(list 'fukan.canvas.core.typing/value-valid? target '?v) '?ok]
+                            [(list 'false? '?ok)]]}
+                   {:desc (str tn "." rn " value must be a " (name target))
+                    :offenders '[?x]
+                    :where [['?x :structure/of tag]
+                            ['?x val-attr '?v]
+                            [(list (scalar-types target) '?v) '?ok]
+                            [(list 'false? '?ok)]]})
         none-law {:desc (str tn "." rn " requires exactly one (found none)")
                   :offenders '[?x]
                   :where [['?x :structure/of tag]

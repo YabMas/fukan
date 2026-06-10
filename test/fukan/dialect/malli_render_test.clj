@@ -3,7 +3,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.model.typing :as typing]
+            [fukan.canvas.core.typing :as typing]
             ;; fukan.dialect.malli referred for its render fn (registered per-test below)
             [fukan.dialect.malli :as malli]
             ;; Schema referred so clj-kondo resolves its instance-macro hook

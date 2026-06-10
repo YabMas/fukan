@@ -1,9 +1,12 @@
 (ns fukan.dialect.malli
-  "The malli render bridge — a Schema subgraph → a malli data-form (code).
-   The materialize/LOWER direction of the schema dialect. A pure library
-   exposing `render`; wired to the schema-dialect plug-point at the composition
-   root (`fukan.infra.model`). Pure data: no malli library needed."
-  (:require [datascript.core :as d]))
+  "The malli runtime bridges — a Schema subgraph → a malli data-form (`render`),
+   signature adherence (`sigs-adhere?`), and refined-slot value checking (`valid?`,
+   the one bridge that runs the malli library). Wired to the type-dialect plug-point
+   (`fukan.canvas.core.typing`) at the composition root (`fukan.infra.model`);
+   `lib.type.malli` (the authoring grammar) registers `:valid?` at load so any
+   model opting into the grammar carries its checking."
+  (:require [datascript.core :as d]
+            [malli.core :as m]))
 
 (defn- children
   "Target eids of `from`'s reified `rel` relations, in :rel/order order
@@ -48,6 +51,17 @@
       "ref"
       (keyword (:entity/name (d/entity db (first (children db eid :names)))))
       (throw (ex-info (str "cannot render schema kind: " kind) {:eid eid :kind kind})))))
+
+(def ^:private validator
+  "Compiled validator per type form (memoized — forms are authored literals, few)."
+  (memoize m/validator))
+
+(defn valid?
+  "Does `value` satisfy the malli `type-form`? The refined-slot bridge: a slot
+   target like `[:enum \"a\" \"b\"]` or `[:int {:min 1}]` is checked with the full
+   malli interpretation — the kernel stores the form verbatim and never reads it."
+  [type-form value]
+  ((validator type-form) value))
 
 (defn- normalize-fn-schema
   "Normalize a malli function-schema `[:=> [:cat IN…] OUT]` to `{:in [IN…] :out OUT}`

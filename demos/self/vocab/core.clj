@@ -30,7 +30,9 @@
    design idea is a structure or a law, so the design reads off the grammar and is CHECKABLE.
    Authored as a demo (isolated classpath) so its reused names — Model, Lens — don't collide with
    the main canvas in the single global tag registry."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]))
+  (:require [fukan.canvas.core.structure :refer [defstructure]]
+            ;; refined slot targets ([:enum …]) check through the malli type dialect
+            [lib.type.malli]))
 
 ;; ── #2 the floor: what the graph is made of (drill-down, deliberately minimal) ──
 
@@ -78,12 +80,7 @@
    the write side has nothing to apply yet."
   (slot :doc      (optional :String))
   (slot :into     (one Model))
-  (slot :polarity (one :String))                ; "design-down" | "code-up"
-  (law "a source's polarity is design-down or code-up"
-    :offenders '[?s]
-    :where '[[?s :val/polarity ?p]
-             [(clojure.core/contains? #{"design-down" "code-up"} ?p) ?ok]
-             [(clojure.core/false? ?ok)]])
+  (slot :polarity (one [:enum "design-down" "code-up"]))
   ;; #4 made assertable from THIS side: a lifted-in source must have a corresponding act to
   ;; lower it back down — else the loop can't close. Names the design claim 'correspondence
   ;; emerges where extract meets project'. Negation is over a RULE (not inline clauses) so it
@@ -107,13 +104,8 @@
   (slot :doc     (optional :String))
   (slot :reads   (one Model))
   (slot :through (one Lens))
-  (slot :mode    (one :String))                 ; "analyse" | "synthesise"
-  (slot :yields  (one Output))
-  (law "an act's mode is analyse or synthesise"
-    :offenders '[?a]
-    :where '[[?a :val/mode ?m]
-             [(clojure.core/contains? #{"analyse" "synthesise"} ?m) ?ok]
-             [(clojure.core/false? ?ok)]]))
+  (slot :mode    (one [:enum "analyse" "synthesise"]))
+  (slot :yields  (one Output)))
 
 ;; ── #4 emergent: the loop closes ────────────────────────────────────────────
 

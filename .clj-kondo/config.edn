@@ -289,6 +289,7 @@
    fukan.canvas.core.structure-test/Boxed hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Carry hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Function hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/Gate hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Holder hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Holder2 hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/HolderO hooks.fukan.structure/instance

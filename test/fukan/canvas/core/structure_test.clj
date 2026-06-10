@@ -5,10 +5,29 @@
 
    Instances are top-level value `def`s assembled with `assemble-vars` (the
    var-capture surface); references between them are ordinary var refs."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]))
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.typing :as typing]))
+
+;; The core is dialect-BLIND: a refined slot target (vector type form) is checked
+;; through whatever :valid? the project registered. This test brings its own minimal
+;; dialect (enum membership only) rather than depending on a lib type grammar —
+;; registered around the run, restoring whatever was there before.
+(defn- enum-only-valid? [form v]
+  (if (= :enum (first form))
+    (contains? (set (rest form)) v)
+    (throw (ex-info "test dialect handles only [:enum …]" {:form form}))))
+
+(use-fixtures :once
+  (fn [t]
+    (let [saved (typing/registered-dialect)]
+      (typing/register-type-dialect! {:valid? enum-only-valid?})
+      (try (t)
+           (finally
+             (typing/clear-type-dialect!)
+             (when saved (typing/register-type-dialect! saved)))))))
 
 ;; ── structures under test ───────────────────────────────────────────────────
 ;; The primitive's tests own their fixtures (the base vocab was evicted from core;
@@ -108,6 +127,11 @@
 (defstructure Carry
   "Test fixture: a scalar slot with a :payload companion."
   (slot :text (optional :String) :payload :extra))
+
+(defstructure Gate
+  "Test fixture: refined slot targets — scalars checked through the type dialect."
+  (slot :state (one [:enum "open" "closed"]))
+  (slot :note  (optional [:enum "a" "b"])))
 
 ;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
 ;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
@@ -231,6 +255,10 @@
 (def pl-c1 (Carry "c1" (text "hi" [:a :b])))
 (def pl-c2 (Carry "c2" (text "solo")))
 (def pl-c3 (Carry "c3" (text "hi" '(fn [x] x))))
+
+(def en-ok   (Gate "ok"   (state "open") (note "a")))
+(def en-bad  (Gate "bad"  (state "ajar")))             ; not a member
+(def en-miss (Gate "miss"))                            ; required state absent
 
 ;; ── tests ───────────────────────────────────────────────────────────────────
 
@@ -433,6 +461,35 @@
     (let [msg (try (let [_ (macroexpand
                             '(fukan.canvas.core.structure/defstructure BadVal "d"
                                (slot :xs (many :Int))))]
+                     "no throw")
+                   (catch Throwable e
+                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
+      (is (re-find #"must be \(one \.\.\.\) or \(optional \.\.\.\)" msg)))))
+
+(deftest refined-slot-accepts-a-valid-value
+  (testing "values the dialect accepts trip no law (required and optional refined slots)"
+    (let [db (a/assemble-vars [#'en-ok])]
+      (is (= "open" (ffirst (d/q '[:find ?v :where [?x :entity/name "ok"] [?x :val/state ?v]] db)))
+          "a refined slot stores a plain :val leaf, like any scalar")
+      (is (empty? (laws-firing db :Gate))))))
+
+(deftest refined-slot-rejects-an-invalid-value
+  (testing "a value the dialect rejects trips the refinement law"
+    (let [db (a/assemble-vars [#'en-bad])]
+      (is (contains? (laws-firing db :Gate)
+                     "Gate.state value must satisfy [:enum \"open\" \"closed\"]")))))
+
+(deftest refined-slot-one-cardinality-catches-missing
+  (testing "a refined slot keeps the ordinary (one …) none-law"
+    (let [db (a/assemble-vars [#'en-miss])]
+      (is (contains? (laws-firing db :Gate)
+                     "Gate.state requires exactly one (found none)")))))
+
+(deftest refined-slot-rejects-some-and-many
+  (testing "a refined slot is a scalar — (one …) or (optional …) only"
+    (let [msg (try (let [_ (macroexpand
+                            '(fukan.canvas.core.structure/defstructure BadRefined "d"
+                               (slot :xs (many [:enum "a" "b"]))))]
                      "no throw")
                    (catch Throwable e
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]

@@ -19,7 +19,7 @@
             [clojure.string :as str]
             [datascript.core :as d]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.model.typing :as typing]))
+            [fukan.canvas.core.typing :as typing]))
 
 (defn ^:export module-corresponds?
   "True when code namespace `km` realizes canvas module `cm`. Deterministic, separator-agnostic:

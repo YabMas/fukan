@@ -10,7 +10,15 @@
    (render now; parse/adheres? later), own all interpretation.
 
    Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]))
+  (:require [fukan.canvas.core.structure :refer [defstructure]]
+            [fukan.canvas.core.typing :as typing]
+            [fukan.dialect.malli :as dialect]))
+
+;; Opting into this grammar wires its checking: a refined slot target (e.g.
+;; `(slot :polarity (one [:enum "design-down" "code-up"]))`) compiles to a law that
+;; checks values through the type-dialect plug-point — so the grammar registers the
+;; malli `:valid?` bridge at load (merge-per-key; a composition root adds the rest).
+(typing/register-type-dialect! {:valid? dialect/valid?})
 
 (defn ^:export read-choice
   "An enum member (already a string) -> SchemaChoice clauses."

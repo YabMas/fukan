@@ -87,6 +87,10 @@ A `defstructure` is a composition of **slots** plus **laws**:
 - Slot cardinalities: `(one T)`, `(optional T)`, `(many T)`, `(some T)`,
   `(ordered T)`. A slot whose target is a scalar (e.g. `(one :Bool)`) stores a
   leaf value with an auto-generated type-check law; otherwise it reifies a relation.
+  A vector target (`[:enum "a" "b"]`, `[:int {:min 1}]`) is a REFINED scalar: the
+  core stores the type form verbatim and the generated law checks values through the
+  registered type dialect (`fukan.canvas.core.typing`, the kernel's third plug-point;
+  `lib.type.malli` registers `:valid?` at load). Never hand-write a membership/range law.
 - Slot options: `:payload` (carry a companion code-form alongside a scalar slot's
   leaf, stored as a sibling `:val/` datom on the node), `(reader f)` (expand
   authoring data-literals — e.g. fukan's Shape expands `Foo` / `[X]` / `{:f X}`). A
