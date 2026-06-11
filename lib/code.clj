@@ -72,16 +72,22 @@
    actual calls). A modelled Operation corresponds 1-on-1 (by name + corresponding Module)
    to its extracted twin; the two stay distinct nodes so spec and actual remain checkable.
 
-   Authored with a malli signature: `(Operation f \"doc\" {:signature [:=> [:catn [:name Type] …] Out] :calls […]})`
+   Authored with a malli signature: `(Operation f \"doc\" {:signature [:=> [:catn [:name Type] …] Out] :delegates […]})`
    — the `(syntax signature->slots)` hook rewrites `:signature` to the `:in`/`:out` entries.
    (Replaces the old `Stage` and the extractor's private `Operation` — one vocab, owned here,
-   the extractor produces into it by tag.)"
+   the extractor produces into it by tag.)
+
+   A boundary sketch authors `:delegates` (the cross-module surfaces it relies on — designed
+   dependencies) and `:guidance` (implementer-directed intent); it does NOT author `:calls` —
+   internal wiring is extraction's job. `:calls` is therefore the EXTRACTED actual-call graph."
   (includes Connected)
   (syntax signature->slots)          ; {:signature [:=> [:catn …] Out]} authoring entry (vocab-owned)
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
    :performs  [:* Effect]            ; side effects
-   :calls     [:* Operation]         ; downstream operations it invokes
+   :delegates [:* Operation]         ; cross-boundary dependencies it relies on (authored, designed)
+   :guidance  [:? :String]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection
+   :calls     [:* Operation]         ; the ACTUAL call graph (extraction's actuals; not authored)
    :private   [:? :Bool]             ; public/internal — the module's surface (from extraction)
    :extracted [:? :Bool]             ; provenance: true ⇒ from code; absent/false ⇒ authored
    ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
