@@ -8,25 +8,25 @@
    one capability, `check` (laws → violations): the canonical integrity inspect, modelled because
    code is a projection of the model 1-on-1.
 
-   (Concept vars are `c-`-prefixed — `String`/`Keyword`/`Int` would shadow the Java classes —
-   with `^{:name …}` restoring the concept names.)"
+   (One concept needs a var workaround: `String` shadows `java.lang.String`, so its var is
+   `c-String` with `^{:name}` restoring the concept name. The rest carry no shadow — plain names.)"
   (:require [canvas.vocabulary.meta :refer [Concept MetaSlot]]
             [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.query-engine :as query-engine]))
 
 ;; ── the substrate: the kernel's own data-shapes (reflection can't reach below the registry) ──
-(Concept ^{:name "Keyword"} c-Keyword)
-(Concept ^{:name "String"}  c-String)
-(Concept ^{:name "Int"}     c-Int)
-(Concept ^{:name "Node"}    c-Node
+(Concept Keyword)
+(Concept ^{:name "String"} c-String)   ; only String shadows java.lang.String → keep the var workaround
+(Concept Int)
+(Concept Node
   "An instance: identified by name + uuid, or by content when value-typed.")
-(Concept ^{:name "Relation"} c-Relation
+(Concept Relation
   "A reified slot value — a kinded edge between Nodes, carrying optional label/order."
-  {:slot [(MetaSlot {:name "from"  :cardinality "one"      :of c-Node})
-          (MetaSlot {:name "to"    :cardinality "one"      :of c-Node})
-          (MetaSlot {:name "kind"  :cardinality "one"      :of c-Keyword})
+  {:slot [(MetaSlot {:name "from"  :cardinality "one"      :of Node})
+          (MetaSlot {:name "to"    :cardinality "one"      :of Node})
+          (MetaSlot {:name "kind"  :cardinality "one"      :of Keyword})
           (MetaSlot {:name "label" :cardinality "optional" :of c-String})
-          (MetaSlot {:name "order" :cardinality "optional" :of c-Int})]})
+          (MetaSlot {:name "order" :cardinality "optional" :of Int})]})
 
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────
 (Kind StructureDb
@@ -49,4 +49,4 @@
   "The defstructure kernel — laws → violations over the structure graph."
   {:exposes [check vocab-rules]                  ; the kernel capabilities others compose
    :owns    [StructureDb Violation]              ; data-shapes that cross the boundary (others adopt by name)
-   :child   [Rule c-Keyword c-String c-Int c-Node c-Relation]})  ; internal grain: the rules-output type + the reflexive substrate
+   :child   [Rule Keyword c-String Int Node Relation]})  ; internal grain: the rules-output type + the reflexive substrate
