@@ -98,6 +98,15 @@
       (is (not (str/includes? p "Second doc line")))
       (is (not (str/includes? p ":offenders"))))))
 
+(deftest unused-structures-reads-the-dead-vocabulary
+  (testing "the grammar-drift reading: structures with no instances are reported;
+            inhabited (PLeaf) and self-reifying (Structure) ones are not"
+    (let [unused (set (g/unused-structures (reflected)))]
+      (is (every? unused ["PNode" "PVal" "PCarry"])
+          "the grammar-only fixtures (never instantiated) are dead vocabulary here")
+      (is (not (unused "PLeaf")) "an instantiated structure is spoken")
+      (is (not (unused "Structure")) "the meta-grammar inhabits itself (reified nodes)"))))
+
 (deftest primer-covers-the-strange-loop
   (testing "the full primer includes the meta-grammar describing itself"
     (let [db (reflected)

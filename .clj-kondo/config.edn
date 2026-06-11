@@ -33,6 +33,10 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  canvas.realization.grammar-projection
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   canvas.realization.infra
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}

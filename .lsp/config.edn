@@ -31,6 +31,7 @@
               lib.grammar
               fukan.canvas.projection.grammar-test
               canvas.realization.extraction
+              canvas.realization.grammar-projection
               canvas.realization.infra
               canvas.realization.kernel
               canvas.domain.lens

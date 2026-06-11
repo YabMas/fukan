@@ -156,3 +156,28 @@
                             :where [?v :structure/of :lib.grammar/Vocabulary]
                                    [?v :entity/name ?n]] db))]
     (str/join "\n\n" (map #(vocabulary-primer db %) vocabs))))
+
+;; ── grammar drift (the dead-vocabulary reading) ───────────────────────────────
+
+(defn ^{:malli/schema [:=> [:cat :StructureDb] [:vector :string]]} unused-structures
+  "The grammar-drift reading: reified Structures no instance inhabits — dead
+   vocabulary. Excludes the Any wildcard and derivation-inhabited concepts:
+   realized-as, and facets reached via includes. Sorted structure names. (A
+   reading to reason with, not a gate — law-hosts and not-yet-spoken grammar are
+   legitimate; the human interprets.)"
+  [db]
+  ;; set-filtering, not datalog negation — inline (not …) over a pattern with NO
+  ;; matches anywhere (e.g. a model with no realized-as concepts) mis-fires in
+  ;; datascript (the wholly-empty-relation gotcha the law combinators encapsulate)
+  (let [in-use   (into #{} (map (comp str first))
+                       (d/q '[:find ?t :where [_ :structure/of ?t]] db))
+        realized (into #{} (map first)
+                       (d/q '[:find ?s :where [?s :val/realizes _]] db))
+        included (into #{} (map first)
+                       (d/q '[:find ?t :where [?r :rel/kind :includes] [?r :rel/to ?t]] db))]
+    (->> (d/q '[:find ?s ?n ?t
+                :where [?s :structure/of :lib.grammar/Structure]
+                       [?s :entity/name ?n] [?s :val/tag ?t]]
+              db)
+         (remove (fn [[s _ t]] (or (realized s) (included s) (= ":Any" t) (in-use t))))
+         (map second) sort vec)))
