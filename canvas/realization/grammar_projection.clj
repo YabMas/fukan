@@ -3,7 +3,7 @@
    print-dual of the authoring surface (reified Structures render back as map-form
    defstructures; the primer is the live language reference) plus the GRAMMAR-DRIFT
    reading: `unused-structures`, the dead-vocabulary signal. With the grammar
-   reflected onto the graph, the drift faculty extends to the language itself —
+   reflected onto the graph, drift detection extends to the language itself —
    a Structure no instance inhabits is vocabulary the model carries but does not
    speak. (A reading to reason with, not a gate: law-hosts and not-yet-spoken
    grammar are legitimate — the human interprets.)"

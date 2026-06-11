@@ -3,8 +3,7 @@
    Forward-looking (the parked projection tier). The implementation Blueprint is the
    first projection target; more (docs, diagrams, other realizations) are projections
    we add as we go. Each projection is built from the source→artifact mappings that
-   turn model elements into that target's content. The overview's `Faculty
-   \"Projection\"` is `realized-by` this module."
+   turn model elements into that target's content."
   (:require [canvas.vocabulary.act :refer [Projection Mapping]]
             [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]))

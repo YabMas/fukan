@@ -8,8 +8,7 @@
      one Correspondence is the inverse pair: extract ⊣ project across the model↔code boundary.
 
    Which code Modules BUILD each of these is NOT stated here (the domain stays pure) — it is the
-   `Realization` seam in `canvas.correspondence`, the verify-down link of the tower. Coexists with
-   the `Faculty` self-model (`canvas.domain.faculties`) during the migration."
+   `Realization` seam in `canvas.correspondence`, the verify-down link of the tower."
   (:require [canvas.vocabulary.subject :refer [Primitive Model Output Lens Source Act Correspondence]]
             [lib.grouping :refer [Grouping]]))
 

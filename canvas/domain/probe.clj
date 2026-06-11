@@ -3,8 +3,8 @@
    Forward-looking (the tier is parked under `.paused/`). Each probe reads THROUGH a
    lens (the `lens` view's Lens instances — interlocking) and yields a finding.
    INSPECT ⊂ PROBE: integrity/coverage/drift are probes whose findings GATE action
-   (Signals); survey/patterns/… yield non-gating Views. The overview's `Faculty
-   \"Probe\"` is `realized-by` this module."
+   (Signals); survey/patterns/… yield non-gating Views. Realized by the probe
+   surface (`canvas.realization.probe-surface`)."
   (:require [canvas.vocabulary.act :refer [Probe Finding]]
             [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]))

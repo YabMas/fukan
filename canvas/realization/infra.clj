@@ -1,7 +1,7 @@
 (ns canvas.realization.infra
   "Canvas spec for fukan's infra.model subsystem (the model lifecycle), modelled with the
    materialize code vocab. It exposes the model-lifecycle API (load/get/refresh); the model it
-   produces is the kernel's shared `StructureDb` (the domain `Model` faculty's data realization)
+   produces is the kernel's shared `StructureDb` (the domain `Model`'s data realization)
    and the source path is the shared `extraction/Path` — both referenced, not redeclared.
 
    Authored as one nested `Module` form: the operations live inside it (no separate `def`s),

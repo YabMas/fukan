@@ -2,9 +2,8 @@
   "fukan's SUBJECT grammar — the promotion of the `demos/self` experiment into the live canvas
    as Layer 1 of the verifiable tower (Subject → Realization → Code).
 
-   It names fukan's design directly, rather than emergently from the ten-node `Faculty` graph in
-   `canvas.domain.faculties` (which it is intended to REPLACE over time; the two coexist during the
-   migration). The shape, settled in the demo:
+   It names fukan's design directly, rather than leaving it to emerge from a graph of generic
+   faculties (an earlier self-model, since removed). The shape, settled in the demo:
 
      one hub MODEL, made-of one PRIMITIVE (defstructure);
      two SOURCES — author (intent, design↓) and extract (reality, code↑): two ORIGINS in tension;

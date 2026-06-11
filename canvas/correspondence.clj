@@ -5,10 +5,9 @@
    endpoints (a subject concept and the code Module(s) that build it), so the pure subject domain
    never names its realizers.
 
-   (Retired with the faculty self-model: `FacultyRealization`, the `:feeds`-functoriality and
-   faculty-realization-completeness laws, and the `DataForm` model↔code data-form check. DataForm
-   was a real cross-layer assertion — re-home it onto the subject `Model`/`Act` in a follow-up;
-   it needs each concept's data-form Kind re-aligned with its NEW realizer module.)"
+   (Follow-up: an earlier self-model carried a `DataForm` model↔code data-form check — a real
+   cross-layer assertion, retired and not yet re-homed. Re-home it onto the subject `Model`/`Act`,
+   re-aligning each concept's data-form Kind with its realizer module.)"
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.grouping :refer [Grouping]]
             ;; Act/Source: the law-scope targets of the completeness laws
