@@ -48,5 +48,5 @@
 (Module core-structure
   "The defstructure kernel — laws → violations over the structure graph."
   {:exposes [check vocab-rules]                  ; the kernel capabilities others compose
-   :owns    [StructureDb Violation Rule]         ; the data-shapes core.structure decides
-   :child   [c-Keyword c-String c-Int c-Node c-Relation]})  ; the substrate it owns
+   :owns    [StructureDb Violation]              ; data-shapes that cross the boundary (others adopt by name)
+   :child   [Rule c-Keyword c-String c-Int c-Node c-Relation]})  ; internal grain: the rules-output type + the reflexive substrate

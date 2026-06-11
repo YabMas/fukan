@@ -106,9 +106,11 @@
    a cluster of modules realizing a capability — is reserved and undefined for now; today every
    code namespace is a Module.)
 
-   `:exposes` is the public surface (the Operations callers depend on); `:owns` are the Kinds
-   this module DECIDES — others adopt them, they don't redefine them; `:child` is the full
-   membership / ownership backbone (`in-module` resolves over it)."
-  {:exposes [:* Operation]           ; the public API surface
-   :owns    [:* Kind]                ; the Kinds it is the source of truth for
-   :child   [:* Any]})               ; internal members + ownership backbone
+   `:exposes` is the public surface (the Operations callers depend on); `:owns` are the data-shapes
+   that CROSS THE BOUNDARY — Kinds other modules ADOPT by name (and don't redefine); `:child` is the
+   internal membership / ownership backbone (`in-module` resolves over `:exposes`/`:owns`/`:child`),
+   the home for grain a module is source-of-truth-for but no one else consumes. The discriminant is
+   adoption: a data-shape no other module names is internal grain (`:child`), not a boundary (`:owns`)."
+  {:exposes [:* Operation]           ; the public API surface — Operations callers depend on
+   :owns    [:* Kind]                ; data-shapes that cross the boundary (other modules adopt by name)
+   :child   [:* Any]})               ; internal members + grain no other module consumes
