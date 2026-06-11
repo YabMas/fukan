@@ -38,12 +38,12 @@
 
 (defstructure Function
   "Test fixture: takes typed inputs, gives exactly one typed output."
-  (slot :takes (many Type) :label-as :param)
-  (slot :gives (one  Type)))
+  {:takes [:* Type]
+   :gives Type})
 
 (defstructure Tree
   "A self-referential structure."
-  (slot :child (many Tree))
+  {:child [:* Tree]}
   (law "no cycle through :child"
     :rules '[[(reaches ?a ?b) [?r :rel/from ?a] [?r :rel/kind :child] [?r :rel/to ?b]]
              [(reaches ?a ?b) [?r :rel/from ?a] [?r :rel/kind :child] [?r :rel/to ?m]
@@ -52,16 +52,16 @@
     :where '[(reaches ?t ?t)]))
 
 (defstructure NonEmpty
-  "Exercises the (some Type) cardinality — at least one."
-  (slot :item (some Type)))
+  "Exercises the [:+ Type] cardinality — at least one."
+  {:item [:+ Type]})
 
 (defstructure Plain
   "A plain structure with fields (no laws)."
-  (slot :field (many Type) :label-as :field-name))
+  {:field [:* Type]})
 
 (defstructure Tagged
   "A free law scoped (by default) to its own instances."
-  (slot :field (many Type) :label-as :field-name)
+  {:field [:* Type]}
   (law "no field labelled secret"
     :offenders '[?x]
     :where '[[?r :rel/from ?x] [?r :rel/kind :field] [?r :rel/label "secret"]]))
@@ -76,9 +76,9 @@
 (defstructure Box
   "Exercises value slots: a required Bool, an optional String, a required Int.
    The positivity constraint is a free law — proving predicates ride the engine."
-  (slot :open  (one :Bool))
-  (slot :label (optional :String))
-  (slot :size  (one :Int))
+  {:open  :Bool
+   :label [:? :String]
+   :size  :Int}
   (law "size must be positive"
     :offenders '[?x]
     :where '[[?x :val/size ?s] [(<= ?s 0)]]))
@@ -87,51 +87,61 @@
 ;; anonymous); Holder is an entity that holds them.
 (defstructure ^:value Pair
   "A value-typed pair of ints — content-identified."
-  (slot :fst (one :Int))
-  (slot :snd (one :Int)))
+  {:fst :Int
+   :snd :Int})
 
 (defstructure ^:value Boxed
   "A value wrapping a Pair (nested value) and pointing at a Type entity."
-  (slot :inner (one Pair))
-  (slot :ty    (one Type)))
+  {:inner Pair
+   :ty    Type})
 
 (defstructure Holder
   "An entity that holds value-typed Pairs and Boxeds inline."
-  (slot :pair (many Pair))
-  (slot :box  (many Boxed)))
+  {:pair [:* Pair]
+   :box  [:* Boxed]})
 
 ;; data-literal reader: a bare Int authors a Wrapped value (exercises the generic
 ;; per-structure :reader — a literal arg is expanded to construction clauses).
 (defstructure ^:value Wrapped
   "A value with a data-literal reader: the literal `5` authors `(v 5)`."
-  (slot :v (one :Int))
+  {:v :Int}
   (reader (fn [n] [(list 'v n)])))
 
 (defstructure Holder2
   "An entity holding Wrapped values authored via the Int literal."
-  (slot :w (many Wrapped)))
+  {:w [:* Wrapped]})
 
-;; ordered composition: a sequence-bearing slot, authored with a vector.
+;; sequence composition: multi-slots are ordered by default ([:*]/[:+]); a [:set]
+;; slot opts out — no recorded order, duplicates collapse, identity ignores order.
 (defstructure Seq2
-  "An entity with an ordered slot (a sequence of Types)."
-  (slot :items (ordered Type)))
+  "An entity with a sequence slot (zero or more Types, in authoring order)."
+  {:items [:* Type]})
 
 (defstructure ^:value OrdVal
-  "A value whose ordered slot makes order part of its identity."
-  (slot :xs (ordered Type)))
+  "A value whose sequence slot makes order part of its identity."
+  {:xs [:* Type]})
+
+(defstructure ^:value SetVal
+  "A value whose :set slot keeps order OUT of its identity."
+  {:xs [:set Type]})
 
 (defstructure HolderO
-  "An entity holding ordered values inline."
-  (slot :v (many OrdVal)))
+  "An entity holding sequence values inline."
+  {:v [:* OrdVal]})
+
+(defstructure HolderS
+  "An entity holding set values inline, and a :set slot of its own."
+  {:v    [:* SetVal]
+   :tags [:set Type]})
 
 (defstructure Carry
   "Test fixture: a scalar slot with a :payload companion."
-  (slot :text (optional :String) :payload :extra))
+  {:text [:? {:payload :extra} :String]})
 
 (defstructure Gate
   "Test fixture: refined slot targets — scalars checked through the type dialect."
-  (slot :state (one [:enum "open" "closed"]))
-  (slot :note  (optional [:enum "a" "b"])))
+  {:state [:enum "open" "closed"]
+   :note  [:? [:enum "a" "b"]]})
 
 ;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
 ;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
@@ -215,18 +225,25 @@
 
 (def os-Int (Type "Int"))
 (def os-Str (Type "Str"))
-(def os-s   (Seq2 "s" (items [os-Int os-Str os-Int])))   ; Int repeats at 0 and 2
+(def os-s   (Seq2 "s" (items os-Int os-Str os-Int)))   ; Int repeats at 0 and 2
 
 (def o2-Int (Type "Int"))
 (def o2-Str (Type "Str"))
-(def o2-s   (Seq2 "s" (items [o2-Int o2-Str])))
+(def o2-s   (Seq2 "s" (items o2-Int) (items o2-Str)))  ; split clauses — order runs across them
 
 (def ov-Int (Type "Int"))
 (def ov-Str (Type "Str"))
 (def ov-h   (HolderO "h"
-              (v (OrdVal (xs [ov-Int ov-Str])))
-              (v (OrdVal (xs [ov-Str ov-Int])))     ; reversed → distinct value
-              (v (OrdVal (xs [ov-Int ov-Str])))))   ; same as first → dedup
+              (v (OrdVal (xs ov-Int ov-Str)))
+              (v (OrdVal (xs ov-Str ov-Int)))     ; reversed → distinct value
+              (v (OrdVal (xs ov-Int ov-Str)))))   ; same as first → dedup
+
+(def sv-Int (Type "Int"))
+(def sv-Str (Type "Str"))
+(def sv-h   (HolderS "h"
+              (v (SetVal (xs sv-Int sv-Str)))
+              (v (SetVal (xs sv-Str sv-Int)))                 ; reversed → SAME value (set identity)
+              (tags sv-Int sv-Int sv-Str)))                   ; duplicate target collapses
 
 (def ev-h (Holder "h" (pair (Pair (fst 1) (snd 2)))
                       (pair (Pair (fst 1) (snd 2)))))   ; same content
@@ -456,15 +473,15 @@
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
       (is (re-find #"unknown body form" msg)))))
 
-(deftest scalar-slot-rejects-some-and-many
-  (testing "a scalar-typed slot may only be (one ...) or (optional ...)"
+(deftest scalar-slot-rejects-multi-quantifiers
+  (testing "a scalar-typed slot may only be bare (one) or [:? ...] (optional)"
     (let [msg (try (let [_ (macroexpand
                             '(fukan.canvas.core.structure/defstructure BadVal "d"
-                               (slot :xs (many :Int))))]
+                               {:xs [:* :Int]}))]
                      "no throw")
                    (catch Throwable e
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
-      (is (re-find #"must be \(one \.\.\.\) or \(optional \.\.\.\)" msg)))))
+      (is (re-find #"must be bare \(one\) or \[:\? \.\.\.\]" msg)))))
 
 (deftest refined-slot-accepts-a-valid-value
   (testing "values the dialect accepts trip no law (required and optional refined slots)"
@@ -485,15 +502,15 @@
       (is (contains? (laws-firing db :Gate)
                      "Gate.state requires exactly one (found none)")))))
 
-(deftest refined-slot-rejects-some-and-many
-  (testing "a refined slot is a scalar — (one …) or (optional …) only"
+(deftest refined-slot-rejects-multi-quantifiers
+  (testing "a refined slot is a scalar — bare (one) or [:? ...] (optional) only"
     (let [msg (try (let [_ (macroexpand
                             '(fukan.canvas.core.structure/defstructure BadRefined "d"
-                               (slot :xs (many [:enum "a" "b"]))))]
+                               {:xs [:* [:enum "a" "b"]]}))]
                      "no throw")
                    (catch Throwable e
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
-      (is (re-find #"must be \(one \.\.\.\) or \(optional \.\.\.\)" msg)))))
+      (is (re-find #"must be bare \(one\) or \[:\? \.\.\.\]" msg)))))
 
 (deftest data-literal-reader-expands-and-dedups
   (testing "a value structure's :reader expands a literal arg into clauses; equal literals dedup"
@@ -503,8 +520,8 @@
                                            :where [?x :structure/of ::Wrapped] [?x :val/v ?n]]
                                          db))))))))
 
-(deftest ordered-slot-captures-position
-  (testing "a vector-authored ordered slot records :rel/order, recovering the sequence"
+(deftest sequence-slot-captures-position
+  (testing "a [:* T] slot records :rel/order from authoring position, recovering the sequence"
     (let [db (a/assemble-vars [#'os-Int #'os-Str #'os-s])]
       (is (= ["Int" "Str" "Int"]
              (->> (d/q '[:find ?o ?n
@@ -514,26 +531,29 @@
                   (sort-by first) (mapv second)))
           "sorting the :items relations by :rel/order recovers [Int Str Int]"))))
 
-(deftest ordered-two-element-vector-is-a-sequence-not-a-label
-  (testing "a 2-element ordered vector is two elements, not a [label target] form"
+(deftest sequence-order-runs-across-clauses
+  (testing "(items a) (items b) orders like (items a b) — the index runs across clauses"
     (let [db (a/assemble-vars [#'o2-Int #'o2-Str #'o2-s])]
-      (is (= 2 (count (d/q '[:find ?r :where [?s :entity/name "s"]
-                                            [?r :rel/from ?s] [?r :rel/kind :items]] db)))))))
+      (is (= [["Int" 0] ["Str" 1]]
+             (->> (d/q '[:find ?n ?o :where [?s :entity/name "s"]
+                                            [?r :rel/from ?s] [?r :rel/kind :items]
+                                            [?r :rel/order ?o] [?r :rel/to ?t] [?t :entity/name ?n]] db)
+                  (sort-by second) (mapv vec)))))))
 
-(deftest ordered-value-identity-respects-order
-  (testing "order is part of a value's identity: [Int Str] ≠ [Str Int], and equals itself"
+(deftest sequence-value-identity-respects-order
+  (testing "order is part of a sequence value's identity: [Int Str] ≠ [Str Int], and equals itself"
     (let [db (a/assemble-vars [#'ov-Int #'ov-Str #'ov-h])]
       (is (= 2 (count-of db :OrdVal))))))
 
-(deftest ordered-rejects-scalar-slot
-  (testing "ordered is rejected on a scalar slot (scalar storage is cardinality-one)"
-    (let [msg (try (let [_ (macroexpand
-                            '(fukan.canvas.core.structure/defstructure BadOrd "d"
-                               (slot :xs (ordered :Int))))]
-                     "no throw")
-                   (catch Throwable e
-                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
-      (is (re-find #"must be \(one \.\.\.\) or \(optional \.\.\.\)" msg)))))
+(deftest set-slot-ignores-order-and-collapses-duplicates
+  (testing "[:set T]: identity ignores order (reversed SetVals dedup) and duplicate targets collapse"
+    (let [db (a/assemble-vars [#'sv-Int #'sv-Str #'sv-h])]
+      (is (= 1 (count-of db :SetVal)) "(xs Int Str) and (xs Str Int) are ONE set value")
+      (is (= 2 (count (d/q '[:find ?r :where [?h :entity/name "h"]
+                                             [?r :rel/from ?h] [?r :rel/kind :tags]] db)))
+          "(tags Int Int Str) collapses the duplicate Int to one relation")
+      (is (empty? (d/q '[:find ?o :where [?r :rel/kind :tags] [?r :rel/order ?o]] db))
+          "a :set slot records no :rel/order"))))
 
 ;; ── value-identity (content-deduped, inline-anonymous value nodes) ───────────
 

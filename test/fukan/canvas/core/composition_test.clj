@@ -18,7 +18,7 @@
 (defstructure Hub
   "Includes the Linked facet; points at Spokes."
   (includes Linked)
-  (slot :spokes (many Spoke)))
+  {:spokes [:* Spoke]})
 
 (deftest includes-parsed-onto-sdef
   (testing "(includes …) collects facet tags onto the structure def"
@@ -60,7 +60,7 @@
 ;; ── realization fixtures ────────────────────────────────────────────────────
 (defstructure Note
   "A base concept with a Bool discriminant."
-  (slot :flag (one :Bool)))
+  {:flag :Bool})
 
 (defstructure Flagged
   "A realized concept: a Note whose flag is true — derived membership, NO constructor."
@@ -87,7 +87,7 @@
 ;; compound: a realized concept whose rule references another realized rule (the Inspect shape)
 (defstructure Holder
   "A base concept holding a Note."
-  (slot :holds (one Note)))
+  {:holds Note})
 (defstructure FlaggedHolder
   "Realized: a Holder holding a Flagged Note — a rule that references another realized rule."
   (realized-as '[(Holder ?e) [?r :rel/from ?e] [?r :rel/kind :holds] [?r :rel/to ?n] (Flagged ?n)]))
@@ -106,7 +106,7 @@
 ;; ── coproduct fixtures: a closed sum + a totality law ───────────────────────
 (defstructure Sum
   "A closed coproduct discriminated by :kind; totality asserted by a law."
-  (slot :kind (one :String))
+  {:kind :String}
   (law "every Sum is a VariantA or a VariantB"
     :offenders '[?s]
     :where '[(not (VariantA ?s)) (not (VariantB ?s))]))
@@ -138,7 +138,7 @@
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized "d"
              (realized-as '[(Note ?e)])
-             (slot :x (one :Bool))))
+             {:x :Bool}))
         "realized-as + slot is rejected")
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized2 "d"

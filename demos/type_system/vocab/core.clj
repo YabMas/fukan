@@ -41,16 +41,16 @@
    VALUE, distinct from the Field node's unique handle. Two record types that share
    a field name get two distinct Field nodes with the same `:fname` (see the
    value-identity note in the namespace docstring)."
-  (slot :fname (one :String))
-  (slot :type  (one Type)))
+  {:fname :String
+   :type  Type})
 
 (defstructure Type
   "A type in a nominal subtyping lattice. It may declare record :fields, name its
    direct supertypes via :subtype-of (transitive, must be acyclic), and be :sealed?
    (no type may then subtype it)."
-  (slot :field      (many Field))
-  (slot :subtype-of (many Type))
-  (slot :sealed?    (optional :Bool))
+  {:field      [:* Field]
+   :subtype-of [:* Type]
+   :sealed?    [:? :Bool]}
 
   ;; Acyclic lattice: no type (transitively) subtypes itself. `sub*` is transitive
   ;; subtyping over the DIRECT :subtype-of relation, step INLINED.

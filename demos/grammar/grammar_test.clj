@@ -18,7 +18,7 @@
 ;; `orphan` is an IDENT declared in the grammar but unreachable from `root`.
 
 (def g-IDENT  (Symbol "IDENT"))
-(def g-root   (Symbol "root" (produces (Production (rhs [g-IDENT])))))
+(def g-root   (Symbol "root" (produces (Production (rhs g-IDENT)))))
 (def g-orphan (Symbol "orphan"))   ; in the grammar, but unreachable
 (def g-gram   (Grammar "g"
                  (start g-root)

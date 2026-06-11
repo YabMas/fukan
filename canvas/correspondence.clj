@@ -26,8 +26,8 @@
    NB named `SubjectRealization`, not `Realization`: `fukan.target.correspondence/Realization` is
    the op-layer law-host. Distinct namespaces now keep both (the global-tag-namespace fix), but the
    names stay descriptive."
-  (slot :realizes (one Any))     ; the subject concept (an Act / Source / Model / …)
-  (slot :by       (many Any)))   ; the realizing code Module(s)
+  {:realizes Any        ; the subject concept (an Act / Source / Model / …)
+   :by       [:* Any]}) ; the realizing code Module(s)
 
 ;; the keystone column — project (the synthesise Act) IS materialization, realized by the
 ;; `materialize` Module; the rest wire each subject concept to the subsystem that builds it.

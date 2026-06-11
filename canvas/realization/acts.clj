@@ -24,21 +24,21 @@
   "The datalog `:where` selection (binding `?n` as the focused node) that resolves a `Lens`'s
    prose focus to a genuine sub-graph. Evaluated with the vocab-derived rules, so it reads at
    domain altitude. A prose-only lens simply has no LensSelection (not evaluable)."
-  (slot :realizes (one Lens))
-  (slot :selects  (one :String) :payload :query))   ; :selects = recap; :query = the datalog form
+  {:realizes Lens
+   :selects  [{:payload :query} :String]})   ; :selects = recap; :query = the datalog form
 
 (defstructure FindingCheck
   "The runtime predicate that enforces a `Finding`'s `:holds` invariant — a `(fn [result
    target-db] → ok?)` checked against a probe RESULT + the target model. (The invariant itself
    stays stated on the domain `Finding`; this pins how it's verified.)"
-  (slot :realizes (one Finding))
-  (slot :enforces (one :String) :payload :pred))    ; :enforces = recap; :pred = the predicate fn
+  {:realizes Finding
+   :enforces [{:payload :pred} :String]})    ; :enforces = recap; :pred = the predicate fn
 
 (defstructure ProbeComposition
   "The modelled kernel capability a `Probe` invokes when run (e.g. the integrity probe composes
    the kernel's `check`). The same `:calls` relation an op `Operation` uses — a probe IS an operation."
-  (slot :realizes (one Probe))
-  (slot :calls    (many Operation)))
+  {:realizes Probe
+   :calls    [:* Operation]})
 
 ;; ── lens selections ──────────────────────────────────────────────────────────
 (def s-survey      (LensSelection (realizes lens/survey)

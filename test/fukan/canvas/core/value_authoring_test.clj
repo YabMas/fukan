@@ -19,10 +19,8 @@
 ;; Top-level vocab for the entity-constructor test: defstructure is a macro so the
 ;; generated constructor macros (Attr, Ent) must be defined at compile-time (top level)
 ;; for later forms in the same compilation unit to use them.
-(s/defstructure Attr "an attribute" (slot :required (one :Bool)))
-(s/defstructure Ent  "an entity"
-  (slot :attr (many Attr))
-  (slot :links (one Ent)))
+(s/defstructure Attr "an attribute" {:required :Bool})
+(s/defstructure Ent  "an entity" {:attr [:* Attr] :links Ent})
 
 ;; Forward declaration needed for the cyclic ref before the var exists.
 (declare ev-test-User)
@@ -42,12 +40,12 @@
 ;; in the same compilation unit requires top-level definitions).
 
 (s/defstructure Sym  "symbol")
-(s/defstructure Prod "production" (slot :rhs (ordered Sym)))
-(s/defstructure Lnk  "link" (slot :to (one Sym)))
+(s/defstructure Prod "production" {:rhs [:* Sym]})
+(s/defstructure Lnk  "link" {:to Sym})
 
 (def t3-x (Sym "x"))
 (def t3-y (Sym "y"))
-(def t3-p (Prod "p" (rhs [t3-x t3-y])))
+(def t3-p (Prod "p" (rhs t3-x t3-y)))
 (def t3-l (Lnk "l" (to [edge t3-y])))
 
 (deftest ordered-and-labelled-clauses
@@ -58,19 +56,19 @@
   ;; and the single target is captured as a var
   (is (= [#'t3-y] (:targets (first (:clauses t3-l))))))
 
-;; ── ordered slot WITH per-element labels: order + label both carried ──────────
-;; reuses Prod (slot :rhs (ordered Sym)) — exercises an ordered slot both ways.
+;; ── sequence slot WITH per-element labels: order + label both carried ─────────
+;; reuses Prod {:rhs [:* Sym]} — exercises a sequence slot both ways.
 
-;; bare ordered: order only, no labels
-(def op-bare (Prod "bare" (rhs [t3-x t3-y])))
-;; labelled ordered: each element is a [label target]
-(def op-lbl  (Prod "lbl"  (rhs [[a t3-x] [b t3-y]])))
+;; bare sequence: order only, no labels
+(def op-bare (Prod "bare" (rhs t3-x t3-y)))
+;; labelled sequence: each element is a [label target]
+(def op-lbl  (Prod "lbl"  (rhs [a t3-x] [b t3-y])))
 
-(deftest ordered-slot-carries-order-and-labels
-  ;; the labelled ordered clause parses each [label target] → parallel :labels + :targets
+(deftest sequence-slot-carries-order-and-labels
+  ;; the labelled sequence clause parses each [label target] → parallel :labels + :targets
   (is (= ["a" "b"] (:labels (first (:clauses op-lbl)))))
   (is (= [#'t3-x #'t3-y] (:targets (first (:clauses op-lbl)))))
-  ;; bare ordered → no labels on the clause (existing behaviour pinned)
+  ;; bare sequence → no labels on the clause (existing behaviour pinned)
   (is (nil? (:labels (first (:clauses op-bare)))))
   (is (= [#'t3-x #'t3-y] (:targets (first (:clauses op-bare)))))
   ;; assembled: each reified :rhs relation carries :rel/order (0,1 in authoring
@@ -83,7 +81,7 @@
                        db [:entity/id (s/var-id #'op-lbl)])
                   (sort-by first))]
     (is (= [[0 "a" "x"] [1 "b" "y"]] rels)))
-  ;; bare ordered assembles with :rel/order but no :rel/label
+  ;; bare sequence assembles with :rel/order but no :rel/label
   (let [db (a/assemble-vars [#'op-bare #'t3-x #'t3-y])
         rels (->> (d/q '[:find ?ord ?tn :in $ ?from
                          :where [?r :rel/from ?from] [?r :rel/kind :rhs]
@@ -95,10 +93,10 @@
                       :where [?r :rel/from ?from] [?r :rel/kind :rhs] [?r :rel/label ?lbl]]
                     db [:entity/id (s/var-id #'op-bare)])]
     (is (= [[0 "x"] [1 "y"]] rels))
-    (is (empty? labels) "bare ordered slot carries no :rel/label")))
+    (is (empty? labels) "bare sequence slot carries no :rel/label")))
 
 ;; ── entity name defaults to the binding var's simple name ────────────────────
-(s/defstructure Named "n" (slot :doc (optional :String)))
+(s/defstructure Named "n" {:doc [:? :String]})
 
 (def nm-derived  (Named))             ; no name → derived from the var
 (def nm-override (Named "explicit"))  ; explicit string → overrides the var
@@ -116,8 +114,8 @@
 ;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
 
 (s/defstructure ^:value Shp "a shape"
-  (slot :kind (one :String))
-  (slot :of (many Shp)))
+  {:kind :String
+   :of   [:* Shp]})
 
 (def t4-s1 (Shp (kind "leaf")))
 (def t4-s2 (Shp (kind "leaf")))
@@ -142,11 +140,11 @@
 
 (s/defstructure RKind "kind")
 (s/defstructure ^:value RShape "shape"
-  (slot :kind (one :String))
-  (slot :of   (many RShape))
-  (slot :type (optional RKind))
+  {:kind :String
+   :of   [:* RShape]
+   :type [:? RKind]}
   (reader t7b-read-shape))
-(s/defstructure SHolder "h" (slot :shape (one RShape)))
+(s/defstructure SHolder "h" {:shape RShape})
 
 (def Db  (RKind "Db"))
 (def Foo (RKind "Foo"))
@@ -213,7 +211,7 @@
 
 (s/defstructure WA "a")
 (s/defstructure WB "b")
-(s/defstructure Grp "group" (slot :child (many Any)))
+(s/defstructure Grp "group" {:child [:* Any]})
 
 (def wa (WA "a-node"))
 (def wb (WB "b-node"))
@@ -234,7 +232,7 @@
 ;; A scalar slot with :payload stores a sibling :val/<payload> leaf alongside
 ;; the primary :val/<slot> leaf when a 3rd clause element is present.
 
-(s/defstructure Doc "doc" (slot :note (one :String) :payload :extra))
+(s/defstructure Doc "doc" {:note [{:payload :extra} :String]})
 
 (def t-doc (Doc "d" (note "hello" [:a :b :c])))
 
@@ -246,8 +244,8 @@
 
 ;; A payload carries a CODE-FORM (a datalog query, a predicate) — stored as DATA,
 ;; not evaluated, so unbound symbols like ?n survive instead of resolving at runtime.
-(s/defstructure FocusT "f" (slot :focus (one :String) :payload :query))
-(s/defstructure HoldT  "h" (slot :holds (one :String) :payload :holds-pred))
+(s/defstructure FocusT "f" {:focus [{:payload :query} :String]})
+(s/defstructure HoldT  "h" {:holds [{:payload :holds-pred} :String]})
 
 (def t-focus (FocusT "X" (focus "the whole model" '[[?n :structure/of _]])))
 (def t-hold  (HoldT  "Y" (holds "no violations" (fn [result _db] (empty? (:observations result))))))

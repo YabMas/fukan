@@ -7,10 +7,12 @@
    a datalog constraint at once. The structure substrate IS the model — no separate
    model-map, no privileged kinds.
 
-   A structure instance is a Node tagged `:structure/of <Tag>`. A slot whose target
+   A structure instance is a Node tagged `:structure/of <Tag>`. Slots are declared as
+   one map of `rel → type-expr`, cardinality as a quantifier (bare = one, `:?` optional,
+   `:*` zero+, `:+` one+ — both ordered — `:set` unordered). A slot whose target
    is another structure reifies a Relation (`:rel/from` → `:rel/to`, `:rel/kind`,
    optional `:rel/label` from an authored `[label target]` clause, `:rel/order` for
-   ordered slots) so every cross-reference stays queryable; a slot whose target is a
+   sequence slots) so every cross-reference stays queryable; a slot whose target is a
    scalar stores a `:val/<slot>` leaf with an auto-generated type-check law — a
    vector target (`[:enum \"a\" \"b\"]`, `[:int {:min 1}]`) is a REFINED scalar whose
    law checks values through the registered type dialect (the core stores the type
@@ -34,7 +36,7 @@
    :rel/kind     {:db/index true}
    :rel/to       {:db/valueType :db.type/ref}
    :rel/label    {}
-   :rel/order    {}})                                         ; position in an (ordered ...) slot
+   :rel/order    {}})                                         ; authoring position in a sequence (:*/:+) slot
 
 (defn create [] (d/empty-db schema))
 
@@ -136,41 +138,29 @@
      `{:rk ~rk :card ~card :targets [~@targets]})))
 
 (defn- parse-clause-arg-forms
-  "Given a slot's `:card`, its raw args (from the authored clause), and optionally
-   the target structure's sdef (when it has a `:reader`), return
-   `[labels target-forms]` where `target-forms` is a seq of code forms to splice
-   into `:targets` and `labels` is a parallel vector (nil per unlabelled target),
-   or nil when there are no labels.
-
-   - `:ordered` slot: the single arg is expected to be a vector; its elements are
-     spliced in order, each parsed for an optional `[label target]` shape — so an
-     ordered slot's reified relations carry `:rel/order` AND (when labelled)
-     `:rel/label`. An all-bare ordered vector yields nil labels (order only).
-   - Other slots: parse each arg — a 2-element, symbol-headed vector `[label t]`
-     contributes a labelled single target; a bare arg contributes one unlabelled
-     target. (So `(takes [x Int] [y Str])` carries per-target labels.)
+  "Given a clause's raw args and optionally the target structure's sdef (when it
+   has a `:reader`), return `[labels target-forms]` where `target-forms` is a seq
+   of code forms to splice into `:targets` and `labels` is a parallel vector (nil
+   per unlabelled target). Each arg is one element — multi-slots are varargs, and
+   for sequence slots the authoring order IS the order: a 2-element, symbol-headed
+   vector `[label t]` contributes a labelled target; a bare arg an unlabelled one
+   (so `(takes [x Int] [y Str])` carries per-target labels). (Malli forms are
+   keyword-headed and bare Kind refs are symbols, so the label shape never misfires
+   on a Schema `:of` element or a grammar `:rhs` symbol.)
 
    When `target-sdef` has a `:reader`, data literals are expanded via the reader
    (§2.1 reader-slot exception). A `[label literal]` form for a reader-slot
    extracts the label and reader-expands the target part."
-  ([card args] (parse-clause-arg-forms card args nil))
-  ([card args target-sdef]
+  ([args] (parse-clause-arg-forms args nil))
+  ([args target-sdef]
    (let [arg->form  (if (and target-sdef (:reader target-sdef))
                       (partial reader-arg->form (:tag target-sdef) (:reader target-sdef))
                       ref-arg->form)
-         ;; a 2-element, symbol-headed vector is a [label target]; anything else is a bare target.
-         ;; (Malli forms are keyword-headed and bare Kind refs are symbols, so this never
-         ;; misfires on a Schema `:of` element or a grammar `:rhs` symbol.)
          parse-elem (fn [a]
                       (if (and (vector? a) (= 2 (count a)) (symbol? (first a)))
                         {:label (str (first a)) :target (arg->form (second a))}
                         {:label nil :target (arg->form a)}))
-         elems      (if (= :ordered card)
-                      ;; ordered: the clause's single vector arg is spliced to its elements
-                      (mapcat #(if (vector? %) % [%]) args)
-                      ;; non-ordered: each clause arg is itself an element
-                      args)
-         parsed     (mapv parse-elem elems)]
+         parsed     (mapv parse-elem args)]
      [(mapv :label parsed) (mapv :target parsed)])))
 
 (defn- build-instance-form
@@ -209,7 +199,7 @@
                             (throw (ex-info (str (clojure.core/name tag) ": `"
                                                  (clojure.core/name rk) "` is not a slot")
                                             {:tag tag :rel rk})))
-                          (let [[labels target-forms] (parse-clause-arg-forms (:card slot) (rest c) target-sdef)]
+                          (let [[labels target-forms] (parse-clause-arg-forms (rest c) target-sdef)]
                             (rel-map-form rk (:card slot) target-forms labels))))
                       (remove scalar? clauses))]
     `(->InstanceValue ~tag ~name-expr ~doc ~scalars ~rels ~value?-expr)))
@@ -304,11 +294,14 @@
 
 (defn value-content-key
   "A deterministic, purely structural identity for a ^:value InstanceValue.
-   Returns a pr-str over [tag-name scalars-map rel-key-seq] where each rel entry
-   is [rk-name [target-id...]] with targets resolved recursively:
+   Returns a pr-str over [tag-name scalars-map slot-entries] where each entry is
+   [rk-name [[label target-id] …]] with targets resolved recursively:
      - a Var → (var-id v)
      - an InstanceValue → (value-content-key iv) (recurse)
-   Order within an ordered clause is preserved (so [A B] ≠ [B A])."
+   Clauses are grouped per slot and the groups sorted by name, so clause ORDER
+   across different slots never splits identity. Within a slot, sequence cards
+   (:many/:some) preserve authoring order ([A B] ≠ [B A]); a :set card sorts its
+   pairs, so order — and duplicate targets — are excluded from identity."
   [^InstanceValue iv]
   (let [tag-name (clojure.core/str (:tag iv))   ; qualified — value identity is ns-distinct
         scalars  (into (sorted-map) (:scalars iv))
@@ -317,31 +310,60 @@
                            (var? t)             (var-id t)
                            (instance? InstanceValue t) (value-content-key t)
                            :else                (pr-str t)))
-        rel-keys (mapv (fn [{:keys [rk targets labels]}]
-                         [(clojure.core/name rk)
-                          labels
-                          (mapv resolve-target targets)])
-                       (:clauses iv))]
-    (pr-str [tag-name scalars rel-keys])))
+        entries  (->> (group-by :rk (:clauses iv))
+                      (map (fn [[rk clauses]]
+                             (let [pairs (vec (for [{:keys [targets labels]} clauses
+                                                    [i t] (map-indexed vector targets)]
+                                                [(when labels (nth labels i nil))
+                                                 (resolve-target t)]))
+                                   pairs (if (= :set (:card (first clauses)))
+                                           (vec (distinct (sort-by pr-str pairs)))
+                                           pairs)]
+                               [(clojure.core/name rk) pairs])))
+                      (sort-by first)
+                      vec)]
+    (pr-str [tag-name scalars entries])))
 
 ;; ── defstructure (the one form) ──────────────────────────────────────────────
 
-(defn- parse-slot
-  "(slot :rel (card Target) & opts) → {:rel :card :target & opts}. A symbol target resolves to its
-   ns-qualified tag; a keyword target (a scalar type like `:String`, or `:Any`) stays bare; a
-   VECTOR target (e.g. `[:enum \"a\" \"b\"]`, `[:int {:min 1}]`) is a REFINED scalar — a type form
-   stored verbatim, never interpreted by the core: the slot's generated law checks values through
-   the registered type dialect (`fukan.canvas.core.typing/value-valid?`)."
-  [form]
-  (let [[_ rel card-form & opts] form
-        t (second card-form)]
-    (merge {:rel rel
-            :card (keyword (first card-form))
-            :target (cond
-                      (symbol? t) (resolve-struct-tag t)
-                      (vector? t) t
-                      :else       (keyword (name t)))}
-           (apply hash-map opts))))
+(def ^:private quantifiers
+  "Surface quantifier → slot cardinality. `:many` (`:*`) and `:some` (`:+`) are
+   SEQUENCES — authoring order is recorded as `:rel/order` and enters value
+   identity; `:set` is unordered — order is excluded from identity and duplicate
+   targets collapse. The unmarked case is `:one`."
+  {:? :optional, :* :many, :+ :some, :set :set})
+
+(defn- parse-slot-entry
+  "One slots-map entry `rel → type-expr` → {:rel :card :target & opts}:
+
+     :reads Model                      one (the default — a bare target)
+     :doc   [:? :String]               optional
+     :child [:* Node]                  zero or more, ordered
+     :item  [:+ Item]                  one or more, ordered
+     :field [:set Field]               zero or more, unordered identity
+     :mode  [:enum \"a\" \"b\"]            a refined scalar, cardinality one
+
+   A quantifier takes malli's props position for slot options: `[:? {:payload :q} :String]`;
+   for the default card, lead with the props map: `[{:payload :q} :String]`.
+   The target form: a symbol resolves to a structure tag; a keyword is a scalar type
+   (or `:Any`); any other vector is a REFINED scalar — a type form stored verbatim,
+   never interpreted by the core (the generated law checks values through the
+   registered type dialect, `fukan.canvas.core.typing/value-valid?`)."
+  [rel v]
+  (let [[card props form] (cond
+                            (and (vector? v) (contains? quantifiers (first v)))
+                            (let [props (when (map? (second v)) (second v))]
+                              [(quantifiers (first v)) props (if props (nth v 2 nil) (second v))])
+                            (and (vector? v) (map? (first v)))
+                            [:one (first v) (second v)]
+                            :else [:one nil v])
+        target (cond
+                 (symbol? form)  (resolve-struct-tag form)
+                 (vector? form)  form
+                 (keyword? form) (keyword (name form))
+                 :else (throw (ex-info (str "slot " rel ": unreadable type expression " (pr-str v))
+                                       {:rel rel :form v})))]
+    (merge {:rel rel :card card :target target} props)))
 
 (defn- parse-law
   "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?).
@@ -410,35 +432,45 @@
    relation slots into `:clauses` as `{:rk :card :targets [...]}` where each symbol target
    is captured as `(var sym)` (a deferred var reference, safe for forward/cyclic refs).
 
+   Slots are ONE map of `rel → type-expr`; cardinality is a quantifier (bare = one,
+   `:?` optional, `:*` zero+ ordered, `:+` one+ ordered, `:set` unordered) — see
+   `parse-slot-entry`:
+
      (defstructure Function \"...\"
-       (slot :takes (many Type))
-       (slot :gives (one  Type))
+       {:takes [:* Type]
+        :gives Type}
        (law \"...\" :offenders '[?f] :where '[...] :rules '[...]?))
 
-   Instantiate with the generated macro, slot names as clause heads:
-     (Function \"load-model\" (takes [src String]) (gives Model))
+   Instantiate with the generated macro, slot names as clause heads (multi-slots
+   take varargs; authoring order is the sequence order):
+     (Function \"load-model\" (takes [src String] [out String]) (gives Model))
 
-   Body forms must be (slot ...) or (law ...); anything else is rejected at
-   macro-expansion time (a silently-dropped form is a footgun).
+   Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
+   (includes ...) / (realized-as ...); anything else is rejected at macro-expansion
+   time (a silently-dropped form is a footgun).
 
    A law's recursive :rules must INLINE their step — a self-recursive rule may
    not call another rule, because datascript diverges on cyclic data for that
    shape (rejected here; the *law-timeout-ms* guard backstops the rest)."
   [sname docstring & body]
   (doseq [form body]
-    (when-not (and (seq? form) (#{'slot 'law 'reader 'syntax 'includes 'realized-as} (first form)))
+    (when-not (or (map? form)
+                  (and (seq? form) (#{'law 'reader 'syntax 'includes 'realized-as} (first form))))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected (slot ...), (law ...), (reader ...), (syntax ...), (includes ...) or (realized-as ...)")
+                           " — expected a slots map, (law ...), (reader ...), (syntax ...), (includes ...) or (realized-as ...)")
                       {:structure sname :form form}))))
+  (when (> (count (filter map? body)) 1)
+    (throw (ex-info (str "defstructure " sname ": multiple slots maps — declare all slots in one map")
+                    {:structure sname})))
   (let [value? (boolean (:value (meta sname)))
         tag    (keyword (str (ns-name *ns*)) (name sname))   ; identity = defining ns + name
-        slots  (mapv parse-slot (filter #(= 'slot (first %)) body))
+        slots  (mapv (fn [[rel v]] (parse-slot-entry rel v)) (or (first (filter map? body)) {}))
         _      (doseq [s slots]
-                 (when (and (scalar-slot? s) (#{:some :many :ordered} (:card s)))
+                 (when (and (scalar-slot? s) (#{:some :many :set} (:card s)))
                    (throw (ex-info
                            (str "defstructure " sname ": scalar slot " (:rel s)
-                                " must be (one ...) or (optional ...), not ("
-                                (name (:card s)) " ...)")
+                                " must be bare (one) or [:? ...] (optional), not [:"
+                                (name (:card s)) " ...]")
                            {:structure sname :slot (:rel s) :card (:card s)}))))
         laws   (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
         _      (doseq [law laws] (check-law-recursion! sname law))

@@ -21,18 +21,18 @@
 (defstructure Attribute
   "A named, typed attribute of an entity. `:required`/`:unique?` are scalar flags
    — leaf values now that the core has them (closing this domain's original gap)."
-  (slot :type     (one DataType))
-  (slot :required (optional :Bool))
-  (slot :unique?  (optional :Bool)))
+  {:type     DataType
+   :required [:? :Bool]
+   :unique?  [:? :Bool]})
 
 (defstructure Relationship
   "A directed relationship from its owning entity to a target entity."
-  (slot :target (one Entity)))
+  {:target Entity})
 
 (defstructure Entity
   "A data entity: at least one attribute, plus relationships to other entities."
-  (slot :attr (some Attribute))
-  (slot :rel  (many Relationship))
+  {:attr [:+ Attribute]
+   :rel  [:* Relationship]}
   ;; No circular dependency among entities. `refs*` is reachability over the
   ;; INDIRECT graph Entity →:rel→ Relationship →:target→ Entity, with the two-hop
   ;; step INLINED into the recursive rule (a recursive rule may not call a helper

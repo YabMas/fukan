@@ -14,8 +14,7 @@
     (is (contains? names 't5-foo))
     (is (not (contains? names 't5-plain)))))
 
-(s/defstructure Box "box"
-  (slot :links (one Box)))
+(s/defstructure Box "box" {:links Box})
 
 (declare t6-b)
 (def t6-a (Box "A" (links t6-b)))
@@ -33,21 +32,21 @@
 ;; ── Task 7: value dedup, ordered, labelled ────────────────────────────────────
 
 ;; value dedup (inline + top-level)
-(s/defstructure ^:value Tag2 "tag" (slot :n (one :String)))
-(s/defstructure Holder "h" (slot :a (one Tag2)) (slot :b (one Tag2)))
+(s/defstructure ^:value Tag2 "tag" {:n :String})
+(s/defstructure Holder "h" {:a Tag2 :b Tag2})
 (def t7-h  (Holder "h" (a (Tag2 (n "x"))) (b (Tag2 (n "x")))))   ; two equal inline values
 (def t7-v1 (Tag2 (n "z")))                                         ; two equal top-level values
 (def t7-v2 (Tag2 (n "z")))
 
 ;; ordered
 (s/defstructure Sym2 "s")
-(s/defstructure Seq2 "seq" (slot :items (ordered Sym2)))
+(s/defstructure Seq2 "seq" {:items [:* Sym2]})
 (def t7-sx (Sym2 "x")) (def t7-sy (Sym2 "y"))
-(def t7-seq (Seq2 "sq" (items [t7-sx t7-sy])))
+(def t7-seq (Seq2 "sq" (items t7-sx t7-sy)))
 
 ;; labelled
 (s/defstructure Node2 "n")
-(s/defstructure Edge2 "e" (slot :to (one Node2)))
+(s/defstructure Edge2 "e" {:to Node2})
 (def t7-n (Node2 "n"))
 (def t7-e (Edge2 "e" (to [knows t7-n])))
 

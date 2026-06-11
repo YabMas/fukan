@@ -20,13 +20,11 @@
 ;; ── two-view fixtures ────────────────────────────────────────────────────────
 ;; IMPL view: a module.  CONCEPT view: a faculty that flows (:feeds) + is realized.
 ;; PURPOSE view: a step that sequences (:next) and maps to a concept (:via).
-(defstructure Mod "impl-view node." (slot :child (many Any)))
+(defstructure Mod "impl-view node." {:child [:* Any]})
 (defstructure Fac "concept-view node: flows to peers (:feeds), realized by a module (:realized-by)."
-  (slot :feeds (many Fac))
-  (slot :realized-by (many Mod)))
+  {:feeds [:* Fac] :realized-by [:* Mod]})
 (defstructure Step "purpose-view node: sequences (:next), maps to a concept (:via)."
-  (slot :next (optional Step))
-  (slot :via  (one Fac)))
+  {:next [:? Step] :via Fac})
 
 ;; the cross-view link as a relation-coproduct — now a VOCAB-DERIVED relation.
 ;; (named `xview` to avoid colliding with the real `view-map` in canvas/domain/view.clj,

@@ -28,7 +28,7 @@
 (def c-Int         (Concept "Int"))
 (def c-Concept     (Concept "Concept" (doc "A type/structure — the meta-type this model is built from.")))
 (def c-Node        (Concept "Node" (doc "An instance: identified by name + uuid, or by content when value-typed.")))
-(def c-Cardinality (Concept "Cardinality" (doc "one | some | many | optional | ordered.")))
+(def c-Cardinality (Concept "Cardinality" (doc "one | optional | many | some | set.")))
 
 ;; the substrate seam: a reified slot relation
 (def c-Relation

@@ -38,25 +38,36 @@
 
 (defn- walk
   "Emit `iv` (already assigned `id`): conj its node-map and its reified relations,
-   recursing into inline-value targets. Returns [nodes rels]."
+   recursing into inline-value targets. Returns [nodes rels].
+
+   The per-slot index runs ACROSS clauses (`(child a) (child b)` orders like
+   `(child a b)`): sequence slots (:many/:some) record it as `:rel/order` and keep
+   duplicate targets distinct; a :set slot's rel-id omits it, so duplicate targets
+   collapse to one relation."
   [iv id nodes rels]
-  (let [nodes (conj nodes (node-map id iv))]
-    (reduce
-     (fn [[nodes rels] {:keys [rk labels targets card]}]
-       (reduce
-        (fn [[nodes rels] [idx t]]
-          (let [[tid nodes rels] (target-id+walk t id rk idx nodes rels)
-                label (when labels (nth labels idx nil))]
-            [nodes
-             (conj rels (cond-> {:rel/id   (str id "|" (name rk) "|" idx "|" tid)
-                                 :rel/from [:entity/id id] :rel/kind rk
-                                 :rel/to   [:entity/id tid]}
-                          label                (assoc :rel/label label)
-                          (= card :ordered)    (assoc :rel/order idx)))]))
-        [nodes rels]
-        (map-indexed vector targets)))
-     [nodes rels]
-     (:clauses iv))))
+  (let [nodes (conj nodes (node-map id iv))
+        [nodes rels _]
+        (reduce
+         (fn [acc {:keys [rk labels targets card]}]
+           (reduce
+            (fn [[nodes rels counters] [i t]]
+              (let [n     (get counters rk 0)
+                    [tid nodes rels] (target-id+walk t id rk n nodes rels)
+                    label (when labels (nth labels i nil))]
+                [nodes
+                 (conj rels (cond-> {:rel/id   (if (= card :set)
+                                                 (str id "|" (name rk) "|" tid)
+                                                 (str id "|" (name rk) "|" n "|" tid))
+                                     :rel/from [:entity/id id] :rel/kind rk
+                                     :rel/to   [:entity/id tid]}
+                              label                 (assoc :rel/label label)
+                              (#{:many :some} card) (assoc :rel/order n)))
+                 (assoc counters rk (inc n))]))
+            acc
+            (map-indexed vector targets)))
+         [nodes rels {}]
+         (:clauses iv))]
+    [nodes rels]))
 
 (defn assemble-vars
   "Build one structure db from an explicit collection of instance-bearing vars.

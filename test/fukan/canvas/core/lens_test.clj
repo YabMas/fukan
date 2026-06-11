@@ -9,11 +9,11 @@
 
 (defstructure Widget
   "A fixture structure with a relation slot, so a lens query can traverse it."
-  (slot :links (many Widget)))
+  {:links [:* Widget]})
 
 (defstructure Grp
   "A grouping fixture — :child relations place members in a module (in-module)."
-  (slot :child (many Any)))
+  {:child [:* Any]})
 
 (defn- by-name [db n]
   (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))

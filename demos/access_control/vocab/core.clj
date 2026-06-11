@@ -50,15 +50,15 @@
 (defstructure Permission
   "The right to perform one action on one resource. `:conflicts-with` names other
    permissions that must not be held by the same role (separation of duties)."
-  (slot :action        (one  Action))
-  (slot :resource      (one  Resource))
-  (slot :conflicts-with (many Permission)))
+  {:action         Action
+   :resource       Resource
+   :conflicts-with [:* Permission]})
 
 (defstructure Role
   "A role: the permissions it directly grants, plus the roles it inherits (whose
    permissions it also effectively holds)."
-  (slot :grants   (many Permission))
-  (slot :inherits (many Role))
+  {:grants   [:* Permission]
+   :inherits [:* Role]}
 
   ;; Acyclic hierarchy: a role may not (transitively) inherit itself. `inh*` is
   ;; transitive inheritance over the DIRECT :inherits relation, step INLINED.

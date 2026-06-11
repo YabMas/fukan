@@ -16,7 +16,7 @@
 
 (defstructure RenderHolder
   "Test fixture: carries one Schema so the reader expands native malli literals."
-  (slot :schema (one Schema)))
+  {:schema Schema})
 
 (def Socket (Kind "Socket"))
 

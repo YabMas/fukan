@@ -14,7 +14,7 @@
 ;; when it's a slot target, native malli literals are expanded at macroexpand time).
 (defstructure SchemaHolder
   "Test fixture: a named node that carries one Schema for reader-expansion tests."
-  (slot :schema (one Schema)))
+  {:schema Schema})
 
 ;; ── reader-expanded instances (native malli literals auto-expanded via read-malli) ──
 

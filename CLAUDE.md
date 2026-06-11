@@ -84,18 +84,22 @@ consumer needs to diverge.
 
 A `defstructure` is a composition of **slots** plus **laws**:
 
-- Slot cardinalities: `(one T)`, `(optional T)`, `(many T)`, `(some T)`,
-  `(ordered T)`. A slot whose target is a scalar (e.g. `(one :Bool)`) stores a
-  leaf value with an auto-generated type-check law; otherwise it reifies a relation.
-  A vector target (`[:enum "a" "b"]`, `[:int {:min 1}]`) is a REFINED scalar: the
-  core stores the type form verbatim and the generated law checks values through the
-  registered type dialect (`fukan.canvas.core.typing`, the kernel's third plug-point;
+- Slots are ONE map of `rel → type-expr`; cardinality is a quantifier: a bare target
+  is one (`:reads Model`), `[:? T]` optional, `[:* T]` zero+ ordered, `[:+ T]` one+
+  ordered, `[:set T]` unordered (no `:rel/order`; order and duplicate targets are
+  excluded from value identity). Multi-slots author as varargs — authoring order IS
+  the sequence order, recorded as `:rel/order`. A scalar target (`:Bool`/`:Int`/
+  `:String`) stores a leaf value with an auto-generated type-check law; any other
+  vector (`[:enum "a" "b"]`, `[:int {:min 1}]`) is a REFINED scalar: the core stores
+  the type form verbatim and the generated law checks values through the registered
+  type dialect (`fukan.canvas.core.typing`, the kernel's third plug-point;
   `lib.type.malli` registers `:valid?` at load). Never hand-write a membership/range law.
-- Slot options: `:payload` (carry a companion code-form alongside a scalar slot's
-  leaf, stored as a sibling `:val/` datom on the node), `(reader f)` (expand
-  authoring data-literals — e.g. fukan's Shape expands `Foo` / `[X]` / `{:f X}`). A
-  reified relation's label comes from an authored `[label target]` clause, not a slot
-  option.
+- Slot options ride the props position: `[:? {:payload :q} :String]` (`:payload` =
+  a companion code-form stored as a sibling `:val/` datom); for cardinality one,
+  lead with the props map: `[{:payload :q} :String]`. `(reader f)` expands authoring
+  data-literals (e.g. the malli dialect's Schema expands native malli forms). A
+  reified relation's label comes from an authored `[label target]` element, not a
+  slot option.
 - `^:value` structures are content-deduped, inline-anonymous nodes (structurally
   equal values collapse to one node) — used for nameless compound data.
 - `(law "desc" :offenders '[?x] :where '[…])` is a datalog constraint; `:scope

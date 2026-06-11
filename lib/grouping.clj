@@ -15,7 +15,7 @@
    ownership semantics; a code `Module` (`lib.code`) is a Grouping that adds those.
    `in-module` resolves over these `:child` relations (no privileged `:Grouping` tag in the
    kernel — a grouping is ordinary vocab)."
-  (slot :child (many Any)))
+  {:child [:* Any]})
 
 (defstructure Connected
   "Facet: a node that participates in the directed graph over its own kind — it is not

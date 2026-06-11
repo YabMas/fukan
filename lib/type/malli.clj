@@ -15,8 +15,8 @@
             [fukan.dialect.malli :as dialect]))
 
 ;; Opting into this grammar wires its checking: a refined slot target (e.g.
-;; `(slot :polarity (one [:enum "design-down" "code-up"]))`) compiles to a law that
-;; checks values through the type-dialect plug-point — so the grammar registers the
+;; `{:polarity [:enum "design-down" "code-up"]}`) compiles to a law that checks
+;; values through the type-dialect plug-point — so the grammar registers the
 ;; malli `:valid?` bridge at load (merge-per-key; a composition root adds the rest).
 (typing/register-type-dialect! {:valid? dialect/valid?})
 
@@ -27,7 +27,7 @@
 
 (defstructure ^:value SchemaChoice
   "One member of an enum schema, value-identified (`:red` shared across enums)."
-  (slot :value (one :String))
+  {:value :String}
   (reader read-choice))
 
 (defn ^:export read-field
@@ -39,9 +39,9 @@
 
 (defstructure ^:value SchemaField
   "A labelled map entry: key + its Schema + optionality."
-  (slot :key      (one :String))
-  (slot :schema   (one Schema))
-  (slot :optional (one :Bool))
+  {:key      :String
+   :schema   Schema
+   :optional :Bool}
   (reader read-field))
 
 (defn ^:export read-malli
@@ -81,11 +81,12 @@
             (:max props) (conj (list 'max (:max props)))
             (:re  props) (conj (list 'regex (str (:re props)))))
           (:vector :set :sequential)
-          ;; one element, wrapped so the ordered `:of` slot keeps a vector schema
-          ;; element (e.g. [:vector [:map …]]) as a single child rather than splicing it.
-          [(list 'kind (name op)) (list 'of [(first args)])]
+          ;; one element — clause args are varargs now (no vector splicing), so a
+          ;; vector schema element (e.g. [:vector [:map …]]) passes through as one
+          ;; reader literal.
+          [(list 'kind (name op)) (list 'of (first args))]
           (:tuple :or :and)
-          [(list 'kind (name op)) (list 'of (vec args))]
+          [(list 'kind (name op)) (cons 'of args)]
           :map
           (into [(list 'kind "map")]
                 (map (fn [[k & rest-entry]]
@@ -110,14 +111,14 @@
    read-malli expands it. The ref edge targets the wildcard `Any` (the named
    type's var is captured at the authoring site) to avoid a require cycle on the
    vocab that owns the named Kind."
-  (slot :kind   (one :String))
-  (slot :min    (optional :Int))
-  (slot :max    (optional :Int))
-  (slot :regex  (optional :String))
-  (slot :names  (optional Any))
-  (slot :of     (ordered Schema))
-  (slot :field  (many SchemaField))
-  (slot :choice (many SchemaChoice))
+  {:kind   :String
+   :min    [:? :Int]
+   :max    [:? :Int]
+   :regex  [:? :String]
+   :names  [:? Any]
+   :of     [:* Schema]           ; ordered children (tuple/or/and are form-faithful)
+   :field  [:set SchemaField]    ; map entries — unordered, like the map they describe
+   :choice [:* SchemaChoice]}    ; enum members in form order (round-trip faithful)
   (reader read-malli)
   (law "a ref schema must name a target"
     :offenders '[?s]

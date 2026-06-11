@@ -13,7 +13,8 @@
      Symbol)`, which conflated `value → STRING | NUMBER` (two alternatives) with
      `pair → key ':' value` (one ordered sequence). Separating them needs BOTH new
      primitives at once: a Symbol :produces many Productions (alternation), and a
-     Production's :rhs is `(ordered Symbol)` (sequence, position-bearing).
+     Production's :rhs is `[:* Symbol]` (a sequence — position-bearing, since
+     sequences are ordered by default).
 
    - A Production is a `^:value`: a production IS its (ordered) rhs sequence, so two
      productions with the same rhs are one node (value-identity). Authored inline,
@@ -29,17 +30,17 @@
 (defstructure ^:value Production
   "One production alternative: the ORDERED right-hand side sequence of symbols.
    Value-identified — a production is its rhs."
-  (slot :rhs (ordered Symbol)))
+  {:rhs [:* Symbol]})
 
 (defstructure Symbol
   "A grammar symbol. A nonterminal :produces one or more Productions (its
    alternatives); a terminal produces none."
-  (slot :produces (many Production)))
+  {:produces [:* Production]})
 
 (defstructure Grammar
   "A context-free grammar: a start symbol over a set of symbols."
-  (slot :start  (one  Symbol))
-  (slot :symbol (some Symbol))
+  {:start  Symbol
+   :symbol [:+ Symbol]}
   ;; No useless symbols: every symbol is reachable from the start. `derives` is
   ;; reachability over the indirect graph Symbol →:produces→ Production →:rhs→
   ;; Symbol, with the two-hop step INLINED into the recursive rule.

@@ -23,11 +23,11 @@
 (def NUMBER (Symbol))
 
 ;; nonterminals — :produces one or more Production alternatives;
-;; a Production's :rhs is an ordered sequence (vector)
-(def kv-key   (Symbol "key"   (produces (Production (rhs [IDENT])))))
-(def kv-value (Symbol "value" (produces (Production (rhs [STRING]))     ; value → STRING
-                                         (Production (rhs [NUMBER])))))  ; value → NUMBER
-(def kv-pair  (Symbol "pair"  (produces (Production (rhs [kv-key COLON kv-value])))))  ; ordered RHS
+;; a Production's :rhs is a sequence (authoring order is the order)
+(def kv-key   (Symbol "key"   (produces (Production (rhs IDENT)))))
+(def kv-value (Symbol "value" (produces (Production (rhs STRING))     ; value → STRING
+                                         (Production (rhs NUMBER)))))  ; value → NUMBER
+(def kv-pair  (Symbol "pair"  (produces (Production (rhs kv-key COLON kv-value)))))  ; ordered RHS
 
 (def kv-grammar
   (Grammar "kv"

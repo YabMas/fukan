@@ -24,11 +24,10 @@
      union/scalar gaps bite for *intrinsic* node typing but not for *positional*
      typing, and a surprising amount of workflow structure is positional.
 
-   - UNORDERED :next IS CORRECT HERE. A fork's branches run in parallel — they are
-     an unordered set, not a sequence. So the unordered-slot default (gap #2 in the
-     grammar/AST demo, where order was load-bearing) is exactly RIGHT for this
-     domain. A positive finding: the default fits whenever concurrency, not
-     sequence, is the intent.
+   - ORDER IS NOT LOAD-BEARING ON :next. A fork's branches run in parallel — they
+     are a set in intent, not a sequence. Multi-target slots record authoring order
+     by default now (cf. the grammar/AST demo, where that order IS load-bearing);
+     here the recorded order is simply incidental — no law or reading depends on it.
 
    - Cycles (retry loops, rework edges) are authorable: var capture defers
      reference resolution to assemble time, so a step may :next a step declared
@@ -43,12 +42,12 @@
    (fan-out), and a step that ≥2 :next edges target is a join (fan-in). A step
    with no :next is a terminal. Step kinds are emergent from graph position, not
    declared — see the namespace docstring."
-  (slot :next (many Step)))
+  {:next [:* Step]})
 
 (defstructure Workflow
   "A workflow: a single start step over the set of steps reachable through :next."
-  (slot :start (one  Step))
-  (slot :step  (some Step))
+  {:start Step
+   :step  [:+ Step]}
 
   ;; Reachability: no unreachable steps — every step is reachable from the start
   ;; through :next. `flows` is transitive reachability over the DIRECT relation

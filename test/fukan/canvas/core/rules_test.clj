@@ -8,7 +8,7 @@
 (defstructure RuleThing
   "A fixture structure: a relation slot (→ a relation rule) + a law that reads over
    the vocab-derived rules (→ exercises check's auto-injection)."
-  (slot :links (many RuleThing))
+  {:links [:* RuleThing]}
   (law "no rule-thing may be named \"forbidden\""
     :scope :global
     :offenders '[?s]
@@ -17,7 +17,7 @@
 (defstructure Mod
   "A grouping fixture — a node whose :child relations place its members in a module
    (so (in-module ?e \"t\") resolves)."
-  (slot :child (many Any)))
+  {:child [:* Any]})
 
 ;; instances under test
 (def rt-a (RuleThing "a"))

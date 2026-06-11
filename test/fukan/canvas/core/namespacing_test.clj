@@ -16,7 +16,7 @@
 ;; a LOCAL structure named `Kind` — same short name as `lib.code/Kind`, different namespace
 (defstructure Kind
   "Test fixture sharing the short name `Kind` with lib.code/Kind."
-  (slot :note (optional :String)))
+  {:note [:? :String]})
 
 (def local-kind (Kind "local"))
 (def lib-kind   (code/Kind "fromlib"))

@@ -17,10 +17,10 @@
 
 (def c1-String (DataType "String"))
 (def c1-n      (Attribute "n" (type c1-String)))
-(def c1-Empty  (Entity "Empty"))                       ; no :attr → trips (some Attribute)
+(def c1-Empty  (Entity "Empty"))                       ; no :attr → trips [:+ Attribute]
 
 (deftest entity-needs-an-attribute
-  (testing "an entity with no attribute trips the (some Attribute) cardinality"
+  (testing "an entity with no attribute trips the [:+ Attribute] cardinality"
     (let [db (a/assemble-vars [#'c1-String #'c1-n #'c1-Empty])]
       (is (contains? (laws db) "Entity.attr requires at least one (found none)")))))
 

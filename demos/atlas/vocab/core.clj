@@ -54,15 +54,15 @@
 (defstructure Tier
   "A layering axis. `:over` names the tier directly beneath this one, so the
    chain foundation ← service ← api expresses the legal direction of dependency."
-  (slot :over (optional Tier)))
+  {:over [:? Tier]})
 
 (defstructure ExecutionFunction
   "Atlas's :atlas/execution-function. Its compound identity is its (domain, tier,
    operation) facets; `:deps` are the other functions it calls."
-  (slot :domain    (one  Domain))
-  (slot :tier      (one  Tier))
-  (slot :operation (one  Operation))
-  (slot :deps      (many ExecutionFunction))
+  {:domain    Domain
+   :tier      Tier
+   :operation Operation
+   :deps      [:* ExecutionFunction]}
 
   ;; Dependency legality across tiers — Atlas's flagship invariant. A function may
   ;; not depend UPWARD: a service function must not call an api function. `over*`
@@ -89,14 +89,14 @@
 
 (defstructure Aspect
   "A single point on one axis — `auth` on the domain axis, `service` on tier."
-  (slot :axis (one Axis)))
+  {:axis Axis})
 
 (defstructure Faceted
   "Atlas's open compound identity verbatim: one flat `:aspects` set instead of
    named axis slots, extensible with no schema change. The cost is the law below —
    'one aspect per axis', which style A got for free from a slot cardinality."
-  (slot :aspects (many Aspect))
-  (slot :deps    (many Faceted))
+  {:aspects [:* Aspect]
+   :deps    [:* Faceted]}
 
   (law "an entity carries at most one aspect per axis"
     :scope ::Faceted

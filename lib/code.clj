@@ -27,7 +27,7 @@
 (defstructure ^:value Effect
   "A named side effect an Operation performs (e.g. :io, :require, :stderr, :throws).
    Value-identified — `:io` is one node shared across every Operation that performs it."
-  (slot :name (one :String))
+  {:name :String}
   (reader read-effect))
 
 (defn ^:export signature->clauses
@@ -50,11 +50,13 @@
           (let [[in-op & in-args] input
                 in-clause (case in-op
                             :catn (when (seq in-args)
-                                    [(list 'in (mapv (fn [pair]
-                                                       (when-not (and (vector? pair) (= 2 (count pair)) (keyword? (first pair)))
-                                                         (throw (ex-info (str ":catn entry must be [:name Type]: " (pr-str pair)) {:form form})))
-                                                       [(symbol (name (first pair))) (second pair)])
-                                                     in-args))])
+                                    ;; one (in [name Type] …) clause — VARARGS of labelled
+                                    ;; pairs; authoring order is the :in sequence order
+                                    [(cons 'in (map (fn [pair]
+                                                      (when-not (and (vector? pair) (= 2 (count pair)) (keyword? (first pair)))
+                                                        (throw (ex-info (str ":catn entry must be [:name Type]: " (pr-str pair)) {:form form})))
+                                                      [(symbol (name (first pair))) (second pair)])
+                                                    in-args))])
                             :cat  (when (seq in-args)
                                     (throw (ex-info (str "name your parameters — use [:catn [:name Type] …], not [:cat …]: " (pr-str input)) {:form form})))
                             (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))]
@@ -72,16 +74,16 @@
    `Stage` and the extractor's private `Operation` — one vocab, owned here, the extractor produces
    into it by tag.)"
   (includes Connected)
-  (syntax signature->clauses)         ; (signature [:=> [:catn …] Out]) authoring form (vocab-owned)
-  (slot :in        (ordered Schema))  ; ordered input shapes — positional, each labelled with its param name
-  (slot :out       (optional Schema)) ; output schema (authored ops declare one; extracted may not)
-  (slot :performs  (many Effect))     ; side effects
-  (slot :calls     (many Operation))  ; downstream operations it invokes
-  (slot :private   (optional :Bool))  ; public/internal — the module's surface (from extraction)
-  (slot :extracted (optional :Bool))  ; provenance: true ⇒ from code; absent/false ⇒ authored
-  ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
-  ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
-  (slot :sig       (optional :String)))
+  (syntax signature->clauses)        ; (signature [:=> [:catn …] Out]) authoring form (vocab-owned)
+  {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
+   :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
+   :performs  [:* Effect]            ; side effects
+   :calls     [:* Operation]         ; downstream operations it invokes
+   :private   [:? :Bool]             ; public/internal — the module's surface (from extraction)
+   :extracted [:? :Bool]             ; provenance: true ⇒ from code; absent/false ⇒ authored
+   ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
+   ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
+   :sig       [:? :String]})
 
 ;; ── code module (boundary + ownership) ───────────────────────────────────────
 
@@ -98,9 +100,9 @@
    `:exposes` is the public surface (the Operations callers depend on); `:owns` are the Kinds
    this module DECIDES — others adopt them, they don't redefine them; `:child` is the full
    membership / ownership backbone (`in-module` resolves over it)."
-  (slot :exposes (many Operation))   ; the public API surface
-  (slot :owns    (many Kind))        ; the Kinds it is the source of truth for
-  (slot :child   (many Any))         ; internal members + ownership backbone
+  {:exposes [:* Operation]           ; the public API surface
+   :owns    [:* Kind]                ; the Kinds it is the source of truth for
+   :child   [:* Any]}                ; internal members + ownership backbone
   (law "a Kind is owned by at most one Module"
     :offenders '[?k]
     :where '[[?k :structure/of :Kind]

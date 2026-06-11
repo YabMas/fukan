@@ -28,8 +28,7 @@
    focus (the datalog selection that resolves it to a sub-graph) is realization mechanism —
    a `LensSelection` in `canvas.realization.acts`, read by `core.lens/evaluate-lens`.
    A lens with no LensSelection is prose-only (not evaluable)."
-  (slot :doc   (optional :String))
-  (slot :focus (one :String)))   ; the prose description of the slice
+  {:focus :String})   ; the prose description of the slice
 
 ;; ── The observation act: Probe → Finding (inspect ⊂ probe) ───────────────────
 
@@ -43,9 +42,8 @@
    ok?)`) is realization mechanism — a `FindingCheck` in `canvas.realization.acts`,
    surfaced by the projector as a runtime gate. The complement of this observation act is a
    `Projection` (synthesis)."
-  (slot :doc    (optional :String))
-  (slot :gating (one :Bool))       ; gating → a trust Signal (inspect); else a View
-  (slot :holds  (optional :String)) ; the stated invariant (its executable check lives in the realization view)
+  {:gating :Bool          ; gating → a trust Signal (inspect); else a View
+   :holds  [:? :String]}  ; the stated invariant (its executable check lives in the realization view)
   ;; a finding is meaningful only if some probe yields it
   (law "every finding is yielded by some probe"
     :offenders '[?f]
@@ -59,9 +57,8 @@
    Finding). Which kernel capability it invokes when run (e.g. the integrity probe composes
    the kernel's `check`) is realization mechanism — a `ProbeComposition` in
    `canvas.realization.acts`."
-  (slot :doc     (optional :String))
-  (slot :through (one Lens))       ; the focus it reads through
-  (slot :yields  (one Finding)))   ; the observation it produces
+  {:through Lens       ; the focus it reads through
+   :yields  Finding})  ; the observation it produces
 
 (defstructure Signal
   "A gating Finding — an inspect's trust verdict. Realized: derived, not instantiated."
@@ -81,8 +78,8 @@
 (defstructure ^:value Mapping
   "One source-kind → target-artifact rule within a projection — value-identified by
    its (from, to)."
-  (slot :from (one :String))     ; the source structure kind
-  (slot :to   (one :String)))    ; the target artifact it becomes
+  {:from :String     ; the source structure kind
+   :to   :String})   ; the target artifact it becomes
 
 (defstructure Projection
   "A projected representation of the model — a target we render it into. Two flavours,
@@ -95,11 +92,10 @@
      mappings of its own — it reuses the base's, told differently.
    Either flavour renders THROUGH a `Lens` (the WHAT). The same lens can feed a probe and
    a projection (the drift lens feeds the drift inspect AND DriftClose)."
-  (slot :doc            (optional :String))
-  (slot :through        (one Lens))         ; the focus it renders through (the WHAT)
-  (slot :maps           (many Mapping))     ; a BASE's source→artifact mappings (the HOW)
-  (slot :contextualizes (optional Projection)) ; a CONTEXTUALIZATION's base projection
-  (slot :context        (optional :String)) ; the framing prose wrapped around the base render
+  {:through        Lens              ; the focus it renders through (the WHAT)
+   :maps           [:* Mapping]      ; a BASE's source→artifact mappings (the HOW)
+   :contextualizes [:? Projection]   ; a CONTEXTUALIZATION's base projection
+   :context        [:? :String]}     ; the framing prose wrapped around the base render
   ;; a projection is one flavour or the other — it declares mappings (base) or frames
   ;; another (contextualization); neither would render nothing.
   (law "a projection is a base (declares mappings) or a contextualization (frames another)"

@@ -137,7 +137,7 @@
   (testing "a MetaSlot whose cardinality is outside the known set is caught"
     (let [bad (a/assemble-vars [#'mc-T #'mc-X])]
       (is (contains? (set (map :law (s/check bad)))
-                     "MetaSlot.cardinality value must satisfy [:enum \"one\" \"some\" \"many\" \"optional\" \"ordered\"]")))))
+                     "MetaSlot.cardinality value must satisfy [:enum \"one\" \"optional\" \"many\" \"some\" \"set\"]")))))
 
 (deftest cross-module-ref-resolves
   (testing "the project Act is realized by → the materialize module, via a SubjectRealization"
