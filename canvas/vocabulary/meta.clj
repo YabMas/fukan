@@ -15,10 +15,14 @@
             [lib.type.malli]))
 
 (defstructure ^:value MetaSlot
-  "A slot of a Concept — value-identified by its (name, cardinality, target)."
+  "A slot of a Concept — value-identified by its (name, cardinality, target). Mirrors a real
+   slot's target: a structure-REF (`:of` another Concept) OR a leaf SCALAR type (`:scalar`).
+   A field declares one or the other — exactly as the core distinguishes a symbol (tag ref)
+   from a keyword (scalar type), so no scalar needs a Concept node of its own."
   {:name        :String
    :cardinality [:enum "one" "optional" "many" "some" "set"]
-   :of          Concept})    ; the target concept
+   :of          [:? Concept]                                    ; a ref target (another Concept), or
+   :scalar      [:? [:enum "Keyword" "String" "Int" "Bool"]]})  ; a leaf scalar type
 
 (defstructure Concept
   "A concept (type) in a modelled data model — a defstructure structure, a reified

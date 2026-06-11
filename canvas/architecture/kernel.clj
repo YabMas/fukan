@@ -4,29 +4,24 @@
    (`lib.grammar/with-grammar`) derives it from the live registry, where it can never drift. What
    remains hand-modelled is the SUBSTRATE the registry sits on — `Node` and the reified `Relation`
    — which is not registry data, so reflection can't reach it. It rides here as the module's own
-   children (the reflexive self-description, in `canvas.vocabulary.meta`). The kernel also exposes
-   one capability, `check` (laws → violations): the canonical integrity inspect, modelled because
-   code is a projection of the model 1-on-1.
-
-   (One concept needs a var workaround: `String` shadows `java.lang.String`, so its var is
-   `c-String` with `^{:name}` restoring the concept name. The rest carry no shadow — plain names.)"
+   children (the reflexive self-description, in `canvas.vocabulary.meta`): `Node`, and `Relation`
+   whose scalar fields use `MetaSlot`'s `:scalar` leaf type, so no scalar needs a Concept of its
+   own. The kernel also exposes one capability, `check` (laws → violations): the canonical
+   integrity inspect, modelled because code is a projection of the model 1-on-1."
   (:require [canvas.vocabulary.meta :refer [Concept MetaSlot]]
             [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.query-engine :as query-engine]))
 
 ;; ── the substrate: the kernel's own data-shapes (reflection can't reach below the registry) ──
-(Concept Keyword)
-(Concept ^{:name "String"} c-String)   ; only String shadows java.lang.String → keep the var workaround
-(Concept Int)
 (Concept Node
   "An instance: identified by name + uuid, or by content when value-typed.")
 (Concept Relation
   "A reified slot value — a kinded edge between Nodes, carrying optional label/order."
-  {:slot [(MetaSlot {:name "from"  :cardinality "one"      :of Node})
-          (MetaSlot {:name "to"    :cardinality "one"      :of Node})
-          (MetaSlot {:name "kind"  :cardinality "one"      :of Keyword})
-          (MetaSlot {:name "label" :cardinality "optional" :of c-String})
-          (MetaSlot {:name "order" :cardinality "optional" :of Int})]})
+  {:slot [(MetaSlot {:name "from"  :cardinality "one"      :of     Node})
+          (MetaSlot {:name "to"    :cardinality "one"      :of     Node})
+          (MetaSlot {:name "kind"  :cardinality "one"      :scalar "Keyword"})
+          (MetaSlot {:name "label" :cardinality "optional" :scalar "String"})
+          (MetaSlot {:name "order" :cardinality "optional" :scalar "Int"})]})
 
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────
 (Kind StructureDb
@@ -49,4 +44,4 @@
   "The defstructure kernel — laws → violations over the structure graph."
   {:exposes [check vocab-rules]                  ; the kernel capabilities others compose
    :owns    [StructureDb Violation]              ; data-shapes that cross the boundary (others adopt by name)
-   :child   [Rule Keyword c-String Int Node Relation]})  ; internal grain: the rules-output type + the reflexive substrate
+   :child   [Rule Node Relation]})  ; internal grain: the rules-output type + the reflexive substrate
