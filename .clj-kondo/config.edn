@@ -298,6 +298,15 @@
    fukan.canvas.core.structure-test/Function hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Gate hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Holder hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LDoc hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LReviewer hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LBot hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LRef hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LProj hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LSrc hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LLift hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LOwned hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LOwner hooks.fukan.structure/instance
    lib.grammar-test/Leaf hooks.fukan.structure/instance
    lib.grammar-test/Node hooks.fukan.structure/instance
    fukan.canvas.projection.grammar-test/PLeaf hooks.fukan.structure/instance

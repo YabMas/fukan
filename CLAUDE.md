@@ -109,8 +109,12 @@ A `defstructure` is a composition of **slots** plus **laws**:
 - `^:value` structures are content-deduped, inline-anonymous nodes (structurally
   equal values collapse to one node) — used for nameless compound data.
 - `(law "desc" :offenders '[?x] :where '[…])` is a datalog constraint; `:scope
-  :global` opts a law out of self-scoping. `(structure/check db)` runs every law →
-  violations.
+  :global` opts a law out of self-scoping. The recurring shapes have COMBINATORS —
+  `(law "desc" (matched-by R :from S? :when {k v}? :scope T?))`, `(has R :when …?)`,
+  `(has-any R1 R2 …)`, `(target R {k v})`, `(at-most-one R)` — which expand to
+  datalog with negation routed through rules (the datascript empty-relation
+  `not-join` gotcha is encapsulated in the kernel; never hand-write these shapes).
+  `(structure/check db)` runs every law → violations.
 
 The current catalog is the source: read `canvas/vocabulary/*.clj` for fukan's own
 grammar (`perspective` = Faculty + Phase + view-map; `act` = Lens + Probe + Projection;

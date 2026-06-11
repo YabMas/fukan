@@ -50,12 +50,7 @@
   {:into     Model
    :polarity [:enum "design-down" "code-up"]}
   (law "the loop closes — every code-up source is matched by a correspondence"
-    :rules '[[(corresponded ?src)
-              [?c :structure/of :canvas.vocabulary.subject/Correspondence]
-              [?l :rel/from ?c] [?l :rel/kind :lifts] [?l :rel/to ?src]]]
-    :offenders '[?src]
-    :where '[[?src :val/polarity "code-up"]
-             (not (corresponded ?src))]))
+    (matched-by :lifts :from Correspondence :when {:polarity "code-up"})))
 
 (defstructure Act
   "A way OUT — using the Model. The out-2fold is two MODES, one each — probe = analyse (→ a
@@ -75,10 +70,6 @@
   {:lifts  Source
    :lowers Act}
   (law "a correspondence lifts a code-up source"
-    :offenders '[?c]
-    :where '[[?l :rel/from ?c] [?l :rel/kind :lifts] [?l :rel/to ?s]
-             (not [?s :val/polarity "code-up"])])
+    (target :lifts {:polarity "code-up"}))
   (law "a correspondence lowers a synthesise act"
-    :offenders '[?c]
-    :where '[[?l :rel/from ?c] [?l :rel/kind :lowers] [?l :rel/to ?a]
-             (not [?a :val/mode "synthesise"])]))
+    (target :lowers {:mode "synthesise"})))

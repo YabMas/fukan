@@ -83,16 +83,11 @@
    :polarity [:enum "design-down" "code-up"]}
   ;; #4 made assertable from THIS side: a lifted-in source must have a corresponding act to
   ;; lower it back down — else the loop can't close. Names the design claim 'correspondence
-  ;; emerges where extract meets project'. Negation is over a RULE (not inline clauses) so it
-  ;; fires correctly even when NO correspondence exists yet — datascript's inline `not-join`
-  ;; mis-handles a wholly-empty relation; a negated rule does not (cf. the workflow demo).
+  ;; emerges where extract meets project'. (The combinator expands the negation through a
+  ;; RULE, so it fires correctly even when NO correspondence exists yet — the datascript
+  ;; empty-relation `not-join` gotcha is encapsulated in the kernel.)
   (law "the loop closes — every code-up source is matched by a correspondence"
-    :rules '[[(corresponded ?src)
-              [?c :structure/of ::Correspondence]
-              [?l :rel/from ?c] [?l :rel/kind :lifts] [?l :rel/to ?src]]]
-    :offenders '[?src]
-    :where '[[?src :val/polarity "code-up"]
-             (not (corresponded ?src))]))
+    (matched-by :lifts :from Correspondence :when {:polarity "code-up"})))
 
 ;; ── #3 the OUT-dual: two complementary acts, one focus ──────────────────────
 
@@ -119,10 +114,6 @@
    :lifts  Source
    :lowers Act}
   (law "a correspondence lifts a code-up source"
-    :offenders '[?c]
-    :where '[[?l :rel/from ?c] [?l :rel/kind :lifts] [?l :rel/to ?s]
-             (not [?s :val/polarity "code-up"])])
+    (target :lifts {:polarity "code-up"}))
   (law "a correspondence lowers a synthesise act"
-    :offenders '[?c]
-    :where '[[?l :rel/from ?c] [?l :rel/kind :lowers] [?l :rel/to ?a]
-             (not [?a :val/mode "synthesise"])]))
+    (target :lowers {:mode "synthesise"})))

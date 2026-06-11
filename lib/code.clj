@@ -15,7 +15,10 @@
 ;; ── data types ───────────────────────────────────────────────────────────────
 
 (defstructure Kind
-  "A named atomic type — a leaf in a Schema (e.g. Db, NsSymbol, File).")
+  "A named atomic type — a leaf in a Schema (e.g. Db, NsSymbol, File). Owned by at
+   most one Module (`:owns` — others adopt it, they don't redefine it)."
+  (law "a Kind is owned by at most one Module"
+    (at-most-one :owns)))
 
 ;; ── computation ──────────────────────────────────────────────────────────────
 
@@ -103,10 +106,4 @@
    membership / ownership backbone (`in-module` resolves over it)."
   {:exposes [:* Operation]           ; the public API surface
    :owns    [:* Kind]                ; the Kinds it is the source of truth for
-   :child   [:* Any]}                ; internal members + ownership backbone
-  (law "a Kind is owned by at most one Module"
-    :offenders '[?k]
-    :where '[[?k :structure/of :Kind]
-             [?r1 :rel/from ?s1] [?r1 :rel/kind :owns] [?r1 :rel/to ?k]
-             [?r2 :rel/from ?s2] [?r2 :rel/kind :owns] [?r2 :rel/to ?k]
-             [(not= ?s1 ?s2)]]))
+   :child   [:* Any]})               ; internal members + ownership backbone

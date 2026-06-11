@@ -84,11 +84,13 @@
 
 ;; ── the data form (round-trip) ────────────────────────────────────────────────
 
-(defn- law-form [{:keys [desc scope rules offenders where]}]
-  (concat ['law desc]
-          (when scope [:scope scope])
-          (when rules [:rules rules])
-          [:offenders offenders :where where]))
+(defn- law-form [{:keys [desc scope rules offenders where src]}]
+  (if src
+    (list 'law desc src)   ; authored through a combinator — render the combinator back
+    (concat ['law desc]
+            (when scope [:scope scope])
+            (when rules [:rules rules])
+            [:offenders offenders :where where])))
 
 (defn structure-form
   "The reified Structure at `eid` rendered back as its `defstructure` data form —

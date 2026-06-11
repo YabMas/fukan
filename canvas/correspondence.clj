@@ -11,6 +11,8 @@
    it needs each concept's data-form Kind re-aligned with its NEW realizer module.)"
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.grouping :refer [Grouping]]
+            ;; Act/Source: the law-scope targets of the completeness laws
+            [canvas.vocabulary.subject :refer [Act Source]]
             [canvas.domain.subject :as subj]
             [canvas.realization.kernel :as kernel]
             [canvas.realization.canvas-source :as canvas-source]
@@ -44,19 +46,9 @@
    what is built. (The realizing Modules' Operations are in turn checked against real `src/`
    functions by the op-layer correspondence — so this reaches the code transitively.)"
   (law "every act is realized by a module"
-    :rules '[[(realized ?x)
-              [?r :structure/of :canvas.correspondence/SubjectRealization]
-              [?e :rel/from ?r] [?e :rel/kind :realizes] [?e :rel/to ?x]]]
-    :scope :global
-    :offenders '[?a]
-    :where '[[?a :structure/of :canvas.vocabulary.subject/Act] (not (realized ?a))])
+    (matched-by :realizes :from SubjectRealization :scope Act))
   (law "every source is realized by a module"
-    :rules '[[(realized ?x)
-              [?r :structure/of :canvas.correspondence/SubjectRealization]
-              [?e :rel/from ?r] [?e :rel/kind :realizes] [?e :rel/to ?x]]]
-    :scope :global
-    :offenders '[?s]
-    :where '[[?s :structure/of :canvas.vocabulary.subject/Source] (not (realized ?s))]))
+    (matched-by :realizes :from SubjectRealization :scope Source)))
 
 (def subject-realization
   (Grouping (child z-model z-author z-extract z-probe z-project z-corr)))

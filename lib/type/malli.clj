@@ -130,6 +130,4 @@
    :choice [:* SchemaChoice]}    ; enum members in form order (round-trip faithful)
   (reader read-malli)
   (law "a ref schema must name a target"
-    :offenders '[?s]
-    :where '[[?s :val/kind "ref"]
-             (not-join [?s] [?r :rel/from ?s] [?r :rel/kind :names])]))
+    (has :names :when {:kind "ref"})))

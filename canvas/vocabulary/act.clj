@@ -46,8 +46,7 @@
    :holds  [:? :String]}  ; the stated invariant (its executable check lives in the realization view)
   ;; a finding is meaningful only if some probe yields it
   (law "every finding is yielded by some probe"
-    :offenders '[?f]
-    :where '[(not [?r :rel/kind :yields] [?r :rel/to ?f])]))
+    (matched-by :yields)))
 
 (defstructure Probe
   "Reads the model through a Lens → a Finding. The model is unchanged (probe observes;
@@ -99,6 +98,4 @@
   ;; a projection is one flavour or the other — it declares mappings (base) or frames
   ;; another (contextualization); neither would render nothing.
   (law "a projection is a base (declares mappings) or a contextualization (frames another)"
-    :offenders '[?p]
-    :where '[(not-join [?p] [?m :rel/from ?p] [?m :rel/kind :maps])
-             (not-join [?p] [?c :rel/from ?p] [?c :rel/kind :contextualizes])]))
+    (has-any :maps :contextualizes)))

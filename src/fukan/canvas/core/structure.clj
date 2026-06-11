@@ -366,21 +366,96 @@
                                        {:rel rel :form v})))]
     (merge {:rel rel :card card :target target} props)))
 
+;; ── law combinators: the recurring law shapes, datalog-correct by construction ─
+;; A combinator names a law SHAPE at domain altitude and expands to the datalog —
+;; with negation routed through RULES, never inline not-join, so datascript's
+;; wholly-empty-relation gotcha is encapsulated here, once. The authored form is
+;; kept on the law as :src (the print-dual renders it back).
+
+(defn- when-clauses
+  "{:polarity \"code-up\"} → scalar-equality clauses on `var`."
+  [var when-map]
+  (mapv (fn [[k v]] [var (keyword "val" (clojure.core/name k)) v]) when-map))
+
+(defn- combinator-law
+  "Expand `(law \"desc\" (combinator …))` into a parsed law map:
+
+     (has R :when {k v}?)        every instance (satisfying :when) has ≥1 outgoing R
+     (has-any R1 R2 …)           … has at least one of the Rs
+     (matched-by R :from S? :when {k v}? :scope T?)
+                                 every instance is the TARGET of some R (from an S)
+     (target R {k v})            every R-target satisfies the value conditions
+     (at-most-one R)             at most one incoming R (a unique owner/matcher)
+
+   :when filters the law's subjects by scalar values; :from constrains the
+   matching counterpart's structure; :scope (a structure symbol) hosts the law
+   about ANOTHER structure's instances (default: self-scoped to the owner)."
+  [desc form]
+  (let [[op & args] form
+        kvs    (fn [xs] (apply hash-map xs))
+        merged (fn [scope m] (merge {:desc desc :src form
+                                     :scope (when scope (resolve-struct-tag scope))} m))]
+    (case op
+      has
+      (let [[rel & opts] args
+            {whenm :when scope :scope} (kvs opts)]
+        (merged scope
+                {:offenders '[?x]
+                 :rules [[(list 'law-has '?x) ['?r :rel/from '?x] ['?r :rel/kind rel]]]
+                 :where (conj (when-clauses '?x whenm) '(not (law-has ?x)))}))
+      has-any
+      (merged nil
+              {:offenders '[?x]
+               :rules (mapv (fn [rel] [(list 'law-has '?x) ['?r :rel/from '?x] ['?r :rel/kind rel]])
+                            args)
+               :where ['(not (law-has ?x))]})
+      matched-by
+      (let [[rel & opts] args
+            {whenm :when scope :scope from :from} (kvs opts)]
+        (merged scope
+                {:offenders '[?x]
+                 :rules [(vec (concat [(list 'law-matched '?x)]
+                                      (when from [['?c :structure/of (resolve-struct-tag from)]])
+                                      [['?r :rel/from '?c] ['?r :rel/kind rel] ['?r :rel/to '?x]]))]
+                 :where (conj (when-clauses '?x whenm) '(not (law-matched ?x)))}))
+      target
+      (let [[rel whenm] args]
+        (merged nil
+                {:offenders '[?x]
+                 :rules [(vec (cons (list 'law-target-ok '?t) (when-clauses '?t whenm)))]
+                 :where [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
+                         '(not (law-target-ok ?t))]}))
+      at-most-one
+      (let [[rel] args]
+        (merged nil
+                {:offenders '[?x]
+                 :where [['?r1 :rel/kind rel] ['?r1 :rel/to '?x] ['?r1 :rel/from '?a]
+                         ['?r2 :rel/kind rel] ['?r2 :rel/to '?x] ['?r2 :rel/from '?b]
+                         '[(not= ?a ?b)]]}))
+      (throw (ex-info (str "unknown law combinator " op " — expected has, has-any, "
+                           "matched-by, target, or at-most-one")
+                      {:form form})))))
+
 (defn- parse-law
-  "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?).
+  "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?)
+   — or `(law \"desc\" (combinator …))`, expanded by `combinator-law`.
 
    :scope controls auto-scoping of the first offender var to a structure:
    absent → the owning structure (the common case: a law about my own
    instances); a tag → that structure (a law whose subject is a related
    structure); :global → no auto-scope (the law is fully explicit)."
   [form]
-  (let [[_ desc & kvs] form
-        m (apply hash-map kvs)]
-    {:desc desc
-     :offenders (unquote-lit (:offenders m))
-     :where     (unquote-lit (:where m))
-     :rules     (unquote-lit (:rules m))
-     :scope     (:scope m)}))
+  (let [[_ desc & kvs] form]
+    (if (and (seq? (first kvs)) (symbol? (ffirst kvs)))
+      (do (when (next kvs)
+            (throw (ex-info (str "a combinator law takes one form: " (pr-str form)) {:form form})))
+          (combinator-law desc (first kvs)))
+      (let [m (apply hash-map kvs)]
+        {:desc desc
+         :offenders (unquote-lit (:offenders m))
+         :where     (unquote-lit (:where m))
+         :rules     (unquote-lit (:rules m))
+         :scope     (:scope m)}))))
 
 (defn- defined-rule-names
   "The set of rule-head names defined in a datalog rule vector."
@@ -623,6 +698,15 @@
   []
   (rules/derive-rules (all-structures) scalar-slot?))
 
+(defn- rules-recursive?
+  "Whether a law's own rules can recurse: some rule's body invokes a rule the law
+   itself defines (self- or mutual). Vocab-derived rules can't call a law's rules,
+   so only these need the timeout guard; plain helper rules (e.g. combinator
+   expansions) run on the fast path."
+  [rules]
+  (let [defined (defined-rule-names rules)]
+    (boolean (some #(seq (rule-refs (rest %) defined)) rules))))
+
 (defn- run-query
   "Run a law's offender query, returning the offender rows (or nil if none).
    Only laws with their OWN recursive `:rules` can diverge, so only they are run under
@@ -651,8 +735,9 @@
                     (vec (cons (list (symbol (name scope-tag)) (first offenders)) where))
                     where)
         q         (vec (concat [:find] offenders [:in '$ '%] [:where] where*))
-        ;; vocab-derived rules are always available; a law's OWN rules signal recursion
-        results   (run-query db q (into (vec base-rules) rules) (boolean (seq rules)))]
+        ;; vocab-derived rules are always available; only actually-recursive own
+        ;; rules need the timeout guard
+        results   (run-query db q (into (vec base-rules) rules) (rules-recursive? rules))]
     (cond
       (= results ::timeout) ::timeout
       (seq results)         (mapv vec results)

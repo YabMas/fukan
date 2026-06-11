@@ -163,7 +163,9 @@
            {:node (cond-> {:entity/id (str sid "#law/" i) :structure/of ::Law
                            :val/desc  (:desc law)
                            :val/query (pr-str (:where law))
-                           :val/form  (select-keys law [:offenders :where :rules])}
+                           ;; :src = the authored combinator form, when the law was
+                           ;; authored through one (the print-dual renders it back)
+                           :val/form  (select-keys law [:offenders :where :rules :src])}
                     (:scope law) (assoc :val/scope (str (:scope law))))
             :rel  {:rel/id   (str sid "|law|" i)
                    :rel/from [:entity/id sid] :rel/kind :law

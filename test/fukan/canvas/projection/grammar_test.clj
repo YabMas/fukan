@@ -24,7 +24,9 @@
    :mode    [:enum "a" "b"]}
   (law "no bad title"
     :offenders '[?n]
-    :where '[[?n :val/title "bad"]]))
+    :where '[[?n :val/title "bad"]])
+  (law "every node references a leaf"
+    (has :one-ref)))
 
 (defstructure ^:value PVal
   "A value fixture."
@@ -57,9 +59,12 @@
                :mode    [:enum "a" "b"]}
               (law "no bad title"
                 :offenders [?n]
-                :where [[?n :val/title "bad"]]))
+                :where [[?n :val/title "bad"]])
+              (law "every node references a leaf"
+                (has :one-ref)))
            f)
-        "the rendered form IS the authored form (laws unquoted — the parsed form)")))
+        "the rendered form IS the authored form (raw laws unquoted — the parsed
+         form; combinator laws render their authored combinator back)")))
 
 (deftest payload-options-round-trip
   (let [db (reflected)
