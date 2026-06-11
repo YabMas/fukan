@@ -71,7 +71,13 @@ contributes grammar only when a model opts in. Current entries: `lib.code` (Kind
 / Operation / Module — standard code-structures, where a `Module` is one code namespace:
 an API surface + owned types), `lib.grouping` (Grouping — the most abstract membership
 primitive — and Connected), `lib.type.malli` (the malli type dialect — first entry in the
-`lib.type.*` pluggable type-authoring surface). The grouping ladder is deliberately
+`lib.type.*` pluggable type-authoring surface), `lib.grammar` (GRAMMAR REFLECTION:
+`with-grammar` projects the registry onto the model db — every defstructure in the model's
+namespace closure becomes a `Structure` node, slots as `:slot/<card>`-kinded labeled edges
+(scalar/refined targets reify as content-deduped `Schema` values), laws as nodes with
+their datalog as a `:val/form` payload, one `Vocabulary` node per grammar namespace; the
+join rule `(of-structure ?i ?s)` is in `lib.grammar/rules`; fukan's `build-model` always
+reflects, demos opt in). The grouping ladder is deliberately
 levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace) ⊂ `Subsystem` (a
 cluster of modules realizing a capability — reserved, not yet defined). This keeps
 `canvas/vocabulary/` focused on

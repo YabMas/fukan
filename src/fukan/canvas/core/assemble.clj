@@ -87,15 +87,23 @@
                              vars)]
     (-> (s/create) (d/db-with nodes) (d/db-with rels))))
 
-(defn assemble-instances
-  "Build one structure db from explicit `[id InstanceValue]` roots — programmatic
-   construction with no var scan, for builders that synthesize instances at runtime
-   (e.g. a code extractor). Inline-value children get owner-path ids; nodes are
-   transacted before rels so lookup-refs resolve."
+(defn emit-instances
+  "Walk explicit `[id InstanceValue]` roots into `{:nodes [...] :rels [...]}` maps
+   WITHOUT transacting — for builders that merge into an EXISTING db (e.g. the
+   grammar reflector). Inline-value children get owner-path / content-key ids, so
+   value dedup holds across separate emits into one db."
   [id+ivs]
   (let [[nodes rels] (reduce (fn [[nodes rels] [id iv]] (walk iv id nodes rels))
                              [[] []]
                              id+ivs)]
+    {:nodes nodes :rels rels}))
+
+(defn assemble-instances
+  "Build one structure db from explicit `[id InstanceValue]` roots — programmatic
+   construction with no var scan, for builders that synthesize instances at runtime
+   (e.g. a code extractor). Nodes are transacted before rels so lookup-refs resolve."
+  [id+ivs]
+  (let [{:keys [nodes rels]} (emit-instances id+ivs)]
     (-> (s/create) (d/db-with nodes) (d/db-with rels))))
 
 (defn assemble

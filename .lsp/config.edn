@@ -28,6 +28,7 @@
               canvas.realization.canvas-source
               canvas.correspondence
               canvas.realization.acts
+              lib.grammar
               canvas.realization.extraction
               canvas.realization.infra
               canvas.realization.kernel

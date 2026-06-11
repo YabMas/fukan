@@ -9,6 +9,7 @@
 
    Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
+            [lib.grouping :refer [Connected]]
             [lib.type.malli :refer [Schema]]))
 
 ;; ── data types ───────────────────────────────────────────────────────────────

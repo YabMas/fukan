@@ -115,6 +115,25 @@
                     db))
           "build performs :io"))))
 
+(deftest grammar-is-reflected-onto-the-model
+  (testing "the registry has no off-graph remainder: the subject grammar is reified —
+            slots as :slot/<card> edges, refined scalars as Schema values, strange loop closed"
+    (let [db (pipeline/build-model nil)]
+      (is (= {"into" :slot/one, "polarity" :slot/one}
+             (into {} (d/q '[:find ?l ?k
+                             :where [?s :structure/of :lib.grammar/Structure]
+                                    [?s :val/tag ":canvas.vocabulary.subject/Source"]
+                                    [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db)))
+          "Source's slots are cardinality-kinded, name-labeled edges")
+      (is (= "enum"
+             (ffirst (d/q '[:find ?kind
+                            :where [?s :val/tag ":canvas.vocabulary.subject/Source"]
+                                   [?r :rel/from ?s] [?r :rel/label "polarity"] [?r :rel/to ?t]
+                                   [?t :val/kind ?kind]] db)))
+          "the refined polarity slot targets its Schema value")
+      (is (seq (d/q '[:find ?s :where [?s :val/tag ":lib.grammar/Structure"]] db))
+          "the reflection self-reifies (Structure has a Structure node)"))))
+
 (deftest kernel-meta-model-captures-structure-composition
   (testing "the reflexive kernel model: Structure is composed of Slot and Law"
     (let [db (pipeline/build-model nil)]

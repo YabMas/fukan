@@ -14,18 +14,22 @@
    its Clojure extractor over `src/` in `fukan.infra.model`)."
   (:require [clojure.java.io :as io]
             [fukan.canvas.projection.canvas-source :as canvas-source]
-            [fukan.model.extraction :as extraction]))
+            [fukan.model.extraction :as extraction]
+            [lib.grammar :as grammar]))
 
 (defn build-model
   "Build the model — the unified structure substrate db. Always ingests the canvas/
    design specs; when `code-root` names an existing source tree AND a project
    extractor is registered, the code structures it yields are merged onto the same
-   graph and cross-references re-resolved. Pass nil (or build with no extractor
-   registered) for the design model alone."
+   graph and cross-references re-resolved. The model's GRAMMAR is then reflected
+   onto the same graph (`lib.grammar/with-grammar`), so the registry has no
+   off-graph remainder. Pass nil (or build with no extractor registered) for the
+   design model alone."
   [code-root]
   (let [design  (canvas-source/build)
         code-db (when (and code-root (.exists (io/file code-root)))
                   (extraction/run-extractor code-root))]
-    (if code-db
-      (canvas-source/union-dbs [design code-db])
-      design)))
+    (grammar/with-grammar
+     (if code-db
+       (canvas-source/union-dbs [design code-db])
+       design))))
