@@ -56,6 +56,10 @@ not removing the decision.
   authored with a vector, stores each element's position as `:rel/order` on its
   reified relation — chosen over value-encoding the sequence, for clean queries. Order
   enters a value's content key, so `[A B] ≠ [B A]`. Rejected on scalar slots.
+  *Superseded 2026-06-11:* ordered became the DEFAULT plural — `[:* T]`/`[:+ T]` are
+  sequences (varargs authoring, position recorded), `[:set T]` is the marked unordered
+  case (order and duplicates excluded from identity); the separate `ordered`
+  cardinality and vector authoring were retired with the slot-map surface.
 
 - **D6 — Classification dissolved into the substrate.** There is no `:entity/type` /
   `:affordance/role` classification layer; a node's kind is just `:structure/of`, and

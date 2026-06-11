@@ -18,72 +18,102 @@ down) joined by correspondence laws.
 
 The single most load-bearing decision: `src/fukan/canvas/` ships only the
 `defstructure` primitive and the ingestion/projection machinery. It ships **no
-domain vocabulary** — no `Type`, no `Function`, no architectural kinds. Every
-modelling project authors its own grammar on the core:
+domain vocabulary** — no `Type`, no `Function`, no architectural kinds. This is the
+bottom-up half of the premise (see VISION.md: *bottom-up language building,
+top-down design*) — in the Lisp tradition of stratified languages, authoring a
+grammar is every project's first modelling act:
 
-- **fukan-on-fukan's** vocabulary lives in `canvas/vocab/` (a data layer, a
-  computation layer, a schema layer, an architecture layer, plus probe / projection
-  / collaboration / lens layers).
+- **fukan-on-fukan's** vocabulary lives in `canvas/vocabulary/` (the subject
+  grammar, the act grammar — Lens / Probe / Finding / Projection — and the schema
+  layer).
 - **Each demo** owns its grammar under `demos/<domain>/vocab/`.
+- **Domain-general** vocabulary lives in the opt-in stdlib `lib/` (code structures,
+  grouping, the malli type dialect, grammar reflection).
 
 The core knows no kinds. This keeps the substrate a small, honest floor and forces
 every modelling exercise to confront "what is the clearest vocabulary for *this*?"
 — which is the point of the current phase.
 
-A consequence and standing finding: the structure registry is a **single global tag
-namespace**, so co-loaded projects cannot share a tag name. (Fukan's data layer
-names its leaf type `Kind`, not `Type`, only because a test fixture co-loads a
-`Type`.) Per-project tag namespacing is deferred until it earns its keep.
+Structure tags are **namespace-qualified** (identity = defining ns + name), so
+co-loaded projects may share short names. The remaining edge: law scoping rides
+SHORT-name rules, so two same-short-named structures *with laws* deliberately
+co-loaded would share a scope predicate — harmless until someone does it on purpose.
 
 ## The `defstructure` surface
 
 A structure is a *composition of slots* plus *datalog laws*.
 
-- **Slot cardinalities:** `(one T)`, `(optional T)`, `(many T)`, `(some T)`,
-  `(ordered T)`. A slot whose target is a scalar (`(one :Bool)`) stores a leaf value
-  with an auto-generated type-check law; a slot whose target is another structure
-  reifies a relation.
-- **Slot options:** `:payload` carries a companion code-form alongside a scalar
-  slot's leaf value (stored as a sibling `:val/` datom on the node); `(reader f)`
-  lets a structure expand authoring data-literals (fukan's `Shape` reads `Foo` /
-  `[X]` / `{:f X}`). A reified relation's label comes from an authored `[label
-  target]` clause, not a slot option.
+- **Slots are one typed map**, cardinality as a quantifier: a bare target is one
+  (`:reads Model`), `[:? T]` optional, `[:* T]` zero+ ordered, `[:+ T]` one+
+  ordered, `[:set T]` unordered (order and duplicate targets excluded from value
+  identity). Multi-slots author as varargs; authoring order is the sequence order,
+  recorded as `:rel/order`. A scalar target (`:Bool`/`:Int`/`:String`) stores a
+  leaf value with an auto type-check law; any other vector (`[:enum "a" "b"]`,
+  `[:int {:min 1}]`) is a **refined scalar** — the core stores the type form
+  verbatim and the generated law checks values through the registered type dialect
+  (`fukan.canvas.core.typing`, the kernel's third plug-point); a slot whose target
+  is another structure reifies a relation.
+- **Slot options** ride the props position: `[:? {:payload :q} :String]`
+  (`:payload` = a companion code-form stored as a sibling `:val/` datom); for
+  cardinality one, lead with the props map. `(reader f)` lets a value structure
+  expand authoring data-literals (the malli dialect's `Schema` reads native malli
+  forms); `(syntax f)` lets a structure own instance-level sugar (`Operation`'s
+  `(signature [:=> …])`). A reified relation's label comes from an authored
+  `[label target]` element.
 - **`^:value` structures** are content-deduped, inline-anonymous nodes:
   structurally-equal values collapse to a single node (identity = a content hash).
   Used for nameless compound data — list/record/shape descriptions — where an
   entity-style named stand-in would erase the structure.
 - **Laws:** `(law "desc" :offenders '[?x] :where '[…])` is a datalog constraint.
   `:scope :global` opts a law out of its structure's self-scoping (needed for
-  cross-cutting laws like correspondence). `(structure/check db)` runs every law and
-  returns the violations.
+  cross-cutting laws like correspondence). The recurring shapes have
+  **combinators** — `(law "desc" (matched-by R :from S? :when {k v}? :scope T?))`,
+  `(has R :when …?)`, `(has-any R1 R2 …)`, `(target R {k v})`, `(at-most-one R)` —
+  expanding to datalog with negation routed through rules, so the datascript
+  empty-relation `not-join` gotcha is encapsulated in the kernel.
+  `(structure/check db)` runs every law and returns the violations.
 
 ## Laws read at domain altitude — vocab-derived rules
 
 Laws should read in the vocabulary's own terms, not in raw substrate patterns. The
 core derives a set of **datalog rules from the live vocabulary** (`core/rules.clj`,
-pure): a kind rule per structure (`(Stage ?e)`), a relation rule per relation slot
-(`(calls ?a ?b)`), plus fixed substrate rules (`in-module`, `named`). `check`
-auto-injects these into every law's query, so a law can say `(Stage ?s) (in-module
-?s ?m)` instead of navigating `:structure/of` and reified `:rel/*` triples by hand.
+pure): a kind rule per structure (`(Operation ?e)`), a relation rule per relation
+slot (`(calls ?a ?b)`), inclusion/realized-as rules, plus fixed substrate rules
+(`in-module`, `named`). `check` auto-injects these into every law's query, so a law
+can say `(Operation ?s) (in-module ?s ?m)` instead of navigating `:structure/of`
+and reified `:rel/*` triples by hand.
 
 ## Ownership-on-owner
 
-Module ownership flows via `:module/child` relations on the **owner**, not via
-back-references on the owned entity. The `within-module` helper emits `:module/child`
-automatically. Owned entities carry no `:module` field.
+Module ownership flows via `:child` relations on the **owner**, not via
+back-references on the owned entity. Nested authoring routes members into the
+container's slots automatically (`(Module m … (Operation f …))` emits the
+`:exposes`/`:child` relations). Owned entities carry no module back-reference;
+`in-module` resolves over `:child`/`:exposes`/`:owns`.
 
 ## Ingestion — many specs, one graph
 
 Canvas files under `canvas/**/*.clj` are **auto-discovered** (`canvas_source`): each
-is required (registering its vocabulary) and, if it defines `build-canvas`, called
-to produce a per-spec structure db. The per-spec dbs are merged into one
-(schema-driven: identity-bearing entities carry across, ref-typed attrs become
-identity lookup-refs). Adding a spec is a single file drop — no registry edit.
+is required — registering its vocabulary and interning its instance `def`s — and the
+global assembler scans the interned vars into one structure db. Adding a spec is a
+single file drop — no registry edit, no per-spec build fn, no merge pass.
 
-**Cross-module references** are authored by name — `(across "<module>")` or
-`(across "<module>" "<name>")` — and resolved *post-merge* (`resolve-cross-refs`);
-an unresolved reference throws. References are by-name and build-time by design;
-compile-checked var-references would be a whole-ref-system change, deferred.
+**References between specs are ordinary var references** (require + var capture;
+`declare` for forward refs within a namespace). Identity is the qualified var name,
+so cross-namespace reference cycles are inexpressible by construction. The earlier
+by-name `(across …)`/post-merge-resolution scheme is retired.
+
+## Grammar reflection — the language is on the graph
+
+The structure registry is projected onto the model on every build
+(`lib.grammar/with-grammar`): each defstructure in the model's namespace closure
+becomes a `Structure` node — slots as `:slot/<card>`-kinded labeled edges whose
+scalar/refined targets reify as the type dialect's content-deduped `Schema` values,
+laws as nodes carrying their datalog as a payload. The print-dual
+(`fukan.canvas.projection.grammar`) renders a reified structure back as its
+authoring form — `(grammar)` in the REPL is the live language reference, derived
+not maintained — and grammar drift (`unused-structures`: vocabulary no instance
+inhabits) becomes an ordinary reading.
 
 ## The model↔code seam — two directions
 
@@ -105,11 +135,13 @@ and implementation onto the same substrate, then checking them against each othe
   Blueprint framed as drift-to-close). `compose` / `materialize-view` /
   `materialize-projection` compose the renders over a lens's focus.
 - **Correspondence (verify).** `target/correspondence.clj` holds the laws that link
-  the two — e.g. every modelled Stage is realized by an Operation of the same name
-  in the corresponding module. Correspondence is its **own** concern, not a slot on
-  any domain structure: a domain's laws describe that domain's own behaviour;
-  "does the model realize in code" is orthogonal and lives apart (with `:scope
-  :global` to escape self-scoping).
+  the two — every authored Operation is realized by an extracted Operation of the
+  same name in the corresponding module, and the realized `:malli/schema` adheres
+  to the modelled signature (type-level correspondence, through the same dialect).
+  Correspondence is its **own** concern, not a slot on any domain structure: a
+  domain's laws describe that domain's own behaviour; "does the model realize in
+  code" is orthogonal and lives apart (with `:scope :global` to escape
+  self-scoping).
 
 ## Lens, probe, and projection — acts through a lens
 
@@ -155,9 +187,10 @@ defmethod (`(defmethod render-base [base kind] [db base eid] …)`, dispatching 
 
 The serving daemon is paused, so the loop is in-process (`clj -M:dev`):
 `(go)` builds the model (canvas specs + the Clojure extractor over `src/`),
-`(refresh)` reloads + rebuilds, `(status)` reports state, `(drift)` reports modelled
-capabilities not yet realized in code. Build a db directly with `with-structures` /
-`within-module`, query with `d/q`, check with `(s/check db)`.
+`(refresh)` reloads + rebuilds, `(status)` reports state, `(overview)` projects the
+system map, `(grammar)` prints the live language primer, `(drift)` reports modelled
+capabilities not yet realized in code. Build a db directly with top-level instance
+`def`s + `assemble-vars`, query with `d/q`, check with `(s/check db)`.
 
 ---
 

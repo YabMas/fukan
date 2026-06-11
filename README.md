@@ -13,6 +13,11 @@ are one graph whose consistency a machine checks. You **define** a system's stru
 **model** abstractions over it, **verify** the whole by running its laws, and **act**
 on it — probing what it is, projecting it toward an implementation.
 
+The approach is **bottom-up language building, top-down design** — the Lisp tradition
+of stratified languages: grow the vocabulary the domain wants from one primitive up,
+press the design down onto it as laws, and let the graph hold both — and the
+LLM-written implementation — to account.
+
 > **Status: lean-kernel + modelling-exploration phase.** Fukan was radically pruned and
 > rebuilt around a single primitive, `defstructure`. The interactive browser explorer
 > that gives fukan its name — the whole graph rendered as a navigable bird's-eye view —
@@ -29,32 +34,36 @@ and the ingestion/projection machinery and **no domain vocabulary** — every pr
 authors its own grammar on the core.
 
 ```clojure
-(require '[fukan.canvas.core.structure :as s :refer [defstructure]])
+(require '[fukan.canvas.core.structure :as s :refer [defstructure]]
+         '[fukan.canvas.core.assemble :as a])
 
-;; a tiny vocabulary: one structure, one law
+;; a tiny vocabulary: one structure — its slots as one typed map — plus one law
 (defstructure Task
   "A unit of work that may depend on other tasks."
-  (slot :done? (one :Bool))
-  (slot :deps  (many Task))
+  {:done? :Bool
+   :deps  [:* Task]}
   (law "a task cannot depend on itself"
     :offenders '[?t]
     :where '[[?r :rel/from ?t] [?r :rel/kind :deps] [?r :rel/to ?t]]))
 
-;; a model authored against it
-(def db (s/with-structures
-          (s/within-module "plan"
-            (Task "spec"  (done? true))
-            (Task "build" (done? false) (deps spec)))))
+;; a model authored against it — instances are values, references are vars
+(def spec  (Task (done? true)))
+(def build (Task (done? false) (deps spec)))
 
-(s/check db)   ;; => []  (every law holds)
+(s/check (a/assemble-vars [#'spec #'build]))   ;; => []  (every law holds)
 ```
 
-A scalar slot (`(one :Bool)`) stores a leaf value with an auto type-check law; a slot
-whose target is another structure reifies a *queryable relation*. The model is a
-datascript db, so a human or an LLM interrogates it with the **same datalog** — fukan
-is REPL-native and agent-native by construction. Cardinalities are `one` / `optional` /
-`many` / `some` / `ordered`; `^:value` structures are content-deduped anonymous nodes
-for nameless compound data.
+Cardinality is a quantifier: a bare target is *one*, `[:? T]` optional, `[:* T]` zero
+or more (ordered), `[:+ T]` one or more, `[:set T]` unordered. A scalar slot
+(`:Bool`) stores a leaf value with an auto type-check law; a refined scalar
+(`[:enum "a" "b"]`, `[:int {:min 1}]`) is checked through a pluggable type dialect
+(malli ships); a slot whose target is another structure reifies a *queryable
+relation*; `^:value` structures are content-deduped anonymous nodes for nameless
+compound data. The model is a datascript db, so a human or an LLM interrogates it
+with the **same datalog** — fukan is REPL-native and agent-native by construction.
+And the grammar itself is reflected onto the graph: vocabularies are data too, and
+`(grammar)` renders the live language reference back as the very forms above — the
+print-dual of authoring.
 
 ## One graph spanning spec and code
 
@@ -64,23 +73,27 @@ substrate — fukan's own extractor reads clj-kondo analysis into `Module` and
 *across* the spec↔code seam:
 
 ```clojure
-;; every modelled Stage must be realized by a same-named Operation
+;; every authored Operation must be realized by a same-named extracted Operation
 ;; in the corresponding code module — a law spanning design and implementation
-(law "every modelled Stage is realized in code"
+(law "every authored operation is realized in code"
   :scope :global
   :offenders '[?s]
-  :where '[(Operation ?o)
-           (Stage ?s) (named ?s ?n) (in-module ?s ?cm)
-           (not (Operation ?o2) (named ?o2 ?n) (in-module ?o2 ?km)
-                [(module-corresponds? ?cm ?km)])])
+  :where '[(Operation ?s) (not [?s :val/extracted true])
+           (named ?s ?n) (in-module ?s ?cm)
+           (not-join [?n ?cm]
+             (Operation ?o) [?o :val/extracted true]
+             (named ?o ?n) (in-module ?o ?km)
+             [(module-corresponds? ?cm ?km)])])
 ```
 
 Run `(structure/check db)` and **drift surfaces as a law violation** — a modelled
 capability with no implementation, on the same footing as any other broken invariant.
 The converse query reports the opposite gap: code the model doesn't yet cover. Laws
-read in the vocabulary's own terms — `(Stage ?s)`, `(in-module …)` — because the core
-derives those rules from the live vocabulary, so a law spans design and implementation
-without ever dropping to raw triples.
+read in the vocabulary's own terms — `(Operation ?s)`, `(in-module …)` — because the
+core derives those rules from the live vocabulary, so a law spans design and
+implementation without ever dropping to raw triples. The recurring law shapes have
+**combinators** — `(law "…" (matched-by R :from S))`, `(has R)`, `(at-most-one R)` —
+that expand to correct datalog so common constraints are one declarative line.
 
 ## Acts through a lens
 
@@ -112,19 +125,22 @@ meant to be and what it actually is.
 ## Self-model and demos
 
 Fukan is exercised by modelling — including **modelling itself**. The self-model is laid
-out by altitude: `canvas/vocabulary/` holds the grammars *unique to fukan* (faculty /
-lens / probe / projection / view / phase / meta), `canvas/domain/` models fukan as an
-abstract system (its faculties and the use-side acts), and `canvas/realization/` models
-fukan as a built system (its subsystem self-specs) — with `canvas/correspondence.clj`
-sitting between the two as the seam that asserts they agree. Canvas files under
-`canvas/**/*.clj` are auto-discovered and merged into one structure db — the model.
+out by altitude: `canvas/vocabulary/` holds the grammars *unique to fukan* (the subject
+grammar, the act grammar, the schema layer), `canvas/domain/` models fukan as an
+abstract system (its subject: one Model, two sources, two acts, one correspondence), and
+`canvas/realization/` models fukan as a built system (its subsystem self-specs) — with
+`canvas/correspondence.clj` sitting between the two as the seam that asserts they agree.
+Canvas files under `canvas/**/*.clj` are auto-discovered and assembled into one
+structure db — the model.
 
 Reusable, domain-general vocabulary lives in a separate opt-in stdlib, `lib/` — code
 structures (`lib.code`: Operation / Effect / Kind / Module, where a Module is one code
-namespace), structural primitives (`lib.grouping`: Grouping / Connected), and a pluggable
-type-authoring surface (`lib.type.malli`). It is required, not auto-discovered, so fukan's
-own canvas vocab stays focused on what is unique to fukan. `clj -M:demos` runs a corpus of standalone modelling demos (grammar, ER,
-workflow, access-control, type-system) that pressure-test the core.
+namespace), structural primitives (`lib.grouping`: Grouping / Connected), a pluggable
+type-authoring surface (`lib.type.malli`), and grammar reflection (`lib.grammar`: the
+registry projected onto the graph, so the language is model too). It is required, not
+auto-discovered, so fukan's own canvas vocab stays focused on what is unique to fukan.
+`clj -M:demos` runs a corpus of standalone modelling demos (grammar, ER, workflow,
+access-control, type-system) that pressure-test the core.
 
 ## Development
 
@@ -143,6 +159,8 @@ In the REPL (`clj -M:dev`):
 (go)        ; build the model (canvas specs + the Clojure extractor over src/)
 (refresh)   ; reload changed code + rebuild
 (status)    ; model state
+(overview)  ; the projected system map — the canvas's front door
+(grammar)   ; the live language primer — every vocabulary rendered back as source
 (drift)     ; modelled capabilities not yet realized in code
 (probes)    ; run every probe over the held model, printing each finding
 ```
@@ -150,9 +168,9 @@ In the REPL (`clj -M:dev`):
 ## Project structure
 
 ```
-lib/                 reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.type.malli
+lib/                 reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.type.malli, lib.grammar
 canvas/vocabulary/   the grammars unique to fukan (defstructure grammars)
-canvas/domain/       fukan as an abstract system (faculties + the use-side acts)
+canvas/domain/       fukan as an abstract system (the subject + the use-side acts)
 canvas/realization/  fukan as a built system (subsystem self-specs)
 canvas/correspondence.clj  the seam asserting domain ↔ realization agree
 demos/             standalone modelling demos (vocab + model + regression)

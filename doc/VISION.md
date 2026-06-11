@@ -21,7 +21,7 @@ The loop fukan is built around is **define → model → verify → project**:
 
 > **Define** a system's structure — its concepts as a composition of slots, plus
 > the datalog laws that must hold of it.
-> **Model** abstractions over that structure (views, faculties, higher-level
+> **Model** abstractions over that structure (views, subjects, higher-level
 > concepts) on the same substrate.
 > **Verify** the whole as one assertable graph — laws run as checks; specification
 > and implementation, projected onto the same graph, are checkable against each other.
@@ -31,6 +31,25 @@ Specification and implementation live on the **same** graph. That is the thesis:
 intended structure and actual structure are not two artifacts to keep in sync by
 discipline, but one graph whose internal consistency a machine can check.
 
+## The premise: bottom-up language building, top-down design
+
+Fukan's approach is rooted in the Lisp tradition of **stratified language
+building**: you do not model a system in a fixed notation — you first grow the
+language the domain wants, then express the system in it. The core ships no
+vocabulary; authoring a grammar is every project's *first modelling act*, and
+everything above — models, laws, probes, projections — reads in that grammar's own
+terms (the core derives its datalog rules from the live vocabulary, and the grammar
+itself is reflected onto the graph as data, like everything else).
+
+The counterpart is deliberate **top-down design pressure**: the compositions, the
+laws, the stated intent are high-altitude decisions a human commits to, and the
+graph holds everything — including the LLM-written implementation — to them.
+
+The premise is that these two motions together — a language grown bottom-up until
+the domain reads in its own words, and design pressed top-down until the laws say
+what must hold — yield expressions of a system powerful enough to verify against
+its implementation, and to project an implementation from.
+
 ## Why it matters
 
 As LLMs absorb the low-level work, the human's value migrates upward — to the
@@ -38,7 +57,7 @@ boundaries, the contracts, the invariants, the architectural composition. A tool
 for that layer needs primitives that *are* those things, not a code graph that
 merely annotates them. Fukan's primitive is the **structure**: a composition plus
 the laws that constrain it. Everything — a function's signature, an architectural
-faculty, a workflow, fukan's own kernel — is expressed as a structure, queried as
+concept, a workflow, fukan's own grammar and kernel — is expressed as a structure, queried as
 one graph, and checked by running its laws.
 
 The tool is REPL-native and agent-native by construction: models are Clojure data

@@ -19,19 +19,22 @@ structures, merged across all specs, *are* the model.
 
 Everything reduces to three datom shapes:
 
-- **Node** — an instance of some structure. `:structure/of <Tag>` records its kind;
-  `:entity/name` its name; `:entity/doc` an optional docstring. A node owned by a
-  module is reached via the owner's `:module/child` (ownership-on-owner — owned
-  nodes carry no module back-reference).
+- **Node** — an instance of some structure. `:structure/of <Tag>` records its kind
+  (tags are namespace-qualified: identity = defining ns + name); `:entity/name` its
+  name (derived from the binding var when not explicit); `:entity/doc` an optional
+  docstring. A node owned by a module is reached via the owner's `:child`
+  (ownership-on-owner — owned nodes carry no module back-reference).
 - **Reified relation** — a slot whose target is another structure becomes a relation
   *entity*: `:rel/from`, `:rel/kind` (the slot keyword), `:rel/to`. Optional
-  `:rel/label` (from an authored `[label target]` clause) and `:rel/order` (for
-  `ordered` slots, position). A not-yet-resolved cross-module target is held as
-  `:rel/to-ref [module name]` and resolved post-merge.
+  `:rel/label` (from an authored `[label target]` element) and `:rel/order`
+  (authoring position, on sequence slots `[:* T]`/`[:+ T]`; a `[:set T]` slot
+  records none and collapses duplicate targets).
 - **Scalar leaf** — a slot whose target is a scalar type (`:Bool`, `:String`, …)
   stores its value directly as `:val/<slot>` on the node, with an auto-generated
-  type-check law rather than a reified relation. A scalar slot's optional `:payload`
-  rides as a companion `:val/<payload>` datom on the same node.
+  type-check law rather than a reified relation; a refined scalar (`[:enum …]`,
+  `[:int {:min 1}]`) is checked through the registered type dialect. A scalar
+  slot's optional `:payload` rides as a companion `:val/<payload>` datom on the
+  same node.
 
 ## Value identity
 
@@ -54,30 +57,38 @@ A law is a datalog constraint: `(law "desc" :offenders '[?x] :where '[…])`.
   cross-cutting laws (e.g. correspondence) that quantify over other kinds.
 - **Vocab-derived rules.** `check` derives datalog rules from the live vocabulary
   (`core/rules.clj`, pure) and injects them into every law's query: a kind rule per
-  structure (`(Stage ?e)`), a relation rule per relation slot (`(calls ?a ?b)`), and
-  fixed substrate rules (`in-module`, `named`). Laws therefore read in the
-  vocabulary's own terms, not in raw `:structure/of` / `:rel/*` navigation.
+  structure (`(Operation ?e)`), a relation rule per relation slot (`(calls ?a ?b)`),
+  inclusion / realized-as rules, and fixed substrate rules (`in-module`, `named`).
+  Laws therefore read in the vocabulary's own terms, not in raw `:structure/of` /
+  `:rel/*` navigation.
+- **Combinators.** The recurring law shapes — `(matched-by R …)`, `(has R …)`,
+  `(has-any …)`, `(target R {k v})`, `(at-most-one R)` — are authored as
+  `(law "desc" (combinator …))` and expand to datalog with negation routed through
+  rules (the datascript empty-relation `not-join` gotcha lives in the kernel, once);
+  the authored form rides the law as `:src` and round-trips through the print-dual.
 
 ## The registry
 
-`defstructure` registers each structure (its slots, laws, value-ness, reader) in a
-global table. `with-structures` / `within-module` author instances against the
-registered macros; `within-module` emits `:module/child` automatically.
-`all-structures` and `vocab-rules` expose the registry as data — the latter is what
-`check` and `evaluate-lens` inject. The registry is a **single global namespace**:
-co-loaded projects cannot share a tag name (a standing finding; per-project
-namespacing deferred).
+`defstructure` registers each structure (its slots, laws, value-ness, reader,
+syntax hook) in a global table, keyed by the **namespace-qualified tag**, and
+defines a value-returning instance macro. Instances author as top-level `def`s;
+references are ordinary var references; the global assembler (`assemble-vars`)
+scans the interned vars into one db. `all-structures` and `vocab-rules` expose the
+registry as data — and the registry is also **reflected onto the graph itself** on
+every build (`lib.grammar/with-grammar`): Structure nodes, slots as
+`:slot/<card>`-kinded labeled edges, laws as payload-carrying nodes — so the
+language has no off-graph remainder and renders back as source (the print-dual,
+`fukan.canvas.projection.grammar`).
 
-## Merge and cross-module references
+## Assembly and cross-spec references
 
-Each spec builds its own per-spec db; `canvas_source` merges them into one
-(`merge-dbs`). The merge is **schema-driven**: `db->entity-maps` carries every
-identity-bearing entity across without per-attribute knowledge — scalar attrs as
-maps (cardinality-many accumulated as sets), ref-typed attrs translated to identity
-lookup-refs in a second pass — so per-db eids never leak across the boundary.
-`resolve-cross-refs` then resolves every deferred `:rel/to-ref` against the merged
-db (`[module]` → that Module node; `[module name]` → that module's named child),
-throwing on an unresolved reference.
+There is no per-spec db and no merge pass: `canvas_source` requires every
+discovered canvas namespace and the **global assembler** walks all interned
+instance vars into one db (nodes first, then relations, so lookup-refs resolve
+across cycles). References between specs are ordinary var references — identity is
+the qualified var name — so cross-namespace cycles are inexpressible by
+construction. `union-dbs` remains only to fold an extractor's code db onto the
+assembled design db.
 
 ## Acts through a lens — probe and projection
 
@@ -103,11 +114,13 @@ Acts on the graph are **complementary** — analysis (probe) and synthesis (proj
 
 `model/pipeline.clj`'s `build-model code-root`:
 
-1. `canvas-source/build` — discover, load, build, and merge the `canvas/` design
-   specs (resolving cross-refs).
+1. `canvas-source/build` — discover and load the `canvas/` design specs, assemble
+   their instance vars into one db.
 2. When `code-root` exists **and** an extractor is registered
-   (`model/extraction.clj`), run it, merge the extracted code structures onto the
-   same graph, and re-resolve cross-references.
+   (`model/extraction.clj`), run it and fold the extracted code structures onto the
+   same graph.
+3. `lib.grammar/with-grammar` — reflect the registry onto the graph (the model's
+   grammar is part of the model).
 
 `(structure/check db)` over the result runs all laws — including the correspondence
 laws — so model↔code drift surfaces as violations on one graph. The legacy
