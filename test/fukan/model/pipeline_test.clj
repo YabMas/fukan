@@ -135,22 +135,30 @@
           "the reflection self-reifies (Structure has a Structure node)"))))
 
 (deftest kernel-meta-model-captures-structure-composition
-  (testing "the reflexive kernel model: Structure is composed of Slot and Law"
+  (testing "the reflexive kernel model: 'a structure = slots + laws' reads off the
+            REFLECTED grammar (the hand-modelled defstructure-layer Concepts are gone);
+            the hand-modelled remainder is the substrate (Node, Relation)"
     (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "core-structure"))
-      (is (= #{"slot" "law" "value"}
-             (set (map first (d/q '[:find ?n
-                                    :where [?st :structure/of :canvas.vocabulary.meta/Concept] [?st :entity/name "Structure"]
-                                           [?r :rel/from ?st] [?r :rel/kind :slot] [?r :rel/to ?ms]
-                                           [?ms :val/name ?n]] db))))
-          "Structure's MetaSlots are slot, law, value")
-      (is (seq (d/q '[:find ?slot-c
-                      :where [?st :structure/of :canvas.vocabulary.meta/Concept] [?st :entity/name "Structure"]
-                             [?r :rel/from ?st] [?r :rel/kind :slot] [?r :rel/to ?ms]
-                             [?ms :val/name "slot"]
-                             [?o :rel/from ?ms] [?o :rel/kind :of] [?o :rel/to ?slot-c]
-                             [?slot-c :entity/name "Slot"]] db))
-          "Structure.slot targets the Slot concept (composition)"))))
+      (is (= #{"tag" "value" "includes" "law" "realizes"}
+             (set (d/q '[:find [?l ...]
+                         :where [?st :structure/of :lib.grammar/Structure]
+                                [?st :val/tag ":lib.grammar/Structure"]
+                                [?r :rel/from ?st] [?r :rel/label ?l]] db)))
+          "the Structure meta-structure's own reified slots — the strange loop")
+      (is (= ":lib.grammar/Law"
+             (ffirst (d/q '[:find ?lt
+                            :where [?st :val/tag ":lib.grammar/Structure"]
+                                   [?r :rel/from ?st] [?r :rel/label "law"] [?r :rel/to ?t]
+                                   [?t :val/tag ?lt]] db)))
+          "Structure.law targets the reified Law structure (composition)")
+      (is (= #{"from" "to" "kind" "label" "order"}
+             (set (d/q '[:find [?n ...]
+                         :where [?c :structure/of :canvas.vocabulary.meta/Concept]
+                                [?c :entity/name "Relation"]
+                                [?r :rel/from ?c] [?r :rel/kind :slot] [?r :rel/to ?ms]
+                                [?ms :val/name ?n]] db)))
+          "the substrate Relation stays hand-modelled — below the registry"))))
 
 (deftest metaslot-cardinality-law-catches-unknown-cardinality
   (testing "a MetaSlot whose cardinality is outside the known set is caught"
