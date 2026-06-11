@@ -14,8 +14,7 @@
 
    Caveat (storage, not render): an enum's member TYPE is not stored — read-malli
    names members on the way in — so enum members render as strings, the slot-
-   refinement convention. Slot options (`:payload`) are not yet reified, so they
-   do not render.
+   refinement convention.
 
    Pure projection: model db → form / string."
   (:require [clojure.edn :as edn]
@@ -50,21 +49,27 @@
         (get malli->scalar f f))
       (symbol (:entity/name e)))))
 
-(defn- slot-expr [kind target]
-  (case kind
-    :slot/one      target
-    :slot/optional [:? target]
-    :slot/many     [:* target]
-    :slot/some     [:+ target]
-    :slot/set      [:set target]))
+(defn- slot-expr
+  "Card + optional props (payload) + target → the slot's type expression. Props
+   take malli's position after a quantifier; a props-only one-card leads with the
+   props map."
+  [kind props target]
+  (let [quantifier ({:slot/optional :?, :slot/many :*, :slot/some :+, :slot/set :set} kind)]
+    (cond
+      quantifier (if props [quantifier props target] [quantifier target])
+      props      [props target]
+      :else      target)))
 
 (defn- slots-of [db s]
-  (->> (d/q '[:find ?k ?l ?o ?t :in $ ?s
+  (->> (d/q '[:find ?k ?l ?o ?t ?p :in $ ?s
               :where [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]
-                     [?r :rel/order ?o] [?r :rel/to ?t]] db s)
+                     [?r :rel/order ?o] [?r :rel/to ?t]
+                     [(get-else $ ?r :rel/payload ::none) ?p]] db s)
        (filter #(= "slot" (namespace (first %))))
        (sort-by #(nth % 2))
-       (mapv (fn [[k l _ t]] [(keyword l) (slot-expr k (target-expr db t))]))))
+       (mapv (fn [[k l _ t p]]
+               (let [props (when (not= ::none p) {:payload p})]
+                 [(keyword l) (slot-expr k props (target-expr db t))])))))
 
 (defn- laws-of [db s]
   (->> (d/q '[:find ?l ?id :in $ ?s

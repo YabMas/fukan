@@ -151,10 +151,11 @@
                                  [(structure-id (:target sl)) nil])]
              {:emitted emitted
               :any?    (= :Any (:target sl))
-              :rel     {:rel/id   (str sid "|" (name kind) "|" label)
-                        :rel/from [:entity/id sid] :rel/kind kind
-                        :rel/to   [:entity/id tid]
-                        :rel/label label :rel/order i}}))
+              :rel     (cond-> {:rel/id   (str sid "|" (name kind) "|" label)
+                                :rel/from [:entity/id sid] :rel/kind kind
+                                :rel/to   [:entity/id tid]
+                                :rel/label label :rel/order i}
+                         (:payload sl) (assoc :rel/payload (:payload sl)))}))
          slots)
         law-bits
         (map-indexed

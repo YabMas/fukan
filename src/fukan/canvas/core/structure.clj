@@ -36,7 +36,8 @@
    :rel/kind     {:db/index true}
    :rel/to       {:db/valueType :db.type/ref}
    :rel/label    {}
-   :rel/order    {}})                                         ; authoring position in a sequence (:*/:+) slot
+   :rel/order    {}                                           ; authoring position in a sequence (:*/:+) slot
+   :rel/payload  {}})                                         ; a payload slot's companion :val key (on reified grammar slot-edges)
 
 (defn create [] (d/empty-db schema))
 

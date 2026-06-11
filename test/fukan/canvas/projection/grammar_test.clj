@@ -30,6 +30,11 @@
   "A value fixture."
   {:v :Int})
 
+(defstructure PCarry
+  "A payload fixture: companion code-forms on one- and optional-card scalars."
+  {:focus [{:payload :query} :String]
+   :note  [:? {:payload :extra} :String]})
+
 (def p-leaf (PLeaf "l"))
 
 (defn- reflected [] (grammar/with-grammar (a/assemble-vars [#'p-leaf])))
@@ -56,6 +61,16 @@
            f)
         "the rendered form IS the authored form (laws unquoted — the parsed form)")))
 
+(deftest payload-options-round-trip
+  (let [db (reflected)
+        f  (g/structure-form db (struct-node db ":fukan.canvas.projection.grammar-test/PCarry"))]
+    (is (= '(defstructure PCarry
+              "A payload fixture: companion code-forms on one- and optional-card scalars."
+              {:focus [{:payload :query} :String]
+               :note  [:? {:payload :extra} :String]})
+           f)
+        "a slot's :payload opt rides the reified edge and renders back in props position")))
+
 (deftest value-structures-carry-the-value-meta
   (let [db (reflected)
         f  (g/structure-form db (struct-node db ":fukan.canvas.projection.grammar-test/PVal"))]
@@ -66,7 +81,7 @@
   (let [db (reflected)
         p  (g/vocabulary-primer db "fukan.canvas.projection.grammar-test")]
     (testing "header + every structure"
-      (is (str/includes? p "fukan.canvas.projection.grammar-test — 3 structures"))
+      (is (str/includes? p "fukan.canvas.projection.grammar-test — 4 structures"))
       (is (str/includes? p "(defstructure PLeaf"))
       (is (str/includes? p "(defstructure ^:value PVal")))
     (testing "slots aligned in one map, refined scalars as their forms"
