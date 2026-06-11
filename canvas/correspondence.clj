@@ -13,11 +13,11 @@
             ;; Act/Source: the law-scope targets of the completeness laws
             [canvas.vocabulary.subject :refer [Act Source]]
             [canvas.domain.subject :as subj]
-            [canvas.realization.kernel :as kernel]
-            [canvas.realization.canvas-source :as canvas-source]
-            [canvas.realization.target :as target]
-            [canvas.realization.probe-surface :as probe-surface]
-            [canvas.realization.materialize :as materialize]))
+            [canvas.architecture.kernel :as kernel]
+            [canvas.architecture.canvas-source :as canvas-source]
+            [canvas.architecture.target :as target]
+            [canvas.architecture.probe-surface :as probe-surface]
+            [canvas.architecture.materialize :as materialize]))
 
 (defstructure SubjectRealization
   "Seam (verify-DOWN): the realization Module(s) that BUILD a subject concept — Layer 1 → Layer 2.

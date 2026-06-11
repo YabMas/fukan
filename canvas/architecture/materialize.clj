@@ -1,12 +1,12 @@
-(ns canvas.realization.materialize
+(ns canvas.architecture.materialize
   "Self-spec: fukan's materialize / LOWER layer (`fukan.model.materialize`) — the inverse of the
    target layer's extraction. It composes per-primitive `render` instructions (a multimethod — the
    open extension point, not modelled as an Operation) over a Lens's focus, projecting the model
    into an implementation specification. `materialize-view` is the public entry. `core.lens` lives
-   in `canvas.realization.lens-engine`."
+   in `canvas.architecture.lens-engine`."
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.realization.kernel :as kernel]
-            [canvas.realization.lens-engine :as lens-engine]))
+            [canvas.architecture.kernel :as kernel]
+            [canvas.architecture.lens-engine :as lens-engine]))
 
 (Module materialize
   "Project the model down into an implementation spec, through a Lens focus + a Projection."

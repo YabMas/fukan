@@ -1,11 +1,11 @@
-(ns canvas.realization.lens-engine
+(ns canvas.architecture.lens-engine
   "Self-spec: fukan's LENS ENGINE — `core.lens` (`fukan.canvas.core.lens`): run a selection query,
    WITH the vocab-derived rules, to a focus node-set, and refine a focus by a further query
    (lens-within-lens). Split out of the rule-derivation machinery so the chain stays acyclic:
    lens-engine → kernel → query-engine. (The Lens *vocab* — the primitive that carries a query —
    is the forward-looking view in `canvas.domain.lens`; this is the machinery that RUNS it.)"
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.realization.kernel :as kernel]))
+            [canvas.architecture.kernel :as kernel]))
 
 (Module core-lens
   "The lens engine — evaluate a focus query (with vocab rules) and refine it."

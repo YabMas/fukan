@@ -1,4 +1,4 @@
-(ns canvas.realization.probe-surface
+(ns canvas.architecture.probe-surface
   "Self-spec: fukan's PROBE IMPLEMENTATION — a boundary sketch of the realized probe surface.
    `probes` (`fukan.canvas.projection.probes`) exposes the live run/run-all dispatch over the
    implemented probe leaves; `probe-code` (`fukan.canvas.projection.probe-code`) projects a
@@ -7,8 +7,8 @@
    target correspondence queries — is sketched on the exposed dispatch. Both read the kernel's
    shared `StructureDb`."
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.realization.kernel :as kernel]
-            [canvas.realization.target :as target]))
+            [canvas.architecture.kernel :as kernel]
+            [canvas.architecture.target :as target]))
 
 (Module probes
   "The live run/run-all dispatch surface over the implemented probe leaves."

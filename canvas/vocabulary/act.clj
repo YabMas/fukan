@@ -12,7 +12,7 @@
    projection).
 
    The domain instances live in `canvas.domain.{lens,probe,projection}`; the executable
-   mechanism that runs these acts lives in `canvas.realization.acts`.
+   mechanism that runs these acts lives in `canvas.architecture.acts`.
 
    (Consolidated from the former `vocabulary.lens` / `vocabulary.probe` /
    `vocabulary.projection` shards — they mirrored `domain/` 1:1 for no structural gain.)
@@ -42,7 +42,7 @@
 
    A finding may STATE a CONTRACT — a `:holds` invariant (the human's correctness spec for
    the probe's output). The executable check of that invariant (a `(fn [result target-db] →
-   ok?)`) is realization mechanism — a `FindingCheck` in `canvas.realization.acts`,
+   ok?)`) is realization mechanism — a `FindingCheck` in `canvas.architecture.acts`,
    surfaced by the projector as a runtime gate. The complement of this observation act is a
    `Projection` (synthesis)."
   {:gating :Bool          ; gating → a trust Signal (inspect); else a View
@@ -58,7 +58,7 @@
    The domain probe states only what it reads (`:through` a Lens) and produces (`:yields` a
    Finding). Which kernel capability it invokes when run (e.g. the integrity probe composes
    the kernel's `check`) is realization mechanism — a `ProbeComposition` in
-   `canvas.realization.acts`."
+   `canvas.architecture.acts`."
   {:through Lens       ; the focus it reads through
    :yields  Finding})  ; the observation it produces
 

@@ -1,4 +1,4 @@
-(ns canvas.realization.instance-projection
+(ns canvas.architecture.instance-projection
   "Self-spec: the INSTANCE projection (`fukan.canvas.projection.instance`) — the
    print-dual of the INSTANCE surface, `structure-form`'s sibling one stratum
    down: a model node renders back as the def-emitting form that authored it.
@@ -7,9 +7,9 @@
    offender quoted as its form. With this, the model — not just the grammar —
    talks back in the language it was written in."
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.realization.kernel :as kernel]
-            [canvas.realization.lens-engine :as lens-engine]
-            [canvas.realization.materialize :as mat]))
+            [canvas.architecture.kernel :as kernel]
+            [canvas.architecture.lens-engine :as lens-engine]
+            [canvas.architecture.materialize :as mat]))
 
 (Module projection-instance
   "Render model nodes back as their authored instance forms."

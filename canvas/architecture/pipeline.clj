@@ -1,4 +1,4 @@
-(ns canvas.realization.pipeline
+(ns canvas.architecture.pipeline
   "Self-spec: fukan's model-build pipeline (`fukan.model.pipeline`).
 
    `build-model` is the single public entry point. It ingests the canvas design specs
@@ -7,9 +7,9 @@
    StructureDb (fukan's thesis). It names no specific extractor — it runs whatever the project
    registered. Collaborators are cross-module var-refs (the seams)."
   (:require [lib.code :refer [Operation Module]]
-            [canvas.realization.kernel :as kernel]
-            [canvas.realization.canvas-source :as canvas-source]
-            [canvas.realization.extraction :as extraction]))
+            [canvas.architecture.kernel :as kernel]
+            [canvas.architecture.canvas-source :as canvas-source]
+            [canvas.architecture.extraction :as extraction]))
 
 (Module model-pipeline
   "The model-build pipeline — the single build entry point."

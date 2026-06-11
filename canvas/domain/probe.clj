@@ -4,13 +4,13 @@
    lens (the `lens` view's Lens instances — interlocking) and yields a finding.
    INSPECT ⊂ PROBE: integrity/coverage/drift are probes whose findings GATE action
    (Signals); survey/patterns/… yield non-gating Views. Realized by the probe
-   surface (`canvas.realization.probe-surface`)."
+   surface (`canvas.architecture.probe-surface`)."
   (:require [canvas.vocabulary.act :refer [Probe Finding]]
             [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]))
 
 ;; non-gating findings — perspectives to reason with (Views). Each STATES its `holds`
-;; invariant in prose; the executable check lives in canvas.realization.acts.
+;; invariant in prose; the executable check lives in canvas.architecture.acts.
 (Finding Survey "A structural overview of the whole model."
   {:gating false})
 (Finding Patterns "Recurring structural patterns across the model."

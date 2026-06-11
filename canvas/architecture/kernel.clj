@@ -1,4 +1,4 @@
-(ns canvas.realization.kernel
+(ns canvas.architecture.kernel
   "Self-spec: fukan's defstructure KERNEL (`fukan.canvas.core.structure`) — a boundary sketch.
    The defstructure layer (Structure = slots + laws) is NOT hand-modelled: grammar reflection
    (`lib.grammar/with-grammar`) derives it from the live registry, where it can never drift. What
@@ -12,7 +12,7 @@
    with `^{:name …}` restoring the concept names.)"
   (:require [canvas.vocabulary.meta :refer [Concept MetaSlot]]
             [lib.code :refer [Kind Operation Module]]
-            [canvas.realization.query-engine :as query-engine]))
+            [canvas.architecture.query-engine :as query-engine]))
 
 ;; ── the substrate: the kernel's own data-shapes (reflection can't reach below the registry) ──
 (Concept ^{:name "Keyword"} c-Keyword)

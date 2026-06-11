@@ -59,7 +59,7 @@
   (let [results (d/q '[:find ?cn :in $ ?pn
                        :where [?p :entity/name ?pn] [?p :structure/of :canvas.vocabulary.act/Probe]
                               [?rz :rel/kind :realizes] [?rz :rel/to ?p]
-                              [?rz :rel/from ?pc] [?pc :structure/of :canvas.realization.acts/ProbeComposition]
+                              [?rz :rel/from ?pc] [?pc :structure/of :canvas.architecture.acts/ProbeComposition]
                               [?cr :rel/from ?pc] [?cr :rel/kind :calls] [?cr :rel/to ?c]
                               [?c :structure/of :lib.code/Operation] [?c :entity/name ?cn]]
                      db probe-name)]

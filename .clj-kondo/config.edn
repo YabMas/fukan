@@ -12,7 +12,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.canvas-source
+  canvas.architecture.canvas-source
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -20,7 +20,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.acts
+  canvas.architecture.acts
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -29,23 +29,23 @@
   ;; register the meta-grammar.
   lib.grammar
   {:linters {:unused-public-var {:level :off}}}
-  canvas.realization.extraction
+  canvas.architecture.extraction
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.grammar-projection
+  canvas.architecture.grammar-projection
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.instance-projection
+  canvas.architecture.instance-projection
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.infra
+  canvas.architecture.infra
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.kernel
+  canvas.architecture.kernel
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -53,11 +53,11 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.lens-engine
+  canvas.architecture.lens-engine
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.materialize
+  canvas.architecture.materialize
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -65,7 +65,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.pipeline
+  canvas.architecture.pipeline
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -73,15 +73,15 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.probe-surface
+  canvas.architecture.probe-surface
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.query-engine
+  canvas.architecture.query-engine
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.realization.target
+  canvas.architecture.target
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -229,9 +229,8 @@
    lib.grouping/Grouping hooks.fukan.structure/instance
    canvas.correspondence/SubjectRealization hooks.fukan.structure/instance
    canvas.correspondence/SubjectCompleteness hooks.fukan.structure/instance
-   canvas.realization.acts/LensSelection hooks.fukan.structure/instance
-   canvas.realization.acts/FindingCheck hooks.fukan.structure/instance
-   canvas.realization.acts/ProbeComposition hooks.fukan.structure/instance
+   canvas.architecture.acts/FindingCheck hooks.fukan.structure/instance
+   canvas.architecture.acts/ProbeComposition hooks.fukan.structure/instance
    canvas.vocabulary.act/Lens hooks.fukan.structure/instance
    canvas.vocabulary.meta/Concept hooks.fukan.structure/instance
    canvas.vocabulary.meta/MetaSlot hooks.fukan.structure/instance

@@ -1,4 +1,4 @@
-(ns canvas.realization.acts
+(ns canvas.architecture.acts
   "Executable realizations of the use-side domain acts that genuinely reference CODE — the
    MECHANISM that RUNS a modelled concept, kept OFF the domain (which states only
    invariant/purpose + its laws). Each node `:realizes` a domain concept and carries the
@@ -16,7 +16,7 @@
             [lib.code :refer [Operation]]
             [lib.grouping :refer [Grouping]]
             [canvas.domain.probe :as probe]
-            [canvas.realization.kernel :as kernel]))
+            [canvas.architecture.kernel :as kernel]))
 
 (defstructure FindingCheck
   "The runtime predicate that enforces a `Finding`'s `:holds` invariant — a `(fn [result
