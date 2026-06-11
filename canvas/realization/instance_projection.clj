@@ -21,13 +21,11 @@
     {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]})
   (Operation instance-text
     "instance-form, formatted like the authored source (aligned slot map)."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Text]
-     :calls     [instance-form]})
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Text]})
   (Operation focus-text
     "A focus (clauses or eids) rendered as its authored forms — the textual model explorer."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:focus Focus]] Text]
-     :calls     [instance-text lens-engine/focus-nodes]})
+     :delegates [lens-engine/focus-nodes]})
   (Operation violations-text
     "check output with each offender quoted as its authored form, fix-adjacent."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:violations [:vector kernel/Violation]]] Text]
-     :calls     [instance-text]}))
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:violations [:vector kernel/Violation]]] Text]}))

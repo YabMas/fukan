@@ -18,10 +18,9 @@
     {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:focus [:vector Eid]]] Instruction]})
   (Operation materialize-focus "Render the nodes an ad-hoc :where clause selects, under a projection."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:clauses [:vector Clause]]] Instruction]
-     :calls     [materialize-over lens-engine/focus-nodes]})
+     :delegates [lens-engine/focus-nodes]})
   (Operation materialize-module "Render a module's Operations under a projection."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:module ModuleName]] Instruction]
-     :calls     [materialize-focus]})
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:module ModuleName]] Instruction]})
   (Operation materialize-projection "Render a modelled Projection through its own lens (model-driven)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:proj Projection]] Instruction]
-     :calls     [lens-engine/evaluate-lens]}))
+     :delegates [lens-engine/evaluate-lens]}))

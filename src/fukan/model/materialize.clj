@@ -59,8 +59,9 @@
                    (sort-by first)
                    (mapv (fn [[_ to lbl]] {:label lbl :shape to})))
      :out     (rel-target db eid :out)
-     :effects (target-names db eid :performs :val/name)
-     :calls   (target-names db eid :calls :entity/name)}))
+     :effects   (target-names db eid :performs :val/name)
+     :delegates (target-names db eid :delegates :entity/name)
+     :guidance  (:val/guidance (d/entity db eid))}))
 
 ;; ── render-base: each [base projection, kind] renders itself ─────────────────
 
@@ -97,7 +98,7 @@
 (defmethod render-base ["Blueprint" :lib.type.malli/Schema] [db b eid] (schema-str db b eid))
 
 (defmethod render-base ["Blueprint" :lib.code/Operation] [db b eid]
-  (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)
+  (let [{:keys [nm doc module params out effects delegates guidance]} (stage-facts db eid)
         sig    (str "(" nm (apply str (map #(str " " (:label %)) params)) ")")
         ptypes (str/join ", " (map #(str (:label %) ": " (render-base db b (:shape %))) params))]
     (str "Implement `" nm "` in module `" module "`.\n"
@@ -105,7 +106,8 @@
          "Signature: " sig (when (seq params) (str " where " ptypes))
          " → " (if out (render-base db b out) "Unit") "\n"
          (when (seq effects) (str "Effects: " (str/join ", " effects) "\n"))
-         (when (seq calls) (str "Calls: " (str/join ", " calls) "\n"))
+         (when (seq delegates) (str "Delegates: " (str/join ", " delegates) "\n"))
+         (when guidance (str "Guidance: " guidance "\n"))
          "This is an implementation specification projected from the model — realize it "
          "as a function honoring this signature and intent.")))
 
@@ -114,7 +116,7 @@
 (defmethod render-base ["Docs" :lib.type.malli/Schema] [db b eid] (schema-str db b eid))
 
 (defmethod render-base ["Docs" :lib.code/Operation] [db b eid]
-  (let [{:keys [nm doc module params out effects calls]} (stage-facts db eid)]
+  (let [{:keys [nm doc module params out effects delegates]} (stage-facts db eid)]
     (str "### " nm "\n"
          (or doc "_No description._") "\n\n"
          "- **Grouping:** " module "\n"
@@ -123,7 +125,7 @@
                 (str/join ", " (map #(str (:label %) " (" (render-base db b (:shape %)) ")") params)) "\n"))
          "- **Gives:** " (if out (render-base db b out) "nothing") "\n"
          (when (seq effects) (str "- **Effects:** " (str/join ", " effects) "\n"))
-         (when (seq calls) (str "- **Calls:** " (str/join ", " calls) "\n")))))
+         (when (seq delegates) (str "- **Delegates:** " (str/join ", " delegates) "\n")))))
 
 ;; ── contextualization: base + framing context, read from the model ───────────
 

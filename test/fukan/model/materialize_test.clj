@@ -63,8 +63,7 @@
       (is (str/includes? text "Implement `extract` in module `target-clojure`"))
       (is (str/includes? text "paths: [Path]") "the :in Schema rendered via render :Schema (vector → [Kind])")
       (is (str/includes? text "→ StructureDb"))
-      (is (str/includes? text "Effects: io"))
-      (is (str/includes? text "Calls: analyze")))))
+      (is (str/includes? text "Effects: io")))))
 
 (deftest the-same-node-renders-differently-per-projection
   (testing "Blueprint and Docs are distinct targets over the same focus — the generalization"
@@ -84,7 +83,6 @@
           lens-db (a/assemble-vars [#'mvl-target])
           db      (cs/union-dbs [model lens-db])
           view    (m/materialize-view db (by-name db "target"))]
-      (is (str/includes? view "Implement `analyze`"))
       (is (str/includes? view "Implement `extract`"))
       (is (str/includes? view "paths: [Path]")))))
 
@@ -98,13 +96,13 @@
 (deftest materialize-module-composes-a-modules-stages
   (testing "materialize-module renders a module's Operations under a projection — no stored lens"
     (let [db (pipeline/build-model nil)]
-      (let [bp (m/materialize-module db "Blueprint" "target-clojure")]
-        (is (str/includes? bp "Implement `analyze`"))
-        (is (str/includes? bp "Implement `extract`"))
-        (is (str/includes? bp "paths: [Path]") "shapes rendered inline"))
-      (let [docs (m/materialize-module db "Docs" "target-clojure")]
-        (is (str/includes? docs "### analyze"))
-        (is (str/includes? docs "### extract")))
+      (let [bp (m/materialize-module db "Blueprint" "target-correspondence")]
+        (is (str/includes? bp "Implement `drifted-operations`"))
+        (is (str/includes? bp "Implement `uncovered-operations`"))
+        (is (str/includes? bp "Delegates: check") "the cross-boundary dependency renders inline"))
+      (let [docs (m/materialize-module db "Docs" "target-correspondence")]
+        (is (str/includes? docs "### drifted-operations"))
+        (is (str/includes? docs "### uncovered-operations")))
       (is (= "" (m/materialize-module db "Blueprint" "no-such-module")) "unknown module → empty"))))
 
 (deftest materialize-focus-takes-ad-hoc-clauses
@@ -175,7 +173,6 @@
           rendered (m/materialize-over db "Blueprint" in-tc)]                 ; project the refined focus
       (is (set? stages) "focus-nodes / refine yield node-sets — the composable currency")
       (is (< (count in-tc) (count stages)) "refine narrowed the focus")
-      (is (str/includes? rendered "Implement `analyze`"))
       (is (str/includes? rendered "Implement `extract`"))
       (is (not (str/includes? rendered "Implement `materialize-view`"))
           "the refine step bounded the focus to target-clojure — other modules' Operations excluded"))))
@@ -188,8 +185,7 @@
           proj-db  (a/assemble-vars [#'mprd-stages #'mprd-Docs])
           db       (cs/union-dbs [model proj-db])
           out      (m/materialize-projection db (by-name db "Docs"))]
-      (is (str/includes? out "### analyze") "rendered under the projection's name (Docs)")
-      (is (str/includes? out "### extract"))
+      (is (str/includes? out "### extract") "rendered under the projection's name (Docs)")
       (is (str/includes? out "**Grouping:** target-clojure")))))
 
 (deftest probe-foci-compose-into-a-projection
