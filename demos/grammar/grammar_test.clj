@@ -17,12 +17,12 @@
 ;; Top-level defs prefixed with `g-` to avoid namespace collisions.
 ;; `orphan` is an IDENT declared in the grammar but unreachable from `root`.
 
-(def g-IDENT  (Symbol "IDENT"))
-(def g-root   (Symbol "root" (produces (Production (rhs g-IDENT)))))
-(def g-orphan (Symbol "orphan"))   ; in the grammar, but unreachable
-(def g-gram   (Grammar "g"
-                 (start g-root)
-                 (symbol g-root) (symbol g-IDENT) (symbol g-orphan)))
+(Symbol ^{:name "IDENT"} g-IDENT)
+(Symbol ^{:name "root"} g-root {:produces [(Production {:rhs [g-IDENT]})]})
+(Symbol ^{:name "orphan"} g-orphan)   ; in the grammar, but unreachable
+(Grammar ^{:name "g"} g-gram
+  {:start  g-root
+   :symbol [g-root g-IDENT g-orphan]})
 
 (deftest unreachable-symbol-is-caught
   (testing "a symbol unreachable from the start trips the reachability law"

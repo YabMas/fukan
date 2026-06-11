@@ -11,14 +11,14 @@
 
 ;; focuses fed to reasoning probes (non-gating findings) — prose only; the executable
 ;; selections live in canvas.realization.acts (LensSelection)
-(def survey      (Lens (focus "the whole model's structure")))
-(def patterns    (Lens (focus "recurring structures across the model")))
-(def consistency (Lens (focus "where contracts and structure align — or drift")))
-(def tar-pit     (Lens (focus "complexity hotspots — tangles worth attention")))
+(Lens survey      {:focus "the whole model's structure"})
+(Lens patterns    {:focus "recurring structures across the model"})
+(Lens consistency {:focus "where contracts and structure align — or drift"})
+(Lens tar-pit     {:focus "complexity hotspots — tangles worth attention"})
 ;; focuses fed to inspect probes (gating findings — trust verdicts)
-(def integrity   (Lens (focus "the model's structural integrity — laws, partitions")))
-(def coverage    (Lens (focus "spec ↔ code coverage")))
-(def drift       (Lens (focus "spec ↔ code divergence")))
+(Lens integrity   {:focus "the model's structural integrity — laws, partitions"})
+(Lens coverage    {:focus "spec ↔ code coverage"})
+(Lens drift       {:focus "spec ↔ code divergence"})
 
-(def lens
-  (Grouping (child survey patterns consistency tar-pit integrity coverage drift)))
+(Grouping lens
+  {:child [survey patterns consistency tar-pit integrity coverage drift]})

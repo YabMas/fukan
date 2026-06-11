@@ -25,8 +25,8 @@
 ;; Forward declaration needed for the cyclic ref before the var exists.
 (declare ev-test-User)
 
-(def ev-test-name (Attr "name" (required true)))
-(def ev-test-User (Ent "User" (attr ev-test-name) (links ev-test-User)))
+(Attr ^{:name "name"} ev-test-name {:required true})
+(Ent ^{:name "User"} ev-test-User {:attr [ev-test-name] :links ev-test-User})
 
 (deftest entity-constructor-returns-value-with-var-refs
   (is (s/instance-value? ev-test-User))
@@ -43,15 +43,15 @@
 (s/defstructure Prod "production" {:rhs [:* Sym]})
 (s/defstructure Lnk  "link" {:to Sym})
 
-(def t3-x (Sym "x"))
-(def t3-y (Sym "y"))
-(def t3-p (Prod "p" (rhs t3-x t3-y)))
-(def t3-l (Lnk "l" (to [edge t3-y])))
+(Sym ^{:name "x"} t3-x)
+(Sym ^{:name "y"} t3-y)
+(Prod ^{:name "p"} t3-p {:rhs [t3-x t3-y]})
+(Lnk ^{:name "l"} t3-l {:to [edge t3-y]})
 
 (deftest ordered-and-labelled-clauses
-  ;; ordered vector splices in order — :targets holds both elements as vars
+  ;; the slot vector splices in order — :targets holds both elements as vars
   (is (= [#'t3-x #'t3-y] (:targets (first (:clauses t3-p)))))
-  ;; [label target] form → per-target :labels on the clause map
+  ;; a card-one [label target] pair → per-target :labels on the clause map
   (is (= ["edge"] (:labels (first (:clauses t3-l)))))
   ;; and the single target is captured as a var
   (is (= [#'t3-y] (:targets (first (:clauses t3-l))))))
@@ -60,9 +60,9 @@
 ;; reuses Prod {:rhs [:* Sym]} — exercises a sequence slot both ways.
 
 ;; bare sequence: order only, no labels
-(def op-bare (Prod "bare" (rhs t3-x t3-y)))
+(Prod ^{:name "bare"} op-bare {:rhs [t3-x t3-y]})
 ;; labelled sequence: each element is a [label target]
-(def op-lbl  (Prod "lbl"  (rhs [a t3-x] [b t3-y])))
+(Prod ^{:name "lbl"} op-lbl {:rhs [[a t3-x] [b t3-y]]})
 
 (deftest sequence-slot-carries-order-and-labels
   ;; the labelled sequence clause parses each [label target] → parallel :labels + :targets
@@ -98,8 +98,8 @@
 ;; ── entity name defaults to the binding var's simple name ────────────────────
 (s/defstructure Named "n" {:doc [:? :String]})
 
-(def nm-derived  (Named))             ; no name → derived from the var
-(def nm-override (Named "explicit"))  ; explicit string → overrides the var
+(def nm-derived (Named))                    ; expression form, no name → derived from the var
+(Named ^{:name "explicit"} nm-override)     ; ^{:name} meta → overrides the var
 
 (deftest entity-without-a-name-takes-the-vars-simple-name
   (is (nil? (:name nm-derived)) "the InstanceValue carries no name until assembly")
@@ -109,7 +109,7 @@
         "the node is named after its binding var")
     (is (= "explicit"
            (:entity/name (d/entity db [:entity/id (s/var-id #'nm-override)])))
-        "an explicit string still overrides — for dotted module names / renamed vars")))
+        "^{:name \"…\"} meta overrides — for names the var can't carry / renamed vars")))
 
 ;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
 
@@ -117,8 +117,8 @@
   {:kind :String
    :of   [:* Shp]})
 
-(def t4-s1 (Shp (kind "leaf")))
-(def t4-s2 (Shp (kind "leaf")))
+(def t4-s1 (Shp {:kind "leaf"}))
+(def t4-s2 (Shp {:kind "leaf"}))
 
 (deftest value-structures-dedupe-by-content
   (is (:value? t4-s1))
@@ -146,15 +146,15 @@
   (reader t7b-read-shape))
 (s/defstructure SHolder "h" {:shape RShape})
 
-(def Db  (RKind "Db"))
-(def Foo (RKind "Foo"))
+(RKind Db)
+(RKind Foo)
 
 ;; symbol literal → "type" shape referencing the RKind named Db
-(def t7b-leaf (SHolder "leaf" (shape Db)))
+(SHolder ^{:name "leaf"} t7b-leaf {:shape Db})
 ;; vector literal → "list" shape whose child is a "type" shape naming Db
-(def t7b-list (SHolder "list" (shape [Db])))
+(SHolder ^{:name "list"} t7b-list {:shape [Db]})
 ;; map literal → "record" shape with field f naming Foo
-(def t7b-rec  (SHolder "rec"  (shape {:f Foo})))
+(SHolder ^{:name "rec"} t7b-rec {:shape {:f Foo}})
 
 (deftest reader-slot-symbol-literal
   ;; (shape Db) → inline RShape value-form with {:val/kind "type"} and :type → RKind "Db"
@@ -213,9 +213,9 @@
 (s/defstructure WB "b")
 (s/defstructure Grp "group" {:child [:* Any]})
 
-(def wa (WA "a-node"))
-(def wb (WB "b-node"))
-(def grp (Grp "g" (child wa) (child wb)))
+(WA ^{:name "a-node"} wa)
+(WB ^{:name "b-node"} wb)
+(Grp ^{:name "g"} grp {:child [wa wb]})
 
 (deftest wildcard-slot-accepts-any-type
   (let [db (a/assemble-vars [#'wa #'wb #'grp])]
@@ -234,7 +234,7 @@
 
 (s/defstructure Doc "doc" {:note [{:payload :extra} :String]})
 
-(def t-doc (Doc "d" (note "hello" [:a :b :c])))
+(Doc ^{:name "d"} t-doc {:note ["hello" [:a :b :c]]})
 
 (deftest payload-stores-sibling-leaf
   (is (= "hello" (:val/note (:scalars t-doc)))
@@ -247,8 +247,8 @@
 (s/defstructure FocusT "f" {:focus [{:payload :query} :String]})
 (s/defstructure HoldT  "h" {:holds [{:payload :holds-pred} :String]})
 
-(def t-focus (FocusT "X" (focus "the whole model" '[[?n :structure/of _]])))
-(def t-hold  (HoldT  "Y" (holds "no violations" (fn [result _db] (empty? (:observations result))))))
+(FocusT ^{:name "X"} t-focus {:focus ["the whole model" '[[?n :structure/of _]]]})
+(HoldT  ^{:name "Y"} t-hold  {:holds ["no violations" (fn [result _db] (empty? (:observations result)))]})
 
 (deftest payload-stores-code-form-as-data
   (is (= '[[?n :structure/of _]] (:val/query (:scalars t-focus)))

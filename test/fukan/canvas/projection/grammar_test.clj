@@ -37,7 +37,7 @@
   {:focus [{:payload :query} :String]
    :note  [:? {:payload :extra} :String]})
 
-(def p-leaf (PLeaf "l"))
+(PLeaf ^{:name "l"} p-leaf)
 
 (defn- reflected [] (grammar/with-grammar (a/assemble-vars [#'p-leaf])))
 

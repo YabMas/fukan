@@ -37,11 +37,11 @@
     [(traces ?a ?c) (xview ?a ?b) (traces ?b ?c)]])
 
 ;; aligned chain: SA→SB,  SA↦FA SB↦FB,  FA feeds FB,  FA realized-by M1
-(def m1 (Mod))
-(def fb (Fac))
-(def fa (Fac (feeds fb) (realized-by m1)))
-(def sb (Step (via fb)))
-(def sa (Step (next sb) (via fa)))
+(Mod m1)
+(Fac fb)
+(Fac fa {:feeds [fb] :realized-by [m1]})
+(Step sb {:via fb})
+(Step sa {:next sb :via fa})
 
 (deftest coproduct-is-vocab-derived
   (testing "defrelation-coproduct emits the union rules into vocab-rules"
@@ -91,10 +91,10 @@
     :where '[(next ?a ?b) (via ?a ?fa) (via ?b ?fb) (not (feeds ?fa ?fb))]))
 
 ;; drift chain: SC→SD,  SC↦FC SD↦FD,  but FC does NOT feed FD
-(def fc (Fac))
-(def fd (Fac))
-(def sd (Step (via fd)))
-(def sc (Step (next sd) (via fc)))
+(Fac fc)
+(Fac fd)
+(Step sd {:via fd})
+(Step sc {:next sd :via fc})
 
 (defn- flow-offenders [db]
   (->> (s/check db)

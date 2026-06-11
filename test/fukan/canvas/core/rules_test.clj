@@ -20,12 +20,12 @@
   {:child [:* Any]})
 
 ;; instances under test
-(def rt-a (RuleThing "a"))
-(def rt-b (RuleThing "b"))
-(def rt-t (Mod "t" (child rt-a rt-b)))
+(RuleThing ^{:name "a"} rt-a)
+(RuleThing ^{:name "b"} rt-b)
+(Mod ^{:name "t"} rt-t {:child [rt-a rt-b]})
 
-(def rt2-ok        (RuleThing "ok"))
-(def rt2-forbidden (RuleThing "forbidden"))
+(RuleThing ^{:name "ok"} rt2-ok)
+(RuleThing ^{:name "forbidden"} rt2-forbidden)
 
 (deftest derives-kind-relation-and-substrate-rules
   (testing "the live vocab yields kind rules, relation rules, and the fixed substrate rules"

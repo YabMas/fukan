@@ -3,8 +3,8 @@
    reified slot Relations; slot cardinality + target-type compile to laws;
    `check` runs them, including a recursive free law.
 
-   Instances are top-level value `def`s assembled with `assemble-vars` (the
-   var-capture surface); references between them are ordinary var refs."
+   Instances are top-level def-emitting forms assembled with `assemble-vars`
+   (the var-capture surface); references between them are ordinary var refs."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
@@ -171,111 +171,124 @@
   (->> (d/q '[:find ?e ?t :where [?e :structure/of ?t]] db)
        (filter (fn [[_ t]] (= (name tag) (name t)))) count))
 
-;; ── instances under test (top-level value defs, assembled per test) ──────────
+;; ── instances under test (top-level def-emitting forms, assembled per test) ──
+;; `^{:name "…"}` overrides where the entity name repeats across cases (one var
+;; per ns, many same-named fixtures).
 
-(def ie-Int (Type "Int"))
-(def ie-Str (Type "Str"))
-(def ie-f   (Function "f" (takes [x ie-Int] [y ie-Str]) (gives ie-Int)))
+(Type ^{:name "Int"} ie-Int)
+(Type ^{:name "Str"} ie-Str)
+(Function ^{:name "f"} ie-f {:takes [[x ie-Int] [y ie-Str]] :gives ie-Int})
 
-(def wf-Int (Type "Int"))
-(def wf-f   (Function "f" (takes [x wf-Int]) (gives wf-Int)))
+(Type ^{:name "Int"} wf-Int)
+(Function ^{:name "f"} wf-f {:takes [[x wf-Int]] :gives wf-Int})
 
-(def dc-Int (Type "Int"))
-(def dc-f   (Function "f" (doc "Builds the thing.") (gives dc-Int)))
+(Type ^{:name "Int"} dc-Int)
+(Function ^{:name "f"} dc-f "Builds the thing." {:gives dc-Int})
 
-(def co-Int     (Type "Int"))
-(def co-Str     (Type "Str"))
-(def co-none    (Function "none"))                  ; zero gives
-(def co-several (Function "several" (gives co-Int co-Str)))   ; two gives
+(Type ^{:name "Int"} co-Int)
+(Type ^{:name "Str"} co-Str)
+(Function ^{:name "none"} co-none)                  ; zero gives
+;; two targets on a one-card slot is deliberately ill-formed — the map surface
+;; can't author it, so build the violating instance through the internal IR
+(def co-several (s/->InstanceValue ::Function "several" nil {}
+                                   [{:rk :gives :card :one :targets [#'co-Int #'co-Str]}] false))
 
-(def tt-Int    (Type "Int"))
-(def tt-callee (Function "callee" (gives tt-Int)))
-(def tt-bad    (Function "bad" (gives tt-callee)))  ; gives a Function, not a Type
+(Type ^{:name "Int"} tt-Int)
+(Function ^{:name "callee"} tt-callee {:gives tt-Int})
+(Function ^{:name "bad"} tt-bad {:gives tt-callee})  ; gives a Function, not a Type
 
-(def at-leaf (Tree "leaf"))
-(def at-mid  (Tree "mid"  (child at-leaf)))
-(def at-root (Tree "root" (child at-mid)))
+(Tree ^{:name "leaf"} at-leaf)
+(Tree ^{:name "mid"}  at-mid  {:child [at-leaf]})
+(Tree ^{:name "root"} at-root {:child [at-mid]})
 
 (declare frc-b)
-(def frc-a (Tree "a" (child frc-b)))   ; forward reference — frc-b declared below
-(def frc-b (Tree "b" (child frc-a)))   ; back reference — together an a→b→a cycle
+(Tree ^{:name "a"} frc-a {:child [frc-b]})   ; forward reference — frc-b declared below
+(Tree ^{:name "b"} frc-b {:child [frc-a]})   ; back reference — together an a→b→a cycle
 
-(def vs-b (Box "b" (open true) (label "hi") (size 3)))
-(def vf-b (Box "b" (open false) (size 3)))
+(Box ^{:name "b"} vs-b {:open true :label "hi" :size 3})
+(Box ^{:name "b"} vf-b {:open false :size 3})
 
-(def sc-z-Int (Type "Int"))
-(def sc-z     (NonEmpty "z"))                    ; zero items
-(def sc-o-Int (Type "Int"))
-(def sc-o     (NonEmpty "o" (item sc-o-Int)))    ; one item
+(Type ^{:name "Int"} sc-z-Int)
+(NonEmpty ^{:name "z"} sc-z)                       ; zero items
+(Type ^{:name "Int"} sc-o-Int)
+(NonEmpty ^{:name "o"} sc-o {:item [sc-o-Int]})    ; one item
 
-(def fl-Str (Type "Str"))
-(def fl-p   (Plain  "p" (field [secret fl-Str])))   ; matches the pattern but is NOT Tagged
-(def fl-t   (Tagged "t" (field [secret fl-Str])))   ; the genuine offender
+(Type ^{:name "Str"} fl-Str)
+(Plain  ^{:name "p"} fl-p {:field [[secret fl-Str]]})   ; matches the pattern but is NOT Tagged
+(Tagged ^{:name "t"} fl-t {:field [[secret fl-Str]]})   ; the genuine offender
 
-(def ls-Str   (Type "Str"))
-(def ls-guard (Auditor "guard"))
-(def ls-p     (Plain "p" (field [secret ls-Str])))
+(Type ^{:name "Str"} ls-Str)
+(Auditor ^{:name "guard"} ls-guard)
+(Plain ^{:name "p"} ls-p {:field [[secret ls-Str]]})
 
-(def vw-b (Box "b" (open true) (size 3)))     ; label optional, omitted
-(def vt-b (Box "b" (open "yes") (size 3)))    ; open is a String, not a Bool
-(def vo-b (Box "b" (size 3)))                 ; open absent
-(def fv-b (Box "b" (open true) (size 0)))     ; size 0 violates positivity
+(Box ^{:name "b"} vw-b {:open true :size 3})     ; label optional, omitted
+(Box ^{:name "b"} vt-b {:open "yes" :size 3})    ; open is a String, not a Bool
+(Box ^{:name "b"} vo-b {:size 3})                ; open absent
+(Box ^{:name "b"} fv-b {:open true :size 0})     ; size 0 violates positivity
 
-(def dl-h (Holder2 "h" (w 5) (w 5) (w 6)))    ; 5 authored twice
+(Holder2 ^{:name "h"} dl-h {:w [5 5 6]})         ; 5 authored twice
 
-(def os-Int (Type "Int"))
-(def os-Str (Type "Str"))
-(def os-s   (Seq2 "s" (items os-Int os-Str os-Int)))   ; Int repeats at 0 and 2
+(Type ^{:name "Int"} os-Int)
+(Type ^{:name "Str"} os-Str)
+(Seq2 ^{:name "s"} os-s {:items [os-Int os-Str os-Int]})   ; Int repeats at 0 and 2
 
-(def o2-Int (Type "Int"))
-(def o2-Str (Type "Str"))
-(def o2-s   (Seq2 "s" (items o2-Int) (items o2-Str)))  ; split clauses — order runs across them
+(Type ^{:name "Int"} o2-Int)
+(Type ^{:name "Str"} o2-Str)
+;; two clause GROUPS for one slot can no longer be authored (the map has one entry
+;; per slot) but still arise internally (nested routing) — build via the IR to keep
+;; the assembler's cross-group index covered
+(def o2-s (s/->InstanceValue ::Seq2 "s" nil {}
+                             [{:rk :items :card :many :targets [#'o2-Int]}
+                              {:rk :items :card :many :targets [#'o2-Str]}] false))
 
-(def ov-Int (Type "Int"))
-(def ov-Str (Type "Str"))
-(def ov-h   (HolderO "h"
-              (v (OrdVal (xs ov-Int ov-Str)))
-              (v (OrdVal (xs ov-Str ov-Int)))     ; reversed → distinct value
-              (v (OrdVal (xs ov-Int ov-Str)))))   ; same as first → dedup
+(Type ^{:name "Int"} ov-Int)
+(Type ^{:name "Str"} ov-Str)
+(HolderO ^{:name "h"} ov-h
+  {:v [(OrdVal {:xs [ov-Int ov-Str]})
+       (OrdVal {:xs [ov-Str ov-Int]})     ; reversed → distinct value
+       (OrdVal {:xs [ov-Int ov-Str]})]})  ; same as first → dedup
 
-(def sv-Int (Type "Int"))
-(def sv-Str (Type "Str"))
-(def sv-h   (HolderS "h"
-              (v (SetVal (xs sv-Int sv-Str)))
-              (v (SetVal (xs sv-Str sv-Int)))                 ; reversed → SAME value (set identity)
-              (tags sv-Int sv-Int sv-Str)))                   ; duplicate target collapses
+(Type ^{:name "Int"} sv-Int)
+(Type ^{:name "Str"} sv-Str)
+(HolderS ^{:name "h"} sv-h
+  {:v    [(SetVal {:xs [sv-Int sv-Str]})
+          (SetVal {:xs [sv-Str sv-Int]})]          ; reversed → SAME value (set identity)
+   :tags [sv-Int sv-Int sv-Str]})                  ; duplicate target collapses
 
-(def ev-h (Holder "h" (pair (Pair (fst 1) (snd 2)))
-                      (pair (Pair (fst 1) (snd 2)))))   ; same content
+(Holder ^{:name "h"} ev-h
+  {:pair [(Pair {:fst 1 :snd 2})
+          (Pair {:fst 1 :snd 2})]})   ; same content
 
-(def dv-h (Holder "h" (pair (Pair (fst 1) (snd 2)))
-                      (pair (Pair (fst 3) (snd 4)))))
+(Holder ^{:name "h"} dv-h
+  {:pair [(Pair {:fst 1 :snd 2})
+          (Pair {:fst 3 :snd 4})]})
 
-(def vn-h (Holder "h" (pair (Pair (fst 1) (snd 2)))))
+(Holder ^{:name "h"} vn-h {:pair [(Pair {:fst 1 :snd 2})]})
 
-(def vd-Int (Type "Int"))
-(def vd-h   (Holder "h"
-              (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty vd-Int)))
-              (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty vd-Int)))))
+(Type ^{:name "Int"} vd-Int)
+(Holder ^{:name "h"} vd-h
+  {:box [(Boxed {:inner (Pair {:fst 1 :snd 2}) :ty vd-Int})
+         (Boxed {:inner (Pair {:fst 1 :snd 2}) :ty vd-Int})]})
 
-(def de-Int (Type "Int"))
-(def de-Str (Type "Str"))
-(def de-h   (Holder "h"
-              (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty de-Int)))
-              (box (Boxed (inner (Pair (fst 1) (snd 2))) (ty de-Str)))))
+(Type ^{:name "Int"} de-Int)
+(Type ^{:name "Str"} de-Str)
+(Holder ^{:name "h"} de-h
+  {:box [(Boxed {:inner (Pair {:fst 1 :snd 2}) :ty de-Int})
+         (Boxed {:inner (Pair {:fst 1 :snd 2}) :ty de-Str})]})
 
-(def lr-bad-scalar-h (Holder "h" (pair (Pair (fst "no") (snd 2)))))   ; fst not an Int
-(def lr-p            (Plain "p"))
-(def lr-bad-target-h (Holder "h" (box (Boxed (inner (Pair (fst 1) (snd 2)))
-                                             (ty lr-p)))))             ; ty targets a Plain, not a Type
+(Holder ^{:name "h"} lr-bad-scalar-h {:pair [(Pair {:fst "no" :snd 2})]})   ; fst not an Int
+(Plain ^{:name "p"} lr-p)
+(Holder ^{:name "h"} lr-bad-target-h
+  {:box [(Boxed {:inner (Pair {:fst 1 :snd 2})
+                 :ty    lr-p})]})                                           ; ty targets a Plain, not a Type
 
-(def pl-c1 (Carry "c1" (text "hi" [:a :b])))
-(def pl-c2 (Carry "c2" (text "solo")))
-(def pl-c3 (Carry "c3" (text "hi" '(fn [x] x))))
+(Carry ^{:name "c1"} pl-c1 {:text ["hi" [:a :b]]})
+(Carry ^{:name "c2"} pl-c2 {:text "solo"})
+(Carry ^{:name "c3"} pl-c3 {:text ["hi" '(fn [x] x)]})
 
-(def en-ok   (Gate "ok"   (state "open") (note "a")))
-(def en-bad  (Gate "bad"  (state "ajar")))             ; not a member
-(def en-miss (Gate "miss"))                            ; required state absent
+(Gate ^{:name "ok"}   en-ok {:state "open" :note "a"})
+(Gate ^{:name "bad"}  en-bad {:state "ajar"})          ; not a member
+(Gate ^{:name "miss"} en-miss)                         ; required state absent
 
 ;; ── tests ───────────────────────────────────────────────────────────────────
 
@@ -294,13 +307,13 @@
     (let [db (a/assemble-vars [#'wf-Int #'wf-f])]
       (is (empty? (laws-firing db :Function))))))
 
-(deftest doc-clause-sets-instance-doc
-  (testing "(doc ...) is a universal built-in clause → :entity/doc, not a slot"
+(deftest docstring-sets-instance-doc
+  (testing "the docstring position → :entity/doc, not a slot"
     (let [db (a/assemble-vars [#'dc-Int #'dc-f])]
       (is (= "Builds the thing."
              (ffirst (d/q '[:find ?d :where [?e :entity/name "f"] [?e :entity/doc ?d]] db))))
       (is (empty? (laws-firing db :Function))
-          "the doc clause does not register as a slot or trip any law"))))
+          "the docstring does not register as a slot or trip any law"))))
 
 (deftest cardinality-one-catches-zero-and-several
   (testing "gives (one Type): zero and several are both violations"
@@ -355,10 +368,10 @@
 (deftest unresolved-reference-is-a-compile-error
   (testing "a slot reference to an undefined var is a compile error (not a silent skip)"
     ;; var-capture means a typo'd reference fails to compile — the whole point of the
-    ;; reframe. `(gives totally-undefined-xyz)` expands to `(var totally-undefined-xyz)`.
+    ;; reframe. `:gives totally-undefined-xyz` expands to `(var totally-undefined-xyz)`.
     (is (thrown? clojure.lang.Compiler$CompilerException
-          (eval '(fukan.canvas.core.structure-test/Function "f"
-                   (gives totally-undefined-xyz)))))))
+          (eval '(fukan.canvas.core.structure-test/Function
+                   {:gives totally-undefined-xyz}))))))
 
 (deftest value-slot-stores-leaf-datom
   (testing "a scalar-typed slot stores a leaf :val/<key> datom on the node, not a relation"
@@ -531,8 +544,8 @@
                   (sort-by first) (mapv second)))
           "sorting the :items relations by :rel/order recovers [Int Str Int]"))))
 
-(deftest sequence-order-runs-across-clauses
-  (testing "(items a) (items b) orders like (items a b) — the index runs across clauses"
+(deftest sequence-order-runs-across-clause-groups
+  (testing "two IR clause groups for one slot order like one — the index runs across groups"
     (let [db (a/assemble-vars [#'o2-Int #'o2-Str #'o2-s])]
       (is (= [["Int" 0] ["Str" 1]]
              (->> (d/q '[:find ?n ?o :where [?s :entity/name "s"]

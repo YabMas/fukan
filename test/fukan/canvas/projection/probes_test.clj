@@ -8,10 +8,10 @@
             [canvas.vocabulary.act :refer [Finding]]
             [lib.code :refer [Kind]]))
 
-;; tiny degenerate models built from top-level value defs (assembled per use)
-(def solo (Kind "Solo"))
-(def broken-Str    (Kind "Str"))
-(def broken-Orphan (Finding "Orphan" (gating false)))   ; no probe yields it → a violation
+;; tiny degenerate models built from top-level defs (assembled per use)
+(Kind ^{:name "Solo"} solo)
+(Kind ^{:name "Str"} broken-Str)
+(Finding ^{:name "Orphan"} broken-Orphan {:gating false})   ; no probe yields it → a violation
 
 (deftest probe-patterns-yields-observations-with-foci
   (testing "patterns reports recurring structures as observations carrying foci"

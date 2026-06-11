@@ -25,13 +25,13 @@
 
 ;; ── a minimal well-formed fixture the negative cases perturb ──────────────────
 
-(def prim (Primitive "p"))
-(def mdl  (Model "M" (made-of prim)))
-(def lns  (Lens "L" (focus "a slice")))
-(def out  (Output "O"))
+(Primitive ^{:name "p"} prim)
+(Model ^{:name "M"} mdl {:made-of prim})
+(Lens ^{:name "L"} lns {:focus "a slice"})
+(Output ^{:name "O"} out)
 
 ;; case: the origin distinction — a source with a bogus polarity
-(def bad-source (Source "bad" (into mdl) (polarity "sideways")))
+(Source ^{:name "bad"} bad-source {:into mdl :polarity "sideways"})
 
 (deftest in-dual-is-enforced
   (testing "a source whose polarity is neither design-down nor code-up is caught"
@@ -39,7 +39,7 @@
       (is (contains? (laws db) "Source.polarity value must satisfy [:enum \"design-down\" \"code-up\"]")))))
 
 ;; case: OUT-dual — an act with a bogus mode
-(def bad-act (Act "bad" (reads mdl) (through lns) (mode "ponder") (yields out)))
+(Act ^{:name "bad"} bad-act {:reads mdl :through lns :mode "ponder" :yields out})
 
 (deftest out-dual-is-enforced
   (testing "an act whose mode is neither analyse nor synthesise is caught"
@@ -47,7 +47,7 @@
       (is (contains? (laws db) "Act.mode value must satisfy [:enum \"analyse\" \"synthesise\"]")))))
 
 ;; case: #4 enforced from the in-side — a code-up source with no correspondence
-(def orphan-extract (Source "extract" (into mdl) (polarity "code-up")))
+(Source ^{:name "extract"} orphan-extract {:into mdl :polarity "code-up"})
 
 (deftest correspondence-emerges-or-the-loop-is-open
   (testing "a code-up source with no correspondence trips the loop-closes law (#4 enforced from the in-side)"
@@ -55,9 +55,9 @@
       (is (contains? (laws db) "the loop closes — every code-up source is matched by a correspondence")))))
 
 ;; case: the adjunction is well-typed — a correspondence lowering a non-synthesise act
-(def mis-up      (Source "extract" (into mdl) (polarity "code-up")))
-(def mis-analyse (Act "probe" (reads mdl) (through lns) (mode "analyse") (yields out)))
-(def mis-corr    (Correspondence "c" (lifts mis-up) (lowers mis-analyse)))
+(Source ^{:name "extract"} mis-up {:into mdl :polarity "code-up"})
+(Act ^{:name "probe"} mis-analyse {:reads mdl :through lns :mode "analyse" :yields out})
+(Correspondence ^{:name "c"} mis-corr {:lifts mis-up :lowers mis-analyse})
 
 (deftest correspondence-must-pair-the-right-poles
   (testing "a correspondence that lowers a non-synthesise act is caught (the adjunction is well-typed)"

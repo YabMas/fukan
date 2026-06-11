@@ -44,15 +44,15 @@
 
 ;; ── matched-by ────────────────────────────────────────────────────────────────
 
-(def mb-orphan (LDoc "orphan" (flag true)))   ; flagged, NO approvals anywhere
+(LDoc ^{:name "orphan"} mb-orphan {:flag true})   ; flagged, NO approvals anywhere
 
-(def mb-ok-doc (LDoc "ok" (flag true)))
-(def mb-rev    (LReviewer "rev" (approves mb-ok-doc)))
+(LDoc ^{:name "ok"} mb-ok-doc {:flag true})
+(LReviewer ^{:name "rev"} mb-rev {:approves [mb-ok-doc]})
 
-(def mb-bot-doc (LDoc "botted" (flag true)))
-(def mb-bot     (LBot "bot" (approves mb-bot-doc)))
+(LDoc ^{:name "botted"} mb-bot-doc {:flag true})
+(LBot ^{:name "bot"} mb-bot {:approves [mb-bot-doc]})
 
-(def mb-plain  (LDoc "plain"))                ; unflagged, unapproved — fine
+(LDoc ^{:name "plain"} mb-plain)              ; unflagged, unapproved — fine
 
 (deftest matched-by-fires-on-the-wholly-empty-relation
   (testing "THE gotcha case: no :approves relation exists at all — must still fire"
@@ -74,10 +74,10 @@
 
 ;; ── has ───────────────────────────────────────────────────────────────────────
 
-(def h-bare  (LRef "bare"  (kind "ref")))                  ; ref without names
-(def h-named-t (LDoc "t"))
-(def h-named (LRef "named" (kind "ref") (names h-named-t)))
-(def h-plain (LRef "plain" (kind "plain")))                ; not a ref — exempt
+(LRef ^{:name "bare"} h-bare {:kind "ref"})                ; ref without names
+(LDoc ^{:name "t"} h-named-t)
+(LRef ^{:name "named"} h-named {:kind "ref" :names h-named-t})
+(LRef ^{:name "plain"} h-plain {:kind "plain"})            ; not a ref — exempt
 
 (deftest has-fires-when-the-relation-is-absent
   (is (contains? (laws (a/assemble-vars [#'h-bare])) "a ref names a target")))
@@ -88,10 +88,10 @@
 
 ;; ── has-any ───────────────────────────────────────────────────────────────────
 
-(def ha-neither (LProj "neither"))
-(def ha-doc     (LDoc "d"))
-(def ha-mapper  (LProj "mapper" (maps ha-doc)))
-(def ha-wrapper (LProj "wrapper" (wraps ha-mapper)))
+(LProj ^{:name "neither"} ha-neither)
+(LDoc ^{:name "d"} ha-doc)
+(LProj ^{:name "mapper"} ha-mapper {:maps [ha-doc]})
+(LProj ^{:name "wrapper"} ha-wrapper {:wraps ha-mapper})
 
 (deftest has-any-fires-only-when-every-alternative-is-absent
   (is (contains? (laws (a/assemble-vars [#'ha-neither])) "a proj maps or wraps"))
@@ -100,10 +100,10 @@
 
 ;; ── target ────────────────────────────────────────────────────────────────────
 
-(def t-up   (LSrc "up"   (polarity "code-up")))
-(def t-down (LSrc "down" (polarity "design-down")))
-(def t-good (LLift "good" (lifts t-up)))
-(def t-bad  (LLift "bad"  (lifts t-down)))
+(LSrc ^{:name "up"}   t-up   {:polarity "code-up"})
+(LSrc ^{:name "down"} t-down {:polarity "design-down"})
+(LLift ^{:name "good"} t-good {:lifts t-up})
+(LLift ^{:name "bad"}  t-bad  {:lifts t-down})
 
 (deftest target-checks-the-relations-targets
   (is (not (contains? (laws (a/assemble-vars [#'t-up #'t-good])) "lifts only code-up")))
@@ -111,12 +111,12 @@
 
 ;; ── at-most-one ───────────────────────────────────────────────────────────────
 
-(def amo-x  (LOwned "x"))
-(def amo-a  (LOwner "a" (owns amo-x)))
-(def amo-b  (LOwner "b" (owns amo-x)))
+(LOwned ^{:name "x"} amo-x)
+(LOwner ^{:name "a"} amo-a {:owns [amo-x]})
+(LOwner ^{:name "b"} amo-b {:owns [amo-x]})
 
-(def amo-y  (LOwned "y"))
-(def amo-c  (LOwner "c" (owns amo-y)))
+(LOwned ^{:name "y"} amo-y)
+(LOwner ^{:name "c"} amo-c {:owns [amo-y]})
 
 (deftest at-most-one-fires-on-a-second-incoming
   (is (contains? (laws (a/assemble-vars [#'amo-x #'amo-a #'amo-b])) "at most one owner"))

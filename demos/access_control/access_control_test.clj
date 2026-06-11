@@ -21,8 +21,8 @@
 ;; declarations. Var-capture resolves at assemble time.
 
 (declare c1-role-a c1-role-b)
-(def c1-role-a (Role "a" (inherits c1-role-b)))
-(def c1-role-b (Role "b" (inherits c1-role-a)))
+(Role ^{:name "a"} c1-role-a {:inherits [c1-role-b]})
+(Role ^{:name "b"} c1-role-b {:inherits [c1-role-a]})
 
 (deftest inheritance-cycle-is-caught
   (testing "a role that transitively inherits itself trips the acyclic-hierarchy law"
@@ -33,16 +33,17 @@
 ;; `c2-lead` holds neither conflicting permission directly — both arrive via
 ;; inheritance, exercising grants* transitivity.
 
-(def c2-submit         (Action "submit"))
-(def c2-approve        (Action "approve"))
-(def c2-report         (Resource "Report"))
+(Action ^{:name "submit"} c2-submit)
+(Action ^{:name "approve"} c2-approve)
+(Resource ^{:name "Report"} c2-report)
 (declare c2-approve-report)
-(def c2-submit-report  (Permission "submit-report"  (action c2-submit)  (resource c2-report)
-                                                     (conflicts-with c2-approve-report)))
-(def c2-approve-report (Permission "approve-report" (action c2-approve) (resource c2-report)))
-(def c2-author         (Role "author"   (grants c2-submit-report)))
-(def c2-approver       (Role "approver" (grants c2-approve-report)))
-(def c2-lead           (Role "lead"     (inherits c2-author c2-approver)))
+(Permission ^{:name "submit-report"} c2-submit-report
+  {:action c2-submit :resource c2-report :conflicts-with [c2-approve-report]})
+(Permission ^{:name "approve-report"} c2-approve-report
+  {:action c2-approve :resource c2-report})
+(Role ^{:name "author"} c2-author {:grants [c2-submit-report]})
+(Role ^{:name "approver"} c2-approver {:grants [c2-approve-report]})
+(Role ^{:name "lead"} c2-lead {:inherits [c2-author c2-approver]})
 
 (deftest separation-of-duties-violation-through-inheritance-is-caught
   (testing "a role that inherits two roles whose combined effective permissions conflict is caught"
@@ -54,8 +55,8 @@
 ;; ── case 3: permission action must be an Action ───────────────────────────────
 ;; :action points at a Resource — wrong target type.
 
-(def c3-report (Resource "Report"))
-(def c3-bad    (Permission "bad" (action c3-report) (resource c3-report)))
+(Resource ^{:name "Report"} c3-report)
+(Permission ^{:name "bad"} c3-bad {:action c3-report :resource c3-report})
 
 (deftest permission-action-must-be-an-action
   (testing "a permission whose :action targets a Resource, not an Action, is caught"

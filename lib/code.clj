@@ -24,7 +24,7 @@
 
 (defn ^:export read-effect
   "Expand an effect literal — a keyword like `:io` — into Effect clauses, so
-   effects author as `(performs :io :require)`."
+   effects author as `:performs [:io :require]`."
   [kw]
   [(list 'name (name kw))])
 
@@ -34,37 +34,36 @@
   {:name :String}
   (reader read-effect))
 
-(defn ^:export signature->clauses
-  "Operation's authoring syntax (the `(syntax …)` hook): a `(signature <malli-fn-schema>)`
-   clause is rewritten into the ordered+labelled `:in` and the `:out` clauses. The schema is a
-   malli function schema `[:=> INPUT OUTPUT]`; INPUT is `[:catn [:name Type] …]` (named params →
-   ordered + labelled) or `[:cat]` (nullary). A `[:cat Type …]` (positional, unnamed) is REJECTED —
-   name your parameters. The Types are ordinary malli, expanded by the Schema reader (a bare symbol
-   is a var-ref to a Kind). Lives in the vocab — malli never touches core."
-  [body]
-  (let [sig (some #(when (and (seq? %) (= 'signature (first %))) %) body)]
-    (if-not sig
-      body
-      (let [form (second sig)]
-        (when-not (and (vector? form) (= :=> (first form)) (= 3 (count form)))
-          (throw (ex-info (str "signature must be a malli function schema [:=> INPUT OUTPUT]: " (pr-str form)) {:form form})))
-        (let [[_ input output] form]
-          (when-not (vector? input)
-            (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))
-          (let [[in-op & in-args] input
-                in-clause (case in-op
-                            :catn (when (seq in-args)
-                                    ;; one (in [name Type] …) clause — VARARGS of labelled
-                                    ;; pairs; authoring order is the :in sequence order
-                                    [(cons 'in (map (fn [pair]
-                                                      (when-not (and (vector? pair) (= 2 (count pair)) (keyword? (first pair)))
-                                                        (throw (ex-info (str ":catn entry must be [:name Type]: " (pr-str pair)) {:form form})))
-                                                      [(symbol (name (first pair))) (second pair)])
-                                                    in-args))])
-                            :cat  (when (seq in-args)
-                                    (throw (ex-info (str "name your parameters — use [:catn [:name Type] …], not [:cat …]: " (pr-str input)) {:form form})))
-                            (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))]
-            (concat (remove #(= % sig) body) in-clause [(list 'out output)])))))))
+(defn ^:export signature->slots
+  "Operation's authoring syntax (the `(syntax …)` hook, map → map): a `:signature`
+   pseudo-key is rewritten into the ordered+labelled `:in` vector and the `:out` entry.
+   The value is a malli function schema `[:=> INPUT OUTPUT]`; INPUT is `[:catn [:name Type] …]`
+   (named params → ordered + labelled `[name Type]` pairs) or `[:cat]` (nullary). A
+   `[:cat Type …]` (positional, unnamed) is REJECTED — name your parameters. The Types are
+   ordinary malli, expanded by the Schema reader (a bare symbol is a var-ref to a Kind).
+   Lives in the vocab — malli never touches core."
+  [m]
+  (if-not (contains? m :signature)
+    m
+    (let [form (:signature m)]
+      (when-not (and (vector? form) (= :=> (first form)) (= 3 (count form)))
+        (throw (ex-info (str "signature must be a malli function schema [:=> INPUT OUTPUT]: " (pr-str form)) {:form form})))
+      (let [[_ input output] form]
+        (when-not (vector? input)
+          (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))
+        (let [[in-op & in-args] input
+              in (case in-op
+                   :catn (mapv (fn [pair]
+                                 (when-not (and (vector? pair) (= 2 (count pair)) (keyword? (first pair)))
+                                   (throw (ex-info (str ":catn entry must be [:name Type]: " (pr-str pair)) {:form form})))
+                                 [(symbol (name (first pair))) (second pair)])
+                               in-args)
+                   :cat  (if (seq in-args)
+                           (throw (ex-info (str "name your parameters — use [:catn [:name Type] …], not [:cat …]: " (pr-str input)) {:form form}))
+                           [])
+                   (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))]
+          (cond-> (-> m (dissoc :signature) (assoc :out output))
+            (seq in) (assoc :in in)))))))
 
 (defstructure Operation
   "A named unit of computation — the UNIFIED computational unit. An `Operation` is either
@@ -73,12 +72,12 @@
    actual calls). A modelled Operation corresponds 1-on-1 (by name + corresponding Module)
    to its extracted twin; the two stay distinct nodes so spec and actual remain checkable.
 
-   Authored with a malli signature: `(Operation (doc …) (signature [:=> [:catn [:name Type] …] Out]) (calls …))`
-   — the `(syntax signature->clauses)` hook rewrites it to `:in`/`:out` clauses. (Replaces the old
-   `Stage` and the extractor's private `Operation` — one vocab, owned here, the extractor produces
-   into it by tag.)"
+   Authored with a malli signature: `(Operation f \"doc\" {:signature [:=> [:catn [:name Type] …] Out] :calls […]})`
+   — the `(syntax signature->slots)` hook rewrites `:signature` to the `:in`/`:out` entries.
+   (Replaces the old `Stage` and the extractor's private `Operation` — one vocab, owned here,
+   the extractor produces into it by tag.)"
   (includes Connected)
-  (syntax signature->clauses)        ; (signature [:=> [:catn …] Out]) authoring form (vocab-owned)
+  (syntax signature->slots)          ; {:signature [:=> [:catn …] Out]} authoring entry (vocab-owned)
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
    :performs  [:* Effect]            ; side effects

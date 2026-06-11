@@ -33,12 +33,12 @@
 
 ;; the keystone column — project (the synthesise Act) IS materialization, realized by the
 ;; `materialize` Module; the rest wire each subject concept to the subsystem that builds it.
-(def z-model   (SubjectRealization (realizes subj/model)          (by kernel/core-structure)))
-(def z-author  (SubjectRealization (realizes subj/author)         (by canvas-source/canvas-source)))
-(def z-extract (SubjectRealization (realizes subj/extract)        (by target/target-clojure)))
-(def z-probe   (SubjectRealization (realizes subj/probe)          (by probe-surface/probes)))
-(def z-project (SubjectRealization (realizes subj/project)        (by materialize/materialize)))
-(def z-corr    (SubjectRealization (realizes subj/correspondence) (by target/target-correspondence)))
+(SubjectRealization z-model   {:realizes subj/model          :by [kernel/core-structure]})
+(SubjectRealization z-author  {:realizes subj/author         :by [canvas-source/canvas-source]})
+(SubjectRealization z-extract {:realizes subj/extract        :by [target/target-clojure]})
+(SubjectRealization z-probe   {:realizes subj/probe          :by [probe-surface/probes]})
+(SubjectRealization z-project {:realizes subj/project        :by [materialize/materialize]})
+(SubjectRealization z-corr    {:realizes subj/correspondence :by [target/target-correspondence]})
 
 (defstructure SubjectCompleteness
   "Law-host: the verify-down completeness of the tower — every Act and every Source (Layer 1) must
@@ -50,5 +50,5 @@
   (law "every source is realized by a module"
     (matched-by :realizes :from SubjectRealization :scope Source)))
 
-(def subject-realization
-  (Grouping (child z-model z-author z-extract z-probe z-project z-corr)))
+(Grouping subject-realization
+  {:child [z-model z-author z-extract z-probe z-project z-corr]})

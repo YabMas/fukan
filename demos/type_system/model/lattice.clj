@@ -18,19 +18,19 @@
             [demos.type-system.vocab.core :refer [Field Type]]))
 
 ;; primitive types
-(def NumberT (Type "Number"))
-(def IntT    (Type "Int"   (subtype-of NumberT)))
-(def FloatT  (Type "Float" (subtype-of NumberT)))
+(Type ^{:name "Number"} NumberT)
+(Type ^{:name "Int"}   IntT   {:subtype-of [NumberT]})
+(Type ^{:name "Float"} FloatT {:subtype-of [NumberT]})
 
 ;; Point { x: IntT, y: IntT }
-(def px    (Field (fname "x") (type IntT)))
-(def py    (Field (fname "y") (type IntT)))
-(def Point (Type (field px) (field py)))
+(Field px {:fname "x" :type IntT})
+(Field py {:fname "y" :type IntT})
+(Type Point {:field [px py]})
 
 ;; Point3D <: Point — its own x/y Field nodes (distinct from Point's), plus z
-(def qx      (Field (fname "x") (type IntT)))
-(def qy      (Field (fname "y") (type IntT)))
-(def qz      (Field (fname "z") (type IntT)))
-(def Point3D (Type (field qx) (field qy) (field qz) (subtype-of Point)))
+(Field qx {:fname "x" :type IntT})
+(Field qy {:fname "y" :type IntT})
+(Field qz {:fname "z" :type IntT})
+(Type Point3D {:field [qx qy qz] :subtype-of [Point]})
 
 (defn build [] (a/assemble ['demos.type-system.model.lattice]))

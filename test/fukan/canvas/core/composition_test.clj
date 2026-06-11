@@ -32,9 +32,9 @@
       (is (some #(= % '[(Linked ?e) (Hub ?e)])   rs) "Hub includer rule")
       (is (some #(= % '[(Linked ?e) (Spoke ?e)]) rs) "Spoke includer rule"))))
 
-(def lk-spoke (Spoke))                  ; pointed at by lk-hub → has incoming → connected
-(def lk-hub   (Hub (spokes lk-spoke)))  ; has outgoing → connected
-(def lk-iso   (Hub))                    ; no edges → isolated → OFFENDER of Linked's law
+(Spoke lk-spoke)                    ; pointed at by lk-hub → has incoming → connected
+(Hub lk-hub {:spokes [lk-spoke]})   ; has outgoing → connected
+(Hub lk-iso)                        ; no edges → isolated → OFFENDER of Linked's law
 
 (defn- offenders-of [db law-desc]
   (->> (s/check db)
@@ -73,8 +73,8 @@
     (is (not (contains? (ns-interns 'fukan.canvas.core.composition-test) 'Flagged))
         "a realized concept defines no constructor (it is never instantiated)")))
 
-(def nt-on  (Note (flag true)))
-(def nt-off (Note (flag false)))
+(Note nt-on  {:flag true})
+(Note nt-off {:flag false})
 
 (deftest realized-membership-is-derived
   (testing "(Flagged ?e) returns exactly the flag=true Notes"
@@ -92,8 +92,8 @@
   "Realized: a Holder holding a Flagged Note — a rule that references another realized rule."
   (realized-as '[(Holder ?e) [?r :rel/from ?e] [?r :rel/kind :holds] [?r :rel/to ?n] (Flagged ?n)]))
 
-(def hold-on  (Holder (holds nt-on)))
-(def hold-off (Holder (holds nt-off)))
+(Holder hold-on  {:holds nt-on})
+(Holder hold-off {:holds nt-off})
 
 (deftest realized-rule-references-another-realized-rule
   (testing "FlaggedHolder realizes via Flagged — the inspect-over-signal composition"
@@ -113,9 +113,9 @@
 (defstructure VariantA "Realized variant: kind = a." (realized-as '[(Sum ?e) [?e :val/kind "a"]]))
 (defstructure VariantB "Realized variant: kind = b." (realized-as '[(Sum ?e) [?e :val/kind "b"]]))
 
-(def sum-a (Sum (kind "a")))
-(def sum-b (Sum (kind "b")))
-(def sum-c (Sum (kind "c")))   ; neither variant → totality violation
+(Sum sum-a {:kind "a"})
+(Sum sum-b {:kind "b"})
+(Sum sum-c {:kind "c"})   ; neither variant → totality violation
 
 (deftest closed-sum-totality-has-teeth
   (testing "a Sum matching no variant is caught by the totality law"

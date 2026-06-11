@@ -21,16 +21,16 @@
 ;; A service-tier function calls an api-tier function. foundation ← service ← api,
 ;; so api is "over" service and the dependency points upward — illegal.
 
-(def c1-foundation (Tier "foundation"))
-(def c1-service    (Tier "service" (over c1-foundation)))
-(def c1-api        (Tier "api"     (over c1-service)))
-(def c1-d          (Domain "auth"))
-(def c1-op         (Operation "handle"))
+(Tier ^{:name "foundation"} c1-foundation)
+(Tier ^{:name "service"} c1-service {:over c1-foundation})
+(Tier ^{:name "api"} c1-api {:over c1-service})
+(Domain ^{:name "auth"} c1-d)
+(Operation ^{:name "handle"} c1-op)
 (declare c1-handler)
-(def c1-validator  (ExecutionFunction "validator" (domain c1-d) (tier c1-service)
-                                       (operation c1-op) (deps c1-handler)))
-(def c1-handler    (ExecutionFunction "handler"   (domain c1-d) (tier c1-api)
-                                       (operation c1-op)))
+(ExecutionFunction ^{:name "validator"} c1-validator
+  {:domain c1-d :tier c1-service :operation c1-op :deps [c1-handler]})
+(ExecutionFunction ^{:name "handler"} c1-handler
+  {:domain c1-d :tier c1-api :operation c1-op})
 
 (deftest upward-tier-dependency-is-caught
   (testing "a service-tier function depending on an api-tier function trips the tier-boundary law"
@@ -41,9 +41,10 @@
 ;; ── case 2: a facet slot must point at its axis type ──────────────────────────
 ;; :domain targets a Tier, not a Domain — wrong target type.
 
-(def c2-tier (Tier "service"))
-(def c2-op   (Operation "validate"))
-(def c2-bad  (ExecutionFunction "bad" (domain c2-tier) (tier c2-tier) (operation c2-op)))
+(Tier ^{:name "service"} c2-tier)
+(Operation ^{:name "validate"} c2-op)
+(ExecutionFunction ^{:name "bad"} c2-bad
+  {:domain c2-tier :tier c2-tier :operation c2-op})
 
 (deftest facet-slot-must-match-its-axis-type
   (testing "an execution-function whose :domain targets a Tier, not a Domain, is caught"
@@ -53,10 +54,10 @@
 ;; ── case 3 (style B): at most one aspect per axis ─────────────────────────────
 ;; Both aspects sit on the tier axis — two tiers at once is ill-formed.
 
-(def c3-tier-axis (Axis "tier"))
-(def c3-service   (Aspect "service" (axis c3-tier-axis)))
-(def c3-api       (Aspect "api"     (axis c3-tier-axis)))
-(def c3-confused  (Faceted "confused" (aspects c3-service c3-api)))
+(Axis ^{:name "tier"} c3-tier-axis)
+(Aspect ^{:name "service"} c3-service {:axis c3-tier-axis})
+(Aspect ^{:name "api"} c3-api {:axis c3-tier-axis})
+(Faceted ^{:name "confused"} c3-confused {:aspects [c3-service c3-api]})
 
 (deftest two-aspects-on-one-axis-is-caught
   (testing "a faceted entity carrying two aspects on the same axis trips the one-per-axis law"

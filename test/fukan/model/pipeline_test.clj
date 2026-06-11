@@ -21,17 +21,17 @@
 ;; ── ad-hoc dbs built from top-level value defs (assembled per test) ──────────
 
 ;; a MetaSlot with an unknown cardinality
-(def mc-T (Concept "T"))
-(def mc-X (Concept "X" (slot (MetaSlot (name "f") (cardinality "lots") (of mc-T)))))
+(Concept ^{:name "T"} mc-T)
+(Concept ^{:name "X"} mc-X {:slot [(MetaSlot {:name "f" :cardinality "lots" :of mc-T})]})
 
 ;; a finding yielded by no probe
-(def of2-l      (Lens "l" (focus "things")))
-(def of2-Used   (Finding "Used" (gating false)))
-(def of2-Orphan (Finding "Orphan" (gating false)))
-(def of2-x      (Probe "x" (through of2-l) (yields of2-Used)))
+(Lens ^{:name "l"} of2-l {:focus "things"})
+(Finding ^{:name "Used"} of2-Used {:gating false})
+(Finding ^{:name "Orphan"} of2-Orphan {:gating false})
+(Probe ^{:name "x"} of2-x {:through of2-l :yields of2-Used})
 
 ;; a projection that is neither a base nor a contextualization
-(def pe-Empty (Projection "Empty"))
+(Projection ^{:name "Empty"} pe-Empty)
 
 (deftest build-model-ingests-canvas-specs-into-a-structure-db
   (testing "the model is the merged structure db over the canvas/ defstructure specs"

@@ -23,31 +23,35 @@
 ;; (build-model nil = design-only, no extraction). Ad-hoc lenses/projections are
 ;; top-level value defs assembled and unioned onto the model.
 
-(def mvl-target     (Lens "target" (focus "the target extractor's stages")))
-(def mvl-target-sel (LensSelection (realizes mvl-target)
-                      (selects "target stages" '[(Operation ?n) (in-module ?n "target-clojure")])))
-(def ef-none     (Lens "none" (focus "nothing")))
-(def ef-none-sel (LensSelection (realizes ef-none)
-                   (selects "nothing" '[(Operation ?n) (in-module ?n "no-such-module")])))
+(Lens ^{:name "target"} mvl-target {:focus "the target extractor's stages"})
+(LensSelection mvl-target-sel
+  {:realizes mvl-target
+   :selects  ["target stages" '[(Operation ?n) (in-module ?n "target-clojure")]]})
+(Lens ^{:name "none"} ef-none {:focus "nothing"})
+(LensSelection ef-none-sel
+  {:realizes ef-none
+   :selects  ["nothing" '[(Operation ?n) (in-module ?n "no-such-module")]]})
 
 ;; an ad-hoc contextualization of the SHIPPED Blueprint — no Refactor renderer exists.
 ;; projection/Blueprint (+ its survey lens) is included in the assembled fragment so its
 ;; var-ref resolves; union with the model then dedups it.
-(def acb-stages     (Lens "stages" (focus "x")))
-(def acb-stages-sel (LensSelection (realizes acb-stages)
-                      (selects "target stages" '[(Operation ?n) (in-module ?n "target-clojure")])))
-(def acb-Refactor (Projection "Refactor"
-                    (through acb-stages)
-                    (contextualizes cm-proj/Blueprint)
-                    (context "Refactor the existing implementation to match these specs:")))
+(Lens ^{:name "stages"} acb-stages {:focus "x"})
+(LensSelection acb-stages-sel
+  {:realizes acb-stages
+   :selects  ["target stages" '[(Operation ?n) (in-module ?n "target-clojure")]]})
+(Projection ^{:name "Refactor"} acb-Refactor
+  {:through        acb-stages
+   :contextualizes cm-proj/Blueprint
+   :context        "Refactor the existing implementation to match these specs:"})
 
 ;; an ad-hoc Docs projection whose name selects the Docs renderers
-(def mprd-stages     (Lens "stages" (focus "target stages")))
-(def mprd-stages-sel (LensSelection (realizes mprd-stages)
-                       (selects "target stages" '[(Operation ?n) (in-module ?n "target-clojure")])))
-(def mprd-Docs   (Projection "Docs"
-                   (through mprd-stages)
-                   (maps (Mapping (from "a function") (to "a doc section")))))
+(Lens ^{:name "stages"} mprd-stages {:focus "target stages"})
+(LensSelection mprd-stages-sel
+  {:realizes mprd-stages
+   :selects  ["target stages" '[(Operation ?n) (in-module ?n "target-clojure")]]})
+(Projection ^{:name "Docs"} mprd-Docs
+  {:through mprd-stages
+   :maps    [(Mapping {:from "a function" :to "a doc section"})]})
 
 (defn- by-name [db n]
   (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))

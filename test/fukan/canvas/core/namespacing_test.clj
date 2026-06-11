@@ -18,8 +18,8 @@
   "Test fixture sharing the short name `Kind` with lib.code/Kind."
   {:note [:? :String]})
 
-(def local-kind (Kind "local"))
-(def lib-kind   (code/Kind "fromlib"))
+(Kind ^{:name "local"} local-kind)
+(code/Kind ^{:name "fromlib"} lib-kind)
 
 (deftest same-short-name-different-ns-coexist
   (testing "two `Kind`s from different namespaces keep distinct identities and instances"

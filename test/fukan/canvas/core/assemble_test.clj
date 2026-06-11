@@ -5,7 +5,7 @@
             [fukan.canvas.core.assemble :as a]))
 
 (s/defstructure Thing "t")
-(def t5-foo (Thing "foo"))     ; an instance-bearing var
+(Thing ^{:name "foo"} t5-foo)  ; an instance-bearing var
 (def t5-plain 42)              ; not an instance
 
 (deftest collect-finds-instance-vars
@@ -17,8 +17,8 @@
 (s/defstructure Box "box" {:links Box})
 
 (declare t6-b)
-(def t6-a (Box "A" (links t6-b)))
-(def t6-b (Box "B" (links t6-a)))
+(Box ^{:name "A"} t6-a {:links t6-b})
+(Box ^{:name "B"} t6-b {:links t6-a})
 
 (deftest assembles-a-cycle-into-one-db
   (let [db (a/assemble ['fukan.canvas.core.assemble-test])
@@ -34,21 +34,21 @@
 ;; value dedup (inline + top-level)
 (s/defstructure ^:value Tag2 "tag" {:n :String})
 (s/defstructure Holder "h" {:a Tag2 :b Tag2})
-(def t7-h  (Holder "h" (a (Tag2 (n "x"))) (b (Tag2 (n "x")))))   ; two equal inline values
-(def t7-v1 (Tag2 (n "z")))                                         ; two equal top-level values
-(def t7-v2 (Tag2 (n "z")))
+(Holder ^{:name "h"} t7-h {:a (Tag2 {:n "x"}) :b (Tag2 {:n "x"})})   ; two equal inline values
+(def t7-v1 (Tag2 {:n "z"}))                                          ; two equal top-level values
+(def t7-v2 (Tag2 {:n "z"}))
 
 ;; ordered
 (s/defstructure Sym2 "s")
 (s/defstructure Seq2 "seq" {:items [:* Sym2]})
-(def t7-sx (Sym2 "x")) (def t7-sy (Sym2 "y"))
-(def t7-seq (Seq2 "sq" (items t7-sx t7-sy)))
+(Sym2 ^{:name "x"} t7-sx) (Sym2 ^{:name "y"} t7-sy)
+(Seq2 ^{:name "sq"} t7-seq {:items [t7-sx t7-sy]})
 
 ;; labelled
 (s/defstructure Node2 "n")
 (s/defstructure Edge2 "e" {:to Node2})
-(def t7-n (Node2 "n"))
-(def t7-e (Edge2 "e" (to [knows t7-n])))
+(Node2 ^{:name "n"} t7-n)
+(Edge2 ^{:name "e"} t7-e {:to [knows t7-n]})
 
 (deftest value-dedup-inline
   (let [db (a/assemble ['fukan.canvas.core.assemble-test])]

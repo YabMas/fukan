@@ -12,11 +12,12 @@
   (Kind Clause)
   (Kind Eid)
   (Operation focus-nodes "Run :where clauses (binding ?n) with the vocab rules → focus node-set."
-    (signature [:=> [:catn [:db kernel/StructureDb] [:clauses [:vector Clause]]] [:vector Eid]])
-    (calls kernel/vocab-rules))
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:clauses [:vector Clause]]] [:vector Eid]]
+     :calls     [kernel/vocab-rules]})
   (Operation evaluate-lens "Read a stored lens's query, then delegate to focus-nodes."
-    (signature [:=> [:catn [:db kernel/StructureDb] [:lens-eid Eid]] [:vector Eid]]) (performs :throws)
-    (calls focus-nodes))
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:lens-eid Eid]] [:vector Eid]]
+     :performs  [:throws]
+     :calls     [focus-nodes]})
   (Operation refine "Narrow a focus to members also matching further clauses (lens-within-lens)."
-    (signature [:=> [:catn [:db kernel/StructureDb] [:focus [:vector Eid]] [:clauses [:vector Clause]]] [:vector Eid]])
-    (calls focus-nodes)))
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:focus [:vector Eid]] [:clauses [:vector Clause]]] [:vector Eid]]
+     :calls     [focus-nodes]}))

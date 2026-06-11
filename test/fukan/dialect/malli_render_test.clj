@@ -18,16 +18,16 @@
   "Test fixture: carries one Schema so the reader expands native malli literals."
   {:schema Schema})
 
-(def Socket (Kind "Socket"))
+(Kind Socket)
 
-(def h-port  (RenderHolder "h-port"  (schema [:int {:min 1 :max 65535}])))
-(def h-addr  (RenderHolder "h-addr"  (schema [:map [:street :string] [:zip {:optional true} :string]])))
-(def h-color (RenderHolder "h-color" (schema [:enum :red :green :blue])))
-(def h-tags  (RenderHolder "h-tags"  (schema [:vector :keyword])))
-(def h-kw    (RenderHolder "h-kw"    (schema :keyword)))
-(def h-ref   (RenderHolder "h-ref"   (schema Socket)))
-(def h-or    (RenderHolder "h-or"    (schema [:or :int :string])))
-(def h-tup   (RenderHolder "h-tup"   (schema [:tuple :string :int :keyword])))
+(RenderHolder h-port  {:schema [:int {:min 1 :max 65535}]})
+(RenderHolder h-addr  {:schema [:map [:street :string] [:zip {:optional true} :string]]})
+(RenderHolder h-color {:schema [:enum :red :green :blue]})
+(RenderHolder h-tags  {:schema [:vector :keyword]})
+(RenderHolder h-kw    {:schema :keyword})
+(RenderHolder h-ref   {:schema Socket})
+(RenderHolder h-or    {:schema [:or :int :string]})
+(RenderHolder h-tup   {:schema [:tuple :string :int :keyword]})
 
 (defn- db [] (a/assemble-vars [#'Socket #'h-port #'h-addr #'h-color #'h-tags #'h-kw #'h-ref #'h-or #'h-tup]))
 (defn- root [db kind] (ffirst (d/q '[:find ?s :in $ ?k :where [?s :val/kind ?k]] db kind)))
@@ -58,8 +58,8 @@
     (testing "choices (an unordered `many` slot) compared as a set"
       (is (= #{:red :green :blue} (set (rest form)))))))
 
-(def h-kw-x  (RenderHolder "h-kw-x"  (schema [:enum :x])))
-(def h-str-x (RenderHolder "h-str-x" (schema [:enum "x"])))
+(RenderHolder h-kw-x  {:schema [:enum :x]})
+(RenderHolder h-str-x {:schema [:enum "x"]})
 
 (deftest enum-member-type-is-stored-and-round-trips
   (let [d* (a/assemble-vars [#'h-kw-x #'h-str-x])

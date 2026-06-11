@@ -46,8 +46,7 @@ A structure is a *composition of slots* plus *datalog laws*.
 - **Slots are one typed map**, cardinality as a quantifier: a bare target is one
   (`:reads Model`), `[:? T]` optional, `[:* T]` zero+ ordered, `[:+ T]` one+
   ordered, `[:set T]` unordered (order and duplicate targets excluded from value
-  identity). Multi-slots author as varargs; authoring order is the sequence order,
-  recorded as `:rel/order`. A scalar target (`:Bool`/`:Int`/`:String`) stores a
+  identity). A scalar target (`:Bool`/`:Int`/`:String`) stores a
   leaf value with an auto type-check law; any other vector (`[:enum "a" "b"]`,
   `[:int {:min 1}]`) is a **refined scalar** — the core stores the type form
   verbatim and the generated law checks values through the registered type dialect
@@ -57,9 +56,19 @@ A structure is a *composition of slots* plus *datalog laws*.
   (`:payload` = a companion code-form stored as a sibling `:val/` datom); for
   cardinality one, lead with the props map. `(reader f)` lets a value structure
   expand authoring data-literals (the malli dialect's `Schema` reads native malli
-  forms); `(syntax f)` lets a structure own instance-level sugar (`Operation`'s
-  `(signature [:=> …])`). A reified relation's label comes from an authored
-  `[label target]` element.
+  forms); `(syntax f)` lets a structure own instance-level sugar — a map → map
+  rewrite of the authored slots map (`Operation` rewrites `:signature` into
+  `:in`/`:out`).
+- **Instances mirror defstructure** position-for-position: `(Structure name "doc"?
+  {slot → value}? nested…)`, a top-level def-emitting form — the symbol is the var
+  AND the entity name (`^{:name "…"}` metadata overrides). One `{slot → value}`
+  map: a plural slot takes a vector of targets (authoring order is the sequence
+  order, recorded as `:rel/order` — the bracket mirrors the quantifier), a
+  labelled target is a `[label target]` pair, a payload slot takes
+  `[value payload]`, reader literals pass as values. The same form without the
+  symbol is an anonymous expression instance (inline values, def-wrapped vars).
+  Nested member instances trail where defstructure's laws sit, lift to sibling
+  `def`s, and route by target-type into the container's slots.
 - **`^:value` structures** are content-deduped, inline-anonymous nodes:
   structurally-equal values collapse to a single node (identity = a content hash).
   Used for nameless compound data — list/record/shape descriptions — where an

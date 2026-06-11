@@ -46,9 +46,10 @@ authors its own grammar on the core.
     :offenders '[?t]
     :where '[[?r :rel/from ?t] [?r :rel/kind :deps] [?r :rel/to ?t]]))
 
-;; a model authored against it — instances are values, references are vars
-(def spec  (Task (done? true)))
-(def build (Task (done? false) (deps spec)))
+;; a model authored against it — the instance form mirrors defstructure:
+;; a name symbol (the var AND the entity name) + one {slot → value} map
+(Task spec  {:done? true})
+(Task build {:done? false :deps [spec]})
 
 (s/check (a/assemble-vars [#'spec #'build]))   ;; => []  (every law holds)
 ```

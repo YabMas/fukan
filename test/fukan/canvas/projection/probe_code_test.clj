@@ -7,7 +7,7 @@
 
 ;; a Finding with no probe yielding it → trips the "every finding is yielded by some
 ;; probe" law (a broken model for the integrity probe to surface)
-(def orphan-finding (Finding "Orphan" (gating false)))
+(Finding ^{:name "Orphan"} orphan-finding {:gating false})
 
 (deftest projects-uniform-observations-contract
   (testing "the projected contract checks a result's observations are {focus tag note}"

@@ -20,8 +20,8 @@
 ;; resolved at assemble time (when all defs are bound), not at construction time.
 
 (declare c1-A c1-B)
-(def c1-A (Type "A" (subtype-of c1-B)))   ; forward reference to c1-B
-(def c1-B (Type "B" (subtype-of c1-A)))   ; forward reference to c1-A
+(Type ^{:name "A"} c1-A {:subtype-of [c1-B]})   ; forward reference to c1-B
+(Type ^{:name "B"} c1-B {:subtype-of [c1-A]})   ; forward reference to c1-A
 
 (deftest subtype-cycle-is-caught
   (testing "a type that transitively subtypes itself trips the acyclic-lattice law"
@@ -30,10 +30,10 @@
 
 ;; ── case 2: width-subtyping violation ────────────────────────────────────────
 
-(def c2-Prim  (Type "Prim"))
-(def c2-sid   (Field "sid" (fname "id") (type c2-Prim)))
-(def c2-Super (Type "Super" (field c2-sid)))
-(def c2-Sub   (Type "Sub" (subtype-of c2-Super)))   ; lacks a field named "id"
+(Type ^{:name "Prim"} c2-Prim)
+(Field ^{:name "sid"} c2-sid {:fname "id" :type c2-Prim})
+(Type ^{:name "Super"} c2-Super {:field [c2-sid]})
+(Type ^{:name "Sub"} c2-Sub {:subtype-of [c2-Super]})   ; lacks a field named "id"
 
 (deftest width-subtyping-violation-is-caught
   (testing "a subtype that omits a field name its supertype declares is caught"
@@ -42,8 +42,8 @@
 
 ;; ── case 3: subtyping a sealed type ──────────────────────────────────────────
 
-(def c3-Final (Type "Final" (sealed? true)))
-(def c3-Bad   (Type "Bad" (subtype-of c3-Final)))
+(Type ^{:name "Final"} c3-Final {:sealed? true})
+(Type ^{:name "Bad"} c3-Bad {:subtype-of [c3-Final]})
 
 (deftest subtype-of-sealed-is-caught
   (testing "subtyping a sealed type is caught (a leaf-Bool value driving a law)"
@@ -52,7 +52,7 @@
 
 ;; ── case 4: non-boolean :sealed? flag ────────────────────────────────────────
 
-(def c4-T (Type "T" (sealed? "yes")))   ; not a Bool
+(Type ^{:name "T"} c4-T {:sealed? "yes"})   ; not a Bool
 
 (deftest sealed-flag-must-be-boolean
   (testing "a non-boolean :sealed? value is caught by the value-type law"

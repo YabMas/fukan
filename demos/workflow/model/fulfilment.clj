@@ -13,18 +13,16 @@
 
 (declare validate charge-card reserve-stock ship notify done-step)
 
-(def receive       (Step (next validate)))
-(def validate      (Step (next charge-card reserve-stock)))  ; FORK — fan-out
-(def charge-card   (Step (next ship)))
-(def reserve-stock (Step (next ship)))                       ; JOIN at ship — fan-in
-(def ship          (Step (next notify)))
-(def notify        (Step (next done-step)))
-(def done-step     (Step "done"))                                             ; terminal
+(Step receive       {:next [validate]})
+(Step validate      {:next [charge-card reserve-stock]})  ; FORK — fan-out
+(Step charge-card   {:next [ship]})
+(Step reserve-stock {:next [ship]})                       ; JOIN at ship — fan-in
+(Step ship          {:next [notify]})
+(Step notify        {:next [done-step]})
+(Step ^{:name "done"} done-step)                          ; terminal
 
-(def order-fulfilment
-  (Workflow
-    (start receive)
-    (step receive) (step validate) (step charge-card)
-    (step reserve-stock) (step ship) (step notify) (step done-step)))
+(Workflow order-fulfilment
+  {:start receive
+   :step  [receive validate charge-card reserve-stock ship notify done-step]})
 
 (defn build [] (a/assemble ['demos.workflow.model.fulfilment]))

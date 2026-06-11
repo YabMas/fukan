@@ -15,9 +15,9 @@
 
 ;; ── case 1: entity with no attribute ─────────────────────────────────────────
 
-(def c1-String (DataType "String"))
-(def c1-n      (Attribute "n" (type c1-String)))
-(def c1-Empty  (Entity "Empty"))                       ; no :attr → trips [:+ Attribute]
+(DataType ^{:name "String"} c1-String)
+(Attribute ^{:name "n"} c1-n {:type c1-String})
+(Entity ^{:name "Empty"} c1-Empty)                     ; no :attr → trips [:+ Attribute]
 
 (deftest entity-needs-an-attribute
   (testing "an entity with no attribute trips the [:+ Attribute] cardinality"
@@ -26,10 +26,10 @@
 
 ;; ── case 2: relationship targeting a non-Entity ───────────────────────────────
 
-(def c2-String (DataType "String"))
-(def c2-n      (Attribute "n" (type c2-String)))
-(def c2-bad    (Relationship "bad" (target c2-String)))  ; targets a DataType, not an Entity
-(def c2-E      (Entity "E" (attr c2-n) (rel c2-bad)))
+(DataType ^{:name "String"} c2-String)
+(Attribute ^{:name "n"} c2-n {:type c2-String})
+(Relationship ^{:name "bad"} c2-bad {:target c2-String})  ; targets a DataType, not an Entity
+(Entity ^{:name "E"} c2-E {:attr [c2-n] :rel [c2-bad]})
 
 (deftest relationship-must-target-an-entity
   (testing "a relationship whose target is a DataType, not an Entity, is caught"
@@ -40,8 +40,8 @@
 
 ;; ── case 3: non-boolean flag ──────────────────────────────────────────────────
 
-(def c3-String (DataType "String"))
-(def c3-bad    (Attribute "bad" (type c3-String) (required "yes")))   ; not a Bool
+(DataType ^{:name "String"} c3-String)
+(Attribute ^{:name "bad"} c3-bad {:type c3-String :required "yes"})   ; not a Bool
 
 (deftest attribute-flag-must-be-boolean
   (testing "a non-boolean :required flag is caught by the value-type law"
@@ -54,12 +54,12 @@
 ;; resolved at assemble time (when all defs are bound), not at construction time.
 
 (declare c4-A c4-B)
-(def c4-String (DataType "String"))
-(def c4-n      (Attribute "n" (type c4-String)))
-(def c4-to-b   (Relationship "to-b" (target c4-B)))   ; forward reference to c4-B
-(def c4-to-a   (Relationship "to-a" (target c4-A)))   ; forward reference to c4-A
-(def c4-A      (Entity "A" (attr c4-n) (rel c4-to-b)))
-(def c4-B      (Entity "B" (attr c4-n) (rel c4-to-a)))
+(DataType ^{:name "String"} c4-String)
+(Attribute ^{:name "n"} c4-n {:type c4-String})
+(Relationship ^{:name "to-b"} c4-to-b {:target c4-B})   ; forward reference to c4-B
+(Relationship ^{:name "to-a"} c4-to-a {:target c4-A})   ; forward reference to c4-A
+(Entity ^{:name "A"} c4-A {:attr [c4-n] :rel [c4-to-b]})
+(Entity ^{:name "B"} c4-B {:attr [c4-n] :rel [c4-to-a]})
 
 (deftest circular-dependency-is-caught
   (testing "a reference cycle A→B→A — authorable via forward declare — is caught"

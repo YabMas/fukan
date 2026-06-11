@@ -17,22 +17,20 @@
             [demos.grammar.vocab.core :refer [Symbol Grammar Production]]))
 
 ;; terminals — no productions
-(def COLON  (Symbol))
-(def IDENT  (Symbol))
-(def STRING (Symbol))
-(def NUMBER (Symbol))
+(Symbol COLON)
+(Symbol IDENT)
+(Symbol STRING)
+(Symbol NUMBER)
 
 ;; nonterminals — :produces one or more Production alternatives;
 ;; a Production's :rhs is a sequence (authoring order is the order)
-(def kv-key   (Symbol "key"   (produces (Production (rhs IDENT)))))
-(def kv-value (Symbol "value" (produces (Production (rhs STRING))     ; value → STRING
-                                         (Production (rhs NUMBER)))))  ; value → NUMBER
-(def kv-pair  (Symbol "pair"  (produces (Production (rhs kv-key COLON kv-value)))))  ; ordered RHS
+(Symbol ^{:name "key"}   kv-key   {:produces [(Production {:rhs [IDENT]})]})
+(Symbol ^{:name "value"} kv-value {:produces [(Production {:rhs [STRING]})     ; value → STRING
+                                              (Production {:rhs [NUMBER]})]})  ; value → NUMBER
+(Symbol ^{:name "pair"}  kv-pair  {:produces [(Production {:rhs [kv-key COLON kv-value]})]})  ; ordered RHS
 
-(def kv-grammar
-  (Grammar "kv"
-    (start  kv-pair)
-    (symbol kv-pair) (symbol kv-key) (symbol kv-value)
-    (symbol COLON) (symbol IDENT) (symbol STRING) (symbol NUMBER)))
+(Grammar ^{:name "kv"} kv-grammar
+  {:start  kv-pair
+   :symbol [kv-pair kv-key kv-value COLON IDENT STRING NUMBER]})
 
 (defn build [] (a/assemble ['demos.grammar.model.key-value]))

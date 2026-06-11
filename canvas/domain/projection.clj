@@ -9,26 +9,24 @@
             [lib.grouping :refer [Grouping]]
             [canvas.domain.lens :as lens]))
 
-(def Blueprint
-  (Projection
-    (doc "The model projected to implementation code — the first projection target.")
-    (through lens/survey)   ; renders through the whole-model focus (reused from the survey probe)
-    (maps (Mapping (from "an atomic value")    (to "a def")))
-    (maps (Mapping (from "a record structure") (to "a Malli schema")))
-    (maps (Mapping (from "a function")         (to "a defn")))
-    (maps (Mapping (from "a law")              (to "a predicate")))))
+(Projection Blueprint
+  "The model projected to implementation code — the first projection target."
+  {:through lens/survey   ; renders through the whole-model focus (reused from the survey probe)
+   :maps    [(Mapping {:from "an atomic value"    :to "a def"})
+             (Mapping {:from "a record structure" :to "a Malli schema"})
+             (Mapping {:from "a function"         :to "a defn"})
+             (Mapping {:from "a law"              :to "a predicate"})]})
 
 ;; instruct ⊂ projection: DriftClose is a CONTEXTUALIZATION of Blueprint, not a new
 ;; target — it renders Blueprint's specs through the drift lens (the unrealized
 ;; Operations) and frames them with a drift-closing context. The same composing shape
 ;; contextualizes Blueprint as a new feature, a refactor, etc. — just a different
 ;; context over the same base.
-(def DriftClose
-  (Projection
-    (doc "Blueprint, framed as drift to close — the unrealized Operations as instructions to implement.")
-    (contextualizes Blueprint)
-    (through lens/drift)
-    (context "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:")))
+(Projection DriftClose
+  "Blueprint, framed as drift to close — the unrealized Operations as instructions to implement."
+  {:contextualizes Blueprint
+   :through        lens/drift
+   :context        "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:"})
 
-(def projection
-  (Grouping (child Blueprint DriftClose)))
+(Grouping projection
+  {:child [Blueprint DriftClose]})

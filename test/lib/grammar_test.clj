@@ -26,8 +26,8 @@
     :offenders '[?n]
     :where '[[?n :val/title "bad"]]))
 
-(def t-leaf (Leaf "l"))
-(def t-node (Node "n" (one-ref t-leaf) (title "x") (mode "a")))
+(Leaf ^{:name "l"} t-leaf)
+(Node ^{:name "n"} t-node {:one-ref t-leaf :title "x" :mode "a"})
 
 (defn- reflected []
   (g/with-grammar (a/assemble-vars [#'t-leaf #'t-node])))

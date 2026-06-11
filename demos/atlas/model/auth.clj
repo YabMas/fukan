@@ -19,38 +19,37 @@
 ;; ── style A: the execution-function graph ─────────────────────────────────────
 
 ;; Tiers — foundation ← service ← api (each :over the one beneath it)
-(def foundation (Tier "foundation"))
-(def service    (Tier "service" (over foundation)))
-(def api        (Tier "api"     (over service)))
+(Tier foundation)
+(Tier service {:over foundation})
+(Tier api     {:over service})
 
 ;; Domains
-(def auth  (Domain "auth"))
-(def users (Domain "users"))
+(Domain auth)
+(Domain users)
 
 ;; Operations
-(def validate (Operation "validate"))
-(def fetch    (Operation "fetch"))
-(def handle   (Operation "handle"))
+(Operation validate)
+(Operation fetch)
+(Operation handle)
 
 ;; Functions — every dep points downward or sideways across tiers
-(def validate-token (ExecutionFunction "validate-token"
-                      (domain auth) (tier service) (operation validate)))
-(def get-user       (ExecutionFunction "get-user"
-                      (domain users) (tier service) (operation fetch)
-                      (deps validate-token)))
-(def login-endpoint (ExecutionFunction "login-endpoint"
-                      (domain auth) (tier api) (operation handle)
-                      (deps validate-token get-user)))
+(ExecutionFunction validate-token
+  {:domain auth :tier service :operation validate})
+(ExecutionFunction get-user
+  {:domain users :tier service :operation fetch
+   :deps   [validate-token]})
+(ExecutionFunction login-endpoint
+  {:domain auth :tier api :operation handle
+   :deps   [validate-token get-user]})
 
 ;; ── style B: the same identity carried as an open aspect set ──────────────────
 
-(def domain-axis (Axis "domain"))
-(def tier-axis   (Axis "tier"))
+(Axis ^{:name "domain"} domain-axis)
+(Axis ^{:name "tier"}   tier-axis)
 
-(def auth-aspect    (Aspect "auth"    (axis domain-axis)))
-(def service-aspect (Aspect "service" (axis tier-axis)))
+(Aspect ^{:name "auth"}    auth-aspect    {:axis domain-axis})
+(Aspect ^{:name "service"} service-aspect {:axis tier-axis})
 
-(def token-validator (Faceted "token-validator"
-                       (aspects auth-aspect service-aspect)))
+(Faceted token-validator {:aspects [auth-aspect service-aspect]})
 
 (defn build [] (a/assemble ['demos.atlas.model.auth]))

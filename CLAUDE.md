@@ -100,8 +100,7 @@ A `defstructure` is a composition of **slots** plus **laws**:
 - Slots are ONE map of `rel → type-expr`; cardinality is a quantifier: a bare target
   is one (`:reads Model`), `[:? T]` optional, `[:* T]` zero+ ordered, `[:+ T]` one+
   ordered, `[:set T]` unordered (no `:rel/order`; order and duplicate targets are
-  excluded from value identity). Multi-slots author as varargs — authoring order IS
-  the sequence order, recorded as `:rel/order`. A scalar target (`:Bool`/`:Int`/
+  excluded from value identity). A scalar target (`:Bool`/`:Int`/
   `:String`) stores a leaf value with an auto-generated type-check law; any other
   vector (`[:enum "a" "b"]`, `[:int {:min 1}]`) is a REFINED scalar: the core stores
   the type form verbatim and the generated law checks values through the registered
@@ -110,9 +109,18 @@ A `defstructure` is a composition of **slots** plus **laws**:
 - Slot options ride the props position: `[:? {:payload :q} :String]` (`:payload` =
   a companion code-form stored as a sibling `:val/` datom); for cardinality one,
   lead with the props map: `[{:payload :q} :String]`. `(reader f)` expands authoring
-  data-literals (e.g. the malli dialect's Schema expands native malli forms). A
-  reified relation's label comes from an authored `[label target]` element, not a
-  slot option.
+  data-literals (e.g. the malli dialect's Schema expands native malli forms); a
+  `(syntax f)` hook (map → map) rewrites an instance's slots map before parsing
+  (e.g. `lib.code/Operation` rewrites `:signature` into `:in`/`:out`).
+- INSTANCES mirror defstructure position-for-position: `(Structure name "doc"?
+  {slot → value}? nested…)` — a top-level def-emitting form (the symbol is the var
+  AND the entity name; `^{:name "…"}` metadata overrides, e.g. a name the var can't
+  carry). One map of `slot → value`: a plural slot takes a VECTOR of targets
+  (authoring order = `:rel/order`; the bracket mirrors the quantifier), a labelled
+  target is a `[label target]` pair, a payload slot takes `[value payload]`, reader
+  literals pass as values. Anonymous/inline instances are the same form without the
+  symbol: `(Structure "doc"? {…})`. Nested member instances trail where
+  defstructure's laws sit and route by target-type into the container's slots.
 - `^:value` structures are content-deduped, inline-anonymous nodes (structurally
   equal values collapse to one node) — used for nameless compound data.
 - `(law "desc" :offenders '[?x] :where '[…])` is a datalog constraint; `:scope

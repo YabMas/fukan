@@ -13,56 +13,54 @@
    because code is a projection of the model 1-on-1: the agent's integrity probe
    composes `check`, so `check` must exist in the model, not just in code.
 
-   (Concept instance vars are `c-`-prefixed so they don't shadow the `Concept`
-   constructor — fukan's own kernel modelled in fukan's own meta-vocab.)"
+   (Concept instance vars are `c-`-prefixed — `String` would shadow the class
+   referral — with `^{:name …}` restoring the concept names; fukan's own kernel
+   modelled in fukan's own meta-vocab.)"
   (:require [canvas.vocabulary.meta :refer [Concept MetaSlot]]
             [lib.code :refer [Kind Operation Module]]
             [canvas.realization.query-engine :as query-engine]))
 
 ;; leaf concepts — the scalar types the substrate's attributes carry
-(def c-Keyword (Concept "Keyword"))
-(def c-String  (Concept "String"))
-(def c-Int     (Concept "Int"))
-(def c-Node    (Concept "Node" (doc "An instance: identified by name + uuid, or by content when value-typed.")))
+(Concept ^{:name "Keyword"} c-Keyword)
+(Concept ^{:name "String"}  c-String)
+(Concept ^{:name "Int"}     c-Int)
+(Concept ^{:name "Node"}    c-Node
+  "An instance: identified by name + uuid, or by content when value-typed.")
 
 ;; the substrate seam: a reified slot relation (below the registry — reflection
 ;; cannot derive this; everything above it, lib.grammar does)
-(def c-Relation
-  (Concept "Relation"
-    (doc "A reified slot value — a kinded edge between Nodes, carrying optional label/order.")
-    (slot (MetaSlot (name "from")  (cardinality "one")      (of c-Node)))
-    (slot (MetaSlot (name "to")    (cardinality "one")      (of c-Node)))
-    (slot (MetaSlot (name "kind")  (cardinality "one")      (of c-Keyword)))
-    (slot (MetaSlot (name "label") (cardinality "optional") (of c-String)))
-    (slot (MetaSlot (name "order") (cardinality "optional") (of c-Int)))))
+(Concept ^{:name "Relation"} c-Relation
+  "A reified slot value — a kinded edge between Nodes, carrying optional label/order."
+  {:slot [(MetaSlot {:name "from"  :cardinality "one"      :of c-Node})
+          (MetaSlot {:name "to"    :cardinality "one"      :of c-Node})
+          (MetaSlot {:name "kind"  :cardinality "one"      :of c-Keyword})
+          (MetaSlot {:name "label" :cardinality "optional" :of c-String})
+          (MetaSlot {:name "order" :cardinality "optional" :of c-Int})]})
 
 ;; the kernel's one OPERATION (modelled with the op vocab): check runs every
 ;; structure's laws over the db and yields the violations that hold. This is
 ;; the canonical integrity inspect — the capability the agent's integrity probe
 ;; composes, so it lives in the model 1-on-1 with the code.
-(def StructureDb
-  (Kind (doc "The unified structure db — the data realization of the domain `Model` faculty
-              (canvas.domain.faculties): a datascript db of structure instances +
-              their reified relations. Owned here; every subsystem adopts this one Kind.")))
-(def Violation   (Kind))
-(def Rule        (Kind))
+(Kind StructureDb
+  "The unified structure db — the data realization of the domain `Model` faculty
+   (canvas.domain.faculties): a datascript db of structure instances +
+   their reified relations. Owned here; every subsystem adopts this one Kind.")
+(Kind Violation)
+(Kind Rule)
 
 ;; the rules-cut bridge: derive the datalog rules from the live vocabulary
 ;; (delegating to core.rules) — the rules check + the lens engine inject so
 ;; laws/lenses read at domain altitude.
-(def vocab-rules
-  (Operation
-    (doc "The datalog rules derived from the live vocabulary, injected into laws/lenses.")
-    (signature [:=> [:cat] [:vector Rule]])
-    (calls query-engine/derive-rules)))
-(def check
-  (Operation
-    (doc "Run every structure's laws over the model db; yield the violations.")
-    (signature [:=> [:catn [:db StructureDb]] [:vector Violation]])
-    (calls vocab-rules)))
+(Operation vocab-rules
+  "The datalog rules derived from the live vocabulary, injected into laws/lenses."
+  {:signature [:=> [:cat] [:vector Rule]]
+   :calls     [query-engine/derive-rules]})
+(Operation check
+  "Run every structure's laws over the model db; yield the violations."
+  {:signature [:=> [:catn [:db StructureDb]] [:vector Violation]]
+   :calls     [vocab-rules]})
 
-(def core-structure
-  (Module
-    (exposes check vocab-rules)                    ; the kernel capabilities others compose
-    (owns StructureDb Violation Rule)              ; the data-shapes core.structure decides (others adopt StructureDb)
-    (child c-Keyword c-String c-Int c-Node c-Relation)))
+(Module core-structure
+  {:exposes [check vocab-rules]                  ; the kernel capabilities others compose
+   :owns    [StructureDb Violation Rule]         ; the data-shapes core.structure decides (others adopt StructureDb)
+   :child   [c-Keyword c-String c-Int c-Node c-Relation]})

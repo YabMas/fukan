@@ -13,8 +13,8 @@
 (Module infra-model
   "The model lifecycle — load / get / refresh the held Model from a source path."
   (Operation load-model    "Build (or reload) the held Model from a src path."
-    (signature [:=> [:catn [:src extraction/Path]] kernel/StructureDb]))
+    {:signature [:=> [:catn [:src extraction/Path]] kernel/StructureDb]})
   (Operation get-model     "The current held Model, or none."
-    (signature [:=> [:cat] kernel/StructureDb]))
+    {:signature [:=> [:cat] kernel/StructureDb]})
   (Operation refresh-model "Rebuild the Model from the last src path."
-    (signature [:=> [:cat] kernel/StructureDb])))
+    {:signature [:=> [:cat] kernel/StructureDb]}))

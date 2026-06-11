@@ -28,7 +28,7 @@
 (def schema
   {:entity/id    {:db/unique :db.unique/identity}
    :entity/name  {:db/index true}
-   :entity/doc   {}                                            ; instance documentation (the (doc ...) clause)
+   :entity/doc   {}                                            ; instance documentation (the docstring position)
    :structure/of {:db/index true}                              ; the structure tag of an instance
    ;; reified slot relations — the seam carrying :rel/label / :rel/order
    :rel/id       {:db/unique :db.unique/identity}
@@ -84,10 +84,6 @@
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
 (defn- slot-for [sdef rel] (first (filter #(= rel (:rel %)) (:slots sdef))))
-
-;; Universal built-in clauses are not slots — they set scalar attributes on the
-;; instance node rather than emitting relations.
-(def ^:private builtin-clauses #{'doc})
 
 
 ;; ── value-authoring: instance-form / value-form ──────────────────────────────
@@ -164,21 +160,65 @@
          parsed     (mapv parse-elem args)]
      [(mapv :label parsed) (mapv :target parsed)])))
 
+(defn- map-entry->clause
+  "One slots-map entry `slot → value` → the internal clause form. The encoding is
+   schema-driven — the slot's declared quantifier/payload disambiguates the value:
+
+     :one/:optional    bare value         (k v)         a `[label target]` pair stays one element
+     :many/:some/:set  vector of targets  (k v1 v2 …)   the bracket mirrors the quantifier
+     payload slot      [value payload]    (k value payload)"
+  [tag sdef [k v]]
+  (let [slot (slot-for sdef k)
+        head (symbol (clojure.core/name k))]
+    (when-not slot
+      (throw (ex-info (str (clojure.core/name tag) ": `" (clojure.core/name k) "` is not a slot")
+                      {:tag tag :rel k})))
+    (cond
+      (and (scalar-slot? slot) (:payload slot) (vector? v))
+      (do (when-not (= 2 (count v))
+            (throw (ex-info (str (clojure.core/name tag) "." (clojure.core/name k)
+                                 ": a payload slot takes [value payload] — got " (pr-str v))
+                            {:tag tag :rel k})))
+          (list head (first v) (second v)))
+
+      (scalar-slot? slot) (list head v)
+
+      (#{:many :some :set} (:card slot))
+      (do (when-not (or (vector? v) (set? v))
+            (throw (ex-info (str (clojure.core/name tag) "." (clojure.core/name k)
+                                 ": a plural slot takes a vector of targets — got " (pr-str v))
+                            {:tag tag :rel k})))
+          (cons head (seq v)))
+
+      :else (list head v))))
+
+(defn- map->clauses
+  "The {slot → value} authoring map → the internal clause IR (which readers and
+   nesting also feed). The map is the author surface; clauses are the mechanism."
+  [tag sdef m]
+  (mapv #(map-entry->clause tag sdef %) m))
+
+(defn- apply-syntax
+  "Run the structure's instance-level `(syntax f)` hook over the authored slots
+   map — f : map → map (e.g. Operation rewrites :signature into :in/:out). The
+   transform lives in the vocab; core just invokes it."
+  [sdef m]
+  (if-let [syn (:syntax sdef)] (syn m) m))
+
 (defn- build-instance-form
-  "Shared clause-walker for `instance-form` and `value-form`. Builds the
-   `->InstanceValue` call with `name-expr` (a string form or nil-literal) and
-   `value?-expr` (true/false literal). Validates slot names; separates scalar
-   clauses from relation clauses; emits target-capture forms via `ref-arg->form`.
+  "Shared clause-walker behind `instance-form`, `value-form` and `expand-instance`.
+   Builds the `->InstanceValue` call with `name-expr` (a string form or nil-literal),
+   `doc` (a string or nil) and `value?-expr` (true/false literal). Validates slot
+   names; separates scalar clauses from relation clauses; emits target-capture
+   forms via `ref-arg->form`.
 
    §2.1 reader-slot exception: when a slot's target structure declares a `:reader`,
    data literals (symbol/vector/map, not inline `(Tag …)` seqs) in that slot are
    expanded via the reader at macroexpansion time and inlined as value-forms."
-  [tag name-expr value?-expr body]
+  [tag name-expr doc value?-expr clauses]
   (let [sdef    (structure-by-tag tag)
         _       (when-not sdef
                   (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
-        doc     (some (fn [c] (when (and (seq? c) (= 'doc (first c))) (second c))) body)
-        clauses (remove #(contains? builtin-clauses (first %)) body)
         scalar? (fn [c] (let [s (slot-for sdef (keyword (first c)))] (and s (scalar-slot? s))))
         scalars (into {} (for [c clauses :when (scalar? c)
                                :let [slot (slot-for sdef (keyword (first c)))]
@@ -206,32 +246,45 @@
     `(->InstanceValue ~tag ~name-expr ~doc ~scalars ~rels ~value?-expr)))
 
 (defn instance-form
-  "Macroexpansion-time: build the (->InstanceValue ...) form for an entity instance.
-   An optional leading string literal is the entity's name. When it is absent the
-   name is nil and the assembler derives `:entity/name` from the binding var's simple
-   name — so `(def survey (Lens (focus …)))` names the node \"survey\" with no
-   redundant string. Pass a name only to override (e.g. a dotted module name, or a
-   var renamed to dodge a collision)."
+  "Macroexpansion-time: build the (->InstanceValue ...) form for an EXPRESSION-position
+   entity instance — `(Tag \"doc\"? {slot → value}?)`, mirroring defstructure's
+   docstring + one-map shape. The name is always nil: the assembler derives
+   `:entity/name` from the binding var's simple name; a named top-level instance
+   authors as the def-emitting `(Tag sym …)` form (see `expand-instance`)."
   [tag args]
-  (let [named?    (string? (first args))
-        name-expr (when named? (first args))
-        body      (if named? (rest args) args)
-        ;; a structure may own instance-level authoring sugar via (syntax f): f rewrites the
-        ;; body before clause-parsing (e.g. Operation's `[in] -> out` → (in …)/(out …)). The
-        ;; transform lives in the vocab; core just invokes it.
-        body      (if-let [syn (:syntax (structure-by-tag tag))] (syn body) body)]
-    (build-instance-form tag name-expr false body)))
+  (let [sdef (structure-by-tag tag)
+        _    (when-not sdef
+               (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
+        doc  (when (string? (first args)) (first args))
+        body (if doc (rest args) args)]
+    (when-not (or (empty? body) (and (map? (first body)) (empty? (rest body))))
+      (throw (ex-info (str (clojure.core/name tag) ": an instance is `("
+                           (clojure.core/name tag) " \"doc\"? {slot → value}?)` — got "
+                           (pr-str (vec body)))
+                      {:tag tag :body (vec body)})))
+    (build-instance-form tag nil doc false
+                         (map->clauses tag sdef (apply-syntax sdef (or (first body) {}))))))
 
 (defn value-form
-  "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance.
-   Anonymous (name=nil) and content-identified (value?=true)."
+  "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance —
+   anonymous (name=nil) and content-identified (value?=true). The author surface is
+   `(Tag {slot → value})`; a clause-vector body is the internal IR readers emit
+   (`reader-arg->form` calls this with the reader's expansion)."
   [tag body]
-  (build-instance-form tag nil true body))
+  (let [sdef (structure-by-tag tag)]
+    (when-not sdef
+      (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
+    (if (and (= 1 (count body)) (map? (first body)))
+      (build-instance-form tag nil nil true
+                           (map->clauses tag sdef (apply-syntax sdef (first body))))
+      (build-instance-form tag nil nil true body))))
 
-;; ── nesting: a container instance lifts nested named instances to sibling defs ──
-;; `(Module infra-model "doc" (Operation load-model …) …)` is a TOP-LEVEL def-emitting form:
-;; the leading symbol is the name AND the var; nested `(Tag sym …)` instances become sibling
-;; `def`s (so cross-refs stay VAR-refs) and route by target-type into the container's slots.
+;; ── the named-instance surface: def-emitting, defstructure's mirror ──────────
+;; `(Tag sym "doc"? {slot → value}? nested…)` is a TOP-LEVEL def-emitting form — the
+;; instance surface mirrors defstructure position-for-position (name symbol, docstring,
+;; one map; nested member instances trail where defstructure's laws do). The symbol is
+;; the var AND the entity name; nested `(Tag sym …)` instances become sibling `def`s
+;; (so cross-refs stay VAR-refs) and route by target-type into the container's slots.
 
 (defn- resolve-struct-tag
   "Resolve a slot/nesting target SYMBOL to its ns-qualified structure tag — the structure's
@@ -265,26 +318,36 @@
 (declare expand-instance)
 
 (defn expand-instance
-  "Def-emitting + nesting expansion of `(sym \"doc\"? body…)` for structure `tag`. Returns
-   {:defs [forms] :sym :tag}: nested named instances are lifted to sibling `def`s (cross-refs stay
-   var-refs) and routed by target-type into the container's slots; this instance's `def` is last.
-   The leading symbol is the name AND the var; a bare string after it is the doc."
+  "Def-emitting + nesting expansion of `(sym \"doc\"? {slot → value}? nested…)` for
+   structure `tag` — the named-instance authoring surface. Returns {:defs [forms] :sym :tag}:
+   nested named instances are lifted to sibling `def`s (cross-refs stay var-refs) and routed
+   by target-type into the container's slots; this instance's `def` is last. The leading
+   symbol is the name AND the var; `^{:name \"…\"}` metadata on it overrides the entity
+   name (the rare case: a name the var can't carry, or same-named instances across cases)."
   [tag args]
   (let [sym   (first args)
         more  (rest args)
         doc   (when (string? (first more)) (first more))
         body  (if doc (rest more) more)
         sdef  (structure-by-tag tag)
-        body  (if-let [syn (:syntax sdef)] (syn body) body)
+        _     (when-not sdef
+                (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
         nests (filter nested-instance? body)
         cls   (remove nested-instance? body)
+        _     (when-not (or (empty? cls) (and (map? (first cls)) (empty? (rest cls))))
+                (throw (ex-info (str (clojure.core/name tag) " " sym ": an instance is `("
+                                     (clojure.core/name tag)
+                                     " name \"doc\"? {slot → value}? nested…)` — got "
+                                     (pr-str (vec cls)))
+                                {:tag tag :sym sym :body (vec cls)})))
+        m     (apply-syntax sdef (or (first cls) {}))
         kids  (mapv (fn [nf] (assoc (expand-instance (resolve-struct-tag (first nf)) (rest nf))
                                     :private? (boolean (:private (meta (second nf)))))) nests)
         routed (->> kids
                     (group-by #(route-slot sdef (:tag %) (:private? %)))
                     (map (fn [[rel ks]] (cons (symbol (name rel)) (map :sym ks)))))
-        clauses (concat (when doc [(list 'doc doc)]) cls routed)
-        value   (build-instance-form tag (name sym) false clauses)]
+        clauses (concat (map->clauses tag sdef m) routed)
+        value   (build-instance-form tag (or (:name (meta sym)) (name sym)) doc false clauses)]
     ;; forward-declare the nested syms so they may cross-reference each other (and the parent
     ;; reference them) in any authoring order — `(var X)` captures the var; its value is read
     ;; later, at assemble time, once every def has run.
@@ -517,9 +580,15 @@
         :gives Type}
        (law \"...\" :offenders '[?f] :where '[...] :rules '[...]?))
 
-   Instantiate with the generated macro, slot names as clause heads (multi-slots
-   take varargs; authoring order is the sequence order):
-     (Function \"load-model\" (takes [src String] [out String]) (gives Model))
+   Instantiate with the generated macro — the instance surface MIRRORS defstructure:
+   a name symbol (the var AND the entity name; `^{:name \"…\"}` meta overrides), an
+   optional docstring, ONE {slot → value} map, then nested member instances where
+   defstructure's laws would sit. A plural slot takes a vector (authoring order is
+   the sequence order); a labelled target is a `[label target]` pair; a payload
+   slot takes `[value payload]`:
+     (Function load-model \"doc\" {:takes [[src String] [out String]] :gives Model})
+   The same form without the symbol is an anonymous EXPRESSION instance (inline
+   values, def-wrapped instances): (Function \"doc\"? {slot → value}?)
 
    Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
    (includes ...) / (realized-as ...); anything else is rejected at macro-expansion
@@ -582,9 +651,9 @@
                       (fukan.canvas.core.structure/value-form ~tag body#))
           :else    `(defmacro ~sname ~docstring [& args#]
                       (if (symbol? (first args#))
-                        ;; def-emitting + nesting: `(Tag sym …)` interns the var, lifts nested
+                        ;; def-emitting + nesting: `(Tag sym "doc"? {…} nested…)` interns the var
                         (cons 'do (:defs (fukan.canvas.core.structure/expand-instance ~tag args#)))
-                        ;; value form: `(def x (Tag …))` / `(Tag "name" …)`
+                        ;; expression form: `(Tag "doc"? {…})` — anonymous / def-wrapped
                         (fukan.canvas.core.structure/instance-form ~tag args#)))))))
 
 (defmacro defrelation-coproduct

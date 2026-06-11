@@ -18,10 +18,10 @@
 ;; ── case 1: unreachable step ──────────────────────────────────────────────────
 
 (declare c1-b)
-(def c1-a      (Step "a"      (next c1-b)))
-(def c1-b      (Step "b"))                        ; terminal
-(def c1-orphan (Step "orphan"))                   ; a :step, but nothing reaches it
-(def c1-w      (Workflow "w" (start c1-a) (step c1-a) (step c1-b) (step c1-orphan)))
+(Step ^{:name "a"} c1-a {:next [c1-b]})
+(Step ^{:name "b"} c1-b)                          ; terminal
+(Step ^{:name "orphan"} c1-orphan)                ; a :step, but nothing reaches it
+(Workflow ^{:name "w"} c1-w {:start c1-a :step [c1-a c1-b c1-orphan]})
 
 (deftest unreachable-step-is-caught
   (testing "a step in the workflow that the start cannot reach trips the reachability law"
@@ -33,10 +33,10 @@
 ;; declarations.  c2-c is declared forward because a references it before its def.
 
 (declare c2-a c2-b c2-c)
-(def c2-a (Step "a" (next c2-b c2-c)))             ; fork; forward refs
-(def c2-b (Step "b" (next c2-a)))                  ; back-edge to the start
-(def c2-c (Step "c"))                              ; terminal — so the no-terminal law is NOT what fires
-(def c2-w (Workflow "w" (start c2-a) (step c2-a) (step c2-b) (step c2-c)))
+(Step ^{:name "a"} c2-a {:next [c2-b c2-c]})       ; fork; forward refs
+(Step ^{:name "b"} c2-b {:next [c2-a]})            ; back-edge to the start
+(Step ^{:name "c"} c2-c)                           ; terminal — so the no-terminal law is NOT what fires
+(Workflow ^{:name "w"} c2-w {:start c2-a :step [c2-a c2-b c2-c]})
 
 (deftest edge-back-to-start-is-caught
   (testing "a transition back to the start step — re-entering the entry — is caught"
@@ -47,10 +47,10 @@
 ;; a and b form a mutual loop (a→b, b→a); entry feeds in but is not in the loop.
 
 (declare c3-a c3-b)
-(def c3-entry (Step "entry" (next c3-a)))
-(def c3-a     (Step "a"     (next c3-b)))
-(def c3-b     (Step "b"     (next c3-a)))          ; a⇄b loop; entry feeds in but isn't in the loop
-(def c3-w     (Workflow "w" (start c3-entry) (step c3-entry) (step c3-a) (step c3-b)))
+(Step ^{:name "entry"} c3-entry {:next [c3-a]})
+(Step ^{:name "a"} c3-a {:next [c3-b]})
+(Step ^{:name "b"} c3-b {:next [c3-a]})            ; a⇄b loop; entry feeds in but isn't in the loop
+(Workflow ^{:name "w"} c3-w {:start c3-entry :step [c3-entry c3-a c3-b]})
 
 (deftest workflow-with-no-terminal-is-caught
   (testing "a workflow whose steps loop forever — no terminal — is caught (cycle off the start)"

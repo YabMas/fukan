@@ -23,19 +23,23 @@
 
 ;; module m: x links to y and z; module other: q
 (declare w-y w-z)
-(def w-x     (Widget "x" (links w-y w-z)))
-(def w-y     (Widget "y"))
-(def w-z     (Widget "z"))
-(def w-m     (Grp "m" (child w-x w-y w-z)))
-(def w-q     (Widget "q"))
-(def w-other (Grp "other" (child w-q)))
+(Widget ^{:name "x"} w-x {:links [w-y w-z]})
+(Widget ^{:name "y"} w-y)
+(Widget ^{:name "z"} w-z)
+(Grp ^{:name "m"} w-m {:child [w-x w-y w-z]})
+(Widget ^{:name "q"} w-q)
+(Grp ^{:name "other"} w-other {:child [w-q]})
 
-(def lns-in-m    (Lens "in-m"    (focus "widgets in m")))
-(def lns-x-links (Lens "x-links" (focus "what x links to")))
-(def lns-prose   (Lens "prose"   (focus "just words")))
+(Lens ^{:name "in-m"}    lns-in-m    {:focus "widgets in m"})
+(Lens ^{:name "x-links"} lns-x-links {:focus "what x links to"})
+(Lens ^{:name "prose"}   lns-prose   {:focus "just words"})
 ;; the executable selections that realize them (live in the realization view)
-(def sel-in-m    (LensSelection (realizes lns-in-m)    (selects "widgets in m" '[(Widget ?n) (in-module ?n "m")])))
-(def sel-x-links (LensSelection (realizes lns-x-links) (selects "x's links" '[(named ?root "x") (links ?root ?n)])))
+(LensSelection sel-in-m
+  {:realizes lns-in-m
+   :selects  ["widgets in m" '[(Widget ?n) (in-module ?n "m")]]})
+(LensSelection sel-x-links
+  {:realizes lns-x-links
+   :selects  ["x's links" '[(named ?root "x") (links ?root ?n)]]})
 
 (deftest evaluates-a-lens-selection-query-to-its-focus-node-set
   (testing "a lens's realizing selection query (over the vocab rules) yields the focus nodes"

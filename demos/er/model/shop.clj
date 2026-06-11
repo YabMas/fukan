@@ -10,23 +10,23 @@
   (:require [fukan.canvas.core.assemble :as a]
             [demos.er.vocab.core :refer [DataType Attribute Relationship Entity]]))
 
-(def StrType (DataType "String"))
-(def IntType (DataType "Int"))
+(DataType ^{:name "String"} StrType)
+(DataType ^{:name "Int"} IntType)
 
 ;; User
-(def attr-name (Attribute "name"  (type StrType) (required true)))
-(def email     (Attribute (type StrType) (required true) (unique? true)))
-(def User      (Entity (attr attr-name) (attr email)))
+(Attribute ^{:name "name"} attr-name {:type StrType :required true})
+(Attribute email {:type StrType :required true :unique? true})
+(Entity User {:attr [attr-name email]})
 
 ;; Product
-(def title   (Attribute (type StrType) (required true)))
-(def price   (Attribute (type IntType) (required true)))
-(def Product (Entity (attr title) (attr price)))
+(Attribute title {:type StrType :required true})
+(Attribute price {:type IntType :required true})
+(Entity Product {:attr [title price]})
 
 ;; Order — references User and Product
-(def total     (Attribute (type IntType)))
-(def placed-by (Relationship (target User)))
-(def contains  (Relationship (target Product)))
-(def Order     (Entity (attr total) (rel placed-by) (rel contains)))
+(Attribute total {:type IntType})
+(Relationship placed-by {:target User})
+(Relationship contains {:target Product})
+(Entity Order {:attr [total] :rel [placed-by contains]})
 
 (defn build [] (a/assemble ['demos.er.model.shop]))

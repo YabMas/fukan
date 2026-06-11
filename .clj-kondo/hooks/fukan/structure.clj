@@ -2,13 +2,14 @@
   "clj-kondo hooks for the defstructure DSL (fukan.canvas.core.structure).
 
    defstructure defines a structure (slots + laws) AND a macro named for the
-   structure used to author instances. Its body — (slot :rel (card Target) …)
-   and (law …) — and the instance clauses — (takes [x Int]) … — are data, not
-   code, so clj-kondo's default analysis flags every bare symbol. These hooks
-   rewrite both forms into something analyzable:
+   structure used to author instances. Its body — the slots map and (law …) —
+   and the instance {slot → value} map (by-name target/label symbols, datalog
+   payloads) are data, not code, so clj-kondo's default analysis flags every
+   bare symbol. These hooks rewrite both forms into something analyzable:
 
-     (defstructure Name \"doc\" body…)   → (def Name \"doc\")   ; Name resolves; body dropped
-     (Name \"inst\" clauses…)            → (do \"inst\")         ; clauses dropped
+     (defstructure Name \"doc\" body…)    → (declare Name)        ; Name resolves; body dropped
+     (Name sym \"doc\"? {…} nested…)      → (declare sym …kids)   ; def-emitting: vars resolve
+     (Name \"doc\"? {…})                  → (Name \"doc\"?)         ; expression: body dropped
 
    Each generated instance macro is registered against `instance` in
    .clj-kondo/config.edn by its fully-qualified name (clj-kondo can't discover
@@ -23,16 +24,34 @@
   (let [name-node (second (:children node))]
     {:node (api/list-node [(api/token-node 'declare) name-node])}))
 
-(defn instance
-  "(Structure \"name\" & clauses) → (Structure \"name\"): keep the call to the
-   (declared) structure var and its name; drop the slot-clause DSL (bare slot
-   names + by-name target/label symbols) rather than lint it as code. Staying a
-   call avoids the unused-value flag a bare literal would draw in a body.
+(defn- instance-syms
+  "The name symbols a def-emitting instance form interns: its own (the second
+   child) plus, recursively, every nested `(Tag sym …)` member's."
+  [node]
+  (let [[_ sym & body] (:children node)
+        sym-node? (fn [n] (and n (try (symbol? (api/sexpr n)) (catch Exception _ false))))]
+    (into [sym]
+          (mapcat (fn [c]
+                    (when (and (= :list (api/tag c))
+                               (let [[h s] (:children c)]
+                                 (and (sym-node? h) (sym-node? s))))
+                      (instance-syms c)))
+                  body))))
 
-   A `^:value` structure has NO name — its second child is already a clause
-   (`(Shp (kind \"leaf\"))`), so keep only the head unless the second child is a
-   string literal, else the clause body would be linted as code."
+(defn instance
+  "Instance authoring is data, not code — rewrite to the analyzable skeleton.
+
+   Def-emitting `(Structure sym \"doc\"? {…} nested…)` → `(declare sym …kids)`:
+   the interned vars resolve (declare draws no unused-public-var); the slots map
+   (by-name targets, labels, datalog payloads) is dropped rather than linted.
+
+   Expression `(Structure \"doc\"? {…})` → `(Structure \"doc\"?)`: keep the call to
+   the (declared) structure var; staying a call avoids the unused-value flag a
+   bare literal would draw in a body."
   [{:keys [node]}]
   (let [[head x] (:children node)
-        name? (and x (api/token-node? x) (string? (api/sexpr x)))]
-    {:node (api/list-node (if name? [head x] [head]))}))
+        sexpr-of (fn [n] (when n (try (api/sexpr n) (catch Exception _ nil))))]
+    (if (symbol? (sexpr-of x))
+      ;; ^{:name "…"}-meta'd name symbols are meta nodes, not token nodes — hence sexpr
+      {:node (api/list-node (into [(api/token-node 'declare)] (instance-syms node)))}
+      {:node (api/list-node (if (string? (sexpr-of x)) [head x] [head]))})))

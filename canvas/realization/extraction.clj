@@ -14,6 +14,8 @@
               flows in from the CLI → build-model → run-extractor).")
   (Kind Unit)
   (Operation register-extractor! "Register the project's extractor (a fn Path → StructureDb)."
-    (signature [:=> [:catn [:f Extractor]] Unit]) (performs :state))
+    {:signature [:=> [:catn [:f Extractor]] Unit]
+     :performs  [:state]})
   (Operation run-extractor "Run the registered extractor over a code-root → its structure db."
-    (signature [:=> [:catn [:code-root Path]] kernel/StructureDb]) (performs :state)))
+    {:signature [:=> [:catn [:code-root Path]] kernel/StructureDb]
+     :performs  [:state]}))

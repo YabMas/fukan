@@ -41,50 +41,59 @@
    :calls    [:* Operation]})
 
 ;; ── lens selections ──────────────────────────────────────────────────────────
-(def s-survey      (LensSelection (realizes lens/survey)
-                     (selects "every node" '[[?n :structure/of _]])))
-(def s-patterns    (LensSelection (realizes lens/patterns)
-                     (selects "every relation source" '[[?r :rel/from ?n]])))
-(def s-consistency (LensSelection (realizes lens/consistency)
-                     (selects "the contract-bearing authored operations"
-                       '[(Operation ?n) (not [?n :val/extracted true])])))
-(def s-tar-pit     (LensSelection (realizes lens/tar-pit)
-                     (selects "the call-graph callers" '[(calls ?n ?callee)])))
-(def s-integrity   (LensSelection (realizes lens/integrity)
-                     (selects "the whole model" '[[?n :structure/of _]])))
-(def s-coverage    (LensSelection (realizes lens/coverage)
-                     (selects "the extracted code operations"
-                       '[(Operation ?n) [?n :val/extracted true]])))
-(def s-drift       (LensSelection (realizes lens/drift)
-                     (selects "authored operations with no extracted twin"
-                       '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)
-                         (not (Operation ?o) [?o :val/extracted true] (named ?o ?nm) (in-module ?o ?km)
-                              [(fukan.target.correspondence/module-corresponds? ?cm ?km)])])))
+(LensSelection s-survey
+  {:realizes lens/survey
+   :selects  ["every node" '[[?n :structure/of _]]]})
+(LensSelection s-patterns
+  {:realizes lens/patterns
+   :selects  ["every relation source" '[[?r :rel/from ?n]]]})
+(LensSelection s-consistency
+  {:realizes lens/consistency
+   :selects  ["the contract-bearing authored operations"
+              '[(Operation ?n) (not [?n :val/extracted true])]]})
+(LensSelection s-tar-pit
+  {:realizes lens/tar-pit
+   :selects  ["the call-graph callers" '[(calls ?n ?callee)]]})
+(LensSelection s-integrity
+  {:realizes lens/integrity
+   :selects  ["the whole model" '[[?n :structure/of _]]]})
+(LensSelection s-coverage
+  {:realizes lens/coverage
+   :selects  ["the extracted code operations"
+              '[(Operation ?n) [?n :val/extracted true]]]})
+(LensSelection s-drift
+  {:realizes lens/drift
+   :selects  ["authored operations with no extracted twin"
+              '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)
+                (not (Operation ?o) [?o :val/extracted true] (named ?o ?nm) (in-module ?o ?km)
+                     [(fukan.target.correspondence/module-corresponds? ?cm ?km)])]]})
 
 ;; ── finding checks (the executable holds) ────────────────────────────────────
-(def c-patterns
-  (FindingCheck (realizes probe/Patterns)
-    (enforces "no recurring structure anywhere ⇒ no patterns reported"
-      (fn [result target-db]
-        (or (empty? (:observations result))
-            (seq (datascript.core/q
-                   '[:find ?ft ?k ?tt
-                     :where [?r1 :rel/from ?f1] [?r1 :rel/kind ?k] [?r1 :rel/to ?t1]
-                            [?f1 :structure/of ?ft] [?t1 :structure/of ?tt]
-                            [?r2 :rel/from ?f2] [?r2 :rel/kind ?k] [?r2 :rel/to ?t2]
-                            [?f2 :structure/of ?ft] [?t2 :structure/of ?tt]
-                            [(not= ?r1 ?r2)]]
-                   target-db)))))))
-(def c-integrity
-  (FindingCheck (realizes probe/IntegrityReport)
-    (enforces "no law violations ⇒ no violations reported"
-      (fn [result target-db]
-        (or (empty? (:observations result))
-            (seq (fukan.canvas.core.structure/check target-db)))))))
+(FindingCheck c-patterns
+  {:realizes probe/Patterns
+   :enforces ["no recurring structure anywhere ⇒ no patterns reported"
+              (fn [result target-db]
+                (or (empty? (:observations result))
+                    (seq (datascript.core/q
+                           '[:find ?ft ?k ?tt
+                             :where [?r1 :rel/from ?f1] [?r1 :rel/kind ?k] [?r1 :rel/to ?t1]
+                                    [?f1 :structure/of ?ft] [?t1 :structure/of ?tt]
+                                    [?r2 :rel/from ?f2] [?r2 :rel/kind ?k] [?r2 :rel/to ?t2]
+                                    [?f2 :structure/of ?ft] [?t2 :structure/of ?tt]
+                                    [(not= ?r1 ?r2)]]
+                           target-db))))]})
+(FindingCheck c-integrity
+  {:realizes probe/IntegrityReport
+   :enforces ["no law violations ⇒ no violations reported"
+              (fn [result target-db]
+                (or (empty? (:observations result))
+                    (seq (fukan.canvas.core.structure/check target-db))))]})
 
 ;; ── probe compositions (the kernel capabilities a probe invokes) ─────────────
-(def k-integrity (ProbeComposition (realizes probe/integrity) (calls kernel/check)))
+(ProbeComposition k-integrity
+  {:realizes probe/integrity
+   :calls    [kernel/check]})
 
-(def realization
-  (Grouping (child s-survey s-patterns s-consistency s-tar-pit s-integrity s-coverage s-drift
-                 c-patterns c-integrity k-integrity)))
+(Grouping realization
+  {:child [s-survey s-patterns s-consistency s-tar-pit s-integrity s-coverage s-drift
+           c-patterns c-integrity k-integrity]})

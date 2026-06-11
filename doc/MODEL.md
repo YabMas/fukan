@@ -71,9 +71,11 @@ A law is a datalog constraint: `(law "desc" :offenders '[?x] :where '[…])`.
 
 `defstructure` registers each structure (its slots, laws, value-ness, reader,
 syntax hook) in a global table, keyed by the **namespace-qualified tag**, and
-defines a value-returning instance macro. Instances author as top-level `def`s;
-references are ordinary var references; the global assembler (`assemble-vars`)
-scans the interned vars into one db. `all-structures` and `vocab-rules` expose the
+defines an instance macro mirroring defstructure's own shape: `(Structure name
+"doc"? {slot → value}? nested…)` is a top-level def-emitting form (the symbol is
+the var and the entity name); without the name symbol it is an anonymous
+expression instance. References are ordinary var references; the global assembler
+(`assemble-vars`) scans the interned vars into one db. `all-structures` and `vocab-rules` expose the
 registry as data — and the registry is also **reflected onto the graph itself** on
 every build (`lib.grammar/with-grammar`): Structure nodes, slots as
 `:slot/<card>`-kinded labeled edges, laws as payload-carrying nodes — so the

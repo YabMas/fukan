@@ -18,21 +18,21 @@
 
 ;; ── reader-expanded instances (native malli literals auto-expanded via read-malli) ──
 
-(def port  (SchemaHolder "port"  (schema [:int {:min 1 :max 65535}])))
-(def email (SchemaHolder "email" (schema [:string {:re "@"}])))
-(def tags  (SchemaHolder "tags"  (schema [:vector :keyword])))
-(def addr  (SchemaHolder "addr"  (schema [:map [:street :string] [:zip {:optional true} :string]])))
-(def color (SchemaHolder "color" (schema [:enum :red :green :blue])))
+(SchemaHolder port  {:schema [:int {:min 1 :max 65535}]})
+(SchemaHolder email {:schema [:string {:re "@"}]})
+(SchemaHolder tags  {:schema [:vector :keyword]})
+(SchemaHolder addr  {:schema [:map [:street :string] [:zip {:optional true} :string]]})
+(SchemaHolder color {:schema [:enum :red :green :blue]})
 ;; A real named Kind — a ref schema names it via a :names edge (var-captured here).
-(def sock  (Kind "Socket"))
-(def ref-k (SchemaHolder "ref-k" (schema sock)))  ; bare symbol -> :ref schema naming the Socket Kind
-(def combo (SchemaHolder "combo" (schema [:or :int :string])))
-(def tup   (SchemaHolder "tup"   (schema [:tuple :int :int :string])))
+(Kind ^{:name "Socket"} sock)
+(SchemaHolder ref-k {:schema sock})  ; bare symbol -> :ref schema naming the Socket Kind
+(SchemaHolder combo {:schema [:or :int :string]})
+(SchemaHolder tup   {:schema [:tuple :int :int :string]})
 
 ;; ── collection / map schemas over a named Kind ──
-(def file-k (Kind "File"))
-(def lst    (SchemaHolder "lst" (schema [:vector file-k])))           ; vector of ref(File)
-(def rec    (SchemaHolder "rec" (schema [:map [:a [:vector file-k]]]))) ; map of field a: vector-of-ref(File)
+(Kind ^{:name "File"} file-k)
+(SchemaHolder lst {:schema [:vector file-k]})            ; vector of ref(File)
+(SchemaHolder rec {:schema [:map [:a [:vector file-k]]]}) ; map of field a: vector-of-ref(File)
 
 (defn- build []
   (a/assemble-vars [#'port #'email #'tags #'addr #'color #'sock #'ref-k #'combo #'tup
@@ -40,7 +40,7 @@
 
 ;; A ref Schema built INLINE (an `(Schema …)` seq bypasses the reader, so no :to
 ;; is produced) — exercises the "ref must name a target" law.
-(def bad (SchemaHolder "bad" (schema (Schema (kind "ref")))))
+(SchemaHolder bad {:schema (Schema {:kind "ref"})})
 
 (deftest schemas-are-valid
   (is (empty? (s/check (build))) "no law violations"))
