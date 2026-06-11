@@ -37,6 +37,10 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  canvas.realization.instance-projection
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   canvas.realization.infra
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -197,11 +201,19 @@
              :unused-referred-var {:level :off}}}
   fukan.dialect.malli-render-test
   {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  fukan.canvas.projection.instance-test
+  {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}}
 
  :linters
  {;; The canvas DSL's structural clause syntax confuses clj-kondo's `when` body check.
-  :missing-body-in-when {:level :off}}
+  :missing-body-in-when {:level :off}
+  ;; the instance hook rewrites def-emitting instance forms `(Tag sym …)` to
+  ;; `(declare sym …)`, so an authored forward `(declare …)` above one reads as
+  ;; redundant to the analyzer — it is not (the real macro var-captures forward
+  ;; refs). Mirrored in `.lsp/config.edn`.
+  :redundant-declare {:level :off}}
 
  :lint-as
  {clojure.test.check.clojure-test/defspec clojure.core/def}
@@ -278,6 +290,9 @@
    fukan.canvas.core.view-map-test/Mod hooks.fukan.structure/instance
    fukan.canvas.core.view-map-test/Fac hooks.fukan.structure/instance
    fukan.canvas.core.view-map-test/Step hooks.fukan.structure/instance
+   fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance
+   fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
+   fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Holder hooks.fukan.structure/instance

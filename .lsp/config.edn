@@ -11,7 +11,13 @@
  ;; adding a namespace to the clj-kondo exemption list, add it here too.
 
  :linters
- {:clojure-lsp/unused-public-var
+ {;; the instance hook rewrites def-emitting instance forms `(Tag sym …)` to
+  ;; `(declare sym …)`, so an authored forward `(declare …)` above one reads as
+  ;; redundant to the analyzer — it is not (the real macro var-captures forward
+  ;; refs). Mirrors `.clj-kondo/config.edn`.
+  :redundant-declare {:level :off}
+
+  :clojure-lsp/unused-public-var
   {;; Vars marked with these metadata keys are intentionally exported for
    ;; dynamic invocation (canvas registry lookup of build-canvas, datalog
    ;; predicates called from law :where clauses). clojure-lsp's static
@@ -32,6 +38,7 @@
               fukan.canvas.projection.grammar-test
               canvas.realization.extraction
               canvas.realization.grammar-projection
+              canvas.realization.instance-projection
               canvas.realization.infra
               canvas.realization.kernel
               canvas.domain.lens
@@ -68,6 +75,7 @@
               fukan.canvas.core.value-authoring-test
               fukan.canvas.projection.probe-code-test
               fukan.canvas.projection.probes-test
+              fukan.canvas.projection.instance-test
               fukan.model.materialize-test
               fukan.model.pipeline-test
               lib.type.malli

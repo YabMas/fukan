@@ -10,8 +10,10 @@
             [clj-reload.core :as reload]
             [datascript.core :as d]
             [fukan.infra.model :as infra-model]
+            [fukan.canvas.core.structure :as structure]
             [fukan.canvas.projection.finding :as pf]
             [fukan.canvas.projection.grammar :as gram]
+            [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.overview :as overview]
             [fukan.canvas.projection.probes :as probe]
             [fukan.model.materialize :as mat]
@@ -74,6 +76,38 @@
      (println (gram/vocabulary-primer m vocab-name))
      (println "No model loaded yet. Use (go) first."))))
 
+(defn show
+  "Print every model node named `n` (a string or symbol) as its AUTHORED form —
+   the instance print-dual. The model talks back in the language you wrote it in:
+   (show 'probe) → (Act probe \"…\" {:reads model …})."
+  [n]
+  (if-let [m (infra-model/get-model)]
+    (let [eids (map first (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]]
+                               m (name n)))]
+      (if (empty? eids)
+        (println "No node named" (pr-str (name n)))
+        (println (inst/focus-text m eids))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn focus
+  "Evaluate datalog `clauses` (binding ?n, with the vocab rules) over the held
+   model and print the focused nodes as their authored forms — the textual model
+   explorer: (focus '[(Operation ?n) (in-module ?n \"materialize\")])."
+  [clauses]
+  (if-let [m (infra-model/get-model)]
+    (let [out (inst/focus-text m clauses)]
+      (println (if (str/blank? out) "Empty focus." out)))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn check
+  "Run every law over the held model and print the violations with each offender
+   QUOTED as its authored form — the law that fired and the instance that fired
+   it, side by side."
+  []
+  (if-let [m (infra-model/get-model)]
+    (println (inst/violations-text m (structure/check m)))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn drift
   "Model↔code drift in the held (unified) model: modelled Operations with no realizing
    function of the same name. Empty ⇔ the implementation fully realizes every
@@ -128,6 +162,9 @@
   (overview)
   (grammar)
   (grammar "canvas.vocabulary.subject")
+  (show 'probe)
+  (focus '[(Operation ?n) (in-module ?n "materialize")])
+  (check)
   (drift)
   (probes)
   (materialize "target.clojure")

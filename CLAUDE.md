@@ -36,7 +36,9 @@ structure substrate **is** the model (no separate model-map).
   focus sub-graph
 - `canvas/projection/canvas_source.clj` — ingestion: discover `canvas/**/*.clj`
   defstructure specs and assemble their instance vars into one structure db;
-  `canvas/projection/{grammar,overview}.clj` — the print-dual + the system map
+  `canvas/projection/{grammar,instance,overview}.clj` — the two print-duals
+  (grammar → defstructure forms; model nodes → authored instance forms) + the
+  system map
 - `canvas/projection/probes.clj`, `probe_code.clj` — the probe surface (read the
   model → findings; project a probe spec for an implementing LLM). Cut-1.
 - `model/pipeline.clj` → `build-model`; `model/extraction.clj` — the code→model
@@ -206,6 +208,10 @@ structure substrate which is the model:
   removing/renaming a var (a removed `defmethod`/`defn` lingers until a clean reset).
 - `(status)` — report model state. `(drift)` — report unrealized modelled
   capabilities via the correspondence laws.
+- `(show 'name)` — print a node as its AUTHORED form (the instance print-dual);
+  `(focus '[(Operation ?n) …])` — render a datalog-selected slice as authored
+  forms (the textual model explorer); `(check)` — violations with each offender
+  quoted as its form.
 - Build a db directly: top-level instance `def`s + `(a/assemble-vars [#'x …])`, query with
   `d/q`, run `(s/check db)`.
 - **Never** use `remove-ns`, `require :reload`, or `(reload/reload)` directly.
