@@ -58,6 +58,21 @@
     (testing "choices (an unordered `many` slot) compared as a set"
       (is (= #{:red :green :blue} (set (rest form)))))))
 
+(def h-kw-x  (RenderHolder "h-kw-x"  (schema [:enum :x])))
+(def h-str-x (RenderHolder "h-str-x" (schema [:enum "x"])))
+
+(deftest enum-member-type-is-stored-and-round-trips
+  (let [d* (a/assemble-vars [#'h-kw-x #'h-str-x])
+        of-holder (fn [n] (ffirst (d/q '[:find ?s :in $ ?n
+                                         :where [?h :entity/name ?n]
+                                                [?r :rel/from ?h] [?r :rel/kind :schema] [?r :rel/to ?s]]
+                                       d* n)))]
+    (testing "keyword and string members render back as authored"
+      (is (= [:enum :x]  (typing/render-type d* (of-holder "h-kw-x"))))
+      (is (= [:enum "x"] (typing/render-type d* (of-holder "h-str-x")))))
+    (testing "[:enum :x] and [:enum \"x\"] are DISTINCT values — member type enters identity"
+      (is (not= (of-holder "h-kw-x") (of-holder "h-str-x"))))))
+
 (deftest scalar-without-constraints-renders-bare
   (let [d* (db)]
     (is (= :keyword (typing/render-type d* (root d* "keyword"))))))

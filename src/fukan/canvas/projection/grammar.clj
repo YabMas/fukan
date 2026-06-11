@@ -12,14 +12,9 @@
                            model, each structure with aligned slots, first doc
                            line, law descs (datalog elided as `…`).
 
-   Caveat (storage, not render): an enum's member TYPE is not stored — read-malli
-   names members on the way in — so enum members render as strings, the slot-
-   refinement convention.
-
    Pure projection: model db → form / string."
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
-            [clojure.walk :as walk]
             [datascript.core :as d]
             [fukan.dialect.malli :as malli]))
 
@@ -27,25 +22,14 @@
 
 (def ^:private malli->scalar {:string :String, :int :Int, :boolean :Bool})
 
-(defn- de-keyword-enums
-  "Enum members render keywordized by the dialect (member type is not stored);
-   slot refinements author strings — map them back."
-  [form]
-  (walk/postwalk
-   (fn [x]
-     (if (and (vector? x) (= :enum (first x)))
-       (into [:enum] (map #(if (keyword? %) (name %) %)) (rest x))
-       x))
-   form))
-
 (defn- target-expr
   "A slot edge's target → its authoring type expression: a reified Structure → its
-   name symbol; a Schema value → its malli form (bare scalars map back to
-   :String/:Int/:Bool)."
+   name symbol; a Schema value → its malli form via the dialect render (faithful —
+   enum member types are stored); bare scalars map back to :String/:Int/:Bool."
   [db t]
   (let [e (d/entity db t)]
     (if (= :lib.type.malli/Schema (:structure/of e))
-      (let [f (de-keyword-enums (malli/render db t))]
+      (let [f (malli/render db t)]
         (get malli->scalar f f))
       (symbol (:entity/name e)))))
 

@@ -21,13 +21,22 @@
 (typing/register-type-dialect! {:valid? dialect/valid?})
 
 (defn ^:export read-choice
-  "An enum member (already a string) -> SchemaChoice clauses."
-  [s]
-  [(list 'value s)])
+  "An enum member (a keyword, string, or symbol — passed RAW) -> SchemaChoice
+   clauses. The member's TYPE is preserved as :kind, so `[:enum :a]` and
+   `[:enum \"a\"]` are distinct values and forms round-trip exactly."
+  [m]
+  [(list 'value (name m))
+   (list 'kind (cond (keyword? m) "keyword"
+                     (string? m)  "string"
+                     (symbol? m)  "symbol"
+                     :else (throw (ex-info (str "enum member must be a keyword, string, or symbol: "
+                                                (pr-str m)) {:member m}))))])
 
 (defstructure ^:value SchemaChoice
-  "One member of an enum schema, value-identified (`:red` shared across enums)."
-  {:value :String}
+  "One member of an enum schema, value-identified by (name, member kind) — `:red`
+   is one node shared across enums, distinct from `\"red\"`."
+  {:value :String
+   :kind  [:enum "keyword" "string" "symbol"]}
   (reader read-choice))
 
 (defn ^:export read-field
@@ -52,7 +61,7 @@
      [:vector|:set|:sequential X]              collection of element X
      [:tuple A B ...] / [:or ...] / [:and ...]  ordered/alternative children :of
      [:map [:k V] [:k {:optional true} V]]     labelled :field entries
-     [:enum :a :b]                             :choice members
+     [:enum :a :b] / [:enum \"a\" \"b\"]           :choice members (type preserved)
      [:re \"pat\"]                               string + regex (normalizes to the
                                                same datoms as [:string {:re \"pat\"}])
      Foo  (a bare symbol)                      a var-ref naming a Kind: a `ref`
@@ -61,8 +70,8 @@
                                                authoring site)
 
    A bare keyword is a scalar; a bare symbol is a var-ref naming a Kind (a named
-   schema). Enum members must be keywords or symbols — each is passed through
-   `(name …)`."
+   schema). Enum members must be keywords, strings, or symbols — passed raw; the
+   SchemaChoice reader preserves the member type, so forms round-trip exactly."
   [data]
   (cond
     (keyword? data) [(list 'kind (name data))]
@@ -95,7 +104,7 @@
                          (list 'field [(name k) v (boolean (:optional fp))])))
                      args))
           :enum
-          (into [(list 'kind "enum")] (map #(list 'choice (name %)) args))
+          (into [(list 'kind "enum")] (map #(list 'choice %) args))
           :re
           [(list 'kind "string") (list 'regex (str (first args)))]
           (throw (ex-info (str "unsupported malli op: " op) {:form data})))))

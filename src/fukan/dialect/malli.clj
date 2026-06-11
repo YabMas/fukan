@@ -46,7 +46,13 @@
                  (children db eid :field)))
       "enum"
       (into [:enum]
-            (map (fn [ceid] (keyword (:val/value (d/entity db ceid))))
+            (map (fn [ceid]
+                   (let [c (d/entity db ceid)
+                         v (:val/value c)]
+                     (case (:val/kind c)
+                       "string" v
+                       "symbol" (symbol v)
+                       (keyword v))))
                  (children db eid :choice)))
       "ref"
       (keyword (:entity/name (d/entity db (first (children db eid :names)))))
