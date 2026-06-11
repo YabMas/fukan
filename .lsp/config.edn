@@ -29,6 +29,7 @@
               canvas.correspondence
               canvas.realization.acts
               lib.grammar
+              fukan.canvas.projection.grammar-test
               canvas.realization.extraction
               canvas.realization.infra
               canvas.realization.kernel

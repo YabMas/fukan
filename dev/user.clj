@@ -11,6 +11,7 @@
             [datascript.core :as d]
             [fukan.infra.model :as infra-model]
             [fukan.canvas.projection.finding :as pf]
+            [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.overview :as overview]
             [fukan.canvas.projection.probes :as probe]
             [fukan.model.materialize :as mat]
@@ -60,6 +61,18 @@
   (if-let [m (infra-model/get-model)]
     (println (overview/system-overview m))
     (println "No model loaded yet. Use (go) first.")))
+
+(defn grammar
+  "Print the GRAMMAR PRIMER — every vocabulary in the held model rendered back as
+   its map-form defstructures, live from the reified grammar (the print-dual).
+   Pass a namespace string for one vocabulary: (grammar \"canvas.vocabulary.subject\")."
+  ([] (if-let [m (infra-model/get-model)]
+        (println (gram/grammar-primer m))
+        (println "No model loaded yet. Use (go) first.")))
+  ([vocab-name]
+   (if-let [m (infra-model/get-model)]
+     (println (gram/vocabulary-primer m vocab-name))
+     (println "No model loaded yet. Use (go) first."))))
 
 (defn drift
   "Model↔code drift in the held (unified) model: modelled Operations with no realizing
@@ -113,6 +126,8 @@
   (reset)
   (refresh)
   (overview)
+  (grammar)
+  (grammar "canvas.vocabulary.subject")
   (drift)
   (probes)
   (materialize "target.clojure")

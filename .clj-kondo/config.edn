@@ -172,6 +172,8 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  fukan.canvas.projection.grammar-test
+  {:linters {:unused-public-var {:level :off}}}
   fukan.canvas.projection.probes-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -298,6 +300,7 @@
    fukan.canvas.core.structure-test/Holder hooks.fukan.structure/instance
    lib.grammar-test/Leaf hooks.fukan.structure/instance
    lib.grammar-test/Node hooks.fukan.structure/instance
+   fukan.canvas.projection.grammar-test/PLeaf hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Holder2 hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/HolderO hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/HolderS hooks.fukan.structure/instance
