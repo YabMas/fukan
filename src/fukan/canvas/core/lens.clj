@@ -23,16 +23,13 @@
             db (s/vocab-rules))))
 
 (defn evaluate-lens
-  "Run the selection query that REALIZES lens `lens-eid` — the `:val/query` carried by
-   whatever node `:realizes` the lens (a `LensSelection` in the self-model) — with the
-   vocab-derived rules, returning the focus node-set (a set of eids). Throws if the lens
-   has no realizing selection (a prose-only lens isn't evaluable). The link is the
-   `:realizes` relation, so the engine stays tag-agnostic."
+  "Run lens `lens-eid`'s own selection query — the `:val/query` payload it carries (its
+   `:select` slot) — with the vocab-derived rules, returning the focus node-set (a set of
+   eids). The selection is the focus stated runnably (model-native datalog), so it lives ON
+   the lens; no `:realizes` indirection. Throws if the lens has no selection (a prose-only
+   lens isn't evaluable)."
   [db lens-eid]
-  (let [clauses (ffirst (d/q '[:find ?q :in $ ?l
-                               :where [?r :rel/kind :realizes] [?r :rel/to ?l]
-                                      [?r :rel/from ?s] [?s :val/query ?q]]
-                             db lens-eid))]
+  (let [clauses (:val/query (d/entity db lens-eid))]
     (when-not clauses
       (throw (ex-info "lens has no selection query — not evaluable"
                       {:lens lens-eid})))

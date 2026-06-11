@@ -1,31 +1,22 @@
 (ns canvas.realization.acts
-  "Executable realizations of the use-side domain acts — the MECHANISM that RUNS a modelled
-   concept, kept OFF the domain (which states only focus/invariant/purpose + its laws). Each
-   node `:realizes` a domain concept and carries the executable form the engines/projector
-   read:
-     LensSelection    — the datalog selection that computes a `Lens`'s focus (read by
-                        `core.lens/evaluate-lens`);
+  "Executable realizations of the use-side domain acts that genuinely reference CODE — the
+   MECHANISM that RUNS a modelled concept, kept OFF the domain (which states only
+   invariant/purpose + its laws). Each node `:realizes` a domain concept and carries the
+   code-referencing form the engines/projector read:
      FindingCheck     — the runtime predicate that enforces a `Finding`'s `:holds` invariant
                         (read by the probe-code projector);
      ProbeComposition — the kernel capability a `Probe` invokes when run (read by the projector).
 
-   The domain `Lens`/`Finding`/`Probe` STATE the focus/invariant/purpose; these PIN how they
-   run. Like `correspondence`, this is a seam — it knows the domain concepts and the realizing
+   The split earns its keep here because these reference code that can DRIFT from the concept;
+   a `Lens`'s selection does not (it is model-native datalog) — so it lives ON the `Lens`, not
+   here. Like `correspondence`, this is a seam — it knows the domain concepts and the realizing
    code."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.vocabulary.act :refer [Lens Probe Finding]]
+            [canvas.vocabulary.act :refer [Probe Finding]]
             [lib.code :refer [Operation]]
             [lib.grouping :refer [Grouping]]
-            [canvas.domain.lens :as lens]
             [canvas.domain.probe :as probe]
             [canvas.realization.kernel :as kernel]))
-
-(defstructure LensSelection
-  "The datalog `:where` selection (binding `?n` as the focused node) that resolves a `Lens`'s
-   prose focus to a genuine sub-graph. Evaluated with the vocab-derived rules, so it reads at
-   domain altitude. A prose-only lens simply has no LensSelection (not evaluable)."
-  {:realizes Lens
-   :selects  [{:payload :query} :String]})   ; :selects = recap; :query = the datalog form
 
 (defstructure FindingCheck
   "The runtime predicate that enforces a `Finding`'s `:holds` invariant — a `(fn [result
@@ -39,34 +30,6 @@
    the kernel's `check`). The same `:calls` relation an op `Operation` uses — a probe IS an operation."
   {:realizes Probe
    :calls    [:* Operation]})
-
-;; ── lens selections ──────────────────────────────────────────────────────────
-(LensSelection s-survey
-  {:realizes lens/survey
-   :selects  ["every node" '[[?n :structure/of _]]]})
-(LensSelection s-patterns
-  {:realizes lens/patterns
-   :selects  ["every relation source" '[[?r :rel/from ?n]]]})
-(LensSelection s-consistency
-  {:realizes lens/consistency
-   :selects  ["the contract-bearing authored operations"
-              '[(Operation ?n) (not [?n :val/extracted true])]]})
-(LensSelection s-tar-pit
-  {:realizes lens/tar-pit
-   :selects  ["the call-graph callers" '[(calls ?n ?callee)]]})
-(LensSelection s-integrity
-  {:realizes lens/integrity
-   :selects  ["the whole model" '[[?n :structure/of _]]]})
-(LensSelection s-coverage
-  {:realizes lens/coverage
-   :selects  ["the extracted code operations"
-              '[(Operation ?n) [?n :val/extracted true]]]})
-(LensSelection s-drift
-  {:realizes lens/drift
-   :selects  ["authored operations with no extracted twin"
-              '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)
-                (not (Operation ?o) [?o :val/extracted true] (named ?o ?nm) (in-module ?o ?km)
-                     [(fukan.target.correspondence/module-corresponds? ?cm ?km)])]]})
 
 ;; ── finding checks (the executable holds) ────────────────────────────────────
 (FindingCheck c-patterns
@@ -95,5 +58,4 @@
    :calls    [kernel/check]})
 
 (Grouping realization
-  {:child [s-survey s-patterns s-consistency s-tar-pit s-integrity s-coverage s-drift
-           c-patterns c-integrity k-integrity]})
+  {:child [c-patterns c-integrity k-integrity]})

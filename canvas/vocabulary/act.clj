@@ -24,11 +24,14 @@
 
 (defstructure Lens
   "A focus over the model — what it brings into view / weighs as salient. `:focus` is the
-   prose description of the slice; that's all the domain states. The executable form of the
-   focus (the datalog selection that resolves it to a sub-graph) is realization mechanism —
-   a `LensSelection` in `canvas.realization.acts`, read by `core.lens/evaluate-lens`.
-   A lens with no LensSelection is prose-only (not evaluable)."
-  {:focus :String})   ; the prose description of the slice
+   prose description of the slice; `:select` is the focus's own executable form — the datalog
+   selection (binding `?n`, evaluated by `core.lens/evaluate-lens`) that resolves the prose to
+   a genuine sub-graph. The selection lives HERE, not in a realization shim: it is model-native
+   datalog — it references no code, only the graph's own vocabulary, exactly like a law's
+   `:where` or a `realized-as` derivation. It is the focus stated runnably, not a second thing
+   that could drift from it. A lens with no `:select` is prose-only (not evaluable)."
+  {:focus  :String                          ; the prose description of the slice
+   :select [:? {:payload :query} :String]}) ; recap + the datalog selection (the :query payload)
 
 ;; ── The observation act: Probe → Finding (inspect ⊂ probe) ───────────────────
 

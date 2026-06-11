@@ -2,7 +2,6 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [canvas.vocabulary.act :refer [Lens]]
-            [canvas.realization.acts :refer [LensSelection]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
@@ -30,21 +29,17 @@
 (Widget ^{:name "q"} w-q)
 (Grp ^{:name "other"} w-other {:child [w-q]})
 
-(Lens ^{:name "in-m"}    lns-in-m    {:focus "widgets in m"})
-(Lens ^{:name "x-links"} lns-x-links {:focus "what x links to"})
+;; each lens carries its own selection (model-native datalog — no realization shim)
+(Lens ^{:name "in-m"}    lns-in-m    {:focus  "widgets in m"
+                                      :select ["widgets in m" '[(Widget ?n) (in-module ?n "m")]]})
+(Lens ^{:name "x-links"} lns-x-links {:focus  "what x links to"
+                                      :select ["x's links" '[(named ?root "x") (links ?root ?n)]]})
 (Lens ^{:name "prose"}   lns-prose   {:focus "just words"})
-;; the executable selections that realize them (live in the realization view)
-(LensSelection sel-in-m
-  {:realizes lns-in-m
-   :selects  ["widgets in m" '[(Widget ?n) (in-module ?n "m")]]})
-(LensSelection sel-x-links
-  {:realizes lns-x-links
-   :selects  ["x's links" '[(named ?root "x") (links ?root ?n)]]})
 
 (deftest evaluates-a-lens-selection-query-to-its-focus-node-set
-  (testing "a lens's realizing selection query (over the vocab rules) yields the focus nodes"
+  (testing "a lens's own selection query (over the vocab rules) yields the focus nodes"
     (let [db (a/assemble-vars [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other
-                               #'lns-in-m #'lns-x-links #'sel-in-m #'sel-x-links])]
+                               #'lns-in-m #'lns-x-links])]
       (is (= #{"x" "y" "z"} (names db (lens/evaluate-lens db (by-name db "in-m"))))
           "kind + module selection, at domain altitude")
       (is (= #{"y" "z"} (names db (lens/evaluate-lens db (by-name db "x-links"))))

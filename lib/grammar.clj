@@ -13,7 +13,7 @@
        reifies as ⟨Schema :string⟩, `[:enum …]` as its Schema subgraph), content-
        deduped with every other use of that type anywhere in the model.
      - a LAW is a node: desc + the datalog as a `:val/form` payload (queryable as
-       a form, not decomposed — mirrors LensSelection).
+       a form, not decomposed — like a `Lens`'s `:select` query payload).
      - a VOCABULARY is one grammar namespace: `:child` edges to its Structures.
 
    Scope: the namespace closure of the tags in use — every namespace that defines
