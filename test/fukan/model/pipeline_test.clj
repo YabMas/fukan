@@ -11,7 +11,7 @@
             [fukan.model.pipeline :as pipeline]
             [canvas.vocabulary.meta :refer [Concept MetaSlot]]
             [lib.grouping :refer [Grouping]]
-            [canvas.vocabulary.act :refer [Lens Probe Finding Projection]]))
+            [canvas.vocabulary.act :refer [Projection]]))
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name
 (defn- names-of [db tag]
@@ -23,12 +23,6 @@
 ;; a MetaSlot with an unknown cardinality
 (Concept ^{:name "T"} mc-T)
 (Concept ^{:name "X"} mc-X {:slot [(MetaSlot {:name "f" :cardinality "lots" :of mc-T})]})
-
-;; a finding yielded by no probe
-(Lens ^{:name "l"} of2-l {:focus "things"})
-(Finding ^{:name "Used"} of2-Used {:gating false})
-(Finding ^{:name "Orphan"} of2-Orphan {:gating false})
-(Probe ^{:name "x"} of2-x {:through of2-l :yields of2-Used})
 
 ;; a projection that is neither a base nor a contextualization
 (Projection ^{:name "Empty"} pe-Empty)
@@ -167,10 +161,10 @@
                      "MetaSlot.cardinality value must satisfy [:enum \"one\" \"optional\" \"many\" \"some\" \"set\"]")))))
 
 (deftest cross-module-ref-resolves
-  (testing "the project Act is realized by → the materialize module, via a SubjectRealization"
+  (testing "the project Projection is realized by → the materialize module, via a SubjectRealization"
     (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
-                      :where [?f :structure/of :canvas.vocabulary.subject/Act] [?f :entity/name "project"]
+                      :where [?f :structure/of :canvas.vocabulary.subject/Projection] [?f :entity/name "project"]
                              [?rz :structure/of :canvas.correspondence/SubjectRealization]
                              [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
                              [?b :rel/from ?rz] [?b :rel/kind :by] [?b :rel/to ?m]
@@ -188,31 +182,25 @@
       (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
                        (names-of db :Lens))))))
 
-(deftest probe-acts-read-through-a-lens-yielding-findings
-  (testing "the probe view: a probe reads the model THROUGH a lens (cross-module) → a finding; inspect = gating"
+(deftest findings-read-through-a-lens
+  (testing "the finding view: a Finding reads the model THROUGH a lens (cross-module); inspect = gating"
     (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Grouping) "probe"))
-      (is (set/subset? #{"survey" "patterns" "integrity" "drift"} (names-of db :Probe)))
-      ;; lens ∘ act composition: the patterns probe reads through the patterns lens,
+      (is (set/subset? #{"Survey" "Patterns" "IntegrityReport" "DriftReport"} (names-of db :Finding)))
+      ;; lens ∘ reading composition: the Patterns finding reads through the patterns lens,
       ;; resolved cross-module to the lens node
       (is (seq (d/q '[:find ?l
-                      :where [?p :structure/of :canvas.vocabulary.act/Probe] [?p :entity/name "patterns"]
-                             [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
+                      :where [?f :structure/of :canvas.vocabulary.act/Finding] [?f :entity/name "Patterns"]
+                             [?r :rel/from ?f] [?r :rel/kind :through] [?r :rel/to ?l]
                              [?l :structure/of :canvas.vocabulary.act/Lens] [?l :entity/name "patterns"]]
                     db))
-          "the patterns probe reads through the patterns lens")
-      ;; inspect ⊂ probe — drift is a probe whose finding GATES (a trust Signal)
+          "the Patterns finding reads through the patterns lens")
+      ;; inspect ⊂ reading — DriftReport is a reading whose finding GATES (a trust Signal)
       (is (seq (d/q '[:find ?f
-                      :where [?p :structure/of :canvas.vocabulary.act/Probe] [?p :entity/name "drift"]
-                             [?r :rel/from ?p] [?r :rel/kind :yields] [?r :rel/to ?f]
-                             [?f :structure/of :canvas.vocabulary.act/Finding] [?f :val/gating true]]
+                      :where [?f :structure/of :canvas.vocabulary.act/Finding] [?f :entity/name "DriftReport"]
+                             [?f :val/gating true]]
                     db))
-          "drift is an inspect — a probe whose finding gates"))))
-
-(deftest orphan-finding-is-caught
-  (testing "a finding yielded by no probe trips the probe law"
-    (let [db (a/assemble-vars [#'of2-l #'of2-Used #'of2-Orphan #'of2-x])]
-      (is (contains? (set (map :law (s/check db))) "every finding is yielded by some probe")))))
+          "DriftReport is an inspect — a gating reading"))))
 
 (deftest projection-subsystem-modelled-as-target-representations
   (testing "the projection view: model re-presented into targets through a lens + source→artifact mappings"
@@ -237,18 +225,18 @@
           "the Blueprint projection maps a function → a defn"))))
 
 (deftest a-lens-is-reused-across-acts
-  (testing "the payoff: ONE drift lens feeds BOTH the drift inspect-probe AND the drift-close projection"
+  (testing "the payoff: ONE drift lens feeds BOTH the drift inspect (a Finding) AND the drift-close projection"
     (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :canvas.vocabulary.act/Lens] [?l :entity/name "drift"]] db)))
           "there is exactly one drift lens node")
       (is (seq (d/q '[:find ?l
                       :where [?l :structure/of :canvas.vocabulary.act/Lens] [?l :entity/name "drift"]
-                             ;; consumed by a probe (the inspect) …
-                             [?pr :structure/of :canvas.vocabulary.act/Probe] [?rp :rel/from ?pr] [?rp :rel/kind :through] [?rp :rel/to ?l]
-                             ;; … AND by a projection (drift-close)
+                             ;; read by a Finding (the inspect) …
+                             [?fd :structure/of :canvas.vocabulary.act/Finding] [?rp :rel/from ?fd] [?rp :rel/kind :through] [?rp :rel/to ?l]
+                             ;; … AND rendered by a projection (drift-close)
                              [?pj :structure/of :canvas.vocabulary.act/Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
                     db))
-          "one drift focus, composed with two different acts"))))
+          "one drift focus, read by a finding and rendered by a projection"))))
 
 (deftest projection-that-is-neither-base-nor-contextualization-is-caught
   (testing "a projection with neither mappings nor a contextualized base trips the flavour law"

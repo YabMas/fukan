@@ -230,7 +230,7 @@
    canvas.correspondence/SubjectRealization hooks.fukan.structure/instance
    canvas.correspondence/SubjectCompleteness hooks.fukan.structure/instance
    canvas.architecture.acts/FindingCheck hooks.fukan.structure/instance
-   canvas.architecture.acts/ProbeComposition hooks.fukan.structure/instance
+   canvas.architecture.acts/ReadingComposition hooks.fukan.structure/instance
    canvas.vocabulary.act/Lens hooks.fukan.structure/instance
    canvas.vocabulary.meta/Concept hooks.fukan.structure/instance
    canvas.vocabulary.meta/MetaSlot hooks.fukan.structure/instance
@@ -242,15 +242,13 @@
    lib.type.malli/SchemaChoice hooks.fukan.structure/instance
    lib.code/Module hooks.fukan.structure/instance
    canvas.vocabulary.act/Finding hooks.fukan.structure/instance
-   canvas.vocabulary.act/Probe hooks.fukan.structure/instance
    canvas.vocabulary.act/Mapping hooks.fukan.structure/instance
    canvas.vocabulary.act/Projection hooks.fukan.structure/instance
    canvas.vocabulary.subject/Primitive hooks.fukan.structure/instance
    canvas.vocabulary.subject/Model hooks.fukan.structure/instance
-   canvas.vocabulary.subject/Output hooks.fukan.structure/instance
    canvas.vocabulary.subject/Lens hooks.fukan.structure/instance
    canvas.vocabulary.subject/Source hooks.fukan.structure/instance
-   canvas.vocabulary.subject/Act hooks.fukan.structure/instance
+   canvas.vocabulary.subject/Projection hooks.fukan.structure/instance
    canvas.vocabulary.subject/Correspondence hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance

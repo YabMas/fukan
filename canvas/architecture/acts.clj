@@ -1,18 +1,19 @@
 (ns canvas.architecture.acts
-  "Executable realizations of the use-side domain acts that genuinely reference CODE — the
+  "Executable realizations of the use-side domain concepts that genuinely reference CODE — the
    MECHANISM that RUNS a modelled concept, kept OFF the domain (which states only
    invariant/purpose + its laws). Each node `:realizes` a domain concept and carries the
    code-referencing form the engines/projector read:
-     FindingCheck     — the runtime predicate that enforces a `Finding`'s `:holds` invariant
-                        (read by the probe-code projector);
-     ProbeComposition — the kernel capability a `Probe` invokes when run (read by the projector).
+     FindingCheck       — the runtime predicate that enforces a `Finding`'s `:holds` invariant
+                          (read by the finding-code projector);
+     ReadingComposition — the kernel capability a (gating) `Finding` composes when read (read by the
+                          projector).
 
    The split earns its keep here because these reference code that can DRIFT from the concept;
    a `Lens`'s selection does not (it is model-native datalog) — so it lives ON the `Lens`, not
    here. Like `correspondence`, this is a seam — it knows the domain concepts and the realizing
    code."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.vocabulary.act :refer [Probe Finding]]
+            [canvas.vocabulary.act :refer [Finding]]
             [lib.code :refer [Operation]]
             [lib.grouping :refer [Grouping]]
             [canvas.domain.probe :as probe]
@@ -25,10 +26,11 @@
   {:realizes Finding
    :enforces [{:payload :pred} :String]})    ; :enforces = recap; :pred = the predicate fn
 
-(defstructure ProbeComposition
-  "The modelled kernel capability a `Probe` invokes when run (e.g. the integrity probe composes
-   the kernel's `check`). The same `:calls` relation an op `Operation` uses — a probe IS an operation."
-  {:realizes Probe
+(defstructure ReadingComposition
+  "The modelled kernel capability a (gating) `Finding` composes when read (e.g. the integrity
+   reading composes the kernel's `check`). The same `:calls` relation an op `Operation` uses — a
+   reading IS an operation."
+  {:realizes Finding
    :calls    [:* Operation]})
 
 ;; ── finding checks (the executable holds) ────────────────────────────────────
@@ -52,9 +54,9 @@
                 (or (empty? (:observations result))
                     (seq (fukan.canvas.core.structure/check target-db))))]})
 
-;; ── probe compositions (the kernel capabilities a probe invokes) ─────────────
-(ProbeComposition k-integrity
-  {:realizes probe/integrity
+;; ── reading compositions (the kernel capabilities a gating reading composes) ──
+(ReadingComposition k-integrity
+  {:realizes probe/IntegrityReport
    :calls    [kernel/check]})
 
 (Grouping realization

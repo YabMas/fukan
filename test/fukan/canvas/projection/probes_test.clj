@@ -5,13 +5,12 @@
             [fukan.canvas.projection.probe-code :as pc]
             [fukan.canvas.projection.probes :as probes]
             [fukan.target.clojure :as target]
-            [canvas.vocabulary.act :refer [Finding]]
+            [canvas.vocabulary.act :refer [Projection]]
             [lib.code :refer [Kind]]))
 
 ;; tiny degenerate models built from top-level defs (assembled per use)
 (Kind ^{:name "Solo"} solo)
-(Kind ^{:name "Str"} broken-Str)
-(Finding ^{:name "Orphan"} broken-Orphan {:gating false})   ; no probe yields it → a violation
+(Projection ^{:name "Empty"} broken-projection)   ; neither base nor contextualization → a violation
 
 (deftest probe-patterns-yields-observations-with-foci
   (testing "patterns reports recurring structures as observations carrying foci"
@@ -59,7 +58,7 @@
       (is (= "integrity" (:lens result)))
       (is (true? (:gating result)) "integrity is the gating inspect case")
       (is (empty? (:observations result)) "the self-model's laws all hold — no violations")
-      (let [dirty (a/assemble-vars [#'broken-Str #'broken-Orphan])
+      (let [dirty (a/assemble-vars [#'broken-projection])
             v     (probes/probe-integrity dirty)]
         (is (seq (:observations v)) "a broken model reports violations")
         (let [o (first (:observations v))]

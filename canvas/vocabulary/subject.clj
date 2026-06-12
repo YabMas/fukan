@@ -3,18 +3,23 @@
    as Layer 1 of the verifiable tower (Subject → Realization → Code).
 
    It names fukan's design directly, rather than leaving it to emerge from a graph of generic
-   faculties (an earlier self-model, since removed). The shape, settled in the demo:
+   faculties (an earlier self-model, since removed). The shape:
 
      one hub MODEL, made-of one PRIMITIVE (defstructure);
-     two SOURCES — author (intent, design↓) and extract (reality, code↑): two ORIGINS in tension;
-     two ACTS — probe (analyse) and project (synthesise) — read the Model THROUGH a LENS (focus),
-       each yielding an OUTPUT;
-     one CORRESPONDENCE: extract ⊣ project, the one inverse pair across the model↔code boundary.
+     two SOURCES converge IN — author (intent, design↓) and extract (reality, code↑): two
+       ORIGINS in tension;
+     the Model is USED two ways — but the two are NOT twins (an earlier grammar forced them under
+       one `Act` umbrella with a `finding`/`artifact` `Output`; that symmetry was false — it
+       flattened a primitive and a composite into a fake pair):
+       - a LENS reads it — a focus/query that resolves to a sub-graph. The lens IS the read; there
+         is no separate `probe` act wrapping it.
+       - a PROJECTION synthesises from it — renders THROUGH a lens into a target artifact. It is
+         built ON the lens, doing work the lens does not (mapping kinds, contextualization).
+     one CORRESPONDENCE: extract ⊣ project — the code-up Source and the Projection are inverse over
+       the one Model, so their disagreement is checkable as drift (#4, emergent).
 
-   The read-side focus (`Lens`) rejoined once tags became ns-qualified: this `Lens` coexists with
-   the lower-altitude `canvas.vocabulary.act/Lens` (the lens catalog) — different namespaces, no
-   collision. (A focus is a query and queries need a populated graph → focus is read-side only:
-   `Act` has `:through Lens`, `Source` has no pivot.)
+   This `Lens` coexists with the lower-altitude `canvas.vocabulary.act/Lens` (the lens catalog) —
+   different namespaces, no collision.
 
    Vocab-only canvas spec (no build-canvas)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
@@ -31,44 +36,45 @@
    headline is the two ORIGINS, not the one graph."
   {:made-of Primitive})
 
-(defstructure Output
-  "What an Act yields — a `finding` (probe → a reading to reason with) or an `artifact`
-   (project → a target form to build from).")
-
 (defstructure Lens
-  "The read-side focus — which slice of the Model an Act attends to. A Lens is a QUERY (a
-   selection over the graph), and a query presupposes a populated graph — so focus is intrinsically
-   READ-side; there is no write-side counterpart. (The high-altitude focus concept; the specific
-   lens catalog — survey/patterns/drift/… — lives lower, in `canvas.domain.lens`.)"
-  {:focus :String})
+  "The READ act — a focus over the Model that resolves to a sub-graph. A Lens names WHICH slice to
+   attend to (`:focus`) and `:reads` the Model. A lens is a QUERY, so it is intrinsically read-side
+   (a query presupposes a populated graph — the write side, `Source`, has nothing to apply a focus
+   to). Evaluating a lens IS the act of reading; the read needs no structure of its own on top of
+   the lens — which is why there is no `Probe`. (The lens catalog — survey/patterns/drift/… — and
+   the gating/contract that turns a reading into a trust Signal vs a View live lower, in
+   `canvas.domain.lens` / `canvas.vocabulary.act`.)"
+  {:reads Model
+   :focus :String})
 
 (defstructure Source
-  "A way IN — content converging on the Model. The in-2fold is two ORIGINS, one of each
-   `:polarity` — design authored DOWN (intent), code extracted UP (reality). No focus pivot: focus
-   is a read-side query the write side has nothing to apply yet."
+  "A way IN — content converging on the Model. The in-fold is two ORIGINS, one of each `:polarity` —
+   design authored DOWN (intent), code extracted UP (reality). A Source has no focus: focus is a
+   read-side query, and the write side has nothing to apply it to."
   {:into     Model
    :polarity [:enum "design-down" "code-up"]}
   (law "the loop closes — every code-up source is matched by a correspondence"
     (matched-by :lifts :from Correspondence :when {:polarity "code-up"})))
 
-(defstructure Act
-  "A way OUT — using the Model. The out-2fold is two MODES, one each — probe = analyse (→ a
-   reading), project = synthesise (→ an artifact). Each `:reads` the Model `:through` a Lens (the
-   focus) and `:yields` an Output."
-  {:reads   Model
-   :through Lens
-   :mode    [:enum "analyse" "synthesise"]
-   :yields  Output})
+(defstructure Projection
+  "The SYNTHESIS act — re-presenting the Model in a target form (materialization). It renders THROUGH
+   a Lens (the focus) into an artifact (Blueprint → implementation specs, Docs → documentation). It
+   is NOT a twin of the read act: it is built ON the lens, doing work the lens does not (mapping
+   source kinds to artifacts, contextualizing one render through another). Its full composition
+   grammar lives lower, in `canvas.vocabulary.act/Projection`.
+
+   Shares its short name with that lower-altitude `Projection` — the same concept at two altitudes,
+   exactly like `Lens`. ns-precise law scoping (`[?o :structure/of <qualified-tag>]`) keeps the
+   lower `has-any` law from ranging over this abstract faculty, so the two coexist cleanly."
+  {:through Lens})
 
 (defstructure Correspondence
-  "#4, EMERGENT — the recognition that one Source and one Act are inverse over the one Model. It
-   `:lifts` a code-up Source (extract: code → model) and `:lowers` a synthesise Act (project: model
-   → code/artifact); the two compose to the identity on the shared graph, so their disagreement is
-   checkable as drift. This is the within-SUBJECT relation; the subject→code seam is `Realization`
-   in `canvas.correspondence`."
+  "#4, EMERGENT — the recognition that one Source and one Projection are inverse over the one Model.
+   It `:lifts` the code-up Source (extract: code → model) and `:lowers` the Projection (project:
+   model → code/artifact); the two compose to the identity on the shared graph, so their
+   disagreement is checkable as drift. This is the within-SUBJECT relation; the subject→code seam is
+   `Realization` in `canvas.correspondence`."
   {:lifts  Source
-   :lowers Act}
+   :lowers Projection}
   (law "a correspondence lifts a code-up source"
-    (target :lifts {:polarity "code-up"}))
-  (law "a correspondence lowers a synthesise act"
-    (target :lowers {:mode "synthesise"})))
+    (target :lifts {:polarity "code-up"})))

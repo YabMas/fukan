@@ -11,8 +11,8 @@
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.grouping :refer [Grouping]]
             [lib.code :refer [Kind]]
-            ;; Act/Source: the law-scope targets of the completeness laws
-            [canvas.vocabulary.subject :refer [Act Source]]
+            ;; the law-scope targets of the completeness laws (ns-precise scoping)
+            [canvas.vocabulary.subject :refer [Source Lens Projection]]
             [canvas.domain.subject :as subj]
             [canvas.architecture.kernel :as kernel]
             [canvas.architecture.canvas-source :as canvas-source]
@@ -26,7 +26,7 @@
    element(s) in `:by` — a `Module` today; an `Operation`, a `Kind`, or any code element we invent
    tomorrow, with ZERO change to those structures — and the concept's data shape in `:form` (the
    `Kind` that IS it, when it has one; a facet of the realization, since the realizer owns it:
-   Model→StructureDb, probe→Finding, project→Instruction). Embedding `:realizes` on `Module` would
+   Model→StructureDb, focus→Finding, project→Instruction). Embedding `:realizes` on `Module` would
    force the same slot onto `Operation`, `Kind`, … in turn; reifying the relation expresses 'code
    realizes design' ONCE, for any code element. Authored off the pure domain (code is a projection
    of the model). Crosses subject→code; distinct from the domain `Correspondence` (extract ⊣
@@ -34,7 +34,7 @@
 
    NB named `SubjectRealization`, not `Realization`: `fukan.target.correspondence/Realization` is
    the op-layer law-host. Distinct namespaces keep both, but the names stay descriptive."
-  {:realizes Any         ; the subject (design) concept (an Act / Source / Model / …)
+  {:realizes Any         ; the subject (design) concept (a Source / Lens / Projection / Model / …)
    :by       [:* Any]    ; the realizing code element(s) — any element, not just Module
    :form     [:? Kind]}  ; its data-form, when it has one — a Kind owned by one of :by
   ;; the data-shape half of the abstract↔code correspondence: a recorded form must be owned by
@@ -44,25 +44,32 @@
     :where '[(SubjectRealization ?sr) (form ?sr ?k)
              (not-join [?sr ?k] (by ?sr ?m) (owns ?m ?k))]))
 
-;; the keystone column — project (the synthesise Act) IS materialization, realized by the
-;; `materialize` Module; the rest wire each subject concept to the subsystem that builds it.
-;; Model / probe / project also carry their data form; the Sources + correspondence have none.
+;; the keystone column — project (the Projection) IS materialization, realized by the `materialize`
+;; Module; the rest wire each subject concept to the subsystem that builds it. Model / focus (the
+;; read act) / project carry their data form; the Sources and correspondence have none.
 (SubjectRealization z-model   {:realizes subj/model          :by [kernel/core-structure]        :form kernel/StructureDb})
 (SubjectRealization z-author  {:realizes subj/author         :by [canvas-source/canvas-source]})
 (SubjectRealization z-extract {:realizes subj/extract        :by [target/target-clojure]})
-(SubjectRealization z-probe   {:realizes subj/probe          :by [probe-surface/probes]         :form probe-surface/Finding})
+(SubjectRealization z-focus   {:realizes subj/focus          :by [probe-surface/probes]         :form probe-surface/Finding})
 (SubjectRealization z-project {:realizes subj/project        :by [materialize/materialize]      :form materialize/Instruction})
 (SubjectRealization z-corr    {:realizes subj/correspondence :by [target/target-correspondence]})
 
 (defstructure SubjectCompleteness
-  "Law-host: the verify-down completeness of the tower — every Act and every Source (Layer 1) must
-   be realized by some Module (Layer 2). A missing realization is drift between what fukan IS and
-   what is built. (The realizing Modules' Operations are in turn checked against real `src/`
-   functions by the op-layer correspondence — so this reaches the code transitively.)"
-  (law "every act is realized by a module"
-    (matched-by :realizes :from SubjectRealization :scope Act))
+  "Law-host: the verify-down completeness of the tower — every Layer-1 use-side concept (a `Source`,
+   a `Lens`, a `Projection`) must be realized by some Module (Layer 2). A missing realization is
+   drift between what fukan IS and what is built. (The realizing Modules' Operations are in turn
+   checked against real `src/` functions by the op-layer correspondence — so this reaches the code
+   transitively.)
+
+   The use-side `Lens`/`Projection` share short names with the lower-altitude `canvas.vocabulary.act`
+   catalog; ns-precise law scoping pins each `:scope` to its own qualified tag, so these laws range
+   over the subject concepts only — not the act-layer lenses/projections."
   (law "every source is realized by a module"
-    (matched-by :realizes :from SubjectRealization :scope Source)))
+    (matched-by :realizes :from SubjectRealization :scope Source))
+  (law "every lens is realized by a module"
+    (matched-by :realizes :from SubjectRealization :scope Lens))
+  (law "every projection is realized by a module"
+    (matched-by :realizes :from SubjectRealization :scope Projection)))
 
 (Grouping subject-realization
-  {:child [z-model z-author z-extract z-probe z-project z-corr]})
+  {:child [z-model z-author z-extract z-focus z-project z-corr]})

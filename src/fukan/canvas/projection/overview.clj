@@ -2,10 +2,11 @@
   "Project a navigable SYSTEM OVERVIEW from the model — the canvas's front door.
 
    The flat file list under `canvas/` can't show fukan's shape; the shape lives in the model — the
-   SUBJECT grammar (`canvas.domain.subject`): one hub `Model`, two `Source`s (origins), two `Act`s
-   (modes) through a `Lens`, and the `Correspondence` that closes the loop — each tagged with the
-   code Module that realizes it (`SubjectRealization`, the verify-down seam). Rendered live, so it
-   can never drift from the spec it describes. Read this instead of `ls canvas/`.
+   SUBJECT grammar (`canvas.domain.subject`): one hub `Model`, two `Source`s (origins), a `Lens`
+   that reads it and a `Projection` that synthesises from it (the two uses, not twins), and the
+   `Correspondence` that closes the loop — each tagged with the code Module that realizes it
+   (`SubjectRealization`, the verify-down seam). Rendered live, so it can never drift from the spec
+   it describes. Read this instead of `ls canvas/`.
 
    Pure projection: model db → string."
   (:require [clojure.string :as str]
@@ -41,8 +42,11 @@
         prim     (when model-e (rel-target-name db model-e :made-of))
         sources  (sort (d/q '[:find ?n ?p :in $ ?t
                               :where [?s :structure/of ?t] [?s :entity/name ?n] [?s :val/polarity ?p]] db (keyword SUBJ "Source")))
-        acts     (->> (d/q '[:find ?a ?n ?m :in $ ?t
-                             :where [?a :structure/of ?t] [?a :entity/name ?n] [?a :val/mode ?m]] db (keyword SUBJ "Act"))
+        lens     (->> (d/q '[:find ?l ?n :in $ ?t
+                             :where [?l :structure/of ?t] [?l :entity/name ?n]] db (keyword SUBJ "Lens"))
+                      (sort-by second))
+        projs    (->> (d/q '[:find ?p ?n :in $ ?t
+                             :where [?p :structure/of ?t] [?p :entity/name ?n]] db (keyword SUBJ "Projection"))
                       (sort-by second))
         corr     (ffirst (d/q '[:find ?n :in $ ?t :where [?c :structure/of ?t] [?c :entity/name ?n]] db (keyword SUBJ "Correspondence")))
         arrow    {"design-down" "↓ design" "code-up" "↑ code"}]
@@ -62,9 +66,10 @@
        (for [[n p] sources]
          (str "    " (arrow p p) "  " n (by n)))
        [""
-        "  OUT — two acts use the Model, each through a focus (Lens)"]
-       (for [[e n m] acts]
-         (str "    • " n " (" m ") — reads Model · through " (rel-target-name db e :through)
-              " · yields " (rel-target-name db e :yields) (by n)))
+        "  OUT — the Model is used two ways (not twins)"]
+       (for [[_ n] lens]
+         (str "    ◎ " n " (lens) — reads the Model: a focus → a sub-graph to reason with" (by n)))
+       (for [[e n] projs]
+         (str "    ▶ " n " (projection) — re-presents the Model, through " (rel-target-name db e :through) (by n)))
        [""
         (str "  ⊣ " corr " — extract ⊣ project, the loop closing" (by corr))])))))
