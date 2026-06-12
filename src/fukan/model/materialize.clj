@@ -132,7 +132,7 @@
 (defn- proj-node
   "The Projection node named `projection` (nil if none — a bare base name has no node)."
   [db projection]
-  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :structure/of :canvas.vocabulary.act/Projection] [?e :entity/name ?n]] db projection)))
+  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :structure/of :canvas.acts/Projection] [?e :entity/name ?n]] db projection)))
 
 (defn- base-of
   "The base a `projection` renders through: the name of the Projection it

@@ -13,10 +13,9 @@
    here. Like `correspondence`, this is a seam — it knows the domain concepts and the realizing
    code."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.vocabulary.act :refer [Finding]]
+            [canvas.acts :as probe :refer [Finding]]
             [lib.code :refer [Operation]]
             [lib.grouping :refer [Grouping]]
-            [canvas.domain.probe :as probe]
             [canvas.architecture.kernel :as kernel]))
 
 (defstructure FindingCheck

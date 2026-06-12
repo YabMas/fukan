@@ -8,10 +8,6 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  canvas.domain.projection
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
   canvas.architecture.canvas-source
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -49,7 +45,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.domain.lens
+  canvas.acts
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -66,10 +62,6 @@
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   canvas.architecture.pipeline
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.domain.probe
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -231,9 +223,9 @@
    canvas.correspondence/SubjectCompleteness hooks.fukan.structure/instance
    canvas.architecture.acts/FindingCheck hooks.fukan.structure/instance
    canvas.architecture.acts/ReadingComposition hooks.fukan.structure/instance
-   canvas.vocabulary.act/Lens hooks.fukan.structure/instance
-   canvas.vocabulary.meta/Concept hooks.fukan.structure/instance
-   canvas.vocabulary.meta/MetaSlot hooks.fukan.structure/instance
+   canvas.acts/Lens hooks.fukan.structure/instance
+   canvas.architecture.kernel/Concept hooks.fukan.structure/instance
+   canvas.architecture.kernel/MetaSlot hooks.fukan.structure/instance
    lib.code/Effect hooks.fukan.structure/instance
    lib.code/Operation hooks.fukan.structure/instance
    lib.code/Kind hooks.fukan.structure/instance
@@ -241,9 +233,9 @@
    lib.type.malli/SchemaField hooks.fukan.structure/instance
    lib.type.malli/SchemaChoice hooks.fukan.structure/instance
    lib.code/Module hooks.fukan.structure/instance
-   canvas.vocabulary.act/Finding hooks.fukan.structure/instance
-   canvas.vocabulary.act/Mapping hooks.fukan.structure/instance
-   canvas.vocabulary.act/Projection hooks.fukan.structure/instance
+   canvas.acts/Finding hooks.fukan.structure/instance
+   canvas.acts/Mapping hooks.fukan.structure/instance
+   canvas.acts/Projection hooks.fukan.structure/instance
    canvas.subject/Node hooks.fukan.structure/instance
    canvas.subject/Relation hooks.fukan.structure/instance
    canvas.subject/Form hooks.fukan.structure/instance

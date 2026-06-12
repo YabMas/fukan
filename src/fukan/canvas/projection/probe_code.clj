@@ -19,9 +19,9 @@
   "The Finding eid that reads `:through` the named lens (nil if none)."
   [db lens-name]
   (ffirst (d/q '[:find ?f :in $ ?ln
-                 :where [?l :structure/of :canvas.vocabulary.act/Lens] [?l :entity/name ?ln]
+                 :where [?l :structure/of :canvas.acts/Lens] [?l :entity/name ?ln]
                         [?r :rel/from ?f] [?r :rel/kind :through] [?r :rel/to ?l]
-                        [?f :structure/of :canvas.vocabulary.act/Finding]]
+                        [?f :structure/of :canvas.acts/Finding]]
                db lens-name)))
 
 (defn- finding-gating [db lens-name]
@@ -29,7 +29,7 @@
 
 (defn- finding-focus [db lens-name]
   (ffirst (d/q '[:find ?fc :in $ ?ln
-                 :where [?l :structure/of :canvas.vocabulary.act/Lens] [?l :entity/name ?ln]
+                 :where [?l :structure/of :canvas.acts/Lens] [?l :entity/name ?ln]
                         [?l :val/focus ?fc]]
                db lens-name)))
 

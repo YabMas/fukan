@@ -60,7 +60,7 @@
    checked against real `src/` functions by the op-layer correspondence — so this reaches the code
    transitively.)
 
-   The use-side `Lens`/`Projection` share short names with the lower-altitude `canvas.vocabulary.act`
+   The use-side `Lens`/`Projection` share short names with the lower-altitude `canvas.acts`
    catalog; ns-precise law scoping pins each `:scope` to its own qualified tag, so these laws range
    over the subject concepts only — not the act-layer lenses/projections."
   (law "every source is realized by a module"

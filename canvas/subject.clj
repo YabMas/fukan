@@ -77,14 +77,14 @@
   "The READ act — a focus over the Model that resolves to a sub-graph. A lens is a QUERY, so it is
    intrinsically read-side; evaluating it IS the reading (there is no separate `Probe`). The lens
    catalog + the gating/contract that make a reading a Signal vs a View live lower, in
-   `canvas.domain.lens` / `canvas.vocabulary.act`."
+   `canvas.acts`."
   {:reads Model :focus :String})
 (Lens focus {:reads model :focus "the slice of the model the read attends to"})
 
 (defstructure Projection
   "The SYNTHESIS act — re-presenting the Model in a target form (materialization), THROUGH a Lens. NOT
    a twin of the read: built ON the lens, doing work it does not (mapping kinds, contextualization).
-   The full grammar lives lower in `canvas.vocabulary.act/Projection` (same concept, two altitudes —
+   The full grammar lives lower in `canvas.acts/Projection` (same concept, two altitudes —
    ns-precise scoping keeps the lower `has-any` law off this abstract faculty)."
   {:through Lens})
 (Projection project {:through focus})

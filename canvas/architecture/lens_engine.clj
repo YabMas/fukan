@@ -3,7 +3,7 @@
    WITH the vocab-derived rules, to a focus node-set, and refine a focus by a further query
    (lens-within-lens). Split out of the rule-derivation machinery so the chain stays acyclic:
    lens-engine → kernel → query-engine. (The Lens *vocab* — the primitive that carries a query —
-   is the forward-looking view in `canvas.domain.lens`; this is the machinery that RUNS it.)"
+   is the forward-looking view in `canvas.acts`; this is the machinery that RUNS it.)"
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel :as kernel]))
 

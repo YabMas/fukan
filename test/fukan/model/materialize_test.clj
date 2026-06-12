@@ -2,16 +2,15 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [canvas.vocabulary.act :refer [Lens Projection Mapping]]
+            ;; the acts stratum: grammar (Lens/Projection/Mapping) + the real self-model vars an
+            ;; ad-hoc contextualization composes over (Blueprint, survey)
+            [canvas.acts :as cm-acts :refer [Lens Projection Mapping]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.projection.probes :as probes]
             [fukan.model.materialize :as m]
             [fukan.model.pipeline :as pipeline]
-            ;; the real self-model vars an ad-hoc contextualization composes over
-            [canvas.domain.projection :as cm-proj]
-            [canvas.domain.lens :as cm-lens]
             ;; loaded so the vocab-derived rules carry an Operation kind-rule (coverage /
             ;; drift lenses reference it) and the drift lens's correspondence predicate
             ;; resolves
@@ -37,7 +36,7 @@
    :select ["target stages" '[(Operation ?n) (in-module ?n "target-clojure")]]})
 (Projection ^{:name "Refactor"} acb-Refactor
   {:through        acb-stages
-   :contextualizes cm-proj/Blueprint
+   :contextualizes cm-acts/Blueprint
    :context        "Refactor the existing implementation to match these specs:"})
 
 ;; an ad-hoc Docs projection whose name selects the Docs renderers
@@ -158,7 +157,7 @@
     (let [model   (pipeline/build-model nil)
           ;; the fragment includes Blueprint (+ its survey lens) so the contextualizes
           ;; var-ref resolves; union with the model then dedups them
-          proj-db (a/assemble-vars [#'acb-stages #'acb-Refactor #'cm-proj/Blueprint #'cm-lens/survey])
+          proj-db (a/assemble-vars [#'acb-stages #'acb-Refactor #'cm-acts/Blueprint #'cm-acts/survey])
           db      (cs/union-dbs [model proj-db])
           out     (m/materialize-projection db (by-kind-name db :Projection "Refactor"))]
       (is (str/includes? out "Refactor the existing implementation") "the refactor context frames the output")

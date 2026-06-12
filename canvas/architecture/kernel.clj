@@ -4,13 +4,36 @@
    (`lib.grammar/with-grammar`) derives it from the live registry, where it can never drift. What
    remains hand-modelled is the SUBSTRATE the registry sits on — `Node` and the reified `Relation`
    — which is not registry data, so reflection can't reach it. It rides here as the module's own
-   children (the reflexive self-description, in `canvas.vocabulary.meta`): `Node`, and `Relation`
+   children (the reflexive self-description, in `canvas.architecture.kernel`): `Node`, and `Relation`
    whose scalar fields use `MetaSlot`'s `:scalar` leaf type, so no scalar needs a Concept of its
    own. The kernel also exposes one capability, `check` (laws → violations): the canonical
-   integrity inspect, modelled because code is a projection of the model 1-on-1."
-  (:require [canvas.vocabulary.meta :refer [Concept MetaSlot]]
+   integrity inspect, modelled because code is a projection of the model 1-on-1.
+
+   The reflexive META-GRAMMAR (`Concept`/`MetaSlot` — `defstructure` described in `defstructure`)
+   is folded in here, its sole consumer: a `Concept` is composed of `MetaSlot`s, a `MetaSlot` is a
+   named relation with a cardinality to a target Concept or a leaf scalar — exactly a defstructure
+   slot. (Co-located, not split into a `vocabulary/meta` — a bespoke grammar used by one module.)"
+  (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.code :refer [Kind Operation Module]]
-            [canvas.architecture.query-engine :as query-engine]))
+            [canvas.architecture.query-engine :as query-engine]
+            ;; MetaSlot's refined [:enum …] slots check through the malli type dialect
+            [lib.type.malli]))
+
+;; ── the meta-grammar: defstructure described in defstructure (its only consumer is below) ─────
+(defstructure ^:value MetaSlot
+  "A slot of a Concept — value-identified by its (name, cardinality, target). Mirrors a real slot's
+   target: a structure-REF (`:of` another Concept) OR a leaf SCALAR type (`:scalar`). A field
+   declares one or the other — exactly as the core distinguishes a symbol (tag ref) from a keyword
+   (scalar type), so no scalar needs a Concept node of its own."
+  {:name        :String
+   :cardinality [:enum "one" "optional" "many" "some" "set"]
+   :of          [:? Concept]                                    ; a ref target (another Concept), or
+   :scalar      [:? [:enum "Keyword" "String" "Int" "Bool"]]})  ; a leaf scalar type
+
+(defstructure Concept
+  "A concept (type) in a modelled data model — a defstructure structure, a reified relation, a
+   scalar type, …. Composed of MetaSlots."
+  {:slot [:* MetaSlot]})
 
 ;; ── the substrate: the kernel's own data-shapes (reflection can't reach below the registry) ──
 (Concept Node

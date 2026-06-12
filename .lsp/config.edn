@@ -41,13 +41,11 @@
               canvas.architecture.instance-projection
               canvas.architecture.infra
               canvas.architecture.kernel
-              canvas.domain.lens
+              canvas.acts
               canvas.architecture.lens-engine
               canvas.architecture.materialize
               canvas.architecture.pipeline
-              canvas.domain.probe
               canvas.architecture.probe-surface
-              canvas.domain.projection
               canvas.architecture.query-engine
               canvas.architecture.target
               demos.access-control.model.rbac
