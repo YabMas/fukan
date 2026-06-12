@@ -2,7 +2,8 @@
   "Self-spec: fukan's TARGET layer — how an analyzed codebase's structure is extracted INTO the
    Model, and how the Model's realization in that code is verified. Two namespaces, two subsystems:
    `target.clojure` (the clj-kondo extractor) and `target.correspondence` (drift / coverage queries).
-   Realizes the subject's `extract` Source and `correspondence`; both read/produce the kernel's shared `StructureDb`."
+   Realizes part of the subject's `Source` (the code-up extraction) and `Lens` (its correspondence
+   reading); both read/produce the kernel's shared `StructureDb`."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel :as kernel]))
 

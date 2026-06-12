@@ -67,7 +67,7 @@
 (defn grammar
   "Print the GRAMMAR PRIMER — every vocabulary in the held model rendered back as
    its map-form defstructures, live from the reified grammar (the print-dual).
-   Pass a namespace string for one vocabulary: (grammar \"canvas.vocabulary.subject\")."
+   Pass a namespace string for one vocabulary: (grammar \"canvas.subject\")."
   ([] (if-let [m (infra-model/get-model)]
         (println (gram/grammar-primer m))
         (println "No model loaded yet. Use (go) first.")))
@@ -161,7 +161,7 @@
   (refresh)
   (overview)
   (grammar)
-  (grammar "canvas.vocabulary.subject")
+  (grammar "canvas.subject")
   (show 'probe)
   (focus '[(Operation ?n) (in-module ?n "materialize")])
   (check)

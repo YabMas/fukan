@@ -14,7 +14,7 @@
      Nodes wired by Relations ARE the graph; the Form (defstructure) builds a Vocabulary over that
        substrate — the language a model is authored in (fukan ships none; bottom-up language building);
      one hub MODEL — that graph, authored in a Vocabulary;
-     two SOURCES converge IN — author (intent, design↓), extract (reality, code↑);
+     one SOURCE, two flavours (its `:enum`) converge IN — design↓ (intent), code↑ (reality);
      a LENS reads it; a PROJECTION synthesises from it (built on the lens, not a twin)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             ;; refined slot targets ([:enum …]) check through the malli type dialect
