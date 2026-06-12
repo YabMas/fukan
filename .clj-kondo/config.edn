@@ -334,6 +334,8 @@
    fukan.canvas.core.structure-test/Tree hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Type hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Wrapped hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/PBody hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/PNoSyntax hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Attr hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Doc hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Ent hooks.fukan.structure/instance

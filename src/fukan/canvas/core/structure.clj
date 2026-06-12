@@ -256,14 +256,19 @@
         _    (when-not sdef
                (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
         doc  (when (string? (first args)) (first args))
-        body (if doc (rest args) args)]
-    (when-not (or (empty? body) (and (map? (first body)) (empty? (rest body))))
+        body (if doc (rest args) args)
+        one  (first body)]
+    ;; a structure that declares a (syntax …) hook may take a single POSITIONAL body
+    ;; (a non-map arg-tail) — the hook normalizes it to the slots map; without a hook
+    ;; the body must still be empty or a single slots map.
+    (when-not (or (empty? body)
+                  (and (empty? (rest body)) (or (map? one) (:syntax sdef))))
       (throw (ex-info (str (clojure.core/name tag) ": an instance is `("
                            (clojure.core/name tag) " \"doc\"? {slot → value}?)` — got "
                            (pr-str (vec body)))
                       {:tag tag :body (vec body)})))
     (build-instance-form tag nil doc false
-                         (map->clauses tag sdef (apply-syntax sdef (or (first body) {}))))))
+                         (map->clauses tag sdef (apply-syntax sdef (if (some? one) one {}))))))
 
 (defn value-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance —
@@ -334,13 +339,15 @@
                 (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
         nests (filter nested-instance? body)
         cls   (remove nested-instance? body)
-        _     (when-not (or (empty? cls) (and (map? (first cls)) (empty? (rest cls))))
+        one   (first cls)
+        _     (when-not (or (empty? cls)
+                            (and (empty? (rest cls)) (or (map? one) (:syntax sdef))))
                 (throw (ex-info (str (clojure.core/name tag) " " sym ": an instance is `("
                                      (clojure.core/name tag)
                                      " name \"doc\"? {slot → value}? nested…)` — got "
                                      (pr-str (vec cls)))
                                 {:tag tag :sym sym :body (vec cls)})))
-        m     (apply-syntax sdef (or (first cls) {}))
+        m     (apply-syntax sdef (if (some? one) one {}))
         kids  (mapv (fn [nf] (assoc (expand-instance (resolve-struct-tag (first nf)) (rest nf))
                                     :private? (boolean (:private (meta (second nf)))))) nests)
         routed (->> kids

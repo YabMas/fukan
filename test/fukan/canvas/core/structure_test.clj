@@ -286,6 +286,18 @@
 (Carry ^{:name "c2"} pl-c2 {:text "solo"})
 (Carry ^{:name "c3"} pl-c3 {:text ["hi" '(fn [x] x)]})
 
+;; ── positional body via (syntax …) — Task 1 ──────────────────────────────────
+(defstructure PBody
+  "A test structure whose syntax hook lifts a positional body into its one slot."
+  {:thing [:? :Int]}
+  (syntax (fn [b] (if (map? b) b {:thing b}))))
+
+(PBody pb-pos 42)                  ; def-emitting, positional body
+(def pb-expr (PBody 42))           ; expression position, positional body
+(PBody pb-map {:thing 7})          ; the map form still works
+
+(defstructure PNoSyntax {:thing [:? :Int]})   ; no hook → positional body must error
+
 (Gate ^{:name "ok"}   en-ok {:state "open" :note "a"})
 (Gate ^{:name "bad"}  en-bad {:state "ajar"})          ; not a member
 (Gate ^{:name "miss"} en-miss)                         ; required state absent
@@ -631,3 +643,20 @@
       (is (nil? (:val/extra e2)) "no 2nd arg → no payload")
       (is (= '(fn [x] x) (:val/extra e3))
           "a payload code-form is stored as data (the quoted form)"))))
+
+(deftest positional-body-routes-through-syntax
+  (testing "a syntax-bearing structure accepts a lone non-map body (both surfaces)"
+    (let [db (a/assemble-vars [#'pb-pos #'pb-expr #'pb-map])
+          thing-of (fn [nm] (ffirst (d/q '[:find ?v :in $ ?nm
+                                           :where [?e :entity/name ?nm] [?e :val/thing ?v]] db nm)))]
+      (is (= 42 (thing-of "pb-pos")))
+      (is (= 42 (thing-of "pb-expr")))
+      (is (= 7  (thing-of "pb-map"))))))
+
+(deftest positional-body-without-syntax-errors
+  (testing "a structure with no syntax hook still rejects a non-map body"
+    (let [msg (try (let [_ (macroexpand '(fukan.canvas.core.structure-test/PNoSyntax pn 42))]
+                     "no throw")
+                   (catch Throwable e
+                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
+      (is (re-find #"an instance is" msg)))))
