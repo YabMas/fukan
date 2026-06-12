@@ -11,9 +11,8 @@
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.grouping :refer [Grouping]]
             [lib.code :refer [Kind]]
-            ;; the law-scope targets of the completeness laws (ns-precise scoping)
-            [canvas.vocabulary.subject :refer [Source Lens Projection]]
-            [canvas.domain.subject :as subj]
+            ;; the subject stratum: law-scope targets (ns-precise) + the realized instances
+            [canvas.subject :as subj :refer [Source Lens Projection]]
             [canvas.architecture.kernel :as kernel]
             [canvas.architecture.canvas-source :as canvas-source]
             [canvas.architecture.target :as target]

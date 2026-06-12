@@ -116,12 +116,12 @@
       (is (= {"into" :slot/one, "polarity" :slot/one}
              (into {} (d/q '[:find ?l ?k
                              :where [?s :structure/of :lib.grammar/Structure]
-                                    [?s :val/tag ":canvas.vocabulary.subject/Source"]
+                                    [?s :val/tag ":canvas.subject/Source"]
                                     [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db)))
           "Source's slots are cardinality-kinded, name-labeled edges")
       (is (= "enum"
              (ffirst (d/q '[:find ?kind
-                            :where [?s :val/tag ":canvas.vocabulary.subject/Source"]
+                            :where [?s :val/tag ":canvas.subject/Source"]
                                    [?r :rel/from ?s] [?r :rel/label "polarity"] [?r :rel/to ?t]
                                    [?t :val/kind ?kind]] db)))
           "the refined polarity slot targets its Schema value")
@@ -164,7 +164,7 @@
   (testing "the project Projection is realized by → the materialize module, via a SubjectRealization"
     (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
-                      :where [?f :structure/of :canvas.vocabulary.subject/Projection] [?f :entity/name "project"]
+                      :where [?f :structure/of :canvas.subject/Projection] [?f :entity/name "project"]
                              [?rz :structure/of :canvas.correspondence/SubjectRealization]
                              [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
                              [?b :rel/from ?rz] [?b :rel/kind :by] [?b :rel/to ?m]

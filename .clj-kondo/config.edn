@@ -61,7 +61,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.domain.subject
+  canvas.subject
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -244,12 +244,15 @@
    canvas.vocabulary.act/Finding hooks.fukan.structure/instance
    canvas.vocabulary.act/Mapping hooks.fukan.structure/instance
    canvas.vocabulary.act/Projection hooks.fukan.structure/instance
-   canvas.vocabulary.subject/Primitive hooks.fukan.structure/instance
-   canvas.vocabulary.subject/Model hooks.fukan.structure/instance
-   canvas.vocabulary.subject/Lens hooks.fukan.structure/instance
-   canvas.vocabulary.subject/Source hooks.fukan.structure/instance
-   canvas.vocabulary.subject/Projection hooks.fukan.structure/instance
-   canvas.vocabulary.subject/Correspondence hooks.fukan.structure/instance
+   canvas.subject/Node hooks.fukan.structure/instance
+   canvas.subject/Relation hooks.fukan.structure/instance
+   canvas.subject/Form hooks.fukan.structure/instance
+   canvas.subject/Vocabulary hooks.fukan.structure/instance
+   canvas.subject/Model hooks.fukan.structure/instance
+   canvas.subject/Lens hooks.fukan.structure/instance
+   canvas.subject/Source hooks.fukan.structure/instance
+   canvas.subject/Projection hooks.fukan.structure/instance
+   canvas.subject/Correspondence hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance

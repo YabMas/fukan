@@ -26,7 +26,7 @@
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────
 (Kind StructureDb
   "The unified structure db — the data realization of the domain `Model`
-   (canvas.domain.subject): a datascript db of structure instances + their reified
+   (canvas.subject): a datascript db of structure instances + their reified
    relations. Owned here; every subsystem adopts this one Kind.")
 (Kind Violation)
 (Kind Rule)

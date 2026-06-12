@@ -64,7 +64,7 @@
               demos.workflow.workflow-test
               demos.self.model.fukan
               demos.self.self-test
-              canvas.domain.subject
+              canvas.subject
               fukan.canvas.core.assemble-test
               fukan.canvas.core.composition-test
               fukan.canvas.core.view-map-test
