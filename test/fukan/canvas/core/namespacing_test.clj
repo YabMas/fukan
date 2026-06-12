@@ -6,17 +6,23 @@
 
    Before qualification this collided — the three collisions that drove the change were a `Type`
    test fixture vs the self-model, the `grammar` demo's `Grammar` vs the subject demo's, and
-   `target.correspondence/Realization` vs the new subject seam (which silently disabled a law)."
+   `target.correspondence/Realization` vs the new subject seam (which silently disabled a law).
+
+   LAW SCOPING is ns-precise too: a free law self-scopes to its structure via `[?o :structure/of
+   <qualified-tag>]`, so a law on one `Kind` never ranges over the other's instances (the edge that
+   surfaced when the subject re-grammar re-stated `Projection` at two altitudes)."
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [lib.code :as code]))
 
-;; a LOCAL structure named `Kind` — same short name as `lib.code/Kind`, different namespace
+;; a LOCAL structure named `Kind` — same short name as `lib.code/Kind`, different namespace —
+;; carrying a free law that flags ALL its instances (to probe scope precision)
 (defstructure Kind
   "Test fixture sharing the short name `Kind` with lib.code/Kind."
-  {:note [:? :String]})
+  {:note [:? :String]}
+  (law "local-kind-flag" :offenders '[?k] :where '[]))
 
 (Kind ^{:name "local"} local-kind)
 (code/Kind ^{:name "fromlib"} lib-kind)
@@ -33,4 +39,16 @@
       (is (= #{"local"}
              (set (map first (d/q '[:find ?n :where [?e :structure/of ::Kind] [?e :entity/name ?n]] db)))))
       (is (= #{"fromlib"}
-             (set (map first (d/q '[:find ?n :where [?e :structure/of :lib.code/Kind] [?e :entity/name ?n]] db))))))))
+             (set (map first (d/q '[:find ?n :where [?e :structure/of :lib.code/Kind] [?e :entity/name ?n]] db)))))))
+
+(deftest law-scope-is-ns-precise
+  (testing "a free law self-scoped to the local Kind flags only ::Kind instances — not lib.code/Kind"
+    (let [db      (a/assemble-vars [#'local-kind #'lib-kind])
+          flagged (->> (s/check db)
+                       (filter #(= "local-kind-flag" (:law %)))
+                       (mapcat :offenders)
+                       (map (comp :entity/name #(d/entity db %) first))
+                       set)]
+      (is (contains? flagged "local") "the local law fires on its own ::Kind instance")
+      (is (not (contains? flagged "fromlib"))
+          "and NOT on lib.code/Kind — ns-precise scoping (pre-fix the shared short name cross-scoped)")))))

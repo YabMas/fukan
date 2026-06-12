@@ -752,6 +752,20 @@
     nil     owner
     scope))
 
+(defn- direct-scope-tags
+  "Qualified tags whose instances carry `:structure/of` DIRECTLY, so a law scoped to one can be
+   pinned ns-precisely (`[?o :structure/of tag]`) instead of riding the short-name rule. Excludes
+   facets (`includes` targets — their members are reached via the inclusion rule, not a direct tag)
+   and realized/coproduct concepts (no instances). For these direct tags two same-short-named
+   structures from different namespaces never cross-scope."
+  [structures]
+  (let [facets (into #{} (mapcat :includes) structures)]
+    (into #{}
+          (comp (remove #(or (:realized-as %) (:relation-coproduct %)))
+                (map :tag)
+                (remove facets))
+          structures)))
+
 (def ^:dynamic *law-timeout-ms*
   "Per-law wall-clock budget for `check`. A recursive law that exceeds it —
    e.g. unbounded recursion over a cyclic/indirect graph — is reported as
@@ -791,19 +805,20 @@
         results))
     (d/q q db rules)))
 
-(defn- run-law [db base-rules {:keys [offenders where rules] :as law}]
-  ;; Scope via the structure's RULE predicate `(Foo ?o)` (its short name) — this rides the
-  ;; kind-rule for concrete structures AND the inclusion/realized-as rules for facets and derived
-  ;; concepts, so an `includes`-member is correctly in scope. KNOWN EDGE: the predicate head is the
-  ;; short name, so two same-short-named structures co-loaded from different namespaces share one
-  ;; scope predicate — a law on one would range over the other's instances too. The registry and
-  ;; `:structure/of` storage are ns-qualified (so defs/instances never collide), but law-scoping is
-  ;; not yet ns-precise; harmless until same-named structures WITH laws are deliberately co-loaded.
-  (let [scope-tag (law-scope-tag law)
-        where*    (if scope-tag
-                    (vec (cons (list (symbol (name scope-tag)) (first offenders)) where))
-                    where)
-        q         (vec (concat [:find] offenders [:in '$ '%] [:where] where*))
+(defn- run-law [db base-rules direct-tags {:keys [offenders where rules] :as law}]
+  ;; Scope the first offender var to the law's structure. A DIRECTLY-instantiated concrete tag is
+  ;; pinned ns-precisely via `[?o :structure/of tag]` — so two same-short-named structures from
+  ;; different namespaces (e.g. a concept re-stated at two altitudes) never cross-scope. Facets
+  ;; (`includes` targets) and realized/derived concepts have no direct `:structure/of`, so they ride
+  ;; the short-name RULE `(Foo ?o)`, which chains the inclusion / realized-as rules to reach their
+  ;; members. (A same-short-name collision survives only for those rarely-co-loaded abstract tags.)
+  (let [scope-tag    (law-scope-tag law)
+        scope-clause (when scope-tag
+                       (if (contains? direct-tags scope-tag)
+                         [(first offenders) :structure/of scope-tag]
+                         (list (symbol (name scope-tag)) (first offenders))))
+        where*       (if scope-clause (vec (cons scope-clause where)) where)
+        q            (vec (concat [:find] offenders [:in '$ '%] [:where] where*))
         ;; vocab-derived rules are always available; only actually-recursive own
         ;; rules need the timeout guard
         results   (run-query db q (into (vec base-rules) rules) (rules-recursive? rules))]
@@ -820,11 +835,12 @@
      {:structure :law :timed-out? true :message …} — a (recursive) law that
         exceeded *law-timeout-ms* instead of completing."
   [db]
-  (let [base (vocab-rules)]
+  (let [base   (vocab-rules)
+        direct (direct-scope-tags (all-structures))]
    (vec
     (for [{:keys [tag laws] :as sdef} (all-structures)
           {:keys [desc] :as law} (concat (slot-laws sdef) laws)
-          :let [r (run-law db base law)]
+          :let [r (run-law db base direct law)]
           :when r]
      (if (= r ::timeout)
        {:structure tag :law desc :timed-out? true
