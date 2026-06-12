@@ -11,7 +11,9 @@
             [fukan.model.pipeline :as pipeline]
             [canvas.architecture.kernel :refer [Concept MetaSlot]]
             [lib.grouping :refer [Grouping]]
-            [canvas.acts :refer [Projection]]))
+            [canvas.acts :refer [Projection]]
+            [lib.grammar :as grammar]
+            [canvas.correspondence]))
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name
 (defn- names-of [db tag]
@@ -161,19 +163,31 @@
                      "MetaSlot.cardinality value must satisfy [:enum \"one\" \"optional\" \"many\" \"some\" \"set\"]")))))
 
 (deftest cross-module-ref-resolves
-  (testing "the project Projection is realized by → the materialize module, via a SubjectRealization"
+  (testing "the Projection FACULTY (a portrait → grammar node) is realized by → the materialize module, by tag"
     (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
-                      :where [?f :structure/of :canvas.subject/Projection] [?f :entity/name "project"]
+                      :where [?f :structure/of :lib.grammar/Structure] [?f :val/tag ":canvas.subject/Projection"]
                              [?rz :structure/of :canvas.correspondence/SubjectRealization]
-                             [?a :rel/from ?rz] [?a :rel/kind :realizes] [?a :rel/to ?f]
+                             [?rz :val/realizes ":canvas.subject/Projection"]
                              [?b :rel/from ?rz] [?b :rel/kind :by] [?b :rel/to ?m]
                              [?m :structure/of :lib.code/Module] [?m :entity/name "materialize"]]
                     db))
-          "the cross-refs (ordinary var refs) resolved through the SubjectRealization node")
+          "the realization names the reflected Projection grammar node by tag and is :by materialize")
       (is (every? #(some? (:rel/to (d/entity db (first %))))
                   (d/q '[:find ?r :where [?r :rel/kind :by]] db))
           "every realizer relation has a resolved target — no dangling refs"))))
+
+(deftest subject-completeness-flags-unrealized-faculties
+  (testing "with the subject grammar reflected but NO realizations, every use-side faculty is flagged"
+    (let [db    (grammar/with-grammar (a/assemble-vars []) ["canvas.subject"])
+          fired (->> (s/check db)
+                     (filter #(= "every use-side faculty (Source/Lens/Projection) is realized by a module"
+                                 (:law %)))
+                     (mapcat :offenders)
+                     (map #(:val/tag (d/entity db (first %))))
+                     set)]
+      (is (= #{":canvas.subject/Source" ":canvas.subject/Lens" ":canvas.subject/Projection"} fired)
+          "each use-side faculty with no SubjectRealization is reported by its grammar node"))))
 
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
