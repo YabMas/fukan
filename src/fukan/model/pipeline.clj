@@ -32,4 +32,8 @@
     (grammar/with-grammar
      (if code-db
        (canvas-source/union-dbs [design code-db])
-       design))))
+       design)
+     ;; seed reflection with EVERY discovered canvas namespace, so a pure-grammar
+     ;; stratum (canvas.subject — portraits, no instances) still reflects
+     ;; (with-grammar coerces the ns symbols to strings)
+     (canvas-source/canvas-namespaces))))
