@@ -135,7 +135,7 @@
       (is (str/includes? out "Implement `extract`"))
       (is (str/includes? out "Implement `check`") "Operations from across modules are projected")
       (is (> (count (re-seq #"This is an implementation specification" out)) 3)
-          "several Operations projected; bare Kinds/Concepts are not rendered standalone"))))
+          "several Operations projected; bare Kinds are not rendered standalone"))))
 
 (deftest driftclose-contextualizes-blueprint-not-duplicates-it
   (testing "DriftClose composes Blueprint — its specs framed by a drift context, not a parallel renderer"

@@ -12,7 +12,12 @@
 
 (Module probes
   "The live run/run-all dispatch surface over the implemented probe leaves."
-  (Kind ProbeName) (Kind Finding) (Kind FindingMap)
+  (Kind ProbeName [:enum "survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift" "type-drift"])
+  (Kind Finding
+    [:map [:lens :string]
+          [:gating :boolean]
+          [:observations [:vector [:map [:focus [:set :int]] [:as :keyword] [:note :string]]]]])
+  (Kind FindingMap)
   (Operation run "Dispatch a named probe over a target db → a finding."
     {:signature [:=> [:catn [:target-db kernel/StructureDb] [:probe-name ProbeName]] Finding]
      :performs  [:throws]

@@ -9,9 +9,11 @@
 (Module extraction
   "The extraction plug-point — register and run the project's code extractor."
   (Kind Extractor)
-  (Kind Path "A filesystem path to the source ROOT — the code root a project's extractor reads.
-              The single source-root Kind: `build-model` and `load-model` adopt it (the same value
-              flows in from the CLI → build-model → run-extractor).")
+  (Kind Path
+    "A filesystem path to the source ROOT — the code root a project's extractor reads.
+     The single source-root Kind: `build-model` and `load-model` adopt it (the same value
+     flows in from the CLI → build-model → run-extractor)."
+    :string)
   (Kind Unit)
   (Operation register-extractor! "Register the project's extractor (a fn Path → StructureDb)."
     {:signature [:=> [:catn [:f Extractor]] Unit]

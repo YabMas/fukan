@@ -13,9 +13,9 @@
 
 (Module projection-grammar
   "Render the reified grammar back out: forms, the primer, and the grammar-drift reading."
-  (Kind Form)        ; a defstructure data form (the print-dual's faithful render)
-  (Kind Primer)      ; the reference-card string
-  (Kind VocabName)   ; a grammar namespace name
+  (Kind Form)              ; a defstructure data form (the print-dual's faithful render) — opaque
+  (Kind Primer :string)    ; the reference-card string
+  (Kind VocabName :string) ; a grammar namespace name
   (Operation structure-form
     "A reified Structure rendered back as its map-form defstructure (the print-dual)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]})

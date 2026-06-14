@@ -224,8 +224,6 @@
    canvas.architecture.acts/FindingCheck hooks.fukan.structure/instance
    canvas.architecture.acts/ReadingComposition hooks.fukan.structure/instance
    canvas.acts/Lens hooks.fukan.structure/instance
-   canvas.architecture.kernel/Concept hooks.fukan.structure/instance
-   canvas.architecture.kernel/MetaSlot hooks.fukan.structure/instance
    lib.code/Effect hooks.fukan.structure/instance
    lib.code/Operation hooks.fukan.structure/instance
    lib.code/Kind hooks.fukan.structure/instance
@@ -336,6 +334,7 @@
    fukan.canvas.core.structure-test/Wrapped hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/PBody hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/PNoSyntax hooks.fukan.structure/instance
+   fukan.model.pipeline-test/ECard hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Attr hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Doc hooks.fukan.structure/instance
    fukan.canvas.core.value-authoring-test/Ent hooks.fukan.structure/instance

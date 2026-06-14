@@ -13,9 +13,9 @@
 
 (Module projection-instance
   "Render model nodes back as their authored instance forms."
-  (Kind Form)        ; an instance data form (the print-dual's faithful render)
-  (Kind Text)        ; a formatted render
-  (Kind Focus)       ; what to render: datalog clauses or an eid set
+  (Kind Form)                                       ; an instance data form (the print-dual's faithful render) — opaque
+  (Kind Text :string)                               ; a formatted render
+  (Kind Focus [:or [:vector :int] [:vector :any]])  ; an eid set or datalog clauses (most-specific branch first)
   (Operation instance-form
     "A model node rendered back as its authored instance form (the data dual)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]})

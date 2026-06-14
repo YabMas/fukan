@@ -7,9 +7,8 @@
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.model.pipeline :as pipeline]
-            [canvas.architecture.kernel :refer [Concept MetaSlot]]
             [lib.code :refer [Kind]]
             [lib.grouping :refer [Grouping]]
             [canvas.acts :refer [Projection]]
@@ -23,9 +22,10 @@
 
 ;; ── ad-hoc dbs built from top-level value defs (assembled per test) ──────────
 
-;; a MetaSlot with an unknown cardinality
-(Concept ^{:name "T"} mc-T)
-(Concept ^{:name "X"} mc-X {:slot [(MetaSlot {:name "f" :cardinality "lots" :of mc-T})]})
+;; refined [:enum …] slot validation (relocated from the retired MetaSlot) — Task 3
+(defstructure ECard "Test fixture: a structure with a refined enum slot."
+  {:card [:enum "one" "many"]})
+(ECard ^{:name "Bad"} ec-bad {:card "lots"})
 
 ;; a projection that is neither a base nor a contextualization
 (Projection ^{:name "Empty"} pe-Empty)
@@ -164,18 +164,18 @@
                                    [?t :val/tag ?lt]] db)))
           "Structure.law targets the reified Law structure (composition)")
       (is (= #{"from" "to" "kind" "label" "order"}
-             (set (d/q '[:find [?n ...]
-                         :where [?c :structure/of :canvas.architecture.kernel/Concept]
-                                [?c :entity/name "Relation"]
-                                [?r :rel/from ?c] [?r :rel/kind :slot] [?r :rel/to ?ms]
-                                [?ms :val/name ?n]] db)))
-          "the substrate Relation stays hand-modelled — below the registry"))))
+             (set (d/q '[:find [?k ...]
+                         :where [?kind :structure/of :lib.code/Kind] [?kind :entity/name "Relation"]
+                                [?sr :rel/from ?kind] [?sr :rel/kind :shape] [?sr :rel/to ?schema]
+                                [?fr :rel/from ?schema] [?fr :rel/kind :field] [?fr :rel/to ?f]
+                                [?f :val/key ?k]] db)))
+          "the substrate Relation is a Kind whose :shape is a :map of its fields"))))
 
-(deftest metaslot-cardinality-law-catches-unknown-cardinality
-  (testing "a MetaSlot whose cardinality is outside the known set is caught"
-    (let [bad (a/assemble-vars [#'mc-T #'mc-X])]
+(deftest refined-enum-slot-catches-out-of-set-value
+  (testing "a refined [:enum …] scalar slot rejects an out-of-enum value via its generated law"
+    (let [bad (a/assemble-vars [#'ec-bad])]
       (is (contains? (set (map :law (s/check bad)))
-                     "MetaSlot.cardinality value must satisfy [:enum \"one\" \"optional\" \"many\" \"some\" \"set\"]")))))
+                     "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
 
 (deftest cross-module-ref-resolves
   (testing "the Projection FACULTY (a portrait → grammar node) is realized by → the materialize module, by tag"

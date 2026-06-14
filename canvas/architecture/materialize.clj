@@ -10,8 +10,9 @@
 
 (Module materialize
   "Project the model down into an implementation spec, through a Lens focus + a Projection."
-  (Kind Lens) (Kind Instruction) (Kind Projection) (Kind ProjectionName) (Kind ModuleName)
-  (Kind Clause) (Kind Eid)
+  (Kind Lens) (Kind Instruction) (Kind Projection)
+  (Kind ProjectionName :string) (Kind ModuleName :string)
+  (Kind Clause) (Kind Eid :int)
   (Operation materialize-view "Render a lens focus under Blueprint (the default projection)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:lens Lens]] Instruction]})
   (Operation materialize-over "Render a refined focus (node-set) under a projection."

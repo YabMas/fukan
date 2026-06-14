@@ -9,14 +9,14 @@
 
 (Module target-clojure
   "The Clojure extractor — reads source via clj-kondo (no eval) and emits code structures into a db."
-  (Kind Path)
+  (Kind Path :string)
   (Operation extract "Extract code structures from source paths into the shared StructureDb."
     {:signature [:=> [:catn [:paths [:vector Path]]] kernel/StructureDb]
      :performs  [:io]}))
 
 (Module target-correspondence
   "The model↔code correspondence — drift and coverage as queries over the unified graph."
-  (Kind OperationName)
+  (Kind OperationName :string)
   (Operation drifted-operations "Modelled operations with no realizing function (spec→code gaps)."
     {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector OperationName]]
      :delegates [kernel/check]})

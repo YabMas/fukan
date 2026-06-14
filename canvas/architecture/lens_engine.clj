@@ -10,7 +10,7 @@
 (Module core-lens
   "The lens engine — evaluate a focus query (with vocab rules) and refine it."
   (Kind Clause)
-  (Kind Eid)
+  (Kind Eid :int)
   (Operation focus-nodes "Run :where clauses (binding ?n) with the vocab rules → focus node-set."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:clauses [:vector Clause]]] [:vector Eid]]
      :delegates [kernel/vocab-rules]})
