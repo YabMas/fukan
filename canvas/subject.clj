@@ -23,12 +23,18 @@
 ;; ── the floor: substrate + the grammar-building Form ───────────────────────────
 
 (defstructure Node
-  "A node — the atom of the graph (by name+uuid, or by content when it is a value).")
+  "The atom of the graph. Its identity is one of two modes (`:identity`): a NAMED node (by
+   name + uuid) or a VALUE node (by content — structurally-equal values collapse to one node).
+   The uuid is realization bookkeeping and stays out of the domain shape."
+  {:identity [:enum "named" "value"]})
 
 (defstructure Relation
-  "A reified, kinded edge wiring one Node to another. Nodes + Relations ARE the graph; everything
-   else is built over them."
-  {:wires Node})
+  "A directed, kinded edge: it wires a `:from` Node to a `:to` Node under a `:kind` (the
+   relation's name/role). Nodes + Relations ARE the graph; everything else is built over them.
+   Order and label are realization bookkeeping (datascript `:rel/order`, `:rel/label`) and stay
+   OUT of the domain shape — they live on the realized kernel `Relation` Kind, and the gap
+   (domain shape ⊂ realized shape) is exactly what the correspondence seam can check."
+  {:from Node :to Node :kind :String})
 
 (defstructure Form
   "`defstructure` — the one grammar-building form (fukan ships exactly this; everything else is grown

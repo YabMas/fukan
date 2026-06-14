@@ -325,3 +325,21 @@
           "IntegrityReport has a holds invariant")
       (is (empty? (s/check db))
           "the whole self-model still satisfies every law"))))
+
+(deftest subject-substrate-carries-its-domain-shape
+  (testing "Node and Relation portraits reflect their deepened domain shapes"
+    (let [db     (pipeline/build-model nil)
+          slots  (fn [tag] (into {} (d/q '[:find ?l ?k :in $ ?tag
+                                           :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
+                                                  [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db tag)))
+          target (fn [tag label] (ffirst (d/q '[:find ?tn :in $ ?tag ?label
+                                                 :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
+                                                        [?r :rel/from ?s] [?r :rel/label ?label]
+                                                        [?r :rel/to ?t] [?t :entity/name ?tn]] db tag label)))]
+      (is (= {"identity" :slot/one} (slots ":canvas.subject/Node"))
+          "Node carries its identity-mode shape (named | value)")
+      (is (= {"from" :slot/one, "to" :slot/one, "kind" :slot/one} (slots ":canvas.subject/Relation"))
+          "Relation is directed (from/to Node) and kinded")
+      (is (= "Node" (target ":canvas.subject/Relation" "from")) "from targets Node")
+      (is (= "Node" (target ":canvas.subject/Relation" "to"))   "to targets Node")
+      (is (empty? (s/check db)) "the self-model still satisfies every law"))))
