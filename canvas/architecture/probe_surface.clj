@@ -17,7 +17,7 @@
     [:map [:lens :string]
           [:gating :boolean]
           [:observations [:vector [:map [:focus [:set :int]] [:as :keyword] [:note :string]]]]])
-  (Kind FindingMap)
+  (Kind FindingMap [:map-of ProbeName Finding])
   (Operation run "Dispatch a named probe over a target db → a finding."
     {:signature [:=> [:catn [:target-db kernel/StructureDb] [:probe-name ProbeName]] Finding]
      :performs  [:throws]

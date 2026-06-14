@@ -86,6 +86,7 @@
      [:re \"pat\"]                               string + regex (normalizes to the
                                                same datoms as [:string {:re \"pat\"}])
      [:=> [:catn [:name T] …] Out]             function type — labelled :in params + :out
+     [:map-of K V]                             homogeneous map — key schema + value schema
      Foo  (a bare symbol)                      a var-ref naming a Kind: a `ref`
                                                schema that NAMES the type `Foo` via a
                                                `:names` edge (var-captured at the
@@ -136,6 +137,9 @@
             (into [(list 'kind "=>") (list 'out output)]
                   (map (fn [[pname ptype]] (list 'in [pname ptype]))
                        (catn->pairs input))))
+          :map-of
+          ;; two ordered :of children — the key schema then the value schema
+          [(list 'kind "map-of") (cons 'of args)]
           (throw (ex-info (str "unsupported malli op: " op) {:form data})))))
     :else (throw (ex-info (str "not a valid malli schema: " (pr-str data) " — records are [:map [:k V] …], not {:k V}")
                           {:data data}))))
@@ -144,7 +148,8 @@
   "A malli schema, value-identified. `:kind` (a String) is the combinator:
    scalar (int/string/boolean/keyword/double — with :min/:max/:regex leaves),
    collection (vector/set/sequential — one element in :of), tuple/or/and
-   (children in :of), map (labelled :field entries), enum (:choice members),
+   (children in :of), map (labelled :field entries), map-of (two ordered :of
+   children — key then value), enum (:choice members),
    ref (names another type via the :names edge), or arrow (=> — labelled :in
    params + :out). Author as native malli; read-malli expands it. The ref edge
    targets the wildcard `Any` (the named type's var is captured at the authoring
@@ -154,7 +159,7 @@
    :max    [:? :Int]
    :regex  [:? :String]
    :names  [:? Any]
-   :of     [:* Schema]           ; ordered children (tuple/or/and are form-faithful)
+   :of     [:* Schema]           ; ordered children (tuple/or/and/map-of are form-faithful)
    :field  [:set SchemaField]    ; map entries — unordered, like the map they describe
    :choice [:* SchemaChoice]     ; enum members in form order (round-trip faithful)
    :in     [:* Schema]           ; arrow params — ordered, each :rel/label-ed with its name

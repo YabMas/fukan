@@ -67,6 +67,8 @@
                  (children db eid :choice)))
       "ref"
       (keyword (:entity/name (d/entity db (first (children db eid :names)))))
+      "map-of"
+      (let [[k v] (children db eid :of)] [:map-of (render db k) (render db v)])
       "=>"
       [:=> (into [:catn] (map (fn [[ieid lbl]] [(keyword lbl) (render db ieid)])
                               (labelled-children db eid :in)))

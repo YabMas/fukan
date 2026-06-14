@@ -34,12 +34,22 @@
 ;; an arrow-shaped Kind — Task 4 (scalars only, so render round-trips exactly)
 (Kind ^{:name "Arrow"} k-arrow [:=> [:catn [:code-root :string]] :int])
 
+;; a map-of-shaped Kind — Task 5
+(Kind ^{:name "MapOf"} k-mapof [:map-of :string :int])
+
 (deftest arrow-schema-round-trips
   (testing "a [:=> [:catn …] Out] Kind body reflects and renders back to the same malli form"
     (let [db    (a/assemble-vars [#'k-arrow])
           seid  (ffirst (d/q '[:find ?s :where [?e :entity/name "Arrow"]
                                        [?r :rel/from ?e] [?r :rel/kind :shape] [?r :rel/to ?s]] db))]
       (is (= [:=> [:catn [:code-root :string]] :int] (dialect/render db seid))))))
+
+(deftest map-of-schema-round-trips
+  (testing "a [:map-of K V] Kind body reflects and renders back"
+    (let [db   (a/assemble-vars [#'k-mapof])
+          seid (ffirst (d/q '[:find ?s :where [?e :entity/name "MapOf"]
+                                      [?r :rel/from ?e] [?r :rel/kind :shape] [?r :rel/to ?s]] db))]
+      (is (= [:map-of :string :int] (dialect/render db seid))))))
 
 ;; a Kind authored with a positional record shape — Task 2
 (Kind ^{:name "Vshape"} k-vshape [:map [:law :string] [:offenders [:vector :int]]])
