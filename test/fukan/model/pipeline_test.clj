@@ -10,6 +10,7 @@
             [fukan.canvas.core.structure :as s]
             [fukan.model.pipeline :as pipeline]
             [canvas.architecture.kernel :refer [Concept MetaSlot]]
+            [lib.code :refer [Kind]]
             [lib.grouping :refer [Grouping]]
             [canvas.acts :refer [Projection]]
             [lib.grammar :as grammar]
@@ -28,6 +29,20 @@
 
 ;; a projection that is neither a base nor a contextualization
 (Projection ^{:name "Empty"} pe-Empty)
+
+;; a Kind authored with a positional record shape — Task 2
+(Kind ^{:name "Vshape"} k-vshape [:map [:law :string] [:offenders [:vector :int]]])
+(Kind ^{:name "Opaque"} k-opaque "an opaque external — no body")
+
+(deftest kind-carries-a-positional-schema-shape
+  (testing "a positional malli body becomes the Kind's :shape Schema subgraph; opaque stays bodyless"
+    (let [db (a/assemble-vars [#'k-vshape #'k-opaque])
+          shape-kind (fn [nm] (ffirst (d/q '[:find ?k :in $ ?nm
+                                             :where [?e :entity/name ?nm]
+                                                    [?r :rel/from ?e] [?r :rel/kind :shape] [?r :rel/to ?s]
+                                                    [?s :val/kind ?k]] db nm)))]
+      (is (= "map" (shape-kind "Vshape")) "the record shape reflects as a :map Schema")
+      (is (nil? (shape-kind "Opaque"))    "an opaque Kind has no :shape relation"))))
 
 (deftest build-model-ingests-canvas-specs-into-a-structure-db
   (testing "the model is the merged structure db over the canvas/ defstructure specs"
