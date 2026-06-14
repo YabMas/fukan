@@ -19,6 +19,17 @@
        (sort-by second)
        (mapv first)))
 
+(defn- labelled-children
+  "Like `children` but returns [to label] pairs in :rel/order order — for arrow :in params."
+  [db from rel]
+  (->> (d/q '[:find ?to ?ord ?lbl :in $ ?from ?k :where
+              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]
+              [(get-else $ ?r :rel/order 0) ?ord]
+              [(get-else $ ?r :rel/label "") ?lbl]]
+            db from rel)
+       (sort-by second)
+       (mapv (fn [[to _ lbl]] [to lbl]))))
+
 (defn render
   "Render the Schema at `eid` in `db` back to a malli data-form."
   [db eid]
@@ -29,7 +40,7 @@
                 (:val/max ent)   (assoc :max (:val/max ent))
                 (:val/regex ent) (assoc :re  (:val/regex ent)))]
     (case kind
-      ("int" "string" "boolean" "keyword" "double")
+      ("int" "string" "boolean" "keyword" "double" "any" "nil")
       (if (seq props) [(keyword kind) props] (keyword kind))
       ("vector" "set" "sequential")
       [(keyword kind) (render db (first (children db eid :of)))]
@@ -56,6 +67,10 @@
                  (children db eid :choice)))
       "ref"
       (keyword (:entity/name (d/entity db (first (children db eid :names)))))
+      "=>"
+      [:=> (into [:catn] (map (fn [[ieid lbl]] [(keyword lbl) (render db ieid)])
+                              (labelled-children db eid :in)))
+       (render db (first (children db eid :out)))]
       (throw (ex-info (str "cannot render schema kind: " kind) {:eid eid :kind kind})))))
 
 (def ^:private validator

@@ -20,6 +20,26 @@
 ;; malli `:valid?` bridge at load (merge-per-key; a composition root adds the rest).
 (typing/register-type-dialect! {:valid? dialect/valid?})
 
+(defn ^:export catn->pairs
+  "Parse a malli function-input schema into ordered [param-name-symbol type-form] pairs —
+   the SHARED arrow-input representation used by both Operation's `:signature` sugar and
+   the `:=>` Schema combinator. `[:catn [:name T] …]` → pairs; `[:cat]` → []; a positional
+   `[:cat Type …]` is rejected (name your parameters)."
+  [input]
+  (when-not (vector? input)
+    (throw (ex-info (str "function input must be [:catn …] or [:cat]: " (pr-str input)) {:form input})))
+  (let [[op & more] input]
+    (case op
+      :catn (mapv (fn [pair]
+                    (when-not (and (vector? pair) (= 2 (count pair)) (keyword? (first pair)))
+                      (throw (ex-info (str ":catn entry must be [:name Type]: " (pr-str pair)) {:form input})))
+                    [(symbol (name (first pair))) (second pair)])
+                  more)
+      :cat  (if (seq more)
+              (throw (ex-info (str "name your parameters — use [:catn [:name Type] …], not [:cat …]: " (pr-str input)) {:form input}))
+              [])
+      (throw (ex-info (str "function input must be [:catn …] or [:cat]: " (pr-str input)) {:form input})))))
+
 (defn ^:export read-choice
   "An enum member (a keyword, string, or symbol — passed RAW) -> SchemaChoice
    clauses. The member's TYPE is preserved as :kind, so `[:enum :a]` and
@@ -57,6 +77,7 @@
   "Expand a native malli data-literal into Schema construction clauses (one level).
    Accepts only valid malli structural syntax:
      :int :string :boolean :keyword :double   scalar leaf
+     :any :nil                                 opaque/void scalar leaves
      [:int {:min _ :max _}] / [:string {:re}]  scalar + constraint leaves
      [:vector|:set|:sequential X]              collection of element X
      [:tuple A B ...] / [:or ...] / [:and ...]  ordered/alternative children :of
@@ -64,6 +85,7 @@
      [:enum :a :b] / [:enum \"a\" \"b\"]           :choice members (type preserved)
      [:re \"pat\"]                               string + regex (normalizes to the
                                                same datoms as [:string {:re \"pat\"}])
+     [:=> [:catn [:name T] …] Out]             function type — labelled :in params + :out
      Foo  (a bare symbol)                      a var-ref naming a Kind: a `ref`
                                                schema that NAMES the type `Foo` via a
                                                `:names` edge (var-captured at the
@@ -107,6 +129,13 @@
           (into [(list 'kind "enum")] (map #(list 'choice %) args))
           :re
           [(list 'kind "string") (list 'regex (str (first args)))]
+          :=>
+          ;; a function type — the arrow's :in is LABELLED (param name) + ordered, :out is one
+          ;; schema, exactly as lib.code/Operation stores a signature (the shared representation).
+          (let [[input output] args]
+            (into [(list 'kind "=>") (list 'out output)]
+                  (map (fn [[pname ptype]] (list 'in [pname ptype]))
+                       (catn->pairs input))))
           (throw (ex-info (str "unsupported malli op: " op) {:form data})))))
     :else (throw (ex-info (str "not a valid malli schema: " (pr-str data) " — records are [:map [:k V] …], not {:k V}")
                           {:data data}))))
@@ -116,10 +145,10 @@
    scalar (int/string/boolean/keyword/double — with :min/:max/:regex leaves),
    collection (vector/set/sequential — one element in :of), tuple/or/and
    (children in :of), map (labelled :field entries), enum (:choice members),
-   or ref (names another type via the :names edge). Author as native malli;
-   read-malli expands it. The ref edge targets the wildcard `Any` (the named
-   type's var is captured at the authoring site) to avoid a require cycle on the
-   vocab that owns the named Kind."
+   ref (names another type via the :names edge), or arrow (=> — labelled :in
+   params + :out). Author as native malli; read-malli expands it. The ref edge
+   targets the wildcard `Any` (the named type's var is captured at the authoring
+   site) to avoid a require cycle on the vocab that owns the named Kind."
   {:kind   :String
    :min    [:? :Int]
    :max    [:? :Int]
@@ -127,7 +156,9 @@
    :names  [:? Any]
    :of     [:* Schema]           ; ordered children (tuple/or/and are form-faithful)
    :field  [:set SchemaField]    ; map entries — unordered, like the map they describe
-   :choice [:* SchemaChoice]}    ; enum members in form order (round-trip faithful)
+   :choice [:* SchemaChoice]     ; enum members in form order (round-trip faithful)
+   :in     [:* Schema]           ; arrow params — ordered, each :rel/label-ed with its name
+   :out    [:? Schema]}          ; arrow result
   (reader read-malli)
   (law "a ref schema must name a target"
     (has :names :when {:kind "ref"})))

@@ -8,6 +8,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.dialect.malli :as dialect]
             [fukan.model.pipeline :as pipeline]
             [lib.code :refer [Kind]]
             [lib.grouping :refer [Grouping]]
@@ -29,6 +30,16 @@
 
 ;; a projection that is neither a base nor a contextualization
 (Projection ^{:name "Empty"} pe-Empty)
+
+;; an arrow-shaped Kind — Task 4 (scalars only, so render round-trips exactly)
+(Kind ^{:name "Arrow"} k-arrow [:=> [:catn [:code-root :string]] :int])
+
+(deftest arrow-schema-round-trips
+  (testing "a [:=> [:catn …] Out] Kind body reflects and renders back to the same malli form"
+    (let [db    (a/assemble-vars [#'k-arrow])
+          seid  (ffirst (d/q '[:find ?s :where [?e :entity/name "Arrow"]
+                                       [?r :rel/from ?e] [?r :rel/kind :shape] [?r :rel/to ?s]] db))]
+      (is (= [:=> [:catn [:code-root :string]] :int] (dialect/render db seid))))))
 
 ;; a Kind authored with a positional record shape — Task 2
 (Kind ^{:name "Vshape"} k-vshape [:map [:law :string] [:offenders [:vector :int]]])

@@ -8,7 +8,7 @@
 
 (Module extraction
   "The extraction plug-point — register and run the project's code extractor."
-  (Kind Extractor)
+  (Kind Extractor [:=> [:catn [:code-root Path]] kernel/StructureDb])
   (Kind Path
     "A filesystem path to the source ROOT — the code root a project's extractor reads.
      The single source-root Kind: `build-model` and `load-model` adopt it (the same value

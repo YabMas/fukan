@@ -10,7 +10,7 @@
    Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.grouping :refer [Connected]]
-            [lib.type.malli :refer [Schema]]))
+            [lib.type.malli :as lib.type.malli :refer [Schema]]))
 
 ;; ── data types ───────────────────────────────────────────────────────────────
 
@@ -60,19 +60,10 @@
       (when-not (and (vector? form) (= :=> (first form)) (= 3 (count form)))
         (throw (ex-info (str "signature must be a malli function schema [:=> INPUT OUTPUT]: " (pr-str form)) {:form form})))
       (let [[_ input output] form]
+        ;; keep this guard ahead of catn->pairs: it reports against the whole [:=> …] form
         (when-not (vector? input)
           (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))
-        (let [[in-op & in-args] input
-              in (case in-op
-                   :catn (mapv (fn [pair]
-                                 (when-not (and (vector? pair) (= 2 (count pair)) (keyword? (first pair)))
-                                   (throw (ex-info (str ":catn entry must be [:name Type]: " (pr-str pair)) {:form form})))
-                                 [(symbol (name (first pair))) (second pair)])
-                               in-args)
-                   :cat  (if (seq in-args)
-                           (throw (ex-info (str "name your parameters — use [:catn [:name Type] …], not [:cat …]: " (pr-str input)) {:form form}))
-                           [])
-                   (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))]
+        (let [in (lib.type.malli/catn->pairs input)]
           (cond-> (-> m (dissoc :signature) (assoc :out output))
             (seq in) (assoc :in in)))))))
 
