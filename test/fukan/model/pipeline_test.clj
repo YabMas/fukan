@@ -12,7 +12,7 @@
             [fukan.model.pipeline :as pipeline]
             [lib.code :refer [Kind]]
             [lib.grouping :refer [Grouping]]
-            [canvas.acts :refer [Projection]]
+            [lib.lens :refer [Projection]]
             [lib.grammar :as grammar]
             [canvas.correspondence]))
 
@@ -240,14 +240,14 @@
       ;; lens ∘ reading composition: the Patterns finding reads through the patterns lens,
       ;; resolved cross-module to the lens node
       (is (seq (d/q '[:find ?l
-                      :where [?f :structure/of :canvas.acts/Finding] [?f :entity/name "Patterns"]
+                      :where [?f :structure/of :lib.lens/Finding] [?f :entity/name "Patterns"]
                              [?r :rel/from ?f] [?r :rel/kind :through] [?r :rel/to ?l]
-                             [?l :structure/of :canvas.acts/Lens] [?l :entity/name "patterns"]]
+                             [?l :structure/of :lib.lens/Lens] [?l :entity/name "patterns"]]
                     db))
           "the Patterns finding reads through the patterns lens")
       ;; inspect ⊂ reading — DriftReport is a reading whose finding GATES (a trust Signal)
       (is (seq (d/q '[:find ?f
-                      :where [?f :structure/of :canvas.acts/Finding] [?f :entity/name "DriftReport"]
+                      :where [?f :structure/of :lib.lens/Finding] [?f :entity/name "DriftReport"]
                              [?f :val/gating true]]
                     db))
           "DriftReport is an inspect — a gating reading"))))
@@ -260,16 +260,16 @@
       (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
       ;; a projection composes lens ∘ act too: Blueprint renders THROUGH the survey lens
       (is (seq (d/q '[:find ?l
-                      :where [?p :structure/of :canvas.acts/Projection] [?p :entity/name "Blueprint"]
+                      :where [?p :structure/of :lib.lens/Projection] [?p :entity/name "Blueprint"]
                              [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
-                             [?l :structure/of :canvas.acts/Lens] [?l :entity/name "survey"]]
+                             [?l :structure/of :lib.lens/Lens] [?l :entity/name "survey"]]
                     db))
           "Blueprint renders through the survey lens")
       ;; a projection is built from mappings (value-typed source→artifact pairs)
       (is (seq (d/q '[:find ?mp
-                      :where [?p :structure/of :canvas.acts/Projection] [?p :entity/name "Blueprint"]
+                      :where [?p :structure/of :lib.lens/Projection] [?p :entity/name "Blueprint"]
                              [?r :rel/from ?p] [?r :rel/kind :maps] [?r :rel/to ?mp]
-                             [?mp :structure/of :canvas.acts/Mapping]
+                             [?mp :structure/of :lib.lens/Mapping]
                              [?mp :val/from "a function"] [?mp :val/to "a defn"]]
                     db))
           "the Blueprint projection maps a function → a defn"))))
@@ -277,14 +277,14 @@
 (deftest a-lens-is-reused-across-acts
   (testing "the payoff: ONE drift lens feeds BOTH the drift inspect (a Finding) AND the drift-close projection"
     (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :canvas.acts/Lens] [?l :entity/name "drift"]] db)))
+      (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :lib.lens/Lens] [?l :entity/name "drift"]] db)))
           "there is exactly one drift lens node")
       (is (seq (d/q '[:find ?l
-                      :where [?l :structure/of :canvas.acts/Lens] [?l :entity/name "drift"]
+                      :where [?l :structure/of :lib.lens/Lens] [?l :entity/name "drift"]
                              ;; read by a Finding (the inspect) …
-                             [?fd :structure/of :canvas.acts/Finding] [?rp :rel/from ?fd] [?rp :rel/kind :through] [?rp :rel/to ?l]
+                             [?fd :structure/of :lib.lens/Finding] [?rp :rel/from ?fd] [?rp :rel/kind :through] [?rp :rel/to ?l]
                              ;; … AND rendered by a projection (drift-close)
-                             [?pj :structure/of :canvas.acts/Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
+                             [?pj :structure/of :lib.lens/Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
                     db))
           "one drift focus, read by a finding and rendered by a projection"))))
 
@@ -298,7 +298,7 @@
   (testing "Patterns and IntegrityReport have a FindingCheck carrying an inline holds predicate"
     (let [db (pipeline/build-model nil)
           pred (fn [nm] (ffirst (d/q '[:find ?p :in $ ?n
-                                       :where [?f :entity/name ?n] [?f :structure/of :canvas.acts/Finding]
+                                       :where [?f :entity/name ?n] [?f :structure/of :lib.lens/Finding]
                                               [?r :rel/kind :realizes] [?r :rel/to ?f]
                                               [?r :rel/from ?fc] [?fc :val/pred ?p]]
                                      db nm)))]
@@ -311,7 +311,7 @@
   (testing "the Patterns finding declares a holds invariant in the real model"
     (let [db  (pipeline/build-model nil)
           fid (ffirst (d/q '[:find ?f
-                             :where [?f :entity/name "Patterns"] [?f :structure/of :canvas.acts/Finding]] db))]
+                             :where [?f :entity/name "Patterns"] [?f :structure/of :lib.lens/Finding]] db))]
       (is (some? (:val/holds (d/entity db fid))) "Patterns has a holds invariant")
       (is (empty? (s/check db)) "the whole self-model still satisfies every law"))))
 
@@ -320,7 +320,7 @@
     (let [db  (pipeline/build-model nil)
           fid (ffirst (d/q '[:find ?f
                              :where [?f :entity/name "IntegrityReport"]
-                                    [?f :structure/of :canvas.acts/Finding]] db))]
+                                    [?f :structure/of :lib.lens/Finding]] db))]
       (is (some? (:val/holds (d/entity db fid)))
           "IntegrityReport has a holds invariant")
       (is (empty? (s/check db))

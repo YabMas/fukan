@@ -41,7 +41,8 @@
               canvas.architecture.instance-projection
               canvas.architecture.infra
               canvas.architecture.kernel
-              canvas.acts
+              lib.lens
+              canvas.instruments
               canvas.architecture.lens-engine
               canvas.architecture.materialize
               canvas.architecture.pipeline

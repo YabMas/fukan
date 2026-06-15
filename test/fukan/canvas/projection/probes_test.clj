@@ -5,7 +5,7 @@
             [fukan.canvas.projection.probe-code :as pc]
             [fukan.canvas.projection.probes :as probes]
             [fukan.target.clojure :as target]
-            [canvas.acts :refer [Projection]]
+            [lib.lens :refer [Projection]]
             [lib.code :refer [Kind]]))
 
 ;; tiny degenerate models built from top-level defs (assembled per use)

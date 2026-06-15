@@ -45,7 +45,11 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.acts
+  lib.lens
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.instruments
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -223,7 +227,7 @@
    canvas.correspondence/SubjectCompleteness hooks.fukan.structure/instance
    canvas.architecture.acts/FindingCheck hooks.fukan.structure/instance
    canvas.architecture.acts/ReadingComposition hooks.fukan.structure/instance
-   canvas.acts/Lens hooks.fukan.structure/instance
+   lib.lens/Lens hooks.fukan.structure/instance
    lib.code/Effect hooks.fukan.structure/instance
    lib.code/Operation hooks.fukan.structure/instance
    lib.code/Kind hooks.fukan.structure/instance
@@ -231,9 +235,9 @@
    lib.type.malli/SchemaField hooks.fukan.structure/instance
    lib.type.malli/SchemaChoice hooks.fukan.structure/instance
    lib.code/Module hooks.fukan.structure/instance
-   canvas.acts/Finding hooks.fukan.structure/instance
-   canvas.acts/Mapping hooks.fukan.structure/instance
-   canvas.acts/Projection hooks.fukan.structure/instance
+   lib.lens/Finding hooks.fukan.structure/instance
+   lib.lens/Mapping hooks.fukan.structure/instance
+   lib.lens/Projection hooks.fukan.structure/instance
    canvas.subject/Node hooks.fukan.structure/instance
    canvas.subject/Relation hooks.fukan.structure/instance
    canvas.subject/Form hooks.fukan.structure/instance

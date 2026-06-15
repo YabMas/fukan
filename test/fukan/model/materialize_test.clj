@@ -2,9 +2,10 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            ;; the acts stratum: grammar (Lens/Projection/Mapping) + the real self-model vars an
+            ;; the lens grammar (Lens/Projection/Mapping) + the real self-model instance vars an
             ;; ad-hoc contextualization composes over (Blueprint, survey)
-            [canvas.acts :as cm-acts :refer [Lens Projection Mapping]]
+            [lib.lens :as cm-acts :refer [Lens Projection Mapping]]
+            [canvas.instruments :refer [Blueprint survey]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.projection.canvas-source :as cs]
@@ -36,7 +37,7 @@
    :select ["target stages" '[(Operation ?n) (in-module ?n "target-clojure")]]})
 (Projection ^{:name "Refactor"} acb-Refactor
   {:through        acb-stages
-   :contextualizes cm-acts/Blueprint
+   :contextualizes Blueprint
    :context        "Refactor the existing implementation to match these specs:"})
 
 ;; an ad-hoc Docs projection whose name selects the Docs renderers
@@ -157,7 +158,7 @@
     (let [model   (pipeline/build-model nil)
           ;; the fragment includes Blueprint (+ its survey lens) so the contextualizes
           ;; var-ref resolves; union with the model then dedups them
-          proj-db (a/assemble-vars [#'acb-stages #'acb-Refactor #'cm-acts/Blueprint #'cm-acts/survey])
+          proj-db (a/assemble-vars [#'acb-stages #'acb-Refactor #'Blueprint #'survey])
           db      (cs/union-dbs [model proj-db])
           out     (m/materialize-projection db (by-kind-name db :Projection "Refactor"))]
       (is (str/includes? out "Refactor the existing implementation") "the refactor context frames the output")

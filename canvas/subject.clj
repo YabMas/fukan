@@ -111,13 +111,13 @@
 
 (defstructure ProjectionTarget
   "What a `Projection` yields — a target representation the Model is rendered into (code, docs,
-   instructions, …). The concrete targets are catalog instances in `canvas.acts` (Blueprint,
+   instructions, …). The concrete targets are catalog instances in `canvas.instruments` (Blueprint,
    DriftClose); here it is the abstract output concept.")
 
 (defstructure Lens
   "The READ act — a focus over a Graph that yields a (sub-)Graph. A lens is a QUERY, so it is
    intrinsically read-side; evaluating it IS the reading. Graph → Graph. The lens catalog + the
-   gating that make a reading a Signal vs a View live lower, in `canvas.acts`."
+   gating that make a reading a Signal vs a View live lower, in `canvas.instruments` (grammar in `lib.lens`)."
   {:reads  Graph
    :yields Graph})
 
@@ -125,7 +125,7 @@
   "The SYNTHESIS act — works ON a Graph and YIELDS a ProjectionTarget (Graph → ProjectionTarget).
    It near-always focuses `:through` a Lens first, but that is inessential — it operates on a Graph
    however that graph was obtained, so `:through` is optional. The full grammar (mappings,
-   contextualization) lives lower in `canvas.acts/Projection` (same concept, two altitudes)."
+   contextualization) lives lower in `lib.lens/Projection` (same concept, two altitudes)."
   {:on      Graph
    :through [:? Lens]
    :yields  ProjectionTarget})

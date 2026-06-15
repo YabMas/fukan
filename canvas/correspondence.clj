@@ -77,7 +77,7 @@
    ranges over their reflected `Structure` nodes (present because `build-model` seeds the subject ns
    into reflection) and checks each is named by a `SubjectRealization`'s `:realizes` tag. The fully
    qualified `:val/tag` makes this ns-precise for free — the subject `Lens`/`Projection` never
-   collide with the `canvas.acts` catalog's same-short-named structures.
+   collide with the `lib.lens` grammar's same-short-named structures.
 
    Negation is routed through a rule (`realized-faculty`) — not a raw `not-join` — to dodge
    DataScript's empty-relation gotcha (a `not-join` whose inner pattern matches zero tuples fails

@@ -1,32 +1,16 @@
-(ns canvas.acts
-  "fukan's ACTS stratum — the FOCUS (Lens) and the two ways the model is USED (reading, synthesis),
-   grammar and instances co-located (one artifact per stratum; see `canvas.subject` for the
-   rationale — a bespoke grammar locked to its instances doesn't earn the vocabulary/domain split).
-
-   The two uses are NOT twins:
-     - a LENS is a focus — which slice/aspect to attend to. Evaluating a lens reads the model into a
-       `Finding`; the lens IS the read (no `Probe` structure wraps it).
-     - a `Projection` RE-PRESENTS the model through a lens as a target artifact — built ON the lens,
-       doing work it does not (mapping, contextualization).
-   The same lens can feed both (the drift lens feeds the drift Finding AND DriftClose).
+(ns canvas.instruments
+  "fukan's OWN instruments — the concrete lenses, findings, and projections fukan points at
+   itself, authored against the reusable `lib.lens` grammar (fukan as its own first user). These
+   are configured CONTENT, not fukan's abstract design: the design portrait lives in
+   `canvas.subject`; the authoring grammar lives in `lib.lens`. A user project authors its own
+   instruments the same way, in its own canvas.
 
    The executable mechanism that RUNS these lives in `canvas.architecture.acts` (the realization
    seam — that split IS driftable, it crosses to code)."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]
+  (:require [lib.lens :refer [Lens Finding Projection Mapping]]
             [lib.grouping :refer [Grouping]]))
 
 ;; ── THE FOCUS: a Lens names a slice and carries its runnable selection ─────────────────────────
-
-(defstructure Lens
-  "A focus over the model — what it brings into view / weighs as salient. `:focus` is the prose
-   description of the slice; `:select` is the focus's own executable form — the datalog selection
-   (binding `?n`, evaluated by `core.lens/evaluate-lens`) that resolves the prose to a genuine
-   sub-graph. The selection lives HERE, not in a realization shim: it is model-native datalog — it
-   references no code, only the graph's own vocabulary, exactly like a law's `:where` or a
-   `realized-as` derivation. It is the focus stated runnably, not a second thing that could drift
-   from it. A lens with no `:select` is prose-only (not evaluable)."
-  {:focus  :string                          ; the prose description of the slice
-   :select [:? {:payload :query} :string]}) ; recap + the datalog selection (the :query payload)
 
 ;; focuses fed to reasoning readings (non-gating findings)
 (Lens survey      {:focus  "the whole model's structure"
@@ -54,29 +38,6 @@
   {:child [survey patterns consistency tar-pit integrity coverage drift]})
 
 ;; ── THE READING: a Finding reads through a Lens (inspect ⊂ reading) ────────────────────────────
-
-(defstructure Finding
-  "What reading the model through a Lens yields — an observation ABOUT the model. A Finding reads
-   `:through` a Lens (the focus); evaluating that lens IS the act of reading, so there is no separate
-   `Probe`. A gating Finding is a trust Signal that gates action (the inspect case); a non-gating
-   Finding is a View, a perspective a human/LLM reasons with.
-
-   A finding may STATE a CONTRACT — a `:holds` invariant (the human's correctness spec for the
-   reading's output). The executable check of that invariant (a `(fn [result target-db] → ok?)`) is
-   realization mechanism — a `FindingCheck` in `canvas.architecture.acts`, surfaced by the projector
-   as a runtime gate. The complement of this reading is a `Projection` (synthesis)."
-  {:through Lens          ; the focus it reads through (the model is unchanged)
-   :gating  :boolean      ; gating → a trust Signal (inspect); else a View
-   :holds   [:? :string]}) ; the stated invariant (its executable check lives in the realization view)
-
-(defstructure Signal
-  "A gating Finding — an inspect's trust verdict (a reading whose result gates action). Realized:
-   derived, not instantiated."
-  (realized-as '[(Finding ?e) [?e :val/gating true]]))
-
-(defstructure View
-  "A non-gating Finding — a perspective to reason with. Realized."
-  (realized-as '[(Finding ?e) [?e :val/gating false]]))
 
 ;; non-gating readings — perspectives to reason with (Views); each reads through its lens above
 (Finding Survey "A structural overview of the whole model."
@@ -108,31 +69,6 @@
   {:child [Survey Patterns Consistency TarPit IntegrityReport CoverageReport DriftReport]})
 
 ;; ── THE SYNTHESIS: a Projection re-presents the model through a Lens ───────────────────────────
-
-(defstructure ^:value Mapping
-  "One source-kind → target-artifact rule within a projection — value-identified by
-   its (from, to)."
-  {:from :string     ; the source structure kind
-   :to   :string})   ; the target artifact it becomes
-
-(defstructure Projection
-  "A projected representation of the model — a target we render it into. Two flavours, composing:
-     a BASE projection renders source kinds directly — it `:maps` each focused kind to a target
-     artifact (Blueprint → implementation specs; Docs → documentation).
-     a CONTEXTUALIZATION renders THROUGH a base it `:contextualizes`, wrapping that base's output in
-     a framing `:context` (DriftClose = Blueprint framed as drift to close; the same composes
-     Blueprint with a 'new feature' or 'refactor' context). It adds no mappings of its own — it
-     reuses the base's, told differently.
-   Either flavour renders THROUGH a `Lens` (the WHAT). The same lens can feed a Finding and a
-   projection (the drift lens feeds the drift inspect AND DriftClose)."
-  {:through        Lens              ; the focus it renders through (the WHAT)
-   :maps           [:* Mapping]      ; a BASE's source→artifact mappings (the HOW)
-   :contextualizes [:? Projection]   ; a CONTEXTUALIZATION's base projection
-   :context        [:? :string]}     ; the framing prose wrapped around the base render
-  ;; a projection is one flavour or the other — it declares mappings (base) or frames
-  ;; another (contextualization); neither would render nothing.
-  (law "a projection is a base (declares mappings) or a contextualization (frames another)"
-    (has-any :maps :contextualizes)))
 
 (Projection Blueprint
   "The model projected to implementation code — the first projection target."
