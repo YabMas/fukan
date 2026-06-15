@@ -87,8 +87,7 @@
                          {:entry [rel (let [xs (mapv #(element-expr db %) es)]
                                         (if (#{:many :some :set} card) xs (first xs)))]
                           :rel rel}))
-        scalar?  (fn [{:keys [target]}]
-                   (or (contains? s/scalar-types target) (vector? target)))
+        scalar?  s/scalar-slot?
         declared (keep (fn [slot]
                          (if (scalar? slot) (scalar-entry slot) (rel-entry slot)))
                        (:slots sdef))

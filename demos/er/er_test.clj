@@ -5,7 +5,8 @@
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.assemble :as a]
             [demos.er.model.shop :as shop]
-            [demos.er.vocab.core :refer [DataType Attribute Relationship Entity]]))
+            [demos.er.vocab.core :refer [DataType Attribute Relationship Entity]]
+            [lib.type.malli]))
 
 (defn- laws [db] (set (map :law (s/check db))))
 
@@ -46,7 +47,7 @@
 (deftest attribute-flag-must-be-boolean
   (testing "a non-boolean :required flag is caught by the value-type law"
     (let [db (a/assemble-vars [#'c3-String #'c3-bad])]
-      (is (contains? (laws db) "Attribute.required value must be a boolean")))))
+      (is (contains? (laws db) "Attribute.required value must satisfy :boolean")))))
 
 ;; ── case 4: circular dependency — A→B→A ──────────────────────────────────────
 ;; Both c4-A and c4-B are used as targets before their own defs, so both need

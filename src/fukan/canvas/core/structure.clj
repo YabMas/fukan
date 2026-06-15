@@ -41,19 +41,18 @@
 
 (defn create [] (d/empty-db schema))
 
-;; ── scalar value types (the leaf-value vocabulary) ───────────────────────────
-;; A slot whose target is one of these is a VALUE slot (stores a leaf datum),
-;; not a RELATION slot (an edge to a node). Predicate held as a symbol so it
-;; splices into a datalog clause. Extend by adding a type → predicate-symbol pair.
-
-(def scalar-types {:int 'clojure.core/integer?, :string 'clojure.core/string?, :boolean 'clojure.core/boolean?})
+;; ── value-slot classification ─────────────────────────────────────────────────
+;; A slot is a VALUE slot when its target is a TYPE FORM — a scalar keyword or a
+;; refined vector — owned by the type dialect. Classification is purely SYNTACTIC,
+;; set at parse time (`:type-form?`). The kernel knows no specific scalar types:
+;; every value-slot check is routed through the dialect's `value-valid?`.
 
 (defn scalar-slot?
-  "True when a parsed slot's target is a registered scalar type, or a refined scalar
-   (a vector type form for the registered type dialect)."
+  "True when a slot is a VALUE slot (its target is a type form — a scalar keyword or a
+   refined vector — owned by the type dialect), as opposed to a structure-ref slot.
+   Purely syntactic: set at parse time (`:type-form?`); the kernel knows no specific types."
   [slot]
-  (or (contains? scalar-types (:target slot))
-      (vector? (:target slot))))
+  (boolean (:type-form? slot)))
 
 
 ;; ── structure registry (vocabulary as data: slots + laws, no family/payload) ──
@@ -444,10 +443,10 @@
 
    A quantifier takes malli's props position for slot options: `[:? {:payload :q} :string]`;
    for the default card, lead with the props map: `[{:payload :q} :string]`.
-   The target form: a symbol resolves to a structure tag; a keyword is a scalar type
-   (or `:Any`); any other vector is a REFINED scalar — a type form stored verbatim,
-   never interpreted by the core (the generated law checks values through the
-   registered type dialect, `fukan.canvas.core.typing/value-valid?`)."
+   The target form: a SYMBOL resolves to a structure tag (a ref-slot; `Any` is the
+   wildcard). A KEYWORD or VECTOR is a TYPE FORM (a value-slot): stored verbatim and
+   never interpreted by the kernel — the generated law checks values through the
+   registered type dialect (`fukan.canvas.core.typing/value-valid?`)."
   [rel v]
   (let [[card props form] (cond
                             (and (vector? v) (contains? quantifiers (first v)))
@@ -456,13 +455,14 @@
                             (and (vector? v) (map? (first v)))
                             [:one (first v) (second v)]
                             :else [:one nil v])
+        type-form? (or (keyword? form) (vector? form))   ; symbol → structure-ref; else → a type form
         target (cond
                  (symbol? form)  (resolve-struct-tag form)
                  (vector? form)  form
                  (keyword? form) (keyword (name form))
                  :else (throw (ex-info (str "slot " rel ": unreadable type expression " (pr-str v))
                                        {:rel rel :form v})))]
-    (merge {:rel rel :card card :target target} props)))
+    (merge {:rel rel :card card :target target :type-form? type-form?} props)))
 
 ;; ── law combinators: the recurring law shapes, datalog-correct by construction ─
 ;; A combinator names a law SHAPE at domain altitude and expands to the datalog —
@@ -741,27 +741,19 @@
       (= card :optional) (conj (several-law "allows at most one")))))
 
 (defn- value-slot-laws
-  "Type-check (+ none for `one`) laws for a VALUE slot (target is a scalar type).
-   A REFINED slot (vector type form) gets a law that checks values through the
-   registered type dialect instead of a core predicate — the form is passed verbatim;
-   the core never interprets it. No 'found several' law: plain :val/<key> storage is
-   cardinality-one."
+  "Type-check (+ none for `one`) laws for a VALUE slot (target is a type form — a scalar
+   keyword or a refined vector). Every target is passed verbatim to the dialect's
+   `value-valid?`; the kernel never interprets type forms. No 'found several' law: plain
+   :val/<key> storage is cardinality-one."
   [tag {:keys [rel card target]}]
   (let [tn (name tag) rn (name rel)
         val-attr (keyword "val" (name rel))
-        type-law (if (vector? target)
-                   {:desc (str tn "." rn " value must satisfy " (pr-str target))
-                    :offenders '[?x]
-                    :where [['?x :structure/of tag]
-                            ['?x val-attr '?v]
-                            [(list 'fukan.canvas.core.typing/value-valid? target '?v) '?ok]
-                            [(list 'false? '?ok)]]}
-                   {:desc (str tn "." rn " value must be a " (name target))
-                    :offenders '[?x]
-                    :where [['?x :structure/of tag]
-                            ['?x val-attr '?v]
-                            [(list (scalar-types target) '?v) '?ok]
-                            [(list 'false? '?ok)]]})
+        type-law {:desc (str tn "." rn " value must satisfy " (pr-str target))
+                  :offenders '[?x]
+                  :where [['?x :structure/of tag]
+                          ['?x val-attr '?v]
+                          [(list 'fukan.canvas.core.typing/value-valid? target '?v) '?ok]
+                          [(list 'false? '?ok)]]}
         none-law {:desc (str tn "." rn " requires exactly one (found none)")
                   :offenders '[?x]
                   :where [['?x :structure/of tag]

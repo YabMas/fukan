@@ -6,7 +6,8 @@
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.assemble :as a]
             [demos.type-system.model.lattice :as lattice]
-            [demos.type-system.vocab.core :refer [Field Type]]))
+            [demos.type-system.vocab.core :refer [Field Type]]
+            [lib.type.malli]))
 
 (defn- laws [db] (set (map :law (s/check db))))
 
@@ -57,4 +58,4 @@
 (deftest sealed-flag-must-be-boolean
   (testing "a non-boolean :sealed? value is caught by the value-type law"
     (let [db (a/assemble-vars [#'c4-T])]
-      (is (contains? (laws db) "Type.sealed? value must be a boolean")))))
+      (is (contains? (laws db) "Type.sealed? value must satisfy :boolean")))))

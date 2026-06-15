@@ -12,14 +12,20 @@
             [fukan.canvas.core.typing :as typing]
             [lib.type.malli]))
 
-;; The core is dialect-BLIND: a refined slot target (vector type form) is checked
-;; through whatever :valid? the project registered. This test brings its own minimal
-;; dialect (enum membership only) rather than depending on a lib type grammar —
+;; The core is dialect-BLIND: slot targets (both plain scalar keywords and refined
+;; vector forms) are checked through whatever :valid? the project registered. This
+;; test brings its own minimal dialect that handles enum membership (vector forms)
+;; AND the basic scalar types that were previously in the kernel's predicate map —
 ;; registered around the run, restoring whatever was there before.
 (defn- enum-only-valid? [form v]
-  (if (= :enum (first form))
-    (contains? (set (rest form)) v)
-    (throw (ex-info "test dialect handles only [:enum …]" {:form form}))))
+  (cond
+    (= :int form)     (integer? v)
+    (= :string form)  (string? v)
+    (= :boolean form) (boolean? v)
+    (vector? form)    (if (= :enum (first form))
+                        (contains? (set (rest form)) v)
+                        (throw (ex-info "test dialect handles only basic scalars and [:enum …]" {:form form})))
+    :else (throw (ex-info "test dialect handles only basic scalars and [:enum …]" {:form form}))))
 
 (use-fixtures :once
   (fn [t]
@@ -477,7 +483,7 @@
 (deftest value-type-law-catches-wrong-type
   (testing "a value whose literal fails its declared scalar type is caught"
     (let [db (a/assemble-vars [#'vt-b])]
-      (is (contains? (laws-firing db :Box) "Box.open value must be a boolean")))))
+      (is (contains? (laws-firing db :Box) "Box.open value must satisfy :boolean")))))
 
 (deftest value-one-cardinality-catches-missing
   (testing "a required (one :T) value that is absent trips the none-law"
@@ -618,7 +624,7 @@
   (testing "slot laws fire on deduped value nodes (type-check + relation target-type)"
     (let [bad-scalar (a/assemble-vars [#'lr-bad-scalar-h])
           bad-target (a/assemble-vars [#'lr-p #'lr-bad-target-h])]
-      (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must be a int"))
+      (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must satisfy :int"))
       (is (contains? (set (map :law (s/check bad-target))) "Boxed.ty target must be a Type")))))
 
 (deftest programmatic-emission-builds-a-db
@@ -670,3 +676,22 @@
       (is (= (s/value-content-key iv)
              (s/value-content-key (s/value-literal->iv :lib.type.malli/Schema [:map [:a :string] [:b :int]])))
           "structurally-equal literals get equal content keys (dedup)"))))
+
+;; ── syntactic type-form classification (Phase 3 / Task 3.1) ─────────────────
+;; The kernel classifies a slot target purely syntactically: a symbol → structure-ref;
+;; a keyword or vector → a type form routed through the dialect. The kernel holds NO
+;; scalar-predicate map; EVERY value-slot check goes through value-valid?.
+
+(defstructure SyntClass
+  "Test fixture: a structure with a plain scalar slot (:int) and a ref slot."
+  {:n   [:? :int]
+   :ref [:? PBody]})
+
+(SyntClass ^{:name "Bad"} sc-bad {:n "not-an-int"})
+
+(deftest scalar-checked-through-dialect-not-kernel
+  (testing "a value-slot is checked via the dialect even though the kernel knows no scalar predicates"
+    (let [bad (a/assemble-vars [#'sc-bad])]
+      (is (contains? (set (map :law (s/check bad)))
+                     "SyntClass.n value must satisfy :int")
+          "the generated law routes :int through value-valid?, not a kernel predicate"))))
