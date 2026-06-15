@@ -22,13 +22,15 @@
             ;; refined slot targets ([:enum …]) check through the malli type dialect
             [lib.type.malli]))
 
+(declare Structure Slot Law)
+
 ;; ── the floor: substrate ───────────────────────────────────────────────────────
 
 (defstructure Node
-  "The atom of the graph. Its identity is one of two modes (`:identity`): a NAMED node (by
-   name + uuid) or a VALUE node (by content — structurally-equal values collapse to one node).
-   The uuid is realization bookkeeping and stays out of the domain shape."
-  {:identity [:enum "named" "value"]})
+  "The atom of the graph — an instance OF a `Structure` (every node is typed by the structure it
+   inhabits, mirroring the substrate's `:structure/of`). Whether a node is identified by name or by
+   content is an identity-assignment detail of the realization, not part of the domain shape."
+  {:of Structure})
 
 (defstructure Relation
   "A directed, kinded edge: it wires a `:from` Node to a `:to` Node under a `:kind` (the
@@ -40,13 +42,11 @@
 
 ;; ── the grammar: the language you build over the substrate ───────────────────────
 
-(declare Structure Slot Law)
-
 (defstructure Law
   "A constraint a `Structure` asserts — a datalog constraint that must hold of the model,
    serialised as its `:where` clause or a combinator expansion. A Law is OWNED by the Structure
    that asserts it (ownership-on-owner), so no back-reference to the Structure is modelled here."
-  {:datalog [:? :string]})
+  {:datalog :string})
 
 (defstructure Slot
   "A typed relation-template — one field of a `Structure`. `:typed-by` names the target

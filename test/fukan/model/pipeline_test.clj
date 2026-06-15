@@ -336,8 +336,10 @@
                                                  :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
                                                         [?r :rel/from ?s] [?r :rel/label ?label]
                                                         [?r :rel/to ?t] [?t :entity/name ?tn]] db tag label)))]
-      (is (= {"identity" :slot/one} (slots ":canvas.subject/Node"))
-          "Node carries its identity-mode shape (named | value)")
+      (is (= {"of" :slot/one} (slots ":canvas.subject/Node"))
+          "Node is an instance of a Structure (typed by the structure it inhabits)")
+      (is (= "Structure" (target ":canvas.subject/Node" "of"))
+          "Node.of targets Structure")
       (is (= {"from" :slot/one, "to" :slot/one, "kind" :slot/one} (slots ":canvas.subject/Relation"))
           "Relation is directed (from/to Node) and kinded")
       (is (= "Node" (target ":canvas.subject/Relation" "from")) "from targets Node")
@@ -363,7 +365,7 @@
       (is (= {"typed-by" :slot/one, "cardinality" :slot/one, "label" :slot/optional}
              (slots ":canvas.subject/Slot")))
       (is (= "Structure" (target ":canvas.subject/Slot" "typed-by")) "a Slot is typed by a Structure")
-      (is (= {"datalog" :slot/optional} (slots ":canvas.subject/Law")) "Law carries its datalog form")
+      (is (= {"datalog" :slot/one} (slots ":canvas.subject/Law")) "Law carries its (required) datalog form")
       (is (= "Structure" (target ":canvas.subject/Form" "produces")) "the Form produces a Structure")
       (is (= "Structure" (target ":canvas.subject/Vocabulary" "defines")) "a Vocabulary defines Structures")
       (is (empty? (s/check db)) "the self-model still satisfies every law"))))
