@@ -2,7 +2,7 @@
   "Project a navigable SYSTEM OVERVIEW from the model — the canvas's front door.
 
    The flat file list under `canvas/` can't show fukan's shape; the shape lives in the model — the
-   SUBJECT stratum (`canvas.subject`): one hub `Model`, two `Source`s (origins), a `Lens`
+   SUBJECT stratum (`canvas.subject`): one hub `Model`, one `Source` (two polarities — design intent ↓, code reality ↑), a `Lens`
    that reads it and a `Projection` that synthesises from it (the two uses, not twins) — each
    authored as a PORTRAIT (grammar, no instances) and tagged with the code Module that realizes it
    (`SubjectRealization`, the verify-down seam). Rendered live, so it can never drift from the spec
@@ -52,7 +52,15 @@
         authored (mslot "authored-in")    ; the vocabulary
         source-n (snode "Source")
         lens-n   (snode "Lens")
-        proj-n   (snode "Projection")]
+        proj-n   (snode "Projection")
+        ;; canvas.subject holds ALL portraits (substrate/hub/sources/acts too), so the
+        ;; namespace predicate isn't enough — this set selects just the grammar-layer subset
+        grammar  (sort (filter #{"Form" "Structure" "Slot" "Law" "Vocabulary"}
+                               (map first
+                                    (d/q '[:find ?n
+                                           :where [?s :structure/of :lib.grammar/Structure]
+                                                  [?s :val/tag ?t] [?s :entity/name ?n]
+                                                  [(clojure.string/starts-with? ?t ":canvas.subject/")]] db))))]
     (str/join
      "\n"
      (remove
@@ -64,6 +72,9 @@
         ""
         (str "  ◆ " model-n " — the hub: a graph of " made "s wired by " wired "s, authored in a " authored (by model-n))
         (str "      ⌞ defstructure (the Form) builds a " authored " over " made " + " wired " — bottom-up language building")
+        ""
+        "  GRAMMAR — the language you build with (a shape IS a Structure)"
+        (str "    ⚙ " (str/join " · " grammar) " — Form produces a Structure (Slots + Laws); a Vocabulary is the set")
         ""
         "  IN — two origins converge on the Model (↓ design intent, ↑ code reality)"
         (str "    ⇊⇈ " source-n " — the in-fold, two polarities" (by source-n))
