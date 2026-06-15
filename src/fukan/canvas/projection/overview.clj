@@ -3,7 +3,7 @@
 
    The flat file list under `canvas/` can't show fukan's shape; the shape lives in the model — the
    SUBJECT stratum (`canvas.subject`): one hub `Model`, one `Source` (two polarities — design intent ↓, code reality ↑), a `Lens`
-   that reads it and a `Projection` that synthesises from it (the two uses, not twins) — each
+   that reads a Graph (→ a sub-Graph) and a `Projection` that works on a Graph (→ a ProjectionTarget) — each
    authored as a PORTRAIT (grammar, no instances) and tagged with the code Module that realizes it
    (`SubjectRealization`, the verify-down seam). Rendered live, so it can never drift from the spec
    it describes. Read this instead of `ls canvas/`.
@@ -47,9 +47,10 @@
                                                 [?s :entity/name ?n]] db (str ":" SUBJ "/" nm))))
         model-n  (snode "Model")
         mslot    (fn [label] (struct-slot-target db (str ":" SUBJ "/Model") label))
-        made     (mslot "made-of")        ; the node kind
-        wired    (mslot "wired-by")       ; the relation kind
-        authored (mslot "authored-in")    ; the vocabulary
+        gslot    (fn [label] (struct-slot-target db (str ":" SUBJ "/Graph") label))
+        made     (gslot "made-of")        ; the node kind (now on Graph)
+        wired    (gslot "wired-by")       ; the relation kind (now on Graph)
+        authored (mslot "authored-in")    ; the vocabulary (on Model)
         source-n (snode "Source")
         lens-n   (snode "Lens")
         proj-n   (snode "Projection")
@@ -70,7 +71,7 @@
         ""
         "━━ THE SUBJECT — what fukan is (pure grammar; portraits, no instances) ━━"
         ""
-        (str "  ◆ " model-n " — the hub: a graph of " made "s wired by " wired "s, authored in a " authored (by model-n))
+        (str "  ◆ " model-n " — the hub: structured as a Graph (" made "s wired by " wired "s), authored in a " authored (by model-n))
         (str "      ⌞ defstructure (the Form) builds a " authored " over " made " + " wired " — bottom-up language building")
         ""
         "  GRAMMAR — the language you build with (a shape IS a Structure)"
@@ -79,6 +80,6 @@
         "  IN — two origins converge on the Model (↓ design intent, ↑ code reality)"
         (str "    ⇊⇈ " source-n " — the in-fold, two polarities" (by source-n))
         ""
-        "  OUT — the Model is used two ways (not twins)"
-        (str "    ◎ " lens-n " (lens) — reads the Model: a focus → a sub-graph to reason with" (by lens-n))
-        (str "    ▶ " proj-n " (projection) — re-presents the Model, through the lens" (by proj-n))]))))
+        "  OUT — reads and renders (Graph transforms)"
+        (str "    ◎ " lens-n " (lens) — reads a Graph → a (sub-)Graph: a focus, Graph → Graph" (by lens-n))
+        (str "    ▶ " proj-n " (projection) — works on a Graph (optionally through a lens) → a target" (by proj-n))]))))

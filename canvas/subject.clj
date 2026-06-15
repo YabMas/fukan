@@ -8,16 +8,18 @@
    grammar nodes.
 
    Read top-to-bottom it IS the design:
-     SUBSTRATE — Nodes wired by directed, kinded Relations ARE the graph.
-     GRAMMAR — the language you build over the substrate. The one Form (`defstructure`) produces
-       a Structure; a Structure is a composition of Slots plus the Laws it asserts — AND it is the
-       one notion of SHAPE (a shape is a Structure: record, type, Kind, Schema all collapse into
-       it; cardinality lives on the Slot; a sum is a Structure with `:refines`-members). A
-       Vocabulary is the set of Structures you define — the language a model is authored in (fukan
-       ships none; bottom-up language building).
-     MODEL — the hub: that one graph, authored in Vocabularies.
+     SUBSTRATE — a Node is an instance of a Structure; Relations wire Nodes; a GRAPH is Nodes wired
+       by Relations — the central type.
+     GRAMMAR — the language you build over the substrate. The one Form (`defstructure`) produces a
+       Structure; a Structure is a composition of Slots plus the Laws it asserts — AND it is the one
+       notion of SHAPE (a shape is a Structure: record, type, Kind, Schema collapse into it;
+       cardinality lives on the Slot; a sum is a Structure with `:refines`-members). A Vocabulary is
+       the set of Structures you define — the language a model is authored in (fukan ships none;
+       bottom-up language building).
+     MODEL — the hub: a Graph (`:structured-as`) authored in one or more Vocabularies.
      IN — one Source, two flavours (its `:enum`): design↓ (intent), code↑ (reality).
-     OUT — a Lens reads it; a Projection synthesises from it (built on the lens, not a twin)."
+     OUT — a Lens reads a Graph and yields a (sub-)Graph; a Projection works on a Graph (optionally
+       through a Lens) and yields a ProjectionTarget."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             ;; refined slot targets ([:enum …]) check through the malli type dialect
             [lib.type.malli]))
@@ -39,6 +41,12 @@
    OUT of the domain shape — they live on the realized kernel `Relation` Kind, and the gap
    (domain shape ⊂ realized shape) is exactly what the correspondence seam can check."
   {:from Node :to Node :kind :string})
+
+(defstructure Graph
+  "Nodes wired by Relations — the central type. Everything fukan reasons over is a Graph (or a
+   sub-graph of one): the Model is one, a Lens yields one, a Projection works on one."
+  {:made-of  [:* Node]
+   :wired-by [:* Relation]})
 
 ;; ── the grammar: the language you build over the substrate ───────────────────────
 
@@ -84,12 +92,11 @@
 ;; ── the hub: the one graph ─────────────────────────────────────────────────────
 
 (defstructure Model
-  "The hub: one unified GRAPH — many Nodes wired by many Relations — AUTHORED IN one or more
-   Vocabularies. Spec and implementation live on this one graph. Its one-ness is an apparatus
-   guarantee (one substrate), not a design choice."
-  {:made-of     [:* Node]
-   :wired-by    [:* Relation]
-   :authored-in [:* Vocabulary]})
+  "The hub: a `Graph` (`:structured-as`) AUTHORED IN one or more Vocabularies. Spec and
+   implementation live on this one graph; its one-ness is an apparatus guarantee, not a design
+   choice. (The Model takes the FORM of a Graph — `:structured-as`, not a taxonomic 'is-a'.)"
+  {:structured-as Graph
+   :authored-in   [:* Vocabulary]})
 
 ;; ── two ORIGINS converge IN — intent vs reality (the two flavours ARE the enum) ─
 
@@ -102,14 +109,23 @@
 
 ;; ── the Model is USED two ways (not twins) ─────────────────────────────────────
 
+(defstructure ProjectionTarget
+  "What a `Projection` yields — a target representation the Model is rendered into (code, docs,
+   instructions, …). The concrete targets are catalog instances in `canvas.acts` (Blueprint,
+   DriftClose); here it is the abstract output concept.")
+
 (defstructure Lens
-  "The READ act — a focus over the Model that resolves to a sub-graph. A lens is a QUERY, so it is
-   intrinsically read-side; evaluating it IS the reading. The lens catalog + the gating/contract that
-   make a reading a Signal vs a View live lower, in `canvas.acts`."
-  {:reads Model})
+  "The READ act — a focus over a Graph that yields a (sub-)Graph. A lens is a QUERY, so it is
+   intrinsically read-side; evaluating it IS the reading. Graph → Graph. The lens catalog + the
+   gating that make a reading a Signal vs a View live lower, in `canvas.acts`."
+  {:reads  Graph
+   :yields Graph})
 
 (defstructure Projection
-  "The SYNTHESIS act — re-presenting the Model in a target form (materialization), THROUGH a Lens. NOT
-   a twin of the read: built ON the lens, doing work it does not (mapping kinds, contextualization).
-   The full grammar lives lower in `canvas.acts/Projection` (same concept, two altitudes)."
-  {:through Lens})
+  "The SYNTHESIS act — works ON a Graph and YIELDS a ProjectionTarget (Graph → ProjectionTarget).
+   It near-always focuses `:through` a Lens first, but that is inessential — it operates on a Graph
+   however that graph was obtained, so `:through` is optional. The full grammar (mappings,
+   contextualization) lives lower in `canvas.acts/Projection` (same concept, two altitudes)."
+  {:on      Graph
+   :through [:? Lens]
+   :yields  ProjectionTarget})

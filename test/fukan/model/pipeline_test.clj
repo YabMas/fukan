@@ -369,3 +369,27 @@
       (is (= "Structure" (target ":canvas.subject/Form" "produces")) "the Form produces a Structure")
       (is (= "Structure" (target ":canvas.subject/Vocabulary" "defines")) "a Vocabulary defines Structures")
       (is (empty? (s/check db)) "the self-model still satisfies every law"))))
+
+(deftest subject-graph-is-central-and-acts-are-transforms
+  (testing "Graph is the central type; Model is structured-as a Graph; Lens/Projection are graph transforms"
+    (let [db     (pipeline/build-model nil)
+          slots  (fn [tag] (into {} (d/q '[:find ?l ?k :in $ ?tag
+                                           :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
+                                                  [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db tag)))
+          target (fn [tag label] (ffirst (d/q '[:find ?tn :in $ ?tag ?label
+                                                 :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
+                                                        [?r :rel/from ?s] [?r :rel/label ?label]
+                                                        [?r :rel/to ?t] [?t :entity/name ?tn]] db tag label)))]
+      (is (= {"made-of" :slot/many, "wired-by" :slot/many} (slots ":canvas.subject/Graph")))
+      (is (= "Node" (target ":canvas.subject/Graph" "made-of")))
+      (is (= "Relation" (target ":canvas.subject/Graph" "wired-by")))
+      (is (= {"structured-as" :slot/one, "authored-in" :slot/many} (slots ":canvas.subject/Model")))
+      (is (= "Graph" (target ":canvas.subject/Model" "structured-as")))
+      (is (= {"reads" :slot/one, "yields" :slot/one} (slots ":canvas.subject/Lens")))
+      (is (= "Graph" (target ":canvas.subject/Lens" "reads")))
+      (is (= "Graph" (target ":canvas.subject/Lens" "yields")))
+      (is (= {"on" :slot/one, "through" :slot/optional, "yields" :slot/one} (slots ":canvas.subject/Projection")))
+      (is (= "Graph" (target ":canvas.subject/Projection" "on")))
+      (is (= "Lens" (target ":canvas.subject/Projection" "through")))
+      (is (= "ProjectionTarget" (target ":canvas.subject/Projection" "yields")))
+      (is (empty? (s/check db)) "the self-model still satisfies every law"))))
