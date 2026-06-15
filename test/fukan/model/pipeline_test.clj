@@ -343,3 +343,27 @@
       (is (= "Node" (target ":canvas.subject/Relation" "from")) "from targets Node")
       (is (= "Node" (target ":canvas.subject/Relation" "to"))   "to targets Node")
       (is (empty? (s/check db)) "the self-model still satisfies every law"))))
+
+(deftest subject-grammar-stratum-is-first-class
+  (testing "the grammar layer (Form/Structure/Slot/Law/Vocabulary) reflects as first-class portraits"
+    (let [db     (pipeline/build-model nil)
+          slots  (fn [tag] (into {} (d/q '[:find ?l ?k :in $ ?tag
+                                           :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
+                                                  [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db tag)))
+          target (fn [tag label] (ffirst (d/q '[:find ?tn :in $ ?tag ?label
+                                                 :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
+                                                        [?r :rel/from ?s] [?r :rel/label ?label]
+                                                        [?r :rel/to ?t] [?t :entity/name ?tn]] db tag label)))]
+      (is (= {"composes" :slot/many, "asserts" :slot/many, "refines" :slot/optional}
+             (slots ":canvas.subject/Structure"))
+          "Structure composes Slots, asserts Laws, may refine a parent (sum membership)")
+      (is (= "Slot"      (target ":canvas.subject/Structure" "composes")))
+      (is (= "Law"       (target ":canvas.subject/Structure" "asserts")))
+      (is (= "Structure" (target ":canvas.subject/Structure" "refines")) "refines is self-referential (sums)")
+      (is (= {"typed-by" :slot/one, "cardinality" :slot/one, "label" :slot/optional}
+             (slots ":canvas.subject/Slot")))
+      (is (= "Structure" (target ":canvas.subject/Slot" "typed-by")) "a Slot is typed by a Structure")
+      (is (= {"datalog" :slot/optional} (slots ":canvas.subject/Law")) "Law carries its datalog form")
+      (is (= "Structure" (target ":canvas.subject/Form" "produces")) "the Form produces a Structure")
+      (is (= "Structure" (target ":canvas.subject/Vocabulary" "defines")) "a Vocabulary defines Structures")
+      (is (empty? (s/check db)) "the self-model still satisfies every law"))))
