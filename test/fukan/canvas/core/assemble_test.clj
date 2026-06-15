@@ -32,7 +32,7 @@
 ;; ── Task 7: value dedup, ordered, labelled ────────────────────────────────────
 
 ;; value dedup (inline + top-level)
-(s/defstructure ^:value Tag2 "tag" {:n :String})
+(s/defstructure ^:value Tag2 "tag" {:n :string})
 (s/defstructure Holder "h" {:a Tag2 :b Tag2})
 (Holder ^{:name "h"} t7-h {:a (Tag2 {:n "x"}) :b (Tag2 {:n "x"})})   ; two equal inline values
 (def t7-v1 (Tag2 {:n "z"}))                                          ; two equal top-level values

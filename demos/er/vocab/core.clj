@@ -22,8 +22,8 @@
   "A named, typed attribute of an entity. `:required`/`:unique?` are scalar flags
    — leaf values now that the core has them (closing this domain's original gap)."
   {:type     DataType
-   :required [:? :Bool]
-   :unique?  [:? :Bool]})
+   :required [:? :boolean]
+   :unique?  [:? :boolean]})
 
 (defstructure Relationship
   "A directed relationship from its owning entity to a target entity."

@@ -60,7 +60,7 @@
 ;; ── realization fixtures ────────────────────────────────────────────────────
 (defstructure Note
   "A base concept with a Bool discriminant."
-  {:flag :Bool})
+  {:flag :boolean})
 
 (defstructure Flagged
   "A realized concept: a Note whose flag is true — derived membership, NO constructor."
@@ -106,7 +106,7 @@
 ;; ── coproduct fixtures: a closed sum + a totality law ───────────────────────
 (defstructure Sum
   "A closed coproduct discriminated by :kind; totality asserted by a law."
-  {:kind :String}
+  {:kind :string}
   (law "every Sum is a VariantA or a VariantB"
     :offenders '[?s]
     :where '[(not (VariantA ?s)) (not (VariantB ?s))]))
@@ -138,7 +138,7 @@
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized "d"
              (realized-as '[(Note ?e)])
-             {:x :Bool}))
+             {:x :boolean}))
         "realized-as + slot is rejected")
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized2 "d"

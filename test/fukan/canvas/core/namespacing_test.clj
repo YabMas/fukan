@@ -21,7 +21,7 @@
 ;; carrying a free law that flags ALL its instances (to probe scope precision)
 (defstructure Kind
   "Test fixture sharing the short name `Kind` with lib.code/Kind."
-  {:note [:? :String]}
+  {:note [:? :string]}
   (law "local-kind-flag" :offenders '[?k] :where '[]))
 
 (Kind ^{:name "local"} local-kind)

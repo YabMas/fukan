@@ -12,7 +12,7 @@
 
 (defstructure LDoc
   "matched-by subject: every flagged doc must be approved by a Reviewer."
-  {:flag [:? :Bool]}
+  {:flag [:? :boolean]}
   (law "every flagged doc is approved by a reviewer"
     (matched-by :approves :from LReviewer :when {:flag true})))
 
@@ -21,7 +21,7 @@
 
 (defstructure LRef
   "has subject: a \"ref\"-kinded instance must carry :names."
-  {:kind  :String
+  {:kind  :string
    :names [:? LDoc]}
   (law "a ref names a target" (has :names :when {:kind "ref"})))
 
@@ -31,7 +31,7 @@
    :wraps [:? LProj]}
   (law "a proj maps or wraps" (has-any :maps :wraps)))
 
-(defstructure LSrc "target-condition target." {:polarity :String})
+(defstructure LSrc "target-condition target." {:polarity :string})
 (defstructure LLift
   "target subject: may only lift code-up sources."
   {:lifts LSrc}

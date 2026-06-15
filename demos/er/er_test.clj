@@ -46,7 +46,7 @@
 (deftest attribute-flag-must-be-boolean
   (testing "a non-boolean :required flag is caught by the value-type law"
     (let [db (a/assemble-vars [#'c3-String #'c3-bad])]
-      (is (contains? (laws db) "Attribute.required value must be a Bool")))))
+      (is (contains? (laws db) "Attribute.required value must be a boolean")))))
 
 ;; ── case 4: circular dependency — A→B→A ──────────────────────────────────────
 ;; Both c4-A and c4-B are used as targets before their own defs, so both need

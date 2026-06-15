@@ -19,7 +19,7 @@
 ;; Top-level vocab for the entity-constructor test: defstructure is a macro so the
 ;; generated constructor macros (Attr, Ent) must be defined at compile-time (top level)
 ;; for later forms in the same compilation unit to use them.
-(s/defstructure Attr "an attribute" {:required :Bool})
+(s/defstructure Attr "an attribute" {:required :boolean})
 (s/defstructure Ent  "an entity" {:attr [:* Attr] :links Ent})
 
 ;; Forward declaration needed for the cyclic ref before the var exists.
@@ -96,7 +96,7 @@
     (is (empty? labels) "bare sequence slot carries no :rel/label")))
 
 ;; ── entity name defaults to the binding var's simple name ────────────────────
-(s/defstructure Named "n" {:doc [:? :String]})
+(s/defstructure Named "n" {:doc [:? :string]})
 
 (def nm-derived (Named))                    ; expression form, no name → derived from the var
 (Named ^{:name "explicit"} nm-override)     ; ^{:name} meta → overrides the var
@@ -114,7 +114,7 @@
 ;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
 
 (s/defstructure ^:value Shp "a shape"
-  {:kind :String
+  {:kind :string
    :of   [:* Shp]})
 
 (def t4-s1 (Shp {:kind "leaf"}))
@@ -140,7 +140,7 @@
 
 (s/defstructure RKind "kind")
 (s/defstructure ^:value RShape "shape"
-  {:kind :String
+  {:kind :string
    :of   [:* RShape]
    :type [:? RKind]}
   (reader t7b-read-shape))
@@ -232,7 +232,7 @@
 ;; A scalar slot with :payload stores a sibling :val/<payload> leaf alongside
 ;; the primary :val/<slot> leaf when a 3rd clause element is present.
 
-(s/defstructure Doc "doc" {:note [{:payload :extra} :String]})
+(s/defstructure Doc "doc" {:note [{:payload :extra} :string]})
 
 (Doc ^{:name "d"} t-doc {:note ["hello" [:a :b :c]]})
 
@@ -244,8 +244,8 @@
 
 ;; A payload carries a CODE-FORM (a datalog query, a predicate) — stored as DATA,
 ;; not evaluated, so unbound symbols like ?n survive instead of resolving at runtime.
-(s/defstructure FocusT "f" {:focus [{:payload :query} :String]})
-(s/defstructure HoldT  "h" {:holds [{:payload :holds-pred} :String]})
+(s/defstructure FocusT "f" {:focus [{:payload :query} :string]})
+(s/defstructure HoldT  "h" {:holds [{:payload :holds-pred} :string]})
 
 (FocusT ^{:name "X"} t-focus {:focus ["the whole model" '[[?n :structure/of _]]]})
 (HoldT  ^{:name "Y"} t-hold  {:holds ["no violations" (fn [result _db] (empty? (:observations result)))]})

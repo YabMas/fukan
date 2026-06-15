@@ -46,7 +46,7 @@
 ;; not a RELATION slot (an edge to a node). Predicate held as a symbol so it
 ;; splices into a datalog clause. Extend by adding a type → predicate-symbol pair.
 
-(def scalar-types {:Int 'clojure.core/integer?, :String 'clojure.core/string?, :Bool 'clojure.core/boolean?})
+(def scalar-types {:int 'clojure.core/integer?, :string 'clojure.core/string?, :boolean 'clojure.core/boolean?})
 
 (defn- scalar-slot?
   "True when a parsed slot's target is a registered scalar type, or a refined scalar
@@ -408,14 +408,14 @@
   "One slots-map entry `rel → type-expr` → {:rel :card :target & opts}:
 
      :reads Model                      one (the default — a bare target)
-     :doc   [:? :String]               optional
+     :doc   [:? :string]               optional
      :child [:* Node]                  zero or more, ordered
      :item  [:+ Item]                  one or more, ordered
      :field [:set Field]               zero or more, unordered identity
      :mode  [:enum \"a\" \"b\"]            a refined scalar, cardinality one
 
-   A quantifier takes malli's props position for slot options: `[:? {:payload :q} :String]`;
-   for the default card, lead with the props map: `[{:payload :q} :String]`.
+   A quantifier takes malli's props position for slot options: `[:? {:payload :q} :string]`;
+   for the default card, lead with the props map: `[{:payload :q} :string]`.
    The target form: a symbol resolves to a structure tag; a keyword is a scalar type
    (or `:Any`); any other vector is a REFINED scalar — a type form stored verbatim,
    never interpreted by the core (the generated law checks values through the

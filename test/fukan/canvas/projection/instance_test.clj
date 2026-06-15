@@ -17,13 +17,13 @@
 
 (defstructure ^:value IVal
   "An anonymous value."
-  {:n :Int})
+  {:n :int})
 
 (defstructure INode
   "Fixture: scalars, payload, one/optional/plural refs, labels, values, a Schema."
-  {:title  :String
-   :flag   [:? :Bool]
-   :query  [:? {:payload :q} :String]
+  {:title  :string
+   :flag   [:? :boolean]
+   :query  [:? {:payload :q} :string]
    :main   ITarget
    :links  [:* ITarget]
    :vals   [:* IVal]

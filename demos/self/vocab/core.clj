@@ -40,7 +40,7 @@
   "What the Model is made of: `defstructure` = a composition of slots + datalog laws. The
    reflexive floor — a lower-altitude detail you drill into once the high-level shape is grasped,
    per the altitude ordering (grasp #1/#3 first, then #2)."
-  {:doc [:? :String]})
+  {:doc [:? :string]})
 
 ;; ── the hub ─────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@
    model), not a subject design choice — so #1's headline is the two ORIGINS, not the one graph.
    (No structure for the schema sources conform to: that 'dialect' is apparatus and recedes — it
    is not a subject concept, and it is emphatically not a read-side focus.)"
-  {:doc     [:? :String]
+  {:doc     [:? :string]
    :made-of Primitive})
 
 ;; ── the read-side focus (no write-side mirror — a focus is a query) ──────────
@@ -61,14 +61,14 @@
    is deliberately NO write-side counterpart: construction is local (you author one structure at a
    time), only observing an existing whole needs selection. That the grammar gives `Act` a
    `:through Lens` but `Source` no pivot is the design stating this asymmetry, not hiding it."
-  {:focus :String})
+  {:focus :string})
 
 ;; ── what an act yields ──────────────────────────────────────────────────────
 
 (defstructure Output
   "What an Act yields — a `finding` (probe → a reading to reason with) or an `artifact`
    (project → a target form to build from)."
-  {:doc [:? :String]})
+  {:doc [:? :string]})
 
 ;; ── #1 two ORIGINS in tension (not a mirror of the out-side) ─────────────────
 
@@ -78,7 +78,7 @@
    subject-unique half of #1; the 'one graph' half is apparatus (one substrate). A Source has no
    `:through` pivot: the schema it conforms to is apparatus, and focus is a read-side query that
    the write side has nothing to apply yet."
-  {:doc      [:? :String]
+  {:doc      [:? :string]
    :into     Model
    :polarity [:enum "design-down" "code-up"]}
   ;; #4 made assertable from THIS side: a lifted-in source must have a corresponding act to
@@ -96,7 +96,7 @@
    probe = analyse (→ a reading), project = synthesise (→ an artifact). Each `:reads` the Model
    `:through` a Lens (the focus). Analysis vs synthesis is the duality the flat faculty-graph
    could not name."
-  {:doc     [:? :String]
+  {:doc     [:? :string]
    :reads   Model
    :through Lens
    :mode    [:enum "analyse" "synthesise"]
@@ -110,7 +110,7 @@
    `:lowers` a synthesise Act (project: model → code/artifact); the two compose to the identity
    on the shared graph, so their disagreement is checkable as drift. That it references BOTH a
    Source and an Act is the structural form of 'falls out of #1 and #3'."
-  {:doc    [:? :String]
+  {:doc    [:? :string]
    :lifts  Source
    :lowers Act}
   (law "a correspondence lifts a code-up source"

@@ -9,7 +9,7 @@
      - a SLOT is an EDGE from its Structure: `:rel/kind :slot/<card>` carries the
        cardinality, `:rel/label` the slot name, `:rel/order` the declaration
        position. Its target is the reified target `Structure` — or, for scalar
-       and refined slots, the type dialect's own `^:value Schema` node (`:String`
+       and refined slots, the type dialect's own `^:value Schema` node (`:string`
        reifies as ⟨Schema :string⟩, `[:enum …]` as its Schema subgraph), content-
        deduped with every other use of that type anywhere in the model.
      - a LAW is a node: desc + the datalog as a `:val/form` payload (queryable as
@@ -39,20 +39,20 @@
 (defstructure Law
   "A registered law, reified. `:query` recaps the :where; the full datalog
    ({:offenders :where :rules}) rides as the `:form` payload."
-  {:desc  :String
-   :scope [:? :String]
-   :query [{:payload :form} :String]})
+  {:desc  :string
+   :scope [:? :string]
+   :query [{:payload :form} :string]})
 
 (defstructure Structure
   "A registered defstructure, reified into the graph it defines. Slots are
    `:slot/<card>` edges (see the ns doc), not declared here; `:tag` is the
    instance-join key (`(of-structure ?i ?s)` in `rules`); a realized concept
    carries its membership datalog as the `:form` payload of `:realizes`."
-  {:tag      :String
-   :value    [:? :Bool]
+  {:tag      :string
+   :value    [:? :boolean]
    :includes [:* Structure]
    :law      [:* Law]
-   :realizes [:? {:payload :form} :String]})
+   :realizes [:? {:payload :form} :string]})
 
 (defstructure Vocabulary
   "One grammar namespace, reified — the Structures it defines. (Named Vocabulary,
@@ -70,7 +70,7 @@
 
 ;; ── runtime value construction (the reader expansion, mirrored off-macro) ────
 
-(def ^:private scalar->malli {:String :string, :Int :int, :Bool :boolean})
+(def ^:private scalar->malli {:int :int, :string :string, :boolean :boolean})
 
 (defn- scalar-slot? [slot]
   (or (contains? scalar->malli (:target slot)) (vector? (:target slot))))

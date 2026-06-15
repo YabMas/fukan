@@ -23,7 +23,7 @@
    target-db] → ok?)` checked against a probe RESULT + the target model. (The invariant itself
    stays stated on the domain `Finding`; this pins how it's verified.)"
   {:realizes Finding
-   :enforces [{:payload :pred} :String]})    ; :enforces = recap; :pred = the predicate fn
+   :enforces [{:payload :pred} :string]})    ; :enforces = recap; :pred = the predicate fn
 
 (defstructure ReadingComposition
   "The modelled kernel capability a (gating) `Finding` composes when read (e.g. the integrity

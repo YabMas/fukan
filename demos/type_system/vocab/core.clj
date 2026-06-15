@@ -41,7 +41,7 @@
    VALUE, distinct from the Field node's unique handle. Two record types that share
    a field name get two distinct Field nodes with the same `:fname` (see the
    value-identity note in the namespace docstring)."
-  {:fname :String
+  {:fname :string
    :type  Type})
 
 (defstructure Type
@@ -50,7 +50,7 @@
    (no type may then subtype it)."
   {:field      [:* Field]
    :subtype-of [:* Type]
-   :sealed?    [:? :Bool]}
+   :sealed?    [:? :boolean]}
 
   ;; Acyclic lattice: no type (transitively) subtypes itself. `sub*` is transitive
   ;; subtyping over the DIRECT :subtype-of relation, step INLINED.

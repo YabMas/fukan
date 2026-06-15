@@ -20,7 +20,7 @@
    :opt-ref [:? PLeaf]
    :seq-ref [:* PLeaf]
    :set-ref [:set PLeaf]
-   :title   :String
+   :title   :string
    :mode    [:enum "a" "b"]}
   (law "no bad title"
     :offenders '[?n]
@@ -30,12 +30,12 @@
 
 (defstructure ^:value PVal
   "A value fixture."
-  {:v :Int})
+  {:v :int})
 
 (defstructure PCarry
   "A payload fixture: companion code-forms on one- and optional-card scalars."
-  {:focus [{:payload :query} :String]
-   :note  [:? {:payload :extra} :String]})
+  {:focus [{:payload :query} :string]
+   :note  [:? {:payload :extra} :string]})
 
 (PLeaf ^{:name "l"} p-leaf)
 
@@ -55,7 +55,7 @@
                :opt-ref [:? PLeaf]
                :seq-ref [:* PLeaf]
                :set-ref [:set PLeaf]
-               :title   :String
+               :title   :string
                :mode    [:enum "a" "b"]}
               (law "no bad title"
                 :offenders [?n]
@@ -71,15 +71,15 @@
         f  (g/structure-form db (struct-node db ":fukan.canvas.projection.grammar-test/PCarry"))]
     (is (= '(defstructure PCarry
               "A payload fixture: companion code-forms on one- and optional-card scalars."
-              {:focus [{:payload :query} :String]
-               :note  [:? {:payload :extra} :String]})
+              {:focus [{:payload :query} :string]
+               :note  [:? {:payload :extra} :string]})
            f)
         "a slot's :payload opt rides the reified edge and renders back in props position")))
 
 (deftest value-structures-carry-the-value-meta
   (let [db (reflected)
         f  (g/structure-form db (struct-node db ":fukan.canvas.projection.grammar-test/PVal"))]
-    (is (= '(defstructure PVal "A value fixture." {:v :Int}) f))
+    (is (= '(defstructure PVal "A value fixture." {:v :int}) f))
     (is (true? (:value (meta (second f)))) "^:value rides the name symbol's metadata")))
 
 (deftest primer-renders-the-reference-card

@@ -55,7 +55,7 @@
 (defstructure ^:value SchemaChoice
   "One member of an enum schema, value-identified by (name, member kind) — `:red`
    is one node shared across enums, distinct from `\"red\"`."
-  {:value :String
+  {:value :string
    :kind  [:enum "keyword" "string" "symbol"]}
   (reader read-choice))
 
@@ -68,9 +68,9 @@
 
 (defstructure ^:value SchemaField
   "A labelled map entry: key + its Schema + optionality."
-  {:key      :String
+  {:key      :string
    :schema   Schema
-   :optional :Bool}
+   :optional :boolean}
   (reader read-field))
 
 (defn ^:export read-malli
@@ -154,10 +154,10 @@
    params + :out). Author as native malli; read-malli expands it. The ref edge
    targets the wildcard `Any` (the named type's var is captured at the authoring
    site) to avoid a require cycle on the vocab that owns the named Kind."
-  {:kind   :String
-   :min    [:? :Int]
-   :max    [:? :Int]
-   :regex  [:? :String]
+  {:kind   :string
+   :min    [:? :int]
+   :max    [:? :int]
+   :regex  [:? :string]
    :names  [:? Any]
    :of     [:* Schema]           ; ordered children (tuple/or/and/map-of are form-faithful)
    :field  [:set SchemaField]    ; map entries — unordered, like the map they describe

@@ -76,9 +76,9 @@
 (defstructure Box
   "Exercises value slots: a required Bool, an optional String, a required Int.
    The positivity constraint is a free law — proving predicates ride the engine."
-  {:open  :Bool
-   :label [:? :String]
-   :size  :Int}
+  {:open  :boolean
+   :label [:? :string]
+   :size  :int}
   (law "size must be positive"
     :offenders '[?x]
     :where '[[?x :val/size ?s] [(<= ?s 0)]]))
@@ -87,8 +87,8 @@
 ;; anonymous); Holder is an entity that holds them.
 (defstructure ^:value Pair
   "A value-typed pair of ints — content-identified."
-  {:fst :Int
-   :snd :Int})
+  {:fst :int
+   :snd :int})
 
 (defstructure ^:value Boxed
   "A value wrapping a Pair (nested value) and pointing at a Type entity."
@@ -104,7 +104,7 @@
 ;; per-structure :reader — a literal arg is expanded to construction clauses).
 (defstructure ^:value Wrapped
   "A value with a data-literal reader: the literal `5` authors `(v 5)`."
-  {:v :Int}
+  {:v :int}
   (reader (fn [n] [(list 'v n)])))
 
 (defstructure Holder2
@@ -136,7 +136,7 @@
 
 (defstructure Carry
   "Test fixture: a scalar slot with a :payload companion."
-  {:text [:? {:payload :extra} :String]})
+  {:text [:? {:payload :extra} :string]})
 
 (defstructure Gate
   "Test fixture: refined slot targets — scalars checked through the type dialect."
@@ -289,14 +289,14 @@
 ;; ── positional body via (syntax …) — Task 1 ──────────────────────────────────
 (defstructure PBody
   "A test structure whose syntax hook lifts a positional body into its one slot."
-  {:thing [:? :Int]}
+  {:thing [:? :int]}
   (syntax (fn [b] (if (map? b) b {:thing b}))))
 
 (PBody pb-pos 42)                  ; def-emitting, positional body
 (def pb-expr (PBody 42))           ; expression position, positional body
 (PBody pb-map {:thing 7})          ; the map form still works
 
-(defstructure PNoSyntax {:thing [:? :Int]})   ; no hook → positional body must error
+(defstructure PNoSyntax {:thing [:? :int]})   ; no hook → positional body must error
 
 (Gate ^{:name "ok"}   en-ok {:state "open" :note "a"})
 (Gate ^{:name "bad"}  en-bad {:state "ajar"})          ; not a member
@@ -476,7 +476,7 @@
 (deftest value-type-law-catches-wrong-type
   (testing "a value whose literal fails its declared scalar type is caught"
     (let [db (a/assemble-vars [#'vt-b])]
-      (is (contains? (laws-firing db :Box) "Box.open value must be a Bool")))))
+      (is (contains? (laws-firing db :Box) "Box.open value must be a boolean")))))
 
 (deftest value-one-cardinality-catches-missing
   (testing "a required (one :T) value that is absent trips the none-law"
@@ -502,7 +502,7 @@
   (testing "a scalar-typed slot may only be bare (one) or [:? ...] (optional)"
     (let [msg (try (let [_ (macroexpand
                             '(fukan.canvas.core.structure/defstructure BadVal "d"
-                               {:xs [:* :Int]}))]
+                               {:xs [:* :int]}))]
                      "no throw")
                    (catch Throwable e
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
@@ -617,7 +617,7 @@
   (testing "slot laws fire on deduped value nodes (type-check + relation target-type)"
     (let [bad-scalar (a/assemble-vars [#'lr-bad-scalar-h])
           bad-target (a/assemble-vars [#'lr-p #'lr-bad-target-h])]
-      (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must be a Int"))
+      (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must be a int"))
       (is (contains? (set (map :law (s/check bad-target))) "Boxed.ty target must be a Type")))))
 
 (deftest programmatic-emission-builds-a-db

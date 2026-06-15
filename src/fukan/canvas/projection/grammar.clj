@@ -20,12 +20,12 @@
 
 ;; ── parts: one reified Structure → its authoring ingredients ─────────────────
 
-(def ^:private malli->scalar {:string :String, :int :Int, :boolean :Bool})
+(def ^:private malli->scalar {:string :string, :int :int, :boolean :boolean})
 
 (defn- target-expr
   "A slot edge's target → its authoring type expression: a reified Structure → its
    name symbol; a Schema value → its malli form via the dialect render (faithful —
-   enum member types are stored); bare scalars map back to :String/:Int/:Bool."
+   enum member types are stored); bare scalars map back to :string/:int/:boolean."
   [db t]
   (let [e (d/entity db t)]
     (if (= :lib.type.malli/Schema (:structure/of e))

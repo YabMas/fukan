@@ -25,8 +25,8 @@
    references no code, only the graph's own vocabulary, exactly like a law's `:where` or a
    `realized-as` derivation. It is the focus stated runnably, not a second thing that could drift
    from it. A lens with no `:select` is prose-only (not evaluable)."
-  {:focus  :String                          ; the prose description of the slice
-   :select [:? {:payload :query} :String]}) ; recap + the datalog selection (the :query payload)
+  {:focus  :string                          ; the prose description of the slice
+   :select [:? {:payload :query} :string]}) ; recap + the datalog selection (the :query payload)
 
 ;; focuses fed to reasoning readings (non-gating findings)
 (Lens survey      {:focus  "the whole model's structure"
@@ -66,8 +66,8 @@
    realization mechanism — a `FindingCheck` in `canvas.architecture.acts`, surfaced by the projector
    as a runtime gate. The complement of this reading is a `Projection` (synthesis)."
   {:through Lens          ; the focus it reads through (the model is unchanged)
-   :gating  :Bool         ; gating → a trust Signal (inspect); else a View
-   :holds   [:? :String]}) ; the stated invariant (its executable check lives in the realization view)
+   :gating  :boolean      ; gating → a trust Signal (inspect); else a View
+   :holds   [:? :string]}) ; the stated invariant (its executable check lives in the realization view)
 
 (defstructure Signal
   "A gating Finding — an inspect's trust verdict (a reading whose result gates action). Realized:
@@ -112,8 +112,8 @@
 (defstructure ^:value Mapping
   "One source-kind → target-artifact rule within a projection — value-identified by
    its (from, to)."
-  {:from :String     ; the source structure kind
-   :to   :String})   ; the target artifact it becomes
+  {:from :string     ; the source structure kind
+   :to   :string})   ; the target artifact it becomes
 
 (defstructure Projection
   "A projected representation of the model — a target we render it into. Two flavours, composing:
@@ -128,7 +128,7 @@
   {:through        Lens              ; the focus it renders through (the WHAT)
    :maps           [:* Mapping]      ; a BASE's source→artifact mappings (the HOW)
    :contextualizes [:? Projection]   ; a CONTEXTUALIZATION's base projection
-   :context        [:? :String]}     ; the framing prose wrapped around the base render
+   :context        [:? :string]}     ; the framing prose wrapped around the base render
   ;; a projection is one flavour or the other — it declares mappings (base) or frames
   ;; another (contextualization); neither would render nothing.
   (law "a projection is a base (declares mappings) or a contextualization (frames another)"

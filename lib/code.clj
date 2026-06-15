@@ -42,7 +42,7 @@
 (defstructure ^:value Effect
   "A named side effect an Operation performs (e.g. :io, :require, :stderr, :throws).
    Value-identified — `:io` is one node shared across every Operation that performs it."
-  {:name :String}
+  {:name :string}
   (reader read-effect))
 
 (defn ^:export signature->slots
@@ -88,13 +88,13 @@
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
    :performs  [:* Effect]            ; side effects
    :delegates [:* Operation]         ; cross-boundary dependencies it relies on (authored, designed)
-   :guidance  [:? :String]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection
+   :guidance  [:? :string]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection
    :calls     [:* Operation]         ; the ACTUAL call graph (extraction's actuals; not authored)
-   :private   [:? :Bool]             ; public/internal — the module's surface (from extraction)
-   :extracted [:? :Bool]             ; provenance: true ⇒ from code; absent/false ⇒ authored
+   :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
+   :extracted [:? :boolean]          ; provenance: true ⇒ from code; absent/false ⇒ authored
    ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
    ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
-   :sig       [:? :String]})
+   :sig       [:? :string]})
 
 ;; ── code module (boundary + ownership) ───────────────────────────────────────
 

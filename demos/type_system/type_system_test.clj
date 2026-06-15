@@ -57,4 +57,4 @@
 (deftest sealed-flag-must-be-boolean
   (testing "a non-boolean :sealed? value is caught by the value-type law"
     (let [db (a/assemble-vars [#'c4-T])]
-      (is (contains? (laws db) "Type.sealed? value must be a Bool")))))
+      (is (contains? (laws db) "Type.sealed? value must be a boolean")))))

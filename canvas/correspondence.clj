@@ -50,7 +50,7 @@
 
    NB named `SubjectRealization`, not `Realization`: `fukan.target.correspondence/Realization` is
    the op-layer law-host. Distinct namespaces keep both, but the names stay descriptive."
-  {:realizes :String     ; the qualified tag of the realized faculty (authored as its symbol)
+  {:realizes :string     ; the qualified tag of the realized faculty (authored as its symbol)
    :by       [:* Any]    ; the realizing code element(s) — any element, not just Module
    :form     [:? Kind]}  ; its data-form, when it has one — a Kind owned by one of :by
   (syntax realizes->tag)

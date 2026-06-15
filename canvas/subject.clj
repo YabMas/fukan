@@ -36,7 +36,7 @@
    Order and label are realization bookkeeping (datascript `:rel/order`, `:rel/label`) and stay
    OUT of the domain shape — they live on the realized kernel `Relation` Kind, and the gap
    (domain shape ⊂ realized shape) is exactly what the correspondence seam can check."
-  {:from Node :to Node :kind :String})
+  {:from Node :to Node :kind :string})
 
 ;; ── the grammar: the language you build over the substrate ───────────────────────
 
@@ -46,7 +46,7 @@
   "A constraint a `Structure` asserts — a datalog constraint that must hold of the model,
    serialised as its `:where` clause or a combinator expansion. A Law is OWNED by the Structure
    that asserts it (ownership-on-owner), so no back-reference to the Structure is modelled here."
-  {:datalog [:? :String]})
+  {:datalog [:? :string]})
 
 (defstructure Slot
   "A typed relation-template — one field of a `Structure`. `:typed-by` names the target
@@ -57,7 +57,7 @@
    a plural slot, not a type."
   {:typed-by    Structure
    :cardinality [:enum "one" "optional" "many" "some" "set"]
-   :label       [:? :String]})
+   :label       [:? :string]})
 
 (defstructure Structure
   "THE grammar unit — AND the shape. A named composition of the Slots it `:composes` plus the

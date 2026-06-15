@@ -20,7 +20,7 @@
    :opt-ref [:? Leaf]
    :seq-ref [:* Leaf]
    :set-ref [:set Leaf]
-   :title   :String
+   :title   :string
    :mode    [:enum "a" "b"]}
   (law "no node may be titled \"bad\""
     :offenders '[?n]
@@ -73,7 +73,7 @@
                                      :where [?r :rel/from ?n] [?r :rel/label ?l] [?r :rel/to ?t]
                                             [?t :val/kind ?k]]
                                    db n label)))]
-    (is (= "string" (target-kind "title")) ":String reifies as ⟨Schema :string⟩")
+    (is (= "string" (target-kind "title")) ":string reifies as ⟨Schema :string⟩")
     (is (= "enum" (target-kind "mode")) "[:enum …] reifies as its Schema subgraph")
     (is (= #{"a" "b"}
            (set (d/q '[:find [?v ...] :in $ ?n
@@ -84,7 +84,7 @@
         "the enum's members are queryable choices")
     (is (= 1 (count (d/q '[:find ?t :where [?t :structure/of :lib.type.malli/Schema]
                                            [?t :val/kind "string"]] db)))
-        "every :String slot in the model shares ONE content-deduped ⟨Schema :string⟩")))
+        "every :string slot in the model shares ONE content-deduped ⟨Schema :string⟩")))
 
 (deftest laws-reify-with-their-datalog-payload
   (let [db (reflected)
