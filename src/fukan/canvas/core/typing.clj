@@ -10,6 +10,7 @@
      :parse    (fn [form]   → entity-maps)          code-form → datoms (later)
      :adheres? (fn [model-form code-form] → bool)   model type ↔ realized code type
      :valid?   (fn [type-form value] → bool)        scalar value ⊨ refined slot type
+     :reflect  (fn [form] → {:nodes :rels})         type form → its deduped subgraph
 
    Registration MERGES per key, so capabilities compose across registrars: a grammar
    (e.g. `lib.type.malli`) contributes `:valid?` when it loads — opting a model into
@@ -50,6 +51,13 @@
   "Check a modelled type code-form against a realized code type-form via the dialect, or nil."
   [model-form code-form]
   (when-let [f (:adheres? @dialect)] (f model-form code-form)))
+
+(defn reflect-type
+  "Reflect a type `form` (a scalar keyword or a refined vector) into its content-deduped
+   subgraph via the dialect, or nil when no dialect is registered. The returned map
+   carries `:id` (the root content key) plus `:nodes`/`:rels`."
+  [form]
+  (when-let [f (:reflect @dialect)] (f form)))
 
 (defn ^:export value-valid?
   "Does scalar `value` satisfy the dialect type `form`? The refined-slot law bridge —

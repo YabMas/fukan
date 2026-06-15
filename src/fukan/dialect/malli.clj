@@ -6,6 +6,8 @@
    `lib.type.malli` (the authoring grammar) registers `:valid?` at load so any
    model opting into the grammar carries its checking."
   (:require [datascript.core :as d]
+            [fukan.canvas.core.assemble :as a]
+            [fukan.canvas.core.structure :as s]
             [malli.core :as m]))
 
 (defn- children
@@ -85,6 +87,14 @@
    malli interpretation — the kernel stores the form verbatim and never reads it."
   [type-form value]
   ((validator type-form) value))
+
+(defn reflect
+  "A malli type form → its content-deduped Schema subgraph {:id <root content key>
+   :nodes … :rels …}, via the kernel value-construction primitive on the Schema tag."
+  [form]
+  (let [iv  (s/value-literal->iv :lib.type.malli/Schema form)
+        key (s/value-content-key iv)]
+    (assoc (a/emit-instances [[key iv]]) :id key)))
 
 (defn- normalize-fn-schema
   "Normalize a malli function-schema `[:=> [:cat IN…] OUT]` to `{:in [IN…] :out OUT}`

@@ -9,7 +9,8 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.typing :as typing]))
+            [fukan.canvas.core.typing :as typing]
+            [lib.type.malli]))
 
 ;; The core is dialect-BLIND: a refined slot target (vector type form) is checked
 ;; through whatever :valid? the project registered. This test brings its own minimal
@@ -660,3 +661,12 @@
                    (catch Throwable e
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
       (is (re-find #"an instance is" msg)))))
+
+(deftest value-literal-expands-to-deduped-instancevalue
+  (testing "the kernel value-literal primitive builds a ^:value InstanceValue from a reader literal"
+    (let [iv (s/value-literal->iv :lib.type.malli/Schema [:map [:a :string] [:b :int]])]
+      (is (s/instance-value? iv) "returns an InstanceValue")
+      (is (= :lib.type.malli/Schema (:tag iv)))
+      (is (= (s/value-content-key iv)
+             (s/value-content-key (s/value-literal->iv :lib.type.malli/Schema [:map [:a :string] [:b :int]])))
+          "structurally-equal literals get equal content keys (dedup)"))))

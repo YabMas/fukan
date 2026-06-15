@@ -48,7 +48,7 @@
 
 (def scalar-types {:int 'clojure.core/integer?, :string 'clojure.core/string?, :boolean 'clojure.core/boolean?})
 
-(defn- scalar-slot?
+(defn scalar-slot?
   "True when a parsed slot's target is a registered scalar type, or a refined scalar
    (a vector type form for the registered type dialect)."
   [slot]
@@ -394,6 +394,34 @@
                       (sort-by first)
                       vec)]
     (pr-str [tag-name scalars entries])))
+
+(defn value-literal->iv
+  "Build a ^:value InstanceValue for value-structure `tag` from a data `literal`,
+   recursing into relation targets via THEIR readers. The ONE value-construction
+   path — used by reflection (a slot's type form → its Schema subgraph), so content
+   keys match by construction."
+  [tag literal]
+  (let [sdef    (structure-by-tag tag)
+        clauses ((:reader sdef) literal)
+        slot-of (fn [k] (some #(when (= k (:rel %)) %) (:slots sdef)))]
+    (reduce
+     (fn [iv [head & args]]
+       (let [sl (slot-of (keyword head))]
+         (cond
+           (nil? sl)
+           (throw (ex-info (str "reader for " tag " emitted unknown clause " head) {:literal literal}))
+           (scalar-slot? sl)
+           (assoc-in iv [:scalars (keyword "val" (name head))] (first args))
+           :else
+           (let [ttag (:target sl)]
+             (when-not (:reader (structure-by-tag ttag))
+               (throw (ex-info (str "cannot reify type form " (pr-str literal) " — slot target "
+                                    ttag " has no reader (named-Kind refs are not reflectable)")
+                               {:tag tag :literal literal})))
+             (update iv :clauses conj {:rk (:rel sl) :card (:card sl)
+                                       :targets (mapv #(value-literal->iv ttag %) args)})))))
+     (->InstanceValue tag nil nil {} [] true)
+     clauses)))
 
 ;; ── defstructure (the one form) ──────────────────────────────────────────────
 

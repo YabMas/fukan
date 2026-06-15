@@ -18,7 +18,8 @@
 ;; `{:polarity [:enum "design-down" "code-up"]}`) compiles to a law that checks
 ;; values through the type-dialect plug-point — so the grammar registers the
 ;; malli `:valid?` bridge at load (merge-per-key; a composition root adds the rest).
-(typing/register-type-dialect! {:valid? dialect/valid?})
+(typing/register-type-dialect! {:valid?  dialect/valid?
+                                :reflect dialect/reflect})
 
 (defn ^:export catn->pairs
   "Parse a malli function-input schema into ordered [param-name-symbol type-form] pairs —

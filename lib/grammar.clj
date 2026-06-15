@@ -26,9 +26,9 @@
    self-model; demos compose `with-grammar` onto their own assembly."
   (:require [clojure.string :as str]
             [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            ;; Schema must be registered (and its :valid? bridge wired) before
+            [fukan.canvas.core.typing :as typing]
+            ;; Schema must be registered (and its :valid?/:reflect bridges wired) before
             ;; reflection can build Schema value targets from slot type forms.
             [lib.type.malli]))
 
@@ -68,50 +68,6 @@
      [?s :val/tag ?ts]
      [(clojure.core/str ?t) ?ts]]])
 
-;; ── runtime value construction (the reader expansion, mirrored off-macro) ────
-
-(def ^:private scalar->malli {:int :int, :string :string, :boolean :boolean})
-
-(defn- scalar-slot? [slot]
-  (or (contains? scalar->malli (:target slot)) (vector? (:target slot))))
-
-(defn- literal->iv
-  "Runtime mirror of the authoring-time reader expansion: a data literal for
-   value structure `tag` → an InstanceValue, recursing into relation targets via
-   THEIR readers. Lets the reflector build Schema subgraphs from slot type forms
-   with the same content keys authored Schemas get — so they dedup."
-  [tag literal]
-  (let [sdef    (s/structure-by-tag tag)
-        clauses ((:reader sdef) literal)
-        slot-of (fn [k] (some #(when (= k (:rel %)) %) (:slots sdef)))]
-    (reduce
-     (fn [iv [head & args]]
-       (let [sl (slot-of (keyword head))]
-         (cond
-           (nil? sl)
-           (throw (ex-info (str "reader for " tag " emitted unknown clause " head) {:literal literal}))
-           (scalar-slot? sl)
-           (assoc-in iv [:scalars (keyword "val" (name head))] (first args))
-           :else
-           (let [ttag (:target sl)]
-             (when-not (:reader (s/structure-by-tag ttag))
-               (throw (ex-info (str "cannot reify type form " (pr-str literal) " — slot target "
-                                    ttag " has no reader (named-Kind refs are not reflectable)")
-                               {:tag tag :literal literal})))
-             (update iv :clauses conj {:rk (:rel sl) :card (:card sl)
-                                       :targets (mapv #(literal->iv ttag %) args)})))))
-     (s/->InstanceValue tag nil nil {} [] true)
-     clauses)))
-
-(defn- schema-target
-  "A scalar/refined slot target → [content-key {:nodes … :rels …}] of its Schema
-   value subgraph (content-deduped with any equal Schema already in the db)."
-  [target]
-  (let [form (if (vector? target) target (scalar->malli target))
-        iv   (literal->iv :lib.type.malli/Schema form)
-        key  (s/value-content-key iv)]
-    [key (a/emit-instances [[key iv]])]))
-
 ;; ── the reflector ─────────────────────────────────────────────────────────────
 
 (defn- structure-id [tag] (str tag))   ; ":ns/Name" — the colon keeps it clear of var-ids
@@ -146,8 +102,9 @@
          (fn [i sl]
            (let [label (name (:rel sl))
                  kind  (keyword "slot" (name (:card sl)))
-                 [tid emitted] (if (scalar-slot? sl)
-                                 (schema-target (:target sl))
+                 [tid emitted] (if (s/scalar-slot? sl)
+                                 (let [sub (typing/reflect-type (:target sl))]
+                                   [(:id sub) sub])
                                  [(structure-id (:target sl)) nil])]
              {:emitted emitted
               :any?    (= :Any (:target sl))
