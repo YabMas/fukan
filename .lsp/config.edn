@@ -34,6 +34,7 @@
               canvas.architecture.canvas-source
               canvas.manifest
               canvas.architecture.acts
+              canvas.descent.source
               lib.grammar
               fukan.canvas.projection.grammar-test
               canvas.architecture.extraction

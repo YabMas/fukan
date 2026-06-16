@@ -20,6 +20,10 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  canvas.descent.source
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   ;; lib.grammar's generated constructors are never CALLED — the reflector emits
   ;; raw node/rel maps by mechanism (like the extractor); the structures exist to
   ;; register the meta-grammar.
@@ -254,6 +258,7 @@
    canvas.subject/Source hooks.fukan.structure/instance
    canvas.subject/Projection hooks.fukan.structure/instance
    canvas.subject/Correspondence hooks.fukan.structure/instance
+   canvas.descent.source/SourceRealizer hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance
