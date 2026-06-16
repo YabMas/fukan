@@ -19,7 +19,8 @@
             [fukan.model.materialize :as mat]
             ;; loads the model↔code correspondence laws into the dev session so a
             ;; `check`/`(drift)` over the unified held model surfaces drift
-            [fukan.target.correspondence :as corr]))
+            [fukan.target.correspondence :as corr]
+            [fukan.descent :as descent]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -121,6 +122,20 @@
         (println "Drift —" (count d) "modelled Operation(s) with no realizing function:" (sort d))))
     (println "No model loaded yet. Use (go) first.")))
 
+(defn witnesses
+  "The generative readings of the Source in-fold descent over the held model: the carved design
+   space (what a realizer MUST witness) and the gap worklist (what is still unwitnessed). Empty
+   gap ⇔ the in-fold is fully realized."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [req (descent/required-witnesses m)
+          gap (descent/unwitnessed-polarities m)]
+      (println "Source in-fold — required (carve):" (sort req))
+      (if (empty? gap)
+        (println "Source in-fold — gap (prompt): none — fully realized.")
+        (println "Source in-fold — gap (prompt):" (sort gap))))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn probes
   "Run the implemented probes against the held model, printing each finding."
   []
@@ -166,6 +181,7 @@
   (focus '[(Operation ?n) (in-module ?n "materialize")])
   (check)
   (drift)
+  (witnesses)
   (probes)
   (materialize "target.clojure")
   (status))
