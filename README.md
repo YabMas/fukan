@@ -35,12 +35,13 @@ authors its own grammar on the core.
 
 ```clojure
 (require '[fukan.canvas.core.structure :as s :refer [defstructure]]
-         '[fukan.canvas.core.assemble :as a])
+         '[fukan.canvas.core.assemble :as a]
+         '[lib.type.malli])               ;; opt into the malli scalar type dialect
 
 ;; a tiny vocabulary: one structure — its slots as one typed map — plus one law
 (defstructure Task
   "A unit of work that may depend on other tasks."
-  {:done? :Bool
+  {:done? :boolean
    :deps  [:* Task]}
   (law "a task cannot depend on itself"
     :offenders '[?t]
@@ -56,7 +57,7 @@ authors its own grammar on the core.
 
 Cardinality is a quantifier: a bare target is *one*, `[:? T]` optional, `[:* T]` zero
 or more (ordered), `[:+ T]` one or more, `[:set T]` unordered. A scalar slot
-(`:Bool`) stores a leaf value with an auto type-check law; a refined scalar
+(`:boolean`) stores a leaf value with an auto type-check law; a refined scalar
 (`[:enum "a" "b"]`, `[:int {:min 1}]`) is checked through a pluggable type dialect
 (malli ships); a slot whose target is another structure reifies a *queryable
 relation*; `^:value` structures are content-deduped anonymous nodes for nameless
@@ -126,23 +127,25 @@ meant to be and what it actually is.
 ## Self-model and demos
 
 Fukan is exercised by modelling — including **modelling itself**. The self-model is laid
-out by altitude: `canvas/vocabulary/` holds the grammars *unique to fukan* (the subject
-grammar, the act grammar, the schema layer), `canvas/domain/` models fukan as an
-abstract system (its subject: one Model, two sources, two acts, one correspondence), and
-`canvas/realization/` models fukan as a built system (its subsystem self-specs) — with
-`canvas/manifest.clj` the build-manifest mapping each subject faculty to the Module(s)
-that build it (the genuine model↔code drift-check is the op-layer `target/correspondence`).
-Canvas files under `canvas/**/*.clj` are auto-discovered and assembled into one
-structure db — the model.
+out by altitude: `canvas/subject.clj` is fukan as an *abstract* system — one stratum of
+pure-grammar portraits (the substrate Node / Relation / Graph, the grammar
+Structure / Slot / Law / Form / Vocabulary, the Model, the Source, and the use-side
+Lens / Projection); `canvas/instruments/` holds fukan's own use-side *instances* — the
+lenses, findings, and projections it runs on itself; and `canvas/architecture/` models
+fukan as a *built* system, one self-spec per implementation subsystem. `canvas/manifest.clj`
+maps each subject faculty to the Module(s) that build it (the genuine model↔code drift-check
+is the op-layer `target/correspondence`). Canvas files under `canvas/**/*.clj` are
+auto-discovered and assembled into one structure db — the model.
 
 Reusable, domain-general vocabulary lives in a separate opt-in stdlib, `lib/` — code
 structures (`lib.code`: Operation / Effect / Kind / Module, where a Module is one code
 namespace), structural primitives (`lib.grouping`: Grouping / Connected), a pluggable
-type-authoring surface (`lib.type.malli`), and grammar reflection (`lib.grammar`: the
-registry projected onto the graph, so the language is model too). It is required, not
-auto-discovered, so fukan's own canvas vocab stays focused on what is unique to fukan.
-`clj -M:demos` runs a corpus of standalone modelling demos (grammar, ER, workflow,
-access-control, type-system) that pressure-test the core.
+type-authoring surface (`lib.type.malli`), grammar reflection (`lib.grammar`: the registry
+projected onto the graph, so the language is model too), and the use-side act grammar
+(`lib.lens`: Lens / Finding / Projection). It is required, not auto-discovered, so fukan's
+own canvas vocab stays focused on what is unique to fukan. `clj -M:demos` runs a corpus of
+standalone modelling demos (grammar, ER, workflow, access-control, type-system, atlas,
+self) that pressure-test the core.
 
 ## Development
 
@@ -170,21 +173,22 @@ In the REPL (`clj -M:dev`):
 ## Project structure
 
 ```
-lib/                 reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.type.malli, lib.grammar
-canvas/vocabulary/   the grammars unique to fukan (defstructure grammars)
-canvas/domain/       fukan as an abstract system (the subject + the use-side acts)
-canvas/realization/  fukan as a built system (subsystem self-specs)
-canvas/manifest.clj  the build-manifest: which module builds each subject faculty
-demos/             standalone modelling demos (vocab + model + regression)
+lib/                  reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.type.malli, lib.grammar, lib.lens
+canvas/subject.clj    fukan as an abstract system (pure-grammar portraits)
+canvas/instruments/   fukan's own use-side instances (lenses, findings, projections)
+canvas/architecture/  fukan as a built system (subsystem self-specs + the acts realization seam)
+canvas/manifest.clj   the build-manifest: which module builds each subject faculty
+demos/                standalone modelling demos (vocab + model + regression)
 src/fukan/
-  canvas/core/     the defstructure primitive, derived rules, lens evaluation
-  canvas/projection/  canvas ingestion + the probe surface
-  model/           build pipeline, extraction plug-point, materialize
-  target/          Clojure code extractor + model↔code correspondence laws
-  infra/           model lifecycle + composition root
-.paused/           the browser viewer stack (deferred indefinitely)
-.legacy-allium/    pre-canvas Allium/Boundary specs (read-only baseline)
-doc/               the vision, design, substrate spec, and decision trace
+  canvas/core/        the defstructure primitive, derived rules, typing plug-point, lens evaluation
+  canvas/projection/  canvas ingestion, the print-duals (grammar/instance/overview), the probe surface
+  model/              build pipeline, extraction plug-point, materialize
+  target/             Clojure code extractor + model↔code correspondence laws
+  dialect/            the malli type-dialect bridge
+  infra/              model lifecycle + composition root
+.paused/              the browser viewer stack (deferred indefinitely)
+.legacy-allium/       pre-canvas Allium/Boundary specs (read-only baseline)
+doc/                  the vision, design, substrate spec, and decision trace
 ```
 
 ## License
