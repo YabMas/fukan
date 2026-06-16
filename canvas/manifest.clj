@@ -16,6 +16,15 @@
             [canvas.architecture.probe-surface :as probe-surface]
             [canvas.architecture.materialize :as materialize]))
 
+;; CANARY (structure-reference slots) — `realizes->tag` is a WORKAROUND, not Manifest business logic.
+;; The kernel has no slot that references a STRUCTURE (a grammar node / portrait) by symbol, so the
+;; realized-faculty link is faked as a `:string` tag + this hook (the faculties are portraits — there
+;; is no instance to var-reference). This is the ONLY site in the tree that authors a reference to a
+;; Structure, so per "grow on second need" it stays a local hook. The day a SECOND model wants to point
+;; a slot at a Structure, lift it into a kernel "structure-reference" slot-kind (stores the tag, joins
+;; to the reflected `:lib.grammar/Structure` node) — which deletes this hook AND the `:string` slot.
+;; Until then, existing primitives express it (clunkily), so this is ergonomics-to-defer, not an
+;; expressive gap.
 (defn ^:export realizes->tag
   "Manifest's authoring syntax (the `(syntax …)` hook, map → map): `:realizes` is authored as the
    realized faculty's structure SYMBOL (`subj/Model` / `subj/Source` / `subj/Lens` /
