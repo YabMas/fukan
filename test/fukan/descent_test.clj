@@ -9,7 +9,7 @@
             ;; side-effect load: registers canvas.subject's structures (incl. Source) so the
             ;; red-case `reflected` helper can reflect them via with-grammar's extra-seed.
             [canvas.subject]
-            [canvas.descent.source :refer [SourceRealizer]]
+            [canvas.descent.source :refer [SourceRealizer ConvergenceEdge]]
             [fukan.descent :as descent]))
 
 (defn- law-desc
@@ -71,3 +71,36 @@
           "GAP: nothing unconverged — :into Model unifies both sides")
       (is (not (fired? db (law-desc :canvas.descent.source/ConvergenceEdge)))
           "the convergence law passes on the real model"))))
+
+;; convergence fixtures — an orchestrator that delegates ONLY to the design-down producer, so a
+;; declared code-up edge is NOT verified (it has no real :delegates edge to its :via producer).
+(code/Operation ^{:name "prod-d"} t-prod-d "a design-down producer")
+(code/Operation ^{:name "prod-c"} t-prod-c "a code-up producer")
+(code/Operation ^{:name "orch"}   t-orch   {:delegates [t-prod-d]})
+(ConvergenceEdge ^{:name "ced"} t-ce-design {:realizer t-orch :polarity "design-down" :via t-prod-d})
+(ConvergenceEdge ^{:name "cec"} t-ce-code   {:realizer t-orch :polarity "code-up"     :via t-prod-c})
+
+(deftest convergence-totality-fires
+  (testing "only the design-down convergence edge declared → code-up is unconverged, law fires"
+    (let [db (reflected [#'t-prod-d #'t-orch #'t-ce-design])]
+      (is (= #{"design-down"} (descent/converged-polarities db)))
+      (is (= #{"code-up"} (descent/unconverged-polarities db))
+          "code-up has no convergence edge")
+      (is (fired? db (law-desc :canvas.descent.source/ConvergenceEdge))))))
+
+(deftest convergence-verified-composition-fires
+  (testing "a code-up edge whose realizer does NOT delegate to its :via producer is still
+            unconverged — the law checks real wiring, not declaration"
+    (let [db (reflected [#'t-prod-d #'t-prod-c #'t-orch #'t-ce-design #'t-ce-code])]
+      (is (= #{"design-down"} (descent/converged-polarities db))
+          "code-up's edge is declared but orch doesn't delegate to prod-c")
+      (is (= #{"code-up"} (descent/unconverged-polarities db)))
+      (is (fired? db (law-desc :canvas.descent.source/ConvergenceEdge))))))
+
+(deftest convergence-zero-edges-fires-on-both
+  (testing "no convergence edge → both polarities unconverged (rule-routed negation, empty relation)"
+    (let [db (reflected [#'t-prod-d])]
+      (is (= #{"design-down" "code-up"} (descent/required-witnesses db))
+          "carve precondition: Source reflected with both flavours")
+      (is (= #{"design-down" "code-up"} (descent/unconverged-polarities db)))
+      (is (fired? db (law-desc :canvas.descent.source/ConvergenceEdge))))))
