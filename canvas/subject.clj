@@ -32,7 +32,23 @@
   "The atom of the graph — an instance OF a `Structure` (every node is typed by the structure it
    inhabits, mirroring the substrate's `:structure/of`). Whether a node is identified by name or by
    content is an identity-assignment detail of the realization, not part of the domain shape."
-  {:of Structure})
+  {:of Structure}
+  ;; CONFORMANCE (well-formedness, M2 — over the reflected grammar): the reflexive form of `:of`.
+  ;; Every node must be typed by a Structure the grammar actually DEFINES (a reflected
+  ;; `:lib.grammar/Structure` whose `:val/tag` matches the node's `:structure/of`). The
+  ;; `[?g …]` guard makes the law inert until reflection is present, so a bespoke (un-reflected)
+  ;; db checks clean — the law only bites once a grammar exists to conform to.
+  (law "every node is an instance of a Structure the grammar defines"
+    :scope :global
+    :offenders '[?i]
+    :rules '[[(grammar-typed ?i)
+              [?i :structure/of ?t]
+              [(clojure.core/str ?t) ?ts]
+              [?s :structure/of :lib.grammar/Structure]
+              [?s :val/tag ?ts]]]
+    :where '[[?i :structure/of ?t]
+             [?g :structure/of :lib.grammar/Structure]   ; reflection is active
+             (not (grammar-typed ?i))]))
 
 (defstructure Relation
   "A directed, kinded edge: it wires a `:from` Node to a `:to` Node under a `:kind` (the
@@ -73,10 +89,31 @@
    Structure. A `^:value` (anonymous) Structure is a nameless shape; a slot-less Structure is a
    primitive (a scalar leaf). A Structure may `:refines` a parent — that is how a SUM is
    expressed: the parent is the union (sum) of the Structures refining it (the classification
-   mechanism; a member's executable form is its `realized-as` datalog)."
+   mechanism). Refinement realizes TWO ways: DECLARED — a structural member→parent edge (the
+   kernel's `:includes`) — or DERIVED — a `realized-as` membership predicate that names the parent
+   inside its datalog (the member's executable form). The declared half is a graph edge; the derived
+   half is a rule."
   {:composes [:* Slot]
    :asserts  [:* Law]
-   :refines  [:? Structure]})
+   :refines  [:? Structure]}
+  ;; ACYCLICITY (well-formedness, M2): DECLARED refinement is a HIERARCHY, so the `:includes` graph
+  ;; must be well-founded — no Structure may refine itself, directly or transitively. Ranges over the
+  ;; reflected `:includes` edges (the structural, member→parent half of `:refines`). This is the one
+  ;; well-formedness property the apparatus does NOT discharge by construction: a cycle is authorable
+  ;; (`(includes B)` on A, `(includes A)` on B), so this law genuinely bites.
+  ;; Out of scope BY DESIGN: the DERIVED half (`realized-as`), whose parent ref lives inside arbitrary
+  ;; datalog (no clean edge to walk). A derived cycle is a recursive-derivation pathology, not a static
+  ;; structural one — a kernel rule-cycle guard's job, not this law's.
+  (law "the refinement graph is acyclic — no Structure refines itself"
+    :scope :global
+    :offenders '[?s]
+    :rules '[[(refines+ ?a ?b)
+              [?r :rel/kind :includes] [?r :rel/from ?a] [?r :rel/to ?b]]
+             [(refines+ ?a ?b)
+              [?r :rel/kind :includes] [?r :rel/from ?a] [?r :rel/to ?m]
+              (refines+ ?m ?b)]]
+    :where '[[?s :structure/of :lib.grammar/Structure]
+             (refines+ ?s ?s)]))
 
 (defstructure Form
   "`defstructure` — the one grammar-building form fukan ships; everything else is grown with it

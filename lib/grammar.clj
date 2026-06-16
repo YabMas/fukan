@@ -41,7 +41,15 @@
    ({:offenders :where :rules}) rides as the `:form` payload."
   {:desc  :string
    :scope [:? :string]
-   :query [{:payload :form} :string]})
+   :query [{:payload :form} :string]}
+  ;; OWNERSHIP — the reflector's self-check. A Law has no independent existence: it is asserted BY a
+  ;; Structure (ownership-on-owner), so every reified Law must have an incoming `:law` edge. An orphan
+  ;; Law is a defect of THIS reflection, not a modelling mistake — which is why it lives here on the
+  ;; reified type (self-scoped to `:lib.grammar/Law`), not as a design law on the `canvas.subject` portrait.
+  (law "every reified Law is owned by an asserting Structure"
+    :offenders '[?l]
+    :rules '[[(asserted ?l) [?r :rel/kind :law] [?r :rel/to ?l]]]
+    :where '[(not (asserted ?l))]))
 
 (defstructure Structure
   "A registered defstructure, reified into the graph it defines. Slots are
@@ -52,7 +60,19 @@
    :value    [:? :boolean]
    :includes [:* Structure]
    :law      [:* Law]
-   :realizes [:? {:payload :form} :string]})
+   :realizes [:? {:payload :form} :string]}
+  ;; TOTALITY — the reflector's self-check. A Structure's identity IS its defining namespace, so every
+  ;; reified Structure belongs to a Vocabulary (an incoming `:child` edge from a `:lib.grammar/Vocabulary`
+  ;; node). The synthetic `:Any` wildcard is not an authored Structure, so it is exempt. A missing
+  ;; Vocabulary is a defect of THIS reflection — hence here, self-scoped to `:lib.grammar/Structure`.
+  (law "every reified Structure is defined in a Vocabulary"
+    :offenders '[?s]
+    :rules '[[(in-vocabulary ?s)
+              [?v :structure/of :lib.grammar/Vocabulary]
+              [?r :rel/kind :child] [?r :rel/from ?v] [?r :rel/to ?s]]]
+    :where '[[?s :val/tag ?tag]
+             [(clojure.core/not= ?tag ":Any")]
+             (not (in-vocabulary ?s))]))
 
 (defstructure Vocabulary
   "One grammar namespace, reified — the Structures it defines. (Named Vocabulary,
