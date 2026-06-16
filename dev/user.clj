@@ -123,17 +123,22 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn witnesses
-  "The generative readings of the Source in-fold descent over the held model: the carved design
-   space (what a realizer MUST witness) and the gap worklist (what is still unwitnessed). Empty
-   gap ⇔ the in-fold is fully realized."
+  "The generative readings of the Source in-fold descent over the held model. Prints three lines:
+   the carved design space (required polarities), the witness gap (slice 1 — every polarity
+   realized), and the convergence gap (slice 2 — :into Model verifiably unifies every polarity).
+   Empty gaps ⇔ the in-fold is fully realized."
   []
   (if-let [m (infra-model/get-model)]
-    (let [req (descent/required-witnesses m)
-          gap (descent/unwitnessed-polarities m)]
+    (let [req  (descent/required-witnesses m)
+          wgap (descent/unwitnessed-polarities m)
+          cgap (descent/unconverged-polarities m)]
       (println "Source in-fold — required (carve):" (sort req))
-      (if (empty? gap)
-        (println "Source in-fold — gap (prompt): none — fully realized.")
-        (println "Source in-fold — gap (prompt):" (sort gap))))
+      (if (empty? wgap)
+        (println "Source in-fold — witness gap: none — every polarity realized.")
+        (println "Source in-fold — witness gap:" (sort wgap)))
+      (if (empty? cgap)
+        (println "Source in-fold — convergence gap: none — :into Model unifies every polarity.")
+        (println "Source in-fold — convergence gap:" (sort cgap))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn probes
