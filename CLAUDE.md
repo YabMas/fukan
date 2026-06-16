@@ -168,8 +168,10 @@ The self-model is laid out by **altitude**, not by pipeline role:
 - `canvas/architecture/<subsystem>.clj` — fukan as a *built* system: one self-spec per
   implementation subsystem (`kernel`/`pipeline`/`infra`/`target`/…), plus `acts.clj`
   (the realization seam that runs the modelled instruments).
-- `canvas/correspondence.clj` — the seam between the two altitudes: the laws asserting
-  each subject concept is realized by its Module(s). It alone sits at the canvas root.
+- `canvas/manifest.clj` — the faculty build-manifest: which Module(s) build each subject
+  concept, rendered by the system overview (editorial, not a drift-check — the genuine
+  model↔code correspondence is the op-layer `target.correspondence`). It alone sits at the
+  canvas root.
 - `demos/<domain>/{vocab,model}/…` + a regression test; run with `clj -M:demos`.
 - `.legacy-allium/` — pre-canvas Allium/Boundary specs (read-only archive; not on
   the classpath; not loaded).
@@ -266,6 +268,6 @@ mixing them corrupts history.
 - `src/fukan/target/{clojure,correspondence}.clj` — code extraction + correspondence laws
 - `lib/` (ns `lib.*`) — the opt-in reusable stdlib vocab (code / grouping / type.malli /
   grammar / lens)
-- `canvas/{subject,correspondence}.clj` + `canvas/{instruments,architecture}/` —
-  fukan-on-fukan's grammar portrait, the seam, use-side instruments (tool-definitions),
+- `canvas/{subject,manifest}.clj` + `canvas/{instruments,architecture}/` —
+  fukan-on-fukan's grammar portrait, the build-manifest, use-side instruments (tool-definitions),
   and the subsystem self-specs

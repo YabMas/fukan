@@ -12,7 +12,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.correspondence
+  canvas.manifest
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -231,8 +231,7 @@
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
    lib.grouping/Connected hooks.fukan.structure/instance
    lib.grouping/Grouping hooks.fukan.structure/instance
-   canvas.correspondence/SubjectRealization hooks.fukan.structure/instance
-   canvas.correspondence/SubjectCompleteness hooks.fukan.structure/instance
+   canvas.manifest/Manifest hooks.fukan.structure/instance
    canvas.architecture.acts/FindingCheck hooks.fukan.structure/instance
    canvas.architecture.acts/ReadingComposition hooks.fukan.structure/instance
    lib.lens/Lens hooks.fukan.structure/instance

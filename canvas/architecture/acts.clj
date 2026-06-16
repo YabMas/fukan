@@ -10,8 +10,10 @@
 
    The split earns its keep here because these reference code that can DRIFT from the concept;
    a `Lens`'s selection does not (it is model-native datalog) — so it lives ON the `Lens`, not
-   here. Like `correspondence`, this is a seam — it knows the domain concepts and the realizing
-   code."
+   here. This is the executable-form STASH for the instruments — where their runtime teeth live off
+   the pure declarative concept. NOT a correspondence: the genuine model↔code drift-check is the
+   op-layer `fukan.target.correspondence/Realization`, and the editorial faculty→module map is
+   `canvas.manifest`."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.lens :refer [Finding]]
             [canvas.instruments.findings :as probe]

@@ -130,7 +130,8 @@ out by altitude: `canvas/vocabulary/` holds the grammars *unique to fukan* (the 
 grammar, the act grammar, the schema layer), `canvas/domain/` models fukan as an
 abstract system (its subject: one Model, two sources, two acts, one correspondence), and
 `canvas/realization/` models fukan as a built system (its subsystem self-specs) — with
-`canvas/correspondence.clj` sitting between the two as the seam that asserts they agree.
+`canvas/manifest.clj` the build-manifest mapping each subject faculty to the Module(s)
+that build it (the genuine model↔code drift-check is the op-layer `target/correspondence`).
 Canvas files under `canvas/**/*.clj` are auto-discovered and assembled into one
 structure db — the model.
 
@@ -173,7 +174,7 @@ lib/                 reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.t
 canvas/vocabulary/   the grammars unique to fukan (defstructure grammars)
 canvas/domain/       fukan as an abstract system (the subject + the use-side acts)
 canvas/realization/  fukan as a built system (subsystem self-specs)
-canvas/correspondence.clj  the seam asserting domain ↔ realization agree
+canvas/manifest.clj  the build-manifest: which module builds each subject faculty
 demos/             standalone modelling demos (vocab + model + regression)
 src/fukan/
   canvas/core/     the defstructure primitive, derived rules, lens evaluation

@@ -5,8 +5,8 @@
    SUBJECT stratum (`canvas.subject`): one hub `Model`, one `Source` (two polarities — design intent ↓, code reality ↑), a `Lens`
    that reads a Graph (→ a sub-Graph) and a `Projection` that works on a Graph (→ a ProjectionTarget) — each
    authored as a PORTRAIT (grammar, no instances) and tagged with the code Module that realizes it
-   (`SubjectRealization`, the verify-down seam). Rendered live, so it can never drift from the spec
-   it describes. Read this instead of `ls canvas/`.
+   (`canvas.manifest/Manifest`, the faculty build-manifest). Rendered live, so it can never drift
+   from the spec it describes. Read this instead of `ls canvas/`.
 
    Pure projection: model db → string."
   (:require [clojure.string :as str]
@@ -15,13 +15,13 @@
 (def ^:private SUBJ "canvas.subject")
 
 (defn- realizers
-  "{faculty-name [realizing-module-name…]} from the SubjectRealization seam — joined to the reflected
+  "{faculty-name [realizing-module-name…]} from the faculty build-manifest — joined to the reflected
    faculty grammar node by tag (the faculties are portraits, not instances)."
   [db]
   (reduce (fn [m [cn mn]] (update m cn (fnil conj []) mn))
           {}
           (d/q '[:find ?cn ?mn
-                 :where [?r :structure/of :canvas.correspondence/SubjectRealization]
+                 :where [?r :structure/of :canvas.manifest/Manifest]
                         [?r :val/realizes ?tag]
                         [?c :structure/of :lib.grammar/Structure] [?c :val/tag ?tag] [?c :entity/name ?cn]
                         [?b :rel/from ?r] [?b :rel/kind :by] [?b :rel/to ?mod] [?mod :entity/name ?mn]] db)))

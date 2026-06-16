@@ -13,8 +13,7 @@
             [lib.code :refer [Kind]]
             [lib.grouping :refer [Grouping]]
             [lib.lens :refer [Projection]]
-            [lib.grammar :as grammar]
-            [canvas.correspondence]))
+            [canvas.manifest]))
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name
 (defn- names-of [db tag]
@@ -199,31 +198,19 @@
                      "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
 
 (deftest cross-module-ref-resolves
-  (testing "the Projection FACULTY (a portrait → grammar node) is realized by → the materialize module, by tag"
+  (testing "the Projection FACULTY (a portrait → grammar node) is built by → the materialize module, by tag"
     (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
                       :where [?f :structure/of :lib.grammar/Structure] [?f :val/tag ":canvas.subject/Projection"]
-                             [?rz :structure/of :canvas.correspondence/SubjectRealization]
+                             [?rz :structure/of :canvas.manifest/Manifest]
                              [?rz :val/realizes ":canvas.subject/Projection"]
                              [?b :rel/from ?rz] [?b :rel/kind :by] [?b :rel/to ?m]
                              [?m :structure/of :lib.code/Module] [?m :entity/name "materialize"]]
                     db))
-          "the realization names the reflected Projection grammar node by tag and is :by materialize")
+          "the manifest entry names the reflected Projection grammar node by tag and is :by materialize")
       (is (every? #(some? (:rel/to (d/entity db (first %))))
                   (d/q '[:find ?r :where [?r :rel/kind :by]] db))
           "every realizer relation has a resolved target — no dangling refs"))))
-
-(deftest subject-completeness-flags-unrealized-faculties
-  (testing "with the subject grammar reflected but NO realizations, every use-side faculty is flagged"
-    (let [db    (grammar/with-grammar (a/assemble-vars []) ["canvas.subject"])
-          fired (->> (s/check db)
-                     (filter #(= "every use-side faculty (Source/Lens/Projection) is realized by a module"
-                                 (:law %)))
-                     (mapcat :offenders)
-                     (map #(:val/tag (d/entity db (first %))))
-                     set)]
-      (is (= #{":canvas.subject/Source" ":canvas.subject/Lens" ":canvas.subject/Projection"} fired)
-          "each use-side faculty with no SubjectRealization is reported by its grammar node"))))
 
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"

@@ -7,7 +7,9 @@
    isolation: focus on the domain without implementation noise, and focus on the
    implementation/correspondence question without touching the domains.
 
-   It holds fukan's self-correspondence. fukan's projection convention is that an
+   It holds fukan's self-correspondence — THE model↔code drift-check (distinct from
+   `canvas.manifest`, the editorial faculty→module map the system overview renders, which
+   checks nothing against extracted reality). fukan's projection convention is that an
    op-layer `Operation` named X in a canvas module is realized by a function named X in
    the CORRESPONDING code module — so the law matches on name AND module placement
    across the altitude gap between authored Operations (canvas/) and extracted Operations

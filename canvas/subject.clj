@@ -3,8 +3,8 @@
 
    The subject is fukan's own design: concepts, not inhabitants. So it is authored entirely as
    `defstructure` PORTRAITS — zero instances. Every fact about a one-of-a-kind concept is
-   DEFINITIONAL, so it lives in the grammar, reflected onto the graph by `lib.grammar`. The
-   realization seam (`canvas.correspondence`) and the completeness laws attach to these reflected
+   DEFINITIONAL, so it lives in the grammar, reflected onto the graph by `lib.grammar`. The faculty
+   build-manifest (`canvas.manifest`) and the well-formedness laws below attach to these reflected
    grammar nodes.
 
    Read top-to-bottom it IS the design:
@@ -55,7 +55,8 @@
    relation's name/role). Nodes + Relations ARE the graph; everything else is built over them.
    Order and label are realization bookkeeping (datascript `:rel/order`, `:rel/label`) and stay
    OUT of the domain shape — they live on the realized kernel `Relation` Kind, and the gap
-   (domain shape ⊂ realized shape) is exactly what the correspondence seam can check."
+   (domain shape ⊂ realized shape) is exactly the kind of gap a shape-level correspondence could
+   target (deferred — no shape correspondence is checked today)."
   {:from Node :to Node :kind :string})
 
 (defstructure Graph
