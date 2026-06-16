@@ -12,12 +12,17 @@
             [canvas.descent.source :refer [SourceRealizer]]
             [fukan.descent :as descent]))
 
+(defn- law-desc
+  "The description of the (single) law on the structure tagged `tag` — the single source of truth,
+   so tests never hardcode a law string. (Each descent structure carries exactly one law.)"
+  [tag]
+  (-> (s/structure-by-tag tag) :laws first :desc))
+
 (defn- fired?
-  "True when the structural-witness law (its description read from the registered
-   SourceRealizer structure) reports any violation over db."
-  [db]
-  (let [desc (-> (s/structure-by-tag :canvas.descent.source/SourceRealizer) :laws first :desc)]
-    (boolean (some #(= desc (:law %)) (s/check db)))))
+  "True when the law described by `desc` reports any violation over `db`. (`s/check` returns
+   violation maps carrying `{:law <desc> …}`.)"
+  [db desc]
+  (boolean (some #(= desc (:law %)) (s/check db))))
 
 ;; fixtures for the partial-witness (red) cases — reflect the real Source via an extra-seed,
 ;; declare only some realizers, and watch the obligation surface the gap.
@@ -36,7 +41,7 @@
           "UP (carve): the Source portrait declares both flavours")
       (is (empty? (descent/unwitnessed-polarities db))
           "GAP (prompt): nothing unwitnessed — the in-fold is fully realized")
-      (is (not (fired? db))
+      (is (not (fired? db (law-desc :canvas.descent.source/SourceRealizer)))
           "DOWN (verify): the structural-witness law passes on the real model"))))
 
 (deftest one-polarity-unwitnessed-fires
@@ -45,7 +50,8 @@
       (is (= #{"design-down" "code-up"} (descent/required-witnesses db)))
       (is (= #{"code-up"} (descent/unwitnessed-polarities db))
           "code-up has no realizer")
-      (is (fired? db) "the witness law fires on the unwitnessed polarity"))))
+      (is (fired? db (law-desc :canvas.descent.source/SourceRealizer))
+          "the witness law fires on the unwitnessed polarity"))))
 
 (deftest zero-witnesses-fires-on-both
   (testing "no realizer at all → both polarities are offenders (rule-routed negation handles the
@@ -54,4 +60,14 @@
       (is (= #{"design-down" "code-up"} (descent/required-witnesses db))
           "carve precondition: Source reflected with both flavours")
       (is (= #{"design-down" "code-up"} (descent/unwitnessed-polarities db)))
-      (is (fired? db)))))
+      (is (fired? db (law-desc :canvas.descent.source/SourceRealizer))))))
+
+(deftest full-model-converges-both-polarities
+  (testing "the real model's :into convergence verifiably unifies both polarities"
+    (let [db (pipeline/build-model nil)]
+      (is (= #{"design-down" "code-up"} (descent/converged-polarities db))
+          "build-model actually delegates to a producer for each polarity")
+      (is (empty? (descent/unconverged-polarities db))
+          "GAP: nothing unconverged — :into Model unifies both sides")
+      (is (not (fired? db (law-desc :canvas.descent.source/ConvergenceEdge)))
+          "the convergence law passes on the real model"))))
