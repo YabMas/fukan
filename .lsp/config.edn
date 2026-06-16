@@ -37,6 +37,7 @@
               canvas.descent.source
               lib.grammar
               fukan.canvas.projection.grammar-test
+              fukan.descent-test
               canvas.architecture.extraction
               canvas.architecture.grammar-projection
               canvas.architecture.instance-projection
