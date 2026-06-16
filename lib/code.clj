@@ -98,6 +98,30 @@
 
 ;; ── code module (boundary + ownership) ───────────────────────────────────────
 
+;; STRUCTURE-REFERENCE CANARY — `realizes->concept` is the lib.code generalization of the workaround
+;; formerly in `canvas.manifest`. The kernel has no slot that references a STRUCTURE (a portrait /
+;; grammar node) by symbol, so a module's realized-concept link is a `:string` tag + this hook (the
+;; concepts are portraits — there is no instance to var-reference). After the manifest collapse this is
+;; the ONLY site authoring a Structure reference, so per "grow on second need" it stays a local hook.
+;; The day a SECOND vocab beyond lib.code points a slot at a Structure, lift it into a kernel
+;; "structure-reference" slot-kind (stores the tag, joins to the reflected `:lib.grammar/Structure`
+;; node) — which deletes this hook AND the `:string` slot. Until then, existing primitives express it.
+(defn ^:export realizes->concept
+  "Module's authoring syntax (the `(syntax …)` hook, map → map): `:realizes` is authored as the
+   realized concept's structure SYMBOL (a portrait such as `subj/Model`); rewrite it to the qualified
+   tag STRING (matching reflection's `:val/tag`), so a reading or the overview can join the module to
+   the concept's reflected grammar node by tag. The symbol resolves through its var (a structure's
+   identity is its defining ns + name), so a typo throws at macro-expansion. A non-symbol passes through."
+  [m]
+  (if-let [s (:realizes m)]
+    (if (symbol? s)
+      (if-let [v (resolve s)]
+        (let [mm (meta v)]
+          (assoc m :realizes (str (keyword (str (ns-name (:ns mm))) (name (:name mm))))))
+        (throw (ex-info (str "Module :realizes — unknown concept " s) {:realizes s})))
+      m)
+    m))
+
 (defstructure Module
   "A code module — one cohesion boundary (a namespace). Like a `Grouping` it collects members
    (`:child`), but it ALSO carries code semantics: an explicit API surface (`:exposes`) and the
@@ -115,4 +139,6 @@
    adoption: a data-shape no other module names is internal grain (`:child`), not a boundary (`:owns`)."
   {:exposes [:* Operation]           ; the public API surface — Operations callers depend on
    :owns    [:* Kind]                ; data-shapes that cross the boundary (other modules adopt by name)
-   :child   [:* Any]})               ; internal members + grain no other module consumes
+   :child   [:* Any]                 ; internal members + grain no other module consumes
+   :realizes [:? :string]}           ; the qualified tag of the abstract concept this module realizes (authored as its symbol)
+  (syntax realizes->concept))
