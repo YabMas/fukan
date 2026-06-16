@@ -261,6 +261,7 @@
    canvas.subject/Projection hooks.fukan.structure/instance
    canvas.subject/Correspondence hooks.fukan.structure/instance
    canvas.descent.source/SourceRealizer hooks.fukan.structure/instance
+   canvas.descent.source/ConvergenceEdge hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance

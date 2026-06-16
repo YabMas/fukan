@@ -13,13 +13,15 @@
    realizers). The editorial `canvas.manifest/z-source` entry is left as-is; this is its toothed
    companion."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [lib.code :refer [Module]]
+            [lib.code :refer [Module Operation]]
             [lib.grouping :refer [Grouping]]
-            ;; the :witnesses [:enum …] scalar checks through the malli type dialect
+            ;; the :witnesses / :polarity [:enum …] scalars check through the malli type dialect
             [lib.type.malli]
-            ;; the realizer Modules — the same vars the editorial manifest names
-            [canvas.architecture.canvas-source :refer [canvas-source]]
-            [canvas.architecture.target :refer [target-clojure]]))
+            ;; slice-1 realizer Modules (referred) + slice-2 producer Operations (aliased)
+            [canvas.architecture.canvas-source :as cs :refer [canvas-source]]  ; canvas-source = the Module (slice-1 :by); cs/build = an Operation it owns (slice-2 :via)
+            [canvas.architecture.target :refer [target-clojure]]
+            [canvas.architecture.pipeline :as pipeline]
+            [canvas.architecture.extraction :as extraction]))
 
 (defstructure SourceRealizer
   "A toothed realization edge for the `canvas.subject/Source` in-fold: the `Module` in `:by`
@@ -49,5 +51,42 @@
 (SourceRealizer w-design {:witnesses "design-down" :by canvas-source})
 (SourceRealizer w-code   {:witnesses "code-up"     :by target-clojure})
 
+;; ── slice 2: the :into Model convergence, with VERIFIED COMPOSITION ──────────────────────────────
+(defstructure ConvergenceEdge
+  "Witnesses that the `Source :into Model` convergence UNIFIES one polarity: the `:realizer` (the
+   convergence operation, e.g. build-model) must actually `:delegates` to the `:via` producer that
+   yields this `:polarity` side. One edge per polarity. The law requires every Source polarity to be
+   converged AND the realizer to truly delegate to its producer — strength (b) structural witness,
+   checked against real modelled wiring, not a second declaration. Where slice 1's `SourceRealizer`
+   asserts each polarity is *realized*, this asserts the merge *unifies* both."
+  {:realizer Operation                          ; the convergence op (build-model)
+   :polarity [:enum "design-down" "code-up"]    ; the polarity side this edge covers
+   :via      Operation}                          ; the producer the realizer must actually delegate to
+  ;; VERIFIED COMPOSITION + TOTALITY (descent obligation, strength b): for every polarity of the
+  ;; reflected Source in-fold there must be a ConvergenceEdge whose :realizer actually :delegates to
+  ;; its :via producer. `:scope :global` (offenders are unconverged polarity choice nodes). Same
+  ;; Source-tag guard as the witness law (vacuous when the subject is not reflected); negation routes
+  ;; through the `(converged …)` rule so the zero-edge / empty-relation case is safe.
+  (law "the Source convergence realizer delegates to a producer for every polarity"
+    :scope :global
+    :offenders '[?choice]
+    :rules '[[(converged ?polarity)
+              [?ce :structure/of :canvas.descent.source/ConvergenceEdge]
+              [?ce :val/polarity ?polarity]
+              [?rr :rel/from ?ce] [?rr :rel/kind :realizer]  [?rr :rel/to ?r]
+              [?vr :rel/from ?ce] [?vr :rel/kind :via]       [?vr :rel/to ?prod]
+              [?dr :rel/from ?r]  [?dr :rel/kind :delegates] [?dr :rel/to ?prod]]]
+    :where '[[?src :val/tag ":canvas.subject/Source"]
+             [?pr :rel/from ?src] [?pr :rel/label "polarity"] [?pr :rel/to ?enum]
+             [?cr :rel/from ?enum] [?cr :rel/kind :choice] [?cr :rel/to ?choice]
+             [?choice :val/value ?polarity]
+             (not (converged ?polarity))]))
+
+;; build-model converges both polarities: design-down via the ingest producer, code-up via the
+;; extraction PLUG-POINT (run-extractor) — extractor-agnostic, NOT target-clojure (the registered
+;; extractor) directly; the convergence is decoupled from any specific extractor.
+(ConvergenceEdge ce-design {:realizer pipeline/build-model :polarity "design-down" :via cs/build})
+(ConvergenceEdge ce-code   {:realizer pipeline/build-model :polarity "code-up"     :via extraction/run-extractor})
+
 (Grouping source-descent
-  {:child [w-design w-code]})
+  {:child [w-design w-code ce-design ce-code]})
