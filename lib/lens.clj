@@ -2,7 +2,7 @@
   "The reusable USE-SIDE grammar — the act of FOCUSING (Lens) and the two ways a model is
    USED (reading → Finding, synthesis → Projection). Opt-in stdlib vocab: any project
    `:require`s it to author its own instruments. Ships NO instances — fukan's own
-   instruments live in `canvas.instruments`.
+   instruments live under `canvas/instruments/`.
 
    The two uses are NOT twins:
      - a LENS is a focus — which slice/aspect to attend to. Evaluating a lens reads the model

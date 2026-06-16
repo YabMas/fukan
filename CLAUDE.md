@@ -161,9 +161,10 @@ The self-model is laid out by **altitude**, not by pipeline role:
   (Structure/Slot/Law/Form/Vocabulary), the Model, the Source, and the use-side
   Lens/Projection concepts. fukan's own grammar is authored here, not in a separate
   vocabulary tree.
-- `canvas/instruments.clj` — fukan as a *user of itself*: its own use-side INSTANCES
-  (the concrete lenses, findings, and projections it points at itself — `survey`/`drift`/…,
-  `Blueprint`/`DriftClose`), authored against the `lib.lens` grammar.
+- `canvas/instruments/<kind>.clj` — fukan as a *user of itself*: its own use-side INSTANCES,
+  one file per kind (`lenses.clj`, `findings.clj`, `projections.clj` — `survey`/`drift`/…,
+  `Blueprint`/`DriftClose`), authored against the `lib.lens` grammar. A separated
+  TOOL-DEFINITIONS area, not part of fukan's design.
 - `canvas/architecture/<subsystem>.clj` — fukan as a *built* system: one self-spec per
   implementation subsystem (`kernel`/`pipeline`/`infra`/`target`/…), plus `acts.clj`
   (the realization seam that runs the modelled instruments).
@@ -265,6 +266,6 @@ mixing them corrupts history.
 - `src/fukan/target/{clojure,correspondence}.clj` — code extraction + correspondence laws
 - `lib/` (ns `lib.*`) — the opt-in reusable stdlib vocab (code / grouping / type.malli /
   grammar / lens)
-- `canvas/{subject,instruments,correspondence}.clj` + `canvas/architecture/` —
-  fukan-on-fukan's grammar portrait, use-side instruments, the seam, and the subsystem
-  self-specs
+- `canvas/{subject,correspondence}.clj` + `canvas/{instruments,architecture}/` —
+  fukan-on-fukan's grammar portrait, the seam, use-side instruments (tool-definitions),
+  and the subsystem self-specs

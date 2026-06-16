@@ -42,7 +42,9 @@
               canvas.architecture.infra
               canvas.architecture.kernel
               lib.lens
-              canvas.instruments
+              canvas.instruments.lenses
+              canvas.instruments.findings
+              canvas.instruments.projections
               canvas.architecture.lens-engine
               canvas.architecture.materialize
               canvas.architecture.pipeline

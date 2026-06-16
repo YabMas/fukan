@@ -5,7 +5,8 @@
             ;; the lens grammar (Lens/Projection/Mapping) + the real self-model instance vars an
             ;; ad-hoc contextualization composes over (Blueprint, survey)
             [lib.lens :as cm-acts :refer [Lens Projection Mapping]]
-            [canvas.instruments :refer [Blueprint survey]]
+            [canvas.instruments.projections :refer [Blueprint]]
+            [canvas.instruments.lenses :refer [survey]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.projection.canvas-source :as cs]

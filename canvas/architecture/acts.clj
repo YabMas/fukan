@@ -14,7 +14,7 @@
    code."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.lens :refer [Finding]]
-            [canvas.instruments :as probe]
+            [canvas.instruments.findings :as probe]
             [lib.code :refer [Operation]]
             [lib.grouping :refer [Grouping]]
             [canvas.architecture.kernel :as kernel]))
