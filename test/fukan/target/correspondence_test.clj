@@ -108,3 +108,13 @@
     (let [worklist (corr/uncovered-calls (pipeline/build-model "src"))]
       (is (seq worklist) "the self-model has real couplings not yet declared as :delegates")
       (is (every? (fn [[a b]] (not= a b)) worklist) "all entries are cross-module pairs"))))
+
+(deftest slice-1-self-model-is-clean
+  (testing "with :calls grounded, the realization law green, and membership scoped, the merged
+            design+code self-model has zero law violations"
+    (let [model (pipeline/build-model "src")]
+      (is (empty? (corr/unrealized-delegates model)) "realization is green")
+      (is (seq (corr/uncovered-calls model)) "fidelity worklist exists (slice-2 input)")
+      (is (empty? (s/check model))
+          (str "no law violations on the merged self-model; got: "
+               (mapv :law (s/check model)))))))
