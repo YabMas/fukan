@@ -109,12 +109,44 @@
       (is (seq worklist) "the self-model has real couplings not yet declared as :delegates")
       (is (every? (fn [[a b]] (not= a b)) worklist) "all entries are cross-module pairs"))))
 
+(deftest fidelity-fires-on-an-undeclared-modelled-coupling
+  (testing "an actual cross-module call between two MODELLED faculties with no covering :delegates fires"
+    (let [db (-> (s/create)
+                 (d/db-with
+                  [;; two authored faculty modules a / b (not extracted) → fukan.a / fukan.b are 'modelled'
+                   {:db/id -1 :structure/of :lib.code/Module :entity/id "a" :entity/name "a"}
+                   {:db/id -2 :structure/of :lib.code/Module :entity/id "b" :entity/name "b"}
+                   {:db/id -3 :structure/of :lib.code/Operation :entity/name "oa"}
+                   {:db/id -4 :structure/of :lib.code/Operation :entity/name "ob"}
+                   {:rel/id "a|exposes|oa" :rel/from -1 :rel/kind :exposes :rel/to -3}
+                   {:rel/id "b|exposes|ob" :rel/from -2 :rel/kind :exposes :rel/to -4}
+                   ;; a guard delegate (some intent authored) that does NOT cover a->b
+                   {:rel/id "oa|delegates|oa" :rel/from -3 :rel/kind :delegates :rel/to -3}
+                   ;; extracted side: fukan.a calls fukan.b, with no covering delegate
+                   {:db/id -5 :structure/of :lib.code/Module :entity/id "fukan.a" :entity/name "fukan.a" :val/extracted true}
+                   {:db/id -6 :structure/of :lib.code/Module :entity/id "fukan.b" :entity/name "fukan.b" :val/extracted true}
+                   {:db/id -7 :structure/of :lib.code/Operation :entity/name "fa" :val/extracted true}
+                   {:db/id -8 :structure/of :lib.code/Operation :entity/name "fb" :val/extracted true}
+                   {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
+                   {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
+                   {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}]))]
+      (is (= #{"fa"} (corr/unfaithful-calls db))
+          "an undeclared coupling between modelled faculties is a fidelity offender")
+      (is (= #{["fukan.a" "fukan.b"]} (corr/uncovered-calls db))
+          "the same coupling appears in the broader query"))))
+
+(deftest fidelity-green-on-the-self-model
+  (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
+    (is (empty? (corr/unfaithful-calls (pipeline/build-model "src")))
+        "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
+
 (deftest slice-1-self-model-is-clean
-  (testing "with :calls grounded, the realization law green, and membership scoped, the merged
+  (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
             design+code self-model has zero law violations"
     (let [model (pipeline/build-model "src")]
       (is (empty? (corr/unrealized-delegates model)) "realization is green")
-      (is (seq (corr/uncovered-calls model)) "fidelity worklist exists (slice-2 input)")
+      (is (empty? (corr/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
+      (is (seq (corr/uncovered-calls model)) "coverage worklist still lists the unmodelled tail")
       (is (empty? (s/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (s/check model)))))))

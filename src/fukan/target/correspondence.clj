@@ -91,6 +91,39 @@
                [(fukan.target.correspondence/module-corresponds? ?cm1 ?km1)]
                [(fukan.target.correspondence/module-corresponds? ?cm2 ?km2)])]))
 
+(defstructure Fidelity
+  "Law-holder for code-up FIDELITY — the ENFORCED dual of the `uncovered-calls` query. Every actual
+   cross-module call BETWEEN MODELLED faculties must be covered by an intended `:delegates`. Scoped to
+   modelled-both-ends: a call into an UNMODELLED namespace is a coverage gap (the `uncovered-calls`
+   query), NOT a fidelity violation — we only enforce boundaries we have claimed to model (a code
+   module is modelled when an authored faculty module `module-corresponds?` it). With THIS law green
+   AND the `lib.arch` DAG-conformance (over `:delegates`) green, the actual code call graph provably
+   conforms to the declared `:may-depend` DAG — the architecture finally bites on code. `:scope
+   :global` (offenders are the extracted caller ops). Guarded vacuous until some intent is authored
+   (`[?anydel :rel/kind :delegates]`); negation via inline not-join with `?km1`/`?km2` bound on entry
+   (no free-variable blow-up); the `intended` rule inlines `in-module` (the `lib.arch` convention)."
+  (law "every actual cross-module call between modelled faculties is covered by an intended delegation"
+    :scope :global
+    :offenders '[?e1]
+    :rules '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(intended ?km1 ?km2)
+              [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+              (not [?o1 :val/extracted true])
+              (in-module ?o1 ?c1) (in-module ?o2 ?c2)
+              [(fukan.target.correspondence/module-corresponds? ?c1 ?km1)]
+              [(fukan.target.correspondence/module-corresponds? ?c2 ?km2)]]]
+    :where '[[?anydel :rel/kind :delegates]
+             [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
+             [?e1 :val/extracted true] [?e2 :val/extracted true]
+             (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
+             [?am1 :structure/of :lib.code/Module] (not [?am1 :val/extracted true]) [?am1 :entity/name ?cm1]
+             [(fukan.target.correspondence/module-corresponds? ?cm1 ?km1)]
+             [?am2 :structure/of :lib.code/Module] (not [?am2 :val/extracted true]) [?am2 :entity/name ?cm2]
+             [(fukan.target.correspondence/module-corresponds? ?cm2 ?km2)]
+             (not (intended ?km1 ?km2))]))
+
 (defn unrealized-delegates
   "The authored source Operations whose cross-module delegation is NOT realized by any actual call
    between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
@@ -126,6 +159,20 @@
                    (some (fn [[cm1 cm2]]
                            (and (module-corresponds? cm1 km1) (module-corresponds? cm2 km2)))
                          intent)))
+         set)))
+
+(defn unfaithful-calls
+  "The ENFORCED fidelity offenders — extracted caller Operations making an undeclared cross-module
+   call between MODELLED faculties, as a set of op names. Empty ⇔ every modelled-faculty coupling in
+   the code is declared as intent (so, with DAG-conformance green, the code conforms to the
+   `:may-depend` DAG). The modelled-both-ends subset of `uncovered-calls`; reads the registered
+   Fidelity law (the single source of truth)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::Fidelity) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
          set)))
 
 (defn drifted-operations
