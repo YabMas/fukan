@@ -20,7 +20,8 @@
             ;; loads the model↔code correspondence laws into the dev session so a
             ;; `check`/`(drift)` over the unified held model surfaces drift
             [fukan.target.correspondence :as corr]
-            [fukan.descent :as descent]))
+            [fukan.descent :as descent]
+            [lib.code :as code]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -139,6 +140,24 @@
       (if (empty? cgap)
         (println "Source in-fold — convergence gap: none — :into Model unifies every polarity.")
         (println "Source in-fold — convergence gap:" (sort cgap))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn roles
+  "Print fukan's modules grouped by realized subject concept (the design-aid role view): which
+   modules realize each faculty, and which are infrastructure (no role)."
+  []
+  (if-let [m (infra-model/get-model)]
+    (doseq [[role mods] (sort-by (comp str key) (code/modules-by-role m))]
+      (println (format "%-32s %s" (str role) (str/join ", " (sort mods)))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn deps
+  "Print fukan's complete module→module dependency graph (calls ∪ data-adoption), one edge per line —
+   the objective backbone to reason a clean organization against."
+  []
+  (if-let [m (infra-model/get-model)]
+    (doseq [[a b] (sort (code/module-dependencies m))]
+      (println (format "%-24s ⟶ %s" a b)))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn probes
