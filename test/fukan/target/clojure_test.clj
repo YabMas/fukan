@@ -40,6 +40,24 @@
       (is (= #{["sample" "alpha"] ["sample" "beta"] ["sample" "delta"]} (set owned))
           "the `sample` namespace is a Module owning all three operations"))))
 
+(deftest emits-calls-between-operations
+  (testing "the extractor populates :calls from clj-kondo var-usages — beta calls alpha"
+    (let [db    (tc/extract "test/fixtures/target/sample.clj")
+          calls (d/q '[:find ?fromn ?ton
+                       :where [?cr :rel/kind :calls] [?cr :rel/from ?f] [?cr :rel/to ?t]
+                              [?f :entity/name ?fromn] [?t :entity/name ?ton]]
+                     db)]
+      (is (contains? (set calls) ["beta" "alpha"])
+          "beta -> alpha is emitted as a :calls relation")
+      (is (not (some (fn [[a b]] (= a b)) calls)) "no self-call edges"))))
+
+(deftest extracted-modules-carry-provenance
+  (testing "each extracted Module is stamped :val/extracted true"
+    (let [db (tc/extract "test/fixtures/target/sample.clj")]
+      (is (true? (ffirst (d/q '[:find ?x :where [?m :structure/of :lib.code/Module]
+                                              [?m :entity/name "sample"] [?m :val/extracted ?x]] db)))
+          "the sample Module is provenance-stamped"))))
+
 (deftest every-modelled-stage-is-realized-in-src
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/)
             with the code extracted from src/ on one graph, and every modelled
