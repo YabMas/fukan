@@ -15,6 +15,7 @@
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.overview :as overview]
+            [fukan.canvas.projection.architecture :as arch]
             [fukan.canvas.projection.probes :as probe]
             [fukan.model.materialize :as mat]
             ;; loads the model↔code correspondence laws into the dev session so a
@@ -64,6 +65,14 @@
   []
   (if-let [m (infra-model/get-model)]
     (println (overview/system-overview m))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn architecture
+  "Print fukan's code-side architecture: subsystems, their modules (faculty-annotated), and the
+   :may-depend DAG — the design-aid companion to (overview)'s subject view."
+  []
+  (if-let [m (infra-model/get-model)]
+    (println (arch/architecture-overview m))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn grammar
