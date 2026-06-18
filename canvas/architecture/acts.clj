@@ -13,7 +13,7 @@
    here. This is the executable-form STASH for the instruments — where their runtime teeth live off
    the pure declarative concept. NOT a correspondence: the genuine model↔code drift-check is the
    op-layer `fukan.target.correspondence/Realization`, and the editorial faculty→module map is
-   `canvas.manifest`."
+   the role-derived faculty→module map rendered by the system overview."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.lens :refer [Finding]]
             [canvas.instruments.findings :as probe]

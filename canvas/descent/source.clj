@@ -7,10 +7,10 @@
 
    The same law reads three ways: DOWN = verify (it runs in `check`), UP = carve and GAP = prompt
    (those readings live in `fukan.descent`). It joins to the reflected `Source` by its tag — the
-   manifest's existing mechanism — so NO kernel structure-reference slot is lifted. This is the
+   same mechanism the module roles use — so NO kernel structure-reference slot is lifted. This is the
    model↔realization correspondence for the in-fold, so it lives in its own seam (like
    `fukan.target.correspondence`), NOT on the pure `Source` portrait (which must not name
-   realizers). The editorial `canvas.manifest/z-source` entry is left as-is; this is its toothed
+   realizers). The Source role now sits on the realizing Modules (`:realizes subj/Source`); this is its toothed
    companion."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.code :refer [Module Operation]]

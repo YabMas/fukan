@@ -3,8 +3,8 @@
 
    The subject is fukan's own design: concepts, not inhabitants. So it is authored entirely as
    `defstructure` PORTRAITS — zero instances. Every fact about a one-of-a-kind concept is
-   DEFINITIONAL, so it lives in the grammar, reflected onto the graph by `lib.grammar`. The faculty
-   build-manifest (`canvas.manifest`) and the well-formedness laws below attach to these reflected
+   DEFINITIONAL, so it lives in the grammar, reflected onto the graph by `lib.grammar`. The system
+   overview's role-derived faculty→module map and the well-formedness laws below attach to these reflected
    grammar nodes.
 
    Read top-to-bottom it IS the design:

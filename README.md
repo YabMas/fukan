@@ -132,9 +132,10 @@ pure-grammar portraits (the substrate Node / Relation / Graph, the grammar
 Structure / Slot / Law / Form / Vocabulary, the Model, the Source, and the use-side
 Lens / Projection); `canvas/instruments/` holds fukan's own use-side *instances* — the
 lenses, findings, and projections it runs on itself; and `canvas/architecture/` models
-fukan as a *built* system, one self-spec per implementation subsystem. `canvas/manifest.clj`
-maps each subject faculty to the Module(s) that build it (the genuine model↔code drift-check
-is the op-layer `target/correspondence`). Canvas files under `canvas/**/*.clj` are
+fukan as a *built* system, one self-spec per implementation subsystem. Each architecture Module
+carries a `:realizes` role naming the subject faculty it builds; the system overview derives the
+faculty→module map from those roles (the genuine model↔code drift-check is the op-layer
+`target/correspondence`). Canvas files under `canvas/**/*.clj` are
 auto-discovered and assembled into one structure db — the model.
 
 Reusable, domain-general vocabulary lives in a separate opt-in stdlib, `lib/` — code
@@ -176,8 +177,7 @@ In the REPL (`clj -M:dev`):
 lib/                  reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.type.malli, lib.grammar, lib.lens
 canvas/subject.clj    fukan as an abstract system (pure-grammar portraits)
 canvas/instruments/   fukan's own use-side instances (lenses, findings, projections)
-canvas/architecture/  fukan as a built system (subsystem self-specs + the acts realization seam)
-canvas/manifest.clj   the build-manifest: which module builds each subject faculty
+canvas/architecture/  fukan as a built system (subsystem self-specs + the acts realization seam; faculty roles on each Module)
 demos/                standalone modelling demos (vocab + model + regression)
 src/fukan/
   canvas/core/        the defstructure primitive, derived rules, typing plug-point, lens evaluation

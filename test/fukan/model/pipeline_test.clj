@@ -12,8 +12,7 @@
             [fukan.model.pipeline :as pipeline]
             [lib.code :refer [Kind]]
             [lib.grouping :refer [Grouping]]
-            [lib.lens :refer [Projection]]
-            [canvas.manifest]))
+            [lib.lens :refer [Projection]]))
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name
 (defn- names-of [db tag]
@@ -198,19 +197,13 @@
                      "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
 
 (deftest cross-module-ref-resolves
-  (testing "the Projection FACULTY (a portrait → grammar node) is built by → the materialize module, by tag"
+  (testing "the Projection FACULTY (a portrait → grammar node) is realized by → the materialize module, by role"
     (let [db (pipeline/build-model nil)]
       (is (seq (d/q '[:find ?m
                       :where [?f :structure/of :lib.grammar/Structure] [?f :val/tag ":canvas.subject/Projection"]
-                             [?rz :structure/of :canvas.manifest/Manifest]
-                             [?rz :val/realizes ":canvas.subject/Projection"]
-                             [?b :rel/from ?rz] [?b :rel/kind :by] [?b :rel/to ?m]
-                             [?m :structure/of :lib.code/Module] [?m :entity/name "materialize"]]
-                    db))
-          "the manifest entry names the reflected Projection grammar node by tag and is :by materialize")
-      (is (every? #(some? (:rel/to (d/entity db (first %))))
-                  (d/q '[:find ?r :where [?r :rel/kind :by]] db))
-          "every realizer relation has a resolved target — no dangling refs"))))
+                             [?m :structure/of :lib.code/Module] [?m :val/realizes ":canvas.subject/Projection"]
+                             [?m :entity/name "materialize"]] db))
+          "the materialize Module's :realizes tag joins the reflected Projection grammar node"))))
 
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"

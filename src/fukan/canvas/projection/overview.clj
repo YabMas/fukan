@@ -5,7 +5,7 @@
    SUBJECT stratum (`canvas.subject`): one hub `Model`, one `Source` (two polarities — design intent ↓, code reality ↑), a `Lens`
    that reads a Graph (→ a sub-Graph) and a `Projection` that works on a Graph (→ a ProjectionTarget) — each
    authored as a PORTRAIT (grammar, no instances) and tagged with the code Module that realizes it
-   (`canvas.manifest/Manifest`, the faculty build-manifest). Rendered live, so it can never drift
+   (each module's `:realizes` role, derived live — the collapse of the former editorial manifest). Rendered live, so it can never drift
    from the spec it describes. Read this instead of `ls canvas/`.
 
    Pure projection: model db → string."
@@ -15,16 +15,15 @@
 (def ^:private SUBJ "canvas.subject")
 
 (defn- realizers
-  "{faculty-name [realizing-module-name…]} from the faculty build-manifest — joined to the reflected
-   faculty grammar node by tag (the faculties are portraits, not instances)."
+  "{concept-name [realizing-module-name…]} derived from each Module's `:realizes` role (the collapse
+   of the former editorial `canvas.manifest`) — the role tag joined to the reflected concept grammar
+   node by `:val/tag` (the concepts are portraits, not instances)."
   [db]
   (reduce (fn [m [cn mn]] (update m cn (fnil conj []) mn))
           {}
           (d/q '[:find ?cn ?mn
-                 :where [?r :structure/of :canvas.manifest/Manifest]
-                        [?r :val/realizes ?tag]
-                        [?c :structure/of :lib.grammar/Structure] [?c :val/tag ?tag] [?c :entity/name ?cn]
-                        [?b :rel/from ?r] [?b :rel/kind :by] [?b :rel/to ?mod] [?mod :entity/name ?mn]] db)))
+                 :where [?mod :structure/of :lib.code/Module] [?mod :val/realizes ?tag] [?mod :entity/name ?mn]
+                        [?c :structure/of :lib.grammar/Structure] [?c :val/tag ?tag] [?c :entity/name ?cn]] db)))
 
 (defn- struct-slot-target
   "The name of the structure a `Structure`'s slot points to — read from the REFLECTED grammar
