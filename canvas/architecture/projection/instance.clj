@@ -18,7 +18,8 @@
   (Kind Focus [:or [:vector :int] [:vector :any]])  ; an eid set or datalog clauses (most-specific branch first)
   (Operation instance-form
     "A model node rendered back as its authored instance form (the data dual)."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]})
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]
+     :delegates [kernel/structure-by-tag]})     ; resolves a node's structure to drive the render
   (Operation instance-text
     "instance-form, formatted like the authored source (aligned slot map)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Text]})

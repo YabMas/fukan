@@ -15,7 +15,8 @@
   "Discover canvas specs, require + assemble them into the model db; fold extracted code in."
   {:realizes subj/Source}                        ; faculty role: the design-down half of the Source in-fold
   (Operation union-dbs "Fold the extractor's code db onto the assembled design db."
-    {:signature [:=> [:catn [:dbs [:vector kernel/StructureDb]]] kernel/StructureDb]})
+    {:signature [:=> [:catn [:dbs [:vector kernel/StructureDb]]] kernel/StructureDb]
+     :delegates [kernel/create]})               ; builds on the kernel's StructureDb constructor
   (Operation build "Discover + require + assemble the canvas specs → the model db."
     {:signature [:=> [:cat] kernel/StructureDb]
      :performs  [:io :stderr :require]}))

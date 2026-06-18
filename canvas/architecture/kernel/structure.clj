@@ -38,10 +38,16 @@
   "Run every structure's laws over the model db; yield the violations."
   {:signature [:=> [:catn [:db StructureDb]] [:vector Violation]]
    :guidance  "Inject vocab-rules into each law's :where so laws read at domain altitude; route negation through rules to dodge datascript's empty-relation not-join gotcha."})
+(Operation create
+  "Construct an empty StructureDb — the substrate constructor builders start from."
+  {:signature [:=> [:cat] StructureDb]})
+(Operation structure-by-tag
+  "Look up a registered structure definition (slots + laws) by its tag."
+  {:signature [:=> [:catn [:tag :keyword]] :any]})
 
 (Module core-structure
   "The defstructure kernel — laws → violations over the structure graph."
-  {:exposes [check vocab-rules]                  ; the kernel capabilities others compose
+  {:exposes [check vocab-rules create structure-by-tag]   ; the kernel capabilities others compose
    :owns    [StructureDb Violation]              ; data-shapes that cross the boundary (others adopt by name)
    :child   [Rule Node Relation]                 ; internal grain: the rules-output type + the reflexive substrate
    :realizes subj/Model})                        ; faculty role: this module realizes the Model hub
