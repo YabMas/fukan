@@ -44,6 +44,8 @@
               canvas.architecture.orchestration.infra
               canvas.architecture.kernel.structure
               canvas.architecture.kernel.assemble
+              canvas.architecture.kernel.typing
+              canvas.architecture.kernel.malli
               canvas.architecture.subsystems
               lib.lens
               canvas.instruments.lenses
