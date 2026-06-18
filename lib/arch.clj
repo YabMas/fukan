@@ -77,14 +77,17 @@
              [(sub-reaches ?s ?t) [?r :rel/from ?s] [?r :rel/kind :may-depend] [?r :rel/to ?mid] (sub-reaches ?mid ?t)]]
     :where '[[?s :structure/of :lib.code/Subsystem] (sub-reaches ?s ?s)])
 
-  ;; MEMBERSHIP TOTALITY — every Module belongs to a Subsystem, so conformance has full coverage.
-  ;; Guarded by [?_s :structure/of :lib.code/Subsystem] (a direct datom) → vacuous for subsystem-free
-  ;; models (plain lib.code or lib.arch w/o subsystems). Negation routes through the `in-subsystem`
-  ;; rule so the zero-member case dodges datascript's empty-relation not-join gotcha.
+  ;; MEMBERSHIP TOTALITY — every AUTHORED Module belongs to a Subsystem, so conformance has full
+  ;; coverage. Guarded by [?_s :structure/of :lib.code/Subsystem] (a direct datom) → vacuous for
+  ;; subsystem-free models (plain lib.code or lib.arch w/o subsystems). Negation routes through the
+  ;; `in-subsystem` rule so the zero-member case dodges datascript's empty-relation not-join gotcha.
+  ;; Extracted code-fact modules (stamped `:val/extracted true` by the extractor) are out of scope
+  ;; for design-membership — (not [?mod :val/extracted true]) guards them out.
   (law "every Module belongs to a Subsystem"
     :scope :global
     :offenders '[?mod]
     :rules '[[(in-subsystem ?mod ?sub) [?sub :structure/of :lib.code/Subsystem] [?cr :rel/from ?sub] [?cr :rel/kind :child] [?cr :rel/to ?mod]]]
     :where '[[?_s :structure/of :lib.code/Subsystem]
              [?mod :structure/of :lib.code/Module]
+             (not [?mod :val/extracted true])
              (not-join [?mod] (in-subsystem ?mod ?_sub))]))

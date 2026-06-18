@@ -71,7 +71,14 @@
 ;; ── membership fixtures: a module in no subsystem (with a subsystem present) ──
 (code/Module ^{:name "orphan"} t-orphan "a module in no subsystem")
 (code/Module ^{:name "homed"}  t-homed  "a module in a subsystem")
+(code/Module t-ext-orphan {:extracted true})   ; an extracted code-fact module, in no subsystem
 (code/Subsystem ^{:name "home"} t-sub-home {:child [t-homed]})
+
+(deftest membership-ignores-extracted-modules
+  (testing "an extracted (code-fact) module in no subsystem is NOT a membership offender"
+    (let [db (a/assemble-vars [#'t-ext-orphan #'t-homed #'t-sub-home])]
+      (is (empty? (offenders db "belongs to a Subsystem"))
+          "design-membership is for authored modules; extracted modules are out of scope"))))
 
 (deftest membership-fires-on-unclustered-module
   (testing "with a Subsystem present, a Module in none is an offender"
