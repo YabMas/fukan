@@ -44,10 +44,21 @@
 (Operation structure-by-tag
   "Look up a registered structure definition (slots + laws) by its tag."
   {:signature [:=> [:catn [:tag :keyword]] :any]})
+(Operation value-literal->iv
+  "Build a ^:value InstanceValue for a value-structure tag from a data literal — the one
+   value-construction path; type dialects build their value subgraphs through it."
+  {:signature [:=> [:catn [:tag :keyword] [:literal :any]] :any]})
+(Operation value-content-key
+  "A deterministic, purely structural identity for a ^:value InstanceValue (the content-dedup key)."
+  {:signature [:=> [:catn [:iv :any]] :any]})
 
 (Module core-structure
   "The defstructure kernel — laws → violations over the structure graph."
-  {:exposes [check vocab-rules create structure-by-tag]   ; the kernel capabilities others compose
+  ;; NB: the dialect-facing half of :exposes (create / structure-by-tag / value-literal->iv /
+  ;; value-content-key) has grown one widening at a time to serve consumers — esp. the malli
+  ;; dialect reaching the value machinery. See the kernel<->dialect-boundary note: this signals
+  ;; the kernel<->typing-plugin seam wants a deliberate SPI, not piecemeal exposure (parked).
+  {:exposes [check vocab-rules create structure-by-tag value-literal->iv value-content-key]   ; the kernel capabilities others compose
    :owns    [StructureDb Violation]              ; data-shapes that cross the boundary (others adopt by name)
    :child   [Rule Node Relation]                 ; internal grain: the rules-output type + the reflexive substrate
    :realizes subj/Model})                        ; faculty role: this module realizes the Model hub
