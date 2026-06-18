@@ -8,10 +8,12 @@
    the assembled design db. The db it builds is the kernel's shared `StructureDb`. (Discovery,
    namespace derivation and the entity-map fold are internals — extraction's job, not sketched.)"
   (:require [lib.code :refer [Operation Module]]
-            [canvas.architecture.kernel :as kernel]))
+            [canvas.architecture.kernel :as kernel]
+            [canvas.subject :as subj]))
 
 (Module canvas-source
   "Discover canvas specs, require + assemble them into the model db; fold extracted code in."
+  {:realizes subj/Source}                        ; faculty role: the design-down half of the Source in-fold
   (Operation union-dbs "Fold the extractor's code db onto the assembled design db."
     {:signature [:=> [:catn [:dbs [:vector kernel/StructureDb]]] kernel/StructureDb]})
   (Operation build "Discover + require + assemble the canvas specs → the model db."

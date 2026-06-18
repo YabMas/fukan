@@ -6,10 +6,12 @@
    in `canvas.architecture.lens-engine`."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel :as kernel]
-            [canvas.architecture.lens-engine :as lens-engine]))
+            [canvas.architecture.lens-engine :as lens-engine]
+            [canvas.subject :as subj]))
 
 (Module materialize
   "Project the model down into an implementation spec, through a Lens focus + a Projection."
+  {:realizes subj/Projection}                    ; faculty role: projects the graph to a target
   (Kind Lens) (Kind Instruction) (Kind Projection)
   (Kind ProjectionName :string) (Kind ModuleName :string)
   (Kind Clause) (Kind Eid :int)

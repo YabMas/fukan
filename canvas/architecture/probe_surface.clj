@@ -8,10 +8,12 @@
    shared `StructureDb`."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel :as kernel]
-            [canvas.architecture.target :as target]))
+            [canvas.architecture.target :as target]
+            [canvas.subject :as subj]))
 
 (Module probes
   "The live run/run-all dispatch surface over the implemented probe leaves."
+  {:realizes subj/Lens}                          ; faculty role: reads the graph (findings)
   (Kind ProbeName [:enum "survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift" "type-drift"])
   (Kind Finding
     [:map [:lens :string]

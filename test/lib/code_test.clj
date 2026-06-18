@@ -4,6 +4,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.model.pipeline :as pipeline]
             [lib.code :as code]))
 
 ;; a fixture abstract concept (a portrait — no instances), realized by a module
@@ -44,3 +45,11 @@
     (let [db (a/assemble-vars [#'t-fx-impl #'t-fx-infra])]
       (is (= {":lib.code-test/FxConcept" #{"fx-impl"} :infrastructure #{"fx-infra"}}
              (code/modules-by-role db))))))
+
+(deftest fukan-architecture-modules-carry-their-faculty-roles
+  (testing "the six faculty roles sit on fukan's realizing architecture modules"
+    (let [roles (code/modules-by-role (pipeline/build-model nil))]
+      (is (= #{"core-structure"} (roles ":canvas.subject/Model")))
+      (is (= #{"canvas-source" "target-clojure"} (roles ":canvas.subject/Source")))
+      (is (= #{"probes" "target-correspondence"} (roles ":canvas.subject/Lens")))
+      (is (= #{"materialize"} (roles ":canvas.subject/Projection"))))))

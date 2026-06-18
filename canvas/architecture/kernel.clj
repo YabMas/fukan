@@ -10,6 +10,7 @@
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.query-engine :as query-engine]
+            [canvas.subject :as subj]
             ;; [:enum …] / :keyword literals in Kind bodies check through the malli type dialect
             [lib.type.malli]))
 
@@ -42,4 +43,5 @@
   "The defstructure kernel — laws → violations over the structure graph."
   {:exposes [check vocab-rules]                  ; the kernel capabilities others compose
    :owns    [StructureDb Violation]              ; data-shapes that cross the boundary (others adopt by name)
-   :child   [Rule Node Relation]})  ; internal grain: the rules-output type + the reflexive substrate
+   :child   [Rule Node Relation]                 ; internal grain: the rules-output type + the reflexive substrate
+   :realizes subj/Model})                        ; faculty role: this module realizes the Model hub
