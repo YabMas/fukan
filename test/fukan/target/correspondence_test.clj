@@ -4,6 +4,8 @@
             ;; loading infra.model is the composition root — it registers fukan's
             ;; malli dialect AND its Clojure extractor, and offers build/load of the model
             [fukan.infra.model :as infra-model]
+            [fukan.model.pipeline :as pipeline]
+            [fukan.canvas.core.structure :as s]
             [fukan.dialect.malli :as malli]
             [fukan.canvas.core.typing :as typing]
             [fukan.target.correspondence :as corr]))
@@ -77,3 +79,26 @@
       ;; detection: a DROPPED-arg code-sig does NOT adhere (arity fires)
       (is (false? (typing/type-adheres? sig '[:=> [:cat :StructureDb :ProjectionName] :Instruction]))
           "dropped argument does not adhere"))))
+
+(deftest call-realization-fires-on-an-unrealized-delegation
+  (testing "an authored cross-module :delegates with NO actual cross-module :calls is an offender"
+    (let [db (-> (s/create)
+                 (d/db-with
+                  [{:db/id -1 :structure/of :lib.code/Module :entity/id "A" :entity/name "A"}
+                   {:db/id -2 :structure/of :lib.code/Module :entity/id "B" :entity/name "B"}
+                   {:db/id -3 :structure/of :lib.code/Operation :entity/name "op-a"}
+                   {:db/id -4 :structure/of :lib.code/Operation :entity/name "op-b"}
+                   {:db/id -5 :structure/of :lib.code/Module :entity/id "X" :entity/name "X" :val/extracted true}
+                   {:db/id -6 :structure/of :lib.code/Operation :entity/name "ex" :val/extracted true}
+                   {:rel/id "A|exposes|op-a" :rel/from -1 :rel/kind :exposes :rel/to -3}
+                   {:rel/id "B|exposes|op-b" :rel/from -2 :rel/kind :exposes :rel/to -4}
+                   {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
+                   {:rel/id "X|child|ex" :rel/from -5 :rel/kind :child :rel/to -6}
+                   {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}]))]
+      (is (seq (corr/unrealized-delegates db))
+          "A->B delegation has no realizing call between corresponding modules → offender"))))
+
+(deftest call-realization-green-on-the-self-model
+  (testing "module-level realization is green on the live build-model \"src\""
+    (is (empty? (corr/unrealized-delegates (pipeline/build-model "src")))
+        "0 unrealized — verified by the design prototype")))

@@ -61,6 +61,47 @@
                (named ?o ?n) (in-module ?o ?kmn)
                [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]))
 
+(defstructure CallRealization
+  "Law-holder for the model↔code CALL realization — no instances of its own; the relation-level dual
+   of the op-level `Realization`. The INTERPRETATION seam between INTENT (`:delegates`, authored) and
+   FACT (`:calls`, extracted), at MODULE-DEPENDENCY altitude: every authored CROSS-MODULE delegation
+   must be realized by SOME actual cross-module call between the corresponding modules
+   (`module-corresponds?`). Module-level, not exact op-pair: real dependencies are often indirect
+   (dispatch, internal leaves) — the author sketches the module dependency on an exposed op.
+   `:scope :global` (offenders are authored delegation source ops). The leading `:calls` clause guards
+   it vacuous on a model-only build; negation via an inline `not-join` with the corresponding-module
+   names bound on entry (mirroring the op-level `Realization` law) — keeping `?cm1`/`?cm2` bound
+   avoids a free-variable blow-up; the leading `:calls` clause guards vacuity on a model-only build.
+   The `:rules` inline `in-module` (self-contained, the `lib.arch` convention)."
+  (law "every intended cross-module delegation is realized by an actual call between the corresponding modules"
+    :scope :global
+    :offenders '[?o1]
+    :rules '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]]
+    :where '[[?anycall :rel/kind :calls]
+             [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+             (not [?o1 :val/extracted true])
+             (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
+             (not-join [?cm1 ?cm2]
+               [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
+               [?e1 :val/extracted true] [?e2 :val/extracted true]
+               (in-module ?e1 ?km1) (in-module ?e2 ?km2)
+               [(fukan.target.correspondence/module-corresponds? ?cm1 ?km1)]
+               [(fukan.target.correspondence/module-corresponds? ?cm2 ?km2)])]))
+
+(defn unrealized-delegates
+  "The authored source Operations whose cross-module delegation is NOT realized by any actual call
+   between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
+   is backed by real code. Reads the single source of truth (the registered CallRealization law)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::CallRealization) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
+         set)))
+
 (defn drifted-operations
   "The AUTHORED operations in `db` with no same-named extracted operation, as a set of
    names. Empty ⇔ the model is fully realized in code. The focusable surface of the
