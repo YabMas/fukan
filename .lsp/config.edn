@@ -42,6 +42,7 @@
               canvas.architecture.instance-projection
               canvas.architecture.infra
               canvas.architecture.kernel
+              canvas.architecture.subsystems
               lib.lens
               canvas.instruments.lenses
               canvas.instruments.findings
