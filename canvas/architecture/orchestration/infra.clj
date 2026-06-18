@@ -8,12 +8,14 @@
    each interned as a var by the def-emitting macro so cross-refs stay var-refs."
   (:require [lib.code :refer [Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.orchestration.pipeline :as pipeline]
             [canvas.architecture.ingestion.extraction :as extraction]))
 
 (Module infra-model
   "The model lifecycle — load / get / refresh the held Model from a source path."
   (Operation load-model    "Build (or reload) the held Model from a src path."
-    {:signature [:=> [:catn [:src extraction/Path]] kernel/StructureDb]})
+    {:signature  [:=> [:catn [:src extraction/Path]] kernel/StructureDb]
+     :delegates  [pipeline/build-model]})        ; the lifecycle drives the build pipeline
   (Operation get-model     "The current held Model, or none."
     {:signature [:=> [:cat] kernel/StructureDb]})
   (Operation refresh-model "Rebuild the Model from the last src path."
