@@ -20,6 +20,7 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [datascript.core :as d]
+            [fukan.canvas.core.rules :as rules]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]))
 
@@ -100,6 +101,31 @@
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)
          (map #(:entity/name (d/entity db %)))
+         set)))
+
+(defn uncovered-calls
+  "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law, like
+   `uncovered-operations`): actual cross-module module-calls (over `:calls`) with no corresponding
+   intended cross-module delegation (over `:delegates`, bridged by `module-corresponds?`), as a set
+   of [caller-module callee-module] code-module-name pairs. The couplings the design has not yet
+   declared. Computed by set-difference in Clojure (not `not-join`) to sidestep the empty-relation
+   gotcha. A signal, not a violation: you do not model every call."
+  [db]
+  (let [intent (d/q '[:find ?cm1 ?cm2 :in $ %
+                      :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+                             (not [?o1 :val/extracted true])
+                             (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]]
+                    db rules/substrate-rules)
+        actual (d/q '[:find ?km1 ?km2 :in $ %
+                      :where [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
+                             [?e1 :val/extracted true] [?e2 :val/extracted true]
+                             (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]]
+                    db rules/substrate-rules)]
+    (->> actual
+         (remove (fn [[km1 km2]]
+                   (some (fn [[cm1 cm2]]
+                           (and (module-corresponds? cm1 km1) (module-corresponds? cm2 km2)))
+                         intent)))
          set)))
 
 (defn drifted-operations

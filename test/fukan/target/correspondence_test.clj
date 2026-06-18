@@ -102,3 +102,9 @@
   (testing "module-level realization is green on the live build-model \"src\""
     (is (empty? (corr/unrealized-delegates (pipeline/build-model "src")))
         "0 unrealized — verified by the design prototype")))
+
+(deftest uncovered-calls-lists-undeclared-couplings
+  (testing "actual cross-module calls with no corresponding authored delegation are the worklist"
+    (let [worklist (corr/uncovered-calls (pipeline/build-model "src"))]
+      (is (seq worklist) "the self-model has real couplings not yet declared as :delegates")
+      (is (every? (fn [[a b]] (not= a b)) worklist) "all entries are cross-module pairs"))))
