@@ -43,6 +43,7 @@
               canvas.architecture.projection.instance
               canvas.architecture.orchestration.infra
               canvas.architecture.kernel.structure
+              canvas.architecture.kernel.assemble
               canvas.architecture.subsystems
               lib.lens
               canvas.instruments.lenses

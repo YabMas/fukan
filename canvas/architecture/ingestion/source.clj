@@ -9,6 +9,7 @@
    namespace derivation and the entity-map fold are internals — extraction's job, not sketched.)"
   (:require [lib.code :refer [Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.kernel.assemble :as assemble]
             [canvas.subject :as subj]))
 
 (Module canvas-source
@@ -19,4 +20,5 @@
      :delegates [kernel/create]})               ; builds on the kernel's StructureDb constructor
   (Operation build "Discover + require + assemble the canvas specs → the model db."
     {:signature [:=> [:cat] kernel/StructureDb]
-     :performs  [:io :stderr :require]}))
+     :performs  [:io :stderr :require]
+     :delegates [assemble/assemble]}))          ; assembles the discovered instance-vars

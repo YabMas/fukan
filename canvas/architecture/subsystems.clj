@@ -9,6 +9,7 @@
             [canvas.architecture.kernel.structure :refer [core-structure]]
             [canvas.architecture.kernel.rules :refer [core-rules]]
             [canvas.architecture.kernel.lens :refer [core-lens]]
+            [canvas.architecture.kernel.assemble :refer [assemble-faculty]]
             [canvas.architecture.ingestion.source :refer [canvas-source]]
             [canvas.architecture.ingestion.clojure :refer [target-clojure]]
             [canvas.architecture.reading.correspondence :refer [target-correspondence]]
@@ -23,8 +24,8 @@
 (declare ingestion)
 
 (Subsystem kernel
-  "The defstructure substrate + its derived rules + lens engine — foundational; depends on nothing."
-  {:child [core-structure core-rules core-lens] :may-depend []})
+  "The defstructure substrate + its derived rules + lens engine + the assembler — foundational; depends on nothing."
+  {:child [core-structure core-rules core-lens assemble-faculty] :may-depend []})
 
 (Subsystem ingestion
   "The in-fold: discover/assemble design specs + extract code, folded onto the model."

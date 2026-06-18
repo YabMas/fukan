@@ -51,6 +51,10 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  canvas.architecture.kernel.assemble
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   canvas.architecture.subsystems
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}

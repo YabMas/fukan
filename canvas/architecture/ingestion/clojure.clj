@@ -5,6 +5,7 @@
    at the plug-point; `build-model` runs whatever is registered, naming no specific extractor."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.kernel.assemble :as assemble]
             [canvas.subject :as subj]))
 
 (Module target-clojure
@@ -13,4 +14,5 @@
   (Kind Path :string)
   (Operation extract "Extract code structures from source paths into the shared StructureDb."
     {:signature [:=> [:catn [:paths [:vector Path]]] kernel/StructureDb]
-     :performs  [:io]}))
+     :performs  [:io]
+     :delegates [assemble/assemble-instances]}))   ; emits the extracted instances into a db
