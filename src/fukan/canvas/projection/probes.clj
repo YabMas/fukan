@@ -12,7 +12,7 @@
             [fukan.canvas.projection.finding :as f]
             [fukan.target.correspondence :as corr]))
 
-(defn probe-patterns
+(defn- probe-patterns
   "Recurring structures (a View): one observation per structural triplet
    (source-tag, relation-kind, target-tag) borne by more than one reified relation.
    The focus is every matching relation-node plus its endpoints. Scopable to `focus`."
@@ -35,7 +35,7 @@
                       :pattern
                       (str (count rs) "× " ft " -[" rk "]-> " tt)))))))))
 
-(defn probe-integrity
+(defn- probe-integrity
   "The integrity inspect (a gating Signal): the kernel's `check` (laws → violations),
    each violation an observation whose focus is its offender node-set. Empty ⇔ every
    law holds. Global — `focus` accepted for a uniform signature but ignored."
@@ -47,7 +47,7 @@
                             :violation (str v)))
            (structure/check db)))))
 
-(defn probe-survey
+(defn- probe-survey
   "A structural overview (a View): one observation per structure kind, its focus the
    nodes of that kind. Scopable to `focus`."
   ([db] (probe-survey db nil))
@@ -60,7 +60,7 @@
             (sort-by (comp - count val))
             (mapv (fn [[k es]] (f/observation es :count (str (count es) " " (name k))))))))))
 
-(defn probe-consistency
+(defn- probe-consistency
   "Operation-name ambiguity (a View): one observation per Operation name borne by more than
    one module; the focus is the ambiguous Operation nodes. Scopable to `focus`."
   ([db] (probe-consistency db nil))
@@ -83,7 +83,7 @@
                     (f/observation nodes :ambiguity
                       (str sn " in " (count mods) " modules: " (str/join ", " (sort mods)))))))))))
 
-(defn probe-tar-pit
+(defn- probe-tar-pit
   "Complexity hotspots (a View): the top-10 nodes by relation degree (in + out),
    each its own single-node focus. Scopable to `focus`."
   ([db] (probe-tar-pit db nil))
@@ -100,7 +100,7 @@
                         (str n " edges: " (or (:entity/name ent) "(value)")
                              " (" (name (:structure/of ent)) ")"))))))))))
 
-(defn probe-coverage
+(defn- probe-coverage
   "Spec ↔ code coverage (a gating Signal): extracted Operations not covered by a
    Operation, each an observation whose focus is the uncovered Operation node(s). Empty ⇔
    every Operation is modelled. Global — `focus` accepted but ignored."
@@ -115,7 +115,7 @@
                          (map first) set)
                     :gap n)))))))
 
-(defn probe-drift
+(defn- probe-drift
   "Spec ↔ code divergence (a gating Signal): modelled Operations not realized by an
    Operation, each an observation whose focus is the unrealized Operation node(s). Empty ⇔
    the model is fully realized. Global — `focus` accepted but ignored."
@@ -130,7 +130,7 @@
                          (map first) set)
                     :gap n)))))))
 
-(defn probe-type-drift
+(defn- probe-type-drift
   "Spec ↔ code TYPE divergence (a gating Signal): modelled Operations whose type disagrees
    with the realizing function's declared `:malli/schema`, each an observation whose focus is
    the type-drifted Operation node(s). Only checked where the code carries an annotation. Empty

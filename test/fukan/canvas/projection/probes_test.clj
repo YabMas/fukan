@@ -15,7 +15,7 @@
 (deftest probe-patterns-yields-observations-with-foci
   (testing "patterns reports recurring structures as observations carrying foci"
     (let [db     (cs/build)
-          result (probes/probe-patterns db)]
+          result (probes/run db "patterns")]
       (is (= "patterns" (:lens result)))
       (is (false? (:gating result)))
       (is (seq (:observations result)) "the self-model has recurring structures")
@@ -25,14 +25,14 @@
         (is (= :pattern (:as o)))
         (is (string? (:note o))))
       (let [tiny (a/assemble-vars [#'solo])]
-        (is (empty? (:observations (probes/probe-patterns tiny)))
+        (is (empty? (:observations (probes/run tiny "patterns")))
             "holds: a degenerate model → no patterns")))))
 
 (deftest patterns-holds-law-gates-the-finding
   (testing "the projected holds-check passes the real finding and fires on a bogus one"
     (let [db     (cs/build)
           holds? (eval (:holds-check (pc/project-probe db "patterns")))]
-      (is (holds? (probes/probe-patterns db) db)
+      (is (holds? (probes/run db "patterns") db)
           "the real patterns finding satisfies its holds (the self-model recurs)")
       (let [tiny (a/assemble-vars [#'solo])]
         (is (holds? {:lens "patterns" :gating false :observations []} tiny)
@@ -54,12 +54,12 @@
 (deftest probe-integrity-composes-check-into-observations
   (testing "integrity surfaces each violation as an observation whose focus is its offenders"
     (let [db     (cs/build)
-          result (probes/probe-integrity db)]
+          result (probes/run db "integrity")]
       (is (= "integrity" (:lens result)))
       (is (true? (:gating result)) "integrity is the gating inspect case")
       (is (empty? (:observations result)) "the self-model's laws all hold — no violations")
       (let [dirty (a/assemble-vars [#'broken-projection])
-            v     (probes/probe-integrity dirty)]
+            v     (probes/run dirty "integrity")]
         (is (seq (:observations v)) "a broken model reports violations")
         (let [o (first (:observations v))]
           (is (= :violation (:as o)))
@@ -68,14 +68,12 @@
           (is (string? (:note o))))))))
 
 (deftest probe-patterns-scopes-to-a-focus
-  (testing "a probe reads only its focus sub-graph — so a refined focus chains in"
+  (testing "a probe reads only its focus sub-graph — so a refined focus chains in (via the public run)"
     (let [db        (cs/build)
-          whole     (probes/probe-patterns db)
-          empty-foc (probes/probe-patterns db #{})
-          run-foc   (probes/run db "patterns" #{})]
+          whole     (probes/run db "patterns")
+          empty-foc (probes/run db "patterns" #{})]
       (is (seq (:observations whole)) "unscoped: patterns across the whole model")
-      (is (empty? (:observations empty-foc)) "empty focus: no relations, no patterns")
-      (is (= empty-foc run-foc) "run passes the focus through to the leaf"))))
+      (is (empty? (:observations empty-foc)) "empty focus: no relations, no patterns — run passes the focus through to the leaf"))))
 
 (deftest the-full-probe-surface-runs
   (testing "all eight leaves run over the self-model and yield observation findings"
@@ -104,8 +102,8 @@
 (deftest run-and-run-all-are-the-live-probe-surface
   (testing "run dispatches a named probe via the multimethod; run-all runs every method"
     (let [db (cs/build)]
-      (is (= (probes/probe-integrity db) (probes/run db "integrity"))
-          "run dispatches by name to the registered leaf")
+      (is (= "integrity" (:lens (probes/run db "integrity")))
+          "run dispatches by name to the registered leaf (leaves are internal — exercised through run)")
       (let [all (probes/run-all db)]
         (is (= 8 (count all)) "run-all runs every registered method")
         (is (= "patterns" (:lens (all "patterns"))))
