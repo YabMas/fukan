@@ -84,3 +84,18 @@
                          :where [?r :rel/from ?a] [?r :rel/kind :may-depend] [?r :rel/to ?t] [?t :entity/name ?tn]]
                        db a)))
           ":may-depend is a self-reference to another Subsystem (mirrors Operation :delegates)"))))
+
+;; ── :dispatches-to: a dispatch point routes to handler Operations (authored indirection) ──
+(code/Operation t-dp-h1 "handler 1")
+(code/Operation t-dp-h2 "handler 2")
+(code/Operation t-dp "a dispatch point" {:dispatches-to [t-dp-h1 t-dp-h2]})
+
+(deftest operation-dispatches-to-handlers
+  (testing "an Operation authored with :dispatches-to records ordered edges to its handler Operations"
+    (let [db (a/assemble-vars [#'t-dp-h1 #'t-dp-h2 #'t-dp])
+          dp (ffirst (d/q '[:find ?o :where [?o :entity/name "t-dp"]] db))]
+      (is (= #{"t-dp-h1" "t-dp-h2"}
+             (set (d/q '[:find [?hn ...] :in $ ?dp
+                         :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
+                       db dp)))
+          ":dispatches-to reaches each handler Operation"))))

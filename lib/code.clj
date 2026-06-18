@@ -89,6 +89,7 @@
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
    :performs  [:* Effect]            ; side effects
    :delegates [:* Operation]         ; cross-boundary dependencies it relies on (authored, designed)
+   :dispatches-to [:* Operation]     ; indirection: handler Operations this dispatch point routes to (authored intent — a design statement, not an extracted fact)
    :guidance  [:? :string]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection
    :calls     [:* Operation]         ; the ACTUAL call graph (extraction's actuals; not authored)
    :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
