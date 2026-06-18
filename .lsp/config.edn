@@ -82,5 +82,6 @@
               fukan.model.pipeline-test
               lib.type.malli
               lib.code
+              lib.arch
               fukan.dialect.malli-vocab-test
               fukan.dialect.malli-render-test}}}}

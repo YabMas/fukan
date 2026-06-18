@@ -202,6 +202,8 @@
              :unused-referred-var {:level :off}}}
   lib.type.malli
   {:linters {:unused-public-var {:level :off}}}
+  lib.arch
+  {:linters {:unused-public-var {:level :off}}}
   fukan.dialect.malli-vocab-test
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
