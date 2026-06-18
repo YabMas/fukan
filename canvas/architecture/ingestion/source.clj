@@ -1,4 +1,4 @@
-(ns canvas.architecture.canvas-source
+(ns canvas.architecture.ingestion.source
   "Self-spec: fukan's canvas-ingestion subsystem (`fukan.canvas.projection.canvas-source`) — a
    boundary sketch.
 
@@ -8,7 +8,7 @@
    the assembled design db. The db it builds is the kernel's shared `StructureDb`. (Discovery,
    namespace derivation and the entity-map fold are internals — extraction's job, not sketched.)"
   (:require [lib.code :refer [Operation Module]]
-            [canvas.architecture.kernel :as kernel]
+            [canvas.architecture.kernel.structure :as kernel]
             [canvas.subject :as subj]))
 
 (Module canvas-source

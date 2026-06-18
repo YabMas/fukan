@@ -8,7 +8,7 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  canvas.architecture.canvas-source
+  canvas.architecture.ingestion.source
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -27,23 +27,27 @@
   ;; register the meta-grammar.
   lib.grammar
   {:linters {:unused-public-var {:level :off}}}
-  canvas.architecture.extraction
+  canvas.architecture.ingestion.extraction
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.grammar-projection
+  canvas.architecture.ingestion.clojure
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.instance-projection
+  canvas.architecture.projection.grammar
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.infra
+  canvas.architecture.projection.instance
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.kernel
+  canvas.architecture.orchestration.infra
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.architecture.kernel.structure
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -67,11 +71,23 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.lens-engine
+  canvas.architecture.kernel.lens
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.materialize
+  canvas.architecture.kernel.rules
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.architecture.reading.correspondence
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.architecture.reading.probes
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.architecture.projection.materialize
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -79,19 +95,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.pipeline
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.probe-surface
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.query-engine
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.target
+  canvas.architecture.orchestration.pipeline
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}

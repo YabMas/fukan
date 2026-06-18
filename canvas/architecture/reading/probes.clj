@@ -1,4 +1,4 @@
-(ns canvas.architecture.probe-surface
+(ns canvas.architecture.reading.probes
   "Self-spec: fukan's PROBE IMPLEMENTATION — a boundary sketch of the realized probe surface.
    `probes` (`fukan.canvas.projection.probes`) exposes the live run/run-all dispatch over the
    implemented probe leaves; `probe-code` (`fukan.canvas.projection.probe-code`) projects a
@@ -7,8 +7,8 @@
    target correspondence queries — is sketched on the exposed dispatch. Both read the kernel's
    shared `StructureDb`."
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.architecture.kernel :as kernel]
-            [canvas.architecture.target :as target]
+            [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.reading.correspondence :as corr]
             [canvas.subject :as subj]))
 
 (Module probes
@@ -23,10 +23,10 @@
   (Operation run "Dispatch a named probe over a target db → a finding."
     {:signature [:=> [:catn [:target-db kernel/StructureDb] [:probe-name ProbeName]] Finding]
      :performs  [:throws]
-     :delegates [kernel/check target/uncovered-operations target/drifted-operations]})
+     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations]})
   (Operation run-all "Run every implemented probe leaf → a map of findings."
     {:signature [:=> [:catn [:target-db kernel/StructureDb]] FindingMap]
-     :delegates [kernel/check target/uncovered-operations target/drifted-operations]}))
+     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations]}))
 
 (Module probe-code
   "Project a probe's implementation spec from the model. (ProbeName is owned by `probes`.)"

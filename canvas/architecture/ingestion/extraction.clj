@@ -1,10 +1,10 @@
-(ns canvas.architecture.extraction
+(ns canvas.architecture.ingestion.extraction
   "Self-spec: fukan's extraction PLUG-POINT (`fukan.model.extraction`) — the slot where a project
    registers its one custom code extractor (a fn `Path → StructureDb`). `build-model` runs it via
    `run-extractor` WITHOUT naming it (keeps the pipeline generic); the composition root supplies it
    with `register-extractor!`. Both operations mutate/read the registry slot (`:state`)."
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.architecture.kernel :as kernel]))
+            [canvas.architecture.kernel.structure :as kernel]))
 
 (Module extraction
   "The extraction plug-point — register and run the project's code extractor."

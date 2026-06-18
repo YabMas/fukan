@@ -6,18 +6,19 @@
    list — the architecture's shape, stated and checked. (Filesystem layout still mirrors src/; a
    directory move can follow later. Capability ≠ faculty: orchestration realizes no subject faculty.)"
   (:require [lib.code :refer [Subsystem]]
-            [canvas.architecture.kernel :refer [core-structure]]
-            [canvas.architecture.query-engine :refer [core-rules]]
-            [canvas.architecture.lens-engine :refer [core-lens]]
-            [canvas.architecture.canvas-source :refer [canvas-source]]
-            [canvas.architecture.target :refer [target-clojure target-correspondence]]
-            [canvas.architecture.extraction :refer [extraction]]
-            [canvas.architecture.probe-surface :refer [probes probe-code]]
-            [canvas.architecture.materialize :refer [materialize]]
-            [canvas.architecture.instance-projection :refer [projection-instance]]
-            [canvas.architecture.grammar-projection :refer [projection-grammar]]
-            [canvas.architecture.pipeline :refer [model-pipeline]]
-            [canvas.architecture.infra :refer [infra-model]]))
+            [canvas.architecture.kernel.structure :refer [core-structure]]
+            [canvas.architecture.kernel.rules :refer [core-rules]]
+            [canvas.architecture.kernel.lens :refer [core-lens]]
+            [canvas.architecture.ingestion.source :refer [canvas-source]]
+            [canvas.architecture.ingestion.clojure :refer [target-clojure]]
+            [canvas.architecture.reading.correspondence :refer [target-correspondence]]
+            [canvas.architecture.ingestion.extraction :refer [extraction]]
+            [canvas.architecture.reading.probes :refer [probes probe-code]]
+            [canvas.architecture.projection.materialize :refer [materialize]]
+            [canvas.architecture.projection.instance :refer [projection-instance]]
+            [canvas.architecture.projection.grammar :refer [projection-grammar]]
+            [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
+            [canvas.architecture.orchestration.infra :refer [infra-model]]))
 
 (declare ingestion)
 

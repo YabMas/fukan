@@ -1,4 +1,4 @@
-(ns canvas.architecture.grammar-projection
+(ns canvas.architecture.projection.grammar
   "Self-spec: the GRAMMAR projection (`fukan.canvas.projection.grammar`) — the
    print-dual of the authoring surface (reified Structures render back as map-form
    defstructures; the primer is the live language reference) plus the GRAMMAR-DRIFT
@@ -8,8 +8,8 @@
    speak. (A reading to reason with, not a gate: law-hosts and not-yet-spoken
    grammar are legitimate — the human interprets.)"
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.architecture.kernel :as kernel]
-            [canvas.architecture.materialize :as mat]))
+            [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.projection.materialize :as mat]))
 
 (Module projection-grammar
   "Render the reified grammar back out: forms, the primer, and the grammar-drift reading."

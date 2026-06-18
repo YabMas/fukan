@@ -1,4 +1,4 @@
-(ns canvas.architecture.kernel
+(ns canvas.architecture.kernel.structure
   "Self-spec: fukan's defstructure KERNEL (`fukan.canvas.core.structure`) — a boundary sketch.
    The defstructure layer (Structure = slots + laws) is NOT hand-modelled: grammar reflection
    (`lib.grammar/with-grammar`) derives it from the live registry, where it can never drift. What
@@ -9,7 +9,7 @@
    the canonical integrity inspect, modelled because code is a projection of the model 1-on-1."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
             [lib.code :refer [Kind Operation Module]]
-            [canvas.architecture.query-engine :as query-engine]
+            [canvas.architecture.kernel.rules :as query-engine]
             [canvas.subject :as subj]
             ;; [:enum …] / :keyword literals in Kind bodies check through the malli type dialect
             [lib.type.malli]))

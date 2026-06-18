@@ -19,7 +19,7 @@
             [canvas.instruments.findings :as probe]
             [lib.code :refer [Operation]]
             [lib.grouping :refer [Grouping]]
-            [canvas.architecture.kernel :as kernel]))
+            [canvas.architecture.kernel.structure :as kernel]))
 
 (defstructure FindingCheck
   "The runtime predicate that enforces a `Finding`'s `:holds` invariant — a `(fn [result

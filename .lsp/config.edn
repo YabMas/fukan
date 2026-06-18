@@ -31,28 +31,29 @@
               ;; `def`s are reached only by the global assembler's reflective var
               ;; scan (and cross-model var refs inside dropped defstructure clause
               ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
-              canvas.architecture.canvas-source
+              canvas.architecture.ingestion.source
               canvas.architecture.acts
               canvas.descent.source
               lib.grammar
               fukan.canvas.projection.grammar-test
               fukan.descent-test
-              canvas.architecture.extraction
-              canvas.architecture.grammar-projection
-              canvas.architecture.instance-projection
-              canvas.architecture.infra
-              canvas.architecture.kernel
+              canvas.architecture.ingestion.extraction
+              canvas.architecture.ingestion.clojure
+              canvas.architecture.projection.grammar
+              canvas.architecture.projection.instance
+              canvas.architecture.orchestration.infra
+              canvas.architecture.kernel.structure
               canvas.architecture.subsystems
               lib.lens
               canvas.instruments.lenses
               canvas.instruments.findings
               canvas.instruments.projections
-              canvas.architecture.lens-engine
-              canvas.architecture.materialize
-              canvas.architecture.pipeline
-              canvas.architecture.probe-surface
-              canvas.architecture.query-engine
-              canvas.architecture.target
+              canvas.architecture.kernel.lens
+              canvas.architecture.kernel.rules
+              canvas.architecture.reading.correspondence
+              canvas.architecture.reading.probes
+              canvas.architecture.projection.materialize
+              canvas.architecture.orchestration.pipeline
               demos.access-control.model.rbac
               demos.access-control.access-control-test
               demos.atlas.model.auth

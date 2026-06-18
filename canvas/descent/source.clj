@@ -18,10 +18,10 @@
             ;; the :witnesses / :polarity [:enum …] scalars check through the malli type dialect
             [lib.type.malli]
             ;; slice-1 realizer Modules (referred) + slice-2 producer Operations (aliased)
-            [canvas.architecture.canvas-source :as cs :refer [canvas-source]]  ; canvas-source = the Module (slice-1 :by); cs/build = an Operation it owns (slice-2 :via)
-            [canvas.architecture.target :refer [target-clojure]]
-            [canvas.architecture.pipeline :as pipeline]
-            [canvas.architecture.extraction :as extraction]))
+            [canvas.architecture.ingestion.source :as cs :refer [canvas-source]]  ; canvas-source = the Module (slice-1 :by); cs/build = an Operation it owns (slice-2 :via)
+            [canvas.architecture.ingestion.clojure :refer [target-clojure]]
+            [canvas.architecture.orchestration.pipeline :as pipeline]
+            [canvas.architecture.ingestion.extraction :as extraction]))
 
 (defstructure SourceRealizer
   "A toothed realization edge for the `canvas.subject/Source` in-fold: the `Module` in `:by`
