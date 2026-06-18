@@ -132,6 +132,28 @@
         (println "Drift —" (count d) "modelled Operation(s) with no realizing function:" (sort d))))
     (println "No model loaded yet. Use (go) first.")))
 
+(defn encapsulation
+  "The ENCAPSULATION worklist (the privacy-coverage iteration): PUBLIC extracted functions with no
+   authored Operation twin — each an undeclared public surface demanding a decision (model it as
+   intent, or make it `defn-`). Empty ⇔ every unmodelled function is genuinely private. Grouped by
+   code module. (The private half of the coverage gap is settled by definition.)"
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [w (corr/uncovered-public-operations m)]
+      (if (empty? w)
+        (println "Fully encapsulated — every unmodelled function is private.")
+        (let [by-mod (->> (d/q '[:find ?on ?kmn
+                                 :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true]
+                                        [?o :entity/name ?on] (not [?o :val/private true])
+                                        [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o] [?km :entity/name ?kmn]]
+                               m)
+                          (filter (fn [[on _]] (contains? w on)))
+                          (group-by second))]
+          (println "Encapsulation worklist —" (count w) "public functions with no model twin:")
+          (doseq [[mn ops] (sort-by key by-mod)]
+            (println (format "  %-42s %s" mn (str/join ", " (sort (map first ops)))))))))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn witnesses
   "The generative readings of the Source in-fold descent over the held model. Prints three lines:
    the carved design space (required polarities), the witness gap (slice 1 — every polarity

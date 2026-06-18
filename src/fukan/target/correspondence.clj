@@ -232,16 +232,43 @@
   "The DUAL of drifted-operations — EXTRACTED operations in `db` with no authored operation
    of the same name in a corresponding module, as a set of names: code not covered by the
    model. A query, not a law — unmodelled code is a coverage signal, not a violation (you
-   don't model every function)."
+   don't model every function).
+
+   Module membership resolves through the `in-module` rule (`:exposes` ∪ `:owns` ∪ `:child`),
+   matching the `Realization` law's own `in-module` — authored Operations attach to their Module
+   via `:exposes` (the public surface), so a `:child`-only authored-twin lookup would miss every
+   modelled op and report nearly all code as uncovered."
   [db]
-  (->> (d/q '[:find ?on
+  (->> (d/q '[:find ?on :in $ %
               :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
-                     [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o]
-                     [?km :entity/name ?kmn]
+                     (in-module ?o ?kmn)
                      (not-join [?on ?kmn]
                        [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
-                       [?cr :rel/kind :child] [?cr :rel/from ?cm] [?cr :rel/to ?s]
-                       [?cm :entity/name ?cmn]
+                       (in-module ?s ?cmn)
                        [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]
-            db)
+            db rules/substrate-rules)
+       (map first) set))
+
+(defn uncovered-public-operations
+  "The ENCAPSULATION worklist — the PUBLIC subset of `uncovered-operations`: extracted operations
+   that are PUBLIC (not `:val/private true`) AND have no authored twin in a corresponding module.
+   The principle (the dual at op-granularity of `uncovered-calls` at coupling-granularity): a
+   function the model does not name should be an internal detail — so a PUBLIC uncovered function is
+   an UNDECLARED PUBLIC SURFACE, demanding a decision (model it as intent, or make it private). A
+   query/worklist, not yet a law (it is non-empty during a coverage campaign); the enforced
+   `Encapsulation` law lands once this reaches zero. Empty ⇔ the model covers the whole public
+   surface — every unmodelled function is genuinely private. The PRIVATE half of `uncovered-operations`
+   is settled by definition: an unmodelled internal is encapsulation working as intended.
+
+   Module membership resolves through `in-module` (see `uncovered-operations`)."
+  [db]
+  (->> (d/q '[:find ?on :in $ %
+              :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+                     (not [?o :val/private true])
+                     (in-module ?o ?kmn)
+                     (not-join [?on ?kmn]
+                       [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
+                       (in-module ?s ?cmn)
+                       [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]
+            db rules/substrate-rules)
        (map first) set))
