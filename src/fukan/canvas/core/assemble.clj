@@ -2,9 +2,9 @@
   (:require [datascript.core :as d]
             [fukan.canvas.core.structure :as s]))
 
-(defn collect
+(defn- collect
   "Seq of [var InstanceValue] for every instance-bearing interned var across the
-   given namespaces."
+   given namespaces. Internal var-discovery behind the public `assemble`."
   [ns-syms]
   (for [ns-sym ns-syms
         [_ v] (ns-interns ns-sym)

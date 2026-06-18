@@ -8,11 +8,12 @@
 (Thing ^{:name "foo"} t5-foo)  ; an instance-bearing var
 (def t5-plain 42)              ; not an instance
 
-(deftest collect-finds-instance-vars
-  (let [found (a/collect ['fukan.canvas.core.assemble-test])
-        names (set (map (fn [[v _]] (:name (meta v))) found))]
-    (is (contains? names 't5-foo))
-    (is (not (contains? names 't5-plain)))))
+(deftest assemble-includes-only-instance-vars
+  ;; var discovery (`collect`) is a private internal — exercise it through the public `assemble`.
+  (let [db    (a/assemble ['fukan.canvas.core.assemble-test])
+        names (set (map first (d/q '[:find ?n :where [?e :entity/name ?n]] db)))]
+    (is (contains? names "foo") "the instance-bearing var t5-foo (^{:name \"foo\"}) becomes a node")
+    (is (not (contains? names "t5-plain")) "the plain (def t5-plain 42) is skipped")))
 
 (s/defstructure Box "box" {:links Box})
 
