@@ -53,3 +53,23 @@
       (is (= #{"canvas-source" "target-clojure"} (roles ":canvas.subject/Source")))
       (is (= #{"probes" "target-correspondence"} (roles ":canvas.subject/Lens")))
       (is (= #{"materialize"} (roles ":canvas.subject/Projection"))))))
+
+;; ── Subsystem: clusters Modules + declares the :may-depend DAG (self-reference) ──
+(declare t-sub-b)
+(code/Subsystem ^{:name "sub-a"} t-sub-a {:child [t-fx-impl] :may-depend [t-sub-b]})
+(code/Subsystem ^{:name "sub-b"} t-sub-b {:child [t-fx-infra]})
+
+(deftest subsystem-clusters-modules-and-declares-may-depend
+  (testing "a Subsystem owns Modules via :child and declares :may-depend to another Subsystem"
+    (let [db (a/assemble-vars [#'t-fx-impl #'t-fx-infra #'t-sub-a #'t-sub-b])
+          a  (ffirst (d/q '[:find ?s :where [?s :entity/name "sub-a"]] db))]
+      (is (= #{"fx-impl"}
+             (set (d/q '[:find [?mn ...] :in $ ?a
+                         :where [?r :rel/from ?a] [?r :rel/kind :child] [?r :rel/to ?m] [?m :entity/name ?mn]]
+                       db a)))
+          ":child edges reach the clustered Modules")
+      (is (= #{"sub-b"}
+             (set (d/q '[:find [?tn ...] :in $ ?a
+                         :where [?r :rel/from ?a] [?r :rel/kind :may-depend] [?r :rel/to ?t] [?t :entity/name ?tn]]
+                       db a)))
+          ":may-depend is a self-reference to another Subsystem (mirrors Operation :delegates)"))))

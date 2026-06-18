@@ -144,6 +144,18 @@
    :realizes [:? :string]}           ; the qualified tag of the abstract concept this module realizes (authored as its symbol)
   (syntax realizes->concept))
 
+;; ── subsystem (the rung above Module: a capability cluster) ───────────────────
+
+(defstructure Subsystem
+  "A cluster of Modules realizing a capability — the rung above Module in the grouping ladder
+   (Grouping ⊂ Module ⊂ Subsystem). Owns its Modules (`:child`, ownership-on-owner) and DECLARES the
+   subsystems it is allowed to depend on (`:may-depend` — the intended architecture DAG, as declared
+   intent). It carries no `:realizes`: faculty roles live on its member Modules (see `Module`), so a
+   subsystem's faculty-alignment is derivable, not duplicated. `:may-depend` is a self-reference,
+   exactly like `Operation :delegates` — the assembler resolves the var-refs."
+  {:child      [:* Module]        ; the Modules this subsystem clusters
+   :may-depend [:* Subsystem]})   ; the subsystems it is allowed to depend on (declared intent)
+
 ;; ── derived module-dependency + role readings ────────────────────────────────
 
 (def module-depends-rules

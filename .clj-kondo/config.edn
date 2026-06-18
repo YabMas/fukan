@@ -245,6 +245,7 @@
    lib.type.malli/SchemaField hooks.fukan.structure/instance
    lib.type.malli/SchemaChoice hooks.fukan.structure/instance
    lib.code/Module hooks.fukan.structure/instance
+   lib.code/Subsystem hooks.fukan.structure/instance
    lib.lens/Finding hooks.fukan.structure/instance
    lib.lens/Mapping hooks.fukan.structure/instance
    lib.lens/Projection hooks.fukan.structure/instance
