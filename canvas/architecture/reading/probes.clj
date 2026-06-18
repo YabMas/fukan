@@ -9,6 +9,7 @@
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.reading.correspondence :as corr]
+            [canvas.architecture.reading.finding :as finding]
             [canvas.subject :as subj]))
 
 (Module probes
@@ -23,10 +24,10 @@
   (Operation run "Dispatch a named probe over a target db → a finding."
     {:signature [:=> [:catn [:target-db kernel/StructureDb] [:probe-name ProbeName]] Finding]
      :performs  [:throws]
-     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations]})
+     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations finding/finding finding/observation]})
   (Operation run-all "Run every implemented probe leaf → a map of findings."
     {:signature [:=> [:catn [:target-db kernel/StructureDb]] FindingMap]
-     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations]}))
+     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations finding/finding finding/observation]}))
 
 (Module probe-code
   "Project a probe's implementation spec from the model. (ProbeName is owned by `probes`.)"

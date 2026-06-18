@@ -103,11 +103,13 @@
     (is (empty? (corr/unrealized-delegates (pipeline/build-model "src")))
         "0 unrealized — verified by the design prototype")))
 
-(deftest uncovered-calls-lists-undeclared-couplings
-  (testing "actual cross-module calls with no corresponding authored delegation are the worklist"
+(deftest uncovered-calls-backbone-complete
+  (testing "slice 2: every actual cross-module call is now covered by an authored :delegates —
+            the backbone is complete (detection of an UNdeclared coupling is proven on a synthetic
+            db in fidelity-fires-on-an-undeclared-modelled-coupling)"
     (let [worklist (corr/uncovered-calls (pipeline/build-model "src"))]
-      (is (seq worklist) "the self-model has real couplings not yet declared as :delegates")
-      (is (every? (fn [[a b]] (not= a b)) worklist) "all entries are cross-module pairs"))))
+      (is (empty? worklist)
+          (str "the :delegates backbone is complete; undeclared couplings remain: " worklist)))))
 
 (deftest fidelity-fires-on-an-undeclared-modelled-coupling
   (testing "an actual cross-module call between two MODELLED faculties with no covering :delegates fires"
@@ -146,7 +148,7 @@
     (let [model (pipeline/build-model "src")]
       (is (empty? (corr/unrealized-delegates model)) "realization is green")
       (is (empty? (corr/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
-      (is (seq (corr/uncovered-calls model)) "coverage worklist still lists the unmodelled tail")
+      (is (empty? (corr/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
       (is (empty? (s/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (s/check model)))))))

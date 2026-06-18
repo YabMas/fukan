@@ -17,11 +17,13 @@
             [canvas.architecture.reading.correspondence :refer [target-correspondence]]
             [canvas.architecture.ingestion.extraction :refer [extraction]]
             [canvas.architecture.reading.probes :refer [probes probe-code]]
+            [canvas.architecture.reading.finding :refer [finding-faculty]]
             [canvas.architecture.projection.materialize :refer [materialize]]
             [canvas.architecture.projection.instance :refer [projection-instance]]
             [canvas.architecture.projection.grammar :refer [projection-grammar]]
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
-            [canvas.architecture.orchestration.infra :refer [infra-model]]))
+            [canvas.architecture.orchestration.infra :refer [infra-model]]
+            [canvas.architecture.orchestration.core :refer [core]]))
 
 (declare ingestion)
 
@@ -35,13 +37,13 @@
   {:child [canvas-source target-clojure extraction] :may-depend [kernel]})
 
 (Subsystem reading
-  "Lenses over the graph: probe dispatch + the model↔code correspondence."
-  {:child [probes target-correspondence probe-code] :may-depend [kernel]})
+  "Lenses over the graph: probe dispatch + the model↔code correspondence + the Finding output type."
+  {:child [probes target-correspondence probe-code finding-faculty] :may-depend [kernel]})
 
 (Subsystem projection
   "Graph → artifacts: materialization + the instance/grammar print-duals."
   {:child [materialize projection-instance projection-grammar] :may-depend [kernel]})
 
 (Subsystem orchestration
-  "Lifecycle + composition root — coordinates ingestion onto the model. Realizes no subject faculty."
-  {:child [model-pipeline infra-model] :may-depend [kernel ingestion]})
+  "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject faculty."
+  {:child [model-pipeline infra-model core] :may-depend [kernel ingestion]})

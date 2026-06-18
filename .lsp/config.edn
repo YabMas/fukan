@@ -55,6 +55,8 @@
               canvas.architecture.kernel.rules
               canvas.architecture.reading.correspondence
               canvas.architecture.reading.probes
+              canvas.architecture.reading.finding
+              canvas.architecture.orchestration.core
               canvas.architecture.projection.materialize
               canvas.architecture.orchestration.pipeline
               demos.access-control.model.rbac
