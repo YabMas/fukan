@@ -8,7 +8,8 @@
    merge.
 
    Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]
+  (:require [datascript.core :as d]
+            [fukan.canvas.core.structure :refer [defstructure]]
             [lib.grouping :refer [Connected]]
             [lib.type.malli :as lib.type.malli :refer [Schema]]))
 
@@ -142,3 +143,48 @@
    :child   [:* Any]                 ; internal members + grain no other module consumes
    :realizes [:? :string]}           ; the qualified tag of the abstract concept this module realizes (authored as its symbol)
   (syntax realizes->concept))
+
+;; ── derived module-dependency + role readings ────────────────────────────────
+
+(def module-depends-rules
+  "Datalog over the reified code graph: `module-depends` is the COMPLETE module→module dependency
+   graph — call dependencies (an owned Operation `:delegates` to another module's Operation) UNIONed
+   with data-adoption (an owned Operation's `:in`/`:out` is a ref-`Schema` whose `:names` edge reaches
+   a `Kind` another module owns). `module-owns` is ownership via `:exposes`/`:owns`/`:child`.
+   NB: the `lib.arch` no-mutual-dependency law INLINES an identical copy of these rules (a law's
+   `:rules` is macro-time literal data — it cannot reference this var); keep the two copies in sync."
+  '[[(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
+    [(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
+    [(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
+    [(module-depends ?m ?n)                                  ; call dependency
+     (module-owns ?m ?op1) [?dr :rel/from ?op1] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
+     (module-owns ?n ?op2) [(not= ?m ?n)]]
+    [(module-depends ?m ?n)                                  ; data-adoption dependency
+     (module-owns ?m ?op)
+     (or-join [?op ?sch]
+       (and [?ir :rel/from ?op] [?ir :rel/kind :in]  [?ir :rel/to ?sch])
+       (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]))
+     [?sch :val/kind "ref"]
+     [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
+     (module-owns ?n ?k) [(not= ?m ?n)]]])
+
+(defn module-dependencies
+  "The complete module→module dependency graph (calls ∪ data-adoption) as a set of
+   [caller-name callee-name] pairs. A pure read over the reified code graph."
+  [db]
+  (set (d/q '[:find ?mn ?nn :in $ %
+              :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
+            db module-depends-rules)))
+
+(defn modules-by-role
+  "Modules grouped by the qualified concept-tag each `:realizes`; modules with no role under
+   `:infrastructure`. `{tag-string #{module-name…} :infrastructure #{module-name…}}`. A pure read
+   of Module data — concept-NAME resolution (tag → reflected Structure) is left to the consumer."
+  [db]
+  (let [assigned (d/q '[:find ?tag ?mn
+                        :where [?m :structure/of :lib.code/Module] [?m :entity/name ?mn] [?m :val/realizes ?tag]] db)
+        infra    (map first (d/q '[:find ?mn
+                                   :where [?m :structure/of :lib.code/Module] [?m :entity/name ?mn]
+                                          (not [?m :val/realizes _])] db))]
+    (cond-> (reduce (fn [acc [tag mn]] (update acc tag (fnil conj #{}) mn)) {} assigned)
+      (seq infra) (assoc :infrastructure (set infra)))))

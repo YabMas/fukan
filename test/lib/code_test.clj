@@ -18,3 +18,29 @@
           m  (ffirst (d/q '[:find ?m :where [?m :entity/name "fx-impl"]] db))]
       (is (= ":lib.code-test/FxConcept" (:val/realizes (d/entity db m)))
           "the hook resolves FxConcept → its defining-ns+name tag"))))
+
+;; ── module-dependency fixtures: a→b by a delegate edge; c adopts a Kind d owns ──
+(code/Kind DShape :string)
+(code/Operation ^{:name "b-op"} t-b-op "callee")
+(code/Operation ^{:name "a-op"} t-a-op {:delegates [t-b-op]})
+;; c-op takes a DShape (a ref to a Kind owned by module D) → data-adoption dependency c→d
+(code/Operation ^{:name "c-op"} t-c-op {:signature [:=> [:catn [:x DShape]] :nil]})
+(code/Module ^{:name "A"} t-mod-a {:exposes [t-a-op]})
+(code/Module ^{:name "B"} t-mod-b {:exposes [t-b-op]})
+(code/Module ^{:name "C"} t-mod-c {:exposes [t-c-op]})
+(code/Module ^{:name "D"} t-mod-d {:owns [DShape]})
+
+(deftest module-dependencies-unions-calls-and-data-adoption
+  (testing "M depends on N via a delegate (call) OR via adopting a Kind N owns (data)"
+    (let [db (a/assemble-vars [#'DShape #'t-b-op #'t-a-op #'t-c-op
+                               #'t-mod-a #'t-mod-b #'t-mod-c #'t-mod-d])
+          deps (code/module-dependencies db)]
+      (is (contains? deps ["A" "B"]) "call dependency: A's op delegates to B's op")
+      (is (contains? deps ["C" "D"]) "data-adoption: C's op adopts a Kind D owns")
+      (is (not (contains? deps ["A" "A"])) "no self-dependency"))))
+
+(deftest modules-by-role-groups-by-realized-concept-tag
+  (testing "modules group by their :realizes tag; un-roled modules under :infrastructure"
+    (let [db (a/assemble-vars [#'t-fx-impl #'t-fx-infra])]
+      (is (= {":lib.code-test/FxConcept" #{"fx-impl"} :infrastructure #{"fx-infra"}}
+             (code/modules-by-role db))))))
