@@ -54,6 +54,15 @@
       (is (= #{"probes" "target-correspondence"} (roles ":canvas.subject/Lens")))
       (is (= #{"materialize"} (roles ":canvas.subject/Projection"))))))
 
+;; ── Module :extracted provenance (symmetric with Operation) ──────────────────────
+(code/Module ^{:name "t-ext-mod"} t-ext-mod {:extracted true})
+
+(deftest module-carries-extracted-provenance
+  (testing "a Module authored with {:extracted true} stamps :val/extracted (symmetric with Operation)"
+    (let [db (a/assemble-vars [#'t-ext-mod])]
+      (is (true? (ffirst (d/q '[:find ?x :where [?m :structure/of :lib.code/Module] [?m :val/extracted ?x]] db)))
+          "Module :extracted is stored as :val/extracted"))))
+
 ;; ── Subsystem: clusters Modules + declares the :may-depend DAG (self-reference) ──
 (declare t-sub-b)
 (code/Subsystem ^{:name "sub-a"} t-sub-a {:child [t-fx-impl] :may-depend [t-sub-b]})

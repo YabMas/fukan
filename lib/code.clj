@@ -141,7 +141,8 @@
   {:exposes [:* Operation]           ; the public API surface — Operations callers depend on
    :owns    [:* Kind]                ; data-shapes that cross the boundary (other modules adopt by name)
    :child   [:* Any]                 ; internal members + grain no other module consumes
-   :realizes [:? :string]}           ; the qualified tag of the abstract concept this module realizes (authored as its symbol)
+   :realizes  [:? :string]           ; the qualified tag of the abstract concept this module realizes (authored as its symbol)
+   :extracted [:? :boolean]}         ; provenance: true ⇒ from code extraction; absent/false ⇒ authored (symmetric with Operation)
   (syntax realizes->concept))
 
 ;; ── subsystem (the rung above Module: a capability cluster) ───────────────────
