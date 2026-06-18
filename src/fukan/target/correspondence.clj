@@ -257,14 +257,21 @@
    an UNDECLARED PUBLIC SURFACE, demanding a decision (model it as intent, or make it private). A
    query/worklist, not yet a law (it is non-empty during a coverage campaign); the enforced
    `Encapsulation` law lands once this reaches zero. Empty ⇔ the model covers the whole public
-   surface — every unmodelled function is genuinely private. The PRIVATE half of `uncovered-operations`
-   is settled by definition: an unmodelled internal is encapsulation working as intended.
+   surface — every unmodelled function is either genuinely private or intentionally exported.
+
+   Two categories are SETTLED and excluded: a `:val/private` function (an unmodelled internal is
+   encapsulation working as intended) and a `:val/export` function — public for MECHANISM
+   (macro-emitted substrate, or a var reached only through dynamic dispatch: a datalog predicate, a
+   `(syntax …)`/reader hook). Such a var is intentionally public, not a leaked internal; the model
+   does not name it on purpose. The remaining worklist is the GENUINELY questionable surface: public,
+   not exported, and unmodelled — model it as intent, or make it private.
 
    Module membership resolves through `in-module` (see `uncovered-operations`)."
   [db]
   (->> (d/q '[:find ?on :in $ %
               :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                      (not [?o :val/private true])
+                     (not [?o :val/export true])
                      (in-module ?o ?kmn)
                      (not-join [?on ?kmn]
                        [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]

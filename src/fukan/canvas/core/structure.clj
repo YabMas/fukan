@@ -59,7 +59,7 @@
 
 (defonce ^:private structures (atom {}))
 
-(defn register-structure! [sdef] (swap! structures assoc (:tag sdef) sdef) (:tag sdef))
+(defn ^:export register-structure! [sdef] (swap! structures assoc (:tag sdef) sdef) (:tag sdef))
 (defn all-structures [] (vals @structures))
 (defn structure-by-tag [tag] (get @structures tag))
 
@@ -244,7 +244,7 @@
                       (remove scalar? clauses))]
     `(->InstanceValue ~tag ~name-expr ~doc ~scalars ~rels ~value?-expr)))
 
-(defn instance-form
+(defn ^:export instance-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for an EXPRESSION-position
    entity instance — `(Tag \"doc\"? {slot → value}?)`, mirroring defstructure's
    docstring + one-map shape. The name is always nil: the assembler derives
@@ -269,7 +269,7 @@
     (build-instance-form tag nil doc false
                          (map->clauses tag sdef (apply-syntax sdef (if (some? one) one {}))))))
 
-(defn value-form
+(defn ^:export value-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance —
    anonymous (name=nil) and content-identified (value?=true). The author surface is
    `(Tag {slot → value})`; a clause-vector body is the internal IR readers emit
@@ -321,7 +321,7 @@
 
 (declare expand-instance)
 
-(defn expand-instance
+(defn ^:export expand-instance
   "Def-emitting + nesting expansion of `(sym \"doc\"? {slot → value}? nested…)` for
    structure `tag` — the named-instance authoring surface. Returns {:defs [forms] :sym :tag}:
    nested named instances are lifted to sibling `def`s (cross-refs stay var-refs) and routed

@@ -92,6 +92,7 @@
    :guidance  [:? :string]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection
    :calls     [:* Operation]         ; the ACTUAL call graph (extraction's actuals; not authored)
    :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
+   :export    [:? :boolean]          ; intentionally public for MECHANISM (macro emission / dynamic dispatch); settled, not a coverage gap (from ^:export)
    :extracted [:? :boolean]          ; provenance: true ⇒ from code; absent/false ⇒ authored
    ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
    ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.

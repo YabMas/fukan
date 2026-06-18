@@ -76,6 +76,8 @@
                               (s/->InstanceValue :lib.code/Operation (str (:name v)) nil
                                                  (cond-> {:val/private (boolean (:private v))
                                                           :val/extracted true}
+                                                   (:export (:meta v))
+                                                   (assoc :val/export true)
                                                    (:malli/schema (:meta v))
                                                    (assoc :val/sig (pr-str (:malli/schema (:meta v)))))
                                                  [] false))]]
