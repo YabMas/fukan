@@ -19,4 +19,6 @@
   (Operation get-model     "The current held Model, or none."
     {:signature [:=> [:cat] kernel/StructureDb]})
   (Operation refresh-model "Rebuild the Model from the last src path."
-    {:signature [:=> [:cat] kernel/StructureDb]}))
+    {:signature [:=> [:cat] kernel/StructureDb]})
+  (Operation get-src "The current source path the held Model was built from, or none."
+    {:signature [:=> [:cat] extraction/Path]}))

@@ -17,4 +17,6 @@
   (Operation type-adheres? "Whether a model type-form adheres to a realized code type-form, via the dialect."
     {:signature [:=> [:catn [:model-form :any] [:code-form :any]] :boolean]})
   (Operation reflect-type "A type form → its content-deduped subgraph, via the dialect."
+    {:signature [:=> [:catn [:form :any]] :any]})
+  (Operation parse-type "A code-form type → entity-maps, via the dialect's :parse bridge (the inverse of render-type)."
     {:signature [:=> [:catn [:form :any]] :any]}))
