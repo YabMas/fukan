@@ -56,6 +56,8 @@
               canvas.architecture.reading.correspondence
               canvas.architecture.reading.probes
               canvas.architecture.reading.finding
+              canvas.architecture.reading.descent
+              canvas.architecture.projection.overview
               canvas.architecture.orchestration.core
               canvas.architecture.projection.materialize
               canvas.architecture.orchestration.pipeline

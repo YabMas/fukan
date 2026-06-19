@@ -20,4 +20,17 @@
   (Operation type-drifted-operations
     "Modelled operations whose type disagrees with the realizing function's declared signature."
     {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector OperationName]]
-     :delegates [typing/type-adheres?]}))        ; compares modelled vs realized sigs via the dialect
+     :delegates [typing/type-adheres?]})         ; compares modelled vs realized sigs via the dialect
+  ;; ── the relation-level coverage/fidelity queries (the :delegates⟷:calls seam) ──
+  (Operation unrealized-delegates "Authored cross-module delegations with no realizing actual call (intent→fact gap)."
+    {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector OperationName]]
+     :delegates [kernel/check]})                 ; reads the registered CallRealization law via check
+  (Operation uncovered-calls "Actual cross-module calls with no covering :delegates — the fidelity coverage worklist."
+    {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector [:tuple :string :string]]]})
+  (Operation unfaithful-calls "Extracted callers making an undeclared cross-module call between MODELLED faculties."
+    {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector OperationName]]
+     :delegates [kernel/check]})                 ; reads the registered Fidelity law via check
+  (Operation uncovered-public-operations "PUBLIC extracted operations with no model twin — the encapsulation worklist."
+    {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector OperationName]]})
+  (Operation operation-sig "Render an authored Operation's modelled type to a malli function-schema."
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:op-eid :int]] :any]}))

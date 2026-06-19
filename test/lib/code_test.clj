@@ -47,12 +47,14 @@
              (code/modules-by-role db))))))
 
 (deftest fukan-architecture-modules-carry-their-faculty-roles
-  (testing "the six faculty roles sit on fukan's realizing architecture modules"
+  (testing "fukan's subject faculty roles sit on its realizing architecture modules"
     (let [roles (code/modules-by-role (pipeline/build-model nil))]
       (is (= #{"core-structure"} (roles ":canvas.subject/Model")))
       (is (= #{"canvas-source" "target-clojure"} (roles ":canvas.subject/Source")))
-      (is (= #{"probes" "target-correspondence"} (roles ":canvas.subject/Lens")))
-      (is (= #{"materialize"} (roles ":canvas.subject/Projection"))))))
+      ;; the READ act — probes/correspondence findings + the generative-descent witnesses
+      (is (= #{"probes" "target-correspondence" "descent"} (roles ":canvas.subject/Lens")))
+      ;; the SYNTHESIS act — the impl-spec projection + the two system-map overviews
+      (is (= #{"materialize" "overview" "architecture"} (roles ":canvas.subject/Projection"))))))
 
 ;; ── Module :extracted provenance (symmetric with Operation) ──────────────────────
 (code/Module ^{:name "t-ext-mod"} t-ext-mod {:extracted true})

@@ -26,4 +26,8 @@
     {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:module ModuleName]] Instruction]})
   (Operation materialize-projection "Render a modelled Projection through its own lens (model-driven)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:proj Projection]] Instruction]
-     :delegates [lens-engine/evaluate-lens]}))
+     :delegates [lens-engine/evaluate-lens]})
+  (Operation render "Render a single node under a projection (composes the per-primitive render-base multimethod)."
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:eid Eid]] Instruction]})
+  (Operation materialize-finding "Compose a finding's observation foci into a projection — the probe→projection seam."
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]}))
