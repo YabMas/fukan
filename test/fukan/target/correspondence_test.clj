@@ -173,3 +173,14 @@
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
     (is (empty? (corr/uncovered-public-operations (pipeline/build-model "src")))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
+
+(deftest defmultis-are-extracted-and-modelled
+  (testing "both defmultis are extracted as Operations AND covered by the model (not undeclared public surface)"
+    (let [m         (pipeline/build-model "src")
+          extracted (set (d/q '[:find [?n ...]
+                                :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
+          worklist  (corr/uncovered-public-operations m)]
+      (is (contains? extracted "run-probe")   "run-probe (defmulti) is extracted as an Operation")
+      (is (contains? extracted "render-base") "render-base (defmulti) is extracted as an Operation")
+      (is (not (contains? worklist "run-probe"))   "run-probe is covered, not an undeclared public surface")
+      (is (not (contains? worklist "render-base")) "render-base is covered, not an undeclared public surface"))))

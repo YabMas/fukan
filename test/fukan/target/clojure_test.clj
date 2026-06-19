@@ -58,6 +58,18 @@
                                               [?m :entity/name "sample"] [?m :val/extracted ?x]] db)))
           "the sample Module is provenance-stamped"))))
 
+(deftest extracts-defmulti-as-dispatch-operation
+  (testing "a defmulti is extracted as an Operation (a dispatch point) and callers' calls to it resolve"
+    (let [db (tc/extract "src/fukan/canvas/projection/probes.clj")]
+      (is (true? (ffirst (d/q '[:find ?x :where [?o :structure/of :lib.code/Operation]
+                                              [?o :entity/name "run-probe"] [?o :val/extracted ?x]] db)))
+          "run-probe (a defmulti) is an extracted Operation")
+      (is (contains? (set (d/q '[:find ?fromn ?ton
+                                 :where [?c :rel/kind :calls] [?c :rel/from ?f] [?c :rel/to ?t]
+                                        [?f :entity/name ?fromn] [?t :entity/name ?ton]] db))
+                     ["run" "run-probe"])
+          "run -> run-probe resolves as a :calls edge now that the point is a node"))))
+
 (deftest every-modelled-stage-is-realized-in-src
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/)
             with the code extracted from src/ on one graph, and every modelled

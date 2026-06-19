@@ -1,9 +1,9 @@
 (ns canvas.architecture.projection.materialize
   "Self-spec: fukan's materialize / LOWER layer (`fukan.model.materialize`) — the inverse of the
    target layer's extraction. It composes per-primitive `render` instructions (a multimethod — the
-   open extension point, not modelled as an Operation) over a Lens's focus, projecting the model
-   into an implementation specification. `materialize-view` is the public entry. `core.lens` lives
-   in `canvas.architecture.kernel.lens`."
+   open extension point, modelled for coverage but its inline-method fan-out is not) over a Lens's
+   focus, projecting the model into an implementation specification. `materialize-view` is the
+   public entry. `core.lens` lives in `canvas.architecture.kernel.lens`."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.lens :as lens-engine]
@@ -30,4 +30,8 @@
   (Operation render "Render a single node under a projection (composes the per-primitive render-base multimethod)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:eid Eid]] Instruction]})
   (Operation materialize-finding "Compose a finding's observation foci into a projection — the probe→projection seam."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]}))
+    {:signature [:=> [:catn [:db kernel/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]})
+  (Operation ^:private render-base
+    "The per-(projection, kind) render dispatch point. Its defmethods have inline bodies (no named
+     handler ops), so it carries no :dispatches-to fan-out — modelled for coverage."
+    {}))

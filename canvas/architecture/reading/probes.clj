@@ -27,7 +27,10 @@
      :delegates [kernel/check corr/uncovered-operations corr/drifted-operations finding/finding finding/observation]})
   (Operation run-all "Run every implemented probe leaf → a map of findings."
     {:signature [:=> [:catn [:target-db kernel/StructureDb]] FindingMap]
-     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations finding/finding finding/observation]}))
+     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations finding/finding finding/observation]})
+  (Operation ^:private run-probe
+    "The dispatch point: run/run-all route here, and it dispatches to the registered probe leaves."
+    {:performs [:throws]}))
 
 (Module probe-code
   "Project a probe's implementation spec from the model. (ProbeName is owned by `probes`.)"

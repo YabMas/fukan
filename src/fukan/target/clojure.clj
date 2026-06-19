@@ -5,8 +5,8 @@
    that knows Clojure. It reads clj-kondo's `:analysis` output and maps Clojure
    constructs onto fukan's architecture-level code vocabulary:
 
-     ns               → Module   (a cohesion boundary)
-     defn / defn-     → Operation   (a named unit of computation, `:extracted true`)
+     ns                      → Module      (a cohesion boundary)
+     defn / defn- / defmulti → Operation   (a named unit of computation — defmulti is a dispatch point; `:extracted true`)
 
    The extractor OWNS no vocabulary — `Operation`/`Module` are defined in
    `lib.code`; this plug-point only EMITS instances of them by tag
@@ -21,9 +21,11 @@
             [fukan.canvas.core.structure :as s]))
 
 (def ^:private fn-defining
-  "clj-kondo `:defined-by` values that denote a computation unit (an Operation).
-   `def`, `defmacro`, `defmethod`, … are deliberately excluded — only functions."
-  #{'clojure.core/defn 'clojure.core/defn-})
+  "clj-kondo `:defined-by` values that denote a computation unit (an Operation). `defn`/`defn-`
+   are functions; `defmulti` is a DISPATCH POINT — also an Operation (callers depend on it; its
+   handler fan-out is authored intent, see `lib.code/Operation :dispatches-to`). `def`, `defmacro`,
+   `defmethod`, … stay excluded — `defmethod` defines no var."
+  #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti})
 
 (defn- analyze
   "Run clj-kondo over `paths` and return its `:analysis` — namespace + var
