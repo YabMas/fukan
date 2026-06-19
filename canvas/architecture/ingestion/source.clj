@@ -5,8 +5,9 @@
    `build` discovers the canvas namespaces, requires them, and assembles their interned
    instance-vars into one db — references between instances are ordinary var-refs resolved by the
    assembler, so there is no merge/cross-ref pass. `union-dbs` folds an extractor's code db onto
-   the assembled design db. The db it builds is the kernel's shared `StructureDb`. (Discovery,
-   namespace derivation and the entity-map fold are internals — extraction's job, not sketched.)"
+   the assembled design db. The db it builds is the kernel's shared `StructureDb`. `canvas-namespaces`
+   is the discovery half exposed on its own because the build pipeline consumes it directly. (Require
+   and the entity-map fold remain internals — not sketched.)"
   (:require [lib.code :refer [Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.assemble :as assemble]
@@ -18,6 +19,9 @@
   (Operation union-dbs "Fold the extractor's code db onto the assembled design db."
     {:signature [:=> [:catn [:dbs [:vector kernel/StructureDb]]] kernel/StructureDb]
      :delegates [kernel/create]})               ; builds on the kernel's StructureDb constructor
+  (Operation canvas-namespaces "Discover the canvas namespaces on the classpath (the build's input list)."
+    {:signature [:=> [:cat] [:vector :any]]
+     :performs  [:io]})
   (Operation build "Discover + require + assemble the canvas specs → the model db."
     {:signature [:=> [:cat] kernel/StructureDb]
      :performs  [:io :stderr :require]
