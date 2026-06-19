@@ -25,6 +25,8 @@
   (Operation unrealized-delegates "Authored cross-module delegations with no realizing actual call (intent→fact gap)."
     {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector OperationName]]
      :delegates [kernel/check]})                 ; reads the registered CallRealization law via check
+  (Operation unrealized-dispatch "Authored cross-module delegations not realized op-level even through a modelled dispatch point (transitive over :calls ∪ :dispatches-to)."
+    {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector OperationName]]})
   (Operation uncovered-calls "Actual cross-module calls with no covering :delegates — the fidelity coverage worklist."
     {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector [:tuple :string :string]]]})
   (Operation unfaithful-calls "Extracted callers making an undeclared cross-module call between MODELLED faculties."

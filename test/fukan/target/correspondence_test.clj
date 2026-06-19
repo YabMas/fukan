@@ -208,3 +208,76 @@
                          :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
                        m dp)))
           "run-extractor dispatches to the registered Clojure extractor (extract)"))))
+
+;; Tiny model: authored A.op-a :delegates B.op-b. "Same module name" authored/extracted pairs make
+;; module-corresponds? trivial (segs "A" is a suffix of segs "A").
+(defn- dispatch-fixture
+  "Authored A.op-a :delegates B.op-b; a dispatch point dp in A with :dispatches-to handler h; and,
+   when `wired?`, the extracted call path op-a -> dp ... h -> op-b."
+  [wired?]
+  (-> (s/create)
+      (d/db-with
+       (cond-> [{:db/id -1 :structure/of :lib.code/Module :entity/id "A" :entity/name "A"}
+                {:db/id -2 :structure/of :lib.code/Module :entity/id "B" :entity/name "B"}
+                {:db/id -3 :structure/of :lib.code/Operation :entity/name "op-a"}
+                {:db/id -4 :structure/of :lib.code/Operation :entity/name "op-b"}
+                {:db/id -9  :structure/of :lib.code/Operation :entity/name "dp"}
+                {:db/id -10 :structure/of :lib.code/Operation :entity/name "h"}
+                {:rel/id "A|exposes|op-a" :rel/from -1 :rel/kind :exposes :rel/to -3}
+                {:rel/id "A|child|dp"     :rel/from -1 :rel/kind :child   :rel/to -9}
+                {:rel/id "A|child|h"      :rel/from -1 :rel/kind :child   :rel/to -10}
+                {:rel/id "B|exposes|op-b" :rel/from -2 :rel/kind :exposes :rel/to -4}
+                {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
+                {:rel/id "dp|dispatches-to|h"  :rel/from -9 :rel/kind :dispatches-to :rel/to -10}
+                {:db/id -5 :structure/of :lib.code/Module :entity/id "A" :entity/name "A" :val/extracted true}
+                {:db/id -6 :structure/of :lib.code/Module :entity/id "B" :entity/name "B" :val/extracted true}
+                {:db/id -7  :structure/of :lib.code/Operation :entity/name "op-a" :val/extracted true}
+                {:db/id -8  :structure/of :lib.code/Operation :entity/name "op-b" :val/extracted true}
+                {:db/id -11 :structure/of :lib.code/Operation :entity/name "dp"   :val/extracted true}
+                {:db/id -12 :structure/of :lib.code/Operation :entity/name "h"    :val/extracted true}
+                {:rel/id "Ax|child|op-a" :rel/from -5 :rel/kind :child :rel/to -7}
+                {:rel/id "Ax|child|dp"   :rel/from -5 :rel/kind :child :rel/to -11}
+                {:rel/id "Ax|child|h"    :rel/from -5 :rel/kind :child :rel/to -12}
+                {:rel/id "Bx|child|op-b" :rel/from -6 :rel/kind :child :rel/to -8}]
+         wired? (into [{:rel/id "op-a|calls|dp" :rel/from -7  :rel/kind :calls :rel/to -11}
+                       {:rel/id "h|calls|op-b"  :rel/from -12 :rel/kind :calls :rel/to -8}])))))
+
+(deftest unrealized-dispatch-fires-when-unrealized
+  (testing "an authored cross-module delegation with no realizing code path is reported"
+    (is (contains? (corr/unrealized-dispatch (dispatch-fixture false)) "op-a"))))
+
+(deftest unrealized-dispatch-green-through-modelled-dispatch
+  (testing "the delegation is realized once code reaches the target through the modelled dispatch point"
+    (is (empty? (corr/unrealized-dispatch (dispatch-fixture true)))
+        "op-a -> op-b realized via op-a -> dp -> (dispatch) h -> op-b")))
+
+(deftest unrealized-dispatch-green-through-registry-dispatch
+  (testing "realized when the dispatch point routes DIRECTLY to the target (registry flavor, no trailing call)"
+    (let [db (-> (s/create)
+                 (d/db-with
+                  [{:db/id -1 :structure/of :lib.code/Module :entity/id "A" :entity/name "A"}
+                   {:db/id -2 :structure/of :lib.code/Module :entity/id "B" :entity/name "B"}
+                   {:db/id -3 :structure/of :lib.code/Operation :entity/name "op-a"}
+                   {:db/id -4 :structure/of :lib.code/Operation :entity/name "op-b"}
+                   {:db/id -9 :structure/of :lib.code/Operation :entity/name "dp"}
+                   {:rel/id "A|exposes|op-a" :rel/from -1 :rel/kind :exposes :rel/to -3}
+                   {:rel/id "A|child|dp"     :rel/from -1 :rel/kind :child   :rel/to -9}
+                   {:rel/id "B|exposes|op-b" :rel/from -2 :rel/kind :exposes :rel/to -4}
+                   {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
+                   {:rel/id "dp|dispatches-to|op-b" :rel/from -9 :rel/kind :dispatches-to :rel/to -4}
+                   {:db/id -5 :structure/of :lib.code/Module :entity/id "A" :entity/name "A" :val/extracted true}
+                   {:db/id -6 :structure/of :lib.code/Module :entity/id "B" :entity/name "B" :val/extracted true}
+                   {:db/id -7  :structure/of :lib.code/Operation :entity/name "op-a" :val/extracted true}
+                   {:db/id -8  :structure/of :lib.code/Operation :entity/name "op-b" :val/extracted true}
+                   {:db/id -11 :structure/of :lib.code/Operation :entity/name "dp"   :val/extracted true}
+                   {:rel/id "Ax|child|op-a" :rel/from -5 :rel/kind :child :rel/to -7}
+                   {:rel/id "Ax|child|dp"   :rel/from -5 :rel/kind :child :rel/to -11}
+                   {:rel/id "Bx|child|op-b" :rel/from -6 :rel/kind :child :rel/to -8}
+                   {:rel/id "op-a|calls|dp" :rel/from -7 :rel/kind :calls :rel/to -11}]))]
+      (is (empty? (corr/unrealized-dispatch db))
+          "op-a -> op-b realized via op-a -> dp -> (dispatch) op-b"))))
+
+(deftest unrealized-dispatch-green-on-self-model
+  (testing "every authored cross-module delegation is realized op-level (transitively, through dispatch) on the live model"
+    (is (empty? (corr/unrealized-dispatch (pipeline/build-model "src")))
+        "0 unrealized — incl. run/run-all via run-probe dispatch, and structure-form/instance-form via the target-expr helper chain")))

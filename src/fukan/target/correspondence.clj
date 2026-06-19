@@ -167,6 +167,60 @@
          (map #(:entity/name (d/entity db %)))
          set)))
 
+(defn unrealized-dispatch
+  "Authored cross-module delegations NOT realized op-level by the actual code — neither by a direct
+   call nor by reaching the target THROUGH the code's call graph extended by modelled dispatch points
+   (`:dispatches-to`). A set of authored source-op names; empty ⇔ every intended dependency is backed
+   by a real (possibly dispatch-mediated, possibly multi-hop) call path.
+
+   A QUERY, not a law (like `uncovered-calls`): it walks reachability in Clojure (efficient BFS),
+   which a datalog law can't do within the kernel's law-timeout. It is nonetheless a genuine CONSUMER
+   of `:dispatches-to` — a modelled dispatch point's fan-out is lifted onto the extracted call graph
+   (by name + `module-corresponds?`), so removing a seam's `:dispatches-to` makes its consumers'
+   delegations unreachable and surfaces them here. Asserted empty by the regression suite."
+  [db]
+  (let [ext-ops     (d/q '[:find ?e ?en ?km :in $ %
+                           :where [?e :structure/of :lib.code/Operation] [?e :val/extracted true]
+                                  [?e :entity/name ?en] (in-module ?e ?km)]
+                         db rules/substrate-rules)
+        ext-by-name (group-by second ext-ops)
+        twin        (fn [on cm] (some (fn [[e _ km]] (when (module-corresponds? cm km) e))
+                                      (get ext-by-name on)))
+        calls       (d/q '[:find ?from ?to
+                           :where [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]] db)
+        disp        (d/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
+                           :where [?dr :rel/kind :dispatches-to] [?dr :rel/from ?a1] [?dr :rel/to ?a2]
+                                  (not [?a1 :val/extracted true])
+                                  [?a1 :entity/name ?on1] (in-module ?a1 ?cm1)
+                                  [?a2 :entity/name ?on2] (in-module ?a2 ?cm2)]
+                         db rules/substrate-rules)
+        disp-edges  (keep (fn [[on1 cm1 on2 cm2]]
+                            (let [e1 (twin on1 cm1) e2 (twin on2 cm2)]
+                              (when (and e1 e2) [e1 e2])))
+                          disp)
+        adj         (reduce (fn [m [a b]] (update m a (fnil conj #{}) b)) {}
+                            (concat calls disp-edges))
+        reaches?    (fn [start target]
+                      (loop [stack [start] seen #{}]
+                        (if-let [n (peek stack)]
+                          (let [stack (pop stack)]
+                            (cond
+                              (= n target) true
+                              (seen n)     (recur stack seen)
+                              :else        (recur (into stack (get adj n)) (conj seen n))))
+                          false)))
+        delegations (d/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
+                           :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+                                  (not [?o1 :val/extracted true])
+                                  [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
+                                  [?o2 :entity/name ?on2] (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]]
+                         db rules/substrate-rules)]
+    (->> delegations
+         (keep (fn [[on1 cm1 on2 cm2]]
+                 (let [e1 (twin on1 cm1) e2 (twin on2 cm2)]
+                   (when (and e1 e2 (not (reaches? e1 e2))) on1))))
+         set)))
+
 (defn uncovered-calls
   "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law, like
    `uncovered-operations`): actual cross-module module-calls (over `:calls`) with no corresponding
