@@ -47,7 +47,7 @@
     (load-model src)
     (do (println "No src path set. Use load-model first.") nil)))
 
-(defn set-model-for-test!
+(defn ^:test-support set-model-for-test!
   "Test helper — directly set the held model. Never call from production code."
   [m]
   (reset! state {:model m :src "test"}))

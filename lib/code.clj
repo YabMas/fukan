@@ -93,6 +93,7 @@
    :calls     [:* Operation]         ; the ACTUAL call graph (extraction's actuals; not authored)
    :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
    :export    [:? :boolean]          ; intentionally public for MECHANISM (macro emission / dynamic dispatch); settled, not a coverage gap (from ^:export)
+   :test-support [:? :boolean]       ; intentionally public for TEST-SUPPORT (test isolation / setup, never called from production); settled (from ^:test-support)
    :extracted [:? :boolean]          ; provenance: true ⇒ from code; absent/false ⇒ authored
    ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
    ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.

@@ -78,6 +78,8 @@
                                                           :val/extracted true}
                                                    (:export (:meta v))
                                                    (assoc :val/export true)
+                                                   (:test-support (:meta v))
+                                                   (assoc :val/test-support true)
                                                    (:malli/schema (:meta v))
                                                    (assoc :val/sig (pr-str (:malli/schema (:meta v)))))
                                                  [] false))]]

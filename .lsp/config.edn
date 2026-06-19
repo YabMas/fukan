@@ -23,7 +23,7 @@
    ;; predicates called from law :where clauses). clojure-lsp's static
    ;; analysis can't see those call sites, so the unused-public-var lint is a
    ;; false positive on them.
-   :exclude-when-meta #{:export}
+   :exclude-when-meta #{:export :test-support}
 
    ;; Namespace-wide exemptions. Mirrors `.clj-kondo/config.edn`'s
    ;; `:config-in-ns` entries — see that file for per-namespace rationale.

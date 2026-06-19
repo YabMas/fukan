@@ -26,12 +26,12 @@
   (swap! dialect merge d)
   nil)
 
-(defn registered-dialect
+(defn ^:test-support registered-dialect
   "The currently registered dialect map (or nil) — for save/restore in tests."
   []
   @dialect)
 
-(defn clear-type-dialect!
+(defn ^:test-support clear-type-dialect!
   "Drop the registered dialect entirely (tests / re-composition)."
   []
   (reset! dialect nil)
