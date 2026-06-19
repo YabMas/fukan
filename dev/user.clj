@@ -22,7 +22,8 @@
             ;; `check`/`(drift)` over the unified held model surfaces drift
             [fukan.target.correspondence :as corr]
             [fukan.descent :as descent]
-            [lib.code :as code]))
+            [lib.code :as code]
+            [lib.arch :as la]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -203,6 +204,25 @@
                                m)
                           (group-by first) (sort-by key))]
       (println (format "%-16s ⟶ %s" dpn (str/join ", " (sort (map second hs))))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn boundaries
+  "Bottom-up latent-boundary DISCOVERY (interface segregation, Parnas/ISP made mechanical): code modules
+   whose PUBLIC surface has split into ≥2 consumer-DISJOINT clienteles — a sub-interface that has
+   crystallized with its own external clientele but that no formal contract names. For each, the
+   discovered sub-interface(s) and the clientele each is captured by. A SIGNAL for judgment (it detects
+   the crystallized seam; you decide whether it deserves a formal split), count-invariant — a clientele
+   can grow (a 2nd dialect) and the seam stays visible. Empty ⇔ no module's public surface has split."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [lb (la/latent-boundaries m)]
+      (if (empty? lb)
+        (println "No latent boundaries — no module's public surface splits into disjoint clienteles.")
+        (doseq [[km bundles] lb]
+          (println km)
+          (doseq [b bundles]
+            (println (format "  ⊣ sub-interface: %s" (str/join ", " (:ops b))))
+            (println (format "    clientele:     %s" (str/join ", " (:clientele b))))))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn probes

@@ -5,9 +5,12 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s]
+            ;; the composition root — registers fukan's Clojure extractor, so `build-model "src"`
+            ;; merges extracted code (the call graph latent-boundaries reads) onto the design graph
+            [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [lib.code :as code]
-            [lib.arch]))
+            [lib.arch :as la]))
 
 (defn- law-desc [substr]
   (->> (s/structure-by-tag :lib.arch/ModuleArchitecture) :laws
@@ -93,3 +96,68 @@
 (deftest fukan-every-module-is-clustered
   (testing "every fukan Module belongs to a subsystem"
     (is (empty? (offenders (pipeline/build-model nil) "belongs to a Subsystem")))))
+
+;; ── latent-boundaries (interface-segregation discovery) ──
+;; Synthetic EXTRACTED graphs: HOST exposes public ops; consumer modules :call them. The reading
+;; partitions HOST's public surface by shared-clientele and reports ≥2-op consumer-disjoint bundles.
+
+;; HOST: a1,a2 captured by CX; b1,b2 captured by CY — two disjoint clienteles.
+(code/Operation ^{:name "a1"} t-a1 {:extracted true})
+(code/Operation ^{:name "a2"} t-a2 {:extracted true})
+(code/Operation ^{:name "b1"} t-b1 {:extracted true})
+(code/Operation ^{:name "b2"} t-b2 {:extracted true})
+(code/Module ^{:name "HOST"} t-host {:exposes [t-a1 t-a2 t-b1 t-b2]})
+(code/Operation ^{:name "cx-op"} t-cx-op {:extracted true :calls [t-a1 t-a2]})
+(code/Module ^{:name "CX"} t-cx {:exposes [t-cx-op]})
+(code/Operation ^{:name "cy-op"} t-cy-op {:extracted true :calls [t-b1 t-b2]})
+(code/Module ^{:name "CY"} t-cy {:exposes [t-cy-op]})
+
+(deftest latent-boundary-fires-on-disjoint-clienteles
+  (testing "a module whose public ops split into two consumer-disjoint bundles is surfaced"
+    (let [db (a/assemble-vars [#'t-a1 #'t-a2 #'t-b1 #'t-b2 #'t-host
+                               #'t-cx-op #'t-cx #'t-cy-op #'t-cy])
+          lb (la/latent-boundaries db)
+          bundles (->> (get lb "HOST") (map (comp set :ops)) set)]
+      (is (= #{"HOST"} (set (keys lb))) "only HOST has a split surface (consumers have no clientele)")
+      (is (= #{#{"a1" "a2"} #{"b1" "b2"}} bundles)
+          "the two disjoint clienteles are recovered as the sub-interfaces"))))
+
+;; COH: c1,c2 BOTH captured by CZ — one shared clientele, no internal seam.
+(code/Operation ^{:name "c1"} t-c1 {:extracted true})
+(code/Operation ^{:name "c2"} t-c2 {:extracted true})
+(code/Module ^{:name "COH"} t-coh {:exposes [t-c1 t-c2]})
+(code/Operation ^{:name "cz-op"} t-cz-op {:extracted true :calls [t-c1 t-c2]})
+(code/Module ^{:name "CZ"} t-cz {:exposes [t-cz-op]})
+
+(deftest latent-boundary-silent-on-cohesive-surface
+  (testing "a module whose whole public surface shares one clientele is NOT flagged"
+    (let [db (a/assemble-vars [#'t-c1 #'t-c2 #'t-coh #'t-cz-op #'t-cz])]
+      (is (empty? (la/latent-boundaries db))
+          "one clientele = the whole surface = no proper sub-interface"))))
+
+;; LONE: d1 captured by CW, d2 by CV — two disjoint clienteles but each a LONE op (no cohesion).
+(code/Operation ^{:name "d1"} t-d1 {:extracted true})
+(code/Operation ^{:name "d2"} t-d2 {:extracted true})
+(code/Module ^{:name "LONE"} t-lone {:exposes [t-d1 t-d2]})
+(code/Operation ^{:name "cw-op"} t-cw-op {:extracted true :calls [t-d1]})
+(code/Module ^{:name "CW"} t-cw {:exposes [t-cw-op]})
+(code/Operation ^{:name "cv-op"} t-cv-op {:extracted true :calls [t-d2]})
+(code/Module ^{:name "CV"} t-cv {:exposes [t-cv-op]})
+
+(deftest latent-boundary-cohesion-gate-rejects-lone-captives
+  (testing "disjoint clienteles of LONE ops (no ≥2-op bundle) are below the cohesion gate"
+    (let [db (a/assemble-vars [#'t-d1 #'t-d2 #'t-lone #'t-cw-op #'t-cw #'t-cv-op #'t-cv])]
+      (is (empty? (la/latent-boundaries db))
+          "a latent sub-interface is a bundle, not a lone captive op"))))
+
+(deftest fukan-core-structure-has-a-latent-boundary
+  (testing "core-structure's public surface has split into consumer-disjoint clienteles (the kernel SPI seam)"
+    (let [lb (la/latent-boundaries (pipeline/build-model "src"))
+          cs (get lb "fukan.canvas.core.structure")
+          bundle-of (fn [op] (some (fn [b] (when (some #{op} (:ops b)) (set (:ops b)))) cs))]
+      (is (= ["fukan.canvas.core.structure"] (keys lb))
+          "core-structure is currently the ONE latent boundary in fukan (pending the kernel↔dialect SPI close)")
+      (is (<= 2 (count cs)) "split into at least two consumer-disjoint sub-interfaces")
+      (is (and (bundle-of "value-literal->iv") (bundle-of "check")
+               (not= (bundle-of "value-literal->iv") (bundle-of "check")))
+          "the construction surface and the check/introspect API are different clienteles"))))

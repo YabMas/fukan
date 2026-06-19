@@ -3,8 +3,13 @@
    opinions about a clean dependency structure, beyond mere consistency). Required to activate, exactly
    like `lib.code`; it contributes laws only when a model opts in by requiring it. This is NOT a
    methodology/middle layer — it is primitive, reusable architecture-quality structures, grown on real
-   need (the first: no import cycle between a pair of modules)."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]
+   need (the first: no import cycle between a pair of modules).
+
+   It also provides one reusable quality READING (a plain `defn`, like `lib.code/module-dependencies`):
+   `latent-boundaries` — bottom-up boundary DISCOVERY over the extracted call graph."
+  (:require [clojure.set :as set]
+            [datascript.core :as d]
+            [fukan.canvas.core.structure :refer [defstructure]]
             ;; the law reasons over lib.code Modules/Operations; require it so they are registered.
             [lib.code]))
 
@@ -91,3 +96,79 @@
              [?mod :structure/of :lib.code/Module]
              (not [?mod :val/extracted true])
              (not-join [?mod] (in-subsystem ?mod ?_sub))]))
+
+;; ── latent-boundary discovery (interface segregation, bottom-up) ──────────────
+
+(def ^:private in-module-rules
+  "`in-module ?op ?module-name` — an op belongs to a module via :exposes ∪ :owns ∪ :child."
+  '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+    [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+    [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]])
+
+(defn- consumer-components
+  "Partition `ops` (op-eids) into connected components: two ops are linked iff their external-consumer
+   module-sets (`consumers`: op → #{module}) INTERSECT. A component is thus a maximal set of public ops
+   that share a clientele; distinct components are mutually consumer-DISJOINT by construction. Returns
+   a vector of sets of op-eids. O(n²) over the few ops a module exposes."
+  [ops consumers]
+  (reduce (fn [comps o]
+            (let [cs (consumers o)
+                  {hit true miss false}
+                  (group-by (fn [comp] (boolean (some #(seq (set/intersection cs (consumers %))) comp)))
+                            comps)]
+              (conj (vec miss) (apply set/union #{o} hit))))
+          []
+          ops))
+
+(defn latent-boundaries
+  "Bottom-up boundary DISCOVERY (Parnas's decomposition criterion / Interface Segregation, made
+   mechanical): code Modules whose PUBLIC surface has split into ≥2 consumer-DISJOINT clienteles — a
+   latent sub-interface that has crystallized with its own external clientele but that no formal
+   contract names. For each such Module, the discovered sub-interface(s): a bundle of ≥2 public ops
+   sharing a clientele, disjoint from the rest of the Module's public surface.
+
+   A SIGNAL for human judgment, NOT a violation (like `lib.code/module-dependencies` /
+   `fukan.target.correspondence/uncovered-calls`): it detects that a seam has crystallized; whether it
+   DESERVES a formal split is the human's call (detect-vs-decide). COUNT-INVARIANT by construction: a
+   bundle's clientele may grow (e.g. a second type-dialect joins the first) and the bundle stays
+   disjoint from the rest — so the seam stays visible, unlike a single-consumer test which goes silent
+   exactly as a shared internal surface accretes more consumers.
+
+   Method, over the EXTRACTED call graph (`:val/extracted true` + `:calls`): a public op's clientele =
+   the OTHER code modules that call it; two public ops are co-consumed when their clienteles overlap;
+   connected components of the co-consumed graph are the candidate sub-interfaces. A Module is reported
+   when it has a component of ≥2 ops (the COHESION gate — a sub-interface is a bundle, not a lone
+   captive op) that is a PROPER subset of the Module's externally-consumed public surface (so it is a
+   genuine internal seam, not the whole cohesive module). Returns a sorted map
+   `{module-name [{:ops [name…] :clientele [module-name…]} …]}`; empty ⇔ no module's public surface
+   has split into disjoint clienteles."
+  [db]
+  (let [pub      (d/q '[:find ?o ?on ?km :in $ %
+                        :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true]
+                               (not [?o :val/private true])
+                               [?o :entity/name ?on] (in-module ?o ?km)]
+                      db in-module-rules)
+        owner    (into {} (map (fn [[o _ km]] [o km])) pub)        ; public op-eid → owning module name
+        name-of  (into {} (map (fn [[o on _]] [o on])) pub)        ; public op-eid → op name
+        callcons (d/q '[:find ?to ?fkm :in $ %
+                        :where [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]
+                               (in-module ?from ?fkm)]
+                      db in-module-rules)
+        consumers (reduce (fn [m [to fkm]]
+                            (if-let [okm (owner to)]               ; ?to is a public op of some module
+                              (if (= fkm okm) m (update m to (fnil conj #{}) fkm))  ; external callers only
+                              m))
+                          {} callcons)
+        by-mod   (group-by owner (keys consumers))]               ; module → its externally-consumed public ops
+    (into (sorted-map)
+          (keep (fn [[km ops]]
+                  (let [total  (count ops)
+                        proper (->> (consumer-components ops consumers)
+                                    (filter #(and (>= (count %) 2) (< (count %) total)))
+                                    (sort-by count >))]
+                    (when (seq proper)
+                      [km (mapv (fn [comp]
+                                  {:ops       (sort (map name-of comp))
+                                   :clientele (sort (apply set/union (map consumers comp)))})
+                                proper)])))
+                by-mod))))
