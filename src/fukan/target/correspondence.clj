@@ -124,6 +124,37 @@
              [(fukan.target.correspondence/module-corresponds? ?cm2 ?km2)]
              (not (intended ?km1 ?km2))]))
 
+(defstructure Encapsulation
+  "Law-holder for code-up ENCAPSULATION — the ENFORCED dual of the `uncovered-public-operations`
+   query, at OPERATION altitude (the op-level peer of the relation-level `Fidelity`). Every PUBLIC
+   extracted operation must be COVERED by the model (an authored twin of the same name in the
+   corresponding module) OR deliberately exempt:
+     - `:val/private`      — an internal (encapsulation working as intended)
+     - `:val/export`       — public for MECHANISM (macro-emitted substrate / a var reached only via
+                             dynamic dispatch: a datalog predicate, a `(syntax …)`/reader hook)
+     - `:val/test-support` — public only for TEST isolation/setup (never called from production)
+   A public, non-exempt, unmodelled function is an UNDECLARED PUBLIC SURFACE: the model must name it
+   (intent), or it must be hidden. With THIS law green AND `Realization`/`CallRealization`/`Fidelity`
+   green, the WHOLE public code surface is provably accounted for by the model.
+
+   `:scope :global` (offenders are the extracted Operations, not Encapsulation). Vacuous on a
+   model-only build (the leading `:val/extracted true` clause — no extracted ops, no offenders).
+   Module membership + the authored-twin lookup resolve through the injected `in-module` rule,
+   mirroring the `Realization` law (the not-join keeps `?on`/`?kmn` bound on entry — no free-variable
+   blow-up; the authored side ranges over the finitely-many same-named authored ops)."
+  (law "every public extracted operation is covered by the model or deliberately exempt"
+    :scope :global
+    :offenders '[?o]
+    :where '[[?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+             (not [?o :val/private true])
+             (not [?o :val/export true])
+             (not [?o :val/test-support true])
+             (in-module ?o ?kmn)
+             (not-join [?on ?kmn]
+               [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
+               (in-module ?s ?cmn)
+               [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]))
+
 (defn unrealized-delegates
   "The authored source Operations whose cross-module delegation is NOT realized by any actual call
    between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
@@ -254,10 +285,10 @@
    that are PUBLIC (not `:val/private true`) AND have no authored twin in a corresponding module.
    The principle (the dual at op-granularity of `uncovered-calls` at coupling-granularity): a
    function the model does not name should be an internal detail — so a PUBLIC uncovered function is
-   an UNDECLARED PUBLIC SURFACE, demanding a decision (model it as intent, or make it private). A
-   query/worklist, not yet a law (it is non-empty during a coverage campaign); the enforced
-   `Encapsulation` law lands once this reaches zero. Empty ⇔ the model covers the whole public
-   surface — every unmodelled function is either genuinely private or intentionally exported.
+   an UNDECLARED PUBLIC SURFACE, demanding a decision (model it as intent, or make it private). The
+   focusable surface of the encapsulation concern — reads the single source of truth (the registered
+   `Encapsulation` law, like `unfaithful-calls` reads `Fidelity`). Empty ⇔ the whole public surface is
+   covered or deliberately exempt; non-empty is the model-it-or-hide-it worklist.
 
    THREE categories are SETTLED and excluded: a `:val/private` function (an unmodelled internal is
    encapsulation working as intended); a `:val/export` function — public for MECHANISM (macro-emitted
@@ -269,15 +300,9 @@
 
    Module membership resolves through `in-module` (see `uncovered-operations`)."
   [db]
-  (->> (d/q '[:find ?on :in $ %
-              :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
-                     (not [?o :val/private true])
-                     (not [?o :val/export true])
-                     (not [?o :val/test-support true])
-                     (in-module ?o ?kmn)
-                     (not-join [?on ?kmn]
-                       [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
-                       (in-module ?s ?cmn)
-                       [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]
-            db rules/substrate-rules)
-       (map first) set))
+  (let [desc (-> (s/structure-by-tag ::Encapsulation) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
+         set)))

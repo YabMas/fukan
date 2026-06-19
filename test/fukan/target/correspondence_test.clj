@@ -152,3 +152,24 @@
       (is (empty? (s/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (s/check model)))))))
+
+(deftest encapsulation-fires-on-an-undeclared-public-operation
+  (testing "a PUBLIC extracted op with no model twin is an offender; private/export/test-support are exempt"
+    (let [db (-> (s/create)
+                 (d/db-with
+                  [{:db/id -1 :structure/of :lib.code/Module :entity/id "fukan.m" :entity/name "fukan.m" :val/extracted true}
+                   {:db/id -2 :structure/of :lib.code/Operation :entity/name "leaked"   :val/extracted true}                      ; public, unmodelled → offender
+                   {:db/id -3 :structure/of :lib.code/Operation :entity/name "hidden"   :val/extracted true :val/private true}      ; exempt: internal
+                   {:db/id -4 :structure/of :lib.code/Operation :entity/name "exported" :val/extracted true :val/export true}       ; exempt: mechanism
+                   {:db/id -5 :structure/of :lib.code/Operation :entity/name "for-test" :val/extracted true :val/test-support true} ; exempt: test-support
+                   {:rel/id "m|child|leaked"   :rel/from -1 :rel/kind :child :rel/to -2}
+                   {:rel/id "m|child|hidden"   :rel/from -1 :rel/kind :child :rel/to -3}
+                   {:rel/id "m|child|exported" :rel/from -1 :rel/kind :child :rel/to -4}
+                   {:rel/id "m|child|for-test" :rel/from -1 :rel/kind :child :rel/to -5}]))]
+      (is (= #{"leaked"} (corr/uncovered-public-operations db))
+          "only the public, non-exempt, unmodelled op is flagged by the Encapsulation law"))))
+
+(deftest encapsulation-green-on-the-self-model
+  (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
+    (is (empty? (corr/uncovered-public-operations (pipeline/build-model "src")))
+        "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
