@@ -28,9 +28,21 @@
   (Operation run-all "Run every implemented probe leaf → a map of findings."
     {:signature [:=> [:catn [:target-db kernel/StructureDb]] FindingMap]
      :delegates [kernel/check corr/uncovered-operations corr/drifted-operations finding/finding finding/observation]})
+  ;; ── the probe leaves: internal handlers the dispatch point routes to (each a private defn-) ──
+  (Operation ^:private probe-survey      "Structural overview (a View).")
+  (Operation ^:private probe-patterns    "Pattern reading (a View).")
+  (Operation ^:private probe-consistency "Operation-name ambiguity (a View).")
+  (Operation ^:private probe-tar-pit     "Complexity hotspots (a View).")
+  (Operation ^:private probe-integrity   "The integrity inspect (a gating Signal) — runs the kernel's check.")
+  (Operation ^:private probe-coverage    "Spec↔code coverage (a gating Signal).")
+  (Operation ^:private probe-drift       "Spec↔code drift (a gating Signal).")
+  (Operation ^:private probe-type-drift  "Spec↔code TYPE drift (a gating Signal).")
   (Operation ^:private run-probe
-    "The dispatch point: run/run-all route here, and it dispatches to the registered probe leaves."
-    {:performs [:throws]}))
+    "The dispatch point: run/run-all route here, and it dispatches to the registered probe leaves
+     (explicit indirection — the decoupling seam between the surface and the implementations)."
+    {:performs      [:throws]
+     :dispatches-to [probe-survey probe-patterns probe-consistency probe-tar-pit
+                     probe-integrity probe-coverage probe-drift probe-type-drift]}))
 
 (Module probe-code
   "Project a probe's implementation spec from the model. (ProbeName is owned by `probes`.)"

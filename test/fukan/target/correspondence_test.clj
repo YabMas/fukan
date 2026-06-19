@@ -184,3 +184,16 @@
       (is (contains? extracted "render-base") "render-base (defmulti) is extracted as an Operation")
       (is (not (contains? worklist "run-probe"))   "run-probe is covered, not an undeclared public surface")
       (is (not (contains? worklist "render-base")) "render-base is covered, not an undeclared public surface"))))
+
+(deftest run-probe-dispatches-to-the-eight-leaves
+  (testing "run-probe is modelled as a dispatch point fanning out to all eight probe handlers"
+    (let [m  (pipeline/build-model "src")
+          ;; the AUTHORED run-probe (not the extracted twin) carries the fan-out
+          dp (ffirst (d/q '[:find ?o :where [?o :structure/of :lib.code/Operation] [?o :entity/name "run-probe"]
+                                          (not [?o :val/extracted true])] m))]
+      (is (= #{"probe-survey" "probe-patterns" "probe-consistency" "probe-tar-pit"
+               "probe-integrity" "probe-coverage" "probe-drift" "probe-type-drift"}
+             (set (d/q '[:find [?hn ...] :in $ ?dp
+                         :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
+                       m dp)))
+          "the modelled fan-out names every probe leaf"))))
