@@ -191,6 +191,20 @@
       (println (format "%-24s ⟶ %s" a b)))
     (println "No model loaded yet. Use (go) first.")))
 
+(defn dispatch
+  "Print fukan's modelled DISPATCH POINTS (Operations with a :dispatches-to fan-out) and the handlers
+   each routes to — the explicit indirection seams, derived live from the held model."
+  []
+  (if-let [m (infra-model/get-model)]
+    (doseq [[dpn hs] (->> (d/q '[:find ?dpn ?hn
+                                 :where [?r :rel/kind :dispatches-to] [?r :rel/from ?dp] [?r :rel/to ?h]
+                                        (not [?dp :val/extracted true])
+                                        [?dp :entity/name ?dpn] [?h :entity/name ?hn]]
+                               m)
+                          (group-by first) (sort-by key))]
+      (println (format "%-16s ⟶ %s" dpn (str/join ", " (sort (map second hs))))))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn probes
   "Run the implemented probes against the held model, printing each finding."
   []
@@ -238,5 +252,6 @@
   (drift)
   (witnesses)
   (probes)
+  (dispatch)
   (materialize "target.clojure")
   (status))
