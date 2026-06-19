@@ -197,3 +197,14 @@
                          :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
                        m dp)))
           "the modelled fan-out names every probe leaf"))))
+
+(deftest run-extractor-dispatches-to-the-registered-extractor
+  (testing "the extraction plug-point is modelled as a dispatch point routing to the registered extractor"
+    (let [m  (pipeline/build-model "src")
+          dp (ffirst (d/q '[:find ?o :where [?o :structure/of :lib.code/Operation] [?o :entity/name "run-extractor"]
+                                          (not [?o :val/extracted true])] m))]
+      (is (= #{"extract"}
+             (set (d/q '[:find [?hn ...] :in $ ?dp
+                         :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
+                       m dp)))
+          "run-extractor dispatches to the registered Clojure extractor (extract)"))))

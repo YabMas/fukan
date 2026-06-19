@@ -4,7 +4,8 @@
    `run-extractor` WITHOUT naming it (keeps the pipeline generic); the composition root supplies it
    with `register-extractor!`. Both operations mutate/read the registry slot (`:state`)."
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.architecture.kernel.structure :as kernel]))
+            [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.ingestion.clojure :refer [extract]]))
 
 (Module extraction
   "The extraction plug-point — register and run the project's code extractor."
@@ -19,5 +20,6 @@
     {:signature [:=> [:catn [:f Extractor]] Unit]
      :performs  [:state]})
   (Operation run-extractor "Run the registered extractor over a code-root → its structure db."
-    {:signature [:=> [:catn [:code-root Path]] kernel/StructureDb]
-     :performs  [:state]}))
+    {:signature     [:=> [:catn [:code-root Path]] kernel/StructureDb]
+     :performs      [:state]
+     :dispatches-to [extract]}))   ; the registered extractor it routes to (the decoupled seam — NOT a :delegates)
