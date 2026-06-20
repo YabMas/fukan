@@ -6,6 +6,7 @@
    list — the architecture's shape, stated and checked. (Filesystem layout still mirrors src/; a
    directory move can follow later. Capability ≠ faculty: orchestration realizes no subject faculty.)"
   (:require [lib.code :refer [Subsystem]]
+            [canvas.architecture.kernel.substrate :refer [core-substrate]]
             [canvas.architecture.kernel.structure :refer [core-structure]]
             [canvas.architecture.kernel.rules :refer [core-rules]]
             [canvas.architecture.kernel.lens :refer [core-lens]]
@@ -30,9 +31,9 @@
 (declare ingestion)
 
 (Subsystem kernel
-  "The defstructure substrate + its derived rules + lens engine + assembler + the type-dialect
-   plug-point — foundational; depends on nothing."
-  {:child [core-structure core-rules core-lens assemble-faculty typing] :may-depend []})
+  "The node substrate + the defstructure grammar + its derived rules + lens engine + assembler + the
+   type-dialect plug-point — foundational; depends on nothing."
+  {:child [core-substrate core-structure core-rules core-lens assemble-faculty typing] :may-depend []})
 
 (Subsystem dialect
   "A pluggable type dialect — a self-contained LEAF the kernel's typing plug-point dispatches to. It

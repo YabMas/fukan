@@ -9,6 +9,7 @@
    `:reflect-tag`), so a dialect bridge never reaches back into the kernel — the deliberate SPI."
   (:require [lib.code :refer [Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.assemble :as assemble]))
 
 (Module typing
@@ -16,13 +17,13 @@
   (Operation register-type-dialect! "Install a project's type dialect (the bridge-fn map + :reflect-tag)."
     {:signature [:=> [:catn [:dialect :any]] :any]})
   (Operation render-type "Render a type subgraph at an eid to a code-form, via the dialect."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:eid :any]] :any]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid :any]] :any]})
   (Operation type-adheres? "Whether a model type-form adheres to a realized code type-form, via the dialect."
     {:signature [:=> [:catn [:model-form :any] [:code-form :any]] :boolean]})
   (Operation dialect-type-tag "The registered dialect's value-structure tag — how consumers recognize a reflected type value."
     {:signature [:=> [:cat] :any]})
   (Operation reflect-type "A type form → its content-deduped subgraph: the kernel builds via the dialect's :reflect-tag."
     {:signature [:=> [:catn [:form :any]] :any]
-     :delegates [kernel/value-literal->iv kernel/value-content-key assemble/emit-instances]})  ; kernel does the building (the SPI)
+     :delegates [kernel/value-literal->iv substrate/value-content-key assemble/emit-instances]})  ; kernel does the building (the SPI)
   (Operation parse-type "A code-form type → entity-maps, via the dialect's :parse bridge (the inverse of render-type)."
     {:signature [:=> [:catn [:form :any]] :any]}))

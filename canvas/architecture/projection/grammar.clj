@@ -8,7 +8,7 @@
    speak. (A reading to reason with, not a gate: law-hosts and not-yet-spoken
    grammar are legitimate — the human interprets.)"
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.typing :as typing]
             [canvas.architecture.projection.materialize :as mat]))
 
@@ -19,17 +19,17 @@
   (Kind VocabName :string) ; a grammar namespace name
   (Operation structure-form
     "A reified Structure rendered back as its map-form defstructure (the print-dual)."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Form]
      :delegates [typing/render-type]})          ; renders refined slot targets through the type plug-point
   (Operation vocabulary-primer
     "One vocabulary rendered as its defstructure forms."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:vocab-name VocabName]] Primer]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName]] Primer]})
   (Operation grammar-primer
     "Every vocabulary in the model — the live language reference, derived not maintained."
-    {:signature [:=> [:catn [:db kernel/StructureDb]] Primer]})
+    {:signature [:=> [:catn [:db substrate/StructureDb]] Primer]})
   (Operation unused-structures
     "The grammar-drift reading: reified Structures no instance inhabits — dead
      vocabulary. Excludes the Any wildcard and derivation-inhabited concepts:
      realized-as, and facets reached via includes (found by the loop's first
      run — Connected is spoken, just never directly). Sorted structure names."
-    {:signature [:=> [:catn [:db kernel/StructureDb]] [:vector :string]]}))
+    {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector :string]]}))

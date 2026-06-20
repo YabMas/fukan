@@ -18,7 +18,7 @@
   (:require [clj-kondo.core :as kondo]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as assemble]
-            [fukan.canvas.core.structure :as s]))
+            [fukan.canvas.core.substrate :as s]))
 
 (def ^:private fn-defining
   "clj-kondo `:defined-by` values that denote a computation unit (an Operation). `defn`/`defn-`

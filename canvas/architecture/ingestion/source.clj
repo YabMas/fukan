@@ -9,7 +9,7 @@
    is the discovery half exposed on its own because the build pipeline consumes it directly. (Require
    and the entity-map fold remain internals — not sketched.)"
   (:require [lib.code :refer [Operation Module]]
-            [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.assemble :as assemble]
             [canvas.subject :as subj]))
 
@@ -17,12 +17,12 @@
   "Discover canvas specs, require + assemble them into the model db; fold extracted code in."
   {:realizes subj/Source}                        ; faculty role: the design-down half of the Source in-fold
   (Operation union-dbs "Fold the extractor's code db onto the assembled design db."
-    {:signature [:=> [:catn [:dbs [:vector kernel/StructureDb]]] kernel/StructureDb]
-     :delegates [kernel/create]})               ; builds on the kernel's StructureDb constructor
+    {:signature [:=> [:catn [:dbs [:vector substrate/StructureDb]]] substrate/StructureDb]
+     :delegates [substrate/create]})               ; builds on the kernel's StructureDb constructor
   (Operation canvas-namespaces "Discover the canvas namespaces on the classpath (the build's input list)."
     {:signature [:=> [:cat] [:vector :any]]
      :performs  [:io]})
   (Operation build "Discover + require + assemble the canvas specs → the model db."
-    {:signature [:=> [:cat] kernel/StructureDb]
+    {:signature [:=> [:cat] substrate/StructureDb]
      :performs  [:io :stderr :require]
      :delegates [assemble/assemble]}))          ; assembles the discovered instance-vars

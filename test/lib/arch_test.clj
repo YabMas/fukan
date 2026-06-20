@@ -150,14 +150,19 @@
       (is (empty? (la/latent-boundaries db))
           "a latent sub-interface is a bundle, not a lone captive op"))))
 
-(deftest fukan-core-structure-has-a-latent-boundary
-  (testing "core-structure's public surface has split into consumer-disjoint clienteles (the kernel SPI seam)"
+(deftest fukan-latent-boundaries-post-substrate-extraction
+  (testing "the substrate is a clean leaf (not flagged); core-structure keeps only the reader residue"
     (let [lb (la/latent-boundaries (pipeline/build-model "src"))
           cs (get lb "fukan.canvas.core.structure")
-          bundle-of (fn [op] (some (fn [b] (when (some #{op} (:ops b)) (set (:ops b)))) cs))]
-      (is (= ["fukan.canvas.core.structure"] (keys lb))
-          "core-structure is currently the ONE latent boundary in fukan (pending the kernel↔dialect SPI close)")
-      (is (<= 2 (count cs)) "split into at least two consumer-disjoint sub-interfaces")
-      (is (and (bundle-of "value-literal->iv") (bundle-of "check")
-               (not= (bundle-of "value-literal->iv") (bundle-of "check")))
-          "the construction surface and the check/introspect API are different clienteles"))))
+          in-a-bundle? (fn [op] (some (fn [b] (some #{op} (:ops b))) cs))]
+      ;; The node substrate was extracted DOWNWARD: its surface is one clientele (the builders), so it
+      ;; never flags — the cleanest possible boundary. The construction toolkit left core-structure with it.
+      (is (not (contains? lb "fukan.canvas.core.substrate"))
+          "core-substrate is a self-contained base layer — one clientele, no consumer-disjoint split")
+      ;; core-structure still flags, but only with the RESIDUE: its check/introspect reader surface is
+      ;; consumer-disjoint from the lone `value-literal->iv` (the registry-bound builder, used only by
+      ;; typing). We DECIDE to leave it — core-structure is the cohesive defstructure-grammar module.
+      (is (some? cs) "core-structure flags with the reader-vs-value-construction residue")
+      (is (in-a-bundle? "check") "the surfaced bundle is the check/introspect reader surface")
+      (is (not (in-a-bundle? "value-literal->iv"))
+          "value-literal->iv is the disjoint lone builder, not part of the reader bundle"))))

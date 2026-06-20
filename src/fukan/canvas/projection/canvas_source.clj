@@ -16,7 +16,7 @@
    [clojure.string :as str]
    [datascript.core :as d]
    [fukan.canvas.core.assemble :as assemble]
-   [fukan.canvas.core.structure :as structure]))
+   [fukan.canvas.core.substrate :as substrate]))
 
 ;; ---------------------------------------------------------------------------
 ;; Discovery — scan canvas/ for *.clj and derive namespace symbols
@@ -141,7 +141,7 @@
    unique ids)."
   [dbs]
   (let [extractions (map db->entity-maps dbs)]
-    (-> (structure/create)
+    (-> (substrate/create)
         (d/db-with (mapcat :entity-maps extractions))
         (d/db-with (mapcat :ref-txs extractions)))))
 

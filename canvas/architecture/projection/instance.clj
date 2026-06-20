@@ -8,6 +8,7 @@
    talks back in the language it was written in."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.lens :as lens-engine]
             [canvas.architecture.kernel.typing :as typing]
             [canvas.architecture.projection.materialize :as mat]))
@@ -19,15 +20,15 @@
   (Kind Focus [:or [:vector :int] [:vector :any]])  ; an eid set or datalog clauses (most-specific branch first)
   (Operation instance-form
     "A model node rendered back as its authored instance form (the data dual)."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Form]
      :delegates [kernel/structure-by-tag typing/render-type]})   ; resolve the node's structure + render refined targets through the plug-point
   (Operation instance-text
     "instance-form, formatted like the authored source (aligned slot map)."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Text]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Text]})
   (Operation focus-text
     "A focus (clauses or eids) rendered as its authored forms — the textual model explorer."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:focus Focus]] Text]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:focus Focus]] Text]
      :delegates [lens-engine/focus-nodes]})
   (Operation violations-text
     "check output with each offender quoted as its authored form, fix-adjacent."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:violations [:vector kernel/Violation]]] Text]}))
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:violations [:vector kernel/Violation]]] Text]}))

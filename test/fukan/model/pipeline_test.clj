@@ -115,17 +115,17 @@
           "build-model calls extraction/run-extractor — the design↔code seam, via the plug-point"))))
 
 (deftest the-structuredb-kind-is-one-shared-owned-node
-  (testing "after consolidation the StructureDb Kind is a single node owned by core.structure;
+  (testing "the StructureDb Kind is a single node owned by core.substrate (its node home);
             subsystems reference it (no per-subsystem Model/Db redeclaration)"
     (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?k :where [?k :structure/of :lib.code/Kind] [?k :entity/name "StructureDb"]] db)))
           "exactly one StructureDb Kind node")
-      (is (= ["core-structure"]
+      (is (= ["core-substrate"]
              (d/q '[:find [?mn ...]
                     :where [?k :entity/name "StructureDb"] [?k :structure/of :lib.code/Kind]
                            [?r :rel/kind :owns] [?r :rel/from ?m] [?r :rel/to ?k] [?m :entity/name ?mn]]
                   db))
-          "core.structure is its sole owner")
+          "core.substrate is its sole owner (the db it constructs)")
       (is (= 1 (count (d/q '[:find ?s
                              :where [?s :structure/of :lib.type.malli/Schema] [?s :val/kind "ref"]
                                     [?r :rel/from ?s] [?r :rel/kind :names] [?r :rel/to ?k]

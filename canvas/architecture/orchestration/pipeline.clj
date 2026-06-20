@@ -7,12 +7,12 @@
    StructureDb (fukan's thesis). It names no specific extractor — it runs whatever the project
    registered. Collaborators are cross-module var-refs (the seams)."
   (:require [lib.code :refer [Operation Module]]
-            [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.ingestion.source :as canvas-source]
             [canvas.architecture.ingestion.extraction :as extraction]))
 
 (Module model-pipeline
   "The model-build pipeline — the single build entry point."
   (Operation build-model "Ingest the design specs + fold extracted code onto one StructureDb."
-    {:signature [:=> [:catn [:source extraction/Path]] kernel/StructureDb]
+    {:signature [:=> [:catn [:source extraction/Path]] substrate/StructureDb]
      :delegates [canvas-source/build extraction/run-extractor canvas-source/union-dbs]}))

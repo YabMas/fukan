@@ -5,17 +5,18 @@
    lens-engine → kernel → query-engine. (The Lens *vocab* — the primitive that carries a query —
    is the forward-looking view in `canvas.instruments.lenses`; this is the machinery that RUNS it.)"
   (:require [lib.code :refer [Kind Operation Module]]
-            [canvas.architecture.kernel.structure :as kernel]))
+            [canvas.architecture.kernel.structure :as kernel]
+            [canvas.architecture.kernel.substrate :as substrate]))
 
 (Module core-lens
   "The lens engine — evaluate a focus query (with vocab rules) and refine it."
   (Kind Clause)
   (Kind Eid :int)
   (Operation focus-nodes "Run :where clauses (binding ?n) with the vocab rules → focus node-set."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:clauses [:vector Clause]]] [:vector Eid]]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:clauses [:vector Clause]]] [:vector Eid]]
      :delegates [kernel/vocab-rules]})
   (Operation evaluate-lens "Read a stored lens's query, then resolve it to a focus node-set."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:lens-eid Eid]] [:vector Eid]]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:lens-eid Eid]] [:vector Eid]]
      :performs  [:throws]})
   (Operation refine "Narrow a focus to members also matching further clauses (lens-within-lens)."
-    {:signature [:=> [:catn [:db kernel/StructureDb] [:focus [:vector Eid]] [:clauses [:vector Clause]]] [:vector Eid]]}))
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:focus [:vector Eid]] [:clauses [:vector Clause]]] [:vector Eid]]}))

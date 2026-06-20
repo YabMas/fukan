@@ -1,6 +1,6 @@
 (ns fukan.canvas.core.assemble
   (:require [datascript.core :as d]
-            [fukan.canvas.core.structure :as s]))
+            [fukan.canvas.core.substrate :as s]))
 
 (defn- collect
   "Seq of [var InstanceValue] for every instance-bearing interned var across the

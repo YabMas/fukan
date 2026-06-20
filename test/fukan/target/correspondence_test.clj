@@ -6,6 +6,7 @@
             [fukan.infra.model :as infra-model]
             [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.substrate :as sub]
             [fukan.dialect.malli :as malli]
             [fukan.canvas.core.typing :as typing]
             [fukan.target.correspondence :as corr]))
@@ -82,7 +83,7 @@
 
 (deftest call-realization-fires-on-an-unrealized-delegation
   (testing "an authored cross-module :delegates with NO actual cross-module :calls is an offender"
-    (let [db (-> (s/create)
+    (let [db (-> (sub/create)
                  (d/db-with
                   [{:db/id -1 :structure/of :lib.code/Module :entity/id "A" :entity/name "A"}
                    {:db/id -2 :structure/of :lib.code/Module :entity/id "B" :entity/name "B"}
@@ -113,7 +114,7 @@
 
 (deftest fidelity-fires-on-an-undeclared-modelled-coupling
   (testing "an actual cross-module call between two MODELLED faculties with no covering :delegates fires"
-    (let [db (-> (s/create)
+    (let [db (-> (sub/create)
                  (d/db-with
                   [;; two authored faculty modules a / b (not extracted) → fukan.a / fukan.b are 'modelled'
                    {:db/id -1 :structure/of :lib.code/Module :entity/id "a" :entity/name "a"}
@@ -155,7 +156,7 @@
 
 (deftest encapsulation-fires-on-an-undeclared-public-operation
   (testing "a PUBLIC extracted op with no model twin is an offender; private/export/test-support are exempt"
-    (let [db (-> (s/create)
+    (let [db (-> (sub/create)
                  (d/db-with
                   [{:db/id -1 :structure/of :lib.code/Module :entity/id "fukan.m" :entity/name "fukan.m" :val/extracted true}
                    {:db/id -2 :structure/of :lib.code/Operation :entity/name "leaked"   :val/extracted true}                      ; public, unmodelled → offender
@@ -215,7 +216,7 @@
   "Authored A.op-a :delegates B.op-b; a dispatch point dp in A with :dispatches-to handler h; and,
    when `wired?`, the extracted call path op-a -> dp ... h -> op-b."
   [wired?]
-  (-> (s/create)
+  (-> (sub/create)
       (d/db-with
        (cond-> [{:db/id -1 :structure/of :lib.code/Module :entity/id "A" :entity/name "A"}
                 {:db/id -2 :structure/of :lib.code/Module :entity/id "B" :entity/name "B"}
@@ -253,7 +254,7 @@
 
 (deftest unrealized-dispatch-green-through-registry-dispatch
   (testing "realized when the dispatch point routes DIRECTLY to the target (registry flavor, no trailing call)"
-    (let [db (-> (s/create)
+    (let [db (-> (sub/create)
                  (d/db-with
                   [{:db/id -1 :structure/of :lib.code/Module :entity/id "A" :entity/name "A"}
                    {:db/id -2 :structure/of :lib.code/Module :entity/id "B" :entity/name "B"}

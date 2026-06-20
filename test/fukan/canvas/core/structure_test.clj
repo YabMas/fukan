@@ -9,6 +9,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
             [lib.type.malli]))
 
@@ -197,7 +198,7 @@
 (Function ^{:name "none"} co-none)                  ; zero gives
 ;; two targets on a one-card slot is deliberately ill-formed — the map surface
 ;; can't author it, so build the violating instance through the internal IR
-(def co-several (s/->InstanceValue ::Function "several" nil {}
+(def co-several (sub/->InstanceValue ::Function "several" nil {}
                                    [{:rk :gives :card :one :targets [#'co-Int #'co-Str]}] false))
 
 (Type ^{:name "Int"} tt-Int)
@@ -244,7 +245,7 @@
 ;; two clause GROUPS for one slot can no longer be authored (the map has one entry
 ;; per slot) but still arise internally (nested routing) — build via the IR to keep
 ;; the assembler's cross-group index covered
-(def o2-s (s/->InstanceValue ::Seq2 "s" nil {}
+(def o2-s (sub/->InstanceValue ::Seq2 "s" nil {}
                              [{:rk :items :card :many :targets [#'o2-Int]}
                               {:rk :items :card :many :targets [#'o2-Str]}] false))
 
@@ -360,7 +361,7 @@
     ;; build the cyclic substrate directly here to exercise the recursive rule + offender
     ;; in isolation, decoupled from authoring.
     (let [tree-db (fn [nodes edges]
-                    (-> (s/create)
+                    (-> (sub/create)
                         (d/db-with (for [n nodes]
                                      {:entity/id n :entity/name (name n) :structure/of ::Tree}))
                         (d/db-with (for [[from to] edges]
@@ -464,7 +465,7 @@
                        [(hreach ?a ?b) (hstep ?a ?z) (hreach ?z ?b)]]}]})
     ;; n1 -> n2 -> n1 as an INDIRECT graph (edges via e1/e2 reified rels), the
     ;; shape that diverges under a helper-rule recursion.
-    (let [db (-> (s/create)
+    (let [db (-> (sub/create)
                  (d/db-with [{:entity/id "e1"} {:entity/id "e2"}
                              {:entity/id "n1"} {:entity/id "n2"}])
                  (d/db-with [{:rel/id "1" :rel/from [:entity/id "e1"] :rel/kind :h-from :rel/to [:entity/id "n1"]}
@@ -631,7 +632,7 @@
   (testing "assemble-instances lets code emit instances from runtime data"
     (let [db (a/assemble-instances
                (for [n ["a" "b"]]
-                 [n (s/->InstanceValue ::Carry n nil {:val/text n} [] false)]))]
+                 [n (sub/->InstanceValue ::Carry n nil {:val/text n} [] false)]))]
       (is (= #{"a" "b"}
              (set (map first (d/q '[:find ?n :where [?e :structure/of ::Carry] [?e :entity/name ?n]] db))))
           "both instances were emitted programmatically")
@@ -671,10 +672,10 @@
 (deftest value-literal-expands-to-deduped-instancevalue
   (testing "the kernel value-literal primitive builds a ^:value InstanceValue from a reader literal"
     (let [iv (s/value-literal->iv :lib.type.malli/Schema [:map [:a :string] [:b :int]])]
-      (is (s/instance-value? iv) "returns an InstanceValue")
+      (is (sub/instance-value? iv) "returns an InstanceValue")
       (is (= :lib.type.malli/Schema (:tag iv)))
-      (is (= (s/value-content-key iv)
-             (s/value-content-key (s/value-literal->iv :lib.type.malli/Schema [:map [:a :string] [:b :int]])))
+      (is (= (sub/value-content-key iv)
+             (sub/value-content-key (s/value-literal->iv :lib.type.malli/Schema [:map [:a :string] [:b :int]])))
           "structurally-equal literals get equal content keys (dedup)"))))
 
 ;; ── syntactic type-form classification (Phase 3 / Task 3.1) ─────────────────

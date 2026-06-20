@@ -2,19 +2,20 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.core.structure :as s]))
+            [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.substrate :as sub]))
 
 (deftest instance-value-record-holds-composition
-  (let [iv (s/->InstanceValue :Box "A" nil {} [] false)]
+  (let [iv (sub/->InstanceValue :Box "A" nil {} [] false)]
     (is (= :Box (:tag iv)))
     (is (= "A" (:name iv)))
-    (is (s/instance-value? iv))))
+    (is (sub/instance-value? iv))))
 
-(def ^:private sample-iv (s/->InstanceValue :Box "A" nil {} [] false))
+(def ^:private sample-iv (sub/->InstanceValue :Box "A" nil {} [] false))
 
 (deftest var-id-is-fully-qualified
   (is (= "fukan.canvas.core.value-authoring-test/sample-iv"
-         (s/var-id #'sample-iv))))
+         (sub/var-id #'sample-iv))))
 
 ;; Top-level vocab for the entity-constructor test: defstructure is a macro so the
 ;; generated constructor macros (Attr, Ent) must be defined at compile-time (top level)
@@ -29,7 +30,7 @@
 (Ent ^{:name "User"} ev-test-User {:attr [ev-test-name] :links ev-test-User})
 
 (deftest entity-constructor-returns-value-with-var-refs
-  (is (s/instance-value? ev-test-User))
+  (is (sub/instance-value? ev-test-User))
   (is (= ::Ent (:tag ev-test-User)))
   (is (= {:val/required true} (:scalars ev-test-name)))
   ;; the :links target is captured as the var, not deref'd yet
@@ -78,7 +79,7 @@
                          :where [?r :rel/from ?from] [?r :rel/kind :rhs]
                                 [?r :rel/order ?ord] [?r :rel/label ?lbl]
                                 [?r :rel/to ?to] [?to :entity/name ?tn]]
-                       db [:entity/id (s/var-id #'op-lbl)])
+                       db [:entity/id (sub/var-id #'op-lbl)])
                   (sort-by first))]
     (is (= [[0 "a" "x"] [1 "b" "y"]] rels)))
   ;; bare sequence assembles with :rel/order but no :rel/label
@@ -87,11 +88,11 @@
                          :where [?r :rel/from ?from] [?r :rel/kind :rhs]
                                 [?r :rel/order ?ord]
                                 [?r :rel/to ?to] [?to :entity/name ?tn]]
-                       db [:entity/id (s/var-id #'op-bare)])
+                       db [:entity/id (sub/var-id #'op-bare)])
                   (sort-by first))
         labels (d/q '[:find ?lbl :in $ ?from
                       :where [?r :rel/from ?from] [?r :rel/kind :rhs] [?r :rel/label ?lbl]]
-                    db [:entity/id (s/var-id #'op-bare)])]
+                    db [:entity/id (sub/var-id #'op-bare)])]
     (is (= [[0 "x"] [1 "y"]] rels))
     (is (empty? labels) "bare sequence slot carries no :rel/label")))
 
@@ -105,10 +106,10 @@
   (is (nil? (:name nm-derived)) "the InstanceValue carries no name until assembly")
   (let [db (a/assemble-vars [#'nm-derived #'nm-override])]
     (is (= "nm-derived"
-           (:entity/name (d/entity db [:entity/id (s/var-id #'nm-derived)])))
+           (:entity/name (d/entity db [:entity/id (sub/var-id #'nm-derived)])))
         "the node is named after its binding var")
     (is (= "explicit"
-           (:entity/name (d/entity db [:entity/id (s/var-id #'nm-override)])))
+           (:entity/name (d/entity db [:entity/id (sub/var-id #'nm-override)])))
         "^{:name \"…\"} meta overrides — for names the var can't carry / renamed vars")))
 
 ;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
@@ -123,7 +124,7 @@
 (deftest value-structures-dedupe-by-content
   (is (:value? t4-s1))
   ;; equal content → equal computed id (the assembler will stamp :entity/id from this)
-  (is (= (s/value-content-key t4-s1) (s/value-content-key t4-s2))))
+  (is (= (sub/value-content-key t4-s1) (sub/value-content-key t4-s2))))
 
 ;; ── Task 7b: reader-slot expansion ───────────────────────────────────────────
 ;; A ^:value structure that declares a (reader fn) allows slot args to be
@@ -164,7 +165,7 @@
     (let [shape-clause (first (filter #(= :shape (:rk %)) (:clauses t7b-leaf)))
           shape-iv     (first (:targets shape-clause))]
       (is (some? shape-clause) "SHolder must have a :shape clause")
-      (is (s/instance-value? shape-iv) "the :shape target must be an inline InstanceValue (not a Var)")
+      (is (sub/instance-value? shape-iv) "the :shape target must be an inline InstanceValue (not a Var)")
       (is (= ::RShape (:tag shape-iv)) "the inline value must be tagged :RShape")
       (is (= {:val/kind "type"} (:scalars shape-iv)) "kind scalar must be \"type\"")
       ;; the :type rel must be a var-ref to the RKind var Db
@@ -177,13 +178,13 @@
   (testing "shape slot accepts a vector literal and expands via reader"
     (let [shape-clause (first (filter #(= :shape (:rk %)) (:clauses t7b-list)))
           shape-iv     (first (:targets shape-clause))]
-      (is (s/instance-value? shape-iv))
+      (is (sub/instance-value? shape-iv))
       (is (= {:val/kind "list"} (:scalars shape-iv)) "kind must be \"list\"")
       ;; the :of clause's target should be an inline RShape with kind "type" naming Db
       (let [of-clause (first (filter #(= :of (:rk %)) (:clauses shape-iv)))
             of-iv     (first (:targets of-clause))]
         (is (some? of-clause) "the list shape must have an :of clause")
-        (is (s/instance-value? of-iv) ":of child must be an inline InstanceValue")
+        (is (sub/instance-value? of-iv) ":of child must be an inline InstanceValue")
         (is (= {:val/kind "type"} (:scalars of-iv)) "child kind must be \"type\"")
         (let [type-clause (first (filter #(= :type (:rk %)) (:clauses of-iv)))]
           (is (= [#'Db] (:targets type-clause)) "child :type must be (var Db)"))))))
@@ -193,14 +194,14 @@
   (testing "shape slot accepts a map literal and expands via reader"
     (let [shape-clause (first (filter #(= :shape (:rk %)) (:clauses t7b-rec)))
           shape-iv     (first (:targets shape-clause))]
-      (is (s/instance-value? shape-iv))
+      (is (sub/instance-value? shape-iv))
       (is (= {:val/kind "record"} (:scalars shape-iv)) "kind must be \"record\"")
       ;; the :of clause must have label "f" and its target is a "type" shape naming Foo
       (let [of-clause (first (filter #(= :of (:rk %)) (:clauses shape-iv)))
             of-iv     (first (:targets of-clause))]
         (is (some? of-clause))
         (is (= ["f"] (:labels of-clause)) "record field label must be \"f\"")
-        (is (s/instance-value? of-iv))
+        (is (sub/instance-value? of-iv))
         (is (= {:val/kind "type"} (:scalars of-iv)))
         (let [type-clause (first (filter #(= :type (:rk %)) (:clauses of-iv)))]
           (is (= [#'Foo] (:targets type-clause)) "field type must be (var Foo)"))))))
@@ -259,7 +260,7 @@
   ;; and it survives assembly into the db unchanged
   (let [db (a/assemble-vars [#'t-focus])]
     (is (= '[[?n :structure/of _]]
-           (:val/query (d/entity db [:entity/id (s/var-id #'t-focus)])))
+           (:val/query (d/entity db [:entity/id (sub/var-id #'t-focus)])))
         "the query form round-trips through assembly")))
 
 ;; ── Change 3: generic in-module rule ─────────────────────────────────────────

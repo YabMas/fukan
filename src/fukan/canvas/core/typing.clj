@@ -24,7 +24,8 @@
    model into the dialect wires the checking and reflection — while a composition root
    contributes `:render`/`:adheres?`. Re-registering a key replaces that key."
   (:require [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.core.structure :as s]))
+            [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.substrate :as sub]))
 
 (defonce ^:private dialect (atom nil))
 
@@ -79,7 +80,7 @@
   [form]
   (when-let [tag (:reflect-tag @dialect)]
     (let [iv  (s/value-literal->iv tag form)
-          key (s/value-content-key iv)]
+          key (sub/value-content-key iv)]
       (assoc (a/emit-instances [[key iv]]) :id key))))
 
 (defn ^:export value-valid?
