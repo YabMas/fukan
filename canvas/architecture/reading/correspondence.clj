@@ -6,12 +6,10 @@
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.substrate :as substrate]
-            [canvas.architecture.kernel.typing :as typing]
-            [canvas.subject :as subj]))
+            [canvas.architecture.kernel.typing :as typing]))
 
 (Module target-correspondence
   "The model↔code correspondence — drift and coverage as queries over the unified graph."
-  {:realizes subj/Lens}                          ; faculty role: reads the graph (drift/coverage)
   (Kind OperationName :string)
   (Operation drifted-operations "Modelled operations with no realizing function (spec→code gaps)."
     {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector OperationName]]

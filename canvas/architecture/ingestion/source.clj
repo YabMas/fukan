@@ -10,12 +10,10 @@
    and the entity-map fold remain internals — not sketched.)"
   (:require [lib.code :refer [Operation Module]]
             [canvas.architecture.kernel.substrate :as substrate]
-            [canvas.architecture.kernel.assemble :as assemble]
-            [canvas.subject :as subj]))
+            [canvas.architecture.kernel.assemble :as assemble]))
 
 (Module canvas-source
   "Discover canvas specs, require + assemble them into the model db; fold extracted code in."
-  {:realizes subj/Source}                        ; faculty role: the design-down half of the Source in-fold
   (Operation union-dbs "Fold the extractor's code db onto the assembled design db."
     {:signature [:=> [:catn [:dbs [:vector substrate/StructureDb]]] substrate/StructureDb]
      :delegates [substrate/create]})               ; builds on the kernel's StructureDb constructor

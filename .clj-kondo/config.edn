@@ -12,16 +12,6 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.acts
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.descent.source
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  fukan.descent-test
-  {:linters {:unused-namespace {:level :off}}}
   ;; lib.grammar's generated constructors are never CALLED — the reflector emits
   ;; raw node/rel maps by mechanism (like the extractor); the structures exist to
   ;; register the meta-grammar.
@@ -103,11 +93,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.reading.descent
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.projection.overview
+  canvas.architecture.projection.architecture
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -116,10 +102,6 @@
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   canvas.architecture.projection.materialize
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.subject
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
@@ -271,8 +253,6 @@
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
    lib.grouping/Connected hooks.fukan.structure/instance
    lib.grouping/Grouping hooks.fukan.structure/instance
-   canvas.architecture.acts/FindingCheck hooks.fukan.structure/instance
-   canvas.architecture.acts/ReadingComposition hooks.fukan.structure/instance
    lib.lens/Lens hooks.fukan.structure/instance
    lib.code/Effect hooks.fukan.structure/instance
    lib.code/Operation hooks.fukan.structure/instance
@@ -285,17 +265,6 @@
    lib.lens/Finding hooks.fukan.structure/instance
    lib.lens/Mapping hooks.fukan.structure/instance
    lib.lens/Projection hooks.fukan.structure/instance
-   canvas.subject/Node hooks.fukan.structure/instance
-   canvas.subject/Relation hooks.fukan.structure/instance
-   canvas.subject/Form hooks.fukan.structure/instance
-   canvas.subject/Vocabulary hooks.fukan.structure/instance
-   canvas.subject/Model hooks.fukan.structure/instance
-   canvas.subject/Lens hooks.fukan.structure/instance
-   canvas.subject/Source hooks.fukan.structure/instance
-   canvas.subject/Projection hooks.fukan.structure/instance
-   canvas.subject/Correspondence hooks.fukan.structure/instance
-   canvas.descent.source/SourceRealizer hooks.fukan.structure/instance
-   canvas.descent.source/ConvergenceEdge hooks.fukan.structure/instance
    demos.access-control.vocab.core/Action hooks.fukan.structure/instance
    demos.access-control.vocab.core/Permission hooks.fukan.structure/instance
    demos.access-control.vocab.core/Resource hooks.fukan.structure/instance

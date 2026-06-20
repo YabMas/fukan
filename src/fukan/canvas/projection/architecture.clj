@@ -1,19 +1,9 @@
 (ns fukan.canvas.projection.architecture
-  "Project a navigable ARCHITECTURE OVERVIEW — fukan's CODE-SIDE shape: its `lib.code` Subsystems, the
-   Modules each clusters (annotated with the subject faculty they realize, if any), and the declared
-   `:may-depend` DAG. The dual of `overview/system-overview` (which renders the SUBJECT): this renders
-   the realizing architecture. Pure projection: model db → string. Read this instead of `ls canvas/architecture/`."
+  "Project a navigable ARCHITECTURE OVERVIEW — fukan's CODE-SIDE shape and its system map: its
+   `lib.code` Subsystems, the Modules each clusters, and the declared `:may-depend` DAG, derived live
+   from the model. Pure projection: model db → string. Read this instead of `ls canvas/architecture/`."
   (:require [clojure.string :as str]
             [datascript.core :as d]))
-
-(defn- module-role
-  "The short faculty name a module realizes (e.g. \"Model\"), via its :realizes tag joined to the
-   reflected concept node; nil if the module realizes no faculty."
-  [db mod-eid]
-  (ffirst (d/q '[:find ?cn :in $ ?m
-                 :where [?m :val/realizes ?tag]
-                        [?c :structure/of :lib.grammar/Structure] [?c :val/tag ?tag] [?c :entity/name ?cn]]
-               db mod-eid)))
 
 (defn- subsystem-line [db sub-eid sub-name]
   (let [mods (->> (d/q '[:find ?mod ?mn ?o :in $ ?sub
@@ -21,7 +11,7 @@
                                 [(get-else $ ?r :rel/order -1) ?o]]
                        db sub-eid)
                   (sort-by #(nth % 2))
-                  (map (fn [[meid mn _]] (if-let [r (module-role db meid)] (str mn " [" r "]") mn))))
+                  (map (fn [[_ mn _]] mn)))
         deps (->> (d/q '[:find ?tn ?o :in $ ?sub
                          :where [?r :rel/from ?sub] [?r :rel/kind :may-depend] [?r :rel/to ?t] [?t :entity/name ?tn]
                                 [(get-else $ ?r :rel/order -1) ?o]]
@@ -43,6 +33,6 @@
       ["FUKAN — projected architecture overview (code-side subsystems)"
        (str "  " nmod " modules · " (count subs) " subsystems · derived live from the model")
        ""
-       "━━ SUBSYSTEMS — capability clusters of Modules ([Faculty] = realized role; ⟶ = may-depend) ━━"
+       "━━ SUBSYSTEMS — capability clusters of Modules (⟶ = may-depend) ━━"
        ""]
       (map (fn [[seid sname]] (subsystem-line db seid sname)) subs)))))

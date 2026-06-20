@@ -22,7 +22,7 @@
 (Kind InstanceValue
   "the in-flight record an authored instance evaluates to before the assembler stamps it into the db.")
 (Kind StructureDb
-  "The unified structure db — the data realization of the domain `Model` (canvas.subject): a datascript
+  "The unified structure db — the data realization of the model: a datascript
    db of structure instances + their reified relations. Owned here; every subsystem adopts this one Kind.")
 
 ;; ── node construction + identity ──────────────────────────────────────────────

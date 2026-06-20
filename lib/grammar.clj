@@ -45,7 +45,7 @@
   ;; OWNERSHIP — the reflector's self-check. A Law has no independent existence: it is asserted BY a
   ;; Structure (ownership-on-owner), so every reified Law must have an incoming `:law` edge. An orphan
   ;; Law is a defect of THIS reflection, not a modelling mistake — which is why it lives here on the
-  ;; reified type (self-scoped to `:lib.grammar/Law`), not as a design law on the `canvas.subject` portrait.
+  ;; reified type (self-scoped to `:lib.grammar/Law`), not as a design law on a modelled portrait.
   (law "every reified Law is owned by an asserting Structure"
     :offenders '[?l]
     :rules '[[(asserted ?l) [?r :rel/kind :law] [?r :rel/to ?l]]]
@@ -166,7 +166,7 @@
    and scope). Idempotent per build — ids are deterministic, so re-reflection
    upserts rather than duplicates. `extra-seeds` (ns-name strings) are added to the
    reflection closure, so a namespace with NO instantiated tags still reflects — the
-   case for a pure-grammar stratum like `canvas.subject` (portraits, no instances)."
+   case for a pure-grammar stratum (portraits, no instances)."
   ([db] (with-grammar db nil))
   ([db extra-seeds]
    (let [tags   (map first (d/q '[:find ?t :where [_ :structure/of ?t]] db))

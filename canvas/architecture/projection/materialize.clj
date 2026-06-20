@@ -6,12 +6,10 @@
    public entry. `core.lens` lives in `canvas.architecture.kernel.lens`."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.substrate :as substrate]
-            [canvas.architecture.kernel.lens :as lens-engine]
-            [canvas.subject :as subj]))
+            [canvas.architecture.kernel.lens :as lens-engine]))
 
 (Module materialize
   "Project the model down into an implementation spec, through a Lens focus + a Projection."
-  {:realizes subj/Projection}                    ; faculty role: projects the graph to a target
   (Kind Lens) (Kind Instruction) (Kind Projection)
   (Kind ProjectionName :string) (Kind ModuleName :string)
   (Kind Clause) (Kind Eid :int)

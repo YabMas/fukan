@@ -9,12 +9,10 @@
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.reading.correspondence :as corr]
-            [canvas.architecture.reading.finding :as finding]
-            [canvas.subject :as subj]))
+            [canvas.architecture.reading.finding :as finding]))
 
 (Module probes
   "The live run/run-all dispatch surface over the implemented probe leaves."
-  {:realizes subj/Lens}                          ; faculty role: reads the graph (findings)
   (Kind ProbeName [:enum "survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift" "type-drift"])
   (Kind Finding
     [:map [:lens :string]

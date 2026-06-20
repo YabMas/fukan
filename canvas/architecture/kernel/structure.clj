@@ -8,8 +8,7 @@
    `InstanceValue`/`StructureDb` + node identity — lives one layer down in `core-substrate`."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.rules :as query-engine]
-            [canvas.architecture.kernel.substrate :as substrate]
-            [canvas.subject :as subj]))
+            [canvas.architecture.kernel.substrate :as substrate]))
 
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────
 (Kind Violation [:map [:structure :keyword] [:law :string] [:offenders [:vector [:vector :any]]]])
@@ -43,5 +42,4 @@
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:exposes [check vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures]
    :owns    [Violation]                          ; the check output shape (others adopt by name)
-   :child   [Rule]                               ; internal grain: the rules-output type
-   :realizes subj/Model})                        ; faculty role: this module realizes the Model hub
+   :child   [Rule]})                              ; internal grain: the rules-output type

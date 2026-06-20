@@ -1,9 +1,8 @@
 (ns canvas.instruments.lenses
   "fukan's own LENSES — the focuses it points at its own model, authored against the
    `lib.lens` grammar. A lens names a slice (`:focus`) and carries its runnable datalog
-   `:select`. These are TOOL-DEFINITIONS, not fukan's design: the Lens *concept* portrait
-   lives in `canvas.subject`; the authoring grammar in `lib.lens`. A user project authors
-   its own lenses the same way, in its own canvas."
+   `:select`. These are TOOL-DEFINITIONS authored against the `lib.lens` grammar — not
+   fukan's design. A user project authors its own lenses the same way, in its own canvas."
   (:require [lib.lens :refer [Lens]]
             [lib.grouping :refer [Grouping]]))
 

@@ -145,25 +145,6 @@
                     db))
           "build performs :io"))))
 
-(deftest grammar-is-reflected-onto-the-model
-  (testing "the registry has no off-graph remainder: the subject grammar is reified —
-            slots as :slot/<card> edges, refined scalars as Schema values, strange loop closed"
-    (let [db (pipeline/build-model nil)]
-      (is (= {"into" :slot/one, "polarity" :slot/one}
-             (into {} (d/q '[:find ?l ?k
-                             :where [?s :structure/of :lib.grammar/Structure]
-                                    [?s :val/tag ":canvas.subject/Source"]
-                                    [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db)))
-          "Source's slots are cardinality-kinded, name-labeled edges")
-      (is (= "enum"
-             (ffirst (d/q '[:find ?kind
-                            :where [?s :val/tag ":canvas.subject/Source"]
-                                   [?r :rel/from ?s] [?r :rel/label "polarity"] [?r :rel/to ?t]
-                                   [?t :val/kind ?kind]] db)))
-          "the refined polarity slot targets its Schema value")
-      (is (seq (d/q '[:find ?s :where [?s :val/tag ":lib.grammar/Structure"]] db))
-          "the reflection self-reifies (Structure has a Structure node)"))))
-
 (deftest kernel-meta-model-captures-structure-composition
   (testing "the reflexive kernel model: 'a structure = slots + laws' reads off the
             REFLECTED grammar (the hand-modelled defstructure-layer Concepts are gone);
@@ -195,15 +176,6 @@
     (let [bad (a/assemble-vars [#'ec-bad])]
       (is (contains? (set (map :law (s/check bad)))
                      "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
-
-(deftest cross-module-ref-resolves
-  (testing "the Projection FACULTY (a portrait → grammar node) is realized by → the materialize module, by role"
-    (let [db (pipeline/build-model nil)]
-      (is (seq (d/q '[:find ?m
-                      :where [?f :structure/of :lib.grammar/Structure] [?f :val/tag ":canvas.subject/Projection"]
-                             [?m :structure/of :lib.code/Module] [?m :val/realizes ":canvas.subject/Projection"]
-                             [?m :entity/name "materialize"]] db))
-          "the materialize Module's :realizes tag joins the reflected Projection grammar node"))))
 
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
@@ -251,71 +223,3 @@
     (let [db (a/assemble-vars [#'pe-Empty])]
       (is (contains? (set (map :law (s/check db)))
                      "a projection is a base (declares mappings) or a contextualization (frames another)")))))
-
-(deftest subject-substrate-carries-its-domain-shape
-  (testing "Node and Relation portraits reflect their deepened domain shapes"
-    (let [db     (pipeline/build-model nil)
-          slots  (fn [tag] (into {} (d/q '[:find ?l ?k :in $ ?tag
-                                           :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
-                                                  [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db tag)))
-          target (fn [tag label] (ffirst (d/q '[:find ?tn :in $ ?tag ?label
-                                                 :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
-                                                        [?r :rel/from ?s] [?r :rel/label ?label]
-                                                        [?r :rel/to ?t] [?t :entity/name ?tn]] db tag label)))]
-      (is (= {"of" :slot/one} (slots ":canvas.subject/Node"))
-          "Node is an instance of a Structure (typed by the structure it inhabits)")
-      (is (= "Structure" (target ":canvas.subject/Node" "of"))
-          "Node.of targets Structure")
-      (is (= {"from" :slot/one, "to" :slot/one, "kind" :slot/one} (slots ":canvas.subject/Relation"))
-          "Relation is directed (from/to Node) and kinded")
-      (is (= "Node" (target ":canvas.subject/Relation" "from")) "from targets Node")
-      (is (= "Node" (target ":canvas.subject/Relation" "to"))   "to targets Node")
-      (is (empty? (s/check db)) "the self-model still satisfies every law"))))
-
-(deftest subject-grammar-stratum-is-first-class
-  (testing "the grammar layer (Form/Structure/Slot/Law/Vocabulary) reflects as first-class portraits"
-    (let [db     (pipeline/build-model nil)
-          slots  (fn [tag] (into {} (d/q '[:find ?l ?k :in $ ?tag
-                                           :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
-                                                  [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db tag)))
-          target (fn [tag label] (ffirst (d/q '[:find ?tn :in $ ?tag ?label
-                                                 :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
-                                                        [?r :rel/from ?s] [?r :rel/label ?label]
-                                                        [?r :rel/to ?t] [?t :entity/name ?tn]] db tag label)))]
-      (is (= {"composes" :slot/many, "asserts" :slot/many, "refines" :slot/optional}
-             (slots ":canvas.subject/Structure"))
-          "Structure composes Slots, asserts Laws, may refine a parent (sum membership)")
-      (is (= "Slot"      (target ":canvas.subject/Structure" "composes")))
-      (is (= "Law"       (target ":canvas.subject/Structure" "asserts")))
-      (is (= "Structure" (target ":canvas.subject/Structure" "refines")) "refines is self-referential (sums)")
-      (is (= {"typed-by" :slot/one, "cardinality" :slot/one, "label" :slot/optional}
-             (slots ":canvas.subject/Slot")))
-      (is (= "Structure" (target ":canvas.subject/Slot" "typed-by")) "a Slot is typed by a Structure")
-      (is (= {"datalog" :slot/one} (slots ":canvas.subject/Law")) "Law carries its (required) datalog form")
-      (is (= "Structure" (target ":canvas.subject/Form" "produces")) "the Form produces a Structure")
-      (is (= "Structure" (target ":canvas.subject/Vocabulary" "defines")) "a Vocabulary defines Structures")
-      (is (empty? (s/check db)) "the self-model still satisfies every law"))))
-
-(deftest subject-graph-is-central-and-acts-are-transforms
-  (testing "Graph is the central type; Model is structured-as a Graph; Lens/Projection are graph transforms"
-    (let [db     (pipeline/build-model nil)
-          slots  (fn [tag] (into {} (d/q '[:find ?l ?k :in $ ?tag
-                                           :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
-                                                  [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]] db tag)))
-          target (fn [tag label] (ffirst (d/q '[:find ?tn :in $ ?tag ?label
-                                                 :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?tag]
-                                                        [?r :rel/from ?s] [?r :rel/label ?label]
-                                                        [?r :rel/to ?t] [?t :entity/name ?tn]] db tag label)))]
-      (is (= {"made-of" :slot/many, "wired-by" :slot/many} (slots ":canvas.subject/Graph")))
-      (is (= "Node" (target ":canvas.subject/Graph" "made-of")))
-      (is (= "Relation" (target ":canvas.subject/Graph" "wired-by")))
-      (is (= {"structured-as" :slot/one, "authored-in" :slot/many} (slots ":canvas.subject/Model")))
-      (is (= "Graph" (target ":canvas.subject/Model" "structured-as")))
-      (is (= {"reads" :slot/one, "yields" :slot/one} (slots ":canvas.subject/Lens")))
-      (is (= "Graph" (target ":canvas.subject/Lens" "reads")))
-      (is (= "Graph" (target ":canvas.subject/Lens" "yields")))
-      (is (= {"on" :slot/one, "through" :slot/optional, "yields" :slot/one} (slots ":canvas.subject/Projection")))
-      (is (= "Graph" (target ":canvas.subject/Projection" "on")))
-      (is (= "Lens" (target ":canvas.subject/Projection" "through")))
-      (is (= "ProjectionTarget" (target ":canvas.subject/Projection" "yields")))
-      (is (empty? (s/check db)) "the self-model still satisfies every law"))))

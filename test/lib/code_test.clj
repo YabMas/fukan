@@ -1,24 +1,12 @@
 (ns lib.code-test
-  "Module roles + module-dependency readings on the lib.code grammar."
+  "Module-dependency readings on the lib.code grammar."
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.model.pipeline :as pipeline]
             [lib.code :as code]))
 
-;; a fixture abstract concept (a portrait — no instances), realized by a module
-(defstructure FxConcept "A fixture abstract concept (portrait).")
-
-(code/Module ^{:name "fx-impl"}  t-fx-impl  {:realizes FxConcept})
-(code/Module ^{:name "fx-infra"} t-fx-infra "a module that realizes no concept")
-
-(deftest realizes-resolves-symbol-to-qualified-tag
-  (testing "the :realizes symbol is rewritten to the concept's qualified tag string"
-    (let [db (a/assemble-vars [#'t-fx-impl])
-          m  (ffirst (d/q '[:find ?m :where [?m :entity/name "fx-impl"]] db))]
-      (is (= ":lib.code-test/FxConcept" (:val/realizes (d/entity db m)))
-          "the hook resolves FxConcept → its defining-ns+name tag"))))
+(code/Module ^{:name "fx-impl"}  t-fx-impl  "a fixture module")
+(code/Module ^{:name "fx-infra"} t-fx-infra "another fixture module")
 
 ;; ── module-dependency fixtures: a→b by a delegate edge; c adopts a Kind d owns ──
 (code/Kind DShape :string)
@@ -39,22 +27,6 @@
       (is (contains? deps ["A" "B"]) "call dependency: A's op delegates to B's op")
       (is (contains? deps ["C" "D"]) "data-adoption: C's op adopts a Kind D owns")
       (is (not (contains? deps ["A" "A"])) "no self-dependency"))))
-
-(deftest modules-by-role-groups-by-realized-concept-tag
-  (testing "modules group by their :realizes tag; un-roled modules under :infrastructure"
-    (let [db (a/assemble-vars [#'t-fx-impl #'t-fx-infra])]
-      (is (= {":lib.code-test/FxConcept" #{"fx-impl"} :infrastructure #{"fx-infra"}}
-             (code/modules-by-role db))))))
-
-(deftest fukan-architecture-modules-carry-their-faculty-roles
-  (testing "fukan's subject faculty roles sit on its realizing architecture modules"
-    (let [roles (code/modules-by-role (pipeline/build-model nil))]
-      (is (= #{"core-structure"} (roles ":canvas.subject/Model")))
-      (is (= #{"canvas-source" "target-clojure"} (roles ":canvas.subject/Source")))
-      ;; the READ act — probes/correspondence findings
-      (is (= #{"probes" "target-correspondence"} (roles ":canvas.subject/Lens")))
-      ;; the SYNTHESIS act — the impl-spec projection + the two system-map overviews
-      (is (= #{"materialize" "overview" "architecture"} (roles ":canvas.subject/Projection"))))))
 
 ;; ── Module :extracted provenance (symmetric with Operation) ──────────────────────
 (code/Module ^{:name "t-ext-mod"} t-ext-mod {:extracted true})

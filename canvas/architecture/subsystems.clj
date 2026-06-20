@@ -22,7 +22,7 @@
             [canvas.architecture.projection.materialize :refer [materialize]]
             [canvas.architecture.projection.instance :refer [projection-instance]]
             [canvas.architecture.projection.grammar :refer [projection-grammar]]
-            [canvas.architecture.projection.overview :refer [overview architecture]]
+            [canvas.architecture.projection.architecture :refer [architecture]]
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
             [canvas.architecture.orchestration.infra :refer [infra-model]]
             [canvas.architecture.orchestration.core :refer [core]]))
@@ -50,8 +50,8 @@
   {:child [probes target-correspondence finding-faculty] :may-depend [kernel]})
 
 (Subsystem projection
-  "Graph → artifacts: materialization + the instance/grammar print-duals + the system-map overviews."
-  {:child [materialize projection-instance projection-grammar overview architecture] :may-depend [kernel]})
+  "Graph → artifacts: materialization + the instance/grammar print-duals + the system-map overview."
+  {:child [materialize projection-instance projection-grammar architecture] :may-depend [kernel]})
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject

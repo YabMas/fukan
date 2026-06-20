@@ -5,12 +5,10 @@
    at the plug-point; `build-model` runs whatever is registered, naming no specific extractor."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.substrate :as substrate]
-            [canvas.architecture.kernel.assemble :as assemble]
-            [canvas.subject :as subj]))
+            [canvas.architecture.kernel.assemble :as assemble]))
 
 (Module target-clojure
   "The Clojure extractor — reads source via clj-kondo (no eval) and emits code structures into a db."
-  {:realizes subj/Source}                        ; faculty role: the code-up half of the Source in-fold
   (Kind Path :string)
   (Operation extract "Extract code structures from source paths into the shared StructureDb."
     {:signature [:=> [:catn [:paths [:vector Path]]] substrate/StructureDb]

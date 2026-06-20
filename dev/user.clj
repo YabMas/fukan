@@ -14,7 +14,6 @@
             [fukan.canvas.projection.finding :as pf]
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
-            [fukan.canvas.projection.overview :as overview]
             [fukan.canvas.projection.architecture :as arch]
             [fukan.canvas.projection.probes :as probe]
             [fukan.model.materialize :as mat]
@@ -58,18 +57,10 @@
         (println "Refreshed."))
     (println "No model loaded yet. Use (go) first.")))
 
-(defn overview
-  "Print the projected SYSTEM OVERVIEW — the canvas's front door: the faculty map
-   (each tagged with the modules that realize it) + the flow loop, derived live from
-   the held model. Read this instead of `ls canvas/` to grasp fukan's shape."
-  []
-  (if-let [m (infra-model/get-model)]
-    (println (overview/system-overview m))
-    (println "No model loaded yet. Use (go) first.")))
-
 (defn architecture
-  "Print fukan's code-side architecture: subsystems, their modules (faculty-annotated), and the
-   :may-depend DAG — the design-aid companion to (overview)'s subject view."
+  "Print the projected SYSTEM MAP — the canvas's front door: fukan's code-side architecture,
+   its subsystems, their modules, and the :may-depend DAG, derived live from the held model.
+   Read this instead of `ls canvas/` to grasp fukan's shape."
   []
   (if-let [m (infra-model/get-model)]
     (println (arch/architecture-overview m))
@@ -78,7 +69,7 @@
 (defn grammar
   "Print the GRAMMAR PRIMER — every vocabulary in the held model rendered back as
    its map-form defstructures, live from the reified grammar (the print-dual).
-   Pass a namespace string for one vocabulary: (grammar \"canvas.subject\")."
+   Pass a namespace string for one vocabulary: (grammar \"lib.code\")."
   ([] (if-let [m (infra-model/get-model)]
         (println (gram/grammar-primer m))
         (println "No model loaded yet. Use (go) first.")))
@@ -152,15 +143,6 @@
           (println "Encapsulation worklist —" (count w) "public functions with no model twin:")
           (doseq [[mn ops] (sort-by key by-mod)]
             (println (format "  %-42s %s" mn (str/join ", " (sort (map first ops)))))))))
-    (println "No model loaded yet. Use (go) first.")))
-
-(defn roles
-  "Print fukan's modules grouped by realized subject concept (the design-aid role view): which
-   modules realize each faculty, and which are infrastructure (no role)."
-  []
-  (if-let [m (infra-model/get-model)]
-    (doseq [[role mods] (sort-by (comp str key) (code/modules-by-role m))]
-      (println (format "%-32s %s" (str role) (str/join ", " (sort mods)))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn deps
@@ -243,9 +225,8 @@
   (go {})
   (reset)
   (refresh)
-  (overview)
   (grammar)
-  (grammar "canvas.subject")
+  (grammar "lib.code")
   (show 'probe)
   (focus '[(Operation ?n) (in-module ?n "materialize")])
   (check)

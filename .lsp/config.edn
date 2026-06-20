@@ -32,11 +32,8 @@
               ;; scan (and cross-model var refs inside dropped defstructure clause
               ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
               canvas.architecture.ingestion.source
-              canvas.architecture.acts
-              canvas.descent.source
               lib.grammar
               fukan.canvas.projection.grammar-test
-              fukan.descent-test
               canvas.architecture.ingestion.extraction
               canvas.architecture.ingestion.clojure
               canvas.architecture.projection.grammar
@@ -56,8 +53,7 @@
               canvas.architecture.reading.correspondence
               canvas.architecture.reading.probes
               canvas.architecture.reading.finding
-              canvas.architecture.reading.descent
-              canvas.architecture.projection.overview
+              canvas.architecture.projection.architecture
               canvas.architecture.orchestration.core
               canvas.architecture.projection.materialize
               canvas.architecture.orchestration.pipeline
@@ -75,7 +71,6 @@
               demos.workflow.workflow-test
               demos.self.model.fukan
               demos.self.self-test
-              canvas.subject
               fukan.canvas.core.assemble-test
               fukan.canvas.core.composition-test
               fukan.canvas.core.view-map-test
