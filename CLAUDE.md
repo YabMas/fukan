@@ -36,12 +36,11 @@ structure substrate **is** the model (no separate model-map).
   focus sub-graph
 - `canvas/projection/canvas_source.clj` — ingestion: discover `canvas/**/*.clj`
   defstructure specs and assemble their instance vars into one structure db;
-  `canvas/projection/{grammar,instance,overview}.clj` — the two print-duals
+  `canvas/projection/{grammar,instance,architecture}.clj` — the two print-duals
   (grammar → defstructure forms; model nodes → authored instance forms) + the
   system map
-- `canvas/projection/{finding,probes,probe_code}.clj` — the probe surface (`finding`
-  = the Finding output type; read the model → findings; project a probe spec for an
-  implementing LLM). Cut-1.
+- `canvas/projection/{finding,probes}.clj` — the probe surface (`finding`
+  = the runtime finding/reading output type; read the model → findings).
 - `model/pipeline.clj` → `build-model`; `model/extraction.clj` — the code→model
   extractor plug-point; `model/materialize.clj` — model→implementation-spec projection
 - `target/clojure.clj` — the registered Clojure extractor (clj-kondo analysis);
@@ -73,9 +72,9 @@ arises; otherwise the focus is exploring modelling itself.
 
 The core (`src/fukan/canvas/`) ships only the `defstructure` primitive and the
 ingestion/projection machinery. It ships **no domain vocabulary**: every modelling
-project authors its own grammar on the core. Fukan-on-fukan's *unique* grammar lives
-in `canvas/subject.clj` (its pure-grammar self-portrait); each demo owns its grammar
-under `demos/<domain>/vocab/`.
+project authors its own grammar on the core. Fukan-on-fukan authors no unique canvas vocab
+of its own — it composes the `lib.*` stdlib (below); each demo owns its grammar under
+`demos/<domain>/vocab/`.
 
 Reusable, domain-general vocabulary — vocab that is *not* unique to any one project —
 lives in an **opt-in stdlib** at `lib/` (namespaces `lib.*`, reachable via the `.`
@@ -84,9 +83,8 @@ contributes grammar only when a model opts in. Current entries: `lib.code` (Kind
 / Operation / Module — standard code-structures, where a `Module` is one code namespace:
 an API surface + owned types), `lib.grouping` (Grouping — the most abstract membership
 primitive — and Connected), `lib.lens` (the opt-in USE-SIDE act grammar: `Lens` focuses a
-graph → sub-graph, `Finding` is a reading through a lens, `Projection` renders a graph to a
-target artifact — the authoring surface for analytical instruments, distinct from the
-abstract `Lens`/`Projection` concept portraits in `canvas.subject`), `lib.type.malli` (the
+graph → sub-graph, `Projection` renders a graph through a lens to a target artifact, `Mapping`
+is a source→artifact pair — the authoring surface for analytical instruments), `lib.type.malli` (the
 malli type dialect — first entry in the
 `lib.type.*` pluggable type-authoring surface), `lib.grammar` (GRAMMAR REFLECTION:
 `with-grammar` projects the registry onto the model db — every defstructure in the model's
@@ -96,9 +94,8 @@ their datalog as a `:val/form` payload, one `Vocabulary` node per grammar namesp
 join rule `(of-structure ?i ?s)` is in `lib.grammar/rules`; fukan's `build-model` always
 reflects, demos opt in). The grouping ladder is deliberately
 levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace) ⊂ `Subsystem` (a
-cluster of modules realizing a capability — reserved, not yet defined). This keeps
-`canvas/subject.clj` focused on
-what is genuinely fukan-specific. The stdlib is deliberately *not* a methodology/middle
+cluster of modules realizing a capability, with a declared `:may-depend` DAG the `lib.arch`
+laws enforce against the extracted code graph). The stdlib is deliberately *not* a methodology/middle
 layer (DDD/hexagonal/C4) — it's primitive, reusable structures, grown only on real need
 (e.g. add a `lib.code` batch like `in-process`/`event-driven` when a second consumer needs
 it). Tags are namespace-qualified, so a `lib` grammar never collides with a consumer's —
@@ -142,10 +139,7 @@ A `defstructure` is a composition of **slots** plus **laws**:
   `(structure/check db)` runs every law → violations.
 
 The current catalog is the source — or just run `(grammar)` in the REPL: the
-print-dual renders every vocabulary live. The files: `canvas/subject.clj` for
-fukan's own grammar (one pure-grammar stratum: the substrate Node/Relation/Graph, the
-grammar Structure/Slot/Law/Form/Vocabulary, the Model, the Source, and the use-side
-Lens/Projection concepts), `lib/*.clj` for the reusable stdlib
+print-dual renders every vocabulary live. The files: `lib/*.clj` for the reusable stdlib
 (code / grouping / type.malli / grammar / lens), and the demo vocabs.
 
 ## Spec locations
@@ -155,23 +149,15 @@ The self-model is laid out by **altitude**, not by pipeline role:
 - `lib/<grammar>.clj` (ns `lib.*`) — the opt-in reusable stdlib: domain-general vocab
   (`lib.code`, `lib.grouping`, `lib.type.malli`, `lib.grammar` — the reflection that
   projects the registry onto the model, `lib.lens` — the use-side act grammar
-  Lens/Finding/Projection). Required by consumers, not auto-discovered.
-- `canvas/subject.clj` — fukan as an *abstract* system: ONE stratum of pure-grammar
-  PORTRAITS (zero instances) — the substrate (Node/Relation/Graph), the grammar
-  (Structure/Slot/Law/Form/Vocabulary), the Model, the Source, and the use-side
-  Lens/Projection concepts. fukan's own grammar is authored here, not in a separate
-  vocabulary tree.
+  Lens/Mapping/Projection). Required by consumers, not auto-discovered.
 - `canvas/instruments/<kind>.clj` — fukan as a *user of itself*: its own use-side INSTANCES,
-  one file per kind (`lenses.clj`, `findings.clj`, `projections.clj` — `survey`/`drift`/…,
+  one file per kind (`lenses.clj`, `projections.clj` — `survey`/`drift`/…,
   `Blueprint`/`DriftClose`), authored against the `lib.lens` grammar. A separated
   TOOL-DEFINITIONS area, not part of fukan's design.
-- `canvas/architecture/<subsystem>.clj` — fukan as a *built* system: one self-spec per
-  implementation subsystem (`kernel`/`pipeline`/`infra`/`target`/…), plus `acts.clj`
-  (the realization seam that runs the modelled instruments).
-- `canvas/manifest.clj` — the faculty build-manifest: which Module(s) build each subject
-  concept, rendered by the system overview (editorial, not a drift-check — the genuine
-  model↔code correspondence is the op-layer `target.correspondence`). It alone sits at the
-  canvas root.
+- `canvas/architecture/<area>/…` — fukan as a *built* system: one self-spec per
+  implementation module, grouped by area (`kernel`/`ingestion`/`reading`/`projection`/
+  `orchestration`/`dialect`), plus `subsystems.clj` (the capability clusters + the declared
+  `:may-depend` DAG the `lib.arch` laws enforce against the extracted code graph).
 - `demos/<domain>/{vocab,model}/…` + a regression test; run with `clj -M:demos`.
 - `.legacy-allium/` — pre-canvas Allium/Boundary specs (read-only archive; not on
   the classpath; not loaded).
@@ -268,6 +254,5 @@ mixing them corrupts history.
 - `src/fukan/target/{clojure,correspondence}.clj` — code extraction + correspondence laws
 - `lib/` (ns `lib.*`) — the opt-in reusable stdlib vocab (code / grouping / type.malli /
   grammar / lens)
-- `canvas/{subject,manifest}.clj` + `canvas/{instruments,architecture}/` —
-  fukan-on-fukan's grammar portrait, the build-manifest, use-side instruments (tool-definitions),
-  and the subsystem self-specs
+- `canvas/{instruments,architecture}/` — fukan-on-fukan's use-side instruments
+  (tool-definitions) and the built-system self-specs (modules + subsystems + `:may-depend` DAG)

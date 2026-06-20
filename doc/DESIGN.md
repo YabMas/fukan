@@ -167,7 +167,6 @@ There are two **complementary** acts on the graph — analysis and synthesis:
 - A **Probe** *reads* the model and observes it, yielding a **Finding**: a list of
   sub-graphs of interest. Observations carry `{:focus …  :as …  :note …}`. `check`
   is the canonical integrity probe (a finding that *gates* action is a trust signal).
-  `projection/probe_code.clj` projects a probe's spec for an implementing LLM.
 - A **Projection** *re-presents* the model in a target form — an implementation spec,
   docs, a materialize output. `render-base` is the projection multimethod (see the
   model↔code seam section above).
@@ -196,7 +195,7 @@ defmethod (`(defmethod render-base [base kind] [db base eid] …)`, dispatching 
 
 The serving daemon is paused, so the loop is in-process (`clj -M:dev`):
 `(go)` builds the model (canvas specs + the Clojure extractor over `src/`),
-`(refresh)` reloads + rebuilds, `(status)` reports state, `(overview)` projects the
+`(refresh)` reloads + rebuilds, `(status)` reports state, `(architecture)` projects the
 system map, `(grammar)` prints the live language primer, `(drift)` reports modelled
 capabilities not yet realized in code. Build a db directly with top-level instance
 `def`s + `assemble-vars`, query with `d/q`, check with `(s/check db)`.

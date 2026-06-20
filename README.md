@@ -127,24 +127,21 @@ meant to be and what it actually is.
 ## Self-model and demos
 
 Fukan is exercised by modelling — including **modelling itself**. The self-model is laid
-out by altitude: `canvas/subject.clj` is fukan as an *abstract* system — one stratum of
-pure-grammar portraits (the substrate Node / Relation / Graph, the grammar
-Structure / Slot / Law / Form / Vocabulary, the Model, the Source, and the use-side
-Lens / Projection); `canvas/instruments/` holds fukan's own use-side *instances* — the
-lenses, findings, and projections it runs on itself; and `canvas/architecture/` models
-fukan as a *built* system, one self-spec per implementation subsystem. Each architecture Module
-carries a `:realizes` role naming the subject faculty it builds; the system overview derives the
-faculty→module map from those roles (the genuine model↔code drift-check is the op-layer
-`target/correspondence`). Canvas files under `canvas/**/*.clj` are
+out by altitude: `canvas/instruments/` holds fukan's own use-side *instances* — the lenses
+and projections it runs on itself, authored against `lib.lens`; and `canvas/architecture/`
+models fukan as a *built* system — one self-spec per implementation module, clustered into
+subsystems (`canvas/architecture/subsystems.clj`) with a declared `:may-depend` DAG that the
+`lib.arch` laws enforce against the actual extracted code graph. The genuine model↔code
+drift-check is the op-layer `target/correspondence`. Canvas files under `canvas/**/*.clj` are
 auto-discovered and assembled into one structure db — the model.
 
 Reusable, domain-general vocabulary lives in a separate opt-in stdlib, `lib/` — code
-structures (`lib.code`: Operation / Effect / Kind / Module, where a Module is one code
-namespace), structural primitives (`lib.grouping`: Grouping / Connected), a pluggable
+structures (`lib.code`: Operation / Effect / Kind / Module / Subsystem, where a Module is one
+code namespace), structural primitives (`lib.grouping`: Grouping / Connected), a pluggable
 type-authoring surface (`lib.type.malli`), grammar reflection (`lib.grammar`: the registry
 projected onto the graph, so the language is model too), and the use-side act grammar
-(`lib.lens`: Lens / Finding / Projection). It is required, not auto-discovered, so fukan's
-own canvas vocab stays focused on what is unique to fukan. `clj -M:demos` runs a corpus of
+(`lib.lens`: Lens / Mapping / Projection). It is required, not auto-discovered, so it
+contributes grammar only when a model opts in. `clj -M:demos` runs a corpus of
 standalone modelling demos (grammar, ER, workflow, access-control, type-system, atlas,
 self) that pressure-test the core.
 
@@ -165,7 +162,7 @@ In the REPL (`clj -M:dev`):
 (go)        ; build the model (canvas specs + the Clojure extractor over src/)
 (refresh)   ; reload changed code + rebuild
 (status)    ; model state
-(overview)  ; the projected system map — the canvas's front door
+(architecture) ; the projected system map — subsystems, modules, the :may-depend DAG
 (grammar)   ; the live language primer — every vocabulary rendered back as source
 (drift)     ; modelled capabilities not yet realized in code
 (probes)    ; run every probe over the held model, printing each finding
@@ -175,13 +172,12 @@ In the REPL (`clj -M:dev`):
 
 ```
 lib/                  reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.type.malli, lib.grammar, lib.lens
-canvas/subject.clj    fukan as an abstract system (pure-grammar portraits)
-canvas/instruments/   fukan's own use-side instances (lenses, findings, projections)
-canvas/architecture/  fukan as a built system (subsystem self-specs + the acts realization seam; faculty roles on each Module)
+canvas/instruments/   fukan's own use-side instances (lenses, projections)
+canvas/architecture/  fukan as a built system (module self-specs clustered into subsystems with a :may-depend DAG)
 demos/                standalone modelling demos (vocab + model + regression)
 src/fukan/
   canvas/core/        the defstructure primitive, derived rules, typing plug-point, lens evaluation
-  canvas/projection/  canvas ingestion, the print-duals (grammar/instance/overview), the probe surface
+  canvas/projection/  canvas ingestion, the print-duals (grammar/instance/architecture), the probe surface
   model/              build pipeline, extraction plug-point, materialize
   target/             Clojure code extractor + model↔code correspondence laws
   dialect/            the malli type-dialect bridge
