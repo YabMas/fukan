@@ -2,7 +2,6 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.projection.canvas-source :as cs]
-            [fukan.canvas.projection.probe-code :as pc]
             [fukan.canvas.projection.probes :as probes]
             [fukan.target.clojure :as target]
             [lib.lens :refer [Projection]]
@@ -27,29 +26,6 @@
       (let [tiny (a/assemble-vars [#'solo])]
         (is (empty? (:observations (probes/run tiny "patterns")))
             "holds: a degenerate model → no patterns")))))
-
-(deftest patterns-holds-law-gates-the-finding
-  (testing "the projected holds-check passes the real finding and fires on a bogus one"
-    (let [db     (cs/build)
-          holds? (eval (:holds-check (pc/project-probe db "patterns")))]
-      (is (holds? (probes/run db "patterns") db)
-          "the real patterns finding satisfies its holds (the self-model recurs)")
-      (let [tiny (a/assemble-vars [#'solo])]
-        (is (holds? {:lens "patterns" :gating false :observations []} tiny)
-            "empty finding over a degenerate model → holds")
-        (is (not (holds? {:lens "patterns" :gating false
-                          :observations [{:focus #{} :as :pattern :note "bogus pattern"}]} tiny))
-            "a reported pattern over a model with no recurrence → holds FIRES")))))
-
-(deftest integrity-holds-law-gates-the-finding
-  (testing "the projected holds-check for integrity passes real and fires on a bogus finding"
-    (let [db     (cs/build)
-          holds? (eval (:holds-check (pc/project-probe db "integrity")))]
-      (is (holds? {:lens "integrity" :gating true :observations []} db)
-          "empty finding over the clean self-model → holds")
-      (is (not (holds? {:lens "integrity" :gating true
-                        :observations [{:focus #{} :as :violation :note "bogus violation"}]} db))
-          "a reported violation when the model is clean → holds FIRES"))))
 
 (deftest probe-integrity-composes-check-into-observations
   (testing "integrity surfaces each violation as an observation whose focus is its offenders"
