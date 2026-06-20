@@ -210,7 +210,7 @@
   []
   (if-let [m (infra-model/get-model)]
     (doseq [[nm finding] (probe/run-all m)]
-      (println (str "── probe " nm " (gating " (:gating finding) ") ──"))
+      (println (str "── probe " nm " ──"))
       (let [lines (pf/finding->text finding)]
         (if (empty? lines)
           (println "  (nothing)")

@@ -13,5 +13,5 @@
 (Module ^{:name "finding"} finding-faculty
   "The Finding data type — a probe's output: a list of Observations, plus the trivial text projection."
   (Operation observation  "Construct one observation: a focus node-set + an `:as` tag + a note.")
-  (Operation finding       "Construct a Finding: a lens name, whether it gates, and its observations.")
+  (Operation finding       "Construct a Finding: a lens name and its observations.")
   (Operation finding->text "The trivial text projection of a Finding — its observation notes, in order."))

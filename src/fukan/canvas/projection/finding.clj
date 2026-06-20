@@ -15,9 +15,10 @@
   {:focus focus :as as :note note})
 
 (defn finding
-  "A probe's output: the lens name, whether it gates, and its observations."
-  [lens gating observations]
-  {:lens lens :gating gating :observations (vec observations)})
+  "A probe's output: the lens name and its observations. A finding is a READING — gating is
+   not a property of a reading; checking is the law/correspondence substrate's job."
+  [lens observations]
+  {:lens lens :observations (vec observations)})
 
 (defn finding->text
   "The trivial text projection: a finding's observation notes, in order."

@@ -25,7 +25,7 @@
          groups (->> rows
                      (filter (fn [[_ fr _ _ t _]] (and (in? fr) (in? t))))
                      (group-by (fn [[_ _ ft rk _ tt]] [ft rk tt])))]
-     (f/finding "patterns" false
+     (f/finding "patterns"
        (->> groups
             (filter (fn [[_ rs]] (> (count rs) 1)))
             (sort-by (comp - count val))
@@ -36,12 +36,12 @@
                       (str (count rs) "× " ft " -[" rk "]-> " tt)))))))))
 
 (defn- probe-integrity
-  "The integrity inspect (a gating reading): the kernel's `check` (laws → violations),
+  "The integrity reading: the kernel's `check` (laws → violations),
    each violation an observation whose focus is its offender node-set. Empty ⇔ every
    law holds. Global — `focus` accepted for a uniform signature but ignored."
   ([db] (probe-integrity db nil))
   ([db _focus]
-   (f/finding "integrity" true
+   (f/finding "integrity"
      (mapv (fn [v]
              (f/observation (into #{} (mapcat identity) (:offenders v))
                             :violation (str v)))
@@ -53,7 +53,7 @@
   ([db] (probe-survey db nil))
   ([db focus]
    (let [in? (if focus (set focus) (constantly true))]
-     (f/finding "survey" false
+     (f/finding "survey"
        (->> (d/q '[:find ?e ?k :where [?e :structure/of ?k]] db)
             (filter (fn [[e _]] (in? e)))
             (reduce (fn [m [e k]] (update m k (fnil conj #{}) e)) {})
@@ -75,7 +75,7 @@
                            (-> acc (update-in [sn :nodes] (fnil conj #{}) s)
                                    (update-in [sn :mods]  (fnil conj #{}) mn)))
                          {} rows)]
-     (f/finding "consistency" false
+     (f/finding "consistency"
        (->> by-name
             (filter (fn [[_ {:keys [mods]}]] (> (count mods) 1)))
             (sort-by key)
@@ -91,7 +91,7 @@
    (let [in?  (if focus (set focus) (constantly true))
          out  (map second (d/q '[:find ?r ?e :where [?r :rel/from ?e]] db))
          ins  (map second (d/q '[:find ?r ?e :where [?r :rel/to ?e]] db))]
-     (f/finding "tar-pit" false
+     (f/finding "tar-pit"
        (->> (frequencies (concat out ins))
             (filter (fn [[e _]] (in? e))) (sort-by val >) (take 10)
             (mapv (fn [[e n]]
@@ -101,12 +101,12 @@
                              " (" (name (:structure/of ent)) ")"))))))))))
 
 (defn- probe-coverage
-  "Spec ↔ code coverage (a gating reading): extracted Operations not covered by a
+  "Spec ↔ code coverage (a reading): extracted Operations not covered by a
    Operation, each an observation whose focus is the uncovered Operation node(s). Empty ⇔
    every Operation is modelled. Global — `focus` accepted but ignored."
   ([db] (probe-coverage db nil))
   ([db _focus]
-   (f/finding "coverage" true
+   (f/finding "coverage"
      (->> (sort (corr/uncovered-operations db))
           (mapv (fn [n]
                   (f/observation
@@ -116,12 +116,12 @@
                     :gap n)))))))
 
 (defn- probe-drift
-  "Spec ↔ code divergence (a gating reading): modelled Operations not realized by an
+  "Spec ↔ code divergence (a reading): modelled Operations not realized by an
    Operation, each an observation whose focus is the unrealized Operation node(s). Empty ⇔
    the model is fully realized. Global — `focus` accepted but ignored."
   ([db] (probe-drift db nil))
   ([db _focus]
-   (f/finding "drift" true
+   (f/finding "drift"
      (->> (sort (corr/drifted-operations db))
           (mapv (fn [n]
                   (f/observation
@@ -131,13 +131,13 @@
                     :gap n)))))))
 
 (defn- probe-type-drift
-  "Spec ↔ code TYPE divergence (a gating reading): modelled Operations whose type disagrees
+  "Spec ↔ code TYPE divergence (a reading): modelled Operations whose type disagrees
    with the realizing function's declared `:malli/schema`, each an observation whose focus is
    the type-drifted Operation node(s). Only checked where the code carries an annotation. Empty
    ⇔ every annotated function adheres to its model. Global — `focus` accepted but ignored."
   ([db] (probe-type-drift db nil))
   ([db _focus]
-   (f/finding "type-drift" true
+   (f/finding "type-drift"
      (->> (sort (corr/type-drifted-operations db))
           (mapv (fn [n]
                   (f/observation

@@ -16,7 +16,6 @@
     (let [db     (cs/build)
           result (probes/run db "patterns")]
       (is (= "patterns" (:lens result)))
-      (is (false? (:gating result)))
       (is (seq (:observations result)) "the self-model has recurring structures")
       (let [o (first (:observations result))]
         (is (set? (:focus o)) "each observation carries a node-set focus")
@@ -32,7 +31,6 @@
     (let [db     (cs/build)
           result (probes/run db "integrity")]
       (is (= "integrity" (:lens result)))
-      (is (true? (:gating result)) "integrity is a gating reading (surfaces law violations)")
       (is (empty? (:observations result)) "the self-model's laws all hold — no violations")
       (let [dirty (a/assemble-vars [#'broken-projection])
             v     (probes/run dirty "integrity")]
@@ -59,14 +57,12 @@
              (set (keys all))) "the full registered probe surface")
       (is (seq (:observations (all "survey")))  "survey: counts per structure kind")
       (is (seq (:observations (all "tar-pit"))) "tar-pit: connected hotspots")
-      (is (false? (:gating (all "survey"))) "survey is a non-gating reading")
-      (is (true?  (:gating (all "drift")))  "drift is a gating reading")
       (is (every? (fn [o] (and (set? (:focus o)) (keyword? (:as o)) (string? (:note o))))
                   (mapcat :observations (vals all)))
           "every observation is {focus tag note}"))))
 
 (deftest coverage-and-drift-surface-correspondence
-  (testing "the gating probes surface gaps as observations over a unified model"
+  (testing "the coverage/drift readings surface gaps as observations over a unified model"
     (let [db    (cs/union-dbs [(cs/build) (target/extract "test/fixtures/target/sample.clj")])
           drift (probes/run db "drift")
           cov   (probes/run db "coverage")]

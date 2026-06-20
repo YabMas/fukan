@@ -18,7 +18,6 @@
   (Kind ProbeName [:enum "survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift" "type-drift"])
   (Kind Finding
     [:map [:lens :string]
-          [:gating :boolean]
           [:observations [:vector [:map [:focus [:set :int]] [:as :keyword] [:note :string]]]]])
   (Kind FindingMap [:map-of ProbeName Finding])
   (Operation run "Dispatch a named probe over a target db → a finding."
@@ -33,10 +32,10 @@
   (Operation ^:private probe-patterns    "Pattern reading (a reading).")
   (Operation ^:private probe-consistency "Operation-name ambiguity (a reading).")
   (Operation ^:private probe-tar-pit     "Complexity hotspots (a reading).")
-  (Operation ^:private probe-integrity   "The integrity inspect (a gating reading) — runs the kernel's check.")
-  (Operation ^:private probe-coverage    "Spec↔code coverage (a gating reading).")
-  (Operation ^:private probe-drift       "Spec↔code drift (a gating reading).")
-  (Operation ^:private probe-type-drift  "Spec↔code TYPE drift (a gating reading).")
+  (Operation ^:private probe-integrity   "The integrity reading — runs the kernel's check.")
+  (Operation ^:private probe-coverage    "Spec↔code coverage (a reading).")
+  (Operation ^:private probe-drift       "Spec↔code drift (a reading).")
+  (Operation ^:private probe-type-drift  "Spec↔code TYPE drift (a reading).")
   (Operation ^:private run-probe
     "The dispatch point: run/run-all route here, and it dispatches to the registered probe leaves
      (explicit indirection — the decoupling seam between the surface and the implementations)."
