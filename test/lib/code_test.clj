@@ -51,8 +51,8 @@
     (let [roles (code/modules-by-role (pipeline/build-model nil))]
       (is (= #{"core-structure"} (roles ":canvas.subject/Model")))
       (is (= #{"canvas-source" "target-clojure"} (roles ":canvas.subject/Source")))
-      ;; the READ act — probes/correspondence findings + the generative-descent witnesses
-      (is (= #{"probes" "target-correspondence" "descent"} (roles ":canvas.subject/Lens")))
+      ;; the READ act — probes/correspondence findings
+      (is (= #{"probes" "target-correspondence"} (roles ":canvas.subject/Lens")))
       ;; the SYNTHESIS act — the impl-spec projection + the two system-map overviews
       (is (= #{"materialize" "overview" "architecture"} (roles ":canvas.subject/Projection"))))))
 

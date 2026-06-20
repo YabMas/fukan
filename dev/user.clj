@@ -21,7 +21,6 @@
             ;; loads the model↔code correspondence laws into the dev session so a
             ;; `check`/`(drift)` over the unified held model surfaces drift
             [fukan.target.correspondence :as corr]
-            [fukan.descent :as descent]
             [lib.code :as code]
             [lib.arch :as la]))
 
@@ -155,25 +154,6 @@
             (println (format "  %-42s %s" mn (str/join ", " (sort (map first ops)))))))))
     (println "No model loaded yet. Use (go) first.")))
 
-(defn witnesses
-  "The generative readings of the Source in-fold descent over the held model. Prints three lines:
-   the carved design space (required polarities), the witness gap (slice 1 — every polarity
-   realized), and the convergence gap (slice 2 — :into Model verifiably unifies every polarity).
-   Empty gaps ⇔ the in-fold is fully realized."
-  []
-  (if-let [m (infra-model/get-model)]
-    (let [req  (descent/required-witnesses m)
-          wgap (descent/unwitnessed-polarities m)
-          cgap (descent/unconverged-polarities m)]
-      (println "Source in-fold — required (carve):" (sort req))
-      (if (empty? wgap)
-        (println "Source in-fold — witness gap: none — every polarity realized.")
-        (println "Source in-fold — witness gap:" (sort wgap)))
-      (if (empty? cgap)
-        (println "Source in-fold — convergence gap: none — :into Model unifies every polarity.")
-        (println "Source in-fold — convergence gap:" (sort cgap))))
-    (println "No model loaded yet. Use (go) first.")))
-
 (defn roles
   "Print fukan's modules grouped by realized subject concept (the design-aid role view): which
    modules realize each faculty, and which are infrastructure (no role)."
@@ -270,7 +250,6 @@
   (focus '[(Operation ?n) (in-module ?n "materialize")])
   (check)
   (drift)
-  (witnesses)
   (probes)
   (dispatch)
   (materialize "target.clojure")

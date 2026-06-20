@@ -19,7 +19,6 @@
             [canvas.architecture.ingestion.extraction :refer [extraction]]
             [canvas.architecture.reading.probes :refer [probes]]
             [canvas.architecture.reading.finding :refer [finding-faculty]]
-            [canvas.architecture.reading.descent :refer [descent]]
             [canvas.architecture.projection.materialize :refer [materialize]]
             [canvas.architecture.projection.instance :refer [projection-instance]]
             [canvas.architecture.projection.grammar :refer [projection-grammar]]
@@ -47,9 +46,8 @@
   {:child [canvas-source target-clojure extraction] :may-depend [kernel]})
 
 (Subsystem reading
-  "Lenses over the graph: probe dispatch + the model↔code correspondence + the Finding output type +
-   the generative-descent witnesses."
-  {:child [probes target-correspondence finding-faculty descent] :may-depend [kernel]})
+  "Lenses over the graph: probe dispatch + the model↔code correspondence + the Finding output type."
+  {:child [probes target-correspondence finding-faculty] :may-depend [kernel]})
 
 (Subsystem projection
   "Graph → artifacts: materialization + the instance/grammar print-duals + the system-map overviews."
