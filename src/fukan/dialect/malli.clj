@@ -1,13 +1,14 @@
 (ns fukan.dialect.malli
   "The malli runtime bridges — a Schema subgraph → a malli data-form (`render`),
    signature adherence (`sigs-adhere?`), and refined-slot value checking (`valid?`,
-   the one bridge that runs the malli library). Wired to the type-dialect plug-point
+   the one bridge that runs the malli library). A self-contained LEAF: it depends only
+   on malli + datascript, never on kernel internals — reflection (form → subgraph) is the
+   kernel's job, driven by the dialect's registered value-structure tag (`:reflect-tag`),
+   so the dialect contributes no reflect bridge. Wired to the type-dialect plug-point
    (`fukan.canvas.core.typing`) at the composition root (`fukan.infra.model`);
-   `lib.type.malli` (the authoring grammar) registers `:valid?` at load so any
-   model opting into the grammar carries its checking."
+   `lib.type.malli` (the authoring grammar) registers `:valid?` + `:reflect-tag` at load so
+   any model opting into the grammar carries its checking and reflection."
   (:require [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.core.structure :as s]
             [malli.core :as m]))
 
 (defn- children
@@ -87,14 +88,6 @@
    malli interpretation — the kernel stores the form verbatim and never reads it."
   [type-form value]
   ((validator type-form) value))
-
-(defn reflect
-  "A malli type form → its content-deduped Schema subgraph {:id <root content key>
-   :nodes … :rels …}, via the kernel value-construction primitive on the Schema tag."
-  [form]
-  (let [iv  (s/value-literal->iv :lib.type.malli/Schema form)
-        key (s/value-content-key iv)]
-    (assoc (a/emit-instances [[key iv]]) :id key)))
 
 (defn- normalize-fn-schema
   "Normalize a malli function-schema `[:=> [:cat IN…] OUT]` to `{:in [IN…] :out OUT}`

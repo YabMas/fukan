@@ -14,12 +14,13 @@
             [fukan.canvas.core.typing :as typing]
             [fukan.dialect.malli :as dialect]))
 
-;; Opting into this grammar wires its checking: a refined slot target (e.g.
-;; `{:polarity [:enum "design-down" "code-up"]}`) compiles to a law that checks
-;; values through the type-dialect plug-point — so the grammar registers the
-;; malli `:valid?` bridge at load (merge-per-key; a composition root adds the rest).
-(typing/register-type-dialect! {:valid?  dialect/valid?
-                                :reflect dialect/reflect})
+;; Opting into this grammar wires its checking and reflection: a refined slot target (e.g.
+;; `{:polarity [:enum "design-down" "code-up"]}`) compiles to a law that checks values through
+;; the type-dialect plug-point — so the grammar registers the malli `:valid?` bridge at load,
+;; plus its value-structure tag `:reflect-tag` (the kernel's `reflect-type` builds Schema subgraphs
+;; through it — no reflect bridge needed). Merge-per-key; a composition root adds `:render`/`:adheres?`.
+(typing/register-type-dialect! {:valid?      dialect/valid?
+                                :reflect-tag ::Schema})
 
 (defn ^:export catn->pairs
   "Parse a malli function-input schema into ordered [param-name-symbol type-form] pairs —

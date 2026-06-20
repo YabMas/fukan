@@ -9,7 +9,7 @@
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.lens :as lens-engine]
-            [canvas.architecture.kernel.malli :as malli]
+            [canvas.architecture.kernel.typing :as typing]
             [canvas.architecture.projection.materialize :as mat]))
 
 (Module projection-instance
@@ -20,7 +20,7 @@
   (Operation instance-form
     "A model node rendered back as its authored instance form (the data dual)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]
-     :delegates [kernel/structure-by-tag malli/render]})   ; resolve the node's structure + render refined targets via malli
+     :delegates [kernel/structure-by-tag typing/render-type]})   ; resolve the node's structure + render refined targets through the plug-point
   (Operation instance-text
     "instance-form, formatted like the authored source (aligned slot map)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Text]})

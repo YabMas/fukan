@@ -31,8 +31,15 @@
 
 (Subsystem kernel
   "The defstructure substrate + its derived rules + lens engine + assembler + the type-dialect
-   plug-point and its malli dialect — foundational; depends on nothing."
-  {:child [core-structure core-rules core-lens assemble-faculty typing malli] :may-depend []})
+   plug-point — foundational; depends on nothing."
+  {:child [core-structure core-rules core-lens assemble-faculty typing] :may-depend []})
+
+(Subsystem dialect
+  "A pluggable type dialect — a self-contained LEAF the kernel's typing plug-point dispatches to. It
+   depends on nothing: the kernel reaches IN (dispatch), the dialect never reaches back into kernel
+   internals. `:may-depend []` is the teeth — a dialect bridge that delegated to a kernel internal
+   (the pre-SPI `reflect` reaching `value-literal->iv`) would violate conformance. Today: fukan's malli."
+  {:child [malli] :may-depend []})
 
 (Subsystem ingestion
   "The in-fold: discover/assemble design specs + extract code, folded onto the model."
@@ -48,5 +55,6 @@
   {:child [materialize projection-instance projection-grammar overview architecture] :may-depend [kernel]})
 
 (Subsystem orchestration
-  "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject faculty."
-  {:child [model-pipeline infra-model core] :may-depend [kernel ingestion]})
+  "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject
+   faculty. Depends on `dialect` because the composition root (infra-model) wires the project dialect in."
+  {:child [model-pipeline infra-model core] :may-depend [kernel ingestion dialect]})

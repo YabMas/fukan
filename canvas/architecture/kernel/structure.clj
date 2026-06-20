@@ -46,7 +46,8 @@
   {:signature [:=> [:catn [:tag :keyword]] :any]})
 (Operation value-literal->iv
   "Build a ^:value InstanceValue for a value-structure tag from a data literal — the one
-   value-construction path; type dialects build their value subgraphs through it."
+   value-construction path; the kernel's `typing/reflect-type` builds a dialect's type
+   subgraphs through it (the dialect contributes only its tag, never reaching in)."
   {:signature [:=> [:catn [:tag :keyword] [:literal :any]] :any]})
 (Operation value-content-key
   "A deterministic, purely structural identity for a ^:value InstanceValue (the content-dedup key)."
@@ -75,10 +76,10 @@
 
 (Module core-structure
   "The defstructure kernel — laws → violations over the structure graph."
-  ;; NB: the dialect-facing half of :exposes (create / structure-by-tag / value-literal->iv /
-  ;; value-content-key) has grown one widening at a time to serve consumers — esp. the malli
-  ;; dialect reaching the value machinery. See the kernel<->dialect-boundary note: this signals
-  ;; the kernel<->typing-plugin seam wants a deliberate SPI, not piecemeal exposure (parked).
+  ;; NB: value-literal->iv / value-content-key are the value-construction machinery. They are now
+  ;; reached only by kernel-internal builders — the assembler and `typing/reflect-type` (the deliberate
+  ;; SPI): a type dialect contributes only its value-structure tag and never reaches in. This closed the
+  ;; parked kernel<->dialect seam; the dialect (malli) is now a self-contained leaf.
   {:exposes [check vocab-rules create structure-by-tag value-literal->iv value-content-key   ; the kernel capabilities others compose
               var-id var-simple-name instance-value? scalar-slot? all-structures]            ; introspection/identity API (assembler + reflection-facing)
    :owns    [StructureDb Violation]              ; data-shapes that cross the boundary (others adopt by name)

@@ -16,7 +16,7 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [datascript.core :as d]
-            [fukan.dialect.malli :as malli]))
+            [fukan.canvas.core.typing :as typing]))
 
 ;; ── parts: one reified Structure → its authoring ingredients ─────────────────
 
@@ -24,12 +24,13 @@
 
 (defn- target-expr
   "A slot edge's target → its authoring type expression: a reified Structure → its
-   name symbol; a Schema value → its malli form via the dialect render (faithful —
-   enum member types are stored); bare scalars map back to :string/:int/:boolean."
+   name symbol; a reflected type value → its code-form via the dialect render through the
+   plug-point (faithful — enum member types are stored); bare scalars map back to
+   :string/:int/:boolean."
   [db t]
   (let [e (d/entity db t)]
-    (if (= :lib.type.malli/Schema (:structure/of e))
-      (let [f (malli/render db t)]
+    (if (= (typing/dialect-type-tag) (:structure/of e))
+      (let [f (typing/render-type db t)]
         (get malli->scalar f f))
       (symbol (:entity/name e)))))
 

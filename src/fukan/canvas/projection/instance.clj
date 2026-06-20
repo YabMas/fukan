@@ -19,7 +19,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s]
-            [fukan.dialect.malli :as malli]))
+            [fukan.canvas.core.typing :as typing]))
 
 ;; ── parts: one node → its authoring ingredients ──────────────────────────────
 
@@ -49,15 +49,16 @@
       (subs id (inc (str/last-index-of id "/"))))))
 
 (defn- target-expr
-  "A relation target → its authoring value expression: a Schema value → its malli
-   literal (the dialect render IS the reader's dual); any other anonymous value →
-   its inline expression form (recursive); a named entity → the VAR symbol the
-   author referenced (falling back to the entity name for non-var nodes)."
+  "A relation target → its authoring value expression: a reflected type value → its
+   code-form via the dialect render through the plug-point (the render IS the reader's
+   dual); any other anonymous value → its inline expression form (recursive); a named
+   entity → the VAR symbol the author referenced (falling back to the entity name for
+   non-var nodes)."
   [db to]
   (let [e (d/entity db to)]
     (cond
-      (= :lib.type.malli/Schema (:structure/of e)) (malli/render db to)
-      (nil? (:entity/name e))                      (instance-form db to)
+      (= (typing/dialect-type-tag) (:structure/of e)) (typing/render-type db to)
+      (nil? (:entity/name e))                         (instance-form db to)
       :else (symbol (or (var-simple-name e) (:entity/name e))))))
 
 (defn- element-expr [db {:keys [to label]}]

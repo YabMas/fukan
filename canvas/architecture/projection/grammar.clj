@@ -9,7 +9,7 @@
    grammar are legitimate — the human interprets.)"
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
-            [canvas.architecture.kernel.malli :as malli]
+            [canvas.architecture.kernel.typing :as typing]
             [canvas.architecture.projection.materialize :as mat]))
 
 (Module projection-grammar
@@ -20,7 +20,7 @@
   (Operation structure-form
     "A reified Structure rendered back as its map-form defstructure (the print-dual)."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:eid mat/Eid]] Form]
-     :delegates [malli/render]})                ; renders refined slot targets via the malli dialect
+     :delegates [typing/render-type]})          ; renders refined slot targets through the type plug-point
   (Operation vocabulary-primer
     "One vocabulary rendered as its defstructure forms."
     {:signature [:=> [:catn [:db kernel/StructureDb] [:vocab-name VocabName]] Primer]})
