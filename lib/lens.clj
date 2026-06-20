@@ -1,17 +1,19 @@
 (ns lib.lens
-  "The reusable USE-SIDE grammar — the act of FOCUSING (Lens) and the two ways a model is
-   USED (reading → Finding, synthesis → Projection). Opt-in stdlib vocab: any project
-   `:require`s it to author its own instruments. Ships NO instances — fukan's own
-   instruments live under `canvas/instruments/`.
+  "The reusable USE-SIDE grammar — the act of FOCUSING (Lens) and SYNTHESIS (Projection).
+   Opt-in stdlib vocab: any project `:require`s it to author its own instruments. Ships NO
+   instances — fukan's own instruments live under `canvas/instruments/`.
 
-   The two uses are NOT twins:
-     - a LENS is a focus — which slice/aspect to attend to. Evaluating a lens reads the model
-       into a `Finding`; the lens IS the read (no `Probe` structure wraps it).
+     - a LENS is a focus — which slice/aspect to attend to. Evaluating a lens IS the read: it
+       resolves the model to a sub-graph (no wrapper structure). A view is just a lens read.
+       A GATE/CHECK is NOT a use-side act here: gating is the law/correspondence substrate
+       (`structure/check` and `target.correspondence`), which already asserts and gates on
+       violations — reading (Lens) and checking (Law) are different acts, kept apart.
      - a `Projection` RE-PRESENTS the model through a lens as a target artifact — built ON the
        lens, doing work it does not (mapping, contextualization).
-   The same lens can feed both (a drift lens feeds a drift Finding AND a DriftClose projection)."
+   The same lens can feed both a read and a projection (the drift lens feeds drift readings AND a
+   DriftClose projection)."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            ;; :string/:boolean scalar slots check through the malli type dialect
+            ;; :string scalar slots check through the malli type dialect
             [lib.type.malli]))
 
 ;; ── THE FOCUS: a Lens names a slice and carries its runnable selection ─────────────────────────
@@ -26,31 +28,6 @@
    from it. A lens with no `:select` is prose-only (not evaluable)."
   {:focus  :string                          ; the prose description of the slice
    :select [:? {:payload :query} :string]}) ; recap + the datalog selection (the :query payload)
-
-;; ── THE READING: a Finding reads through a Lens (inspect ⊂ reading) ────────────────────────────
-
-(defstructure Finding
-  "What reading the model through a Lens yields — an observation ABOUT the model. A Finding reads
-   `:through` a Lens (the focus); evaluating that lens IS the act of reading, so there is no separate
-   `Probe`. A gating Finding is a trust Signal that gates action (the inspect case); a non-gating
-   Finding is a View, a perspective a human/LLM reasons with.
-
-   A finding may STATE a CONTRACT — a `:holds` invariant (the human's correctness spec for the
-   reading's output). The executable check of that invariant (a `(fn [result target-db] → ok?)`) is
-   realization mechanism — a `FindingCheck` in `canvas.architecture.acts`, surfaced by the projector
-   as a runtime gate. The complement of this reading is a `Projection` (synthesis)."
-  {:through Lens          ; the focus it reads through (the model is unchanged)
-   :gating  :boolean      ; gating → a trust Signal (inspect); else a View
-   :holds   [:? :string]}) ; the stated invariant (its executable check lives in the realization view)
-
-(defstructure Signal
-  "A gating Finding — an inspect's trust verdict (a reading whose result gates action). Realized:
-   derived, not instantiated."
-  (realized-as '[(Finding ?e) [?e :val/gating true]]))
-
-(defstructure View
-  "A non-gating Finding — a perspective to reason with. Realized."
-  (realized-as '[(Finding ?e) [?e :val/gating false]]))
 
 ;; ── THE SYNTHESIS: a Projection re-presents the model through a Lens ───────────────────────────
 
@@ -68,8 +45,8 @@
      a framing `:context` (DriftClose = Blueprint framed as drift to close; the same composes
      Blueprint with a 'new feature' or 'refactor' context). It adds no mappings of its own — it
      reuses the base's, told differently.
-   Either flavour renders THROUGH a `Lens` (the WHAT). The same lens can feed a Finding and a
-   projection (the drift lens feeds the drift inspect AND DriftClose)."
+   Either flavour renders THROUGH a `Lens` (the WHAT). The same lens can feed a read and a
+   projection (the drift lens feeds drift readings AND DriftClose)."
   {:through        Lens              ; the focus it renders through (the WHAT)
    :maps           [:* Mapping]      ; a BASE's source→artifact mappings (the HOW)
    :contextualizes [:? Projection]   ; a CONTEXTUALIZATION's base projection

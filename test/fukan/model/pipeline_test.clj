@@ -212,26 +212,6 @@
       (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
                        (names-of db :Lens))))))
 
-(deftest findings-read-through-a-lens
-  (testing "the finding view: a Finding reads the model THROUGH a lens (cross-module); inspect = gating"
-    (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Grouping) "probe"))
-      (is (set/subset? #{"Survey" "Patterns" "IntegrityReport" "DriftReport"} (names-of db :Finding)))
-      ;; lens ∘ reading composition: the Patterns finding reads through the patterns lens,
-      ;; resolved cross-module to the lens node
-      (is (seq (d/q '[:find ?l
-                      :where [?f :structure/of :lib.lens/Finding] [?f :entity/name "Patterns"]
-                             [?r :rel/from ?f] [?r :rel/kind :through] [?r :rel/to ?l]
-                             [?l :structure/of :lib.lens/Lens] [?l :entity/name "patterns"]]
-                    db))
-          "the Patterns finding reads through the patterns lens")
-      ;; inspect ⊂ reading — DriftReport is a reading whose finding GATES (a trust Signal)
-      (is (seq (d/q '[:find ?f
-                      :where [?f :structure/of :lib.lens/Finding] [?f :entity/name "DriftReport"]
-                             [?f :val/gating true]]
-                    db))
-          "DriftReport is an inspect — a gating reading"))))
-
 (deftest projection-subsystem-modelled-as-target-representations
   (testing "the projection view: model re-presented into targets through a lens + source→artifact mappings"
     (let [db (pipeline/build-model nil)]
@@ -255,56 +235,22 @@
           "the Blueprint projection maps a function → a defn"))))
 
 (deftest a-lens-is-reused-across-acts
-  (testing "the payoff: ONE drift lens feeds BOTH the drift inspect (a Finding) AND the drift-close projection"
+  (testing "the payoff: ONE drift lens is a shared focus — the read focus AND the drift-close projection's focus"
     (let [db (pipeline/build-model nil)]
       (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :lib.lens/Lens] [?l :entity/name "drift"]] db)))
           "there is exactly one drift lens node")
       (is (seq (d/q '[:find ?l
                       :where [?l :structure/of :lib.lens/Lens] [?l :entity/name "drift"]
-                             ;; read by a Finding (the inspect) …
-                             [?fd :structure/of :lib.lens/Finding] [?rp :rel/from ?fd] [?rp :rel/kind :through] [?rp :rel/to ?l]
-                             ;; … AND rendered by a projection (drift-close)
+                             ;; rendered by a projection (drift-close) THROUGH the same focus
                              [?pj :structure/of :lib.lens/Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
                     db))
-          "one drift focus, read by a finding and rendered by a projection"))))
+          "the one drift focus is rendered by the DriftClose projection"))))
 
 (deftest projection-that-is-neither-base-nor-contextualization-is-caught
   (testing "a projection with neither mappings nor a contextualized base trips the flavour law"
     (let [db (a/assemble-vars [#'pe-Empty])]
       (is (contains? (set (map :law (s/check db)))
                      "a projection is a base (declares mappings) or a contextualization (frames another)")))))
-
-(deftest findings-carry-realization-holds-predicates
-  (testing "Patterns and IntegrityReport have a FindingCheck carrying an inline holds predicate"
-    (let [db (pipeline/build-model nil)
-          pred (fn [nm] (ffirst (d/q '[:find ?p :in $ ?n
-                                       :where [?f :entity/name ?n] [?f :structure/of :lib.lens/Finding]
-                                              [?r :rel/kind :realizes] [?r :rel/to ?f]
-                                              [?r :rel/from ?fc] [?fc :val/pred ?p]]
-                                     db nm)))]
-      (is (seq? (pred "Patterns")) "Patterns' holds predicate is a stored form on its FindingCheck")
-      (is (= 'fn (first (pred "Patterns"))) "it is a fn form")
-      (is (seq? (pred "IntegrityReport")) "IntegrityReport's holds predicate is a stored form")
-      (is (empty? (s/check db)) "the whole self-model still satisfies every law"))))
-
-(deftest patterns-finding-carries-its-contract
-  (testing "the Patterns finding declares a holds invariant in the real model"
-    (let [db  (pipeline/build-model nil)
-          fid (ffirst (d/q '[:find ?f
-                             :where [?f :entity/name "Patterns"] [?f :structure/of :lib.lens/Finding]] db))]
-      (is (some? (:val/holds (d/entity db fid))) "Patterns has a holds invariant")
-      (is (empty? (s/check db)) "the whole self-model still satisfies every law"))))
-
-(deftest integrity-finding-carries-its-contract
-  (testing "the IntegrityReport finding declares a holds invariant in the real model"
-    (let [db  (pipeline/build-model nil)
-          fid (ffirst (d/q '[:find ?f
-                             :where [?f :entity/name "IntegrityReport"]
-                                    [?f :structure/of :lib.lens/Finding]] db))]
-      (is (some? (:val/holds (d/entity db fid)))
-          "IntegrityReport has a holds invariant")
-      (is (empty? (s/check db))
-          "the whole self-model still satisfies every law"))))
 
 (deftest subject-substrate-carries-its-domain-shape
   (testing "Node and Relation portraits reflect their deepened domain shapes"

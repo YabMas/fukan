@@ -13,7 +13,7 @@
             [fukan.target.correspondence :as corr]))
 
 (defn- probe-patterns
-  "Recurring structures (a View): one observation per structural triplet
+  "Recurring structures (a reading): one observation per structural triplet
    (source-tag, relation-kind, target-tag) borne by more than one reified relation.
    The focus is every matching relation-node plus its endpoints. Scopable to `focus`."
   ([db] (probe-patterns db nil))
@@ -36,7 +36,7 @@
                       (str (count rs) "× " ft " -[" rk "]-> " tt)))))))))
 
 (defn- probe-integrity
-  "The integrity inspect (a gating Signal): the kernel's `check` (laws → violations),
+  "The integrity inspect (a gating reading): the kernel's `check` (laws → violations),
    each violation an observation whose focus is its offender node-set. Empty ⇔ every
    law holds. Global — `focus` accepted for a uniform signature but ignored."
   ([db] (probe-integrity db nil))
@@ -48,7 +48,7 @@
            (structure/check db)))))
 
 (defn- probe-survey
-  "A structural overview (a View): one observation per structure kind, its focus the
+  "A structural overview (a reading): one observation per structure kind, its focus the
    nodes of that kind. Scopable to `focus`."
   ([db] (probe-survey db nil))
   ([db focus]
@@ -61,7 +61,7 @@
             (mapv (fn [[k es]] (f/observation es :count (str (count es) " " (name k))))))))))
 
 (defn- probe-consistency
-  "Operation-name ambiguity (a View): one observation per Operation name borne by more than
+  "Operation-name ambiguity (a reading): one observation per Operation name borne by more than
    one module; the focus is the ambiguous Operation nodes. Scopable to `focus`."
   ([db] (probe-consistency db nil))
   ([db focus]
@@ -84,7 +84,7 @@
                       (str sn " in " (count mods) " modules: " (str/join ", " (sort mods)))))))))))
 
 (defn- probe-tar-pit
-  "Complexity hotspots (a View): the top-10 nodes by relation degree (in + out),
+  "Complexity hotspots (a reading): the top-10 nodes by relation degree (in + out),
    each its own single-node focus. Scopable to `focus`."
   ([db] (probe-tar-pit db nil))
   ([db focus]
@@ -101,7 +101,7 @@
                              " (" (name (:structure/of ent)) ")"))))))))))
 
 (defn- probe-coverage
-  "Spec ↔ code coverage (a gating Signal): extracted Operations not covered by a
+  "Spec ↔ code coverage (a gating reading): extracted Operations not covered by a
    Operation, each an observation whose focus is the uncovered Operation node(s). Empty ⇔
    every Operation is modelled. Global — `focus` accepted but ignored."
   ([db] (probe-coverage db nil))
@@ -116,7 +116,7 @@
                     :gap n)))))))
 
 (defn- probe-drift
-  "Spec ↔ code divergence (a gating Signal): modelled Operations not realized by an
+  "Spec ↔ code divergence (a gating reading): modelled Operations not realized by an
    Operation, each an observation whose focus is the unrealized Operation node(s). Empty ⇔
    the model is fully realized. Global — `focus` accepted but ignored."
   ([db] (probe-drift db nil))
@@ -131,7 +131,7 @@
                     :gap n)))))))
 
 (defn- probe-type-drift
-  "Spec ↔ code TYPE divergence (a gating Signal): modelled Operations whose type disagrees
+  "Spec ↔ code TYPE divergence (a gating reading): modelled Operations whose type disagrees
    with the realizing function's declared `:malli/schema`, each an observation whose focus is
    the type-drifted Operation node(s). Only checked where the code carries an annotation. Empty
    ⇔ every annotated function adheres to its model. Global — `focus` accepted but ignored."

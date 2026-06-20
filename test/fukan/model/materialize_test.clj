@@ -192,7 +192,7 @@
 (deftest probe-foci-compose-into-a-projection
   (testing "a probe's observation foci flow straight into a projection (the seam)"
     (let [db      (cs/build)
-          finding (probes/run db "survey")              ; whole-model View → foci = all nodes by kind
+          finding (probes/run db "survey")              ; whole-model read → foci = all nodes by kind
           out     (m/materialize-finding db "Blueprint" finding)]
       (is (string? out) "the projection renders the finding's union focus")
       (is (str/includes? out "Implement")

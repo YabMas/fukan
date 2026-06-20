@@ -154,8 +154,9 @@
 
 (defstructure Lens
   "The READ act — a focus over a Graph that yields a (sub-)Graph. A lens is a QUERY, so it is
-   intrinsically read-side; evaluating it IS the reading. Graph → Graph. The lens catalog + the
-   gating that make a reading a Signal vs a View live lower, under `canvas/instruments/` (grammar in `lib.lens`)."
+   intrinsically read-side; evaluating it IS the reading. Graph → Graph. The lens catalog lives
+   lower, under `canvas/instruments/lenses.clj` (grammar in `lib.lens`). GATING is NOT a read act:
+   checking is the law/correspondence substrate (`check`), kept apart from the Lens."
   {:reads  Graph
    :yields Graph})
 

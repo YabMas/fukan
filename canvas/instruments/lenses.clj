@@ -7,7 +7,7 @@
   (:require [lib.lens :refer [Lens]]
             [lib.grouping :refer [Grouping]]))
 
-;; focuses fed to reasoning readings (non-gating findings)
+;; focuses for reasoning reads (non-gating views — perspectives to reason with)
 (Lens survey      {:focus  "the whole model's structure"
                    :select ["every node" '[[?n :structure/of _]]]})
 (Lens patterns    {:focus  "recurring structures across the model"
@@ -17,7 +17,7 @@
                             '[(Operation ?n) (not [?n :val/extracted true])]]})
 (Lens tar-pit     {:focus  "complexity hotspots — tangles worth attention"
                    :select ["the call-graph callers" '[(calls ?n ?callee)]]})
-;; focuses fed to inspect readings (gating findings — trust verdicts)
+;; focuses for gating checks (the law/correspondence substrate surfaces the verdicts)
 (Lens integrity   {:focus  "the model's structural integrity — laws, partitions"
                    :select ["the whole model" '[[?n :structure/of _]]]})
 (Lens coverage    {:focus  "spec ↔ code coverage"

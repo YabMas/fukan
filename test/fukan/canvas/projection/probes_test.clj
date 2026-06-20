@@ -32,7 +32,7 @@
     (let [db     (cs/build)
           result (probes/run db "integrity")]
       (is (= "integrity" (:lens result)))
-      (is (true? (:gating result)) "integrity is the gating inspect case")
+      (is (true? (:gating result)) "integrity is a gating reading (surfaces law violations)")
       (is (empty? (:observations result)) "the self-model's laws all hold — no violations")
       (let [dirty (a/assemble-vars [#'broken-projection])
             v     (probes/run dirty "integrity")]
@@ -59,8 +59,8 @@
              (set (keys all))) "the full registered probe surface")
       (is (seq (:observations (all "survey")))  "survey: counts per structure kind")
       (is (seq (:observations (all "tar-pit"))) "tar-pit: connected hotspots")
-      (is (false? (:gating (all "survey"))) "survey is a View")
-      (is (true?  (:gating (all "drift")))  "drift is a gating Signal")
+      (is (false? (:gating (all "survey"))) "survey is a non-gating reading")
+      (is (true?  (:gating (all "drift")))  "drift is a gating reading")
       (is (every? (fn [o] (and (set? (:focus o)) (keyword? (:as o)) (string? (:note o))))
                   (mapcat :observations (vals all)))
           "every observation is {focus tag note}"))))
