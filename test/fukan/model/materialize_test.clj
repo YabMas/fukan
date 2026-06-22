@@ -2,13 +2,12 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            ;; the lens grammar (Lens/Projection/Mapping) + the real self-model instance vars an
-            ;; ad-hoc contextualization composes over (Blueprint, survey)
-            [lib.lens :as cm-acts :refer [Lens Projection Mapping]]
+            ;; the lens act (the grammar Lens/Projection/Mapping + the engine) + the real
+            ;; self-model instance vars an ad-hoc contextualization composes over (Blueprint, survey)
+            [fukan.canvas.core.lens :as lens :refer [Lens Projection Mapping]]
             [canvas.instruments.projections :refer [Blueprint]]
             [canvas.instruments.lenses :refer [survey]]
             [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.core.lens :as lens]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.projection.probes :as probes]
             [fukan.model.materialize :as m]

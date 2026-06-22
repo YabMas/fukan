@@ -1,8 +1,8 @@
 (ns canvas.instruments.projections
   "fukan's own PROJECTIONS — re-presentations of the model rendered through a lens
    (`canvas.instruments.lenses`) into a target artifact. TOOL-DEFINITIONS, authored against
-   the `lib.lens` grammar."
-  (:require [lib.lens :refer [Projection Mapping]]
+   the core `Lens`/`Projection` grammar."
+  (:require [fukan.canvas.core.lens :refer [Projection Mapping]]
             [lib.grouping :refer [Grouping]]
             [canvas.instruments.lenses :refer [survey drift]]))
 

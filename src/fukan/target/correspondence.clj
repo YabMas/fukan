@@ -256,7 +256,7 @@
     :where '[[?r :structure/of :lib.code/Operation] [?r :val/extracted true] [?r :entity/name ?rn]
              [(clojure.string/starts-with? ?rn "probe-")]
              (not-join [?rn]
-               [?l :structure/of :lib.lens/Lens] [?l :entity/name ?ln]
+               [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name ?ln]
                [(fukan.target.correspondence/reader-realizes-lens? ?rn ?ln)])]))
 
 (defn uncovered-readers

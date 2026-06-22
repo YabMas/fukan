@@ -12,7 +12,7 @@
             [fukan.model.pipeline :as pipeline]
             [lib.code :refer [Kind]]
             [lib.grouping :refer [Grouping]]
-            [lib.lens :refer [Projection]]))
+            [fukan.canvas.core.lens :refer [Projection]]))
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name
 (defn- names-of [db tag]
@@ -192,16 +192,16 @@
       (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
       ;; a projection composes lens ∘ act too: Blueprint renders THROUGH the survey lens
       (is (seq (d/q '[:find ?l
-                      :where [?p :structure/of :lib.lens/Projection] [?p :entity/name "Blueprint"]
+                      :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
                              [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
-                             [?l :structure/of :lib.lens/Lens] [?l :entity/name "survey"]]
+                             [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "survey"]]
                     db))
           "Blueprint renders through the survey lens")
       ;; a projection is built from mappings (value-typed source→artifact pairs)
       (is (seq (d/q '[:find ?mp
-                      :where [?p :structure/of :lib.lens/Projection] [?p :entity/name "Blueprint"]
+                      :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
                              [?r :rel/from ?p] [?r :rel/kind :maps] [?r :rel/to ?mp]
-                             [?mp :structure/of :lib.lens/Mapping]
+                             [?mp :structure/of :fukan.canvas.core.lens/Mapping]
                              [?mp :val/from "a function"] [?mp :val/to "a defn"]]
                     db))
           "the Blueprint projection maps a function → a defn"))))
@@ -209,12 +209,12 @@
 (deftest a-lens-is-reused-across-acts
   (testing "the payoff: ONE drift lens is a shared focus — the read focus AND the drift-close projection's focus"
     (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :lib.lens/Lens] [?l :entity/name "drift"]] db)))
+      (is (= 1 (count (d/q '[:find ?l :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "drift"]] db)))
           "there is exactly one drift lens node")
       (is (seq (d/q '[:find ?l
-                      :where [?l :structure/of :lib.lens/Lens] [?l :entity/name "drift"]
+                      :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "drift"]
                              ;; rendered by a projection (drift-close) THROUGH the same focus
-                             [?pj :structure/of :lib.lens/Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
+                             [?pj :structure/of :fukan.canvas.core.lens/Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
                     db))
           "the one drift focus is rendered by the DriftClose projection"))))
 

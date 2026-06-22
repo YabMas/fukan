@@ -104,9 +104,11 @@
 ;; ── the generated config file ────────────────────────────────────────────────
 
 (def default-dirs
-  "The source roots scanned for fukan's own defstructures. `src/` has none (the kernel
-   ships no vocabulary), so it is omitted."
-  ["lib" "canvas" "demos" "test"])
+  "The source roots scanned for fukan's own defstructures. `src/` now holds the fukan-native
+   ACT grammar (the `Lens`/`Projection`/`Mapping` structures in `core.lens`, instantiated by the
+   instruments) plus the law-holder structures in `target.correspondence` — so it is scanned too.
+   The kernel still ships no DOMAIN vocabulary; it is opinionated only about the native acts."
+  ["src" "lib" "canvas" "demos" "test"])
 
 (def generated-config-path
   "The generated config, merged into the hand-written one via `:config-paths`."

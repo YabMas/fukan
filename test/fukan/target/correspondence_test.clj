@@ -321,8 +321,8 @@
             no reader) is allowed — the law guards reader→lens only"
     (let [db (-> (sub/create)
                  (d/db-with
-                  [{:db/id -1 :structure/of :lib.lens/Lens :entity/name "survey"}                              ; a declared focus
-                   {:db/id -2 :structure/of :lib.lens/Lens :entity/name "purity"}                              ; a Lens with NO reader — allowed
+                  [{:db/id -1 :structure/of :fukan.canvas.core.lens/Lens :entity/name "survey"}                              ; a declared focus
+                   {:db/id -2 :structure/of :fukan.canvas.core.lens/Lens :entity/name "purity"}                              ; a Lens with NO reader — allowed
                    {:db/id -3 :structure/of :lib.code/Operation :entity/name "probe-survey" :val/extracted true} ; covered by the survey Lens
                    {:db/id -4 :structure/of :lib.code/Operation :entity/name "probe-orphan" :val/extracted true} ; no Lens "orphan" → offender
                    {:db/id -5 :structure/of :lib.code/Operation :entity/name "run"          :val/extracted true}]))] ; not a probe-* reader → ignored

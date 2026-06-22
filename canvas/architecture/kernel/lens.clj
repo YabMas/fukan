@@ -2,8 +2,9 @@
   "Self-spec: fukan's LENS ENGINE — `core.lens` (`fukan.canvas.core.lens`): run a selection query,
    WITH the vocab-derived rules, to a focus node-set, and refine a focus by a further query
    (lens-within-lens). Split out of the rule-derivation machinery so the chain stays acyclic:
-   lens-engine → kernel → query-engine. (The Lens *vocab* — the primitive that carries a query —
-   is the forward-looking view in `canvas.instruments.lenses`; this is the machinery that RUNS it.)"
+   lens-engine → kernel → query-engine. This module now ALSO owns the act grammar — the
+   `Lens`/`Projection`/`Mapping` structures — fukan-native apparatus, not domain vocab, alongside
+   the machinery that runs it."
   (:require [lib.code :refer [Kind Operation Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.substrate :as substrate]))
