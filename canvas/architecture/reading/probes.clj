@@ -21,10 +21,10 @@
   (Operation run "Dispatch a named probe over a target db → a finding."
     {:signature [:=> [:catn [:target-db substrate/StructureDb] [:probe-name ProbeName]] Finding]
      :performs  [:throws]
-     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations finding/finding finding/observation]})
+     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations corr/type-drifted-operations finding/finding finding/observation]})
   (Operation run-all "Run every implemented probe leaf → a map of findings."
     {:signature [:=> [:catn [:target-db substrate/StructureDb]] FindingMap]
-     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations finding/finding finding/observation]})
+     :delegates [kernel/check corr/uncovered-operations corr/drifted-operations corr/type-drifted-operations finding/finding finding/observation]})
   ;; ── the probe leaves: internal handlers the dispatch point routes to (each a private defn-) ──
   (Operation ^:private probe-survey      "Structural overview (a reading).")
   (Operation ^:private probe-patterns    "Pattern reading (a reading).")
