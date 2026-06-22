@@ -38,6 +38,14 @@
         c    (segs cm)]
     (= c (take-last (count c) (segs km)))))
 
+(defn ^:export reader-realizes-lens?
+  "True when a bespoke probe reader named `rn` (e.g. \"probe-survey\") realizes the Lens named
+   `ln` (\"survey\") — the reader name is the lens name under the `probe-` realization prefix.
+   The Lens↔reader analog of `module-corresponds?`: a NAME bridge, so the correspondence needs no
+   `:realizes` relation (mirroring `Realization`'s authored↔extracted name match)."
+  [rn ln]
+  (= rn (str "probe-" ln)))
+
 (defstructure Realization
   "A law-holder for the model↔code correspondence — it has no instances of its own;
    it exists to carry the cross-layer assertion in its own concern.
@@ -223,6 +231,46 @@
              (reaches-effect ?e ?en)
              (not-join [?o ?en]
                [?dpr :rel/from ?o] [?dpr :rel/kind :performs] [?dpr :rel/to ?deff] [?deff :val/name ?en])]))
+
+(defstructure LensCoverage
+  "Law-holder for the LENS↔READER correspondence — the lens-analog of `Encapsulation`, at the read
+   surface. fukan's bespoke probe readers (`probe-X`, the model-db→finding leaves in
+   `projection/probes`) are the CODE realization of its declared `Lens` instruments: a reader is a
+   focus run richly (annotated observations, composing `check`/correspondence). So every reader must
+   be COVERED by a declared Lens of the same focus — you do not write a bespoke reader without first
+   naming its focus as a `Lens` (intent), exactly as `Encapsulation` forbids an undeclared public op.
+   The DUAL is deliberately NOT enforced: a Lens needs no reader — a reasoning lens like `purity` is
+   run generically through its `:select` (`core.lens/evaluate-lens`), no bespoke leaf — so this guards
+   reader→lens only.
+
+   Match is on NAME (the `probe-` realization prefix; `reader-realizes-lens?`), no `:realizes`
+   relation — mirroring `Realization`'s name-matching house style. `:scope :global` (offenders are the
+   extracted readers, not LensCoverage). Vacuous on a model-only build (the leading `:val/extracted
+   true` guard — no extracted readers, no offenders); the `Lens` instruments are authored design nodes
+   coexisting on the merged graph, so a reader matches its lens across the altitude gap. The not-join
+   binds `?rn` on entry (no free-variable blow-up); the Lens relation is non-empty in any real build
+   (the instruments are always ingested)."
+  (law "every extracted probe reader is covered by a declared Lens of the same focus"
+    :scope :global
+    :offenders '[?r]
+    :where '[[?r :structure/of :lib.code/Operation] [?r :val/extracted true] [?r :entity/name ?rn]
+             [(clojure.string/starts-with? ?rn "probe-")]
+             (not-join [?rn]
+               [?l :structure/of :lib.lens/Lens] [?l :entity/name ?ln]
+               [(fukan.target.correspondence/reader-realizes-lens? ?rn ?ln)])]))
+
+(defn uncovered-readers
+  "The LENS-COVERAGE worklist — extracted probe readers (`probe-X`) with no declared `Lens` of the
+   same focus, as a set of reader names. Empty ⇔ every bespoke reader's focus is declared as a Lens
+   instrument (the dual — a Lens with no reader — is allowed, see `LensCoverage`). Reads the single
+   source of truth (the registered `LensCoverage` law, like `unfaithful-calls` reads `Fidelity`)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::LensCoverage) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
+         set)))
 
 (defn unrealized-delegates
   "The authored source Operations whose cross-module delegation is NOT realized by any actual call

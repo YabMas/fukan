@@ -314,3 +314,22 @@
           "0 undeclared effects — design and extraction speak one effect language, to call-graph depth")
       (is (empty? (corr/totality-violations model))
           "0 totality violations — every trusted-core reader (its :in is the Model) is total"))))
+
+(deftest lens-coverage-fires-on-an-orphan-reader
+  (testing "an extracted probe reader (probe-X) with no declared Lens of the same focus is an offender;
+            a reader whose Lens exists is covered, a non-probe op is ignored, and the DUAL (a Lens with
+            no reader) is allowed — the law guards reader→lens only"
+    (let [db (-> (sub/create)
+                 (d/db-with
+                  [{:db/id -1 :structure/of :lib.lens/Lens :entity/name "survey"}                              ; a declared focus
+                   {:db/id -2 :structure/of :lib.lens/Lens :entity/name "purity"}                              ; a Lens with NO reader — allowed
+                   {:db/id -3 :structure/of :lib.code/Operation :entity/name "probe-survey" :val/extracted true} ; covered by the survey Lens
+                   {:db/id -4 :structure/of :lib.code/Operation :entity/name "probe-orphan" :val/extracted true} ; no Lens "orphan" → offender
+                   {:db/id -5 :structure/of :lib.code/Operation :entity/name "run"          :val/extracted true}]))] ; not a probe-* reader → ignored
+      (is (= #{"probe-orphan"} (corr/uncovered-readers db))
+          "only the probe reader with no declared Lens is flagged; the covered reader, the non-probe op, and the reader-less Lens are not"))))
+
+(deftest lens-coverage-green-on-the-self-model
+  (testing "every bespoke probe reader has a declared Lens twin on the live build-model \"src\""
+    (is (empty? (corr/uncovered-readers (pipeline/build-model "src")))
+        "0 uncovered readers — every probe-X leaf's focus is declared as a Lens instrument")))

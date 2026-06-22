@@ -33,6 +33,9 @@
      :delegates [kernel/check]})                 ; reads the registered Fidelity law via check
   (Operation uncovered-public-operations "PUBLIC extracted operations with no model twin — the encapsulation worklist."
     {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector OperationName]]})
+  (Operation uncovered-readers "Extracted probe readers (probe-X) with no declared Lens twin — the lens-coverage worklist (the lens-analog of the encapsulation worklist)."
+    {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector OperationName]]
+     :delegates [kernel/check]})                 ; reads the registered LensCoverage law via check
   (Operation operation-sig "Render an authored Operation's modelled type to a malli function-schema."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:op-eid :int]] :any]})
   ;; ── the effect-language / partiality correspondence readers ──
