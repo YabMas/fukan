@@ -10,4 +10,5 @@
 (Module core
   "The CLI entry point / composition root — drives the model lifecycle."
   (Operation -main "Entry point: build the held Model from a src path, then hand off."
-    {:delegates [infra/load-model]}))
+    {:performs  [:io :require :state :throws]
+     :delegates [infra/load-model]}))

@@ -12,5 +12,5 @@
   (Kind Path :string)
   (Operation extract "Extract code structures from source paths into the shared StructureDb."
     {:signature [:=> [:catn [:paths [:vector Path]]] substrate/StructureDb]
-     :performs  [:io]
+     :performs  [:io :throws]
      :delegates [assemble/assemble-instances]}))   ; emits the extracted instances into a db

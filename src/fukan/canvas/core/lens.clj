@@ -26,13 +26,13 @@
   "Run lens `lens-eid`'s own selection query — the `:val/query` payload it carries (its
    `:select` slot) — with the vocab-derived rules, returning the focus node-set (a set of
    eids). The selection is the focus stated runnably (model-native datalog), so it lives ON
-   the lens; no `:realizes` indirection. Throws if the lens has no selection (a prose-only
-   lens isn't evaluable)."
+   the lens; no `:realizes` indirection. TOTAL: a prose-only lens (no `:select`) is not
+   evaluable, so it yields `nil` — a Maybe (`nil` = not evaluable, distinct from `#{}` =
+   evaluated to no nodes), never a throw. This is a trusted-core reader over the Model, so it
+   stays total (parse-don't-validate); deciding a prose-only lens is unevaluable is the
+   caller's concern, not an exception in the core."
   [db lens-eid]
-  (let [clauses (:val/query (d/entity db lens-eid))]
-    (when-not clauses
-      (throw (ex-info "lens has no selection query — not evaluable"
-                      {:lens lens-eid})))
+  (when-let [clauses (:val/query (d/entity db lens-eid))]
     (focus-nodes db clauses)))
 
 (defn refine

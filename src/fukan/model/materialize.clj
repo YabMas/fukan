@@ -216,7 +216,7 @@
   "The model-driven entry: materialize the modelled `Projection` node `proj-eid` — render
    its `:through` lens focus under its base, wrapped in its `:context` (if a
    contextualization). The Projection's `:maps`/`:context` are the intent manifest; the
-   renderers realize them. Throws if the projection's lens carries no selection query."
+   renderers realize them. A prose-only lens (no selection query) yields nil → renders nothing."
   [db proj-eid]
   (let [projection (:entity/name (d/entity db proj-eid))
         lens-eid   (rel-target db proj-eid :through)]

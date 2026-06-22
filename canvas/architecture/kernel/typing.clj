@@ -15,7 +15,8 @@
 (Module typing
   "The type-dialect plug-point — register a dialect; render / check / reflect types through it."
   (Operation register-type-dialect! "Install a project's type dialect (the bridge-fn map + :reflect-tag)."
-    {:signature [:=> [:catn [:dialect :any]] :any]})
+    {:signature [:=> [:catn [:dialect :any]] :any]
+     :performs  [:state]})
   (Operation render-type "Render a type subgraph at an eid to a code-form, via the dialect."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid :any]] :any]})
   (Operation type-adheres? "Whether a model type-form adheres to a realized code type-form, via the dialect."
@@ -24,6 +25,7 @@
     {:signature [:=> [:cat] :any]})
   (Operation reflect-type "A type form → its content-deduped subgraph: the kernel builds via the dialect's :reflect-tag."
     {:signature [:=> [:catn [:form :any]] :any]
+     :performs  [:throws]
      :delegates [kernel/value-literal->iv substrate/value-content-key assemble/emit-instances]})  ; kernel does the building (the SPI)
   (Operation parse-type "A code-form type → entity-maps, via the dialect's :parse bridge (the inverse of render-type)."
     {:signature [:=> [:catn [:form :any]] :any]}))

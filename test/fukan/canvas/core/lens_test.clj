@@ -58,7 +58,6 @@
           "refine composes — a focus narrowed step by step"))))
 
 (deftest prose-only-lens-is-not-evaluable
-  (testing "a lens with no selection query throws (prose focus alone isn't evaluable)"
+  (testing "a prose-only lens (no selection query) yields nil — TOTAL, not a throw"
     (let [db (a/assemble-vars [#'lns-prose])]
-      (is (thrown? clojure.lang.ExceptionInfo
-                   (lens/evaluate-lens db (by-name db "prose")))))))
+      (is (nil? (lens/evaluate-lens db (by-name db "prose")))))))

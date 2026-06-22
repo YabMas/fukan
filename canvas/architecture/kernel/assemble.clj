@@ -16,15 +16,19 @@
   (Operation assemble-vars
     "Build a StructureDb from an explicit collection of instance-bearing vars."
     {:signature [:=> [:catn [:vars [:vector :any]]] substrate/StructureDb]
+     :performs  [:throws]
      :delegates [substrate/create]})               ; builds on the kernel's StructureDb constructor
   (Operation assemble-instances
     "Build a StructureDb from explicit [id InstanceValue] roots — the extractor's path."
     {:signature [:=> [:catn [:id+ivs [:vector :any]]] substrate/StructureDb]
+     :performs  [:throws]
      :delegates [substrate/create]})
   (Operation emit-instances
     "Walk [id InstanceValue] roots into {:nodes :rels} maps WITHOUT transacting — for builders
      that merge into an existing db (the grammar reflector, the malli dialect)."
-    {:signature [:=> [:catn [:id+ivs [:vector :any]]] :any]})
+    {:signature [:=> [:catn [:id+ivs [:vector :any]]] :any]
+     :performs  [:throws]})
   (Operation assemble
     "Scan namespaces for instance-vars and build one StructureDb."
-    {:signature [:=> [:catn [:ns-syms [:vector :symbol]]] substrate/StructureDb]}))
+    {:signature [:=> [:catn [:ns-syms [:vector :symbol]]] substrate/StructureDb]
+     :performs  [:throws]}))

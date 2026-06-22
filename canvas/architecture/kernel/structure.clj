@@ -29,7 +29,8 @@
   "Build a ^:value InstanceValue for a value-structure tag from a data literal — the one
    value-construction path; the kernel's `typing/reflect-type` builds a dialect's type
    subgraphs through it (the dialect contributes only its tag, never reaching in)."
-  {:signature [:=> [:catn [:tag :keyword] [:literal :any]] :any]})
+  {:signature [:=> [:catn [:tag :keyword] [:literal :any]] :any]
+   :performs  [:throws]})
 (Operation scalar-slot?
   "Whether a slot stores a leaf VALUE (vs. a relation to a node) — drives value-vs-ref handling."
   {:signature [:=> [:catn [:slot :any]] :boolean]})

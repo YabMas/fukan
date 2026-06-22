@@ -15,10 +15,12 @@
   "The model lifecycle — load / get / refresh the held Model from a source path."
   (Operation load-model    "Build (or reload) the held Model from a src path."
     {:signature  [:=> [:catn [:src extraction/Path]] substrate/StructureDb]
+     :performs   [:io :require :state :throws]
      :delegates  [pipeline/build-model]})        ; the lifecycle drives the build pipeline
   (Operation get-model     "The current held Model, or none."
     {:signature [:=> [:cat] substrate/StructureDb]})
   (Operation refresh-model "Rebuild the Model from the last src path."
-    {:signature [:=> [:cat] substrate/StructureDb]})
+    {:signature [:=> [:cat] substrate/StructureDb]
+     :performs  [:io :require :state :throws]})
   (Operation get-src "The current source path the held Model was built from, or none."
     {:signature [:=> [:cat] extraction/Path]}))

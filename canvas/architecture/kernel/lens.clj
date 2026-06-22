@@ -15,8 +15,7 @@
   (Operation focus-nodes "Run :where clauses (binding ?n) with the vocab rules → focus node-set."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:clauses [:vector Clause]]] [:vector Eid]]
      :delegates [kernel/vocab-rules]})
-  (Operation evaluate-lens "Read a stored lens's query, then resolve it to a focus node-set."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:lens-eid Eid]] [:vector Eid]]
-     :performs  [:throws]})
+  (Operation evaluate-lens "Read a stored lens's query, then resolve it to a focus node-set (TOTAL: a prose-only lens yields nil, never throws)."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:lens-eid Eid]] [:vector Eid]]})
   (Operation refine "Narrow a focus to members also matching further clauses (lens-within-lens)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:focus [:vector Eid]] [:clauses [:vector Clause]]] [:vector Eid]]}))

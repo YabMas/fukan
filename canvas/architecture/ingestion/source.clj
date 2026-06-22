@@ -22,5 +22,5 @@
      :performs  [:io]})
   (Operation build "Discover + require + assemble the canvas specs → the model db."
     {:signature [:=> [:cat] substrate/StructureDb]
-     :performs  [:io :stderr :require]
+     :performs  [:io :stderr :require :throws]
      :delegates [assemble/assemble]}))          ; assembles the discovered instance-vars

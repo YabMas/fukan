@@ -163,6 +163,65 @@
                (in-module ?s ?cmn)
                [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]))
 
+(defstructure Totality
+  "Law-holder for code-up TOTALITY — the ENFORCED dual of the partiality worklist, at the TRUST LINE
+   (parse-don't-validate). A trusted-core READER is a modelled Operation whose `:in` signature
+   references the trust artifact `StructureDb` (the Model) — it operates ON the trusted graph.
+   Parse-don't-validate confines partiality to the layer that BUILDS the Model from untrusted input, so
+   a reader operating on the already-trusted graph must be TOTAL: it may not throw. An offender is such
+   a reader whose extracted twin (same name, corresponding module — `module-corresponds?`, as
+   `Realization`) performs `:throws`. With THIS law green AND `Realization`/`CallRealization`/`Fidelity`/
+   `Encapsulation` green, the modelled trusted core is provably total — partiality is confined to the
+   Model-building boundary.
+
+   `:scope :global` (offenders are the authored reader ops, not Totality). Naturally vacuous on a
+   model-only build (the `[?e :val/extracted true]` + `:performs :throws` clauses find nothing without
+   extracted code). The trust artifact is identified STRUCTURALLY (the `Kind` named `StructureDb`) — no
+   per-op flag; the `:in`-reaches-`StructureDb` join is the data-adoption join from
+   `lib.code/module-depends-rules`. Module membership resolves through the injected `in-module` rule
+   (mirroring `Realization`); coverage grows as more op signatures are modelled."
+  (law "every trusted-core reader (its :in is the Model) is total — its realizing code performs no :throws"
+    :scope :global
+    :offenders '[?o]
+    :where '[[?o :structure/of :lib.code/Operation] (not [?o :val/extracted true]) [?o :entity/name ?on]
+             [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?sch]
+             [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
+             [?k :structure/of :lib.code/Kind] [?k :entity/name "StructureDb"]
+             (in-module ?o ?cmn)
+             [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
+             (in-module ?e ?kmn)
+             [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)]
+             [?pr :rel/from ?e] [?pr :rel/kind :performs] [?pr :rel/to ?eff] [?eff :val/name "throws"]]))
+
+(defstructure EffectCorrespondence
+  "Law-holder for the model↔code EFFECT correspondence — the effect dimension of the self-correspondence
+   (sibling of `Realization`/`Fidelity`/`Encapsulation`/`Totality`). Every effect a modelled op's
+   extracted twin TRANSITIVELY reaches (over `:calls` ∪ `:performs`) must appear in the op's authored
+   `:performs`: design and extraction speak one effect language, to the depth of the call graph. Twin
+   matched by name + corresponding module (`module-corresponds?`, as `Realization`).
+
+   Direction: UNDER-declaration only (`reached ∖ declared`). Over-declaration (a declared effect the
+   code doesn't reach) is NOT a violation — the classifier is necessarily incomplete (taxonomy +
+   dynamic-dispatch gaps), so a phantom is a soft `effect-phantom` reading, never enforced. `:scope
+   :global`; naturally vacuous on a model-only build (no extracted twin → nothing reached). The
+   `reaches-effect` rule is purely self-recursive (passes `check-law-recursion!`, memoized within the
+   query so it is cheap — ~0.2s of `check`); `in-module` resolves through the injected substrate rule.
+   The `:rules` inline a copy of `lib.code/reaches-effect-rules` (a law's `:rules` is macro-time literal
+   data — it cannot reference that var); keep the two in sync."
+  (law "every effect a modelled op's twin transitively reaches is declared in the op's :performs"
+    :scope :global
+    :offenders '[?o]
+    :rules '[[(reaches-effect ?op ?en) [?pr :rel/from ?op] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]]
+             [(reaches-effect ?op ?en) [?cr :rel/from ?op] [?cr :rel/kind :calls] [?cr :rel/to ?mid] (reaches-effect ?mid ?en)]]
+    :where '[[?o :structure/of :lib.code/Operation] (not [?o :val/extracted true]) [?o :entity/name ?on]
+             (in-module ?o ?cmn)
+             [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
+             (in-module ?e ?kmn)
+             [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)]
+             (reaches-effect ?e ?en)
+             (not-join [?o ?en]
+               [?dpr :rel/from ?o] [?dpr :rel/kind :performs] [?dpr :rel/to ?deff] [?deff :val/name ?en])]))
+
 (defn unrealized-delegates
   "The authored source Operations whose cross-module delegation is NOT realized by any actual call
    between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency

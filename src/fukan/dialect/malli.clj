@@ -76,7 +76,10 @@
       [:=> (into [:catn] (map (fn [[ieid lbl]] [(keyword lbl) (render db ieid)])
                               (labelled-children db eid :in)))
        (render db (first (children db eid :out)))]
-      (throw (ex-info (str "cannot render schema kind: " kind) {:eid eid :kind kind})))))
+      ;; TOTAL: an unknown kind cannot occur for a well-formed Schema (validated at construction),
+      ;; so render a visible structured placeholder instead of throwing — keeps the read side total
+      ;; (a marker that can never pass as a real malli type), rather than leaking partiality upward.
+      [:fukan/unrenderable kind])))
 
 (def ^:private validator
   "Compiled validator per type form (memoized — forms are authored literals, few)."

@@ -15,4 +15,5 @@
   "The model-build pipeline — the single build entry point."
   (Operation build-model "Ingest the design specs + fold extracted code onto one StructureDb."
     {:signature [:=> [:catn [:source extraction/Path]] substrate/StructureDb]
+     :performs  [:io :require :throws]
      :delegates [canvas-source/build extraction/run-extractor canvas-source/union-dbs]}))
