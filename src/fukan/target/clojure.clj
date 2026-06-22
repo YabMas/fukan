@@ -63,18 +63,80 @@
                                   :rel/from c :rel/kind :calls :rel/to e :rel/order n})
                                pairs))))
 
+;; ── effect grounding (the I/O analog of :calls) ──────────────────────────────
+;; The FACTS layer for effects: classify a callee, attribute its effect to the calling op (direct
+;; effects only; transitive reach is the reading's job). CONSEQUENTIAL effects (:io/:state/:require)
+;; are the `(purity)` surface; logging/monitoring is deliberately NOT an effect (observational, not a
+;; hazard). `throw` is classified as PARTIALITY (:throws) — kept OUT of the consequential surface, read
+;; by the `(totality)` trust-line worklist.
+
+(def ^:private effect-by-callee
+  "Fully-qualified callee var → the effect it performs — CONSEQUENTIAL (:io/:state/:require) or
+   PARTIALITY (:throws, kept out of the consequential `(purity)` surface; read by `(totality)`).
+   Logging/monitoring (println/print/prn/pr/printf/flush, clojure.tools.logging, tap>) is
+   deliberately ABSENT — observational, not a hazard, per the purity carve-out."
+  (merge
+   (zipmap '[clojure.core/slurp clojure.core/spit clojure.core/line-seq clojure.core/file-seq
+             clj-kondo.core/run!]                  ; the analyzer's file I/O (reads source, writes its cache)
+           (repeat :io))
+   (zipmap '[clojure.core/swap! clojure.core/reset! clojure.core/swap-vals! clojure.core/reset-vals!
+             clojure.core/alter clojure.core/alter-var-root clojure.core/ref-set clojure.core/vreset!
+             clojure.core/commute clojure.core/send clojure.core/send-off
+             datascript.core/transact! datascript.core/reset-conn!]
+           (repeat :state))
+   (zipmap '[clojure.core/require clojure.core/use clojure.core/load clojure.core/load-file
+             clojure.core/load-string clojure.core/requiring-resolve clojure.core/resolve
+             clojure.core/ns-resolve clojure.core/find-ns clojure.core/the-ns]
+           (repeat :require))
+   ;; partiality — `throw` is a special form, but clj-kondo resolves it as clojure.core/throw.
+   ;; An op that throws is partial; classified so its partiality is queryable by the `(totality)`
+   ;; trust-line worklist. NOT a consequential world-effect → excluded from the `(purity)` surface.
+   (zipmap '[clojure.core/throw] (repeat :throws))))
+
+(def ^:private effect-by-ns
+  "Callee NAMESPACE → effect, for whole namespaces that are effectful regardless of the var."
+  {"clojure.java.io"    :io
+   "clojure.java.shell" :io})
+
+(defn- callee-effect
+  "The effect a callee — namespace symbol `to`, name symbol `nm` — performs, or nil.
+   A specific-var classification wins over the namespace-wide one."
+  [to nm]
+  (or (effect-by-callee (symbol (str to) (str nm)))
+      (effect-by-ns (str to))))
+
+(defn- effect-iv
+  "A value-identified Effect InstanceValue for effect keyword `kw` — content-identical to an
+   authored `(Effect :kw)`, so extracted and authored effects collapse to one node."
+  [kw]
+  (s/->InstanceValue :lib.code/Effect nil nil {:val/name (name kw)} [] true))
+
+(defn- op-effects
+  "Map {[caller-ns-str caller-fn-str] #{effect-kw …}} from clj-kondo var-usages — every resolvable
+   call to a classified-effectful callee attributes that effect to the CALLING op (direct effects
+   only; transitive reach is the reading's job, and is deferred)."
+  [var-usages]
+  (reduce (fn [acc {:keys [from from-var to name]}]
+            (if-let [eff (and from from-var to name (callee-effect to name))]
+              (update acc [(str from) (str from-var)] (fnil conj #{}) eff)
+              acc))
+          {} var-usages))
+
 (defn extract
   "Extract a structure-db of Modules + the Operations they define from the Clojure source under
-   `paths`, then ground the actual call graph as `:calls` rels. Modules are stamped
+   `paths`, then ground the actual call graph as `:calls` rels. Operations are stamped with their
+   DIRECT effects (`:performs`, logging excluded; `throw` as `:throws`); Modules are stamped
    `:val/extracted true` (provenance, like Operations)."
   [& paths]
   (let [{:keys [namespace-definitions var-definitions var-usages]} (analyze paths)
         ops-by-ns    (group-by :ns (filter #(fn-defining (:defined-by %)) var-definitions))
         module-names (distinct (concat (map :name namespace-definitions)
                                        (keys ops-by-ns)))
+        op-effs      (op-effects var-usages)
         db (assemble/assemble-instances
             (for [mname module-names
-                  :let [ops (for [v (ops-by-ns mname)]
+                  :let [ops (for [v (ops-by-ns mname)
+                                  :let [effs (get op-effs [(str mname) (str (:name v))])]]
                               (s/->InstanceValue :lib.code/Operation (str (:name v)) nil
                                                  (cond-> {:val/private (boolean (:private v))
                                                           :val/extracted true}
@@ -84,7 +146,11 @@
                                                    (assoc :val/test-support true)
                                                    (:malli/schema (:meta v))
                                                    (assoc :val/sig (pr-str (:malli/schema (:meta v)))))
-                                                 [] false))]]
+                                                 (cond-> []
+                                                   (seq effs)
+                                                   (conj {:rk :performs :card :many
+                                                          :targets (mapv effect-iv (sort effs))}))
+                                                 false))]]
               [(str mname)
                (s/->InstanceValue :lib.code/Module (str mname) nil {:val/extracted true}
                                   [{:rk :child :card :many :targets (vec ops)}] false)]))]
