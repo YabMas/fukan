@@ -1,7 +1,7 @@
 (ns fukan.canvas.core.lens-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
-            [fukan.canvas.core.lens :as lens :refer [Lens]]
+            [fukan.canvas.core.lens :as lens :refer [Lens Check]]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
@@ -34,6 +34,12 @@
 (Lens ^{:name "x-links"} lns-x-links {:focus  "what x links to"
                                       :select ["x's links" '[(named ?root "x") (links ?root ?n)]]})
 (Lens ^{:name "prose"}   lns-prose   {:focus "just words"})
+(Lens ^{:name "none"}    lns-none    {:focus  "widgets in a module that doesn't exist"
+                                      :select ["none" '[(Widget ?n) (in-module ?n "nope")]]})
+
+;; a Check gates a lens — a non-empty focus is a violation
+(Check ^{:name "widgets-in-m"} chk-fires  {:gates lns-in-m :verdict "widgets exist in m"})
+(Check ^{:name "none-in-nope"} chk-passes {:gates lns-none :verdict "no widgets in module nope"})
 
 (deftest evaluates-a-lens-selection-query-to-its-focus-node-set
   (testing "a lens's own selection query (over the vocab rules) yields the focus nodes"
@@ -60,3 +66,16 @@
   (testing "a prose-only lens (no selection query) yields nil — TOTAL, not a throw"
     (let [db (a/assemble-vars [#'lns-prose])]
       (is (nil? (lens/evaluate-lens db (by-name db "prose")))))))
+
+(deftest run-checks-fires-on-a-nonempty-gated-focus
+  (testing "a Check gating a lens with a NON-EMPTY focus is a violation (offenders = the focus); a
+            gated EMPTY focus passes — the use-side dual of structure/check"
+    (let [db         (a/assemble-vars [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other
+                                       #'lns-in-m #'lns-none #'chk-fires #'chk-passes])
+          violations (lens/run-checks db)
+          by-check   (into {} (map (juxt :check identity)) violations)]
+      (is (= #{"widgets-in-m"} (set (map :check violations)))
+          "only the check whose gated focus is non-empty fires")
+      (is (= "widgets exist in m" (:verdict (by-check "widgets-in-m"))))
+      (is (= #{"x" "y" "z"} (names db (:offenders (by-check "widgets-in-m"))))
+          "the offenders are the gated lens's focus"))))

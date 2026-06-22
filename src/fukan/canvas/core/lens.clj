@@ -56,6 +56,23 @@
   (law "a projection is a base (declares mappings) or a contextualization (frames another)"
     (has-any :maps :contextualizes)))
 
+;; ── THE GATE: a Check turns a Lens's focus into a verdict ──────────────────────────────────────
+
+(defstructure Check
+  "A GATE over a Lens — the use-side dual of the law substrate, and the third native act beside
+   `Lens` (read) and `Projection` (synthesize). A Check names a Lens it `:gates` and a `:verdict`:
+   when that lens's focus is NON-EMPTY, it is a violation and the focused nodes are the offenders.
+   Reading and checking are different acts — a Check turns a focus into a gate, and the focus itself
+   doesn't know it is gated. `run-checks` evaluates every Check, parallel to how `structure/check`
+   runs the laws.
+
+   A Check is the LIGHTWEIGHT use-side gate a project authors over its own lenses (compose a focus,
+   declare 'non-empty is a violation'). fukan's own rigorous model↔code correspondence gates stay
+   bespoke law-holders in `target.correspondence` — guards, transitive rules, module-correspondence
+   — so fukan authors no Check of its own; this is the surface a CONSUMER project gates with."
+  {:gates   Lens       ; the focus this check gates on — non-empty ⇒ violation
+   :verdict :string})  ; what a non-empty focus means — the violation description
+
 (defn focus-nodes
   "Run datalog `:where` `clauses` (binding `?n` as the focused node) with the
    vocab-derived rules, returning the focus node-set (a set of eids). The shared
@@ -84,3 +101,21 @@
    (e.g. focus-nodes → refine → materialize-over / a scoped probe)."
   [db focus clauses]
   (set/intersection (set focus) (focus-nodes db clauses)))
+
+(defn run-checks
+  "Evaluate every `Check` in `db`: a Check gates a Lens, so its violation is the gated lens's focus
+   being NON-EMPTY — each focused node an offender. Returns a seq of
+   `{:check <name> :verdict <str> :offenders <node-set>}`, the use-side dual of `structure/check`'s
+   law violations: empty ⇔ every gated focus is empty (a prose-only gated lens is unevaluable, so it
+   never fires). Laws gate the substrate; Checks gate a use-side focus."
+  [db]
+  (for [[c verdict lens] (d/q '[:find ?c ?verdict ?lens
+                                :where [?c :structure/of :fukan.canvas.core.lens/Check]
+                                       [?c :val/verdict ?verdict]
+                                       [?g :rel/kind :gates] [?g :rel/from ?c] [?g :rel/to ?lens]]
+                              db)
+        :let  [focus (evaluate-lens db lens)]
+        :when (seq focus)]
+    {:check     (:entity/name (d/entity db c))
+     :verdict   verdict
+     :offenders (set focus)}))

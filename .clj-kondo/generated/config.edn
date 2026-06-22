@@ -55,6 +55,7 @@
    fukan.canvas.core.laws-test/LRef hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LReviewer hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LSrc hooks.fukan.structure/instance
+   fukan.canvas.core.lens/Check hooks.fukan.structure/instance
    fukan.canvas.core.lens/Lens hooks.fukan.structure/instance
    fukan.canvas.core.lens/Mapping hooks.fukan.structure/instance
    fukan.canvas.core.lens/Projection hooks.fukan.structure/instance
