@@ -6,7 +6,9 @@
   (:require [fukan.canvas.core.lens :refer [Lens]]
             [lib.grouping :refer [Grouping]]))
 
-;; focuses for reasoning reads (non-gating views — perspectives to reason with)
+;; fukan's focuses over its own model. A lens SELECTS a slice — it does NOT gate; checking is the
+;; law/correspondence substrate's job (reading and checking are different acts, kept apart). So
+;; there is no gating/non-gating partition here — every entry is just a focus.
 (Lens survey      {:focus  "the whole model's structure"
                    :select ["every node" '[[?n :structure/of _]]]})
 (Lens patterns    {:focus  "recurring structures across the model"
@@ -19,7 +21,6 @@
 (Lens purity      {:focus  "operations that directly perform a consequential effect"
                    :select ["operations performing a consequential effect (io/state/require)"
                             '[(Operation ?n) (performs ?n ?e) [?e :val/name ?en] [(not= ?en "throws")]]]})
-;; focuses for gating checks (the law/correspondence substrate surfaces the verdicts)
 (Lens integrity   {:focus  "the model's structural integrity — laws, partitions"
                    :select ["the whole model" '[[?n :structure/of _]]]})
 (Lens coverage    {:focus  "spec ↔ code coverage"
