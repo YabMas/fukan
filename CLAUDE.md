@@ -60,13 +60,17 @@ in `.legacy-allium/` as the baseline to compare against once the transition clos
 vision, but it is *not on the near roadmap and should not be proposed as a next
 step* — the core is being exercised extensively first. Do not re-suggest reviving it.
 
-**Direction — exercise the core via modelling, not a premature middle layer.**
-The work now is authoring a wide variety of models directly on `defstructure`
-(canvas specs + demos), to pressure-test the core in every way. We are **not**
-building a reusable methodology/middle layer (DDD/hexagonal/C4 vocabularies) yet —
-there's no purpose for one today. Keep the core *able* to grow such a layer later
-(the refinement mechanism), and prove that mechanism only when a concrete need
-arises; otherwise the focus is exploring modelling itself.
+**Direction — exercise the core via modelling; extract reusable structures to `lib/`
+under concrete pressure.** The work now is authoring a wide variety of models directly
+on `defstructure` (canvas specs + demos), to pressure-test the core in every way. When
+a real modelling case reveals a structure that is **reusable and not fukan-specific**,
+extracting it into the `lib/` stdlib is good practice — it actively aids finding clean
+designs for fukan itself, even setting reuse aside. The one discipline: extraction must
+be driven by **concrete design pressure from a real case** — do *not* spend considerable
+time abstractly designing reusable layers (methodology vocabularies such as
+DDD/hexagonal/C4) in anticipation of reuse. Grow the layer opportunistically *from*
+modelling, never ahead of it. (The core stays *able* to grow such a layer later via the
+refinement mechanism; that is the seam, proved on real need.)
 
 ## The kernel ships mechanics only — no vocabulary
 
@@ -95,11 +99,13 @@ join rule `(of-structure ?i ?s)` is in `lib.grammar/rules`; fukan's `build-model
 reflects, demos opt in). The grouping ladder is deliberately
 levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace) ⊂ `Subsystem` (a
 cluster of modules realizing a capability, with a declared `:may-depend` DAG the `lib.arch`
-laws enforce against the extracted code graph). The stdlib is deliberately *not* a methodology/middle
-layer (DDD/hexagonal/C4) — it's primitive, reusable structures, grown only on real need
-(e.g. add a `lib.code` batch like `in-process`/`event-driven` when a second consumer needs
-it). Tags are namespace-qualified, so a `lib` grammar never collides with a consumer's —
-the one remaining edge is law scoping, which rides short-name rules.
+laws enforce against the extracted code graph). The stdlib grows **only under concrete design pressure** —
+primitive, reusable structures extracted when a real modelling case reveals them (e.g. add a
+`lib.code` batch like `in-process`/`event-driven` when a consumer needs it), never a
+methodology/middle layer designed abstractly ahead of real cases. Methodology-shaped vocab
+(DDD/Wlaschin/APoSD idioms) is welcome here once a concrete case presses it out. Tags are
+namespace-qualified, so a `lib` grammar never collides with a consumer's — the one remaining
+edge is law scoping, which rides short-name rules.
 
 A `defstructure` is a composition of **slots** plus **laws**:
 
