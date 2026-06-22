@@ -16,6 +16,9 @@
                             '[(Operation ?n) (not [?n :val/extracted true])]]})
 (Lens tar-pit     {:focus  "complexity hotspots — tangles worth attention"
                    :select ["the call-graph callers" '[(calls ?n ?callee)]]})
+(Lens purity      {:focus  "operations that directly perform a consequential effect"
+                   :select ["operations performing a consequential effect (io/state/require)"
+                            '[(Operation ?n) (performs ?n ?e) [?e :val/name ?en] [(not= ?en "throws")]]]})
 ;; focuses for gating checks (the law/correspondence substrate surfaces the verdicts)
 (Lens integrity   {:focus  "the model's structural integrity — laws, partitions"
                    :select ["the whole model" '[[?n :structure/of _]]]})
@@ -29,4 +32,4 @@
                                    [(fukan.target.correspondence/module-corresponds? ?cm ?km)])]]})
 
 (Grouping lens
-  {:child [survey patterns consistency tar-pit integrity coverage drift]})
+  {:child [survey patterns consistency tar-pit purity integrity coverage drift]})
