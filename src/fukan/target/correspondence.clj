@@ -69,18 +69,22 @@
    must be realized by SOME actual cross-module call between the corresponding modules
    (`module-corresponds?`). Module-level, not exact op-pair: real dependencies are often indirect
    (dispatch, internal leaves) — the author sketches the module dependency on an exposed op.
-   `:scope :global` (offenders are authored delegation source ops). The leading `:calls` clause guards
-   it vacuous on a model-only build; negation via an inline `not-join` with the corresponding-module
-   names bound on entry (mirroring the op-level `Realization` law) — keeping `?cm1`/`?cm2` bound
-   avoids a free-variable blow-up; the leading `:calls` clause guards vacuity on a model-only build.
-   The `:rules` inline `in-module` (self-contained, the `lib.arch` convention)."
+   `:scope :global` (offenders are authored delegation source ops). Vacuity guard: extraction happened
+   ⟺ ≥1 extracted Module, so the law guards on the extracted-Module set (~14), NOT on `:calls` — an
+   earlier `[?anycall :rel/kind :calls]` datom guard bound an unused var to every call (~202×),
+   cartesian-multiplying the whole law (~20s of `check`). Negation via an inline `not-join` with the
+   corresponding-module names bound on entry (mirroring the op-level `Realization` law) keeps
+   `?cm1`/`?cm2` bound, avoiding a free-variable blow-up. The `:rules` inline `in-module`
+   (self-contained, the `lib.arch` convention)."
   (law "every intended cross-module delegation is realized by an actual call between the corresponding modules"
     :scope :global
     :offenders '[?o1]
     :rules '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
              [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
              [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]]
-    :where '[[?anycall :rel/kind :calls]
+    ;; vacuity guard on the extracted-Module set (~14), NOT on :calls (~202): an earlier
+    ;; `[?anycall :rel/kind :calls]` bound an unused var to every call, cartesian-multiplying the law.
+    :where '[[?_xm :structure/of :lib.code/Module] [?_xm :val/extracted true]
              [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
              (not [?o1 :val/extracted true])
              (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
@@ -99,9 +103,11 @@
    module is modelled when an authored faculty module `module-corresponds?` it). With THIS law green
    AND the `lib.arch` DAG-conformance (over `:delegates`) green, the actual code call graph provably
    conforms to the declared `:may-depend` DAG — the architecture finally bites on code. `:scope
-   :global` (offenders are the extracted caller ops). Guarded vacuous until some intent is authored
-   (`[?anydel :rel/kind :delegates]`); negation via inline not-join with `?km1`/`?km2` bound on entry
-   (no free-variable blow-up); the `intended` rule inlines `in-module` (the `lib.arch` convention)."
+   :global` (offenders are the extracted caller ops). Naturally vacuous on a model-only build — the body
+   requires extracted cross-module `:calls`, of which there are none without extraction (an earlier
+   `[?anydel :rel/kind :delegates]` guard added only a ~30× cartesian multiply, ~3.7s of `check`);
+   negation via inline not-join with `?km1`/`?km2` bound on entry (no free-variable blow-up); the
+   `intended` rule inlines `in-module` (the `lib.arch` convention)."
   (law "every actual cross-module call between modelled faculties is covered by an intended delegation"
     :scope :global
     :offenders '[?e1]
@@ -114,8 +120,10 @@
               (in-module ?o1 ?c1) (in-module ?o2 ?c2)
               [(fukan.target.correspondence/module-corresponds? ?c1 ?km1)]
               [(fukan.target.correspondence/module-corresponds? ?c2 ?km2)]]]
-    :where '[[?anydel :rel/kind :delegates]
-             [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
+    ;; no vacuity guard needed: the body REQUIRES extracted cross-module :calls, so it is naturally
+    ;; vacuous on a model-only build. An earlier `[?anydel :rel/kind :delegates]` guard added only a
+    ;; ~30× cartesian multiply.
+    :where '[[?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
              [?e1 :val/extracted true] [?e2 :val/extracted true]
              (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
              [?am1 :structure/of :lib.code/Module] (not [?am1 :val/extracted true]) [?am1 :entity/name ?cm1]
