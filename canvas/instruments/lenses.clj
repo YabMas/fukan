@@ -30,6 +30,12 @@
                             '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)
                               (not (Operation ?o) [?o :val/extracted true] (named ?o ?nm) (in-module ?o ?km)
                                    [(fukan.target.correspondence/module-corresponds? ?cm ?km)])]]})
+(Lens type-drift  {:focus  "spec ↔ code TYPE divergence — where a modelled signature and its realizing function disagree"
+                   :select ["authored operations whose realizing twin carries a type annotation"
+                            '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)
+                              (Operation ?o) [?o :val/extracted true] (named ?o ?nm) (in-module ?o ?km)
+                              [(fukan.target.correspondence/module-corresponds? ?cm ?km)]
+                              [?o :val/sig _]]]})
 
 (Grouping lens
-  {:child [survey patterns consistency tar-pit purity integrity coverage drift]})
+  {:child [survey patterns consistency tar-pit purity integrity coverage drift type-drift]})
