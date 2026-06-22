@@ -18,11 +18,13 @@
    references it only as data (a structure tag resolved at check-time over the merged graph), so this
    concern takes no code dependency on either domain."
   (:require [clojure.edn :as edn]
+            [clojure.set :as set]
             [clojure.string :as str]
             [datascript.core :as d]
             [fukan.canvas.core.rules :as rules]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.typing :as typing]))
+            [fukan.canvas.core.typing :as typing]
+            [lib.code :as code]))
 
 (defn ^:export module-corresponds?
   "True when code namespace `km` realizes canvas module `cm`. Deterministic, separator-agnostic:
@@ -422,6 +424,70 @@
    Module membership resolves through `in-module` (see `uncovered-operations`)."
   [db]
   (let [desc (-> (s/structure-by-tag ::Encapsulation) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
+         set)))
+
+(defn effect-drift
+  "The effect-language correspondence reading: per MODELLED operation, the disagreement between its
+   authored `:performs` intent and its extracted twin's TRANSITIVE effect profile (the truth, to the
+   depth of the call graph; `lib.code/reached-effects`). Twin matched by name + corresponding module
+   (`module-corresponds?`, as `Realization`). Returns `{op-name {:undeclared #{…} :phantom #{…}}}` for
+   every op with a disagreement:
+     :undeclared = reached ∖ declared — code reaches an effect the design never declared (HARD: a
+                   detected effect is real, so this is a design blind spot — the enforced law direction).
+     :phantom    = declared ∖ reached — the design declares an effect the code does not reach (SOFT:
+                   a taxonomy gap, OR stale intent like a leftover `:throws`).
+   A QUERY, not a law — the soft over-declaration (phantom) half is advisory (the classifier is
+   incomplete), so it stays a reading; the hard under-declaration half is enforced by the
+   `EffectCorrespondence` law (and surfaced by `undeclared-effects`)."
+  [db]
+  ;; Bind the twin (?e) in the SAME module-matched query the law uses, so the reading agrees with the
+  ;; law by construction — a module-BLIND `[?e :entity/name ?on]` twin lookup would grab a same-named op
+  ;; in the wrong module on a name collision, fabricating a drift the precise law never sees.
+  (let [pairs    (d/q '[:find ?on ?o ?e :in $ %
+                        :where [?o :structure/of :lib.code/Operation] (not [?o :val/extracted true]) [?o :entity/name ?on]
+                               (in-module ?o ?cmn)
+                               [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
+                               (in-module ?e ?kmn)
+                               [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)]]
+                       db rules/substrate-rules)
+        declared (fn [oeid] (set (d/q '[:find [?en ...] :in $ ?o :where [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]] db oeid)))]
+    (reduce (fn [acc [on oeid teid]]
+              (let [dec        (declared oeid)
+                    rea        (code/reached-effects db teid)
+                    undeclared (set/difference rea dec)
+                    phantom    (set/difference dec rea)]
+                (if (or (seq undeclared) (seq phantom))
+                  (assoc acc on {:undeclared undeclared :phantom phantom})
+                  acc)))
+            {} pairs)))
+
+(defn undeclared-effects
+  "The EFFECT-CORRESPONDENCE offenders — modelled ops whose extracted twin TRANSITIVELY reaches an
+   effect the op does not declare in its `:performs`, as a set of op names (the under-declaration
+   direction). Empty ⇔ design declares every effect the code reaches, to the depth of the call graph:
+   design and extraction speak one effect language. Over-declaration (phantom) is a soft `effect-drift`
+   reading, never enforced — the classifier is incomplete (taxonomy + dynamic-dispatch gaps).
+
+   The enforced invariant is the `EffectCorrespondence` law (it fires inside `check`). This reader is
+   the FAST surface — derived from the `effect-drift` query rather than re-running the full `check`, so
+   interactive/test use doesn't pay the whole-model check cost. Law and reader agree by construction
+   (both = reached ∖ declared, transitively)."
+  [db]
+  (set (for [[on m] (effect-drift db) :when (seq (:undeclared m))] on)))
+
+(defn totality-violations
+  "The ENFORCED TOTALITY offenders — trusted-core READER operations whose realizing code is PARTIAL,
+   as a set of op names. A reader is a modelled Operation whose `:in` signature references the trust
+   artifact `StructureDb` (the Model); it operates on the trusted graph, so parse-don't-validate says
+   it must be TOTAL. An entry is such a reader whose extracted twin throws. Empty ⇔ the modelled
+   trusted core is total — the property the `Totality` law asserts. Reads the single source of truth
+   (the registered `Totality` law, like `unfaithful-calls` reads `Fidelity`)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::Totality) :laws first :desc)]
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)

@@ -187,6 +187,69 @@
             (println (format "    clientele:     %s" (str/join ", " (:clientele b))))))))
     (println "No model loaded yet. Use (go) first.")))
 
+(defn purity
+  "The EFFECT SURFACE: extracted operations that DIRECTLY perform a consequential effect
+   (:io/:state/:require — logging excluded), grouped by code module. Cross-reference (architecture)
+   for each module's region: a consequential effect in a meant-to-be-pure region is the
+   design-attention signal. (The `purity` lens's read, printed by region.)"
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [rows (d/q '[:find ?mn ?on ?en
+                      :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+                             [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]
+                             [(not= ?en "throws")]
+                             [?cr :rel/kind :child] [?cr :rel/from ?md] [?cr :rel/to ?o] [?md :entity/name ?mn]]
+                    m)]
+      (if (empty? rows)
+        (println "No effect surface — no extracted op performs a consequential effect.")
+        (let [by-mod (group-by first rows)]
+          (println "Effect surface —" (count (set (map (juxt first second) rows)))
+                   "effectful op(s) in" (count by-mod) "module(s):")
+          (doseq [[mn rs] (sort-by key by-mod)]
+            (println (format "  %s" mn))
+            (doseq [[on ers] (sort-by key (group-by second rs))]
+              (println (format "    %-30s %s" on (str/join " " (sort (set (map #(nth % 2) ers)))))))))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn totality
+  "The TOTALITY worklist — trusted-core READER operations (their modelled `:in` is the Model /
+   StructureDb) whose realizing code is PARTIAL (performs :throws). Parse-don't-validate says the
+   trusted core must be total. Empty ⇔ the trusted core is total — the property the enforced
+   `Totality` law asserts."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [w (corr/totality-violations m)]
+      (if (empty? w)
+        (println "Trusted core is total — no modelled reader's code throws.")
+        (do (println "Totality worklist —" (count w) "trusted-core reader(s) whose code throws:")
+            (doseq [on (sort w)] (println "  " on)))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn effect-drift
+  "EFFECT-LANGUAGE DRIFT: per modelled op, where authored :performs disagrees with the extracted twin's
+   TRANSITIVE effect profile. :undeclared (code reaches it, design silent — the enforced law direction)
+   is listed first; then :phantom (declared, not reached — soft: taxonomy gap or stale intent)."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [drift (corr/effect-drift m)
+          u (filter (fn [[_ d]] (seq (:undeclared d))) drift)
+          p (filter (fn [[_ d]] (seq (:phantom d))) drift)]
+      (println "UNDECLARED — code reaches an effect the design never declared (the law worklist):")
+      (doseq [[on d] (sort-by key u)] (println (format "  %-26s %s" on (sort (:undeclared d)))))
+      (println "\nPHANTOM — design declares an effect the code doesn't reach (taxonomy gap or stale):")
+      (doseq [[on d] (sort-by key p)] (println (format "  %-26s %s" on (sort (:phantom d))))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn throw-spread
+  "Partiality spread: ops that THROW directly (mostly ① parse-edge validators) vs ops that reach :throws
+   only TRANSITIVELY via a call (the ② propagation surface that containment would collapse)."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [{:keys [direct transitive-only]} (code/throw-spread m)]
+      (println "DIRECT throwers (" (count direct) "):" (str/join " " (sort direct)))
+      (println "\nTRANSITIVE-only (" (count transitive-only) "):" (str/join " " (sort transitive-only))))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn probes
   "Run the implemented probes against the held model, printing each finding."
   []

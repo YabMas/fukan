@@ -282,3 +282,35 @@
   (testing "every authored cross-module delegation is realized op-level (transitively, through dispatch) on the live model"
     (is (empty? (corr/unrealized-dispatch (pipeline/build-model "src")))
         "0 unrealized — incl. run/run-all via run-probe dispatch, and structure-form/instance-form via the target-expr helper chain")))
+
+(deftest effect-correspondence-fires-on-an-undeclared-transitive-effect
+  (testing "an authored op whose twin TRANSITIVELY reaches an effect it doesn't declare is flagged
+            (the EffectCorrespondence under-declaration direction, over the recursive reaches-effect rule);
+            declaring the effect on the authored op clears it"
+    (let [io     {:db/id -10 :structure/of :lib.code/Effect :val/name "io"}
+          ;; authored f (module m) ; extracted twin f (module fukan.m, corresponds to m) calls g ; g performs :io
+          common [{:db/id -1 :structure/of :lib.code/Module :entity/name "m"}
+                  {:db/id -2 :structure/of :lib.code/Operation :entity/name "f"}                          ; authored — declares nothing
+                  {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                  {:db/id -3 :structure/of :lib.code/Module :entity/name "fukan.m" :val/extracted true}   ; code module (corresponds to "m")
+                  {:db/id -4 :structure/of :lib.code/Operation :entity/name "f" :val/extracted true}       ; twin of f
+                  {:db/id -5 :structure/of :lib.code/Operation :entity/name "g" :val/extracted true}       ; f calls g
+                  {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}
+                  {:rel/id "km|child|g" :rel/from -3 :rel/kind :child :rel/to -5}
+                  {:rel/id "f|calls|g"  :rel/from -4 :rel/kind :calls :rel/to -5}                          ; f → g (transitive reach)
+                  io
+                  {:rel/id "g|performs|io" :rel/from -5 :rel/kind :performs :rel/to -10}]                  ; g performs :io
+          undeclared-db (-> (sub/create) (d/db-with common))
+          declared-db   (-> (sub/create) (d/db-with (conj common {:rel/id "af|performs|io" :rel/from -2 :rel/kind :performs :rel/to -10})))]
+      (is (= #{"f"} (corr/undeclared-effects undeclared-db))
+          "f's twin transitively reaches :io (via g), but f declares nothing → under-declaration")
+      (is (empty? (corr/undeclared-effects declared-db))
+          "declaring :io on the authored f satisfies EffectCorrespondence"))))
+
+(deftest effect-and-totality-green-on-the-self-model
+  (testing "the merged self-model declares every effect its code reaches, and its trusted core is total"
+    (let [model (pipeline/build-model "src")]
+      (is (empty? (corr/undeclared-effects model))
+          "0 undeclared effects — design and extraction speak one effect language, to call-graph depth")
+      (is (empty? (corr/totality-violations model))
+          "0 totality violations — every trusted-core reader (its :in is the Model) is total"))))

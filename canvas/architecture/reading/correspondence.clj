@@ -34,4 +34,12 @@
   (Operation uncovered-public-operations "PUBLIC extracted operations with no model twin — the encapsulation worklist."
     {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector OperationName]]})
   (Operation operation-sig "Render an authored Operation's modelled type to a malli function-schema."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:op-eid :int]] :any]}))
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:op-eid :int]] :any]})
+  ;; ── the effect-language / partiality correspondence readers ──
+  (Operation effect-drift "Per modelled op, the disagreement between authored :performs and the twin's transitive effect profile (undeclared/phantom)."
+    {:signature [:=> [:catn [:db substrate/StructureDb]] :any]})
+  (Operation undeclared-effects "Modelled ops whose twin reaches an effect not declared — the EffectCorrespondence under-declaration worklist."
+    {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector OperationName]]})
+  (Operation totality-violations "Trusted-core readers whose realizing code throws — the Totality worklist."
+    {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector OperationName]]
+     :delegates [kernel/check]}))                 ; reads the registered Totality law via check
