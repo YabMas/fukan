@@ -30,7 +30,7 @@
    to a fixpoint over the cyclic call graph (no divergence). Used by `reached-effects`/`throw-spread`.
    NB: the `EffectCorrespondence` law INLINES an identical copy in its `:rules` (a law's `:rules` is
    macro-time literal data — it cannot reference this var); keep the two copies in sync (the same
-   convention as `module/module-depends-rules` and the `lib.arch` DAG law)."
+   convention as `module/module-depends-rules` and the `subsystem` DAG law)."
   '[[(reaches-effect ?op ?en) [?pr :rel/from ?op] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]]
     [(reaches-effect ?op ?en) [?cr :rel/from ?op] [?cr :rel/kind :calls] [?cr :rel/to ?mid] (reaches-effect ?mid ?en)]])
 

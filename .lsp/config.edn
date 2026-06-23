@@ -73,6 +73,5 @@
               canvas.vocab.code.operation
               canvas.vocab.code.module
               canvas.vocab.code.subsystem
-              lib.arch
               canvas.vocab.type-vocab-test
               canvas.vocab.type-render-test}}}}

@@ -17,10 +17,10 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [canvas.vocab.code.kind :as code]))
 
-;; a LOCAL structure named `Kind` — same short name as `lib.code/Kind`, different namespace —
+;; a LOCAL structure named `Kind` — same short name as `canvas.vocab.code.kind/Kind`, different namespace —
 ;; carrying a free law that flags ALL its instances (to probe scope precision)
 (defstructure Kind
-  "Test fixture sharing the short name `Kind` with lib.code/Kind."
+  "Test fixture sharing the short name `Kind` with canvas.vocab.code.kind/Kind."
   {:note [:? :string]}
   (law "local-kind-flag" :offenders '[?k] :where '[]))
 
@@ -33,7 +33,7 @@
     (is (= ::Kind          (:tag (s/structure-by-tag ::Kind))))
     (is (= :canvas.vocab.code.kind/Kind  (:tag (s/structure-by-tag :canvas.vocab.code.kind/Kind))))
     (is (not= (s/structure-by-tag ::Kind) (s/structure-by-tag :canvas.vocab.code.kind/Kind))
-        "distinct definitions (the local Kind has a :note slot; lib.code/Kind has none)")
+        "distinct definitions (the local Kind has a :note slot; canvas.vocab.code.kind/Kind has none)")
     ;; co-loaded in ONE db, instances carry distinct :structure/of and are separately queryable
     (let [db (a/assemble-vars [#'local-kind #'lib-kind])]
       (is (= #{"local"}
@@ -42,7 +42,7 @@
              (set (map first (d/q '[:find ?n :where [?e :structure/of :canvas.vocab.code.kind/Kind] [?e :entity/name ?n]] db)))))))
 
 (deftest law-scope-is-ns-precise
-  (testing "a free law self-scoped to the local Kind flags only ::Kind instances — not lib.code/Kind"
+  (testing "a free law self-scoped to the local Kind flags only ::Kind instances — not canvas.vocab.code.kind/Kind"
     (let [db      (a/assemble-vars [#'local-kind #'lib-kind])
           flagged (->> (s/check db)
                        (filter #(= "local-kind-flag" (:law %)))
@@ -51,4 +51,4 @@
                        set)]
       (is (contains? flagged "local") "the local law fires on its own ::Kind instance")
       (is (not (contains? flagged "fromlib"))
-          "and NOT on lib.code/Kind — ns-precise scoping (pre-fix the shared short name cross-scoped)")))))
+          "and NOT on canvas.vocab.code.kind/Kind — ns-precise scoping (pre-fix the shared short name cross-scoped)")))))

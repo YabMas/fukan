@@ -140,7 +140,7 @@
           code  (target/extract "test/fixtures/target/sample.clj")   ; Operations, so coverage/drift resolve
           db    (cs/union-dbs [model code])]
       ;; the predicate the drift lens query invokes
-      (is (corr/module-corresponds? "target-clojure" "fukan.target.clojure"))
+      (is (corr/module-corresponds? "core-structure" "fukan.canvas.core.structure"))
       (doseq [ln ["survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"]]
         (let [focus (lens/evaluate-lens db (by-kind-name db :Lens ln))]
           (is (set? focus) (str "lens " ln " evaluates to a node-set"))))

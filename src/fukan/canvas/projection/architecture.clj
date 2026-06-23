@@ -1,6 +1,6 @@
 (ns fukan.canvas.projection.architecture
   "Project a navigable ARCHITECTURE OVERVIEW — fukan's CODE-SIDE shape and its system map: its
-   `lib.code` Subsystems, the Modules each clusters, and the declared `:may-depend` DAG, derived live
+   the code Subsystems, the Modules each clusters, and the declared `:may-depend` DAG, derived live
    from the model. Pure projection: model db → string. Read this instead of `ls canvas/architecture/`."
   (:require [clojure.string :as str]
             [datascript.core :as d]))

@@ -23,7 +23,7 @@
             [canvas.vocab.fukan :as fukan]
             [canvas.vocab.code.module :as code-module]
             [canvas.vocab.code.effect :as code-effect]
-            [lib.arch :as la]))
+            [canvas.vocab.code.subsystem :as la]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))

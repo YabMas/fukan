@@ -6,7 +6,7 @@
    when given a source tree, merges the code structures extracted from it onto the
    SAME graph. Specification and implementation then live together on one assertable
    graph (fukan's thesis), so a `check` can surface model↔code drift via the
-   correspondence laws (which live in their own concern, `lib.code.correspondence`,
+   correspondence laws (which live in their own concern, the code-vocab correspondence,
    and run whenever they are loaded).
 
    The pipeline names no specific extractor: it runs whatever the project has

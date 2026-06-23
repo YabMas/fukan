@@ -12,6 +12,7 @@
    canvas.vocab.code.operation/Encapsulation hooks.fukan.structure/instance
    canvas.vocab.code.operation/Operation hooks.fukan.structure/instance
    canvas.vocab.code.operation/Realization hooks.fukan.structure/instance
+   canvas.vocab.code.subsystem/ModuleArchitecture hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
    canvas.vocab.fukan/LensCoverage hooks.fukan.structure/instance
    canvas.vocab.fukan/Totality hooks.fukan.structure/instance
@@ -110,5 +111,4 @@
    fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
-   fukan.model.pipeline-test/ECard hooks.fukan.structure/instance
-   lib.arch/ModuleArchitecture hooks.fukan.structure/instance}}}
+   fukan.model.pipeline-test/ECard hooks.fukan.structure/instance}}}

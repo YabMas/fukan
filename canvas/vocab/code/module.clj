@@ -33,7 +33,7 @@
    graph — call dependencies (an owned Operation `:delegates` to another module's Operation) UNIONed
    with data-adoption (an owned Operation's `:in`/`:out` is a ref-`Schema` whose `:names` edge reaches
    a `Kind` another module owns). `module-owns` is ownership via `:exposes`/`:owns`/`:child`.
-   NB: the `lib.arch` no-mutual-dependency law INLINES an identical copy of these rules (a law's
+   NB: the `subsystem` no-mutual-dependency law INLINES an identical copy of these rules (a law's
    `:rules` is macro-time literal data — it cannot reference this var); keep the two copies in sync."
   '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
     [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
@@ -99,7 +99,7 @@
    cartesian-multiplying the whole law (~20s of `check`). Negation via an inline `not-join` with the
    corresponding-module names bound on entry (mirroring the op-level `Realization` law) keeps
    `?cm1`/`?cm2` bound, avoiding a free-variable blow-up. The `:rules` inline `in-module`
-   (self-contained, the `lib.arch` convention)."
+   (self-contained, the `subsystem` convention)."
   (law "every intended cross-module delegation is realized by an actual call between the corresponding modules"
     :scope :global
     :offenders '[?o1]
@@ -125,13 +125,13 @@
    modelled-both-ends: a call into an UNMODELLED namespace is a coverage gap (the `uncovered-calls`
    query), NOT a fidelity violation — we only enforce boundaries we have claimed to model (a code
    module is modelled when an authored faculty module `module-corresponds?` it). With THIS law green
-   AND the `lib.arch` DAG-conformance (over `:delegates`) green, the actual code call graph provably
+   AND the `subsystem` DAG-conformance (over `:delegates`) green, the actual code call graph provably
    conforms to the declared `:may-depend` DAG — the architecture finally bites on code. `:scope
    :global` (offenders are the extracted caller ops). Naturally vacuous on a model-only build — the body
    requires extracted cross-module `:calls`, of which there are none without extraction (an earlier
    `[?anydel :rel/kind :delegates]` guard added only a ~30× cartesian multiply, ~3.7s of `check`);
    negation via inline not-join with `?km1`/`?km2` bound on entry (no free-variable blow-up); the
-   `intended` rule inlines `in-module` (the `lib.arch` convention)."
+   `intended` rule inlines `in-module` (the `subsystem` convention)."
   (law "every actual cross-module call between modelled faculties is covered by an intended delegation"
     :scope :global
     :offenders '[?e1]

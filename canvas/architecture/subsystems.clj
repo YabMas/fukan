@@ -1,7 +1,7 @@
 (ns canvas.architecture.subsystems
   "fukan's code-side SUBSYSTEMS — the five capability clusters its Modules form, and the intended
-   architecture DAG (`:may-depend`). The `lib.arch` quality laws (activated by
-   `canvas.architecture.quality`) enforce that fukan's actual `module-depends` graph conforms to this
+   architecture DAG (`:may-depend`). The architecture-quality laws (in `canvas.vocab.code.subsystem`,
+   auto-active with the vocab) enforce that fukan's actual `module-depends` graph conforms to this
    declared DAG and that the DAG stays acyclic. This is the modelled reorganization of the flat module
    list — the architecture's shape, stated and checked. (Filesystem layout still mirrors src/; a
    directory move can follow later. Capability ≠ faculty: orchestration realizes no subject faculty.)"
@@ -37,7 +37,7 @@
 
 (Subsystem reading
   "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence
-   it composes now lives in `lib.code.correspondence` — a library, not a self-modelled faculty.)"
+   it composes now lives with the code vocab in `canvas.vocab.code.*` — vocab, not a self-modelled faculty.)"
   {:child [probes finding-faculty] :may-depend [kernel]})
 
 (Subsystem projection
