@@ -11,10 +11,10 @@
             [canvas.vocab.type]
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
-            [fukan.target.clojure :as target]))
+            [canvas.vocab.code.extractor :as target]))
 
 ;; Register fukan's project extractor — its own Clojure source.
-(extraction/register-extractor! target/extract)
+(extraction/register-extractor! target/extract)  ; target alias → canvas.vocab.code.extractor
 
 (defonce ^:private state (atom {:model nil :src nil}))
 

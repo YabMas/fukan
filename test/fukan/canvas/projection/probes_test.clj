@@ -3,7 +3,7 @@
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.projection.canvas-source :as cs]
             [fukan.canvas.projection.probes :as probes]
-            [fukan.target.clojure :as target]
+            [canvas.vocab.code.extractor :as target]
             [fukan.canvas.core.lens :refer [Projection]]
             [canvas.vocab.code.kind :refer [Kind]]))
 

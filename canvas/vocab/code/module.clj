@@ -6,6 +6,7 @@
   (:require [clojure.string :as str]
             [datascript.core :as d]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.rules :as rules]
             [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.kind :refer [Kind]]))
@@ -259,3 +260,12 @@
                  (let [e1 (twin on1 cm1) e2 (twin on2 cm2)]
                    (when (and e1 e2 (not (reaches? e1 e2))) on1))))
          set)))
+
+;; ── Clojure extraction (ns → Module) ─────────────────────────────────────────
+
+(defn extract-module
+  "Build an extracted Module InstanceValue named `mname` owning the given extracted Operation
+   InstanceValues (`op-ivs`) via `:child`, stamped `:val/extracted true` (provenance)."
+  [mname op-ivs]
+  (sub/->InstanceValue ::Module (str mname) nil {:val/extracted true}
+                       [{:rk :child :card :many :targets (vec op-ivs)}] false))

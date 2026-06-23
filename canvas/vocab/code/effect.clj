@@ -6,7 +6,8 @@
    effect-grounding extraction is added with the extractor.)"
   (:require [clojure.set :as set]
             [datascript.core :as d]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]))
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.substrate :as sub]))
 
 (defn ^:export read-effect
   "Expand an effect literal — a keyword like `:io` — into Effect clauses, so
@@ -126,3 +127,62 @@
    from `effect-drift`, not a full `check`). Law and reader agree by construction."
   [db]
   (set (for [[on m] (effect-drift db) :when (seq (:undeclared m))] on)))
+
+;; ── Clojure effect-grounding (this element's extraction facts) ────────────────
+;; The FACTS layer for effects: classify a callee, attribute its effect to the calling op (direct
+;; effects only; transitive reach is the reading's job). CONSEQUENTIAL effects (:io/:state/:require)
+;; are the `(purity)` surface; logging/monitoring is deliberately NOT an effect (observational, not a
+;; hazard). `throw` is classified as PARTIALITY (:throws) — kept OUT of the consequential surface, read
+;; by the `(totality)` trust-line worklist.
+
+(def ^:private effect-by-callee
+  "Fully-qualified callee var → the effect it performs — CONSEQUENTIAL (:io/:state/:require) or
+   PARTIALITY (:throws, kept out of the consequential `(purity)` surface; read by `(totality)`).
+   Logging/monitoring (println/print/prn/pr/printf/flush, clojure.tools.logging, tap>) is
+   deliberately ABSENT — observational, not a hazard, per the purity carve-out."
+  (merge
+   (zipmap '[clojure.core/slurp clojure.core/spit clojure.core/line-seq clojure.core/file-seq
+             clj-kondo.core/run!]                  ; the analyzer's file I/O (reads source, writes its cache)
+           (repeat :io))
+   (zipmap '[clojure.core/swap! clojure.core/reset! clojure.core/swap-vals! clojure.core/reset-vals!
+             clojure.core/alter clojure.core/alter-var-root clojure.core/ref-set clojure.core/vreset!
+             clojure.core/commute clojure.core/send clojure.core/send-off
+             datascript.core/transact! datascript.core/reset-conn!]
+           (repeat :state))
+   (zipmap '[clojure.core/require clojure.core/use clojure.core/load clojure.core/load-file
+             clojure.core/load-string clojure.core/requiring-resolve clojure.core/resolve
+             clojure.core/ns-resolve clojure.core/find-ns clojure.core/the-ns]
+           (repeat :require))
+   ;; partiality — `throw` is a special form, but clj-kondo resolves it as clojure.core/throw.
+   ;; An op that throws is partial; classified so its partiality is queryable by the `(totality)`
+   ;; trust-line worklist. NOT a consequential world-effect → excluded from the `(purity)` surface.
+   (zipmap '[clojure.core/throw] (repeat :throws))))
+
+(def ^:private effect-by-ns
+  "Callee NAMESPACE → effect, for whole namespaces that are effectful regardless of the var."
+  {"clojure.java.io"    :io
+   "clojure.java.shell" :io})
+
+(defn- callee-effect
+  "The effect a callee — namespace symbol `to`, name symbol `nm` — performs, or nil.
+   A specific-var classification wins over the namespace-wide one."
+  [to nm]
+  (or (effect-by-callee (symbol (str to) (str nm)))
+      (effect-by-ns (str to))))
+
+(defn effect-iv
+  "A value-identified Effect InstanceValue for effect keyword `kw` — content-identical to an
+   authored `(Effect :kw)`, so extracted and authored effects collapse to one node."
+  [kw]
+  (sub/->InstanceValue ::Effect nil nil {:val/name (name kw)} [] true))
+
+(defn op-effects
+  "Map {[caller-ns-str caller-fn-str] #{effect-kw …}} from clj-kondo var-usages — every resolvable
+   call to a classified-effectful callee attributes that effect to the CALLING op (direct effects
+   only; transitive reach is the reading's job, and is deferred)."
+  [var-usages]
+  (reduce (fn [acc {:keys [from from-var to name]}]
+            (if-let [eff (and from from-var to name (callee-effect to name))]
+              (update acc [(str from) (str from-var)] (fnil conj #{}) eff)
+              acc))
+          {} var-usages))

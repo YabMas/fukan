@@ -13,7 +13,6 @@
             [canvas.architecture.kernel.assemble :refer [assemble-faculty]]
             [canvas.architecture.kernel.typing :refer [typing]]
             [canvas.architecture.ingestion.source :refer [canvas-source]]
-            [canvas.architecture.ingestion.clojure :refer [target-clojure]]
             [canvas.architecture.ingestion.extraction :refer [extraction]]
             [canvas.architecture.reading.probes :refer [probes]]
             [canvas.architecture.reading.finding :refer [finding-faculty]]
@@ -34,7 +33,7 @@
 
 (Subsystem ingestion
   "The in-fold: discover/assemble design specs + extract code, folded onto the model."
-  {:child [canvas-source target-clojure extraction] :may-depend [kernel]})
+  {:child [canvas-source extraction] :may-depend [kernel]})
 
 (Subsystem reading
   "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence

@@ -7,9 +7,10 @@
   (:require [clojure.edn :as edn]
             [datascript.core :as d]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
             [canvas.vocab.type :as ct :refer [Schema]]
-            [canvas.vocab.code.effect :refer [Effect]]
+            [canvas.vocab.code.effect :as effect :refer [Effect]]
             [canvas.vocab.grouping :refer [Connected]]))
 
 (defn ^:export signature->slots
@@ -171,3 +172,29 @@
                         (operation-sig db s)
                         (edn/read-string (:val/sig (d/entity db o)))))))
        (map second) set))
+
+;; ── Clojure extraction (defn → Operation) ────────────────────────────────────
+
+(def fn-defining
+  "clj-kondo `:defined-by` values that denote a computation unit (an Operation). `defn`/`defn-`
+   are functions; `defmulti` is a DISPATCH POINT — also an Operation (callers depend on it; its
+   handler fan-out is authored intent, see `:dispatches-to`). `def`, `defmacro`, `defmethod`, …
+   stay excluded — `defmethod` defines no var."
+  #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti})
+
+(defn extract-operation
+  "Build an extracted Operation InstanceValue from a clj-kondo var-definition `v` and the set of
+   effect keywords `effs` directly attributed to it. Stamps `:val/extracted`, privacy, the `^:export`/
+   `^:test-support` mechanism flags, the realized `:malli/schema` signature (`:val/sig`), and the
+   direct effects as `:performs` (each a content-deduped Effect value, via `effect/effect-iv`)."
+  [v effs]
+  (sub/->InstanceValue ::Operation (str (:name v)) nil
+                       (cond-> {:val/private (boolean (:private v))
+                                :val/extracted true}
+                         (:export (:meta v))       (assoc :val/export true)
+                         (:test-support (:meta v)) (assoc :val/test-support true)
+                         (:malli/schema (:meta v)) (assoc :val/sig (pr-str (:malli/schema (:meta v)))))
+                       (cond-> []
+                         (seq effs) (conj {:rk :performs :card :many
+                                           :targets (mapv effect/effect-iv (sort effs))}))
+                       false))

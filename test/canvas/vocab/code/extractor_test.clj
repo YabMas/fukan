@@ -1,9 +1,9 @@
-(ns fukan.target.clojure-test
+(ns canvas.vocab.code.extractor-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
-            [fukan.target.clojure :as tc]
+            [canvas.vocab.code.extractor :as tc]
             [canvas.vocab.code.operation :as corr]))
 
 ;; Register fukan's extractor so build-model's unified build runs it (the proof).

@@ -35,7 +35,6 @@
               canvas.vocab.grammar
               fukan.canvas.projection.grammar-test
               canvas.architecture.ingestion.extraction
-              canvas.architecture.ingestion.clojure
               canvas.architecture.projection.grammar
               canvas.architecture.projection.instance
               canvas.architecture.orchestration.infra

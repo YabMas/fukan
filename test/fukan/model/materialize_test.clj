@@ -15,8 +15,13 @@
             ;; loaded so the vocab-derived rules carry an Operation kind-rule (coverage /
             ;; drift lenses reference it) and the drift lens's correspondence predicate
             ;; resolves
-            [fukan.target.clojure :as target]
-            [canvas.vocab.code.module :as corr]))
+            [canvas.vocab.code.extractor :as target]
+            ;; the code vocab — `corr` for module-corresponds?, + the macros for the self-contained
+            ;; worked-example fixture (a Module with a rich-signature Operation), which replaces the
+            ;; retired extractor self-spec the tests once read
+            [canvas.vocab.code.kind :refer [Kind]]
+            [canvas.vocab.code.operation :refer [Operation]]
+            [canvas.vocab.code.module :as corr :refer [Module]]))
 
 ;; materialize is the pure LOWER direction — it projects the design model alone
 ;; (build-model nil = design-only, no extraction). Ad-hoc lenses/projections are
@@ -56,9 +61,26 @@
   (->> (d/q '[:find ?e ?k :in $ ?n :where [?e :structure/of ?k] [?e :entity/name ?n]] db n)
        (filter (fn [[_ k]] (= (name kind) (name k)))) ffirst))
 
+;; A self-contained worked example: a code Module `target-clojure` exposing a rich-signature
+;; Operation `extract` (paths: [Path] → StructureDb, performs :io). It reproduces what the retired
+;; extractor self-spec gave the materialize/render tests, without coupling to any one self-model
+;; module. `model*` unions it onto the design-only model.
+(Kind ^{:name "Path"} fx-path :string)
+(Kind ^{:name "StructureDb"} fx-sdb)
+(Operation ^{:name "extract"} fx-extract
+  {:signature [:=> [:catn [:paths [:vector fx-path]]] fx-sdb]
+   :performs  [:io]})
+(Module ^{:name "target-clojure"} fx-target {:exposes [fx-extract] :owns [fx-path fx-sdb]})
+
+(defn- model*
+  "The design-only self-model with the worked-example fixture (`target-clojure`/`extract`) unioned in."
+  []
+  (cs/union-dbs [(pipeline/build-model nil)
+                 (a/assemble-vars [#'fx-path #'fx-sdb #'fx-extract #'fx-target])]))
+
 (deftest render-dispatches-per-projection-and-kind-and-composes-references
   (testing "render [Blueprint :Operation] composes its :Schema renders (via dispatch) into the signature"
-    (let [db   (pipeline/build-model nil)
+    (let [db   (model*)
           text (m/render db "Blueprint" (by-kind-name db :Operation "extract"))]
       (is (str/includes? text "Implement `extract` in module `target-clojure`"))
       (is (str/includes? text "paths: [Path]") "the :in Schema rendered via render :Schema (vector → [Kind])")
@@ -67,7 +89,7 @@
 
 (deftest the-same-node-renders-differently-per-projection
   (testing "Blueprint and Docs are distinct targets over the same focus — the generalization"
-    (let [db        (pipeline/build-model nil)
+    (let [db        (model*)
           extract   (by-kind-name db :Operation "extract")
           blueprint (m/render db "Blueprint" extract)
           docs      (m/render db "Docs" extract)]
@@ -79,7 +101,7 @@
 
 (deftest materialize-view-composes-a-lens-focus-under-blueprint
   (testing "materialize-view renders each primitive a lens selects, under Blueprint (the default)"
-    (let [model   (pipeline/build-model nil)
+    (let [model   (model*)
           lens-db (a/assemble-vars [#'mvl-target])
           db      (cs/union-dbs [model lens-db])
           view    (m/materialize-view db (by-name db "target"))]
@@ -88,14 +110,14 @@
 
 (deftest empty-focus-materializes-to-empty-string
   (testing "a lens whose focus is empty composes to nothing"
-    (let [model   (pipeline/build-model nil)            ; loads the canvas vocab (the (Operation …) rule)
+    (let [model   (model*)            ; loads the canvas vocab (the (Operation …) rule)
           lens-db (a/assemble-vars [#'ef-none])
           db      (cs/union-dbs [model lens-db])]
       (is (= "" (m/materialize-view db (by-name db "none")))))))
 
 (deftest materialize-module-composes-a-modules-stages
   (testing "materialize-module renders a module's Operations under a projection — no stored lens"
-    (let [db (pipeline/build-model nil)]
+    (let [db (model*)]
       (let [bp (m/materialize-module db "Blueprint" "core-lens")]
         (is (str/includes? bp "Implement `evaluate-lens`"))
         (is (str/includes? bp "Implement `refine`"))
@@ -107,14 +129,14 @@
 
 (deftest materialize-focus-takes-ad-hoc-clauses
   (testing "materialize-focus renders the nodes an ad-hoc :where clause selects, under a projection"
-    (let [db   (pipeline/build-model nil)
+    (let [db   (model*)
           spec (m/materialize-focus db "Blueprint" '[(Operation ?n) (in-module ?n "materialize")])]
       (is (str/includes? spec "Implement `materialize-view`")
           "the materialize module's own modelled Operation is projected"))))
 
 (deftest shipped-lenses-with-queries-are-evaluable
   (testing "every retrofitted self-model lens resolves to a node-set (no prose-only throw)"
-    (let [model (pipeline/build-model nil)
+    (let [model (model*)
           code  (target/extract "test/fixtures/target/sample.clj")   ; Operations, so coverage/drift resolve
           db    (cs/union-dbs [model code])]
       ;; the predicate the drift lens query invokes
@@ -129,7 +151,7 @@
 
 (deftest materialize-projection-runs-the-shipped-blueprint
   (testing "Blueprint (through the now-query-bearing survey lens) materializes the model's Operations"
-    (let [db  (pipeline/build-model nil)
+    (let [db  (model*)
           out (m/materialize-projection db (by-kind-name db :Projection "Blueprint"))]
       ;; survey selects the whole model; compose renders only the kinds Blueprint covers
       ;; (named Operations), not every node as a bare name
@@ -142,7 +164,7 @@
   (testing "DriftClose composes Blueprint — its specs framed by a drift context, not a parallel renderer"
     ;; design-only model: no extracted code → every modelled Operation drifts → the drift
     ;; lens selects them all → DriftClose = Blueprint's specs under a drift-closing context.
-    (let [db  (pipeline/build-model nil)
+    (let [db  (model*)
           out (m/materialize-projection db (by-kind-name db :Projection "DriftClose"))]
       (is (str/includes? out "modelled but have no realizing function") "the drift context preamble")
       (is (str/includes? out "Implement `extract` in module `target-clojure`")
@@ -155,7 +177,7 @@
 
 (deftest a-context-composes-over-any-base
   (testing "the same mechanism composes Blueprint with an arbitrary context — e.g. a refactor framing"
-    (let [model   (pipeline/build-model nil)
+    (let [model   (model*)
           ;; the fragment includes Blueprint (+ its survey lens) so the contextualizes
           ;; var-ref resolves; union with the model then dedups them
           proj-db (a/assemble-vars [#'acb-stages #'acb-Refactor #'Blueprint #'survey])
@@ -167,7 +189,7 @@
 
 (deftest acts-chain-over-a-refined-focus
   (testing "focus → refine → materialize-over composes by plain threading — no named Tool"
-    (let [db       (pipeline/build-model nil)
+    (let [db       (model*)
           stages   (lens/focus-nodes db '[(Operation ?n)])                       ; every Operation
           in-tc    (lens/refine db stages '[(in-module ?n "target-clojure")]) ; refined to one module
           rendered (m/materialize-over db "Blueprint" in-tc)]                 ; project the refined focus
@@ -179,7 +201,7 @@
 
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"
-    (let [model    (pipeline/build-model nil)
+    (let [model    (model*)
           ;; a Projection whose name selects the Docs renderers and whose :through lens
           ;; carries a selection query (the manifest's :maps are intent, not dispatched).
           proj-db  (a/assemble-vars [#'mprd-stages #'mprd-Docs])

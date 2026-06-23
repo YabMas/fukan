@@ -4,8 +4,7 @@
    `run-extractor` WITHOUT naming it (keeps the pipeline generic); the composition root supplies it
    with `register-extractor!`. Both operations mutate/read the registry slot (`:state`)."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
-            [canvas.architecture.kernel.substrate :as substrate]
-            [canvas.architecture.ingestion.clojure :refer [extract]]))
+            [canvas.architecture.kernel.substrate :as substrate]))
 
 (Module extraction
   "The extraction plug-point — register and run the project's code extractor."
@@ -19,7 +18,9 @@
   (Operation register-extractor! "Register the project's extractor (a fn Path → StructureDb)."
     {:signature [:=> [:catn [:f Extractor]] Unit]
      :performs  [:state]})
-  (Operation run-extractor "Run the registered extractor over a code-root → its structure db."
-    {:signature     [:=> [:catn [:code-root Path]] substrate/StructureDb]
-     :performs      [:state]
-     :dispatches-to [extract]}))   ; the registered extractor it routes to (the decoupled seam — NOT a :delegates)
+  (Operation run-extractor
+    "Run the registered extractor over a code-root → its structure db. Routes to the registered
+     project extractor, which is now a `canvas/vocab` tool (the Clojure extractor) outside this
+     built-system self-model — so the dispatch seam points beyond what `architecture/` models."
+    {:signature [:=> [:catn [:code-root Path]] substrate/StructureDb]
+     :performs  [:state]}))
