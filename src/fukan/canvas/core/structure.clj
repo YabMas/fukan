@@ -664,7 +664,7 @@
          (in-module ?a ?cm)
          [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :val/extracted true] [?b :entity/name ?n]
          (in-module ?b ?km)
-         [(lib.code.correspondence/module-corresponds? ?cm ?km)]])"
+         [(canvas.vocab.code.module/module-corresponds? ?cm ?km)]])"
   [rtag docstring head where]
   (let [tag (keyword (name rtag))]
     `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws [] :includes []

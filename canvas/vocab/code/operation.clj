@@ -1,9 +1,13 @@
 (ns canvas.vocab.code.operation
   "Code vocab — `Operation`: the unified computational unit, AUTHORED (a self-model's intent)
-   or EXTRACTED from code (`:extracted true`). (The Realization/Encapsulation correspondence
-   + drift/coverage readers live here too — added with the correspondence layer; the
-   `defn→Operation` + `:calls` extraction is added with the extractor.)"
-  (:require [fukan.canvas.core.structure :refer [defstructure]]
+   or EXTRACTED from code (`:extracted true`), plus its model↔code correspondence: the
+   Realization/Encapsulation laws + the drift/coverage/type-drift readers. (The op pairing
+   `op-twin` itself lives in `module` — it is built on the Module name bridge — and is referenced
+   here via datalog injection; the `defn→Operation`+`:calls` extraction is added with the extractor.)"
+  (:require [clojure.edn :as edn]
+            [datascript.core :as d]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.typing :as typing]
             [canvas.vocab.type :as ct :refer [Schema]]
             [canvas.vocab.code.effect :refer [Effect]]
             [canvas.vocab.grouping :refer [Connected]]))
@@ -58,3 +62,112 @@
    ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
    ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
    :sig       [:? :string]})
+
+;; ── model↔code correspondence (op altitude) ──────────────────────────────────
+
+(defstructure Realization
+  "A law-holder for the model↔code correspondence — it has no instances of its own; it exists to
+   carry the cross-layer assertion. `:scope :global` (its offenders are Operations). The leading
+   extracted-Operation clause is the real guard: the law is vacuous when no code is extracted. The
+   twin's existence is the injected `op-twin` rule (registered in `module`): an authored op with no
+   `(op-twin ?s ?e)` has no realizing code."
+  (law "every authored operation is realized by an extracted operation of the same name in the corresponding module"
+    :scope :global
+    :offenders '[?s]
+    :where '[(Operation ?x) [?x :val/extracted true]                  ; guard: some code is extracted
+             (Operation ?s) (not [?s :val/extracted true])            ; an authored operation …
+             (not-join [?s] (op-twin ?s ?e))]))                       ; … with no extracted twin
+
+(defstructure Encapsulation
+  "Law-holder for code-up ENCAPSULATION — the ENFORCED dual of the `uncovered-public-operations`
+   query, at OPERATION altitude (the op-level peer of the relation-level `Fidelity`). Every PUBLIC
+   extracted operation must be COVERED by the model (an `op-twin`) OR deliberately exempt:
+     - `:val/private`      — an internal (encapsulation working as intended)
+     - `:val/export`       — public for MECHANISM (macro-emitted substrate / a var reached only via
+                             dynamic dispatch: a datalog predicate, a `(syntax …)`/reader hook)
+     - `:val/test-support` — public only for TEST isolation/setup (never called from production)
+   A public, non-exempt, unmodelled function is an UNDECLARED PUBLIC SURFACE: the model must name it
+   (intent), or it must be hidden. `:scope :global`; vacuous on a model-only build (the leading
+   `:val/extracted true` clause)."
+  (law "every public extracted operation is covered by the model or deliberately exempt"
+    :scope :global
+    :offenders '[?o]
+    :where '[[?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]
+             (not [?o :val/private true])
+             (not [?o :val/export true])
+             (not [?o :val/test-support true])
+             (not-join [?o] (op-twin ?s ?o))]))                       ; … with no authored twin
+
+(defn drifted-operations
+  "The AUTHORED operations in `db` with no same-named extracted operation, as a set of
+   names. Empty ⇔ the model is fully realized in code. The focusable surface of the
+   correspondence concern; reads the single source of truth (the registered Realization law)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::Realization) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
+         set)))
+
+(defn uncovered-operations
+  "The DUAL of drifted-operations — EXTRACTED operations in `db` with no authored operation
+   of the same name in a corresponding module, as a set of names: code not covered by the
+   model. A query, not a law — unmodelled code is a coverage signal, not a violation (you
+   don't model every function). Twin lookup is the injected `op-twin` rule."
+  [db]
+  (->> (d/q '[:find ?on :in $ %
+              :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+                     (not-join [?o] (op-twin ?s ?o))]
+            db (s/vocab-rules))
+       (map first) set))
+
+(defn uncovered-public-operations
+  "The ENCAPSULATION worklist — the PUBLIC subset of `uncovered-operations`: extracted operations
+   that are PUBLIC (not `:val/private true`) AND have no authored twin. The principle (the dual at
+   op-granularity of `uncovered-calls`): a function the model does not name should be an internal
+   detail — so a PUBLIC uncovered function is an UNDECLARED PUBLIC SURFACE, demanding a decision
+   (model it as intent, or make it private). Reads the single source of truth (the registered
+   `Encapsulation` law). `:val/private`/`:val/export`/`:val/test-support` are settled exclusions."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::Encapsulation) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
+         set)))
+
+(defn operation-sig
+  "Render the AUTHORED Operation at `op-eid` to a malli function-schema
+   `[:=> [:cat <each :in schema>] <:out schema, or :nil if none>]`, each `:in`/`:out`
+   Schema rendered via the type dialect (`typing/render-type`). The `:in` targets are
+   ordered/positional — rendered in `:rel/order` order — so the adherence comparison
+   checks argument order and arity."
+  [db op-eid]
+  (let [ins  (->> (d/q '[:find ?ord ?to :in $ ?from
+                         :where [?r :rel/from ?from] [?r :rel/kind :in] [?r :rel/to ?to] [?r :rel/order ?ord]]
+                       db op-eid)
+                  (sort-by first)
+                  (mapv (fn [[_ to]] (typing/render-type db to))))
+        out  (ffirst (d/q '[:find ?to :in $ ?from
+                            :where [?r :rel/from ?from] [?r :rel/kind :out] [?r :rel/to ?to]]
+                          db op-eid))]
+    [:=> (into [:cat] ins) (if out (typing/render-type db out) :nil)]))
+
+(defn type-drifted-operations
+  "AUTHORED operations whose modelled type disagrees with the realizing function's declared
+   `:malli/schema` — a type-drift signal (only checked where the code carries an annotation).
+   Pairs each authored op with its extracted twin through the shared `op-twin` rule (same name,
+   corresponding module via `in-module` — the SAME membership the laws use, so public ops attached
+   via `:exposes` are seen, not just `:child`-attached ones), additionally requiring the twin
+   carries a `:val/sig`; collects the authored Operation's name when its rendered type does NOT
+   adhere to the twin's realized signature."
+  [db]
+  (->> (d/q '[:find ?s ?sn ?o :in $ %
+              :where (op-twin ?s ?o) [?s :entity/name ?sn] [?o :val/sig _]]
+            db (s/vocab-rules))
+       (filter (fn [[s _ o]]
+                 (not (typing/type-adheres?
+                        (operation-sig db s)
+                        (edn/read-string (:val/sig (d/entity db o)))))))
+       (map second) set))

@@ -16,7 +16,7 @@
             ;; drift lenses reference it) and the drift lens's correspondence predicate
             ;; resolves
             [fukan.target.clojure :as target]
-            [lib.code.correspondence :as corr]))
+            [canvas.vocab.code.module :as corr]))
 
 ;; materialize is the pure LOWER direction — it projects the design model alone
 ;; (build-model nil = design-only, no extraction). Ad-hoc lenses/projections are

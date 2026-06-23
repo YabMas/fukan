@@ -1,4 +1,4 @@
-(ns lib.code.correspondence-test
+(ns canvas.vocab.code.correspondence-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [datascript.core :as d]
             ;; loading infra.model is the composition root — it registers fukan's
@@ -9,7 +9,11 @@
             [fukan.canvas.core.substrate :as sub]
             [canvas.vocab.type :as malli]
             [fukan.canvas.core.typing :as typing]
-            [lib.code.correspondence :as corr]))
+            ;; correspondence is now distributed across the code elements + the fukan tools
+            [canvas.vocab.code.module :as module]
+            [canvas.vocab.code.operation :as operation]
+            [canvas.vocab.code.effect :as effect]
+            [canvas.vocab.fukan :as fukan]))
 
 ;; register the project dialect (malli render + sigs-adhere?) for the `type-adheres?` path
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
@@ -50,7 +54,7 @@
             assert these three specifically rather than global emptiness, which is fragile as
             more functions get annotated. The false-cases above prove DETECTION fires.)"
     (let [model   (infra-model/load-model "src")
-          drifted (corr/type-drifted-operations model)]
+          drifted (operation/type-drifted-operations model)]
       (is (not (contains? drifted "load-model"))
           (str "load-model's :malli/schema should adhere to its model; drifted: " drifted))
       (is (not (contains? drifted "get-model"))
@@ -67,9 +71,9 @@
                                :where [?e :structure/of :canvas.vocab.code.operation/Operation] (not [?e :val/extracted true])
                                       [?e :entity/name "materialize-over"]]
                              model))
-          sig   (corr/operation-sig model op)]
+          sig   (operation/operation-sig model op)]
       ;; integration: multi-arg, in order → adheres → absent from type-drift
-      (is (not (contains? (corr/type-drifted-operations model) "materialize-over"))
+      (is (not (contains? (operation/type-drifted-operations model) "materialize-over"))
           "materialize-over's annotation matches its modelled ordered signature")
       ;; the model renders :in positionally, in order
       (is (= [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Instruction] sig)
@@ -96,19 +100,19 @@
                    {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                    {:rel/id "X|child|ex" :rel/from -5 :rel/kind :child :rel/to -6}
                    {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}]))]
-      (is (seq (corr/unrealized-delegates db))
+      (is (seq (module/unrealized-delegates db))
           "A->B delegation has no realizing call between corresponding modules → offender"))))
 
 (deftest call-realization-green-on-the-self-model
   (testing "module-level realization is green on the live build-model \"src\""
-    (is (empty? (corr/unrealized-delegates (pipeline/build-model "src")))
+    (is (empty? (module/unrealized-delegates (pipeline/build-model "src")))
         "0 unrealized — verified by the design prototype")))
 
 (deftest uncovered-calls-backbone-complete
   (testing "slice 2: every actual cross-module call is now covered by an authored :delegates —
             the backbone is complete (detection of an UNdeclared coupling is proven on a synthetic
             db in fidelity-fires-on-an-undeclared-modelled-coupling)"
-    (let [worklist (corr/uncovered-calls (pipeline/build-model "src"))]
+    (let [worklist (module/uncovered-calls (pipeline/build-model "src"))]
       (is (empty? worklist)
           (str "the :delegates backbone is complete; undeclared couplings remain: " worklist)))))
 
@@ -133,23 +137,23 @@
                    {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
                    {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
                    {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}]))]
-      (is (= #{"fa"} (corr/unfaithful-calls db))
+      (is (= #{"fa"} (module/unfaithful-calls db))
           "an undeclared coupling between modelled faculties is a fidelity offender")
-      (is (= #{["fukan.a" "fukan.b"]} (corr/uncovered-calls db))
+      (is (= #{["fukan.a" "fukan.b"]} (module/uncovered-calls db))
           "the same coupling appears in the broader query"))))
 
 (deftest fidelity-green-on-the-self-model
   (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
-    (is (empty? (corr/unfaithful-calls (pipeline/build-model "src")))
+    (is (empty? (module/unfaithful-calls (pipeline/build-model "src")))
         "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
 
 (deftest slice-1-self-model-is-clean
   (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
             design+code self-model has zero law violations"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (corr/unrealized-delegates model)) "realization is green")
-      (is (empty? (corr/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
-      (is (empty? (corr/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
+      (is (empty? (module/unrealized-delegates model)) "realization is green")
+      (is (empty? (module/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
+      (is (empty? (module/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
       (is (empty? (s/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (s/check model)))))))
@@ -167,12 +171,12 @@
                    {:rel/id "m|child|hidden"   :rel/from -1 :rel/kind :child :rel/to -3}
                    {:rel/id "m|child|exported" :rel/from -1 :rel/kind :child :rel/to -4}
                    {:rel/id "m|child|for-test" :rel/from -1 :rel/kind :child :rel/to -5}]))]
-      (is (= #{"leaked"} (corr/uncovered-public-operations db))
+      (is (= #{"leaked"} (operation/uncovered-public-operations db))
           "only the public, non-exempt, unmodelled op is flagged by the Encapsulation law"))))
 
 (deftest encapsulation-green-on-the-self-model
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
-    (is (empty? (corr/uncovered-public-operations (pipeline/build-model "src")))
+    (is (empty? (operation/uncovered-public-operations (pipeline/build-model "src")))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
 
 (deftest defmultis-are-extracted-and-modelled
@@ -180,7 +184,7 @@
     (let [m         (pipeline/build-model "src")
           extracted (set (d/q '[:find [?n ...]
                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
-          worklist  (corr/uncovered-public-operations m)]
+          worklist  (operation/uncovered-public-operations m)]
       (is (contains? extracted "run-probe")   "run-probe (defmulti) is extracted as an Operation")
       (is (contains? extracted "render-base") "render-base (defmulti) is extracted as an Operation")
       (is (not (contains? worklist "run-probe"))   "run-probe is covered, not an undeclared public surface")
@@ -245,11 +249,11 @@
 
 (deftest unrealized-dispatch-fires-when-unrealized
   (testing "an authored cross-module delegation with no realizing code path is reported"
-    (is (contains? (corr/unrealized-dispatch (dispatch-fixture false)) "op-a"))))
+    (is (contains? (module/unrealized-dispatch (dispatch-fixture false)) "op-a"))))
 
 (deftest unrealized-dispatch-green-through-modelled-dispatch
   (testing "the delegation is realized once code reaches the target through the modelled dispatch point"
-    (is (empty? (corr/unrealized-dispatch (dispatch-fixture true)))
+    (is (empty? (module/unrealized-dispatch (dispatch-fixture true)))
         "op-a -> op-b realized via op-a -> dp -> (dispatch) h -> op-b")))
 
 (deftest unrealized-dispatch-green-through-registry-dispatch
@@ -275,12 +279,12 @@
                    {:rel/id "Ax|child|dp"   :rel/from -5 :rel/kind :child :rel/to -11}
                    {:rel/id "Bx|child|op-b" :rel/from -6 :rel/kind :child :rel/to -8}
                    {:rel/id "op-a|calls|dp" :rel/from -7 :rel/kind :calls :rel/to -11}]))]
-      (is (empty? (corr/unrealized-dispatch db))
+      (is (empty? (module/unrealized-dispatch db))
           "op-a -> op-b realized via op-a -> dp -> (dispatch) op-b"))))
 
 (deftest unrealized-dispatch-green-on-self-model
   (testing "every authored cross-module delegation is realized op-level (transitively, through dispatch) on the live model"
-    (is (empty? (corr/unrealized-dispatch (pipeline/build-model "src")))
+    (is (empty? (module/unrealized-dispatch (pipeline/build-model "src")))
         "0 unrealized — incl. run/run-all via run-probe dispatch, and structure-form/instance-form via the target-expr helper chain")))
 
 (deftest effect-correspondence-fires-on-an-undeclared-transitive-effect
@@ -302,17 +306,17 @@
                   {:rel/id "g|performs|io" :rel/from -5 :rel/kind :performs :rel/to -10}]                  ; g performs :io
           undeclared-db (-> (sub/create) (d/db-with common))
           declared-db   (-> (sub/create) (d/db-with (conj common {:rel/id "af|performs|io" :rel/from -2 :rel/kind :performs :rel/to -10})))]
-      (is (= #{"f"} (corr/undeclared-effects undeclared-db))
+      (is (= #{"f"} (effect/undeclared-effects undeclared-db))
           "f's twin transitively reaches :io (via g), but f declares nothing → under-declaration")
-      (is (empty? (corr/undeclared-effects declared-db))
+      (is (empty? (effect/undeclared-effects declared-db))
           "declaring :io on the authored f satisfies EffectCorrespondence"))))
 
 (deftest effect-and-totality-green-on-the-self-model
   (testing "the merged self-model declares every effect its code reaches, and its trusted core is total"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (corr/undeclared-effects model))
+      (is (empty? (effect/undeclared-effects model))
           "0 undeclared effects — design and extraction speak one effect language, to call-graph depth")
-      (is (empty? (corr/totality-violations model))
+      (is (empty? (fukan/totality-violations model))
           "0 totality violations — every trusted-core reader (its :in is the Model) is total"))))
 
 (deftest lens-coverage-fires-on-an-orphan-reader
@@ -326,10 +330,10 @@
                    {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "probe-survey" :val/extracted true} ; covered by the survey Lens
                    {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "probe-orphan" :val/extracted true} ; no Lens "orphan" → offender
                    {:db/id -5 :structure/of :canvas.vocab.code.operation/Operation :entity/name "run"          :val/extracted true}]))] ; not a probe-* reader → ignored
-      (is (= #{"probe-orphan"} (corr/uncovered-readers db))
+      (is (= #{"probe-orphan"} (fukan/uncovered-readers db))
           "only the probe reader with no declared Lens is flagged; the covered reader, the non-probe op, and the reader-less Lens are not"))))
 
 (deftest lens-coverage-green-on-the-self-model
   (testing "every bespoke probe reader has a declared Lens twin on the live build-model \"src\""
-    (is (empty? (corr/uncovered-readers (pipeline/build-model "src")))
+    (is (empty? (fukan/uncovered-readers (pipeline/build-model "src")))
         "0 uncovered readers — every probe-X leaf's focus is declared as a Lens instrument")))

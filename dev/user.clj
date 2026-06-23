@@ -19,7 +19,8 @@
             [fukan.model.materialize :as mat]
             ;; loads the model↔code correspondence laws into the dev session so a
             ;; `check`/`(drift)` over the unified held model surfaces drift
-            [lib.code.correspondence :as corr]
+            [canvas.vocab.code.operation :as operation]
+            [canvas.vocab.fukan :as fukan]
             [canvas.vocab.code.module :as code-module]
             [canvas.vocab.code.effect :as code-effect]
             [lib.arch :as la]))
@@ -118,7 +119,7 @@
    the held model carries the extracted code.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [d (corr/drifted-operations m)]
+    (let [d (operation/drifted-operations m)]
       (if (empty? d)
         (println "No drift — every modelled Operation is realized in code.")
         (println "Drift —" (count d) "modelled Operation(s) with no realizing function:" (sort d))))
@@ -131,7 +132,7 @@
    code module. (The private half of the coverage gap is settled by definition.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (corr/uncovered-public-operations m)]
+    (let [w (operation/uncovered-public-operations m)]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
         (let [by-mod (->> (d/q '[:find ?on ?kmn
@@ -219,7 +220,7 @@
    `Totality` law asserts."
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (corr/totality-violations m)]
+    (let [w (fukan/totality-violations m)]
       (if (empty? w)
         (println "Trusted core is total — no modelled reader's code throws.")
         (do (println "Totality worklist —" (count w) "trusted-core reader(s) whose code throws:")
@@ -232,7 +233,7 @@
    is listed first; then :phantom (declared, not reached — soft: taxonomy gap or stale intent)."
   []
   (if-let [m (infra-model/get-model)]
-    (let [drift (corr/effect-drift m)
+    (let [drift (code-effect/effect-drift m)
           u (filter (fn [[_ d]] (seq (:undeclared d))) drift)
           p (filter (fn [[_ d]] (seq (:phantom d))) drift)]
       (println "UNDECLARED — code reaches an effect the design never declared (the law worklist):")

@@ -1,11 +1,12 @@
 (ns canvas.vocab.code.module
-  "Code vocab — `Module`: a code boundary (one namespace), plus the derived module-dependency
-   reading. This is also the home of the CROSS-ELEMENT correspondence primitives — the
-   `module-corresponds?` name bridge and the `op-twin` pairing built on it (added with the
-   correspondence layer, alongside Module's own CallRealization/Fidelity laws; the `ns→Module`
-   extraction is added with the extractor)."
-  (:require [datascript.core :as d]
-            [fukan.canvas.core.structure :refer [defstructure]]
+  "Code vocab — `Module`: a code boundary (one namespace), its derived module-dependency reading,
+   AND the CROSS-ELEMENT correspondence: the `module-corresponds?` name bridge + the `op-twin`
+   pairing built on it (used by the operation/effect/fukan laws via datalog injection), plus
+   Module's own CallRealization/Fidelity laws and their readers."
+  (:require [clojure.string :as str]
+            [datascript.core :as d]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.rules :as rules]
             [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.kind :refer [Kind]]))
 
@@ -55,3 +56,206 @@
   (set (d/q '[:find ?mn ?nn :in $ %
               :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
             db module-depends-rules)))
+
+;; ── the cross-element correspondence bridge + op pairing ──────────────────────
+
+(defn ^:export module-corresponds?
+  "True when code namespace `km` realizes canvas module `cm`. Deterministic, separator-agnostic:
+   split both on `[-.]` into segments; the canvas name's segments must be a SUFFIX of the code
+   namespace's. So `infra-model` ← `fukan.infra.model`, `canvas-source` ←
+   `fukan.canvas.projection.canvas-source`, `core-structure` ← `fukan.canvas.core.structure`.
+   (Canvas module names are hyphenated and equal their vars; the code path is dotted — this rule
+   bridges the two without the model authoring a second name string.)"
+  [cm km]
+  (let [segs #(str/split % #"[-.]")
+        c    (segs cm)]
+    (= c (take-last (count c) (segs km)))))
+
+;; op-twin — the model↔code Operation pairing, defined ONCE as a derived relation and injected
+;; into every correspondence law/query at domain altitude (by `check`, like the vocab-derived rules).
+;; An authored op ?a is twinned with an extracted op ?b of the same NAME in a CORRESPONDING module
+;; (`module-corresponds?`). This is the single home of the matching the operation/effect/fukan laws
+;; reference; it lives here because it is built on the Module bridge (the cross-element correspondence).
+(s/defrelation :op-twin
+  "an authored Operation ?a and its extracted code twin ?b — same name, corresponding module"
+  '[?a ?b]
+  '[[?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
+    (in-module ?a ?cm)
+    [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :val/extracted true] [?b :entity/name ?n]
+    (in-module ?b ?km)
+    [(canvas.vocab.code.module/module-corresponds? ?cm ?km)]])
+
+(defstructure CallRealization
+  "Law-holder for the model↔code CALL realization — no instances of its own; the relation-level dual
+   of the op-level `Realization`. The INTERPRETATION seam between INTENT (`:delegates`, authored) and
+   FACT (`:calls`, extracted), at MODULE-DEPENDENCY altitude: every authored CROSS-MODULE delegation
+   must be realized by SOME actual cross-module call between the corresponding modules
+   (`module-corresponds?`). Module-level, not exact op-pair: real dependencies are often indirect
+   (dispatch, internal leaves) — the author sketches the module dependency on an exposed op.
+   `:scope :global` (offenders are authored delegation source ops). Vacuity guard: extraction happened
+   ⟺ ≥1 extracted Module, so the law guards on the extracted-Module set (~14), NOT on `:calls` — an
+   earlier `[?anycall :rel/kind :calls]` datom guard bound an unused var to every call (~202×),
+   cartesian-multiplying the whole law (~20s of `check`). Negation via an inline `not-join` with the
+   corresponding-module names bound on entry (mirroring the op-level `Realization` law) keeps
+   `?cm1`/`?cm2` bound, avoiding a free-variable blow-up. The `:rules` inline `in-module`
+   (self-contained, the `lib.arch` convention)."
+  (law "every intended cross-module delegation is realized by an actual call between the corresponding modules"
+    :scope :global
+    :offenders '[?o1]
+    :rules '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]]
+    ;; vacuity guard on the extracted-Module set (~14), NOT on :calls (~202): an earlier
+    ;; `[?anycall :rel/kind :calls]` bound an unused var to every call, cartesian-multiplying the law.
+    :where '[[?_xm :structure/of :canvas.vocab.code.module/Module] [?_xm :val/extracted true]
+             [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+             (not [?o1 :val/extracted true])
+             (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
+             (not-join [?cm1 ?cm2]
+               [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
+               [?e1 :val/extracted true] [?e2 :val/extracted true]
+               (in-module ?e1 ?km1) (in-module ?e2 ?km2)
+               [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]
+               [(canvas.vocab.code.module/module-corresponds? ?cm2 ?km2)])]))
+
+(defstructure Fidelity
+  "Law-holder for code-up FIDELITY — the ENFORCED dual of the `uncovered-calls` query. Every actual
+   cross-module call BETWEEN MODELLED faculties must be covered by an intended `:delegates`. Scoped to
+   modelled-both-ends: a call into an UNMODELLED namespace is a coverage gap (the `uncovered-calls`
+   query), NOT a fidelity violation — we only enforce boundaries we have claimed to model (a code
+   module is modelled when an authored faculty module `module-corresponds?` it). With THIS law green
+   AND the `lib.arch` DAG-conformance (over `:delegates`) green, the actual code call graph provably
+   conforms to the declared `:may-depend` DAG — the architecture finally bites on code. `:scope
+   :global` (offenders are the extracted caller ops). Naturally vacuous on a model-only build — the body
+   requires extracted cross-module `:calls`, of which there are none without extraction (an earlier
+   `[?anydel :rel/kind :delegates]` guard added only a ~30× cartesian multiply, ~3.7s of `check`);
+   negation via inline not-join with `?km1`/`?km2` bound on entry (no free-variable blow-up); the
+   `intended` rule inlines `in-module` (the `lib.arch` convention)."
+  (law "every actual cross-module call between modelled faculties is covered by an intended delegation"
+    :scope :global
+    :offenders '[?e1]
+    :rules '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
+             [(intended ?km1 ?km2)
+              [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+              (not [?o1 :val/extracted true])
+              (in-module ?o1 ?c1) (in-module ?o2 ?c2)
+              [(canvas.vocab.code.module/module-corresponds? ?c1 ?km1)]
+              [(canvas.vocab.code.module/module-corresponds? ?c2 ?km2)]]]
+    ;; no vacuity guard needed: the body REQUIRES extracted cross-module :calls, so it is naturally
+    ;; vacuous on a model-only build. An earlier `[?anydel :rel/kind :delegates]` guard added only a
+    ;; ~30× cartesian multiply.
+    :where '[[?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
+             [?e1 :val/extracted true] [?e2 :val/extracted true]
+             (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
+             [?am1 :structure/of :canvas.vocab.code.module/Module] (not [?am1 :val/extracted true]) [?am1 :entity/name ?cm1]
+             [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]
+             [?am2 :structure/of :canvas.vocab.code.module/Module] (not [?am2 :val/extracted true]) [?am2 :entity/name ?cm2]
+             [(canvas.vocab.code.module/module-corresponds? ?cm2 ?km2)]
+             (not (intended ?km1 ?km2))]))
+
+(defn unrealized-delegates
+  "The authored source Operations whose cross-module delegation is NOT realized by any actual call
+   between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
+   is backed by real code. Reads the single source of truth (the registered CallRealization law)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::CallRealization) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
+         set)))
+
+(defn uncovered-calls
+  "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law, like
+   `uncovered-operations`): actual cross-module module-calls (over `:calls`) with no corresponding
+   intended cross-module delegation (over `:delegates`, bridged by `module-corresponds?`), as a set
+   of [caller-module callee-module] code-module-name pairs. The couplings the design has not yet
+   declared. Computed by set-difference in Clojure (not `not-join`) to sidestep the empty-relation
+   gotcha. A signal, not a violation: you do not model every call."
+  [db]
+  (let [intent (d/q '[:find ?cm1 ?cm2 :in $ %
+                      :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+                             (not [?o1 :val/extracted true])
+                             (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]]
+                    db rules/substrate-rules)
+        actual (d/q '[:find ?km1 ?km2 :in $ %
+                      :where [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
+                             [?e1 :val/extracted true] [?e2 :val/extracted true]
+                             (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]]
+                    db rules/substrate-rules)]
+    (->> actual
+         (remove (fn [[km1 km2]]
+                   (some (fn [[cm1 cm2]]
+                           (and (module-corresponds? cm1 km1) (module-corresponds? cm2 km2)))
+                         intent)))
+         set)))
+
+(defn unfaithful-calls
+  "The ENFORCED fidelity offenders — extracted caller Operations making an undeclared cross-module
+   call between MODELLED faculties, as a set of op names. Empty ⇔ every modelled-faculty coupling in
+   the code is declared as intent (so, with DAG-conformance green, the code conforms to the
+   `:may-depend` DAG). The modelled-both-ends subset of `uncovered-calls`; reads the registered
+   Fidelity law (the single source of truth)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::Fidelity) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (d/entity db %)))
+         set)))
+
+(defn unrealized-dispatch
+  "Authored cross-module delegations NOT realized op-level by the actual code — neither by a direct
+   call nor by reaching the target THROUGH the code's call graph extended by modelled dispatch points
+   (`:dispatches-to`). A set of authored source-op names; empty ⇔ every intended dependency is backed
+   by a real (possibly dispatch-mediated, possibly multi-hop) call path.
+
+   A QUERY, not a law (like `uncovered-calls`): it walks reachability in Clojure (efficient BFS),
+   which a datalog law can't do within the kernel's law-timeout. It is nonetheless a genuine CONSUMER
+   of `:dispatches-to` — a modelled dispatch point's fan-out is lifted onto the extracted call graph
+   (by name + `module-corresponds?`), so removing a seam's `:dispatches-to` makes its consumers'
+   delegations unreachable and surfaces them here. Asserted empty by the regression suite."
+  [db]
+  (let [ext-ops     (d/q '[:find ?e ?en ?km :in $ %
+                           :where [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]
+                                  [?e :entity/name ?en] (in-module ?e ?km)]
+                         db rules/substrate-rules)
+        ext-by-name (group-by second ext-ops)
+        twin        (fn [on cm] (some (fn [[e _ km]] (when (module-corresponds? cm km) e))
+                                      (get ext-by-name on)))
+        calls       (d/q '[:find ?from ?to
+                           :where [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]] db)
+        disp        (d/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
+                           :where [?dr :rel/kind :dispatches-to] [?dr :rel/from ?a1] [?dr :rel/to ?a2]
+                                  (not [?a1 :val/extracted true])
+                                  [?a1 :entity/name ?on1] (in-module ?a1 ?cm1)
+                                  [?a2 :entity/name ?on2] (in-module ?a2 ?cm2)]
+                         db rules/substrate-rules)
+        disp-edges  (keep (fn [[on1 cm1 on2 cm2]]
+                            (let [e1 (twin on1 cm1) e2 (twin on2 cm2)]
+                              (when (and e1 e2) [e1 e2])))
+                          disp)
+        adj         (reduce (fn [m [a b]] (update m a (fnil conj #{}) b)) {}
+                            (concat calls disp-edges))
+        reaches?    (fn [start target]
+                      (loop [stack [start] seen #{}]
+                        (if-let [n (peek stack)]
+                          (let [stack (pop stack)]
+                            (cond
+                              (= n target) true
+                              (seen n)     (recur stack seen)
+                              :else        (recur (into stack (get adj n)) (conj seen n))))
+                          false)))
+        delegations (d/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
+                           :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+                                  (not [?o1 :val/extracted true])
+                                  [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
+                                  [?o2 :entity/name ?on2] (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]]
+                         db rules/substrate-rules)]
+    (->> delegations
+         (keep (fn [[on1 cm1 on2 cm2]]
+                 (let [e1 (twin on1 cm1) e2 (twin on2 cm2)]
+                   (when (and e1 e2 (not (reaches? e1 e2))) on1))))
+         set)))
