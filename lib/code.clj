@@ -11,7 +11,7 @@
   (:require [clojure.set :as set]
             [datascript.core :as d]
             [fukan.canvas.core.structure :refer [defstructure]]
-            [lib.grouping :refer [Connected]]
+            [canvas.vocab.grouping :refer [Connected]]
             [lib.type.malli :as lib.type.malli :refer [Schema]]))
 
 ;; ── data types ───────────────────────────────────────────────────────────────

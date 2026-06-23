@@ -11,7 +11,7 @@
             [fukan.dialect.malli :as dialect]
             [fukan.model.pipeline :as pipeline]
             [lib.code :refer [Kind]]
-            [lib.grouping :refer [Grouping]]
+            [canvas.vocab.grouping :refer [Grouping]]
             [fukan.canvas.core.lens :refer [Projection]]))
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name

@@ -47,12 +47,12 @@
 ;; ── scanning the real source tree (the integration validator) ────────────────
 
 (deftest scan-finds-known-structures-and-excludes-realized
-  (let [names (set (kondo/scan ["lib" "canvas" "demos" "test"]))]
+  (let [names (set (kondo/scan ["lib" "canvas" "test"]))]
     (testing "live vocab constructors are found"
       (is (contains? names 'lib.code/Module))
       (is (contains? names 'lib.code/Operation))
       (is (contains? names 'lib.type.malli/Schema))
-      (is (contains? names 'lib.grouping/Grouping))
+      (is (contains? names 'canvas.vocab.grouping/Grouping))
       (is (contains? names 'fukan.canvas.core.structure-test/Function)))
     (testing "realized-as concepts intern no constructor → excluded"
       (is (not (contains? names 'fukan.canvas.core.composition-test/Flagged)))
@@ -61,10 +61,10 @@
 ;; ── the generated config shape ───────────────────────────────────────────────
 
 (deftest generated-config-wraps-the-analyze-call-map
-  (let [cfg (kondo/generated-config ["lib"])]
+  (let [cfg (kondo/generated-config ["lib" "canvas"])]
     (is (= 'hooks.fukan.structure/instance
            (get-in cfg [:hooks :analyze-call 'lib.code/Module])))
-    (is (contains? (get-in cfg [:hooks :analyze-call]) 'lib.grouping/Grouping))))
+    (is (contains? (get-in cfg [:hooks :analyze-call]) 'canvas.vocab.grouping/Grouping))))
 
 ;; ── the staleness guard: the committed generated config must be current ──────
 

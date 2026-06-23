@@ -3,7 +3,7 @@
    (`canvas.instruments.lenses`) into a target artifact. TOOL-DEFINITIONS, authored against
    the core `Lens`/`Projection` grammar."
   (:require [fukan.canvas.core.lens :refer [Projection Mapping]]
-            [lib.grouping :refer [Grouping]]
+            [canvas.vocab.grouping :refer [Grouping]]
             [canvas.instruments.lenses :refer [survey drift]]))
 
 (Projection Blueprint

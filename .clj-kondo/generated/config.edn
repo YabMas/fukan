@@ -3,7 +3,9 @@
 ;; the defstructure forms in: src lib canvas test.
 {:hooks
  {:analyze-call
-  {fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
+  {canvas.vocab.grouping/Connected hooks.fukan.structure/instance
+   canvas.vocab.grouping/Grouping hooks.fukan.structure/instance
+   fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Holder hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Node2 hooks.fukan.structure/instance
@@ -107,8 +109,6 @@
    lib.grammar/Vocabulary hooks.fukan.structure/instance
    lib.grammar-test/Leaf hooks.fukan.structure/instance
    lib.grammar-test/Node hooks.fukan.structure/instance
-   lib.grouping/Connected hooks.fukan.structure/instance
-   lib.grouping/Grouping hooks.fukan.structure/instance
    lib.type.malli/Schema hooks.fukan.structure/instance
    lib.type.malli/SchemaChoice hooks.fukan.structure/instance
    lib.type.malli/SchemaField hooks.fukan.structure/instance}}}
