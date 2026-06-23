@@ -26,11 +26,13 @@
      incl  C⊇F      → (F ?e)     ⇐ (C ?e)                    (one per (includes F))
      real  R≔where  → (R ?e)     ⇐ <where…>                  (one per (realized-as …))
      copr  V=k₁|k₂  → (V ?a ?b)  ⇐ (kᵢ ?a ?b)                (one per :relation-coproduct member)
+     drv   D≔head·w → (D head…)  ⇐ <where…>                  (one per (defrelation …))
      rel   slot R   → (R ?a ?b)  ⇐ [?r :rel/from ?a] …
    plus the fixed substrate rules. `scalar?` splits relation slots from value slots.
-   Realized concepts and relation-coproducts carry no instances, so they get no kind-rule."
+   Realized concepts, relation-coproducts, and derived relations carry no instances, so they
+   get no kind-rule."
   [structures scalar?]
-  (let [concrete   (remove #(or (:realized-as %) (:relation-coproduct %)) structures)
+  (let [concrete   (remove #(or (:realized-as %) (:relation-coproduct %) (:derived-rule %)) structures)
         kind-rules (for [{:keys [tag]} concrete]
                      [(list (rule-sym tag) '?e) ['?e :structure/of tag]])
         incl-rules (for [{:keys [tag includes]} structures
@@ -41,6 +43,9 @@
         copr-rules (for [{:keys [tag relation-coproduct]} structures
                          m relation-coproduct]
                      [(list (rule-sym tag) '?a '?b) (list (rule-sym m) '?a '?b)])
+        drv-rules  (for [{:keys [tag derived-rule]} structures :when derived-rule]
+                     (into [(apply list (rule-sym tag) (:head derived-rule))]
+                           (:where derived-rule)))
         rel-kinds  (->> (mapcat :slots structures)
                         (remove scalar?)
                         (map :rel)
@@ -48,4 +53,4 @@
         rel-rules  (for [r rel-kinds]
                      [(list (rule-sym r) '?a '?b)
                       ['?r :rel/from '?a] ['?r :rel/kind r] ['?r :rel/to '?b]])]
-    (vec (concat kind-rules incl-rules real-rules copr-rules rel-rules substrate-rules))))
+    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules substrate-rules))))

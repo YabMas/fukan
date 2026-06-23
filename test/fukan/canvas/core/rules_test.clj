@@ -27,6 +27,17 @@
 (RuleThing ^{:name "ok"} rt2-ok)
 (RuleThing ^{:name "forbidden"} rt2-forbidden)
 
+;; a DERIVED RELATION: a custom-bodied rule (the op-twin generalization) — registered
+;; into the live vocab and injected into every law/vocab-rules query, like a kind/relation rule
+(s/defrelation :same-name
+  "two distinct nodes that share a name"
+  '[?a ?b]
+  '[[?a :entity/name ?n] [?b :entity/name ?n] [(not= ?a ?b)]])
+
+(RuleThing ^{:name "dup"} rt3-a)
+(RuleThing ^{:name "dup"} rt3-b)
+(RuleThing ^{:name "uniq"} rt3-c)
+
 (deftest derives-kind-relation-and-substrate-rules
   (testing "the live vocab yields kind rules, relation rules, and the fixed substrate rules"
     (let [heads (set (map (comp first first) (s/vocab-rules)))]
@@ -69,3 +80,25 @@
       (is (contains? heads 'Foo))
       (is (contains? heads 'bar))
       (is (contains? heads 'in-module) "always includes the fixed substrate rules"))))
+
+(deftest defrelation-emits-an-injected-custom-rule
+  (testing "defrelation registers a custom-bodied derived relation, injected into vocab-rules"
+    (is (contains? (set (map (comp first first) (s/vocab-rules))) 'same-name)
+        "the derived relation is a vocab rule, available to every law and query"))
+  (testing "the derived relation is callable at domain altitude over the injected rules"
+    (let [db    (a/assemble-vars [#'rt3-a #'rt3-b #'rt3-c])
+          pairs (d/q '[:find ?na ?nb :in $ %
+                       :where (same-name ?a ?b) [?a :entity/name ?na] [?b :entity/name ?nb]]
+                     db (s/vocab-rules))]
+      (is (= #{["dup" "dup"]} (set pairs))
+          "only the two distinct same-named nodes pair — the custom predicate body fired"))))
+
+(deftest defrelation-gets-no-spurious-kind-rule
+  (testing "a derived-relation entry yields ONLY its custom rule — no unary kind-rule, no instances"
+    (let [rs    (rules/derive-rules [{:tag :twin :derived-rule {:head '[?a ?b]
+                                                                 :where '[[?a :x ?v] [?b :x ?v]]}}]
+                                    (constantly false))
+          heads (map (comp first first) rs)]
+      (is (= 1 (count (filter #{'twin} heads))) "exactly one `twin` rule (the custom body), no kind-rule")
+      (is (= '[?a ?b] (rest (ffirst (filter #(= 'twin (ffirst %)) rs))))
+          "the rule head carries the declared arity"))))

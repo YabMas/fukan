@@ -644,6 +644,32 @@
     `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws [] :includes []
                            :relation-coproduct ~member-kws})))
 
+(defmacro defrelation
+  "Declare a DERIVED RELATION — a named datalog rule with a CUSTOM body, injected into
+   every law and every `vocab-rules` query at domain altitude (by `check`, exactly as the
+   vocab-derived kind/relation rules are). It is the custom-body generalization of a slot's
+   relation rule and of `realized-as` (derived UNARY membership), and the open-bodied sibling
+   of `defrelation-coproduct` (a relation that is a UNION of existing relation kinds): it has
+   no slots, laws, constructor, or instances — only the rule. So a join several laws would
+   each re-inline (the model↔code op-twin, say) is expressed ONCE here, and the laws just
+   call it `(op-twin ?a ?b)` instead of repeating the clauses.
+
+   `head` is the rule's argument vector; `where` its body clauses, which may reference other
+   injected rules (`in-module`, `named`, …) and call predicates. Keep `where` non-recursive:
+   vocab-injected rules run outside the per-law *law-timeout-ms* guard.
+
+     (defrelation :op-twin \"an authored op ?a and its extracted code twin ?b\"
+       '[?a ?b]
+       '[[?a :structure/of :lib.code/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
+         (in-module ?a ?cm)
+         [?b :structure/of :lib.code/Operation] [?b :val/extracted true] [?b :entity/name ?n]
+         (in-module ?b ?km)
+         [(lib.code.correspondence/module-corresponds? ?cm ?km)]])"
+  [rtag docstring head where]
+  (let [tag (keyword (name rtag))]
+    `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws [] :includes []
+                           :derived-rule {:head '~(unquote-lit head) :where '~(unquote-lit where)}})))
+
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 
 (defn- relation-slot-laws
@@ -724,7 +750,7 @@
   [structures]
   (let [facets (into #{} (mapcat :includes) structures)]
     (into #{}
-          (comp (remove #(or (:realized-as %) (:relation-coproduct %)))
+          (comp (remove #(or (:realized-as %) (:relation-coproduct %) (:derived-rule %)))
                 (map :tag)
                 (remove facets))
           structures)))

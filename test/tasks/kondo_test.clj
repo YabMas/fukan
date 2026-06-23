@@ -19,6 +19,8 @@
   (testing "non-defstructure forms yield nil"
     (is (nil? (kondo/structure-name '(defn foo [x] x))))
     (is (nil? (kondo/structure-name '(defrelation-coproduct :xview "doc" :via :x))))
+    (is (nil? (kondo/structure-name '(defrelation :op-twin "doc" '[?a ?b] '[[?a :x ?v]])))
+        "a defrelation interns no constructor either")
     (is (nil? (kondo/structure-name "a docstring")))))
 
 ;; ── source → fully-qualified constructor names ───────────────────────────────
