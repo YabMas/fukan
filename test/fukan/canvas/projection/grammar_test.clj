@@ -7,7 +7,7 @@
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :refer [defstructure]]
             [fukan.canvas.projection.grammar :as g]
-            [lib.grammar :as grammar]))
+            [canvas.vocab.grammar :as grammar]))
 
 ;; ── the authored grammar the render must reproduce ───────────────────────────
 
@@ -43,7 +43,7 @@
 
 (defn- struct-node [db tag-str]
   (ffirst (d/q '[:find ?s :in $ ?t
-                 :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?t]]
+                 :where [?s :structure/of :canvas.vocab.grammar/Structure] [?s :val/tag ?t]]
                db tag-str)))
 
 (deftest structure-form-round-trips-the-authoring
@@ -111,5 +111,5 @@
   (testing "the full primer includes the meta-grammar describing itself"
     (let [db (reflected)
           p  (g/grammar-primer db)]
-      (is (str/includes? p "━━ lib.grammar — "))
+      (is (str/includes? p "━━ canvas.vocab.grammar — "))
       (is (str/includes? p "(defstructure Structure")))))

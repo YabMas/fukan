@@ -1,4 +1,4 @@
-(ns lib.grammar
+(ns canvas.vocab.grammar
   "GRAMMAR REFLECTION — the registry projected into the model. The structure
    registry is the one piece of fukan that lives OFF the graph; opting in here
    reifies it: every defstructure in the model's namespace closure becomes a
@@ -22,8 +22,10 @@
    Structure node). Reflection is PURE (`with-grammar`: db → db′) and re-runs on
    every build, so the reified grammar can never drift from the registry.
 
-   Opt-in (required, not auto-discovered); fukan's pipeline opts in for the
-   self-model; demos compose `with-grammar` onto their own assembly."
+   A modelling TOOL, not core: the runtime (`check`/`assemble`/`evaluate-lens`) never
+   consults the reflected nodes — they exist only so the grammar is viewable as data (the
+   print-dual primer, the `unused-structures` grammar-drift reading). So it lives in
+   canvas/vocab, and the build pipeline runs `with-grammar` on every build."
   (:require [clojure.string :as str]
             [datascript.core :as d]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
@@ -45,7 +47,7 @@
   ;; OWNERSHIP — the reflector's self-check. A Law has no independent existence: it is asserted BY a
   ;; Structure (ownership-on-owner), so every reified Law must have an incoming `:law` edge. An orphan
   ;; Law is a defect of THIS reflection, not a modelling mistake — which is why it lives here on the
-  ;; reified type (self-scoped to `:lib.grammar/Law`), not as a design law on a modelled portrait.
+  ;; reified type (self-scoped to `:canvas.vocab.grammar/Law`), not as a design law on a modelled portrait.
   (law "every reified Law is owned by an asserting Structure"
     :offenders '[?l]
     :rules '[[(asserted ?l) [?r :rel/kind :law] [?r :rel/to ?l]]]
@@ -62,13 +64,13 @@
    :law      [:* Law]
    :realizes [:? {:payload :form} :string]}
   ;; TOTALITY — the reflector's self-check. A Structure's identity IS its defining namespace, so every
-  ;; reified Structure belongs to a Vocabulary (an incoming `:child` edge from a `:lib.grammar/Vocabulary`
+  ;; reified Structure belongs to a Vocabulary (an incoming `:child` edge from a `:canvas.vocab.grammar/Vocabulary`
   ;; node). The synthetic `:Any` wildcard is not an authored Structure, so it is exempt. A missing
-  ;; Vocabulary is a defect of THIS reflection — hence here, self-scoped to `:lib.grammar/Structure`.
+  ;; Vocabulary is a defect of THIS reflection — hence here, self-scoped to `:canvas.vocab.grammar/Structure`.
   (law "every reified Structure is defined in a Vocabulary"
     :offenders '[?s]
     :rules '[[(in-vocabulary ?s)
-              [?v :structure/of :lib.grammar/Vocabulary]
+              [?v :structure/of :canvas.vocab.grammar/Vocabulary]
               [?r :rel/kind :child] [?r :rel/from ?v] [?r :rel/to ?s]]]
     :where '[[?s :val/tag ?tag]
              [(clojure.core/not= ?tag ":Any")]
@@ -84,7 +86,7 @@
    altitudes: `(of-structure ?i ?s)` binds an instance to its Structure node."
   '[[(of-structure ?i ?s)
      [?i :structure/of ?t]
-     [?s :structure/of :lib.grammar/Structure]
+     [?s :structure/of :canvas.vocab.grammar/Structure]
      [?s :val/tag ?ts]
      [(clojure.core/str ?t) ?ts]]])
 

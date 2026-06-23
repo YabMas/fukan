@@ -1,7 +1,7 @@
 (ns canvas.architecture.kernel.structure
   "Self-spec: fukan's defstructure GRAMMAR (`fukan.canvas.core.structure`) — a boundary sketch. The
    defstructure layer (Structure = slots + laws) is NOT hand-modelled: grammar reflection
-   (`lib.grammar/with-grammar`) derives it from the live registry, where it can never drift. What
+   (`canvas.vocab.grammar/with-grammar`) derives it from the live registry, where it can never drift. What
    remains hand-modelled here is the registry surface, value-construction (`value-literal->iv`), and
    the one capability `check` (laws → violations): the canonical integrity inspect, modelled because
    code is a projection of the model 1-on-1. The NODE substrate it sits on — `Node`/`Relation`/

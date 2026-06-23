@@ -12,10 +12,10 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  ;; lib.grammar's generated constructors are never CALLED — the reflector emits
+  ;; canvas.vocab.grammar's generated constructors are never CALLED — the reflector emits
   ;; raw node/rel maps by mechanism (like the extractor); the structures exist to
   ;; register the meta-grammar.
-  lib.grammar
+  canvas.vocab.grammar
   {:linters {:unused-public-var {:level :off}}}
   canvas.architecture.ingestion.extraction
   {:linters {:unused-public-var {:level :off}

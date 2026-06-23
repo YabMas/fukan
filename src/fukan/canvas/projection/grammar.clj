@@ -138,7 +138,7 @@
   "One vocabulary (a grammar namespace) rendered as its defstructure forms."
   [db vocab-name]
   (let [members (->> (d/q '[:find ?c ?n :in $ ?vn
-                            :where [?v :structure/of :lib.grammar/Vocabulary]
+                            :where [?v :structure/of :canvas.vocab.grammar/Vocabulary]
                                    [?v :entity/name ?vn]
                                    [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
                                    [?c :entity/name ?n]]
@@ -154,7 +154,7 @@
    reified grammar — the canvas's language reference, derived not maintained."
   [db]
   (let [vocabs (sort (d/q '[:find [?n ...]
-                            :where [?v :structure/of :lib.grammar/Vocabulary]
+                            :where [?v :structure/of :canvas.vocab.grammar/Vocabulary]
                                    [?v :entity/name ?n]] db))]
     (str/join "\n\n" (map #(vocabulary-primer db %) vocabs))))
 
@@ -177,7 +177,7 @@
         included (into #{} (map first)
                        (d/q '[:find ?t :where [?r :rel/kind :includes] [?r :rel/to ?t]] db))]
     (->> (d/q '[:find ?s ?n ?t
-                :where [?s :structure/of :lib.grammar/Structure]
+                :where [?s :structure/of :canvas.vocab.grammar/Structure]
                        [?s :entity/name ?n] [?s :val/tag ?t]]
               db)
          (remove (fn [[s _ t]] (or (realized s) (included s) (= ":Any" t) (in-use t))))

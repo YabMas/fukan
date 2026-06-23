@@ -1,4 +1,4 @@
-(ns lib.grammar-test
+(ns canvas.vocab.grammar-test
   "Grammar reflection: the registry projected into the model. A fixture vocab
    exercises every slot shape; `with-grammar` must reify it as Structure nodes,
    `:slot/<card>` edges, Schema value targets (content-deduped with each other),
@@ -8,7 +8,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [lib.grammar :as g]))
+            [canvas.vocab.grammar :as g]))
 
 ;; ── fixture vocab: every cardinality, scalar + refined targets, a law ────────
 
@@ -34,19 +34,19 @@
 
 (defn- struct-node [db tag-str]
   (ffirst (d/q '[:find ?s :in $ ?t
-                 :where [?s :structure/of :lib.grammar/Structure] [?s :val/tag ?t]]
+                 :where [?s :structure/of :canvas.vocab.grammar/Structure] [?s :val/tag ?t]]
                db tag-str)))
 
 (deftest structures-reify-as-nodes
   (let [db (reflected)
-        n  (struct-node db ":lib.grammar-test/Node")]
+        n  (struct-node db ":canvas.vocab.grammar-test/Node")]
     (is (some? n) "Node gets a Structure node keyed by its tag")
     (is (= "Node" (:entity/name (d/entity db n))))
     (is (= "Fixture: one slot of every shape." (:entity/doc (d/entity db n))))))
 
 (deftest slots-reify-as-card-kinded-labeled-edges
   (let [db (reflected)
-        n  (struct-node db ":lib.grammar-test/Node")]
+        n  (struct-node db ":canvas.vocab.grammar-test/Node")]
     (is (= {"one-ref" :slot/one, "opt-ref" :slot/optional, "seq-ref" :slot/many,
             "set-ref" :slot/set, "title" :slot/one, "mode" :slot/one}
            (into {} (d/q '[:find ?l ?k :in $ ?n
@@ -59,7 +59,7 @@
                      db n)
                 (map second) sort))
         "declaration order rides :rel/order")
-    (is (= (struct-node db ":lib.grammar-test/Leaf")
+    (is (= (struct-node db ":canvas.vocab.grammar-test/Leaf")
            (ffirst (d/q '[:find ?t :in $ ?n
                           :where [?r :rel/from ?n] [?r :rel/label "one-ref"] [?r :rel/to ?t]]
                         db n)))
@@ -67,7 +67,7 @@
 
 (deftest scalar-and-refined-targets-are-schema-values
   (let [db (reflected)
-        n  (struct-node db ":lib.grammar-test/Node")
+        n  (struct-node db ":canvas.vocab.grammar-test/Node")
         target-kind (fn [label]
                       (ffirst (d/q '[:find ?k :in $ ?n ?l
                                      :where [?r :rel/from ?n] [?r :rel/label ?l] [?r :rel/to ?t]
@@ -88,7 +88,7 @@
 
 (deftest laws-reify-with-their-datalog-payload
   (let [db (reflected)
-        n  (struct-node db ":lib.grammar-test/Node")
+        n  (struct-node db ":canvas.vocab.grammar-test/Node")
         [law] (first (d/q '[:find ?l :in $ ?n
                             :where [?r :rel/from ?n] [?r :rel/kind :law] [?r :rel/to ?l]] db n))
         e  (d/entity db law)]
@@ -100,17 +100,17 @@
   (let [db (reflected)]
     (is (= #{"Leaf" "Node"}
            (set (d/q '[:find [?n ...]
-                       :where [?v :structure/of :lib.grammar/Vocabulary]
-                              [?v :entity/name "lib.grammar-test"]
+                       :where [?v :structure/of :canvas.vocab.grammar/Vocabulary]
+                              [?v :entity/name "canvas.vocab.grammar-test"]
                               [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
                               [?c :entity/name ?n]]
                      db))))))
 
 (deftest the-reflection-self-reifies
-  (testing "the strange loop: lib.grammar's own Structure gets a Structure node"
+  (testing "the strange loop: canvas.vocab.grammar's own Structure gets a Structure node"
     (let [db (reflected)]
-      (is (some? (struct-node db ":lib.grammar/Structure")))
-      (is (some? (struct-node db ":lib.grammar/Law"))))))
+      (is (some? (struct-node db ":canvas.vocab.grammar/Structure")))
+      (is (some? (struct-node db ":canvas.vocab.grammar/Law"))))))
 
 (deftest instances-join-their-structure
   (testing "the of-structure rule binds an instance to its reified grammar"

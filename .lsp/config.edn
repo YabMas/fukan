@@ -32,7 +32,7 @@
               ;; scan (and cross-model var refs inside dropped defstructure clause
               ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
               canvas.architecture.ingestion.source
-              lib.grammar
+              canvas.vocab.grammar
               fukan.canvas.projection.grammar-test
               canvas.architecture.ingestion.extraction
               canvas.architecture.ingestion.clojure

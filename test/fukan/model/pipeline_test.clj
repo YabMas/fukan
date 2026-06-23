@@ -153,13 +153,13 @@
       (is (contains? (names-of db :Module) "core-structure"))
       (is (= #{"tag" "value" "includes" "law" "realizes"}
              (set (d/q '[:find [?l ...]
-                         :where [?st :structure/of :lib.grammar/Structure]
-                                [?st :val/tag ":lib.grammar/Structure"]
+                         :where [?st :structure/of :canvas.vocab.grammar/Structure]
+                                [?st :val/tag ":canvas.vocab.grammar/Structure"]
                                 [?r :rel/from ?st] [?r :rel/label ?l]] db)))
           "the Structure meta-structure's own reified slots — the strange loop")
-      (is (= ":lib.grammar/Law"
+      (is (= ":canvas.vocab.grammar/Law"
              (ffirst (d/q '[:find ?lt
-                            :where [?st :val/tag ":lib.grammar/Structure"]
+                            :where [?st :val/tag ":canvas.vocab.grammar/Structure"]
                                    [?r :rel/from ?st] [?r :rel/label "law"] [?r :rel/to ?t]
                                    [?t :val/tag ?lt]] db)))
           "Structure.law targets the reified Law structure (composition)")
