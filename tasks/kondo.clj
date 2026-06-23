@@ -108,7 +108,7 @@
    ACT grammar (the `Lens`/`Projection`/`Mapping` structures in `core.lens`, instantiated by the
    instruments) plus the law-holder structures in `target.correspondence` — so it is scanned too.
    The kernel still ships no DOMAIN vocabulary; it is opinionated only about the native acts."
-  ["src" "lib" "canvas" "demos" "test"])
+  ["src" "lib" "canvas" "test"])
 
 (def generated-config-path
   "The generated config, merged into the hand-written one via `:config-paths`."

@@ -56,20 +56,6 @@
               canvas.architecture.orchestration.core
               canvas.architecture.projection.materialize
               canvas.architecture.orchestration.pipeline
-              demos.access-control.model.rbac
-              demos.access-control.access-control-test
-              demos.atlas.model.auth
-              demos.atlas.atlas-test
-              demos.er.model.shop
-              demos.er.er-test
-              demos.grammar.model.key-value
-              demos.grammar.grammar-test
-              demos.type-system.model.lattice
-              demos.type-system.type-system-test
-              demos.workflow.model.fulfilment
-              demos.workflow.workflow-test
-              demos.self.model.fukan
-              demos.self.self-test
               fukan.canvas.core.assemble-test
               fukan.canvas.core.composition-test
               fukan.canvas.core.view-map-test

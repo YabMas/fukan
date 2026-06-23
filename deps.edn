@@ -20,14 +20,6 @@
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}
                       org.clojure/test.check {:mvn/version "1.1.1"}}
          :main-opts ["-m" "cognitect.test-runner"]}
-  ;; The modelling-demo corpus: each demos/<x>/ bundles a domain vocabulary
-  ;; (defstructure) + model(s) + a regression test, exercising the core directly.
-  ;; `clj -M:demos` runs every demo's regression; `clj -M:dev:demos` for the REPL.
-  :demos {:extra-paths ["demos"]
-          :extra-deps {io.github.cognitect-labs/test-runner
-                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}
-                       org.clojure/test.check {:mvn/version "1.1.1"}}
-          :main-opts ["-m" "cognitect.test-runner" "-d" "demos"]}
   ;; Regenerate the clj-kondo instance-constructor hooks from a defstructure scan
   ;; (`tasks.kondo`, reachable via the `.` classpath root). Run after adding or
   ;; removing a structure; the `generated-config-file-is-current` test guards drift.

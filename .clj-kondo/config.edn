@@ -108,62 +108,6 @@
   lib.code
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  demos.access-control.access-control-test
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.access-control.model.rbac
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.atlas.atlas-test
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.atlas.model.auth
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.er.er-test
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.er.model.shop
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.grammar.grammar-test
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.grammar.model.key-value
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.type-system.model.lattice
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.type-system.type-system-test
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.workflow.model.fulfilment
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.workflow.workflow-test
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.self.model.fukan
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  demos.self.self-test
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
   fukan.canvas.core.assemble-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
