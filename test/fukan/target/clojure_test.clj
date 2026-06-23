@@ -13,7 +13,7 @@
   (testing "the clj-kondo extractor emits an Operation per defn/defn-, with privacy"
     (let [db  (tc/extract "test/fixtures/target/sample.clj")
           ops (into {} (d/q '[:find ?n ?p
-                              :where [?e :structure/of :lib.code/Operation]
+                              :where [?e :structure/of :canvas.vocab.code.operation/Operation]
                                      [?e :entity/name ?n] [?e :val/private ?p]]
                             db))]
       (is (= {"alpha" false "beta" false "delta" true} ops)
@@ -23,7 +23,7 @@
   (testing "an annotated defn's :malli/schema metadata is stamped as the Operation's :val/sig"
     (let [db  (tc/extract "test/fixtures/target/sample.clj")
           sig (ffirst (d/q '[:find ?s
-                             :where [?e :structure/of :lib.code/Operation] [?e :entity/name "alpha"]
+                             :where [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :entity/name "alpha"]
                                     [?e :val/sig ?s]]
                            db))]
       (is (= "[:=> [:cat :int] :int]" sig)
@@ -33,9 +33,9 @@
   (testing "each namespace becomes a Module that owns its Operations (via :child relations)"
     (let [db    (tc/extract "test/fixtures/target/sample.clj")
           owned (d/q '[:find ?mn ?on
-                       :where [?m :structure/of :lib.code/Module] [?m :entity/name ?mn]
+                       :where [?m :structure/of :canvas.vocab.code.module/Module] [?m :entity/name ?mn]
                               [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?o]
-                              [?o :structure/of :lib.code/Operation] [?o :entity/name ?on]]
+                              [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name ?on]]
                      db)]
       (is (= #{["sample" "alpha"] ["sample" "beta"] ["sample" "delta"]} (set owned))
           "the `sample` namespace is a Module owning all three operations"))))
@@ -54,14 +54,14 @@
 (deftest extracted-modules-carry-provenance
   (testing "each extracted Module is stamped :val/extracted true"
     (let [db (tc/extract "test/fixtures/target/sample.clj")]
-      (is (true? (ffirst (d/q '[:find ?x :where [?m :structure/of :lib.code/Module]
+      (is (true? (ffirst (d/q '[:find ?x :where [?m :structure/of :canvas.vocab.code.module/Module]
                                               [?m :entity/name "sample"] [?m :val/extracted ?x]] db)))
           "the sample Module is provenance-stamped"))))
 
 (deftest extracts-defmulti-as-dispatch-operation
   (testing "a defmulti is extracted as an Operation (a dispatch point) and callers' calls to it resolve"
     (let [db (tc/extract "src/fukan/canvas/projection/probes.clj")]
-      (is (true? (ffirst (d/q '[:find ?x :where [?o :structure/of :lib.code/Operation]
+      (is (true? (ffirst (d/q '[:find ?x :where [?o :structure/of :canvas.vocab.code.operation/Operation]
                                               [?o :entity/name "run-probe"] [?o :val/extracted ?x]] db)))
           "run-probe (a defmulti) is an extracted Operation")
       (is (contains? (set (d/q '[:find ?fromn ?ton
@@ -78,8 +78,8 @@
     (let [model      (pipeline/build-model "src")        ; design + extracted code, unified
           unrealized (corr/drifted-operations model)]
       ;; sanity: build-model actually brought both layers together
-      (is (seq (d/q '[:find ?s :where [?s :structure/of :lib.code/Operation]] model)) "model has Operations")
-      (is (seq (d/q '[:find ?o :where [?o :structure/of :lib.code/Operation]] model)) "build-model extracted code into Operations")
+      (is (seq (d/q '[:find ?s :where [?s :structure/of :canvas.vocab.code.operation/Operation]] model)) "model has Operations")
+      (is (seq (d/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation]] model)) "build-model extracted code into Operations")
       (is (empty? unrealized)
           (str "every modelled Operation should map to a same-named extracted function; "
                "unrealized (drift): " unrealized)))))

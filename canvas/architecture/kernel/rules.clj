@@ -8,7 +8,7 @@
    delegates to `derive-rules`, and the lens ENGINE (`canvas.architecture.kernel.lens`) evaluates
    queries against those rules. `core.rules` references nothing else, so the chain is acyclic
    (lens-engine → kernel → query-engine)."
-  (:require [lib.code :refer [Kind Operation Module]]))
+  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]))
 
 (Module core-rules
   "Derive datalog rules from the live vocabulary so laws/lenses read at domain altitude."

@@ -10,8 +10,9 @@
   (:require [clojure.set :as set]
             [datascript.core :as d]
             [fukan.canvas.core.structure :refer [defstructure]]
-            ;; the law reasons over lib.code Modules/Operations; require it so they are registered.
-            [lib.code]))
+            ;; the laws reason over Modules + Subsystems; require them so they are registered.
+            [canvas.vocab.code.module]
+            [canvas.vocab.code.subsystem]))
 
 (defstructure ModuleArchitecture
   "A law-holder for clean-architecture quality constraints over `lib.code` Modules — it has no
@@ -30,9 +31,9 @@
   (law "no two modules mutually depend"
     :scope :global
     :offenders '[?m]
-    :rules '[[(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
+    :rules '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
+             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
+             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
              [(module-depends ?m ?n)
               (module-owns ?m ?op1) [?dr :rel/from ?op1] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
               (module-owns ?n ?op2) [(not= ?m ?n)]]
@@ -53,9 +54,9 @@
   (law "every cross-subsystem module dependency follows a declared :may-depend edge"
     :scope :global
     :offenders '[?m]
-    :rules '[[(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :lib.code/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
+    :rules '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
+             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
+             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
              [(module-depends ?m ?n)
               (module-owns ?m ?op1) [?dr :rel/from ?op1] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
               (module-owns ?n ?op2) [(not= ?m ?n)]]
@@ -67,8 +68,8 @@
               [?sch :val/kind "ref"]
               [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
               (module-owns ?n ?k) [(not= ?m ?n)]]
-             [(in-subsystem ?mod ?sub) [?sub :structure/of :lib.code/Subsystem] [?cr :rel/from ?sub] [?cr :rel/kind :child] [?cr :rel/to ?mod]]
-             [(declared-dep ?s ?t)     [?s :structure/of :lib.code/Subsystem]   [?mr :rel/from ?s]   [?mr :rel/kind :may-depend] [?mr :rel/to ?t]]]
+             [(in-subsystem ?mod ?sub) [?sub :structure/of :canvas.vocab.code.subsystem/Subsystem] [?cr :rel/from ?sub] [?cr :rel/kind :child] [?cr :rel/to ?mod]]
+             [(declared-dep ?s ?t)     [?s :structure/of :canvas.vocab.code.subsystem/Subsystem]   [?mr :rel/from ?s]   [?mr :rel/kind :may-depend] [?mr :rel/to ?t]]]
     :where '[(module-depends ?m ?n)
              (in-subsystem ?m ?s) (in-subsystem ?n ?t) [(not= ?s ?t)]
              (not (declared-dep ?s ?t))])
@@ -80,10 +81,10 @@
     :offenders '[?s]
     :rules '[[(sub-reaches ?s ?t) [?r :rel/from ?s] [?r :rel/kind :may-depend] [?r :rel/to ?t]]
              [(sub-reaches ?s ?t) [?r :rel/from ?s] [?r :rel/kind :may-depend] [?r :rel/to ?mid] (sub-reaches ?mid ?t)]]
-    :where '[[?s :structure/of :lib.code/Subsystem] (sub-reaches ?s ?s)])
+    :where '[[?s :structure/of :canvas.vocab.code.subsystem/Subsystem] (sub-reaches ?s ?s)])
 
   ;; MEMBERSHIP TOTALITY — every AUTHORED Module belongs to a Subsystem, so conformance has full
-  ;; coverage. Guarded by [?_s :structure/of :lib.code/Subsystem] (a direct datom) → vacuous for
+  ;; coverage. Guarded by [?_s :structure/of :canvas.vocab.code.subsystem/Subsystem] (a direct datom) → vacuous for
   ;; subsystem-free models (plain lib.code or lib.arch w/o subsystems). Negation routes through the
   ;; `in-subsystem` rule so the zero-member case dodges datascript's empty-relation not-join gotcha.
   ;; Extracted code-fact modules (stamped `:val/extracted true` by the extractor) are out of scope
@@ -91,9 +92,9 @@
   (law "every Module belongs to a Subsystem"
     :scope :global
     :offenders '[?mod]
-    :rules '[[(in-subsystem ?mod ?sub) [?sub :structure/of :lib.code/Subsystem] [?cr :rel/from ?sub] [?cr :rel/kind :child] [?cr :rel/to ?mod]]]
-    :where '[[?_s :structure/of :lib.code/Subsystem]
-             [?mod :structure/of :lib.code/Module]
+    :rules '[[(in-subsystem ?mod ?sub) [?sub :structure/of :canvas.vocab.code.subsystem/Subsystem] [?cr :rel/from ?sub] [?cr :rel/kind :child] [?cr :rel/to ?mod]]]
+    :where '[[?_s :structure/of :canvas.vocab.code.subsystem/Subsystem]
+             [?mod :structure/of :canvas.vocab.code.module/Module]
              (not [?mod :val/extracted true])
              (not-join [?mod] (in-subsystem ?mod ?_sub))]))
 
@@ -144,7 +145,7 @@
    has split into disjoint clienteles."
   [db]
   (let [pub      (d/q '[:find ?o ?on ?km :in $ %
-                        :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true]
+                        :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]
                                (not [?o :val/private true])
                                [?o :entity/name ?on] (in-module ?o ?km)]
                       db in-module-rules)

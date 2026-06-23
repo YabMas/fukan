@@ -3,7 +3,12 @@
 ;; the defstructure forms in: src lib canvas test.
 {:hooks
  {:analyze-call
-  {canvas.vocab.grammar/Law hooks.fukan.structure/instance
+  {canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
+   canvas.vocab.code.kind/Kind hooks.fukan.structure/instance
+   canvas.vocab.code.module/Module hooks.fukan.structure/instance
+   canvas.vocab.code.operation/Operation hooks.fukan.structure/instance
+   canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
+   canvas.vocab.grammar/Law hooks.fukan.structure/instance
    canvas.vocab.grammar/Structure hooks.fukan.structure/instance
    canvas.vocab.grammar/Vocabulary hooks.fukan.structure/instance
    canvas.vocab.grammar-test/Leaf hooks.fukan.structure/instance
@@ -100,11 +105,6 @@
    fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
    fukan.model.pipeline-test/ECard hooks.fukan.structure/instance
    lib.arch/ModuleArchitecture hooks.fukan.structure/instance
-   lib.code/Effect hooks.fukan.structure/instance
-   lib.code/Kind hooks.fukan.structure/instance
-   lib.code/Module hooks.fukan.structure/instance
-   lib.code/Operation hooks.fukan.structure/instance
-   lib.code/Subsystem hooks.fukan.structure/instance
    lib.code.correspondence/CallRealization hooks.fukan.structure/instance
    lib.code.correspondence/EffectCorrespondence hooks.fukan.structure/instance
    lib.code.correspondence/Encapsulation hooks.fukan.structure/instance

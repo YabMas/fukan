@@ -6,7 +6,7 @@
    instances are ordinary var-refs resolved here, so there is no separate merge/cross-ref pass.
    Builds on the kernel's `create` constructor (`:delegates`); the discovery/identity internals are
    not sketched."
-  (:require [lib.code :refer [Operation Module]]
+  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]))
 
 ;; entity-name "assemble" (corresponds to the ns) on a distinct var, so the nested `assemble`

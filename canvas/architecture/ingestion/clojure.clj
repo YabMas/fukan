@@ -3,7 +3,7 @@
    plug-point (`canvas.architecture.ingestion.extraction`). Reads source via clj-kondo (no eval)
    and emits code structures into a db (`fukan.target.clojure`). The composition root registers it
    at the plug-point; `build-model` runs whatever is registered, naming no specific extractor."
-  (:require [lib.code :refer [Kind Operation Module]]
+  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.assemble :as assemble]))
 

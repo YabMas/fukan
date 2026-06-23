@@ -24,9 +24,9 @@
 (defn architecture-overview
   "Render fukan's subsystems + modules + the :may-depend DAG (string)."
   [db]
-  (let [subs  (->> (d/q '[:find ?s ?sn :where [?s :structure/of :lib.code/Subsystem] [?s :entity/name ?sn]] db)
+  (let [subs  (->> (d/q '[:find ?s ?sn :where [?s :structure/of :canvas.vocab.code.subsystem/Subsystem] [?s :entity/name ?sn]] db)
                    (sort-by second))
-        nmod  (count (d/q '[:find ?m :where [?m :structure/of :lib.code/Module]] db))]
+        nmod  (count (d/q '[:find ?m :where [?m :structure/of :canvas.vocab.code.module/Module]] db))]
     (str/join
      "\n"
      (concat

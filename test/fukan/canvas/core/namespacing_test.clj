@@ -15,7 +15,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [lib.code :as code]))
+            [canvas.vocab.code.kind :as code]))
 
 ;; a LOCAL structure named `Kind` — same short name as `lib.code/Kind`, different namespace —
 ;; carrying a free law that flags ALL its instances (to probe scope precision)
@@ -31,15 +31,15 @@
   (testing "two `Kind`s from different namespaces keep distinct identities and instances"
     ;; the registry keeps BOTH defs under their qualified tags — neither overwrites the other
     (is (= ::Kind          (:tag (s/structure-by-tag ::Kind))))
-    (is (= :lib.code/Kind  (:tag (s/structure-by-tag :lib.code/Kind))))
-    (is (not= (s/structure-by-tag ::Kind) (s/structure-by-tag :lib.code/Kind))
+    (is (= :canvas.vocab.code.kind/Kind  (:tag (s/structure-by-tag :canvas.vocab.code.kind/Kind))))
+    (is (not= (s/structure-by-tag ::Kind) (s/structure-by-tag :canvas.vocab.code.kind/Kind))
         "distinct definitions (the local Kind has a :note slot; lib.code/Kind has none)")
     ;; co-loaded in ONE db, instances carry distinct :structure/of and are separately queryable
     (let [db (a/assemble-vars [#'local-kind #'lib-kind])]
       (is (= #{"local"}
              (set (map first (d/q '[:find ?n :where [?e :structure/of ::Kind] [?e :entity/name ?n]] db)))))
       (is (= #{"fromlib"}
-             (set (map first (d/q '[:find ?n :where [?e :structure/of :lib.code/Kind] [?e :entity/name ?n]] db)))))))
+             (set (map first (d/q '[:find ?n :where [?e :structure/of :canvas.vocab.code.kind/Kind] [?e :entity/name ?n]] db)))))))
 
 (deftest law-scope-is-ns-precise
   (testing "a free law self-scoped to the local Kind flags only ::Kind instances — not lib.code/Kind"

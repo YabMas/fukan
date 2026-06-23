@@ -10,7 +10,7 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [canvas.vocab.type :as dialect]
             [fukan.model.pipeline :as pipeline]
-            [lib.code :refer [Kind]]
+            [canvas.vocab.code.kind :refer [Kind]]
             [canvas.vocab.grouping :refer [Grouping]]
             [fukan.canvas.core.lens :refer [Projection]]))
 
@@ -86,7 +86,7 @@
              (d/q '[:find [?n ...]
                     :where [?m :entity/name "model-pipeline"]
                            [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
-                           [?c :structure/of :lib.code/Operation] [?c :entity/name ?n]]
+                           [?c :structure/of :canvas.vocab.code.operation/Operation] [?c :entity/name ?n]]
                   db))
           "model.pipeline exposes exactly one operation — no stale duplicate ingest")
       ;; the seams: build-model's cross-module :delegates resolve to the canvas-source
@@ -118,11 +118,11 @@
   (testing "the StructureDb Kind is a single node owned by core.substrate (its node home);
             subsystems reference it (no per-subsystem Model/Db redeclaration)"
     (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (d/q '[:find ?k :where [?k :structure/of :lib.code/Kind] [?k :entity/name "StructureDb"]] db)))
+      (is (= 1 (count (d/q '[:find ?k :where [?k :structure/of :canvas.vocab.code.kind/Kind] [?k :entity/name "StructureDb"]] db)))
           "exactly one StructureDb Kind node")
       (is (= ["core-substrate"]
              (d/q '[:find [?mn ...]
-                    :where [?k :entity/name "StructureDb"] [?k :structure/of :lib.code/Kind]
+                    :where [?k :entity/name "StructureDb"] [?k :structure/of :canvas.vocab.code.kind/Kind]
                            [?r :rel/kind :owns] [?r :rel/from ?m] [?r :rel/to ?k] [?m :entity/name ?mn]]
                   db))
           "core.substrate is its sole owner (the db it constructs)")
@@ -136,12 +136,12 @@
 (deftest canvas-source-effects-are-captured-and-value-identified
   (testing "Operation effects are recorded; :io (performed by 4 stages) is one shared node"
     (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of :lib.code/Effect] [?e :val/name "io"]] db)))
+      (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of :canvas.vocab.code.effect/Effect] [?e :val/name "io"]] db)))
           "the :io effect is value-identified across every stage that performs it")
       (is (seq (d/q '[:find ?r
-                      :where [?b :structure/of :lib.code/Operation] [?b :entity/name "build"]
+                      :where [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :entity/name "build"]
                              [?r :rel/from ?b] [?r :rel/kind :performs] [?r :rel/to ?e]
-                             [?e :structure/of :lib.code/Effect] [?e :val/name "io"]]
+                             [?e :structure/of :canvas.vocab.code.effect/Effect] [?e :val/name "io"]]
                     db))
           "build performs :io"))))
 
@@ -165,7 +165,7 @@
           "Structure.law targets the reified Law structure (composition)")
       (is (= #{"from" "to" "kind" "label" "order"}
              (set (d/q '[:find [?k ...]
-                         :where [?kind :structure/of :lib.code/Kind] [?kind :entity/name "Relation"]
+                         :where [?kind :structure/of :canvas.vocab.code.kind/Kind] [?kind :entity/name "Relation"]
                                 [?sr :rel/from ?kind] [?sr :rel/kind :shape] [?sr :rel/to ?schema]
                                 [?fr :rel/from ?schema] [?fr :rel/kind :field] [?fr :rel/to ?f]
                                 [?f :val/key ?k]] db)))

@@ -101,7 +101,19 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  lib.code
+  canvas.vocab.code.kind
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.vocab.code.effect
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.vocab.code.operation
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.vocab.code.module
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.vocab.code.subsystem
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   fukan.canvas.core.assemble-test

@@ -8,7 +8,7 @@
    build its findings — keeping that coupling intra-subsystem. Modelling it (minimal: just its public
    surface, no signatures) is what lets `probes` declare the `:delegates [finding/finding …]` that the
    Fidelity law requires once both ends of the call are modelled."
-  (:require [lib.code :refer [Operation Module]]))
+  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]))
 
 (Module ^{:name "finding"} finding-faculty
   "The Finding data type — a probe's output: a list of Observations, plus the trivial text projection."

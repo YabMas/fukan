@@ -20,7 +20,8 @@
             ;; loads the model↔code correspondence laws into the dev session so a
             ;; `check`/`(drift)` over the unified held model surfaces drift
             [lib.code.correspondence :as corr]
-            [lib.code :as code]
+            [canvas.vocab.code.module :as code-module]
+            [canvas.vocab.code.effect :as code-effect]
             [lib.arch :as la]))
 
 (defonce ^:private _reload-init
@@ -134,7 +135,7 @@
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
         (let [by-mod (->> (d/q '[:find ?on ?kmn
-                                 :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true]
+                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]
                                         [?o :entity/name ?on] (not [?o :val/private true])
                                         [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o] [?km :entity/name ?kmn]]
                                m)
@@ -150,7 +151,7 @@
    the objective backbone to reason a clean organization against."
   []
   (if-let [m (infra-model/get-model)]
-    (doseq [[a b] (sort (code/module-dependencies m))]
+    (doseq [[a b] (sort (code-module/module-dependencies m))]
       (println (format "%-24s ⟶ %s" a b)))
     (println "No model loaded yet. Use (go) first.")))
 
@@ -195,7 +196,7 @@
   []
   (if-let [m (infra-model/get-model)]
     (let [rows (d/q '[:find ?mn ?on ?en
-                      :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+                      :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                              [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]
                              [(not= ?en "throws")]
                              [?cr :rel/kind :child] [?cr :rel/from ?md] [?cr :rel/to ?o] [?md :entity/name ?mn]]
@@ -245,7 +246,7 @@
    only TRANSITIVELY via a call (the ② propagation surface that containment would collapse)."
   []
   (if-let [m (infra-model/get-model)]
-    (let [{:keys [direct transitive-only]} (code/throw-spread m)]
+    (let [{:keys [direct transitive-only]} (code-effect/throw-spread m)]
       (println "DIRECT throwers (" (count direct) "):" (str/join " " (sort direct)))
       (println "\nTRANSITIVE-only (" (count transitive-only) "):" (str/join " " (sort transitive-only))))
     (println "No model loaded yet. Use (go) first.")))

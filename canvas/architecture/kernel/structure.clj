@@ -6,7 +6,7 @@
    the one capability `check` (laws → violations): the canonical integrity inspect, modelled because
    code is a projection of the model 1-on-1. The NODE substrate it sits on — `Node`/`Relation`/
    `InstanceValue`/`StructureDb` + node identity — lives one layer down in `core-substrate`."
-  (:require [lib.code :refer [Kind Operation Module]]
+  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.rules :as query-engine]
             [canvas.architecture.kernel.substrate :as substrate]))
 

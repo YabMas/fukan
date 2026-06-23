@@ -1,46 +1,49 @@
-(ns lib.code-test
-  "Module-dependency readings on the lib.code grammar."
+(ns canvas.vocab.code-test
+  "Module-dependency readings on the code grammar."
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
-            [lib.code :as code]))
+            [canvas.vocab.code.kind :as kind]
+            [canvas.vocab.code.operation :as operation]
+            [canvas.vocab.code.module :as module]
+            [canvas.vocab.code.subsystem :as subsystem]))
 
-(code/Module ^{:name "fx-impl"}  t-fx-impl  "a fixture module")
-(code/Module ^{:name "fx-infra"} t-fx-infra "another fixture module")
+(module/Module ^{:name "fx-impl"}  t-fx-impl  "a fixture module")
+(module/Module ^{:name "fx-infra"} t-fx-infra "another fixture module")
 
 ;; ── module-dependency fixtures: a→b by a delegate edge; c adopts a Kind d owns ──
-(code/Kind DShape :string)
-(code/Operation ^{:name "b-op"} t-b-op "callee")
-(code/Operation ^{:name "a-op"} t-a-op {:delegates [t-b-op]})
+(kind/Kind DShape :string)
+(operation/Operation ^{:name "b-op"} t-b-op "callee")
+(operation/Operation ^{:name "a-op"} t-a-op {:delegates [t-b-op]})
 ;; c-op takes a DShape (a ref to a Kind owned by module D) → data-adoption dependency c→d
-(code/Operation ^{:name "c-op"} t-c-op {:signature [:=> [:catn [:x DShape]] :nil]})
-(code/Module ^{:name "A"} t-mod-a {:exposes [t-a-op]})
-(code/Module ^{:name "B"} t-mod-b {:exposes [t-b-op]})
-(code/Module ^{:name "C"} t-mod-c {:exposes [t-c-op]})
-(code/Module ^{:name "D"} t-mod-d {:owns [DShape]})
+(operation/Operation ^{:name "c-op"} t-c-op {:signature [:=> [:catn [:x DShape]] :nil]})
+(module/Module ^{:name "A"} t-mod-a {:exposes [t-a-op]})
+(module/Module ^{:name "B"} t-mod-b {:exposes [t-b-op]})
+(module/Module ^{:name "C"} t-mod-c {:exposes [t-c-op]})
+(module/Module ^{:name "D"} t-mod-d {:owns [DShape]})
 
 (deftest module-dependencies-unions-calls-and-data-adoption
   (testing "M depends on N via a delegate (call) OR via adopting a Kind N owns (data)"
     (let [db (a/assemble-vars [#'DShape #'t-b-op #'t-a-op #'t-c-op
                                #'t-mod-a #'t-mod-b #'t-mod-c #'t-mod-d])
-          deps (code/module-dependencies db)]
+          deps (module/module-dependencies db)]
       (is (contains? deps ["A" "B"]) "call dependency: A's op delegates to B's op")
       (is (contains? deps ["C" "D"]) "data-adoption: C's op adopts a Kind D owns")
       (is (not (contains? deps ["A" "A"])) "no self-dependency"))))
 
 ;; ── Module :extracted provenance (symmetric with Operation) ──────────────────────
-(code/Module ^{:name "t-ext-mod"} t-ext-mod {:extracted true})
+(module/Module ^{:name "t-ext-mod"} t-ext-mod {:extracted true})
 
 (deftest module-carries-extracted-provenance
   (testing "a Module authored with {:extracted true} stamps :val/extracted (symmetric with Operation)"
     (let [db (a/assemble-vars [#'t-ext-mod])]
-      (is (true? (ffirst (d/q '[:find ?x :where [?m :structure/of :lib.code/Module] [?m :val/extracted ?x]] db)))
+      (is (true? (ffirst (d/q '[:find ?x :where [?m :structure/of :canvas.vocab.code.module/Module] [?m :val/extracted ?x]] db)))
           "Module :extracted is stored as :val/extracted"))))
 
 ;; ── Subsystem: clusters Modules + declares the :may-depend DAG (self-reference) ──
 (declare t-sub-b)
-(code/Subsystem ^{:name "sub-a"} t-sub-a {:child [t-fx-impl] :may-depend [t-sub-b]})
-(code/Subsystem ^{:name "sub-b"} t-sub-b {:child [t-fx-infra]})
+(subsystem/Subsystem ^{:name "sub-a"} t-sub-a {:child [t-fx-impl] :may-depend [t-sub-b]})
+(subsystem/Subsystem ^{:name "sub-b"} t-sub-b {:child [t-fx-infra]})
 
 (deftest subsystem-clusters-modules-and-declares-may-depend
   (testing "a Subsystem owns Modules via :child and declares :may-depend to another Subsystem"
@@ -58,9 +61,9 @@
           ":may-depend is a self-reference to another Subsystem (mirrors Operation :delegates)"))))
 
 ;; ── :dispatches-to: a dispatch point routes to handler Operations (authored indirection) ──
-(code/Operation t-dp-h1 "handler 1")
-(code/Operation t-dp-h2 "handler 2")
-(code/Operation t-dp "a dispatch point" {:dispatches-to [t-dp-h1 t-dp-h2]})
+(operation/Operation t-dp-h1 "handler 1")
+(operation/Operation t-dp-h2 "handler 2")
+(operation/Operation t-dp "a dispatch point" {:dispatches-to [t-dp-h1 t-dp-h2]})
 
 (deftest operation-dispatches-to-handlers
   (testing "an Operation authored with :dispatches-to records ordered edges to its handler Operations"

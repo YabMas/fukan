@@ -40,9 +40,9 @@
    :entity/id is `ns-str`, or nil (callee is not one of our `defn`s)."
   [db ns-str fn-str]
   (ffirst (d/q '[:find ?op :in $ ?ns ?fn
-                 :where [?m :structure/of :lib.code/Module] [?m :entity/id ?ns]
+                 :where [?m :structure/of :canvas.vocab.code.module/Module] [?m :entity/id ?ns]
                         [?r :rel/from ?m] [?r :rel/kind :child] [?r :rel/to ?op]
-                        [?op :structure/of :lib.code/Operation] [?op :entity/name ?fn]]
+                        [?op :structure/of :canvas.vocab.code.operation/Operation] [?op :entity/name ?fn]]
                db ns-str fn-str)))
 
 (defn- add-calls
@@ -109,7 +109,7 @@
   "A value-identified Effect InstanceValue for effect keyword `kw` — content-identical to an
    authored `(Effect :kw)`, so extracted and authored effects collapse to one node."
   [kw]
-  (s/->InstanceValue :lib.code/Effect nil nil {:val/name (name kw)} [] true))
+  (s/->InstanceValue :canvas.vocab.code.effect/Effect nil nil {:val/name (name kw)} [] true))
 
 (defn- op-effects
   "Map {[caller-ns-str caller-fn-str] #{effect-kw …}} from clj-kondo var-usages — every resolvable
@@ -137,7 +137,7 @@
             (for [mname module-names
                   :let [ops (for [v (ops-by-ns mname)
                                   :let [effs (get op-effs [(str mname) (str (:name v))])]]
-                              (s/->InstanceValue :lib.code/Operation (str (:name v)) nil
+                              (s/->InstanceValue :canvas.vocab.code.operation/Operation (str (:name v)) nil
                                                  (cond-> {:val/private (boolean (:private v))
                                                           :val/extracted true}
                                                    (:export (:meta v))
@@ -152,6 +152,6 @@
                                                           :targets (mapv effect-iv (sort effs))}))
                                                  false))]]
               [(str mname)
-               (s/->InstanceValue :lib.code/Module (str mname) nil {:val/extracted true}
+               (s/->InstanceValue :canvas.vocab.code.module/Module (str mname) nil {:val/extracted true}
                                   [{:rk :child :card :many :targets (vec ops)}] false)]))]
     (add-calls db var-usages)))

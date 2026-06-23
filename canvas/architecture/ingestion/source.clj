@@ -8,7 +8,7 @@
    the assembled design db. The db it builds is the kernel's shared `StructureDb`. `canvas-namespaces`
    is the discovery half exposed on its own because the build pipeline consumes it directly. (Require
    and the entity-map fold remain internals — not sketched.)"
-  (:require [lib.code :refer [Operation Module]]
+  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.assemble :as assemble]))
 

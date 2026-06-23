@@ -6,7 +6,7 @@
    same graph (extraction/run-extractor + union-dbs) — design + implementation unified on one
    StructureDb (fukan's thesis). It names no specific extractor — it runs whatever the project
    registered. Collaborators are cross-module var-refs (the seams)."
-  (:require [lib.code :refer [Operation Module]]
+  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.ingestion.source :as canvas-source]
             [canvas.architecture.ingestion.extraction :as extraction]))

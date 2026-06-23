@@ -24,7 +24,7 @@
             [fukan.canvas.core.rules :as rules]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]
-            [lib.code :as code]))
+            [canvas.vocab.code.effect :as code-effect]))
 
 (defn ^:export module-corresponds?
   "True when code namespace `km` realizes canvas module `cm`. Deterministic, separator-agnostic:
@@ -54,9 +54,9 @@
 (s/defrelation :op-twin
   "an authored Operation ?a and its extracted code twin ?b — same name, corresponding module"
   '[?a ?b]
-  '[[?a :structure/of :lib.code/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
+  '[[?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
     (in-module ?a ?cm)
-    [?b :structure/of :lib.code/Operation] [?b :val/extracted true] [?b :entity/name ?n]
+    [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :val/extracted true] [?b :entity/name ?n]
     (in-module ?b ?km)
     [(lib.code.correspondence/module-corresponds? ?cm ?km)]])
 
@@ -105,7 +105,7 @@
              [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]]
     ;; vacuity guard on the extracted-Module set (~14), NOT on :calls (~202): an earlier
     ;; `[?anycall :rel/kind :calls]` bound an unused var to every call, cartesian-multiplying the law.
-    :where '[[?_xm :structure/of :lib.code/Module] [?_xm :val/extracted true]
+    :where '[[?_xm :structure/of :canvas.vocab.code.module/Module] [?_xm :val/extracted true]
              [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
              (not [?o1 :val/extracted true])
              (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
@@ -147,9 +147,9 @@
     :where '[[?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
              [?e1 :val/extracted true] [?e2 :val/extracted true]
              (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
-             [?am1 :structure/of :lib.code/Module] (not [?am1 :val/extracted true]) [?am1 :entity/name ?cm1]
+             [?am1 :structure/of :canvas.vocab.code.module/Module] (not [?am1 :val/extracted true]) [?am1 :entity/name ?cm1]
              [(lib.code.correspondence/module-corresponds? ?cm1 ?km1)]
-             [?am2 :structure/of :lib.code/Module] (not [?am2 :val/extracted true]) [?am2 :entity/name ?cm2]
+             [?am2 :structure/of :canvas.vocab.code.module/Module] (not [?am2 :val/extracted true]) [?am2 :entity/name ?cm2]
              [(lib.code.correspondence/module-corresponds? ?cm2 ?km2)]
              (not (intended ?km1 ?km2))]))
 
@@ -174,7 +174,7 @@
   (law "every public extracted operation is covered by the model or deliberately exempt"
     :scope :global
     :offenders '[?o]
-    :where '[[?o :structure/of :lib.code/Operation] [?o :val/extracted true]
+    :where '[[?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]
              (not [?o :val/private true])
              (not [?o :val/export true])
              (not [?o :val/test-support true])
@@ -200,10 +200,10 @@
   (law "every trusted-core reader (its :in is the Model) is total — its realizing code performs no :throws"
     :scope :global
     :offenders '[?o]
-    :where '[[?o :structure/of :lib.code/Operation] (not [?o :val/extracted true])
+    :where '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])
              [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?sch]
              [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-             [?k :structure/of :lib.code/Kind] [?k :entity/name "StructureDb"]
+             [?k :structure/of :canvas.vocab.code.kind/Kind] [?k :entity/name "StructureDb"]
              (op-twin ?o ?e)
              [?pr :rel/from ?e] [?pr :rel/kind :performs] [?pr :rel/to ?eff] [?eff :val/name "throws"]]))
 
@@ -227,7 +227,7 @@
     :offenders '[?o]
     :rules '[[(reaches-effect ?op ?en) [?pr :rel/from ?op] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]]
              [(reaches-effect ?op ?en) [?cr :rel/from ?op] [?cr :rel/kind :calls] [?cr :rel/to ?mid] (reaches-effect ?mid ?en)]]
-    :where '[[?o :structure/of :lib.code/Operation] (not [?o :val/extracted true])
+    :where '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])
              (op-twin ?o ?e)
              (reaches-effect ?e ?en)
              (not-join [?o ?en]
@@ -254,7 +254,7 @@
   (law "every extracted probe reader is covered by a declared Lens of the same focus"
     :scope :global
     :offenders '[?r]
-    :where '[[?r :structure/of :lib.code/Operation] [?r :val/extracted true] [?r :entity/name ?rn]
+    :where '[[?r :structure/of :canvas.vocab.code.operation/Operation] [?r :val/extracted true] [?r :entity/name ?rn]
              [(clojure.string/starts-with? ?rn "probe-")]
              (not-join [?rn]
                [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name ?ln]
@@ -298,7 +298,7 @@
    delegations unreachable and surfaces them here. Asserted empty by the regression suite."
   [db]
   (let [ext-ops     (d/q '[:find ?e ?en ?km :in $ %
-                           :where [?e :structure/of :lib.code/Operation] [?e :val/extracted true]
+                           :where [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]
                                   [?e :entity/name ?en] (in-module ?e ?km)]
                          db rules/substrate-rules)
         ext-by-name (group-by second ext-ops)
@@ -436,7 +436,7 @@
    so a covered extracted op is one with an `(op-twin ?s ?o)`."
   [db]
   (->> (d/q '[:find ?on :in $ %
-              :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+              :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                      (not-join [?o] (op-twin ?s ?o))]
             db (s/vocab-rules))
        (map first) set))
@@ -491,7 +491,7 @@
         declared (fn [oeid] (set (d/q '[:find [?en ...] :in $ ?o :where [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]] db oeid)))]
     (reduce (fn [acc [on oeid teid]]
               (let [dec        (declared oeid)
-                    rea        (code/reached-effects db teid)
+                    rea        (code-effect/reached-effects db teid)
                     undeclared (set/difference rea dec)
                     phantom    (set/difference dec rea)]
                 (if (or (seq undeclared) (seq phantom))

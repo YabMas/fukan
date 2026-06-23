@@ -7,7 +7,7 @@
    a Structure no instance inhabits is vocabulary the model carries but does not
    speak. (A reading to reason with, not a gate: law-hosts and not-yet-spoken
    grammar are legitimate — the human interprets.)"
-  (:require [lib.code :refer [Kind Operation Module]]
+  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.typing :as typing]
             [canvas.architecture.projection.materialize :as mat]))

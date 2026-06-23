@@ -6,7 +6,7 @@
 
    Authored as one nested `Module` form: the operations live inside it (no separate `def`s),
    each interned as a var by the def-emitting macro so cross-refs stay var-refs."
-  (:require [lib.code :refer [Operation Module]]
+  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.orchestration.pipeline :as pipeline]
             [canvas.architecture.ingestion.extraction :as extraction]))

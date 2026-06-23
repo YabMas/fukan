@@ -97,7 +97,7 @@
 
 (defmethod render-base ["Blueprint" :canvas.vocab.type/Schema] [db b eid] (schema-str db b eid))
 
-(defmethod render-base ["Blueprint" :lib.code/Operation] [db b eid]
+(defmethod render-base ["Blueprint" :canvas.vocab.code.operation/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects delegates guidance]} (stage-facts db eid)
         sig    (str "(" nm (apply str (map #(str " " (:label %)) params)) ")")
         ptypes (str/join ", " (map #(str (:label %) ": " (render-base db b (:shape %))) params))]
@@ -115,7 +115,7 @@
 
 (defmethod render-base ["Docs" :canvas.vocab.type/Schema] [db b eid] (schema-str db b eid))
 
-(defmethod render-base ["Docs" :lib.code/Operation] [db b eid]
+(defmethod render-base ["Docs" :canvas.vocab.code.operation/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects delegates]} (stage-facts db eid)]
     (str "### " nm "\n"
          (or doc "_No description._") "\n\n"

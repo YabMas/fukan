@@ -7,7 +7,7 @@
             ;; canvas.vocab.type: its render fn (registered per-test below) + Schema (the clj-kondo hook)
             [canvas.vocab.type :as malli :refer [Schema]]
             ;; Kind — the named type a `ref` schema points at via :names.
-            [lib.code :refer [Kind]]))
+            [canvas.vocab.code.kind :refer [Kind]]))
 
 (use-fixtures :each
   (fn [t] (typing/register-type-dialect! {:render malli/render}) (t)))

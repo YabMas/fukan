@@ -3,7 +3,7 @@
    system map: its `lib.code` Subsystems, the Modules each clusters, and the declared `:may-depend`
    DAG, derived live from the held model. A pure graph→text projection over the kernel's shared
    `StructureDb`; a leaf (no cross-module calls — it reads lib vocab + the graph directly)."
-  (:require [lib.code :refer [Operation Module]]
+  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]))
 
 (Module architecture

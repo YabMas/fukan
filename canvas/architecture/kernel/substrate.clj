@@ -8,7 +8,7 @@
    the unified `StructureDb` every subsystem adopts) and exposes the node-construction + identity
    primitives. Extracted DOWNWARD from `core-structure`: the substrate the registry sits on, long a
    model-only `Node`/`Relation` portrait, finally has a code home."
-  (:require [lib.code :refer [Kind Operation Module]]
+  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             ;; [:enum …] / :keyword literals in Kind bodies check through the malli type dialect
             [canvas.vocab.type]))
 

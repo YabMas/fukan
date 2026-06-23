@@ -5,7 +5,7 @@
    are internals (extraction's job); what the surface DELEGATES to — the kernel's `check` and the
    target correspondence queries — is sketched on the exposed dispatch. Reads the kernel's
    shared `StructureDb`."
-  (:require [lib.code :refer [Kind Operation Module]]
+  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.reading.finding :as finding]))

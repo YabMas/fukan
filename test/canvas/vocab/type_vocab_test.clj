@@ -8,7 +8,7 @@
             [canvas.vocab.type :as malli :refer [Schema SchemaField SchemaChoice]]
             ;; Kind — the named type a `ref`/`[:vector …]`/`[:map …]` schema points
             ;; at via :names.
-            [lib.code :refer [Kind]]))
+            [canvas.vocab.code.kind :refer [Kind]]))
 
 ;; A thin holder lets us exercise reader-expansion (Schema has a reader, so
 ;; when it's a slot target, native malli literals are expanded at macroexpand time).

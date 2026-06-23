@@ -660,9 +660,9 @@
 
      (defrelation :op-twin \"an authored op ?a and its extracted code twin ?b\"
        '[?a ?b]
-       '[[?a :structure/of :lib.code/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
+       '[[?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
          (in-module ?a ?cm)
-         [?b :structure/of :lib.code/Operation] [?b :val/extracted true] [?b :entity/name ?n]
+         [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :val/extracted true] [?b :entity/name ?n]
          (in-module ?b ?km)
          [(lib.code.correspondence/module-corresponds? ?cm ?km)]])"
   [rtag docstring head where]

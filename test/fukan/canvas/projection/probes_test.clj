@@ -5,7 +5,7 @@
             [fukan.canvas.projection.probes :as probes]
             [fukan.target.clojure :as target]
             [fukan.canvas.core.lens :refer [Projection]]
-            [lib.code :refer [Kind]]))
+            [canvas.vocab.code.kind :refer [Kind]]))
 
 ;; tiny degenerate models built from top-level defs (assembled per use)
 (Kind ^{:name "Solo"} solo)

@@ -7,7 +7,7 @@
    never interprets a type form. It dispatches to the registered dialect for render/check/adherence; for
    REFLECTION it does the building itself on the kernel value machinery (driven by the dialect's
    `:reflect-tag`), so a dialect bridge never reaches back into the kernel — the deliberate SPI."
-  (:require [lib.code :refer [Operation Module]]
+  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.assemble :as assemble]))
