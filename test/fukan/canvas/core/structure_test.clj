@@ -11,7 +11,7 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
-            [lib.type.malli]))
+            [canvas.vocab.type]))
 
 ;; The core is dialect-BLIND: slot targets (both plain scalar keywords and refined
 ;; vector forms) are checked through whatever :valid? the project registered. This
@@ -671,11 +671,11 @@
 
 (deftest value-literal-expands-to-deduped-instancevalue
   (testing "the kernel value-literal primitive builds a ^:value InstanceValue from a reader literal"
-    (let [iv (s/value-literal->iv :lib.type.malli/Schema [:map [:a :string] [:b :int]])]
+    (let [iv (s/value-literal->iv :canvas.vocab.type/Schema [:map [:a :string] [:b :int]])]
       (is (sub/instance-value? iv) "returns an InstanceValue")
-      (is (= :lib.type.malli/Schema (:tag iv)))
+      (is (= :canvas.vocab.type/Schema (:tag iv)))
       (is (= (sub/value-content-key iv)
-             (sub/value-content-key (s/value-literal->iv :lib.type.malli/Schema [:map [:a :string] [:b :int]])))
+             (sub/value-content-key (s/value-literal->iv :canvas.vocab.type/Schema [:map [:a :string] [:b :int]])))
           "structurally-equal literals get equal content keys (dedup)"))))
 
 ;; ── syntactic type-form classification (Phase 3 / Task 3.1) ─────────────────

@@ -49,10 +49,6 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.architecture.kernel.malli
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
   canvas.architecture.subsystems
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -158,14 +154,14 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  lib.type.malli
+  canvas.vocab.type
   {:linters {:unused-public-var {:level :off}}}
   lib.arch
   {:linters {:unused-public-var {:level :off}}}
-  fukan.dialect.malli-vocab-test
+  canvas.vocab.type-vocab-test
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  fukan.dialect.malli-render-test
+  canvas.vocab.type-render-test
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   fukan.canvas.projection.instance-test

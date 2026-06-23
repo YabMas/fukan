@@ -12,7 +12,6 @@
             [canvas.architecture.kernel.lens :refer [core-lens]]
             [canvas.architecture.kernel.assemble :refer [assemble-faculty]]
             [canvas.architecture.kernel.typing :refer [typing]]
-            [canvas.architecture.kernel.malli :refer [malli]]
             [canvas.architecture.ingestion.source :refer [canvas-source]]
             [canvas.architecture.ingestion.clojure :refer [target-clojure]]
             [canvas.architecture.ingestion.extraction :refer [extraction]]
@@ -33,13 +32,6 @@
    type-dialect plug-point — foundational; depends on nothing."
   {:child [core-substrate core-structure core-rules core-lens assemble-faculty typing] :may-depend []})
 
-(Subsystem dialect
-  "A pluggable type dialect — a self-contained LEAF the kernel's typing plug-point dispatches to. It
-   depends on nothing: the kernel reaches IN (dispatch), the dialect never reaches back into kernel
-   internals. `:may-depend []` is the teeth — a dialect bridge that delegated to a kernel internal
-   (the pre-SPI `reflect` reaching `value-literal->iv`) would violate conformance. Today: fukan's malli."
-  {:child [malli] :may-depend []})
-
 (Subsystem ingestion
   "The in-fold: discover/assemble design specs + extract code, folded onto the model."
   {:child [canvas-source target-clojure extraction] :may-depend [kernel]})
@@ -55,5 +47,5 @@
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject
-   faculty. Depends on `dialect` because the composition root (infra-model) wires the project dialect in."
-  {:child [model-pipeline infra-model core] :may-depend [kernel ingestion dialect]})
+   faculty."
+  {:child [model-pipeline infra-model core] :may-depend [kernel ingestion]})

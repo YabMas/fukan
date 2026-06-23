@@ -82,7 +82,7 @@
                               [?ch :val/value ?v]]
                      db n)))
         "the enum's members are queryable choices")
-    (is (= 1 (count (d/q '[:find ?t :where [?t :structure/of :lib.type.malli/Schema]
+    (is (= 1 (count (d/q '[:find ?t :where [?t :structure/of :canvas.vocab.type/Schema]
                                            [?t :val/kind "string"]] db)))
         "every :string slot in the model shares ONE content-deduped ⟨Schema :string⟩")))
 

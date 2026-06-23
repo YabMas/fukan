@@ -42,7 +42,6 @@
               canvas.architecture.kernel.structure
               canvas.architecture.kernel.assemble
               canvas.architecture.kernel.typing
-              canvas.architecture.kernel.malli
               canvas.architecture.subsystems
               lib.lens
               canvas.instruments.lenses
@@ -69,8 +68,8 @@
               fukan.canvas.projection.instance-test
               fukan.model.materialize-test
               fukan.model.pipeline-test
-              lib.type.malli
+              canvas.vocab.type
               lib.code
               lib.arch
-              fukan.dialect.malli-vocab-test
-              fukan.dialect.malli-render-test}}}}
+              canvas.vocab.type-vocab-test
+              canvas.vocab.type-render-test}}}}

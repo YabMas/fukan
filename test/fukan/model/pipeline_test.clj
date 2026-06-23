@@ -8,7 +8,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.dialect.malli :as dialect]
+            [canvas.vocab.type :as dialect]
             [fukan.model.pipeline :as pipeline]
             [lib.code :refer [Kind]]
             [canvas.vocab.grouping :refer [Grouping]]
@@ -127,7 +127,7 @@
                   db))
           "core.substrate is its sole owner (the db it constructs)")
       (is (= 1 (count (d/q '[:find ?s
-                             :where [?s :structure/of :lib.type.malli/Schema] [?s :val/kind "ref"]
+                             :where [?s :structure/of :canvas.vocab.type/Schema] [?s :val/kind "ref"]
                                     [?r :rel/from ?s] [?r :rel/kind :names] [?r :rel/to ?k]
                                     [?k :entity/name "StructureDb"]]
                            db)))

@@ -7,7 +7,7 @@
             [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.substrate :as sub]
-            [fukan.dialect.malli :as malli]
+            [canvas.vocab.type :as malli]
             [fukan.canvas.core.typing :as typing]
             [lib.code.correspondence :as corr]))
 

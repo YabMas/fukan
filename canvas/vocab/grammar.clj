@@ -32,7 +32,7 @@
             [fukan.canvas.core.typing :as typing]
             ;; Schema must be registered (and its :valid?/:reflect bridges wired) before
             ;; reflection can build Schema value targets from slot type forms.
-            [lib.type.malli]))
+            [canvas.vocab.type]))
 
 (def ^:private this-ns (str (ns-name *ns*)))
 
@@ -175,7 +175,7 @@
          ;; seed with this ns (the reflection self-reifies), the Schema dialect's
          ;; (reflection emits Schema value targets, so their grammar must be present),
          ;; and any caller-supplied seeds (zero-instance grammar strata)
-         nss    (ns-closure (into (conj (set (keep target-ns tags)) this-ns "lib.type.malli")
+         nss    (ns-closure (into (conj (set (keep target-ns tags)) this-ns "canvas.vocab.type")
                                   (map str (or extra-seeds []))))
          sds    (->> (s/all-structures)
                      (filter #(contains? nss (some-> (:tag %) namespace)))

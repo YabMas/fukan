@@ -1,11 +1,11 @@
-(ns fukan.dialect.malli-vocab-test
+(ns canvas.vocab.type-vocab-test
   (:require [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; SchemaField/SchemaChoice are referred (though only Schema is called
             ;; directly) so clj-kondo resolves their instance-macro hooks.
-            [lib.type.malli :as malli :refer [Schema SchemaField SchemaChoice]]
+            [canvas.vocab.type :as malli :refer [Schema SchemaField SchemaChoice]]
             ;; Kind — the named type a `ref`/`[:vector …]`/`[:map …]` schema points
             ;; at via :names.
             [lib.code :refer [Kind]]))

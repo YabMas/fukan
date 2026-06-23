@@ -1,26 +1,135 @@
-(ns lib.type.malli
-  "The malli type DIALECT — one entry in the shared-lib's pluggable type-authoring
-   surface (`lib.type.*`). A consuming model selects it by requiring this namespace; it
-   is generic, not fukan-specific, so it lives in the reusable `lib/` stdlib rather than
-   fukan's canvas vocab.
+(ns canvas.vocab.type
+  "The malli type DIALECT — fukan's realization of the kernel's `typing` plug-point. A foundational
+   vocab primitive: the code vocab (Kind shapes, Operation signatures) and grammar reflection both
+   build on it. This is the HOOK side of the typing SPI — the plug-point + bridge SHAPE stay in
+   `fukan.canvas.core.typing`; requiring this namespace self-registers the full dialect (all four
+   bridges + its value-structure tag), so a model carries its type checking, reflection, rendering,
+   and adherence by opting in.
 
-   A richer Shape: malli's grammar modelled as content-deduped `^:value` structures, so a
-   schema is a queryable subgraph (plain `d/q`), never a `pr-str` blob. The core stays
-   blind — it sees an opaque schema reference; this dialect, and its src/-side bridges
-   (render now; parse/adheres? later), own all interpretation.
+   A richer Shape: malli's grammar modelled as content-deduped `^:value` structures, so a schema is a
+   queryable subgraph (plain `d/q`), never a `pr-str` blob. The core stays blind — it sees an opaque
+   schema reference; this dialect owns ALL interpretation (`render`/`valid?`/`sigs-adhere?`)."
+  (:require [datascript.core :as d]
+            [malli.core :as m]
+            [fukan.canvas.core.structure :refer [defstructure]]
+            [fukan.canvas.core.typing :as typing]))
 
-   Opt-in (required, not auto-discovered like `canvas/**`); ingests no instances."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [fukan.canvas.core.typing :as typing]
-            [fukan.dialect.malli :as dialect]))
+;; ── the runtime bridges (the hook into the typing plug-point) ──────────────────
 
-;; Opting into this grammar wires its checking and reflection: a refined slot target (e.g.
-;; `{:polarity [:enum "design-down" "code-up"]}`) compiles to a law that checks values through
-;; the type-dialect plug-point — so the grammar registers the malli `:valid?` bridge at load,
-;; plus its value-structure tag `:reflect-tag` (the kernel's `reflect-type` builds Schema subgraphs
-;; through it — no reflect bridge needed). Merge-per-key; a composition root adds `:render`/`:adheres?`.
-(typing/register-type-dialect! {:valid?      dialect/valid?
-                                :reflect-tag ::Schema})
+(defn- children
+  "Target eids of `from`'s reified `rel` relations, in :rel/order order
+   (relations with no :rel/order sort as 0 — harmless for unordered slots)."
+  [db from rel]
+  (->> (d/q '[:find ?to ?ord :in $ ?from ?k :where
+              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]
+              [(get-else $ ?r :rel/order 0) ?ord]]
+            db from rel)
+       (sort-by second)
+       (mapv first)))
+
+(defn- labelled-children
+  "Like `children` but returns [to label] pairs in :rel/order order — for arrow :in params."
+  [db from rel]
+  (->> (d/q '[:find ?to ?ord ?lbl :in $ ?from ?k :where
+              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]
+              [(get-else $ ?r :rel/order 0) ?ord]
+              [(get-else $ ?r :rel/label "") ?lbl]]
+            db from rel)
+       (sort-by second)
+       (mapv (fn [[to _ lbl]] [to lbl]))))
+
+(defn render
+  "Render the Schema at `eid` in `db` back to a malli data-form."
+  [db eid]
+  (let [ent   (d/entity db eid)
+        kind  (:val/kind ent)
+        props (cond-> {}
+                (:val/min ent)   (assoc :min (:val/min ent))
+                (:val/max ent)   (assoc :max (:val/max ent))
+                (:val/regex ent) (assoc :re  (:val/regex ent)))]
+    (case kind
+      ("int" "string" "boolean" "keyword" "double" "any" "nil")
+      (if (seq props) [(keyword kind) props] (keyword kind))
+      ("vector" "set" "sequential")
+      [(keyword kind) (render db (first (children db eid :of)))]
+      ("tuple" "or" "and")
+      (into [(keyword kind)] (map #(render db %) (children db eid :of)))
+      "map"
+      (into [:map]
+            (map (fn [feid]
+                   (let [f   (d/entity db feid)
+                         sk  (first (children db feid :schema))
+                         kw  (keyword (:val/key f))
+                         sub (render db sk)]
+                     (if (:val/optional f) [kw {:optional true} sub] [kw sub])))
+                 (children db eid :field)))
+      "enum"
+      (into [:enum]
+            (map (fn [ceid]
+                   (let [c (d/entity db ceid)
+                         v (:val/value c)]
+                     (case (:val/kind c)
+                       "string" v
+                       "symbol" (symbol v)
+                       (keyword v))))
+                 (children db eid :choice)))
+      "ref"
+      (keyword (:entity/name (d/entity db (first (children db eid :names)))))
+      "map-of"
+      (let [[k v] (children db eid :of)] [:map-of (render db k) (render db v)])
+      "=>"
+      [:=> (into [:catn] (map (fn [[ieid lbl]] [(keyword lbl) (render db ieid)])
+                              (labelled-children db eid :in)))
+       (render db (first (children db eid :out)))]
+      ;; TOTAL: an unknown kind cannot occur for a well-formed Schema (validated at construction),
+      ;; so render a visible structured placeholder instead of throwing — keeps the read side total
+      ;; (a marker that can never pass as a real malli type), rather than leaking partiality upward.
+      [:fukan/unrenderable kind])))
+
+(def ^:private validator
+  "Compiled validator per type form (memoized — forms are authored literals, few)."
+  (memoize m/validator))
+
+(defn valid?
+  "Does `value` satisfy the malli `type-form`? The refined-slot bridge: a slot
+   target like `[:enum \"a\" \"b\"]` or `[:int {:min 1}]` is checked with the full
+   malli interpretation — the kernel stores the form verbatim and never reads it."
+  [type-form value]
+  ((validator type-form) value))
+
+(defn- normalize-fn-schema
+  "Normalize a malli function-schema `[:=> [:cat IN…] OUT]` to `{:in [IN…] :out OUT}`
+   (the empty `[:cat]` yields `:in []`), or `nil` when `form` is not a well-formed
+   `[:=> [:cat …] OUT]`. The `:in` is a VECTOR (a sequence) so order and arity are
+   preserved. Returning `nil` for malformed input means two malformed forms never
+   compare equal — a malformed signature adheres to nothing."
+  [form]
+  (when (and (vector? form) (= :=> (first form)) (>= (count form) 3)
+             (vector? (second form)) (= :cat (first (second form))))
+    {:in (vec (rest (second form))) :out (nth form 2)}))
+
+(defn sigs-adhere?
+  "Whether a code function-schema ADHERES to a modelled Operation's type. Both are
+   malli `[:=> [:cat IN…] OUT]` forms; they adhere iff both are well-formed AND their
+   OUT types are equal AND their input type SEQUENCES (order + arity) are equal.
+   `:in` is an ordered slot on the modelled Operation, so argument ORDER and ARITY are
+   both fidelity-checked: `[:=> [:cat :A :B] :R]` does NOT adhere to `[:=> [:cat :B :A] :R]`,
+   and a 2-arg `[:cat :int :int]` does NOT adhere to a 1-arg `[:cat :int]`."
+  [model-form code-form]
+  (let [m (normalize-fn-schema model-form)
+        c (normalize-fn-schema code-form)]
+    (boolean (and m c (= m c)))))
+
+;; Opting into this grammar wires the FULL dialect: requiring this ns self-registers all four
+;; bridges + its value-structure tag `:reflect-tag` (the kernel's `reflect-type` builds Schema
+;; subgraphs through it — no reflect bridge needed). Merge-per-key, so a composition root could
+;; still override any single bridge.
+(typing/register-type-dialect! {:valid?      valid?
+                                :reflect-tag ::Schema
+                                :render      render
+                                :adheres?    sigs-adhere?})
+
+;; ── the authoring grammar (Schema as queryable ^:value structures) ─────────────
 
 (defn ^:export catn->pairs
   "Parse a malli function-input schema into ordered [param-name-symbol type-form] pairs —
@@ -134,7 +243,7 @@
           [(list 'kind "string") (list 'regex (str (first args)))]
           :=>
           ;; a function type — the arrow's :in is LABELLED (param name) + ordered, :out is one
-          ;; schema, exactly as lib.code/Operation stores a signature (the shared representation).
+          ;; schema, exactly as code/operation stores a signature (the shared representation).
           (let [[input output] args]
             (into [(list 'kind "=>") (list 'out output)]
                   (map (fn [[pname ptype]] (list 'in [pname ptype]))

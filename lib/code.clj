@@ -12,7 +12,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.structure :refer [defstructure]]
             [canvas.vocab.grouping :refer [Connected]]
-            [lib.type.malli :as lib.type.malli :refer [Schema]]))
+            [canvas.vocab.type :as canvas.vocab.type :refer [Schema]]))
 
 ;; ── data types ───────────────────────────────────────────────────────────────
 
@@ -65,7 +65,7 @@
         ;; keep this guard ahead of catn->pairs: it reports against the whole [:=> …] form
         (when-not (vector? input)
           (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))
-        (let [in (lib.type.malli/catn->pairs input)]
+        (let [in (canvas.vocab.type/catn->pairs input)]
           (cond-> (-> m (dissoc :signature) (assoc :out output))
             (seq in) (assoc :in in)))))))
 

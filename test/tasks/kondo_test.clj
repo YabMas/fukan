@@ -51,7 +51,7 @@
     (testing "live vocab constructors are found"
       (is (contains? names 'lib.code/Module))
       (is (contains? names 'lib.code/Operation))
-      (is (contains? names 'lib.type.malli/Schema))
+      (is (contains? names 'canvas.vocab.type/Schema))
       (is (contains? names 'canvas.vocab.grouping/Grouping))
       (is (contains? names 'fukan.canvas.core.structure-test/Function)))
     (testing "realized-as concepts intern no constructor → excluded"

@@ -3,23 +3,18 @@
    (ii)), offering load / refresh / get. `load-model` invokes the build pipeline,
    which ingests the defstructure canvas specs into one structure db.
 
-   This is also fukan-on-itself's composition root for its dialects: it registers
-   fukan's custom code extractor (the Clojure extractor over fukan's `src/`) at the
-   `fukan.model.extraction` plug-point and fukan's type dialect (malli) at the
-   `fukan.canvas.core.typing` plug-point, so the (generic) pipeline can use them
-   without naming them."
+   This is also fukan-on-itself's composition root: it registers fukan's custom code
+   extractor (the Clojure extractor over fukan's `src/`) at the `fukan.model.extraction`
+   plug-point. The type dialect needs no wiring here — `canvas.vocab.type` self-registers
+   the full malli dialect when it loads (required below to guarantee it is)."
   (:require [datascript.core :as d]
-            [fukan.canvas.core.typing :as typing]
-            [fukan.dialect.malli :as malli]
+            [canvas.vocab.type]
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
             [fukan.target.clojure :as target]))
 
 ;; Register fukan's project extractor — its own Clojure source.
 (extraction/register-extractor! target/extract)
-;; Register fukan's project type dialect — malli. (`:valid?` also self-registers
-;; when `lib.type.malli` loads with the canvas vocab; registration merges per key.)
-(typing/register-type-dialect! {:render malli/render :adheres? malli/sigs-adhere? :valid? malli/valid?})
 
 (defonce ^:private state (atom {:model nil :src nil}))
 

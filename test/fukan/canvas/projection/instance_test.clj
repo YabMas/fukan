@@ -9,7 +9,7 @@
             [datascript.core :as d]
             [fukan.canvas.projection.instance :as inst]
             ;; Schema: the INode :shape slot target (reader-expanded malli literals)
-            [lib.type.malli :refer [Schema]]))
+            [canvas.vocab.type :refer [Schema]]))
 
 ;; ── fixture vocab: every instance-surface feature ─────────────────────────────
 

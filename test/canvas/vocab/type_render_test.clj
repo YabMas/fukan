@@ -1,13 +1,11 @@
-(ns fukan.dialect.malli-render-test
+(ns canvas.vocab.type-render-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [datascript.core :as d]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]
-            ;; fukan.dialect.malli referred for its render fn (registered per-test below)
-            [fukan.dialect.malli :as malli]
-            ;; Schema referred so clj-kondo resolves its instance-macro hook
-            [lib.type.malli :refer [Schema]]
+            ;; canvas.vocab.type: its render fn (registered per-test below) + Schema (the clj-kondo hook)
+            [canvas.vocab.type :as malli :refer [Schema]]
             ;; Kind — the named type a `ref` schema points at via :names.
             [lib.code :refer [Kind]]))
 

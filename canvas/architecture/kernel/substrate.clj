@@ -10,7 +10,7 @@
    model-only `Node`/`Relation` portrait, finally has a code home."
   (:require [lib.code :refer [Kind Operation Module]]
             ;; [:enum …] / :keyword literals in Kind bodies check through the malli type dialect
-            [lib.type.malli]))
+            [canvas.vocab.type]))
 
 ;; ── the substrate data-shapes ────────────────────────────────────────────────
 (Kind Node "the substrate atom — identified by name+uuid, or by content when value-typed.")

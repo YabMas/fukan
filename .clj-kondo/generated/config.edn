@@ -10,6 +10,11 @@
    canvas.vocab.grammar-test/Node hooks.fukan.structure/instance
    canvas.vocab.grouping/Connected hooks.fukan.structure/instance
    canvas.vocab.grouping/Grouping hooks.fukan.structure/instance
+   canvas.vocab.type/Schema hooks.fukan.structure/instance
+   canvas.vocab.type/SchemaChoice hooks.fukan.structure/instance
+   canvas.vocab.type/SchemaField hooks.fukan.structure/instance
+   canvas.vocab.type-render-test/RenderHolder hooks.fukan.structure/instance
+   canvas.vocab.type-vocab-test/SchemaHolder hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Holder hooks.fukan.structure/instance
@@ -93,8 +98,6 @@
    fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
-   fukan.dialect.malli-render-test/RenderHolder hooks.fukan.structure/instance
-   fukan.dialect.malli-vocab-test/SchemaHolder hooks.fukan.structure/instance
    fukan.model.pipeline-test/ECard hooks.fukan.structure/instance
    lib.arch/ModuleArchitecture hooks.fukan.structure/instance
    lib.code/Effect hooks.fukan.structure/instance
@@ -108,7 +111,4 @@
    lib.code.correspondence/Fidelity hooks.fukan.structure/instance
    lib.code.correspondence/LensCoverage hooks.fukan.structure/instance
    lib.code.correspondence/Realization hooks.fukan.structure/instance
-   lib.code.correspondence/Totality hooks.fukan.structure/instance
-   lib.type.malli/Schema hooks.fukan.structure/instance
-   lib.type.malli/SchemaChoice hooks.fukan.structure/instance
-   lib.type.malli/SchemaField hooks.fukan.structure/instance}}}
+   lib.code.correspondence/Totality hooks.fukan.structure/instance}}}
