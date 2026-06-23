@@ -46,6 +46,20 @@
   [rn ln]
   (= rn (str "probe-" ln)))
 
+;; op-twin — the model↔code Operation pairing, defined ONCE as a derived relation and injected
+;; into every correspondence law/query at domain altitude (by `check`, like the vocab-derived
+;; rules). An authored op ?a is twinned with an extracted op ?b of the same NAME in a CORRESPONDING
+;; module (`module-corresponds?`). This is the single home of the matching the laws — Realization,
+;; Encapsulation, Totality, EffectCorrespondence — used to each re-inline; they now just call it.
+(s/defrelation :op-twin
+  "an authored Operation ?a and its extracted code twin ?b — same name, corresponding module"
+  '[?a ?b]
+  '[[?a :structure/of :lib.code/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
+    (in-module ?a ?cm)
+    [?b :structure/of :lib.code/Operation] [?b :val/extracted true] [?b :entity/name ?n]
+    (in-module ?b ?km)
+    [(lib.code.correspondence/module-corresponds? ?cm ?km)]])
+
 (defstructure Realization
   "A law-holder for the model↔code correspondence — it has no instances of its own;
    it exists to carry the cross-layer assertion in its own concern.
@@ -59,18 +73,15 @@
    not tag, distinguishes them. The match is on name AND module: an authored Operation in
    canvas module C is realized only by an extracted Operation of the same name whose code
    module corresponds to C (module-corresponds?)."
-  ;; Reads over the vocab-derived rules (check injects them) — domain altitude:
-  ;; `(Operation …)`, `(named …)`, `(in-module …)`; `:val/extracted` splits the two sides.
+  ;; The twin's existence is the injected `op-twin` rule (check injects it like the vocab rules):
+  ;; an authored op with no `(op-twin ?s ?e)` has no realizing code. The leading `:val/extracted`
+  ;; clause is the vacuity guard; op-twin re-derives the name + corresponding-module match.
   (law "every authored operation is realized by an extracted operation of the same name in the corresponding module"
     :scope :global
     :offenders '[?s]
     :where '[(Operation ?x) [?x :val/extracted true]                  ; guard: some code is extracted
-             (Operation ?s) (not [?s :val/extracted true])            ; an authored operation
-             (named ?s ?n) (in-module ?s ?cmn)
-             (not-join [?n ?cmn]
-               (Operation ?o) [?o :val/extracted true]
-               (named ?o ?n) (in-module ?o ?kmn)
-               [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)])]))
+             (Operation ?s) (not [?s :val/extracted true])            ; an authored operation …
+             (not-join [?s] (op-twin ?s ?e))]))                       ; … with no extracted twin
 
 (defstructure CallRealization
   "Law-holder for the model↔code CALL realization — no instances of its own; the relation-level dual
@@ -163,15 +174,11 @@
   (law "every public extracted operation is covered by the model or deliberately exempt"
     :scope :global
     :offenders '[?o]
-    :where '[[?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+    :where '[[?o :structure/of :lib.code/Operation] [?o :val/extracted true]
              (not [?o :val/private true])
              (not [?o :val/export true])
              (not [?o :val/test-support true])
-             (in-module ?o ?kmn)
-             (not-join [?on ?kmn]
-               [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
-               (in-module ?s ?cmn)
-               [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)])]))
+             (not-join [?o] (op-twin ?s ?o))]))                       ; … with no authored twin
 
 (defstructure Totality
   "Law-holder for code-up TOTALITY — the ENFORCED dual of the partiality worklist, at the TRUST LINE
@@ -193,14 +200,11 @@
   (law "every trusted-core reader (its :in is the Model) is total — its realizing code performs no :throws"
     :scope :global
     :offenders '[?o]
-    :where '[[?o :structure/of :lib.code/Operation] (not [?o :val/extracted true]) [?o :entity/name ?on]
+    :where '[[?o :structure/of :lib.code/Operation] (not [?o :val/extracted true])
              [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?sch]
              [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
              [?k :structure/of :lib.code/Kind] [?k :entity/name "StructureDb"]
-             (in-module ?o ?cmn)
-             [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
-             (in-module ?e ?kmn)
-             [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)]
+             (op-twin ?o ?e)
              [?pr :rel/from ?e] [?pr :rel/kind :performs] [?pr :rel/to ?eff] [?eff :val/name "throws"]]))
 
 (defstructure EffectCorrespondence
@@ -223,11 +227,8 @@
     :offenders '[?o]
     :rules '[[(reaches-effect ?op ?en) [?pr :rel/from ?op] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]]
              [(reaches-effect ?op ?en) [?cr :rel/from ?op] [?cr :rel/kind :calls] [?cr :rel/to ?mid] (reaches-effect ?mid ?en)]]
-    :where '[[?o :structure/of :lib.code/Operation] (not [?o :val/extracted true]) [?o :entity/name ?on]
-             (in-module ?o ?cmn)
-             [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
-             (in-module ?e ?kmn)
-             [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)]
+    :where '[[?o :structure/of :lib.code/Operation] (not [?o :val/extracted true])
+             (op-twin ?o ?e)
              (reaches-effect ?e ?en)
              (not-join [?o ?en]
                [?dpr :rel/from ?o] [?dpr :rel/kind :performs] [?dpr :rel/to ?deff] [?deff :val/name ?en])]))
@@ -436,19 +437,14 @@
    model. A query, not a law — unmodelled code is a coverage signal, not a violation (you
    don't model every function).
 
-   Module membership resolves through the `in-module` rule (`:exposes` ∪ `:owns` ∪ `:child`),
-   matching the `Realization` law's own `in-module` — authored Operations attach to their Module
-   via `:exposes` (the public surface), so a `:child`-only authored-twin lookup would miss every
-   modelled op and report nearly all code as uncovered."
+   Twin lookup is the injected `op-twin` rule (the same matching the `Realization` law uses):
+   authored Operations attach to their Module via `:exposes`, which op-twin's `in-module` covers,
+   so a covered extracted op is one with an `(op-twin ?s ?o)`."
   [db]
   (->> (d/q '[:find ?on :in $ %
               :where [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?on]
-                     (in-module ?o ?kmn)
-                     (not-join [?on ?kmn]
-                       [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
-                       (in-module ?s ?cmn)
-                       [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)])]
-            db rules/substrate-rules)
+                     (not-join [?o] (op-twin ?s ?o))]
+            db (s/vocab-rules))
        (map first) set))
 
 (defn uncovered-public-operations
@@ -492,16 +488,12 @@
    incomplete), so it stays a reading; the hard under-declaration half is enforced by the
    `EffectCorrespondence` law (and surfaced by `undeclared-effects`)."
   [db]
-  ;; Bind the twin (?e) in the SAME module-matched query the law uses, so the reading agrees with the
+  ;; Bind the twin (?e) through the SAME `op-twin` rule the law uses, so the reading agrees with the
   ;; law by construction — a module-BLIND `[?e :entity/name ?on]` twin lookup would grab a same-named op
   ;; in the wrong module on a name collision, fabricating a drift the precise law never sees.
   (let [pairs    (d/q '[:find ?on ?o ?e :in $ %
-                        :where [?o :structure/of :lib.code/Operation] (not [?o :val/extracted true]) [?o :entity/name ?on]
-                               (in-module ?o ?cmn)
-                               [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
-                               (in-module ?e ?kmn)
-                               [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)]]
-                       db rules/substrate-rules)
+                        :where (op-twin ?o ?e) [?o :entity/name ?on]]
+                       db (s/vocab-rules))
         declared (fn [oeid] (set (d/q '[:find [?en ...] :in $ ?o :where [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]] db oeid)))]
     (reduce (fn [acc [on oeid teid]]
               (let [dec        (declared oeid)
