@@ -15,7 +15,6 @@
             [canvas.architecture.kernel.malli :refer [malli]]
             [canvas.architecture.ingestion.source :refer [canvas-source]]
             [canvas.architecture.ingestion.clojure :refer [target-clojure]]
-            [canvas.architecture.reading.correspondence :refer [target-correspondence]]
             [canvas.architecture.ingestion.extraction :refer [extraction]]
             [canvas.architecture.reading.probes :refer [probes]]
             [canvas.architecture.reading.finding :refer [finding-faculty]]
@@ -46,8 +45,9 @@
   {:child [canvas-source target-clojure extraction] :may-depend [kernel]})
 
 (Subsystem reading
-  "Lenses over the graph: probe dispatch + the model↔code correspondence + the Finding output type."
-  {:child [probes target-correspondence finding-faculty] :may-depend [kernel]})
+  "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence
+   it composes now lives in `lib.code.correspondence` — a library, not a self-modelled faculty.)"
+  {:child [probes finding-faculty] :may-depend [kernel]})
 
 (Subsystem projection
   "Graph → artifacts: materialization + the instance/grammar print-duals + the system-map overview."

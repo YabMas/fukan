@@ -15,7 +15,7 @@
 
 (defstructure ModuleArchitecture
   "A law-holder for clean-architecture quality constraints over `lib.code` Modules — it has no
-   instances of its own (like `fukan.target.correspondence/Realization`); it exists to carry the
+   instances of its own (like `lib.code.correspondence/Realization`); it exists to carry the
    cross-module assertions in their own opt-in concern.
 
    First law — NO MUTUAL DEPENDENCY: no two Modules may depend on each other (M depends on N and N on
@@ -128,7 +128,7 @@
    sharing a clientele, disjoint from the rest of the Module's public surface.
 
    A SIGNAL for human judgment, NOT a violation (like `lib.code/module-dependencies` /
-   `fukan.target.correspondence/uncovered-calls`): it detects that a seam has crystallized; whether it
+   `lib.code.correspondence/uncovered-calls`): it detects that a seam has crystallized; whether it
    DESERVES a formal split is the human's call (detect-vs-decide). COUNT-INVARIANT by construction: a
    bundle's clientele may grow (e.g. a second type-dialect joins the first) and the bundle stays
    disjoint from the rest — so the seam stays visible, unlike a single-consumer test which goes silent

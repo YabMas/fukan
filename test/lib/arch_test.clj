@@ -151,7 +151,7 @@
           "a latent sub-interface is a bundle, not a lone captive op"))))
 
 (deftest fukan-latent-boundaries-post-substrate-extraction
-  (testing "the substrate is a clean leaf (not flagged); core-structure keeps only the reader residue"
+  (testing "the substrate is a clean leaf (not flagged); core-structure keeps a print-dual reader residue"
     (let [lb (la/latent-boundaries (pipeline/build-model "src"))
           cs (get lb "fukan.canvas.core.structure")
           in-a-bundle? (fn [op] (some (fn [b] (some #{op} (:ops b))) cs))]
@@ -159,10 +159,11 @@
       ;; never flags — the cleanest possible boundary. The construction toolkit left core-structure with it.
       (is (not (contains? lb "fukan.canvas.core.substrate"))
           "core-substrate is a self-contained base layer — one clientele, no consumer-disjoint split")
-      ;; core-structure still flags, but only with the RESIDUE: its check/introspect reader surface is
-      ;; consumer-disjoint from the lone `value-literal->iv` (the registry-bound builder, used only by
-      ;; typing). We DECIDE to leave it — core-structure is the cohesive defstructure-grammar module.
-      (is (some? cs) "core-structure flags with the reader-vs-value-construction residue")
-      (is (in-a-bundle? "check") "the surfaced bundle is the check/introspect reader surface")
+      ;; core-structure still flags, but with the introspection residue: `scalar-slot?` + `structure-by-tag`,
+      ;; both consumed only by the print-dual (projection.instance), consumer-disjoint from the rest of the
+      ;; grammar surface. (The check/introspect reader bundle no longer surfaces here — correspondence, its
+      ;; chief consumer, moved to `lib.code.correspondence`, off the extraction root.)
+      (is (some? cs) "core-structure flags with the print-dual introspection residue")
+      (is (in-a-bundle? "structure-by-tag") "the surfaced bundle is the print-dual's introspection surface")
       (is (not (in-a-bundle? "value-literal->iv"))
-          "value-literal->iv is the disjoint lone builder, not part of the reader bundle"))))
+          "value-literal->iv is the registry-bound builder, not part of the introspection bundle"))))

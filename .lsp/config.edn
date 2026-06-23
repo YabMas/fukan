@@ -50,7 +50,6 @@
               canvas.instruments.projections
               canvas.architecture.kernel.lens
               canvas.architecture.kernel.rules
-              canvas.architecture.reading.correspondence
               canvas.architecture.reading.probes
               canvas.architecture.reading.finding
               canvas.architecture.projection.architecture

@@ -1,4 +1,4 @@
-(ns fukan.target.correspondence
+(ns lib.code.correspondence
   "The model↔code CORRESPONDENCE concern — deliberately separate from BOTH the
    abstract modelling domain (canvas/, e.g. `Operation`) and the code-structure domain
    (`Operation`). A domain definition's laws should concern only that domain's own
@@ -70,7 +70,7 @@
              (not-join [?n ?cmn]
                (Operation ?o) [?o :val/extracted true]
                (named ?o ?n) (in-module ?o ?kmn)
-               [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]))
+               [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)])]))
 
 (defstructure CallRealization
   "Law-holder for the model↔code CALL realization — no instances of its own; the relation-level dual
@@ -102,8 +102,8 @@
                [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
                [?e1 :val/extracted true] [?e2 :val/extracted true]
                (in-module ?e1 ?km1) (in-module ?e2 ?km2)
-               [(fukan.target.correspondence/module-corresponds? ?cm1 ?km1)]
-               [(fukan.target.correspondence/module-corresponds? ?cm2 ?km2)])]))
+               [(lib.code.correspondence/module-corresponds? ?cm1 ?km1)]
+               [(lib.code.correspondence/module-corresponds? ?cm2 ?km2)])]))
 
 (defstructure Fidelity
   "Law-holder for code-up FIDELITY — the ENFORCED dual of the `uncovered-calls` query. Every actual
@@ -128,8 +128,8 @@
               [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
               (not [?o1 :val/extracted true])
               (in-module ?o1 ?c1) (in-module ?o2 ?c2)
-              [(fukan.target.correspondence/module-corresponds? ?c1 ?km1)]
-              [(fukan.target.correspondence/module-corresponds? ?c2 ?km2)]]]
+              [(lib.code.correspondence/module-corresponds? ?c1 ?km1)]
+              [(lib.code.correspondence/module-corresponds? ?c2 ?km2)]]]
     ;; no vacuity guard needed: the body REQUIRES extracted cross-module :calls, so it is naturally
     ;; vacuous on a model-only build. An earlier `[?anydel :rel/kind :delegates]` guard added only a
     ;; ~30× cartesian multiply.
@@ -137,9 +137,9 @@
              [?e1 :val/extracted true] [?e2 :val/extracted true]
              (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
              [?am1 :structure/of :lib.code/Module] (not [?am1 :val/extracted true]) [?am1 :entity/name ?cm1]
-             [(fukan.target.correspondence/module-corresponds? ?cm1 ?km1)]
+             [(lib.code.correspondence/module-corresponds? ?cm1 ?km1)]
              [?am2 :structure/of :lib.code/Module] (not [?am2 :val/extracted true]) [?am2 :entity/name ?cm2]
-             [(fukan.target.correspondence/module-corresponds? ?cm2 ?km2)]
+             [(lib.code.correspondence/module-corresponds? ?cm2 ?km2)]
              (not (intended ?km1 ?km2))]))
 
 (defstructure Encapsulation
@@ -171,7 +171,7 @@
              (not-join [?on ?kmn]
                [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
                (in-module ?s ?cmn)
-               [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]))
+               [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)])]))
 
 (defstructure Totality
   "Law-holder for code-up TOTALITY — the ENFORCED dual of the partiality worklist, at the TRUST LINE
@@ -200,7 +200,7 @@
              (in-module ?o ?cmn)
              [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
              (in-module ?e ?kmn)
-             [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)]
+             [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)]
              [?pr :rel/from ?e] [?pr :rel/kind :performs] [?pr :rel/to ?eff] [?eff :val/name "throws"]]))
 
 (defstructure EffectCorrespondence
@@ -227,7 +227,7 @@
              (in-module ?o ?cmn)
              [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
              (in-module ?e ?kmn)
-             [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)]
+             [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)]
              (reaches-effect ?e ?en)
              (not-join [?o ?en]
                [?dpr :rel/from ?o] [?dpr :rel/kind :performs] [?dpr :rel/to ?deff] [?deff :val/name ?en])]))
@@ -257,7 +257,7 @@
              [(clojure.string/starts-with? ?rn "probe-")]
              (not-join [?rn]
                [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name ?ln]
-               [(fukan.target.correspondence/reader-realizes-lens? ?rn ?ln)])]))
+               [(lib.code.correspondence/reader-realizes-lens? ?rn ?ln)])]))
 
 (defn uncovered-readers
   "The LENS-COVERAGE worklist — extracted probe readers (`probe-X`) with no declared `Lens` of the
@@ -422,7 +422,7 @@
                      [?o :val/sig _]
                      [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o]
                      [?km :entity/name ?kmn]
-                     [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)]]
+                     [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)]]
             db)
        (filter (fn [[s _ o]]
                  (not (typing/type-adheres?
@@ -447,7 +447,7 @@
                      (not-join [?on ?kmn]
                        [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?on]
                        (in-module ?s ?cmn)
-                       [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)])]
+                       [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)])]
             db rules/substrate-rules)
        (map first) set))
 
@@ -500,7 +500,7 @@
                                (in-module ?o ?cmn)
                                [?e :structure/of :lib.code/Operation] [?e :val/extracted true] [?e :entity/name ?on]
                                (in-module ?e ?kmn)
-                               [(fukan.target.correspondence/module-corresponds? ?cmn ?kmn)]]
+                               [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)]]
                        db rules/substrate-rules)
         declared (fn [oeid] (set (d/q '[:find [?en ...] :in $ ?o :where [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]] db oeid)))]
     (reduce (fn [acc [on oeid teid]]

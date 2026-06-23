@@ -4,7 +4,7 @@
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
             [fukan.target.clojure :as tc]
-            [fukan.target.correspondence :as corr]))
+            [lib.code.correspondence :as corr]))
 
 ;; Register fukan's extractor so build-model's unified build runs it (the proof).
 (extraction/register-extractor! tc/extract)

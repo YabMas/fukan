@@ -1,4 +1,4 @@
-(ns fukan.target.correspondence-test
+(ns lib.code.correspondence-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [datascript.core :as d]
             ;; loading infra.model is the composition root — it registers fukan's
@@ -9,7 +9,7 @@
             [fukan.canvas.core.substrate :as sub]
             [fukan.dialect.malli :as malli]
             [fukan.canvas.core.typing :as typing]
-            [fukan.target.correspondence :as corr]))
+            [lib.code.correspondence :as corr]))
 
 ;; register the project dialect (malli render + sigs-adhere?) for the `type-adheres?` path
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.

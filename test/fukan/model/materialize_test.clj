@@ -16,7 +16,7 @@
             ;; drift lenses reference it) and the drift lens's correspondence predicate
             ;; resolves
             [fukan.target.clojure :as target]
-            [fukan.target.correspondence :as corr]))
+            [lib.code.correspondence :as corr]))
 
 ;; materialize is the pure LOWER direction — it projects the design model alone
 ;; (build-model nil = design-only, no extraction). Ad-hoc lenses/projections are
@@ -96,13 +96,13 @@
 (deftest materialize-module-composes-a-modules-stages
   (testing "materialize-module renders a module's Operations under a projection — no stored lens"
     (let [db (pipeline/build-model nil)]
-      (let [bp (m/materialize-module db "Blueprint" "target-correspondence")]
-        (is (str/includes? bp "Implement `drifted-operations`"))
-        (is (str/includes? bp "Implement `uncovered-operations`"))
-        (is (str/includes? bp "Delegates: check") "the cross-boundary dependency renders inline"))
-      (let [docs (m/materialize-module db "Docs" "target-correspondence")]
-        (is (str/includes? docs "### drifted-operations"))
-        (is (str/includes? docs "### uncovered-operations")))
+      (let [bp (m/materialize-module db "Blueprint" "core-lens")]
+        (is (str/includes? bp "Implement `evaluate-lens`"))
+        (is (str/includes? bp "Implement `refine`"))
+        (is (str/includes? bp "Delegates: vocab-rules") "the cross-boundary dependency renders inline"))
+      (let [docs (m/materialize-module db "Docs" "core-lens")]
+        (is (str/includes? docs "### evaluate-lens"))
+        (is (str/includes? docs "### refine")))
       (is (= "" (m/materialize-module db "Blueprint" "no-such-module")) "unknown module → empty"))))
 
 (deftest materialize-focus-takes-ad-hoc-clauses

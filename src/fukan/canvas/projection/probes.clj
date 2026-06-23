@@ -10,7 +10,7 @@
             [datascript.core :as d]
             [fukan.canvas.core.structure :as structure]
             [fukan.canvas.projection.finding :as f]
-            [fukan.target.correspondence :as corr]))
+            [lib.code.correspondence :as corr]))
 
 (defn- probe-patterns
   "Recurring structures (a reading): one observation per structural triplet

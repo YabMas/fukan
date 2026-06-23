@@ -118,19 +118,19 @@
    fukan.dialect.malli-render-test/RenderHolder hooks.fukan.structure/instance
    fukan.dialect.malli-vocab-test/SchemaHolder hooks.fukan.structure/instance
    fukan.model.pipeline-test/ECard hooks.fukan.structure/instance
-   fukan.target.correspondence/CallRealization hooks.fukan.structure/instance
-   fukan.target.correspondence/EffectCorrespondence hooks.fukan.structure/instance
-   fukan.target.correspondence/Encapsulation hooks.fukan.structure/instance
-   fukan.target.correspondence/Fidelity hooks.fukan.structure/instance
-   fukan.target.correspondence/LensCoverage hooks.fukan.structure/instance
-   fukan.target.correspondence/Realization hooks.fukan.structure/instance
-   fukan.target.correspondence/Totality hooks.fukan.structure/instance
    lib.arch/ModuleArchitecture hooks.fukan.structure/instance
    lib.code/Effect hooks.fukan.structure/instance
    lib.code/Kind hooks.fukan.structure/instance
    lib.code/Module hooks.fukan.structure/instance
    lib.code/Operation hooks.fukan.structure/instance
    lib.code/Subsystem hooks.fukan.structure/instance
+   lib.code.correspondence/CallRealization hooks.fukan.structure/instance
+   lib.code.correspondence/EffectCorrespondence hooks.fukan.structure/instance
+   lib.code.correspondence/Encapsulation hooks.fukan.structure/instance
+   lib.code.correspondence/Fidelity hooks.fukan.structure/instance
+   lib.code.correspondence/LensCoverage hooks.fukan.structure/instance
+   lib.code.correspondence/Realization hooks.fukan.structure/instance
+   lib.code.correspondence/Totality hooks.fukan.structure/instance
    lib.grammar/Law hooks.fukan.structure/instance
    lib.grammar/Structure hooks.fukan.structure/instance
    lib.grammar/Vocabulary hooks.fukan.structure/instance

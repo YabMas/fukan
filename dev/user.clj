@@ -19,7 +19,7 @@
             [fukan.model.materialize :as mat]
             ;; loads the model↔code correspondence laws into the dev session so a
             ;; `check`/`(drift)` over the unified held model surfaces drift
-            [fukan.target.correspondence :as corr]
+            [lib.code.correspondence :as corr]
             [lib.code :as code]
             [lib.arch :as la]))
 

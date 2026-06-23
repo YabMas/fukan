@@ -49,7 +49,7 @@
   "Transact a `:calls` rel for every resolvable cross-op var-usage. Both endpoints must be
    extracted Operations we emitted; self-calls and core/library callees (unresolved) drop out.
    This is the FACTS layer — intent-free; the model<->design interpretation lives in
-   `fukan.target.correspondence`."
+   `lib.code.correspondence`."
   [db var-usages]
   (let [pairs (->> var-usages
                    (keep (fn [{:keys [from from-var to name]}]
