@@ -410,21 +410,15 @@
 (defn type-drifted-operations
   "AUTHORED operations whose modelled type disagrees with the realizing function's declared
    `:malli/schema` — a type-drift signal (only checked where the code carries an annotation).
-   Mirrors `uncovered-operations`' authored↔extracted pairing (same name, corresponding
-   module via `module-corresponds?`), additionally requiring the extracted twin carries a
-   `:val/sig`; collects the authored Operation's name when its rendered type does NOT adhere
-   to the twin's realized signature."
+   Pairs each authored op with its extracted twin through the shared `op-twin` rule (same name,
+   corresponding module via `in-module` — the SAME membership the laws use, so public ops attached
+   via `:exposes` are seen, not just `:child`-attached ones), additionally requiring the twin
+   carries a `:val/sig`; collects the authored Operation's name when its rendered type does NOT
+   adhere to the twin's realized signature."
   [db]
-  (->> (d/q '[:find ?s ?sn ?o
-              :where [?s :structure/of :lib.code/Operation] (not [?s :val/extracted true]) [?s :entity/name ?sn]
-                     [?cr :rel/kind :child] [?cr :rel/from ?cm] [?cr :rel/to ?s]
-                     [?cm :entity/name ?cmn]
-                     [?o :structure/of :lib.code/Operation] [?o :val/extracted true] [?o :entity/name ?sn]
-                     [?o :val/sig _]
-                     [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o]
-                     [?km :entity/name ?kmn]
-                     [(lib.code.correspondence/module-corresponds? ?cmn ?kmn)]]
-            db)
+  (->> (d/q '[:find ?s ?sn ?o :in $ %
+              :where (op-twin ?s ?o) [?s :entity/name ?sn] [?o :val/sig _]]
+            db (s/vocab-rules))
        (filter (fn [[s _ o]]
                  (not (typing/type-adheres?
                         (operation-sig db s)
