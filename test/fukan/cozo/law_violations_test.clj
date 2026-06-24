@@ -5,8 +5,9 @@
    (which validates the hand-ported oracle queries); here the COMPILED law is the subject,
    over the rule families rule-compilation lights up: the architecture-quality laws
    (or-join / recursion / subsystem rules), the correspondence laws (`op-twin` +
-   `module-corresponds?`), and the effect law (recursive `reaches-effect`). The fixtures
-   mirror the oracle's so the two stay comparable."
+   `module-corresponds?`), the effect law (recursive `reaches-effect`), and the scalar
+   TYPE-CHECK HYBRID (Cozo finds the leaf, malli validates). The fixtures mirror the
+   oracle's so the two stay comparable."
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datascript.core :as d]
@@ -160,3 +161,16 @@
   (testing "compiled EffectCorrespondence == datascript on an under-declared op"
     (agrees (a/assemble-vars [#'t-doio-auth #'t-doio-ext #'t-svc #'t-code-svc])
             "transitively reaches is declared" #{"doio"})))
+
+;; ── type-check HYBRID: a scalar leaf whose value fails the slot's malli type ──
+;; (not compiled — Cozo finds the leaf in its typed bucket, typing/value-valid? validates)
+(operation/Operation ^{:name "badop"} t-badop {:private 7 :guidance 99})  ; int in :boolean, int in :string (t_int)
+(module/Module ^{:name "strbad"} t-strbad {:extracted "yes"})             ; string in :boolean (t_str bucket)
+(module/Module ^{:name "tc-holder"} t-tc-holder {:child [t-badop]})
+
+(deftest type-check-hybrid-matches-datascript
+  (testing "the type-check hybrid (Cozo finds the leaf, malli validates) == datascript across buckets"
+    (let [ds (a/assemble-vars [#'t-badop #'t-strbad #'t-tc-holder])]
+      (agrees ds "Operation.private value must satisfy" #{"badop"})    ; t_int bucket
+      (agrees ds "Operation.guidance value must satisfy" #{"badop"})   ; t_int bucket
+      (agrees ds "Module.extracted value must satisfy" #{"strbad"})))) ; t_str bucket

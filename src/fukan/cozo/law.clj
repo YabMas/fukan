@@ -14,11 +14,17 @@
        rules `r_name[…] := body`. A law emits only the vocab rules in its reference
        CLOSURE, so each program carries just what it reads.
 
+   HYBRID: the auto-generated scalar TYPE-CHECK laws don't compile — they validate a leaf
+   value through the malli dialect (`typing/value-valid?`), which has no CozoScript form. So
+   `check-structural` runs them split: Cozo finds each instance's leaf value (in its typed
+   bucket), Clojure runs the malli check. Everything else compiles to pure CozoScript.
+
    INCREMENTAL: a law using a not-yet-supported form (or referencing an uncompilable
    vocab rule) is reported `:unsupported` by `check-structural`, never silently skipped,
    so coverage gaps stay explicit."
   (:require [clojure.string :as str]
             [fukan.canvas.core.structure :as structure]
+            [fukan.canvas.core.typing :as typing]
             [fukan.cozo.db :as db]
             [fukan.cozo.rules :as rules]))
 
@@ -189,22 +195,60 @@
   (for [sdef (structure/all-structures), law (structure/laws-of sdef)]
     [(:tag sdef) law]))
 
+;; ── the type-check hybrid: Cozo finds the leaf, Clojure runs malli ────────────
+(defn- value-check-law
+  "If `law` is an auto-generated scalar TYPE-CHECK law — its `:where` carries a
+   `[(typing/value-valid? <target> ?v) ?ok]` clause (malli, not CozoScript-expressible) —
+   return `{:tag :val-attr :target}`; else nil. The structof tag and `:val/<slot>` leaf
+   attr are read off the same `:where`."
+  [{:keys [where]}]
+  (when-let [vv (some #(when (and (vector? %) (= 2 (count %)) (seq? (first %))
+                                  (= 'fukan.canvas.core.typing/value-valid? (ffirst %)))
+                         (first %))
+                      where)]
+    (let [vvar (nth vv 2)]
+      {:target (second vv)
+       :val-attr (some #(when (and (vector? %) (= 3 (count %)) (keyword? (nth % 1))
+                                   (= vvar (nth % 2))) (nth % 1))
+                       where)
+       :tag (some #(when (and (vector? %) (= 3 (count %)) (= :structure/of (nth % 1))) (nth % 2))
+                  where)})))
+
+(defn- value-offenders
+  "Run a type-check law as the hybrid: query each typed bucket for the instances of `tag`
+   that carry a `val-attr` leaf (so the leaf keeps its real type — Int/String/Bool), keep
+   the ones whose value fails the malli `target`, and return their eids as offender rows."
+  [cdb {:keys [tag val-attr target]}]
+  (let [tag-s  (subs (str tag) 1)
+        attr-s (subs (str val-attr) 1)
+        rows   (mapcat (fn [bucket]
+                         (db/q cdb (str "?[x, v] := *" bucket "[x, '" attr-s "', v], "
+                                        "*t_str[x, 'structure/of', '" tag-s "']")))
+                       ["t_int" "t_str" "t_bool"])]
+    (->> rows
+         (filter (fn [[_ v]] (false? (typing/value-valid? target v))))
+         (mapv (fn [[x _]] [(str x)])))))
+
 (defn check-structural
-  "Run every law the compiler currently supports over the Cozo db `cdb`, returning
-   `[{:structure :law :offenders}]` (offenders = matched eid-string tuples) for laws
-   that fire, and `{:structure :law :unsupported true}` for laws whose form (or a vocab
-   rule they read) isn't compiled yet. The Cozo analog of `structure/check`, incrementally."
+  "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]`
+   (offenders = matched eid-string tuples) for laws that fire, and `{:structure :law
+   :unsupported true}` for laws whose form (or a vocab rule they read) isn't compiled yet.
+   A type-check law runs the hybrid (`value-offenders`); everything else compiles to
+   CozoScript and runs. The Cozo analog of `structure/check`, incrementally."
   [cdb]
   (let [index       (vocab-index)
         direct-tags (structure/direct-scope-tags (structure/all-structures))]
-    (vec (for [[tag law] (all-laws)
-               :let [program (try (compile-law law direct-tags index)
-                                  (catch clojure.lang.ExceptionInfo _ ::unsupported))]]
-           (if (= program ::unsupported)
-             {:structure tag :law (:desc law) :unsupported true}
-             (try
-               (let [rows (db/q cdb (str rules/triple "\n" program))]
-                 (cond-> {:structure tag :law (:desc law)}
-                   (seq rows) (assoc :offenders (vec rows))))
-               (catch clojure.lang.ExceptionInfo _
-                 {:structure tag :law (:desc law) :unsupported true})))))))
+    (vec (for [[tag law] (all-laws)]
+           (if-let [vc (value-check-law law)]
+             (let [offs (value-offenders cdb vc)]
+               (cond-> {:structure tag :law (:desc law)} (seq offs) (assoc :offenders offs)))
+             (let [program (try (compile-law law direct-tags index)
+                                (catch clojure.lang.ExceptionInfo _ ::unsupported))]
+               (if (= program ::unsupported)
+                 {:structure tag :law (:desc law) :unsupported true}
+                 (try
+                   (let [rows (db/q cdb (str rules/triple "\n" program))]
+                     (cond-> {:structure tag :law (:desc law)}
+                       (seq rows) (assoc :offenders (vec rows))))
+                   (catch clojure.lang.ExceptionInfo _
+                     {:structure tag :law (:desc law) :unsupported true})))))))))

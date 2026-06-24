@@ -28,4 +28,7 @@
      :performs  [:throws]
      :delegates [kernel/value-literal->iv substrate/value-content-key assemble/emit-instances]})  ; kernel does the building (the SPI)
   (Operation parse-type "A code-form type → entity-maps, via the dialect's :parse bridge (the inverse of render-type)."
-    {:signature [:=> [:catn [:form :any]] :any]}))
+    {:signature [:=> [:catn [:form :any]] :any]})
+  (Operation value-valid? "Whether a scalar value satisfies a refined-slot type form, via the dialect's :valid? bridge — the bridge a refined-scalar slot's auto-generated type-check law calls. Throws when no :valid? is registered."
+    {:signature [:=> [:catn [:type-form :any] [:value :any]] :boolean]
+     :performs  [:throws]}))

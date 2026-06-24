@@ -6,7 +6,8 @@
   (:require [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.cozo.db :as db]
-            [canvas.architecture.kernel.structure :as kstructure]))
+            [canvas.architecture.kernel.structure :as kstructure]
+            [canvas.architecture.kernel.typing :as ktyping]))
 
 (Module cozo-law
   "Compile defstructure laws' datalog → CozoScript over the Cozo substrate and run
@@ -16,7 +17,8 @@
     {:signature [:=> [:catn [:law :any] [:direct-tags :any] [:index :any]] :string]
      :performs  [:state :throws]})
   (Operation check-structural
-    "Run every currently-compilable law over the Cozo db, returning offenders (or :unsupported for laws whose form isn't compiled yet) — the Cozo analog of structure/check."
+    "Run every law over the Cozo db, returning offenders (or :unsupported for laws whose form isn't compiled yet). Compiles each law to CozoScript, except the scalar TYPE-CHECK laws, which run a HYBRID — Cozo finds each instance's leaf value, typing/value-valid? (malli) checks it. The Cozo analog of structure/check."
     {:signature [:=> [:catn [:cdb db/CozoDb]] :any]
      :performs  [:state :throws]
-     :delegates [kstructure/all-structures db/q]}))
+     :delegates [kstructure/all-structures kstructure/direct-scope-tags kstructure/vocab-rules
+                 ktyping/value-valid? db/q]}))
