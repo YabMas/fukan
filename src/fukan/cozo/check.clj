@@ -66,3 +66,17 @@ exempt[o]  := *t_bool[o, 'val/test-support', true]
 covered[o] := op_twin[s, o]
 ?[on] := structof[o, 'canvas.vocab.code.operation/Operation'], extracted[o], not exempt[o], not covered[o], ename[o, on]
 ")))))
+
+(defn drifted-operations
+  "The offenders of the Realization law: authored Operations with no extracted
+   `op_twin` (model ahead of code), as a set of operation names. The law's vacuity
+   guard (no offenders unless some code is extracted) is applied here in Clojure.
+   The Cozo twin of the datascript `drifted-operations` reader."
+  [cdb]
+  (if (empty? (db/q cdb "?[o] := *t_str[o, 'structure/of', 'canvas.vocab.code.operation/Operation'], *t_bool[o, 'val/extracted', true]"))
+    #{}                                                  ; no code extracted → vacuous
+    (set (map first (db/q cdb (str rules/eav rules/correspondence "
+authored_op[s] := structof[s, 'canvas.vocab.code.operation/Operation'], not extracted[s]
+twinned[s]     := op_twin[s, b]
+?[sn] := authored_op[s], not twinned[s], ename[s, sn]
+"))))))

@@ -30,4 +30,8 @@
   (Operation uncovered-public-operations
     "The offenders of the Encapsulation law: public extracted operations with no authored op-twin and not deliberately exempt (private/export/test-support), as a set of operation names. CozoScript over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation drifted-operations
+    "The offenders of the Realization law: authored Operations with no extracted op-twin (model ahead of code), as a set of operation names (vacuous when no code is extracted). CozoScript over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))

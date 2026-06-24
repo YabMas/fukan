@@ -98,6 +98,17 @@
       (is (= #{"loose"} (operation/uncovered-public-operations ds)) "precondition: datascript flags it")
       (is (= (operation/uncovered-public-operations ds) (cozo-via ds check/uncovered-public-operations))))))
 
+;; ── Realization: an authored op with no extracted twin (+ an extracted op to satisfy the guard) ──
+(operation/Operation ^{:name "extracted-thing"} t-ext {:extracted true})
+(operation/Operation ^{:name "ghost"} t-ghost "authored, unrealized")
+(module/Module ^{:name "fukan.realm"} t-realm {:child [t-ghost t-ext]})
+
+(deftest realization-oracle-matches-on-a-violation
+  (testing "cozo == datascript Realization offenders on an authored op with no twin"
+    (let [ds (a/assemble-vars [#'t-ext #'t-ghost #'t-realm])]
+      (is (= #{"ghost"} (operation/drifted-operations ds)) "precondition: datascript flags it")
+      (is (= (operation/drifted-operations ds) (cozo-via ds check/drifted-operations))))))
+
 (deftest oracle-matches-on-the-real-model
   (testing "every ported law agrees (and is empty) on the real, conformant model"
     (let [ds (pipeline/build-model "src")]
@@ -106,4 +117,5 @@
       (is (= (ds-offenders ds "cross-subsystem") (cozo-via ds check/nonconformant-modules)))
       (is (= (ds-offenders ds "belongs to a Subsystem") (cozo-via ds check/unclustered-modules)))
       (is (= (operation/uncovered-public-operations ds) (cozo-via ds check/uncovered-public-operations)))
+      (is (= (operation/drifted-operations ds) (cozo-via ds check/drifted-operations)))
       (is (empty? (ds-offenders ds "acyclic")) "precondition: fukan is acyclic"))))
