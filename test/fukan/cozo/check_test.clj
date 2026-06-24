@@ -109,6 +109,25 @@
       (is (= #{"ghost"} (operation/drifted-operations ds)) "precondition: datascript flags it")
       (is (= (operation/drifted-operations ds) (cozo-via ds check/drifted-operations))))))
 
+;; ── CallRealization: an authored cross-module delegation with no realizing call ──
+(declare t-db)
+(operation/Operation ^{:name "da"} t-da {:delegates [t-db]})
+(operation/Operation ^{:name "db"} t-db "authored callee in b")
+(module/Module ^{:name "a"} t-mod-a {:exposes [t-da]})
+(module/Module ^{:name "b"} t-mod-b {:exposes [t-db]})
+;; fukan.guard satisfies the ≥1-extracted-Module guard AND holds an (unrelated) extracted
+;; call so datascript's not-join isn't over an empty :calls relation — its empty-relation
+;; gotcha would otherwise mis-fire on this synthetic (cozo's stratified negation does not).
+(operation/Operation ^{:name "ge2"} t-ge2 {:extracted true})
+(operation/Operation ^{:name "ge"}  t-ge  {:extracted true :calls [t-ge2]})
+(module/Module ^{:name "fukan.guard"} t-guard {:extracted true :child [t-ge t-ge2]})
+
+(deftest call-realization-oracle-matches-on-a-violation
+  (testing "cozo == datascript CallRealization offenders on an unrealized delegation"
+    (let [ds (a/assemble-vars [#'t-da #'t-db #'t-mod-a #'t-mod-b #'t-ge #'t-ge2 #'t-guard])]
+      (is (= #{"da"} (module/unrealized-delegates ds)) "precondition: datascript flags it")
+      (is (= (module/unrealized-delegates ds) (cozo-via ds check/unrealized-delegates))))))
+
 (deftest oracle-matches-on-the-real-model
   (testing "every ported law agrees (and is empty) on the real, conformant model"
     (let [ds (pipeline/build-model "src")]
@@ -118,4 +137,5 @@
       (is (= (ds-offenders ds "belongs to a Subsystem") (cozo-via ds check/unclustered-modules)))
       (is (= (operation/uncovered-public-operations ds) (cozo-via ds check/uncovered-public-operations)))
       (is (= (operation/drifted-operations ds) (cozo-via ds check/drifted-operations)))
+      (is (= (module/unrealized-delegates ds) (cozo-via ds check/unrealized-delegates)))
       (is (empty? (ds-offenders ds "acyclic")) "precondition: fukan is acyclic"))))

@@ -80,3 +80,21 @@ authored_op[s] := structof[s, 'canvas.vocab.code.operation/Operation'], not extr
 twinned[s]     := op_twin[s, b]
 ?[sn] := authored_op[s], not twinned[s], ename[s, sn]
 "))))))
+
+(defn unrealized-delegates
+  "The offenders of the CallRealization law: authored cross-module delegations not
+   realized by any actual extracted call between the corresponding modules, as a
+   set of source-operation names. `realized` pairs the canvas modules whose
+   corresponding code modules actually call across; the law's vacuity guard
+   (≥1 extracted Module) is applied here in Clojure. The Cozo twin of the
+   datascript `unrealized-delegates` reader."
+  [cdb]
+  (if (empty? (db/q cdb "?[m] := *t_str[m, 'structure/of', 'canvas.vocab.code.module/Module'], *t_bool[m, 'val/extracted', true]"))
+    #{}                                                  ; no extracted Module → vacuous
+    (set (map first (db/q cdb (str rules/eav rules/correspondence "
+realized[cm1, cm2] := relkind[c, 'calls'], relfrom[c, e1], relto[c, e2], extracted[e1], extracted[e2],
+                      in_module[e1, km1], in_module[e2, km2],
+                      module_corresponds[cm1, km1], module_corresponds[cm2, km2]
+?[on] := relkind[d, 'delegates'], relfrom[d, o1], relto[d, o2], not extracted[o1],
+         in_module[o1, cm1], in_module[o2, cm2], cm1 != cm2, not realized[cm1, cm2], ename[o1, on]
+"))))))

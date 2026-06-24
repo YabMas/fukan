@@ -34,4 +34,8 @@
   (Operation drifted-operations
     "The offenders of the Realization law: authored Operations with no extracted op-twin (model ahead of code), as a set of operation names (vacuous when no code is extracted). CozoScript over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation unrealized-delegates
+    "The offenders of the CallRealization law: authored cross-module delegations not realized by any actual extracted call between the corresponding modules, as a set of source-operation names. CozoScript over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))
