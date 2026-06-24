@@ -22,7 +22,9 @@
             [canvas.architecture.projection.architecture :refer [architecture]]
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
             [canvas.architecture.orchestration.infra :refer [infra-model]]
-            [canvas.architecture.orchestration.core :refer [core]]))
+            [canvas.architecture.orchestration.core :refer [core]]
+            [canvas.architecture.cozo.db :refer [cozo-db]]
+            [canvas.architecture.cozo.mirror :refer [cozo-mirror]]))
 
 (declare ingestion)
 
@@ -34,6 +36,14 @@
 (Subsystem ingestion
   "The in-fold: discover/assemble design specs + extract code, folded onto the model."
   {:child [canvas-source extraction] :may-depend [kernel]})
+
+(Subsystem cozo
+  "The Cozo query engine (datascript→Cozo migration) — the engine seam + the EAV
+   mirror that reflects the datascript substrate so laws/readers can be checked
+   against Cozo (the oracle). A leaf during the migration: nothing in production
+   depends on it yet, and it depends on no other faculty. TRANSITIONAL shape —
+   folds into the kernel query layer at cut-over (P5)."
+  {:child [cozo-db cozo-mirror] :may-depend []})
 
 (Subsystem reading
   "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence

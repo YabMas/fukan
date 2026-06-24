@@ -42,6 +42,8 @@
               canvas.architecture.kernel.assemble
               canvas.architecture.kernel.typing
               canvas.architecture.subsystems
+              canvas.architecture.cozo.db
+              canvas.architecture.cozo.mirror
               lib.lens
               canvas.instruments.lenses
               canvas.instruments.findings
