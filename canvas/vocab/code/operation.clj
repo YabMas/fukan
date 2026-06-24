@@ -9,6 +9,7 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
+            [fukan.cozo.query :as cq]
             [canvas.vocab.type :as ct :refer [Schema]]
             [canvas.vocab.code.effect :as effect :refer [Effect]]
             [canvas.vocab.grouping :refer [Connected]]))
@@ -108,7 +109,7 @@
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)
-         (map #(:entity/name (d/entity db %)))
+         (map #(:entity/name (cq/entity db %)))
          set)))
 
 (defn uncovered-operations
@@ -135,7 +136,7 @@
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)
-         (map #(:entity/name (d/entity db %)))
+         (map #(:entity/name (cq/entity db %)))
          set)))
 
 (defn operation-sig

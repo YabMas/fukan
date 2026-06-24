@@ -9,6 +9,7 @@
   (:require [clojure.string :as str]
             [clj-reload.core :as reload]
             [datascript.core :as d]
+            [fukan.cozo.query :as cq]
             [fukan.infra.model :as infra-model]
             [fukan.canvas.core.structure :as structure]
             [fukan.canvas.projection.finding :as pf]
@@ -118,7 +119,7 @@
    modelled capability. (Build with a code-root — `(go)` defaults to \"src\" — so
    the held model carries the extracted code.)"
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (let [d (operation/drifted-operations m)]
       (if (empty? d)
         (println "No drift — every modelled Operation is realized in code.")
@@ -131,11 +132,11 @@
    intent, or make it `defn-`). Empty ⇔ every unmodelled function is genuinely private. Grouped by
    code module. (The private half of the coverage gap is settled by definition.)"
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (let [w (operation/uncovered-public-operations m)]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
-        (let [by-mod (->> (d/q '[:find ?on ?kmn
+        (let [by-mod (->> (cq/q '[:find ?on ?kmn
                                  :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]
                                         [?o :entity/name ?on] (not [?o :val/private true])
                                         [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o] [?km :entity/name ?kmn]]
