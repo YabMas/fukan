@@ -49,3 +49,17 @@
    roots → native datoms → `mirror/load-datoms`. Returns the open Cozo db."
   [vars]
   (mirror/load-datoms (instances->datoms (roots-of vars))))
+
+(defn- collect
+  "Every instance-bearing interned var across the (already-required) `ns-syms`."
+  [ns-syms]
+  (for [ns-sym ns-syms
+        [_ v]  (ns-interns ns-sym)
+        :when  (sub/instance-value? (deref v))]
+    v))
+
+(defn nss->cozo
+  "Build a Cozo substrate natively from the instance-vars of the (already-loaded)
+   `ns-syms` — the namespace-scan entry to `vars->cozo`. Returns the open Cozo db."
+  [ns-syms]
+  (vars->cozo (collect ns-syms)))

@@ -19,4 +19,9 @@
     "Build a Cozo substrate (no datascript) from instance-bearing vars: roots → native datoms (dedup + eids + ref resolution) → load-datoms. Returns the open Cozo db."
     {:signature [:=> [:catn [:vars [:vector :any]]] db/CozoDb]
      :performs  [:throws]
-     :delegates [substrate/value-content-key kassemble/emit-instances cmirror/load-datoms]}))
+     :delegates [substrate/value-content-key kassemble/emit-instances cmirror/load-datoms]})
+  (Operation nss->cozo
+    "Build a Cozo substrate natively from the instance-vars of the already-loaded ns-syms — the namespace-scan entry to vars->cozo."
+    {:signature [:=> [:catn [:ns-syms [:vector :symbol]]] db/CozoDb]
+     :performs  [:throws]
+     :delegates [substrate/instance-value?]}))

@@ -4,6 +4,7 @@
    dedup (a `^:value` shared across ops must collapse to ONE node)."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.canvas.core.assemble :as a]
+            [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.cozo.db :as db]
             [fukan.cozo.mirror :as mirror]
             [fukan.cozo.build :as build]
@@ -36,4 +37,17 @@
             "module-dependencies agree across build paths")
         (is (= 1 (io-nodes native)) "the shared ^:value :io Effect collapses to one node")
         (is (= (io-nodes mirrored) (io-nodes native)) "value-identity dedup agrees")
+        (finally (db/close mirrored) (db/close native))))))
+
+(deftest native-canvas-build-matches-datascript
+  (testing "native build of the FULL canvas design model == datascript (module-deps at scale)"
+    (let [ds       (canvas-source/build)              ; requires + assembles every canvas spec
+          nss      (canvas-source/canvas-namespaces)
+          mirrored (mirror/mirror ds)
+          native   (build/nss->cozo nss)]
+      (try
+        (is (seq (reading/module-dependencies native))
+            "precondition: the real design model has module dependencies")
+        (is (= (reading/module-dependencies mirrored) (reading/module-dependencies native))
+            "full design-model module-dependencies agree across build paths")
         (finally (db/close mirrored) (db/close native))))))
