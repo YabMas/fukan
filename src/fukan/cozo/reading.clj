@@ -2,7 +2,8 @@
   "Read-side queries ported onto the Cozo mirror — each the Cozo twin of a
    datascript reader, which the datascript→Cozo oracle asserts agreement with.
    TRANSITIONAL framing: becomes the read surface once datascript is gone (P5)."
-  (:require [fukan.cozo.db :as db]
+  (:require [clojure.set :as set]
+            [fukan.cozo.db :as db]
             [fukan.cozo.rules :as rules]))
 
 (defn module-dependencies
@@ -38,3 +39,41 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
                {})
        (reduce-kv (fn [acc mod bs] (assoc acc mod (vec (sort-by (comp count :ops) > bs))))
                   (sorted-map))))
+
+(defn throw-spread
+  "How partiality spreads: `{:direct #{ops that throw themselves} :transitive-only
+   #{ops that reach :throws only via a call}}`. Composes `performs` (direct) and
+   `reaches_effect` (transitive) over the Cozo mirror `cdb`. The Cozo twin of
+   `canvas.vocab.code.effect/throw-spread`."
+  [cdb]
+  (let [base     (str rules/eav rules/effect)
+        names    (fn [q] (set (map first (db/q cdb (str base q)))))
+        direct   (names "
+?[on] := structof[o, 'canvas.vocab.code.operation/Operation'], extracted[o], performs[o, 'throws'], ename[o, on]")
+        reachers (names "
+?[on] := structof[o, 'canvas.vocab.code.operation/Operation'], extracted[o], reaches_effect[o, 'throws'], ename[o, on]")]
+    {:direct direct :transitive-only (set/difference reachers direct)}))
+
+(defn- effect-pairs
+  "`{op-name #{effect-name…}}` from a (op-name, effect-name) row set."
+  [rows]
+  (reduce (fn [m [on en]] (update m on (fnil conj #{}) en)) {} rows))
+
+(defn effect-drift
+  "Per MODELLED op, the disagreement between its authored `:performs` and its
+   extracted twin's TRANSITIVE effect profile: `{op-name {:undeclared #{reached ∖
+   declared} :phantom #{declared ∖ reached}}}` for every op with a disagreement.
+   Composes `op_twin`, `performs` and `reaches_effect` over the mirror `cdb`. The
+   Cozo twin of `canvas.vocab.code.effect/effect-drift`."
+  [cdb]
+  (let [script   (str rules/eav rules/correspondence rules/effect)
+        declared (effect-pairs (db/q cdb (str script "
+?[on, en] := op_twin[o, b], ename[o, on], performs[o, en]")))
+        reached  (effect-pairs (db/q cdb (str script "
+?[on, en] := op_twin[o, b], ename[o, on], reaches_effect[b, en]")))]
+    (reduce (fn [acc on]
+              (let [dec (get declared on #{}), rea (get reached on #{})
+                    und (set/difference rea dec), phan (set/difference dec rea)]
+                (cond-> acc
+                  (or (seq und) (seq phan)) (assoc on {:undeclared und :phantom phan}))))
+            {} (into (set (keys declared)) (keys reached)))))

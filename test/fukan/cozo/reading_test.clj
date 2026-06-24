@@ -10,7 +10,8 @@
             [fukan.cozo.mirror :as mirror]
             [fukan.cozo.reading :as reading]
             [canvas.vocab.code.module :as code-module]
-            [canvas.vocab.code.subsystem :as subsystem]))
+            [canvas.vocab.code.subsystem :as subsystem]
+            [canvas.vocab.code.effect :as effect]))
 
 (deftest module-dependencies-matches-datascript
   (testing "the Cozo port agrees with the datascript reader on the real model"
@@ -42,4 +43,22 @@
           (is (seq expected) "precondition: the real model has a latent boundary")
           (is (= (norm-lb expected) (norm-lb actual))
               "cozo == datascript for the boundary bundles"))
+        (finally (db/close cdb))))))
+
+(deftest throw-spread-matches-datascript
+  (testing "the Cozo throw-spread agrees with the datascript reader on the real model"
+    (let [ds  (pipeline/build-model "src")
+          cdb (mirror/mirror ds)]
+      (try
+        (let [expected (effect/throw-spread ds)]
+          (is (seq (:direct expected)) "precondition: the real model has direct throwers")
+          (is (= expected (reading/throw-spread cdb))))
+        (finally (db/close cdb))))))
+
+(deftest effect-drift-matches-datascript
+  (testing "the Cozo effect-drift agrees with the datascript reader on the real model"
+    (let [ds  (pipeline/build-model "src")
+          cdb (mirror/mirror ds)]
+      (try
+        (is (= (effect/effect-drift ds) (reading/effect-drift cdb)))
         (finally (db/close cdb))))))

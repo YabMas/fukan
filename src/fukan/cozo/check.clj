@@ -123,7 +123,6 @@ intended[km1, km2] := relkind[d, 'delegates'], relfrom[d, o1], relto[d, o2], not
    needs extracted ops). The Cozo twin of the datascript `undeclared-effects` reader."
   [cdb]
   (set (map first (db/q cdb (str rules/eav rules/correspondence rules/effect "
-declares[o, en] := relkind[pr, 'performs'], relfrom[pr, o], relto[pr, e], valname[e, en]
 ?[on] := structof[o, 'canvas.vocab.code.operation/Operation'], not extracted[o],
-         op_twin[o, b], reaches_effect[b, en], not declares[o, en], ename[o, on]
+         op_twin[o, b], reaches_effect[b, en], not performs[o, en], ename[o, on]
 ")))))

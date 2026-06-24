@@ -88,11 +88,13 @@ consumed[o, mod] := clientele[o, cm], in_module[o, mod]
 ")
 
 (def effect
-  "Transitive effect reachability, built on `eav`: an op REACHES effect E if it
-   directly `:performs` E, or `:calls` an op that reaches E. The cozo port of
-   `canvas.vocab.code.effect/reaches-effect-rules` — a recursive rule cozo
-   saturates to a fixpoint over the (cyclic) call graph."
+  "Effect attribution + transitive reachability, built on `eav`. `performs`: the
+   DIRECT effect an op declares/performs (op→effect-name). `reaches_effect`: an op
+   REACHES E if it directly performs E or `:calls` an op that reaches E — the cozo
+   port of `reaches-effect-rules`, a recursive rule cozo saturates to a fixpoint
+   over the (cyclic) call graph."
   "
-reaches_effect[op, en] := relkind[pr, 'performs'], relfrom[pr, op], relto[pr, e], valname[e, en]
+performs[op, en] := relkind[pr, 'performs'], relfrom[pr, op], relto[pr, e], valname[e, en]
+reaches_effect[op, en] := performs[op, en]
 reaches_effect[op, en] := relkind[cr, 'calls'], relfrom[cr, op], relto[cr, mid], reaches_effect[mid, en]
 ")

@@ -17,4 +17,12 @@
   (Operation latent-boundaries
     "Code modules whose public surface has split into ≥2 consumer-disjoint clienteles (Parnas/ISP boundary discovery), as {module [{:ops :clientele}…]}. Composes the surface building blocks through ConnectedComponents + a cohesion/proper gate."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation throw-spread
+    "How partiality spreads: {:direct #{ops that throw directly} :transitive-only #{ops that reach :throws only via a call}}. Composes performs and reaches_effect over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation effect-drift
+    "Per modelled op, the disagreement between authored :performs and the extracted twin's transitive effect profile: {op-name {:undeclared #{…} :phantom #{…}}}. Composes op_twin, performs and reaches_effect over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))
