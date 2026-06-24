@@ -41,6 +41,23 @@
                  (set (map first (q/q dq cdb (str eid))))))))
       (finally (db/close cdb)))))
 
+(deftest scalar-param-does-not-leak-into-rules
+  ;; regression: a `$ % ?op` scalar must substitute only into the WHERE body, never into a `%`
+  ;; rule whose head var shares the name (`?op`). Inlining there corrupted the rule head
+  ;; (`r_reaches_effect[604, en]`). The recursive reaches-effect rule is the real-world trigger.
+  (let [ds  (pipeline/build-model "src")
+        cdb (mirror/mirror ds)]
+    (try
+      (let [eid   (ffirst (d/q '[:find ?e :where [?e :entity/name "check"]
+                                 [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]] ds))
+            rules '[[(reaches-effect ?op ?en) [?pr :rel/from ?op] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]]
+                    [(reaches-effect ?op ?en) [?cr :rel/from ?op] [?cr :rel/kind :calls] [?cr :rel/to ?mid] (reaches-effect ?mid ?en)]]
+            dq    '[:find [?en ...] :in $ % ?op :where (reaches-effect ?op ?en)]]
+        (is (= (set (d/q dq ds rules eid))
+               (set (q/q dq cdb rules (str eid))))
+            "the scalar binds the where-body's ?op; the rule's head ?op stays a variable"))
+      (finally (db/close cdb)))))
+
 (deftest entity-agrees-with-datascript
   (let [ds  (pipeline/build-model "src")
         cdb (mirror/mirror ds)]

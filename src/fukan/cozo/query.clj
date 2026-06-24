@@ -205,9 +205,11 @@
   [cdb query inputs]
   (let [{:keys [find in where]} (split-query query)
         {:keys [rules subst]}   (bind-inputs in inputs)
+        ;; scalar params bind only the WHERE-body's vars; a `%` rule's vars are head-scoped
+        ;; and never close over query `:in` inputs — substituting a scalar into a rule would
+        ;; corrupt its head (e.g. a shared name like `?op`), so the rules are passed verbatim.
         where*  (walk/postwalk-replace subst where)
-        rules*  (walk/postwalk-replace subst (vec rules))
-        [rule-lines body] (compile-body where* rules* (vocab-index))
+        [rule-lines body] (compile-body where* (vec rules) (vocab-index))
         head    (str/join ", " (map cvar (find-vars find)))
         program (str preamble "\n" (str/join "\n" rule-lines) "\n?[" head "] := " body)
         rows    (db/q cdb program)]
