@@ -1,62 +1,30 @@
-{:config-in-ns
- {;; Instance-bearing canvas/demo model + test namespaces: their public `def`s are
-  ;; reached only by the global assembler's reflective var scan, their cross-model
-  ;; requires + referred vars are used only inside defstructure clause bodies (which
-  ;; the hook drops), so unused-public-var / unused-namespace / unused-referred-var
-  ;; are false positives here. (clj-kondo CLI is ground truth — mirror in .lsp/config.edn.)
+{;; Instance-bearing self-spec namespaces: their public `def`s are reached only
+ ;; by the global assembler's reflective var scan, and their cross-model requires
+ ;; + referred vars are used only inside defstructure clause bodies (which the
+ ;; instance hook drops) — so unused-public-var / unused-namespace /
+ ;; unused-referred-var are all false positives. Every `canvas.architecture.*`
+ ;; module/subsystem self-spec is uniform in this, so it's matched by PATTERN
+ ;; (`:ns-groups` below) rather than enumerated — a new self-spec needs no config
+ ;; edit. The rest, whose exemptions vary, stay enumerated.
+ ;; (clj-kondo CLI is ground truth — mirror unused-public-var in .lsp/config.edn.)
+ :ns-groups
+ [{:name fukan/architecture-self-spec :pattern "canvas\\.architecture\\..*"}]
+
+ :config-in-ns
+ {fukan/architecture-self-spec
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+
   ;; the extractor test fixture deliberately holds an unused private defn- (delta),
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  canvas.architecture.ingestion.source
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
   ;; canvas.vocab.grammar's generated constructors are never CALLED — the reflector emits
   ;; raw node/rel maps by mechanism (like the extractor); the structures exist to
   ;; register the meta-grammar.
   canvas.vocab.grammar
   {:linters {:unused-public-var {:level :off}}}
-  canvas.architecture.ingestion.extraction
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.projection.grammar
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.projection.instance
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.orchestration.infra
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.kernel.structure
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.kernel.assemble
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.kernel.typing
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.subsystems
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.cozo.db
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.cozo.mirror
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
   lib.lens
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
@@ -70,38 +38,6 @@
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   canvas.instruments.projections
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.kernel.lens
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.kernel.rules
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.reading.probes
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.reading.finding
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.projection.architecture
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.orchestration.core
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.projection.materialize
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
-  canvas.architecture.orchestration.pipeline
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}

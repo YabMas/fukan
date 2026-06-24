@@ -8,7 +8,9 @@
  ;; clj-kondo's per-namespace config, so both files need to know about
  ;; namespaces that exist for non-statically-analyzable reasons (SCI sandbox
  ;; surface, dynamic discovery, trial-run scaffolding, test fixtures). When
- ;; adding a namespace to the clj-kondo exemption list, add it here too.
+ ;; adding a namespace to the clj-kondo exemption list, add it here too —
+ ;; UNLESS it matches a pattern below (e.g. every `canvas.architecture.*`
+ ;; self-spec is covered by the regex, so new ones need no edit).
 
  :linters
  {;; the instance hook rewrites def-emitting instance forms `(Tag sym …)` to
@@ -27,35 +29,16 @@
 
    ;; Namespace-wide exemptions. Mirrors `.clj-kondo/config.edn`'s
    ;; `:config-in-ns` entries — see that file for per-namespace rationale.
-   :exclude #{;; Instance-bearing canvas/demo model + test namespaces: their public
-              ;; `def`s are reached only by the global assembler's reflective var
-              ;; scan (and cross-model var refs inside dropped defstructure clause
-              ;; bodies). Mirrors `.clj-kondo/config.edn`'s `:config-in-ns`.
-              canvas.architecture.ingestion.source
+   ;; Every `canvas.architecture.*` module/subsystem self-spec is uniform, so
+   ;; it's matched by the regex string (mirrors clj-kondo's `:ns-groups`); the
+   ;; rest, whose exemptions vary, stay enumerated.
+   :exclude #{"canvas\\.architecture\\..*"
               canvas.vocab.grammar
               fukan.canvas.projection.grammar-test
-              canvas.architecture.ingestion.extraction
-              canvas.architecture.projection.grammar
-              canvas.architecture.projection.instance
-              canvas.architecture.orchestration.infra
-              canvas.architecture.kernel.structure
-              canvas.architecture.kernel.assemble
-              canvas.architecture.kernel.typing
-              canvas.architecture.subsystems
-              canvas.architecture.cozo.db
-              canvas.architecture.cozo.mirror
               lib.lens
               canvas.instruments.lenses
               canvas.instruments.findings
               canvas.instruments.projections
-              canvas.architecture.kernel.lens
-              canvas.architecture.kernel.rules
-              canvas.architecture.reading.probes
-              canvas.architecture.reading.finding
-              canvas.architecture.projection.architecture
-              canvas.architecture.orchestration.core
-              canvas.architecture.projection.materialize
-              canvas.architecture.orchestration.pipeline
               fukan.canvas.core.assemble-test
               fukan.canvas.core.composition-test
               fukan.canvas.core.view-map-test
