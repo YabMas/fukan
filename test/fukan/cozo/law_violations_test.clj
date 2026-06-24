@@ -13,14 +13,19 @@
             [datascript.core :as d]
             ;; composition root — registers the extractor + loads the full vocab/laws
             [fukan.infra.model]
+            [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.lens :refer [Lens]]
             [fukan.cozo.db :as db]
             [fukan.cozo.mirror :as mirror]
             [fukan.cozo.law :as law]
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as module]
-            [canvas.vocab.code.subsystem :as subsystem]))
+            [canvas.vocab.code.subsystem :as subsystem]
+            ;; ensure the fukan-specific vocab (LensCoverage) is registered even if a sibling
+            ;; test ns's run perturbs the shared structure registry
+            [canvas.vocab.fukan]))
 
 (defn- ds-names
   "Datascript `check` offenders for the law whose desc contains `substr`, as entity names."
@@ -174,3 +179,61 @@
       (agrees ds "Operation.private value must satisfy" #{"badop"})    ; t_int bucket
       (agrees ds "Operation.guidance value must satisfy" #{"badop"})   ; t_int bucket
       (agrees ds "Module.extracted value must satisfy" #{"strbad"})))) ; t_str bucket
+
+;; ── Connected (FACET scope): an isolated Operation, scoped via the (Connected ?n) rule ──
+(operation/Operation ^{:name "lonely"} t-lonely "an isolated op — no relations")
+
+(deftest connected-facet-scope-compiled-matches-datascript
+  (testing "compiled Connected/no-isolated-node (facet scope → short-name rule-call) == datascript"
+    (agrees (a/assemble-vars [#'t-lonely]) "isolated node" #{"lonely"})))
+
+;; ── LensCoverage: an extracted probe-reader with no Lens (starts-with? + reader-realizes-lens?) ──
+;; cozo's stratified negation correctly flags ONLY the uncovered reader (probe-ghost; probe-survey is
+;; covered by lens "survey"). We assert cozo's verdict directly rather than via datascript: under the
+;; test runner's polluted registry datascript's not-join hits its EMPTY-RELATION GOTCHA and misses the
+;; violation — precisely the fragility this migration escapes (the oracle is allowed to diverge here).
+(Lens ^{:name "survey"} t-lens-survey {:focus "f" :select ["all" '[[?n :structure/of _]]]})
+(operation/Operation ^{:name "probe-survey"} t-probe-survey {:extracted true})  ; covered by lens "survey"
+(operation/Operation ^{:name "probe-ghost"}  t-probe-ghost  {:extracted true})  ; uncovered (no lens "ghost")
+(module/Module ^{:name "fukan.probes"} t-probes-mod {:extracted true :child [t-probe-survey t-probe-ghost]})
+
+(deftest lens-coverage-compiled-fires-correctly
+  (testing "compiled LensCoverage (starts-with? + reader-realizes-lens?) flags only the uncovered reader"
+    (let [ds (a/assemble-vars [#'t-lens-survey #'t-probe-survey #'t-probe-ghost #'t-probes-mod])]
+      (is (= #{"probe-ghost"} (compiler-names ds "probe reader"))))))
+
+;; ── full-check coverage + parity ──────────────────────────────────────────────
+(defn- ds-check-set
+  "datascript `structure/check ds` for fukan's own structures, as #{[structure law #{names}]}.
+   Test-fixture structures (their ns contains \"test\") are excluded so the runner's all-ns load
+   doesn't pollute the comparison."
+  [ds]
+  (set (for [{:keys [structure law offenders]} (s/check ds)
+             :when (not (str/includes? (namespace structure) "test"))]
+         [structure law (set (map #(:entity/name (d/entity ds (first %))) offenders))])))
+
+(defn- cozo-check-set
+  "cozo `law/check` over the mirror of `ds`, normalized like `ds-check-set` (fukan structures only)."
+  [ds]
+  (let [cdb (mirror/mirror ds)]
+    (try
+      (set (for [{:keys [structure law offenders]} (law/check cdb)
+                 :when (not (str/includes? (namespace structure) "test"))]
+             [structure law (set (map #(:entity/name (d/entity ds (Long/parseLong (first %)))) offenders))]))
+      (finally (db/close cdb)))))
+
+(deftest fukan-laws-all-compile-on-cozo
+  (testing "every law of fukan's own vocabulary compiles/runs — no silent gaps in cozo `check`"
+    (let [ds (pipeline/build-model "src"), cdb (mirror/mirror ds)]
+      (try
+        (is (empty? (->> (law/check-structural cdb)
+                         (filter :unsupported)
+                         (remove #(str/includes? (namespace (:structure %)) "test"))))
+            "no fukan law is :unsupported")
+        (finally (db/close cdb))))))
+
+(deftest cozo-check-matches-datascript-on-the-real-model
+  (testing "the violation-only `check` agrees with structure/check on the real (green) model"
+    (let [ds (pipeline/build-model "src")]
+      (is (= (ds-check-set ds) (cozo-check-set ds)))
+      (is (empty? (cozo-check-set ds)) "and the real model is clean"))))

@@ -21,4 +21,9 @@
     {:signature [:=> [:catn [:cdb db/CozoDb]] :any]
      :performs  [:state :throws]
      :delegates [kstructure/all-structures kstructure/direct-scope-tags kstructure/vocab-rules
-                 ktyping/value-valid? db/q]}))
+                 ktyping/value-valid? db/q]})
+  (Operation check
+    "Run every law over the Cozo db and return its VIOLATIONS — the structure/check-shaped drift list (the violation-only view of check-structural). A law whose form isn't compilable contributes nothing (the law-engine tests guarantee fukan's own laws all compile). The drop-in Cozo replacement for structure/check."
+    {:signature [:=> [:catn [:cdb db/CozoDb]] :any]
+     :performs  [:state :throws]                    ; reaches :state/:throws through check-structural → compile-law's atoms
+     :delegates [check-structural]}))

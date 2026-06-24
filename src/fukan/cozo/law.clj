@@ -3,7 +3,8 @@
    where, plus the rules it reads at) → CozoScript over the unified `triple` view, run
    it, and return offenders: the Cozo analog of `structure/check`, the keystone that
    replaces it at cut-over. Built alongside datascript so the dual-engine oracle holds
-   until it does.
+   until it does. `check` is the violation-only drop-in for `structure/check`;
+   `check-structural` is the full per-law roll-call (incl. coverage/`:unsupported`).
 
    Two compilers, sharing one clause compiler:
      • `compile-clause` turns one datalog clause into a CozoScript fragment — datom
@@ -58,21 +59,30 @@
                            :refs #{"r_canvas_module" "r_code_module"}}})
 
 (def ^:private predicate-registry
-  "Clojure fn-predicate symbol → a builder `(arg-terms refs) → cozo-fragment` that emits a
-   call to its synthetic rule (and records the rule name on `refs` so the closure emits it)."
+  "Clojure fn-predicate symbol → a builder `(arg-terms refs) → cozo-fragment`. A builder
+   that needs a generating rule (one arg may be unbound) records the rule name on `refs` so
+   the closure emits it; the rest are inline CozoScript expressions (`arg-terms` are already
+   compiled). `not=` is handled separately (built-in)."
   {'canvas.vocab.code.module/module-corresponds?
    (fn [[cm km] refs]
      (swap! refs conj "r_module_corresponds")
-     (str "r_module_corresponds[" cm ", " km "]"))})
+     (str "r_module_corresponds[" cm ", " km "]"))
+   ;; the reader-name `:in` carries no var-binding atom for ?rn, so this is an `=` (unifies if
+   ;; ?rn is bound, binds it from ?ln if not) — the cozo form of `(= rn (str "probe-" ln))`.
+   'canvas.vocab.fukan/reader-realizes-lens?
+   (fn [[rn ln] _] (str rn " = concat('probe-', " ln ")"))
+   'clojure.string/starts-with?
+   (fn [[s prefix] _] (str "starts_with(" s ", " prefix ")"))})
 
 (declare compile-clause compile-clauses)
 
 (defn- compile-predicate
   "A `(pred args…)` predicate (the content of a `[(…)]` clause) → a cozo fragment. `not=`
-   is built in; a registered fn-predicate emits a call to its synthetic rule (via `refs`)."
+   (bare or `clojure.core/`-qualified) is built in; a registered fn-predicate is emitted via
+   its builder (which may record a synthetic-rule ref on `refs`)."
   [[op & args] refs]
   (cond
-    (= 'not= op) (str (cterm (first args)) " != " (cterm (second args)))
+    (#{'not= 'clojure.core/not=} op) (str (cterm (first args)) " != " (cterm (second args)))
     (contains? predicate-registry op) ((predicate-registry op) (mapv cterm args) refs)
     :else (throw (ex-info (str "unsupported predicate: " (pr-str (cons op args))) {:pred op}))))
 
@@ -171,14 +181,15 @@
   "Compile a law's offender query → a CozoScript program: the vocab rules in its
    reference closure, then its own `:rules`, then any `not-join`/`or-join` helpers, then
    the `?` entry. A non-global law's first offender var is bound by a prepended scope
-   clause `[?o :structure/of tag]` for a DIRECT tag (`direct-tags`); a facet/realized
-   scope rides a short-name rule and is not yet supported. `index` is the `vocab-index`."
+   clause: `[?o :structure/of tag]` for a DIRECT tag (`direct-tags`), or the short-name
+   rule-call `(Foo ?o)` for a facet/realized concept (whose members are reached through
+   the inclusion/realized-as rule) — mirroring `check`. `index` is the `vocab-index`."
   [{:keys [offenders where rules] :as law} direct-tags index]
   (let [st           (scope-tag law)
         scope-clause (when st
                        (if (contains? direct-tags st)
                          [(first offenders) :structure/of st]
-                         (throw (ex-info "facet/realized scope not yet supported" {:scope st}))))
+                         (list (symbol (name st)) (first offenders))))
         where        (cond->> where scope-clause (cons scope-clause))
         counter      (atom 0)
         refs         (atom #{})
@@ -252,3 +263,14 @@
                        (seq rows) (assoc :offenders (vec rows))))
                    (catch clojure.lang.ExceptionInfo _
                      {:structure tag :law (:desc law) :unsupported true})))))))))
+
+(defn check
+  "Run every law over the Cozo db `cdb` and return its VIOLATIONS — `[{:structure :law
+   :offenders}]`, the same shape as `structure/check` (offenders are eid-string tuples).
+   The Cozo replacement for `structure/check`. A law whose form isn't compilable yet
+   contributes nothing (it is skipped, not silently miscounted — `check-structural` still
+   reports it `:unsupported`); the law-engine tests assert every law of fukan's own
+   vocabulary compiles, so on a fukan-only registry this is a complete check."
+  [cdb]
+  (vec (for [r (check-structural cdb) :when (:offenders r)]
+         (select-keys r [:structure :law :offenders]))))
