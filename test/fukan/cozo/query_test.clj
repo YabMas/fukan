@@ -41,6 +41,21 @@
                  (set (map first (q/q dq cdb (str eid))))))))
       (finally (db/close cdb)))))
 
+(deftest wildcard-underscore-compiles
+  ;; `_` is a discard placeholder (any value, don't bind). Cozo has no wildcard, so each `_` must
+  ;; become a UNIQUE fresh var — reusing one would wrongly join the positions. Two `_`s in one query
+  ;; (different attrs) must NOT constrain each other. The lens selection queries rely on this.
+  (let [ds  (pipeline/build-model "src")
+        cdb (mirror/mirror ds)]
+    (try
+      (testing "single `_` — every node with any :structure/of"
+        (let [q '[:find [?n ...] :where [?n :structure/of _]]]
+          (is (= (set (map str (d/q q ds))) (set (q/q q cdb))))))
+      (testing "two independent `_`s do not cross-join"
+        (let [q '[:find [?n ...] :where [?n :structure/of _] [?r :rel/from ?n] [?r :rel/to _]]]
+          (is (= (set (map str (d/q q ds))) (set (q/q q cdb))))))
+      (finally (db/close cdb)))))
+
 (deftest scalar-param-does-not-leak-into-rules
   ;; regression: a `$ % ?op` scalar must substitute only into the WHERE body, never into a `%`
   ;; rule whose head var shares the name (`?op`). Inlining there corrupted the rule head

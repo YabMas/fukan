@@ -151,13 +151,22 @@
           (recur (conj seen n) (into todo (:refs (index n))))))
       seen)))
 
+(defn- dewild
+  "Replace each `_` placeholder in `form` with a UNIQUE fresh `?_wN` variable. Datalog `_` means
+   'any value, don't bind', but Cozo has no discard wildcard — and reusing ONE var for every `_`
+   would wrongly JOIN those positions. `counter` keeps the names unique across the whole program."
+  [form counter]
+  (walk/postwalk #(if (= '_ %) (symbol (str "?_w" (swap! counter inc))) %) form))
+
 (defn compile-body
   "Compile `where` (a seq of clauses) + caller-supplied `extra-rules` (datalog rules) into
    `[rule-lines body-str]`: the vocab rules in the reference closure, then the extra rules,
    then any not-join/or-join helpers (deduped), and the joined where body. Shared by the
-   law engine (`compile-law`) and `q`."
+   law engine (`compile-law`) and `q`. `_` wildcards are expanded to fresh vars first."
   [where extra-rules index]
   (let [counter      (atom 0)
+        where        (dewild where counter)
+        extra-rules  (dewild extra-rules counter)
         refs         (atom #{})
         rule-lines   (mapcat #(compile-rule % counter refs) extra-rules)
         [body extra] (compile-clauses where counter refs)
