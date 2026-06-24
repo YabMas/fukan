@@ -15,9 +15,11 @@
    with values in their real types (Int/String/Bool from the typed buckets)."
   (:require [clojure.string :as str]
             [clojure.walk :as walk]
+            [datascript.core :as d]          ; TRANSITION: the d/q + d/entity fallback (removed at cut-over)
             [fukan.canvas.core.structure :as structure]
             [fukan.cozo.db :as db]
-            [fukan.cozo.rules :as rules]))
+            [fukan.cozo.rules :as rules])
+  (:import [org.cozodb CozoJavaBridge]))
 
 ;; ── term + name helpers ───────────────────────────────────────────────────────
 (defn- dvar? [t] (and (symbol? t) (str/starts-with? (name t) "?")))
@@ -196,13 +198,11 @@
       (= '% i) (recur in-more v-more v subst)
       :else    (recur in-more v-more rules (assoc subst i v)))))
 
-(defn q
-  "Run datalog `query` over Cozo db `cdb`, like `d/q` (minus the leading db arg, which is
-   `cdb`). Extra `inputs` match the `:in` spec after `$`: a `%` consumes a rules vector, a
-   `?name` consumes a scalar param (inlined as a literal). Returns a SET of tuples for a
-   relation find, or a distinct vector for a collection find `[:find [?v …]]`. All cells
-   are STRINGS (the `triple` view) — eids are opaque string handles (resolve via `entity`)."
-  [cdb query & inputs]
+(defn- q-cozo
+  "Compile + run `query` over Cozo db `cdb` with `inputs`. Returns a SET of tuples for a
+   relation find, or a distinct vector for a collection find. All cells are STRINGS (the
+   `triple` view) — eids are opaque string handles (resolve via `entity`)."
+  [cdb query inputs]
   (let [{:keys [find in where]} (split-query query)
         {:keys [rules subst]}   (bind-inputs in inputs)
         where*  (walk/postwalk-replace subst where)
@@ -215,16 +215,29 @@
       (vec (distinct (map first rows)))
       (set rows))))
 
-;; ── entity: eid (string) → typed attribute map (the d/entity replacement) ──────
+(defn q
+  "Run datalog `query` over `db` like `d/q` (same argument order). POLYMORPHIC during the
+   cut-over: a Cozo db is compiled + run (relation/collection finds, `:in` of `$` + optional
+   `%` rules + scalar params — cells come back as STRINGS over the `triple` view); a
+   datascript db falls through to `d/q` unchanged. The d/q branch is removed once the held
+   model is Cozo."
+  [query db & inputs]
+  (if (instance? CozoJavaBridge db)
+    (q-cozo db query inputs)
+    (apply d/q query db inputs)))
+
+;; ── entity: eid → attribute map (the d/entity replacement) ─────────────────────
 (defn entity
-  "Resolve `eid` (a string handle) to its attribute map `{attr-keyword value}`, values in
-   their real types (Int/String/Bool, read from the typed buckets) — the `d/entity`
-   replacement. A repeated attribute keeps the LAST value (entity attrs are single-valued
-   here). Returns nil for an unknown eid."
-  [cdb eid]
-  (let [eid  (str eid)
-        rows (mapcat (fn [bucket]
-                       (db/q cdb (str "?[a, v] := *" bucket "[e, a, v], e == " eid)))
-                     ["t_int" "t_str" "t_bool"])
-        m    (reduce (fn [acc [a v]] (assoc acc (keyword a) v)) {} rows)]
-    (when (seq m) (assoc m :db/id eid))))
+  "Resolve `eid` to its attribute map — the `d/entity` replacement, same argument order.
+   POLYMORPHIC: a Cozo db reads the typed buckets (values in their real Int/String/Bool
+   types; eid is a string handle), returning `{attr-keyword value}` (nil for an unknown
+   eid); a datascript db falls through to `d/entity`."
+  [db eid]
+  (if (instance? CozoJavaBridge db)
+    (let [eid  (str eid)
+          rows (mapcat (fn [bucket]
+                         (db/q db (str "?[a, v] := *" bucket "[e, a, v], e == " eid)))
+                       ["t_int" "t_str" "t_bool"])
+          m    (reduce (fn [acc [a v]] (assoc acc (keyword a) v)) {} rows)]
+      (when (seq m) (assoc m :db/id eid)))
+    (d/entity db eid)))

@@ -22,22 +22,23 @@
     (try
       (testing "relation find — module names"
         (is (= (set (map (comp str first) (d/q MOD-NAMES ds)))
-               (set (map first (q/q cdb MOD-NAMES))))))
+               (set (map first (q/q MOD-NAMES cdb))))))
       (testing "collection find — [?n ...]"
         (is (= (set (map (comp str first) (d/q MOD-NAMES ds)))
-               (set (q/q cdb '[:find [?n ...]
-                               :where [?m :structure/of :canvas.vocab.code.module/Module] [?m :entity/name ?n]])))))
+               (set (q/q '[:find [?n ...]
+                           :where [?m :structure/of :canvas.vocab.code.module/Module] [?m :entity/name ?n]]
+                         cdb)))))
       (testing "rules query — module-depends over $ %"
         (let [rels module/module-depends-rules
               dq   '[:find ?mn ?nn :in $ % :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]]
-          (is (= (set (d/q dq ds rels)) (set (q/q cdb dq rels))))))
+          (is (= (set (d/q dq ds rels)) (set (q/q dq cdb rels))))))
       (testing "scalar param query — $ ?from (an eid)"
         (let [eid (ffirst (d/q '[:find ?e :where [?e :entity/name "module-corresponds?"]
                                  [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]] ds))
               dq  '[:find ?kn :in $ ?from :where [?r :rel/from ?from] [?r :rel/kind :performs]
                     [?r :rel/to ?to] [?to :val/name ?kn]]]
           (is (= (set (map first (d/q dq ds eid)))
-                 (set (map first (q/q cdb dq (str eid))))))))
+                 (set (map first (q/q dq cdb (str eid))))))))
       (finally (db/close cdb)))))
 
 (deftest entity-agrees-with-datascript
