@@ -35,20 +35,25 @@
 
 (Subsystem kernel
   "The node substrate + the defstructure grammar + its derived rules + lens engine + assembler + the
-   type-dialect plug-point — foundational; depends on nothing."
-  {:child [core-substrate core-structure core-rules core-lens assemble-faculty typing] :may-depend []})
+   type-dialect plug-point + the Cozo QUERY LAYER (the datalog→CozoScript compiler `cozo-query` and its
+   engine seam `cozo-db`) — foundational; depends on nothing. The query layer sits here because the
+   kernel itself queries (the lens engine, the law engine), so it is infrastructure, not a peripheral
+   subsystem: the datascript→Cozo migration folds the query primitive into the kernel here (the wider
+   `cozo` cluster above remains the migration scaffolding + the registered check engine)."
+  {:child [core-substrate core-structure core-rules core-lens assemble-faculty typing cozo-db cozo-query]
+   :may-depend []})
 
 (Subsystem ingestion
   "The in-fold: discover/assemble design specs + extract code, folded onto the model."
   {:child [canvas-source extraction] :may-depend [kernel]})
 
 (Subsystem cozo
-  "The Cozo query engine (datascript→Cozo migration) — the engine seam, the EAV
-   mirror, the ported laws/readers, and the native build. Depends on the kernel
-   (the native build assembles via the kernel assembler + identity); during the
-   migration nothing in production depends on it yet. TRANSITIONAL shape — folds
-   into the kernel query layer at cut-over (P5)."
-  {:child [cozo-db cozo-mirror cozo-reading cozo-check cozo-build cozo-query cozo-law] :may-depend [kernel]})
+  "The Cozo MIGRATION cluster (datascript→Cozo) — the EAV mirror, the ported oracle laws/readers, the
+   native build, and the registered check ENGINE (`cozo-law`, wired into `structure/check` via the
+   kernel plug-point). The query PRIMITIVE itself (`cozo-query`/`cozo-db`) has folded UP into the kernel
+   query layer; what remains here is the transitional scaffolding (deleted once the native build replaces
+   the datascript mirror) plus the law engine. Depends on the kernel."
+  {:child [cozo-mirror cozo-reading cozo-check cozo-build cozo-law] :may-depend [kernel]})
 
 (Subsystem reading
   "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence
