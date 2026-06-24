@@ -731,6 +731,13 @@
              (relation-slot-laws tag %))
           slots))
 
+(defn laws-of
+  "Every law of structure `sdef` — the slot-derived cardinality/type laws plus its
+   free `(law …)`s, the same set `check` runs. Public so an alternative engine (the
+   Cozo law compiler) can evaluate the identical laws."
+  [sdef]
+  (concat (slot-laws sdef) (:laws sdef)))
+
 (defn- law-scope-tag
   "The structure tag a free law's first offender var is scoped to: its :scope
    when set (nil when :scope is :global), else its owning structure. Slot-derived
@@ -741,7 +748,7 @@
     nil     owner
     scope))
 
-(defn- direct-scope-tags
+(defn direct-scope-tags
   "Qualified tags whose instances carry `:structure/of` DIRECTLY, so a law scoped to one can be
    pinned ns-precisely (`[?o :structure/of tag]`) instead of riding the short-name rule. Excludes
    facets (`includes` targets — their members are reached via the inclusion rule, not a direct tag)

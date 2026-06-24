@@ -38,9 +38,18 @@
   "The live registry roll-call — every registered structure definition (slots + laws). The seam
    grammar reflection reads to project the registry onto the model."
   {:signature [:=> [:cat] [:vector :any]]})
+(Operation laws-of
+  "Every law of a structure — slot-derived cardinality/type laws plus its free laws, the same set
+   check runs. Public so the Cozo law engine can evaluate the identical laws."
+  {:signature [:=> [:catn [:sdef :any]] :any]})
+(Operation direct-scope-tags
+  "Qualified tags whose instances carry :structure/of DIRECTLY, so a scoped law can pin ns-precisely
+   instead of riding the short-name rule. Excludes facets + realized/coproduct/derived concepts."
+  {:signature [:=> [:catn [:structures [:vector :any]]] :any]})
 
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
-  {:exposes [check vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures]
+  {:exposes [check vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
+             laws-of direct-scope-tags]
    :owns    [Violation]                          ; the check output shape (others adopt by name)
    :child   [Rule]})                              ; internal grain: the rules-output type

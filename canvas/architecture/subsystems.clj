@@ -27,7 +27,8 @@
             [canvas.architecture.cozo.mirror :refer [cozo-mirror]]
             [canvas.architecture.cozo.reading :refer [cozo-reading]]
             [canvas.architecture.cozo.check :refer [cozo-check]]
-            [canvas.architecture.cozo.build :refer [cozo-build]]))
+            [canvas.architecture.cozo.build :refer [cozo-build]]
+            [canvas.architecture.cozo.law :refer [cozo-law]]))
 
 (declare ingestion)
 
@@ -46,7 +47,7 @@
    (the native build assembles via the kernel assembler + identity); during the
    migration nothing in production depends on it yet. TRANSITIONAL shape — folds
    into the kernel query layer at cut-over (P5)."
-  {:child [cozo-db cozo-mirror cozo-reading cozo-check cozo-build] :may-depend [kernel]})
+  {:child [cozo-db cozo-mirror cozo-reading cozo-check cozo-build cozo-law] :may-depend [kernel]})
 
 (Subsystem reading
   "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence

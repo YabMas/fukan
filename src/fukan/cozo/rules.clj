@@ -28,6 +28,16 @@ in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[
 in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
 ")
 
+(def triple
+  "The unified all-string EAV view over the typed mirror relations — every datom as
+   `(e a v)` strings (eids stringified). Lets the law compiler map any `[?e :attr ?v]`
+   datalog pattern uniformly to `triple[e, 'attr', v]`; joins are string-equality."
+  "
+triple[e, a, v] := *t_int[ei, a, vi], e = to_string(ei), v = to_string(vi)
+triple[e, a, v] := *t_str[ei, a, v],  e = to_string(ei)
+triple[e, a, v] := *t_bool[ei, a, vi], e = to_string(ei), v = to_string(vi)
+")
+
 (def module-depends
   "Module ownership + the module→module dependency graph (calls ∪ data-adoption),
    built on `eav`. The CozoScript port of `module-depends-rules`: `owns` is
