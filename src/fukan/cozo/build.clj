@@ -10,7 +10,9 @@
    results agree — verified against the datascript build by the oracle."
   (:require [fukan.canvas.core.assemble :as assemble]
             [fukan.canvas.core.substrate :as sub]
-            [fukan.cozo.mirror :as mirror]))
+            [fukan.cozo.db :as db]
+            [fukan.cozo.mirror :as mirror]
+            [fukan.cozo.rules :as rules]))
 
 (defn- roots-of
   "`[id InstanceValue]` roots for `vars`, mirroring assemble-vars' identity rule:
@@ -63,3 +65,44 @@
    `ns-syms` — the namespace-scan entry to `vars->cozo`. Returns the open Cozo db."
   [ns-syms]
   (vars->cozo (collect ns-syms)))
+
+(defn- add-calls-cozo
+  "Ground the actual call graph as `:calls` rels in `cdb` — the datascript-free
+   analog of the extractor's `add-calls`. Resolves each var-usage's caller/callee
+   to the eid of the extracted Operation named `fn` in module `ns` (a single cozo
+   query `{[ns name] → eid}`), then inserts the `:calls` rels above the current max
+   eid. Returns `cdb`."
+  [cdb var-usages]
+  (let [op-eid  (into {} (map (fn [[ns name eid]] [[ns name] eid]))
+                      (db/q cdb (str rules/eav "
+?[ns, name, eid] := structof[eid, 'canvas.vocab.code.operation/Operation'], extracted[eid],
+                   ename[eid, name], in_module[eid, ns]")))
+        max-eid (ffirst (db/q cdb "alle[e] := *t_int[e, _, _]
+alle[e] := *t_str[e, _, _]
+alle[e] := *t_bool[e, _, _]
+?[mx] := alle[e], mx = max(e)"))
+        pairs   (->> var-usages
+                     (keep (fn [{:keys [from from-var to name]}]
+                             (when (and from-var to name)
+                               (let [c (op-eid [(str from) (str from-var)])
+                                     e (op-eid [(str to)   (str name)])]
+                                 (when (and c e (not= c e)) [c e])))))
+                     distinct vec)
+        int-rows (vec (mapcat (fn [n [c e]]
+                                (let [rid (+ max-eid 1 n)]
+                                  [[rid "rel/from" c] [rid "rel/to" e] [rid "rel/order" n]]))
+                              (range) pairs))
+        str-rows (vec (map-indexed (fn [n _] [(+ max-eid 1 n) "rel/kind" "calls"]) pairs))]
+    (when (seq pairs)
+      (db/q cdb "?[e, a, v] <- $rows :put t_int {e, a, v}" {:rows int-rows})
+      (db/q cdb "?[e, a, v] <- $rows :put t_str {e, a, v}" {:rows str-rows}))
+    cdb))
+
+(defn model->cozo
+  "Native FULL build (no datascript): the instance-vars of canvas `ns-syms` + the
+   extraction `{:roots :var-usages}` facts → one native Cozo substrate, with the
+   `:calls` graph grounded. Assembling canvas + extraction roots in one native pass
+   resolves cross-refs without a union/merge. Returns the open Cozo db."
+  [ns-syms {:keys [roots var-usages]}]
+  (-> (mirror/load-datoms (instances->datoms (concat (roots-of (collect ns-syms)) roots)))
+      (add-calls-cozo var-usages)))

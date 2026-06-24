@@ -24,4 +24,9 @@
     "Build a Cozo substrate natively from the instance-vars of the already-loaded ns-syms — the namespace-scan entry to vars->cozo."
     {:signature [:=> [:catn [:ns-syms [:vector :symbol]]] db/CozoDb]
      :performs  [:throws]
-     :delegates [substrate/instance-value?]}))
+     :delegates [substrate/instance-value?]})
+  (Operation model->cozo
+    "Native FULL build: canvas instance-vars + extraction {:roots :var-usages} facts → one native Cozo substrate with the :calls graph grounded (add-calls-cozo queries the built db for op eids). Assembling all roots in one pass resolves cross-refs without a merge."
+    {:signature [:=> [:catn [:ns-syms [:vector :symbol]] [:facts :map]] db/CozoDb]
+     :performs  [:throws]
+     :delegates [cmirror/load-datoms db/q]}))
