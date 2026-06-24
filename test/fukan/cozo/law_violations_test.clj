@@ -68,6 +68,16 @@
     (agrees (a/assemble-vars [#'t-ma-op #'t-mb-op #'t-mod-ma #'t-mod-mb])
             "mutually depend" #{"MA" "MB"})))
 
+(deftest structure-check-dispatches-to-cozo-engine
+  (testing "structure/check on a Cozo db routes through the registered check-engine plug-point"
+    (let [ds  (a/assemble-vars [#'t-ma-op #'t-mb-op #'t-mod-ma #'t-mod-mb])
+          cdb (mirror/mirror ds)]
+      (try
+        (is (= (law/check cdb) (s/check cdb))
+            "the plug-point dispatches a Cozo db to the Cozo law engine (== cozo.law/check)")
+        (is (seq (s/check cdb)) "and so the synthetic cycle is flagged through structure/check")
+        (finally (db/close cdb))))))
+
 ;; ── acyclicity: a :may-depend 2-cycle CY-A ⇄ CY-B (recursive sub-reaches) ──
 (declare t-sub-cy-b)
 (subsystem/Subsystem ^{:name "CY-A"} t-sub-cy-a {:may-depend [t-sub-cy-b]})

@@ -19,6 +19,9 @@
             [fukan.model.pipeline :as pipeline]
             [fukan.cozo.db :as cozo-db]
             [fukan.cozo.mirror :as cozo-mirror]
+            ;; loaded for its side-effect: registers the Cozo backend at structure's
+            ;; check-engine plug-point, so `(structure/check cozo-db)` runs the Cozo law engine
+            [fukan.cozo.law]
             [canvas.vocab.code.extractor :as target]))
 
 ;; Register fukan's project extractor — its own Clojure source.

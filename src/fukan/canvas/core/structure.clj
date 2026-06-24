@@ -823,12 +823,27 @@
       (seq results)         (mapv vec results)
       :else                 nil)))
 
-(defn check
-  "Run every registered structure's laws (slot-cardinality + free) over `db`, with the
-   vocab-derived rules injected so law `:where`s can read at domain altitude.
-   Returns a vector of result maps:
-     {:structure :law :offenders [...]}        — a violation
-     {:structure :law :timed-out? true :message …} — a (recursive) law that
+;; ── The check-engine plug-point ───────────────────────────────────────────────
+;; `check` evaluates laws over a datascript db. An alternative backend (the Cozo law
+;; engine) registers itself here, so `check` dispatches to it for the dbs it claims —
+;; the kernel never names the backend (mirrors the typing plug-point), which avoids a
+;; structure→backend require cycle.
+(defonce ^:private check-engine (atom nil))
+
+(defn register-check-engine!
+  "Register an alternative `check` backend: `{:claims? (fn [db]→bool) :check (fn [db]→results)}`.
+   When `:claims?` holds for the db passed to `check`, `:check` serves it instead of the datascript
+   evaluator, returning the same `[{:structure :law :offenders}]` shape. The plug-point that lets a
+   non-datascript engine (Cozo) back `check` without the kernel depending on it."
+  [engine]
+  (reset! check-engine engine)
+  nil)
+
+(defn- check-datascript
+  "Run every registered structure's laws (slot-cardinality + free) over datascript `db`, with the
+   vocab-derived rules injected so law `:where`s read at domain altitude. Returns result maps:
+     {:structure :law :offenders [...]}             — a violation
+     {:structure :law :timed-out? true :message …}  — a (recursive) law that
         exceeded *law-timeout-ms* instead of completing."
   [db]
   (let [base   (vocab-rules)
@@ -845,3 +860,13 @@
                       "cyclic/indirect graph (recursion must run over a direct "
                       "binary relation, not a rule-derived one)")}
        {:structure tag :law desc :offenders r})))))
+
+(defn check
+  "Run every registered structure's laws over `db` → `[{:structure :law :offenders|:timed-out?}]`.
+   Polymorphic across the cut-over: a registered check engine that CLAIMS `db` (the Cozo backend,
+   for a Cozo db) serves it; otherwise the datascript law evaluator runs (`check-datascript`)."
+  [db]
+  (let [eng @check-engine]
+    (if (and eng ((:claims? eng) db))
+      ((:check eng) db)
+      (check-datascript db))))

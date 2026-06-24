@@ -15,7 +15,8 @@
             [fukan.canvas.core.structure :as structure]
             [fukan.canvas.core.typing :as typing]
             [fukan.cozo.db :as db]
-            [fukan.cozo.query :as query]))
+            [fukan.cozo.query :as query])
+  (:import [org.cozodb CozoJavaBridge]))
 
 (defn- scope-tag
   "The structure tag a free law's first offender var is scoped to (nil for :global
@@ -112,3 +113,9 @@
   [cdb]
   (vec (for [r (check-structural cdb) :when (:offenders r)]
          (select-keys r [:structure :law :offenders]))))
+
+;; Register this engine as `structure/check`'s Cozo backend: it claims any Cozo db, so
+;; `(structure/check cozo-db)` routes here (the kernel never names Cozo — the plug-point does).
+(structure/register-check-engine!
+ {:claims? (fn [db] (instance? CozoJavaBridge db))
+  :check   check})

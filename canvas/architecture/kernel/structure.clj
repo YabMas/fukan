@@ -46,10 +46,15 @@
   "Qualified tags whose instances carry :structure/of DIRECTLY, so a scoped law can pin ns-precisely
    instead of riding the short-name rule. Excludes facets + realized/coproduct/derived concepts."
   {:signature [:=> [:catn [:structures [:vector :any]]] :any]})
+(Operation register-check-engine!
+  "Register an alternative `check` backend (the Cozo law engine), claimed by db type — so `check`
+   dispatches to it without the kernel naming the backend (mirrors the typing plug-point)."
+  {:signature [:=> [:catn [:engine :any]] :nil]
+   :performs  [:state]})
 
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:exposes [check vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
-             laws-of direct-scope-tags]
+             laws-of direct-scope-tags register-check-engine!]
    :owns    [Violation]                          ; the check output shape (others adopt by name)
    :child   [Rule]})                              ; internal grain: the rules-output type
