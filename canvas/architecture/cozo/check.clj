@@ -14,4 +14,8 @@
   (Operation mutually-dependent-modules
     "The offenders of the no-mutual-dependency architecture law: modules that mutually depend (module-depends m→n AND n→m), as a set of module names. CozoScript over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation cyclic-subsystems
+    "The offenders of the :may-depend acyclicity law: subsystems that transitively depend on themselves (a :may-depend cycle), as a set of subsystem names. CozoScript over the mirror, via a recursive sub-reaches rule."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))

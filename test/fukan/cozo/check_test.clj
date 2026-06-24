@@ -15,37 +15,50 @@
             [fukan.cozo.check :as check]
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as module]
-            ;; registers the ModuleArchitecture law so datascript's `check` runs it
-            ;; (the synthetic db is assembled standalone, not via build-model)
-            [canvas.vocab.code.subsystem]))
+            [canvas.vocab.code.subsystem :as subsystem]))
 
-(defn- ds-mutual-offenders
-  "The datascript no-mutual-dependency law's offenders (module names) over `ds`."
-  [ds]
+(defn- ds-offenders
+  "The datascript ModuleArchitecture law matched by `substr`, its offenders over
+   `ds` as module/subsystem names."
+  [ds substr]
   (let [desc (->> (s/structure-by-tag :canvas.vocab.code.subsystem/ModuleArchitecture)
-                  :laws (map :desc) (filter #(str/includes? % "mutually depend")) first)]
+                  :laws (map :desc) (filter #(str/includes? % substr)) first)]
     (->> (s/check ds) (filter #(= desc (:law %))) (mapcat :offenders) (map first)
          (map #(:entity/name (d/entity ds %))) set)))
 
-(defn- cozo-mutual-offenders [ds]
+(defn- cozo-via
+  "Mirror `ds` into Cozo, run the cozo offender-query `f`, close the db."
+  [ds f]
   (let [cdb (mirror/mirror ds)]
-    (try (check/mutually-dependent-modules cdb) (finally (db/close cdb)))))
+    (try (f cdb) (finally (db/close cdb)))))
 
-;; a synthetic mutual pair: MA's op delegates to MB's op and MB's op back to MA's
+;; ── no-mutual-dependency: MA's op delegates to MB's op and MB's back to MA's ──
 (declare t-mb-op)
 (operation/Operation ^{:name "ma-op"} t-ma-op {:delegates [t-mb-op]})
 (operation/Operation ^{:name "mb-op"} t-mb-op {:delegates [t-ma-op]})
 (module/Module ^{:name "MA"} t-mod-ma {:exposes [t-ma-op]})
 (module/Module ^{:name "MB"} t-mod-mb {:exposes [t-mb-op]})
 
-(deftest oracle-matches-on-a-violation
-  (testing "cozo law offenders == datascript law offenders on a synthetic cycle (non-empty)"
+(deftest mutual-oracle-matches-on-a-violation
+  (testing "cozo == datascript no-mutual-dependency offenders on a synthetic cycle"
     (let [ds (a/assemble-vars [#'t-ma-op #'t-mb-op #'t-mod-ma #'t-mod-mb])]
-      (is (= #{"MA" "MB"} (ds-mutual-offenders ds)) "precondition: datascript flags the cycle")
-      (is (= (ds-mutual-offenders ds) (cozo-mutual-offenders ds))))))
+      (is (= #{"MA" "MB"} (ds-offenders ds "mutually depend")) "precondition: datascript flags it")
+      (is (= (ds-offenders ds "mutually depend") (cozo-via ds check/mutually-dependent-modules))))))
+
+;; ── acyclicity: a :may-depend 2-cycle CY-A ⇄ CY-B ──
+(declare t-sub-cy-b)
+(subsystem/Subsystem ^{:name "CY-A"} t-sub-cy-a {:may-depend [t-sub-cy-b]})
+(subsystem/Subsystem ^{:name "CY-B"} t-sub-cy-b {:may-depend [t-sub-cy-a]})
+
+(deftest acyclicity-oracle-matches-on-a-cycle
+  (testing "cozo == datascript acyclicity offenders on a synthetic :may-depend cycle"
+    (let [ds (a/assemble-vars [#'t-sub-cy-a #'t-sub-cy-b])]
+      (is (= #{"CY-A" "CY-B"} (ds-offenders ds "acyclic")) "precondition: datascript flags it")
+      (is (= (ds-offenders ds "acyclic") (cozo-via ds check/cyclic-subsystems))))))
 
 (deftest oracle-matches-on-the-real-model
-  (testing "both empty on the real, acyclic model"
+  (testing "both laws agree (and are empty) on the real, acyclic model"
     (let [ds (pipeline/build-model "src")]
-      (is (empty? (ds-mutual-offenders ds)) "precondition: fukan is acyclic")
-      (is (= (ds-mutual-offenders ds) (cozo-mutual-offenders ds))))))
+      (is (= (ds-offenders ds "mutually depend") (cozo-via ds check/mutually-dependent-modules)))
+      (is (= (ds-offenders ds "acyclic") (cozo-via ds check/cyclic-subsystems)))
+      (is (empty? (ds-offenders ds "acyclic")) "precondition: fukan is acyclic"))))
