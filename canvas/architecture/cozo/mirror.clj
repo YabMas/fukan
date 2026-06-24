@@ -16,5 +16,5 @@
     {:signature [:=> [:catn [:ds-db :any]] :any]})
   (Operation mirror
     "Open a fresh Cozo db and load every datom of ds-db into the typed EAV relations; returns the open db."
-    {:signature [:=> [:catn [:ds-db :any]] :any]
+    {:signature [:=> [:catn [:ds-db :any]] db/CozoDb]
      :delegates [db/open db/q]}))
