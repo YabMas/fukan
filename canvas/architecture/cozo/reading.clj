@@ -25,4 +25,12 @@
   (Operation effect-drift
     "Per modelled op, the disagreement between authored :performs and the extracted twin's transitive effect profile: {op-name {:undeclared #{…} :phantom #{…}}}. Composes op_twin, performs and reaches_effect over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation uncovered-calls
+    "Actual cross-module calls (code-module name pairs) not covered by an intended cross-module delegation — the fidelity coverage signal. CozoScript over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation unrealized-dispatch
+    "Authored cross-module delegations whose extracted twins are not connected through the code call graph extended by modelled :dispatches-to, as a set of source-op names. CozoScript over the mirror, via a recursive reaches rule over calls ∪ dispatch."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))

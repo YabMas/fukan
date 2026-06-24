@@ -77,3 +77,40 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
                 (cond-> acc
                   (or (seq und) (seq phan)) (assoc on {:undeclared und :phantom phan}))))
             {} (into (set (keys declared)) (keys reached)))))
+
+(defn uncovered-calls
+  "Actual cross-module calls (as a set of [caller-module callee-module] code-module
+   name pairs) with no corresponding intended cross-module delegation
+   (`module_corresponds`-bridged) — the fidelity coverage signal. Composes the
+   `actual_call` and `intended_call` relations over the mirror `cdb`. The Cozo twin
+   of `canvas.vocab.code.module/uncovered-calls`."
+  [cdb]
+  (set (db/q cdb (str rules/eav rules/correspondence "
+actual_call[km1, km2] := relkind[c, 'calls'], relfrom[c, e1], relto[c, e2], extracted[e1], extracted[e2],
+                         in_module[e1, km1], in_module[e2, km2], km1 != km2
+intended_call[km1, km2] := relkind[d, 'delegates'], relfrom[d, o1], relto[d, o2], not extracted[o1],
+                           in_module[o1, c1], in_module[o2, c2], module_corresponds[c1, km1], module_corresponds[c2, km2]
+?[km1, km2] := actual_call[km1, km2], not intended_call[km1, km2]
+"))))
+
+(defn unrealized-dispatch
+  "Authored cross-module delegations NOT realized op-level by the actual code —
+   neither by a direct call nor by reaching the target THROUGH the code call graph
+   extended by modelled dispatch points (`:dispatches-to`), as a set of source-op
+   names. The datascript reader walks this reachability with a hand-coded Clojure
+   BFS (a datalog law couldn't, within the kernel's timeout); cozo expresses it as
+   a native recursive `reaches` rule over `calls ∪ dispatch_edge`. The Cozo twin of
+   `canvas.vocab.code.module/unrealized-dispatch`."
+  [cdb]
+  (set (map first (db/q cdb (str rules/eav rules/correspondence "
+calledge[a, b]       := relkind[c, 'calls'], relfrom[c, a], relto[c, b]
+dispatch_edge[e1, e2] := relkind[dr, 'dispatches-to'], relfrom[dr, a1], relto[dr, a2], not extracted[a1],
+                        op_twin[a1, e1], op_twin[a2, e2]
+edge[a, b] := calledge[a, b]
+edge[a, b] := dispatch_edge[a, b]
+reaches[a, b] := edge[a, b]
+reaches[a, b] := edge[a, mid], reaches[mid, b]
+?[on1] := relkind[d, 'delegates'], relfrom[d, ao1], relto[d, ao2], not extracted[ao1],
+          in_module[ao1, cm1], in_module[ao2, cm2], cm1 != cm2,
+          op_twin[ao1, e1], op_twin[ao2, e2], not reaches[e1, e2], ename[ao1, on1]
+")))))

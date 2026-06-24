@@ -8,7 +8,9 @@
             [fukan.model.pipeline :as pipeline]
             [fukan.cozo.db :as db]
             [fukan.cozo.mirror :as mirror]
+            [fukan.canvas.core.assemble :as a]
             [fukan.cozo.reading :as reading]
+            [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as code-module]
             [canvas.vocab.code.subsystem :as subsystem]
             [canvas.vocab.code.effect :as effect]))
@@ -62,3 +64,39 @@
       (try
         (is (= (effect/effect-drift ds) (reading/effect-drift cdb)))
         (finally (db/close cdb))))))
+
+;; ── uncovered-calls: an extracted cross-module call with no intended delegation ──
+(declare t-ucb)
+(operation/Operation ^{:name "uca"} t-uca {:extracted true :calls [t-ucb]})
+(operation/Operation ^{:name "ucb"} t-ucb {:extracted true})
+(code-module/Module ^{:name "fukan.uca"} t-uca-mod {:extracted true :child [t-uca]})
+(code-module/Module ^{:name "fukan.ucb"} t-ucb-mod {:extracted true :child [t-ucb]})
+
+(deftest uncovered-calls-matches-datascript
+  (testing "synthetic uncovered call + the real (covered) model"
+    (let [ds (a/assemble-vars [#'t-uca #'t-ucb #'t-uca-mod #'t-ucb-mod])]
+      (is (= #{["fukan.uca" "fukan.ucb"]} (code-module/uncovered-calls ds)) "precondition")
+      (is (= (code-module/uncovered-calls ds) (reading/uncovered-calls (mirror/mirror ds)))))
+    (let [ds (pipeline/build-model "src"), cdb (mirror/mirror ds)]
+      (try (is (= (code-module/uncovered-calls ds) (reading/uncovered-calls cdb)))
+           (finally (db/close cdb))))))
+
+;; ── unrealized-dispatch: an authored cross-module delegation whose twins aren't connected ──
+(declare t-pb)
+(operation/Operation ^{:name "pa"} t-pa {:delegates [t-pb]})
+(operation/Operation ^{:name "pb"} t-pb "authored callee")
+(code-module/Module ^{:name "pm"} t-pm {:exposes [t-pa]})
+(code-module/Module ^{:name "qm"} t-qm {:exposes [t-pb]})
+(operation/Operation ^{:name "pa"} t-epa {:extracted true})   ; twin of pa — calls nothing
+(operation/Operation ^{:name "pb"} t-epb {:extracted true})
+(code-module/Module ^{:name "fukan.pm"} t-code-pm {:extracted true :child [t-epa]})
+(code-module/Module ^{:name "fukan.qm"} t-code-qm {:extracted true :child [t-epb]})
+
+(deftest unrealized-dispatch-matches-datascript
+  (testing "synthetic unrealized delegation + the real (realized) model"
+    (let [ds (a/assemble-vars [#'t-pa #'t-pb #'t-pm #'t-qm #'t-epa #'t-epb #'t-code-pm #'t-code-qm])]
+      (is (= #{"pa"} (code-module/unrealized-dispatch ds)) "precondition")
+      (is (= (code-module/unrealized-dispatch ds) (reading/unrealized-dispatch (mirror/mirror ds)))))
+    (let [ds (pipeline/build-model "src"), cdb (mirror/mirror ds)]
+      (try (is (= (code-module/unrealized-dispatch ds) (reading/unrealized-dispatch cdb)))
+           (finally (db/close cdb))))))
