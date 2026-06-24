@@ -36,3 +36,18 @@ sub_reaches[s, t] := relkind[r, 'may-depend'], relfrom[r, s], relto[r, mid], sub
   [cdb]
   (set (map first (db/q cdb (str rules/eav rules/module-depends rules/subsystem
                                  "?[mn] := mdep[m, n], in_subsystem[m, s], in_subsystem[n, t], s != t, not declared_dep[s, t], ename[m, mn]")))))
+
+(defn unclustered-modules
+  "The offenders of the Subsystem membership law: authored Modules (not extracted)
+   that belong to no Subsystem, as a set of module names. The law's vacuity guard
+   (no offenders unless a Subsystem is modelled) is applied here in Clojure,
+   mirroring the datascript law. The Cozo twin of the datascript membership law."
+  [cdb]
+  (if (empty? (db/q cdb "?[s] := *t_str[s, 'structure/of', 'canvas.vocab.code.subsystem/Subsystem']"))
+    #{}                                                   ; no Subsystem modelled → vacuous
+    (set (map first
+              (db/q cdb (str rules/eav rules/subsystem "
+authored_module[mod] := structof[mod, 'canvas.vocab.code.module/Module'], not *t_bool[mod, 'val/extracted', true]
+clustered[mod]       := in_subsystem[mod, _]
+?[mn] := authored_module[mod], not clustered[mod], ename[mod, mn]
+"))))))

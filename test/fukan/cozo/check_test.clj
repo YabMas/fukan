@@ -71,10 +71,28 @@
       (is (= #{"M-S"} (ds-offenders ds "cross-subsystem")) "precondition: datascript flags it")
       (is (= (ds-offenders ds "cross-subsystem") (cozo-via ds check/nonconformant-modules))))))
 
+;; ── membership: an authored Module in no Subsystem (with a Subsystem present) ──
+(module/Module ^{:name "orphan"} t-orphan "a module in no subsystem")
+(module/Module ^{:name "homed"}  t-homed  "a module in a subsystem")
+(subsystem/Subsystem ^{:name "home"} t-sub-home {:child [t-homed]})
+
+(deftest membership-oracle-matches-on-a-violation
+  (testing "cozo == datascript membership offenders on an unclustered authored module"
+    (let [ds (a/assemble-vars [#'t-orphan #'t-homed #'t-sub-home])]
+      (is (= #{"orphan"} (ds-offenders ds "belongs to a Subsystem")) "precondition: datascript flags it")
+      (is (= (ds-offenders ds "belongs to a Subsystem") (cozo-via ds check/unclustered-modules))))))
+
+(deftest membership-oracle-matches-when-vacuous
+  (testing "no Subsystem modelled → both empty (the vacuity guard)"
+    (let [ds (a/assemble-vars [#'t-orphan])]
+      (is (empty? (ds-offenders ds "belongs to a Subsystem")) "precondition: datascript vacuous")
+      (is (= (ds-offenders ds "belongs to a Subsystem") (cozo-via ds check/unclustered-modules))))))
+
 (deftest oracle-matches-on-the-real-model
   (testing "every ported law agrees (and is empty) on the real, conformant model"
     (let [ds (pipeline/build-model "src")]
       (is (= (ds-offenders ds "mutually depend") (cozo-via ds check/mutually-dependent-modules)))
       (is (= (ds-offenders ds "acyclic") (cozo-via ds check/cyclic-subsystems)))
       (is (= (ds-offenders ds "cross-subsystem") (cozo-via ds check/nonconformant-modules)))
+      (is (= (ds-offenders ds "belongs to a Subsystem") (cozo-via ds check/unclustered-modules)))
       (is (empty? (ds-offenders ds "acyclic")) "precondition: fukan is acyclic"))))

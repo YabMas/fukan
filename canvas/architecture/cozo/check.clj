@@ -22,4 +22,8 @@
   (Operation nonconformant-modules
     "The offenders of the :may-depend conformance law: modules whose cross-subsystem dependency is not covered by a declared :may-depend edge, as a set of module names. CozoScript over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation unclustered-modules
+    "The offenders of the Subsystem membership law: authored Modules belonging to no Subsystem, as a set of module names (vacuous when no Subsystem is modelled). CozoScript over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))
