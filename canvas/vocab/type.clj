@@ -9,39 +9,49 @@
    A richer Shape: malli's grammar modelled as content-deduped `^:value` structures, so a schema is a
    queryable subgraph (plain `d/q`), never a `pr-str` blob. The core stays blind — it sees an opaque
    schema reference; this dialect owns ALL interpretation (`render`/`valid?`/`sigs-adhere?`)."
-  (:require [datascript.core :as d]
-            [malli.core :as m]
+  (:require [malli.core :as m]
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]))
 
 ;; ── the runtime bridges (the hook into the typing plug-point) ──────────────────
 
+(defn- order-of
+  "Sort key for relation eid `r`: its `:rel/order` from `ords` (absent → 0), coerced to long.
+   `cq/q` returns all cells as STRINGS over Cozo and native numbers over datascript, so the
+   numeric order is normalized to stay correct on both engines."
+  [ords r]
+  (let [o (get ords r)]
+    (cond (nil? o) 0, (string? o) (Long/parseLong o), :else (long o))))
+
 (defn- children
-  "Target eids of `from`'s reified `rel` relations, in :rel/order order
-   (relations with no :rel/order sort as 0 — harmless for unordered slots)."
+  "Target eids of `from`'s reified `rel` relations, in :rel/order order (relations with no
+   :rel/order sort as 0 — harmless for unordered slots). Targets and orders are read in two
+   queries and merged in Clojure — `cq/q` (Cozo) has no `get-else` builtin to default order."
   [db from rel]
-  (->> (d/q '[:find ?to ?ord :in $ ?from ?k :where
-              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]
-              [(get-else $ ?r :rel/order 0) ?ord]]
-            db from rel)
-       (sort-by second)
-       (mapv first)))
+  (let [tos  (cq/q '[:find ?r ?to :in $ ?from ?k :where
+                     [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]] db from rel)
+        ords (into {} (cq/q '[:find ?r ?ord :in $ ?from ?k :where
+                              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/order ?ord]] db from rel))]
+    (->> tos (sort-by #(order-of ords (first %))) (mapv second))))
 
 (defn- labelled-children
-  "Like `children` but returns [to label] pairs in :rel/order order — for arrow :in params."
+  "Like `children` but returns [to label] pairs in :rel/order order — for arrow :in params
+   (absent label → \"\"). Same two-query merge as `children`, plus the labels."
   [db from rel]
-  (->> (d/q '[:find ?to ?ord ?lbl :in $ ?from ?k :where
-              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]
-              [(get-else $ ?r :rel/order 0) ?ord]
-              [(get-else $ ?r :rel/label "") ?lbl]]
-            db from rel)
-       (sort-by second)
-       (mapv (fn [[to _ lbl]] [to lbl]))))
+  (let [tos  (cq/q '[:find ?r ?to :in $ ?from ?k :where
+                     [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]] db from rel)
+        ords (into {} (cq/q '[:find ?r ?ord :in $ ?from ?k :where
+                              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/order ?ord]] db from rel))
+        lbls (into {} (cq/q '[:find ?r ?lbl :in $ ?from ?k :where
+                              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/label ?lbl]] db from rel))]
+    (->> tos (sort-by #(order-of ords (first %)))
+         (mapv (fn [[r to]] [to (get lbls r "")])))))
 
 (defn render
   "Render the Schema at `eid` in `db` back to a malli data-form."
   [db eid]
-  (let [ent   (d/entity db eid)
+  (let [ent   (cq/entity db eid)
         kind  (:val/kind ent)
         props (cond-> {}
                 (:val/min ent)   (assoc :min (:val/min ent))
@@ -55,18 +65,22 @@
       ("tuple" "or" "and")
       (into [(keyword kind)] (map #(render db %) (children db eid :of)))
       "map"
+      ;; `:field` is an UNORDERED slot (a map has no field order), so the relations carry no
+      ;; :rel/order and the db's natural row order differs between engines. Canonicalize by field
+      ;; key so the rendered form is deterministic and engine-independent (fields compare as a set).
       (into [:map]
-            (map (fn [feid]
-                   (let [f   (d/entity db feid)
-                         sk  (first (children db feid :schema))
-                         kw  (keyword (:val/key f))
-                         sub (render db sk)]
-                     (if (:val/optional f) [kw {:optional true} sub] [kw sub])))
-                 (children db eid :field)))
+            (sort-by first
+              (map (fn [feid]
+                     (let [f   (cq/entity db feid)
+                           sk  (first (children db feid :schema))
+                           kw  (keyword (:val/key f))
+                           sub (render db sk)]
+                       (if (:val/optional f) [kw {:optional true} sub] [kw sub])))
+                   (children db eid :field))))
       "enum"
       (into [:enum]
             (map (fn [ceid]
-                   (let [c (d/entity db ceid)
+                   (let [c (cq/entity db ceid)
                          v (:val/value c)]
                      (case (:val/kind c)
                        "string" v
@@ -74,7 +88,7 @@
                        (keyword v))))
                  (children db eid :choice)))
       "ref"
-      (keyword (:entity/name (d/entity db (first (children db eid :names)))))
+      (keyword (:entity/name (cq/entity db (first (children db eid :names)))))
       "map-of"
       (let [[k v] (children db eid :of)] [:map-of (render db k) (render db v)])
       "=>"
