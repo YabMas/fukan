@@ -6,8 +6,8 @@
    (binding NOT lifted) until the parameterized-trait groundwork lets the general law-shapes move to
    the code vocab and the bindings move to fukan's design. The op pairing `op-twin` lives in
    `canvas.vocab.code.module`, referenced here via datalog injection."
-  (:require [datascript.core :as d]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]))
+  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.cozo.query :as cq]))
 
 (defn ^:export reader-realizes-lens?
   "True when a bespoke probe reader named `rn` (e.g. \"probe-survey\") realizes the Lens named
@@ -68,7 +68,7 @@
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)
-         (map #(:entity/name (d/entity db %)))
+         (map #(:entity/name (cq/entity db %)))
          set)))
 
 (defn totality-violations
@@ -82,5 +82,5 @@
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)
-         (map #(:entity/name (d/entity db %)))
+         (map #(:entity/name (cq/entity db %)))
          set)))

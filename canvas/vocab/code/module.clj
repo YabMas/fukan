@@ -166,7 +166,7 @@
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)
-         (map #(:entity/name (d/entity db %)))
+         (map #(:entity/name (cq/entity db %)))
          set)))
 
 (defn uncovered-calls
@@ -205,7 +205,7 @@
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)
-         (map #(:entity/name (d/entity db %)))
+         (map #(:entity/name (cq/entity db %)))
          set)))
 
 (defn unrealized-dispatch

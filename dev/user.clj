@@ -220,7 +220,7 @@
    trusted core must be total. Empty ⇔ the trusted core is total — the property the enforced
    `Totality` law asserts."
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (let [w (fukan/totality-violations m)]
       (if (empty? w)
         (println "Trusted core is total — no modelled reader's code throws.")
