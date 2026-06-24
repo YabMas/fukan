@@ -24,7 +24,8 @@
             [canvas.architecture.orchestration.infra :refer [infra-model]]
             [canvas.architecture.orchestration.core :refer [core]]
             [canvas.architecture.cozo.db :refer [cozo-db]]
-            [canvas.architecture.cozo.mirror :refer [cozo-mirror]]))
+            [canvas.architecture.cozo.mirror :refer [cozo-mirror]]
+            [canvas.architecture.cozo.reading :refer [cozo-reading]]))
 
 (declare ingestion)
 
@@ -43,7 +44,7 @@
    against Cozo (the oracle). A leaf during the migration: nothing in production
    depends on it yet, and it depends on no other faculty. TRANSITIONAL shape —
    folds into the kernel query layer at cut-over (P5)."
-  {:child [cozo-db cozo-mirror] :may-depend []})
+  {:child [cozo-db cozo-mirror cozo-reading] :may-depend []})
 
 (Subsystem reading
   "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence
