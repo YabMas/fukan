@@ -26,3 +26,13 @@ sub_reaches[s, t] := relkind[r, 'may-depend'], relfrom[r, s], relto[r, t]
 sub_reaches[s, t] := relkind[r, 'may-depend'], relfrom[r, s], relto[r, mid], sub_reaches[mid, t]
 ?[sn] := structof[s, 'canvas.vocab.code.subsystem/Subsystem'], sub_reaches[s, s], ename[s, sn]
 ")))))
+
+(defn nonconformant-modules
+  "The offenders of the :may-depend conformance law: modules whose cross-subsystem
+   module-dependency follows no declared `:may-depend` edge, as a set of module
+   names. Uses Cozo's stratified `not declared_dep[s, t]` (s/t bound), where
+   datascript routed the negation through a `not-join`. The Cozo twin of the
+   datascript conformance law."
+  [cdb]
+  (set (map first (db/q cdb (str rules/eav rules/module-depends rules/subsystem
+                                 "?[mn] := mdep[m, n], in_subsystem[m, s], in_subsystem[n, t], s != t, not declared_dep[s, t], ename[m, mn]")))))

@@ -56,9 +56,25 @@
       (is (= #{"CY-A" "CY-B"} (ds-offenders ds "acyclic")) "precondition: datascript flags it")
       (is (= (ds-offenders ds "acyclic") (cozo-via ds check/cyclic-subsystems))))))
 
+;; ── conformance: M-S → M-T cross-subsystem, S-bad does NOT declare :may-depend T ──
+(operation/Operation ^{:name "op-t"} t-op-t "callee in T")
+(operation/Operation ^{:name "op-s"} t-op-s {:delegates [t-op-t]})
+(module/Module ^{:name "M-S"} t-cm-s {:exposes [t-op-s]})
+(module/Module ^{:name "M-T"} t-cm-t {:exposes [t-op-t]})
+(declare t-sub-T)
+(subsystem/Subsystem ^{:name "S-bad"} t-sub-S-bad {:child [t-cm-s]})  ; declares no :may-depend
+(subsystem/Subsystem ^{:name "T"}     t-sub-T     {:child [t-cm-t]})
+
+(deftest conformance-oracle-matches-on-a-violation
+  (testing "cozo == datascript conformance offenders on an undeclared cross-subsystem dep"
+    (let [ds (a/assemble-vars [#'t-op-t #'t-op-s #'t-cm-s #'t-cm-t #'t-sub-S-bad #'t-sub-T])]
+      (is (= #{"M-S"} (ds-offenders ds "cross-subsystem")) "precondition: datascript flags it")
+      (is (= (ds-offenders ds "cross-subsystem") (cozo-via ds check/nonconformant-modules))))))
+
 (deftest oracle-matches-on-the-real-model
-  (testing "both laws agree (and are empty) on the real, acyclic model"
+  (testing "every ported law agrees (and is empty) on the real, conformant model"
     (let [ds (pipeline/build-model "src")]
       (is (= (ds-offenders ds "mutually depend") (cozo-via ds check/mutually-dependent-modules)))
       (is (= (ds-offenders ds "acyclic") (cozo-via ds check/cyclic-subsystems)))
+      (is (= (ds-offenders ds "cross-subsystem") (cozo-via ds check/nonconformant-modules)))
       (is (empty? (ds-offenders ds "acyclic")) "precondition: fukan is acyclic"))))

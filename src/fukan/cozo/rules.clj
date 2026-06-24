@@ -38,3 +38,11 @@ mdep[m, n] := owns[m, a], relkind[ri, 'in'],  relfrom[ri, a], relto[ri, sch],
 mdep[m, n] := owns[m, a], relkind[ro, 'out'], relfrom[ro, a], relto[ro, sch],
               valkind[sch, 'ref'], relkind[rn, 'names'], relfrom[rn, sch], relto[rn, k], owns[n, k], m != n
 ")
+
+(def subsystem
+  "Subsystem membership + declared `:may-depend` edges, built on `eav` — the
+   substrate the conformance/membership architecture laws read."
+  "
+in_subsystem[mod, sub] := structof[sub, 'canvas.vocab.code.subsystem/Subsystem'], relkind[r, 'child'], relfrom[r, sub], relto[r, mod]
+declared_dep[s, t]     := structof[s, 'canvas.vocab.code.subsystem/Subsystem'], relkind[r, 'may-depend'], relfrom[r, s], relto[r, t]
+")

@@ -18,4 +18,8 @@
   (Operation cyclic-subsystems
     "The offenders of the :may-depend acyclicity law: subsystems that transitively depend on themselves (a :may-depend cycle), as a set of subsystem names. CozoScript over the mirror, via a recursive sub-reaches rule."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation nonconformant-modules
+    "The offenders of the :may-depend conformance law: modules whose cross-subsystem dependency is not covered by a declared :may-depend edge, as a set of module names. CozoScript over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))
