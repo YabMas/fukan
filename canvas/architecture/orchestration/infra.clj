@@ -9,16 +9,21 @@
   (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.orchestration.pipeline :as pipeline]
-            [canvas.architecture.ingestion.extraction :as extraction]))
+            [canvas.architecture.ingestion.extraction :as extraction]
+            [canvas.architecture.cozo.db :as cozo-db]
+            [canvas.architecture.cozo.mirror :as cozo-mirror]))
 
 (Module infra-model
-  "The model lifecycle — load / get / refresh the held Model from a source path."
-  (Operation load-model    "Build (or reload) the held Model from a src path."
+  "The model lifecycle — load / get / refresh the held Model from a source path. During the
+   datascript→Cozo cut-over it holds the model dually (the ds db + a Cozo mirror, `get-cozo`)."
+  (Operation load-model    "Build (or reload) the held Model from a src path, holding it dually (ds + a Cozo mirror)."
     {:signature  [:=> [:catn [:src extraction/Path]] substrate/StructureDb]
      :performs   [:io :require :state :throws]
-     :delegates  [pipeline/build-model]})        ; the lifecycle drives the build pipeline
+     :delegates  [pipeline/build-model cozo-mirror/mirror cozo-db/close]})  ; build the model + mirror it to Cozo
   (Operation get-model     "The current held Model, or none."
     {:signature [:=> [:cat] substrate/StructureDb]})
+  (Operation get-cozo      "The current held Model's Cozo mirror (a Cozo db handle), or none."
+    {:signature [:=> [:cat] :any]})
   (Operation refresh-model "Rebuild the Model from the last src path."
     {:signature [:=> [:cat] substrate/StructureDb]
      :performs  [:io :require :state :throws]})

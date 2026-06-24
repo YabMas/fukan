@@ -60,5 +60,5 @@
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject
-   faculty."
-  {:child [model-pipeline infra-model core] :may-depend [kernel ingestion]})
+   faculty. Depends on cozo during the cut-over: the lifecycle holds a Cozo mirror of the model."
+  {:child [model-pipeline infra-model core] :may-depend [kernel ingestion cozo]})
