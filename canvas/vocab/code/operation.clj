@@ -5,7 +5,6 @@
    `op-twin` itself lives in `module` — it is built on the Module name bridge — and is referenced
    here via datalog injection; the `defn→Operation`+`:calls` extraction is added with the extractor.)"
   (:require [clojure.edn :as edn]
-            [datascript.core :as d]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
@@ -146,14 +145,16 @@
    ordered/positional — rendered in `:rel/order` order — so the adherence comparison
    checks argument order and arity."
   [db op-eid]
-  (let [ins  (->> (d/q '[:find ?ord ?to :in $ ?from
-                         :where [?r :rel/from ?from] [?r :rel/kind :in] [?r :rel/to ?to] [?r :rel/order ?ord]]
-                       db op-eid)
-                  (sort-by first)
+  (let [ins  (->> (cq/q '[:find ?ord ?to :in $ ?from
+                          :where [?r :rel/from ?from] [?r :rel/kind :in] [?r :rel/to ?to] [?r :rel/order ?ord]]
+                        db op-eid)
+                  ;; ?ord is a string over Cozo, an int over datascript — coerce so the :in params
+                  ;; sort by true numeric order (a >9-arity op would mis-sort lexically otherwise)
+                  (sort-by (fn [[ord _]] (if (string? ord) (Long/parseLong ord) (long ord))))
                   (mapv (fn [[_ to]] (typing/render-type db to))))
-        out  (ffirst (d/q '[:find ?to :in $ ?from
-                            :where [?r :rel/from ?from] [?r :rel/kind :out] [?r :rel/to ?to]]
-                          db op-eid))]
+        out  (ffirst (cq/q '[:find ?to :in $ ?from
+                             :where [?r :rel/from ?from] [?r :rel/kind :out] [?r :rel/to ?to]]
+                           db op-eid))]
     [:=> (into [:cat] ins) (if out (typing/render-type db out) :nil)]))
 
 (defn type-drifted-operations
@@ -165,13 +166,13 @@
    carries a `:val/sig`; collects the authored Operation's name when its rendered type does NOT
    adhere to the twin's realized signature."
   [db]
-  (->> (d/q '[:find ?s ?sn ?o :in $ %
-              :where (op-twin ?s ?o) [?s :entity/name ?sn] [?o :val/sig _]]
-            db (s/vocab-rules))
+  (->> (cq/q '[:find ?s ?sn ?o :in $ %
+               :where (op-twin ?s ?o) [?s :entity/name ?sn] [?o :val/sig ?sig]]
+             db (s/vocab-rules))
        (filter (fn [[s _ o]]
                  (not (typing/type-adheres?
                         (operation-sig db s)
-                        (edn/read-string (:val/sig (d/entity db o)))))))
+                        (edn/read-string (:val/sig (cq/entity db o)))))))
        (map second) set))
 
 ;; ── Clojure extraction (defn → Operation) ────────────────────────────────────
