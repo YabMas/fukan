@@ -15,7 +15,8 @@
             [fukan.cozo.check :as check]
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as module]
-            [canvas.vocab.code.subsystem :as subsystem]))
+            [canvas.vocab.code.subsystem :as subsystem]
+            [canvas.vocab.code.effect :as effect]))
 
 (defn- ds-offenders
   "The datascript ModuleArchitecture law matched by `substr`, its offenders over
@@ -143,6 +144,18 @@
       (is (= #{"ca"} (module/unfaithful-calls ds)) "precondition: datascript flags it")
       (is (= (module/unfaithful-calls ds) (cozo-via ds check/unfaithful-calls))))))
 
+;; ── EffectCorrespondence: a modelled op whose extracted twin reaches an undeclared effect ──
+(operation/Operation ^{:name "doio"} t-doio-auth "authored, declares no effects")
+(operation/Operation ^{:name "doio"} t-doio-ext {:extracted true :performs [:io]})
+(module/Module ^{:name "svc"} t-svc {:exposes [t-doio-auth]})
+(module/Module ^{:name "fukan.svc"} t-code-svc {:extracted true :child [t-doio-ext]})
+
+(deftest effect-correspondence-oracle-matches-on-a-violation
+  (testing "cozo == datascript EffectCorrespondence offenders on an under-declared op"
+    (let [ds (a/assemble-vars [#'t-doio-auth #'t-doio-ext #'t-svc #'t-code-svc])]
+      (is (= #{"doio"} (effect/undeclared-effects ds)) "precondition: datascript flags it")
+      (is (= (effect/undeclared-effects ds) (cozo-via ds check/undeclared-effects))))))
+
 (deftest oracle-matches-on-the-real-model
   (testing "every ported law agrees (and is empty) on the real, conformant model"
     (let [ds (pipeline/build-model "src")]
@@ -154,4 +167,5 @@
       (is (= (operation/drifted-operations ds) (cozo-via ds check/drifted-operations)))
       (is (= (module/unrealized-delegates ds) (cozo-via ds check/unrealized-delegates)))
       (is (= (module/unfaithful-calls ds) (cozo-via ds check/unfaithful-calls)))
+      (is (= (effect/undeclared-effects ds) (cozo-via ds check/undeclared-effects)))
       (is (empty? (ds-offenders ds "acyclic")) "precondition: fukan is acyclic"))))

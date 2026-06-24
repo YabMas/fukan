@@ -18,6 +18,7 @@ relkind[r, k]    := *t_str[r, 'rel/kind', k]
 ename[e, n]      := *t_str[e, 'entity/name', n]
 structof[e, tag] := *t_str[e, 'structure/of', tag]
 valkind[e, k]    := *t_str[e, 'val/kind', k]
+valname[e, n]    := *t_str[e, 'val/name', n]
 extracted[e]     := *t_bool[e, 'val/extracted', true]
 ")
 
@@ -67,4 +68,14 @@ module_corresponds[cm, km] := canvas_module[cm], code_module[km],
 op_twin[a, b] := structof[a, 'canvas.vocab.code.operation/Operation'], not extracted[a], ename[a, n], in_module[a, cm],
                  structof[b, 'canvas.vocab.code.operation/Operation'], extracted[b], ename[b, n], in_module[b, km],
                  module_corresponds[cm, km]
+")
+
+(def effect
+  "Transitive effect reachability, built on `eav`: an op REACHES effect E if it
+   directly `:performs` E, or `:calls` an op that reaches E. The cozo port of
+   `canvas.vocab.code.effect/reaches-effect-rules` — a recursive rule cozo
+   saturates to a fixpoint over the (cyclic) call graph."
+  "
+reaches_effect[op, en] := relkind[pr, 'performs'], relfrom[pr, op], relto[pr, e], valname[e, en]
+reaches_effect[op, en] := relkind[cr, 'calls'], relfrom[cr, op], relto[cr, mid], reaches_effect[mid, en]
 ")

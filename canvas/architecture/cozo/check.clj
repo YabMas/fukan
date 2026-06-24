@@ -42,4 +42,8 @@
   (Operation unfaithful-calls
     "The offenders of the Fidelity law: extracted cross-module calls between modelled faculties not covered by an intended delegation, as a set of extracted caller-operation names. CozoScript over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation undeclared-effects
+    "The offenders of the EffectCorrespondence law: modelled ops whose extracted twin transitively reaches an effect the op does not declare in its :performs, as a set of operation names. CozoScript over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))

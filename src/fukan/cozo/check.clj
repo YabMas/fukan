@@ -114,3 +114,16 @@ intended[km1, km2] := relkind[d, 'delegates'], relfrom[d, o1], relto[d, o2], not
          module_corresponds[cm1, km1], module_corresponds[cm2, km2],
          not intended[km1, km2], ename[e1, en]
 ")))))
+
+(defn undeclared-effects
+  "The offenders of the EffectCorrespondence law: modelled ops whose extracted
+   `op_twin` TRANSITIVELY reaches (over `:calls` ∪ `:performs`) an effect the op
+   does not declare in its `:performs`, as a set of operation names (the
+   under-declaration direction). Naturally vacuous on a model-only build (op_twin
+   needs extracted ops). The Cozo twin of the datascript `undeclared-effects` reader."
+  [cdb]
+  (set (map first (db/q cdb (str rules/eav rules/correspondence rules/effect "
+declares[o, en] := relkind[pr, 'performs'], relfrom[pr, o], relto[pr, e], valname[e, en]
+?[on] := structof[o, 'canvas.vocab.code.operation/Operation'], not extracted[o],
+         op_twin[o, b], reaches_effect[b, en], not declares[o, en], ename[o, on]
+")))))
