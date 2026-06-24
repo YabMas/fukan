@@ -58,8 +58,13 @@ in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[
 in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[m, mname]
 in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
 
+canvas_module[cm] := structof[m, 'canvas.vocab.code.module/Module'], not extracted[m], ename[m, cm]
+code_module[km]   := structof[m, 'canvas.vocab.code.module/Module'], extracted[m], ename[m, km]
+module_corresponds[cm, km] := canvas_module[cm], code_module[km],
+                              cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'),
+                              or(kmn == cmn, ends_with(kmn, concat('.', cmn)))
+
 op_twin[a, b] := structof[a, 'canvas.vocab.code.operation/Operation'], not extracted[a], ename[a, n], in_module[a, cm],
                  structof[b, 'canvas.vocab.code.operation/Operation'], extracted[b], ename[b, n], in_module[b, km],
-                 cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'),
-                 or(kmn == cmn, ends_with(kmn, concat('.', cmn)))
+                 module_corresponds[cm, km]
 ")
