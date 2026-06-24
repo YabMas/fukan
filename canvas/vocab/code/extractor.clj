@@ -55,21 +55,30 @@
                                   :rel/from c :rel/kind :calls :rel/to e :rel/order n})
                                pairs))))
 
-(defn extract
-  "Extract a structure-db of Modules + the Operations they define from the Clojure source under
-   `paths`, then ground the actual call graph as `:calls` rels. Operations are stamped with their
-   DIRECT effects (`:performs`, logging excluded; `throw` as `:throws`); Modules are stamped
-   `:val/extracted true` (provenance, like Operations). Orchestrates the per-element builders."
-  [& paths]
+(defn extract-roots
+  "The engine-agnostic extraction FACTS over the Clojure source under `paths`:
+   `{:roots [[id InstanceValue]…] :var-usages […]}` — the Module/Operation roots
+   (Operations stamped with DIRECT effects; Modules `:val/extracted true`) plus the
+   clj-kondo var-usages used to ground the `:calls` graph. Both build paths (the
+   datascript `extract` and the native cozo build) assemble these same facts."
+  [paths]
   (let [{:keys [namespace-definitions var-definitions var-usages]} (analyze paths)
         ops-by-ns    (group-by :ns (filter #(operation/fn-defining (:defined-by %)) var-definitions))
         module-names (distinct (concat (map :name namespace-definitions)
                                        (keys ops-by-ns)))
-        op-effs      (effect/op-effects var-usages)
-        db (assemble/assemble-instances
-            (for [mname module-names
-                  :let [ops (for [v (ops-by-ns mname)
-                                  :let [effs (get op-effs [(str mname) (str (:name v))])]]
-                              (operation/extract-operation v effs))]]
-              [(str mname) (module/extract-module mname ops)]))]
-    (add-calls db var-usages)))
+        op-effs      (effect/op-effects var-usages)]
+    {:roots      (vec (for [mname module-names
+                            :let [ops (for [v (ops-by-ns mname)
+                                            :let [effs (get op-effs [(str mname) (str (:name v))])]]
+                                        (operation/extract-operation v effs))]]
+                        [(str mname) (module/extract-module mname ops)]))
+     :var-usages var-usages}))
+
+(defn extract
+  "Extract a datascript structure-db of Modules + the Operations they define from the Clojure source
+   under `paths`, then ground the actual call graph as `:calls` rels. Assembles the engine-agnostic
+   `extract-roots` facts onto datascript. Operations are stamped with their DIRECT effects
+   (`:performs`, logging excluded; `throw` as `:throws`); Modules are stamped `:val/extracted true`."
+  [& paths]
+  (let [{:keys [roots var-usages]} (extract-roots paths)]
+    (add-calls (assemble/assemble-instances roots) var-usages)))
