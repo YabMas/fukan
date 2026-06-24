@@ -10,7 +10,8 @@
 
 (def eav
   "Logical EAV decode — reified-edge, node, and leaf views over the mirror's typed
-   relations. The universal base prepended to every cozo query."
+   relations, plus the foundational `in_module` membership (op→owning-module-name).
+   The universal base prepended to every cozo query."
   "
 relfrom[r, e]    := *t_int[r, 'rel/from', e]
 relto[r, e]      := *t_int[r, 'rel/to', e]
@@ -20,6 +21,11 @@ structof[e, tag] := *t_str[e, 'structure/of', tag]
 valkind[e, k]    := *t_str[e, 'val/kind', k]
 valname[e, n]    := *t_str[e, 'val/name', n]
 extracted[e]     := *t_bool[e, 'val/extracted', true]
+isprivate[e]     := *t_bool[e, 'val/private', true]
+
+in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[m, mname]
+in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[m, mname]
+in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
 ")
 
 (def module-depends
@@ -50,15 +56,11 @@ declared_dep[s, t]     := structof[s, 'canvas.vocab.code.subsystem/Subsystem'], 
 ")
 
 (def correspondence
-  "op→module membership + the authored↔extracted `op_twin` pairing (the cozo port
-   of the `op-twin` defrelation), built on `eav`. `module-corresponds?` is inlined
-   as a normalize-and-suffix match: the canvas module name's hyphens become dots,
-   and it must be the code namespace exactly or a `.`-bounded suffix of it."
+  "The authored↔extracted `op_twin` pairing (the cozo port of the `op-twin`
+   defrelation), built on `eav`. `module-corresponds?` is inlined as a
+   normalize-and-suffix match: the canvas module name's hyphens become dots, and it
+   must be the code namespace exactly or a `.`-bounded suffix of it."
   "
-in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[m, mname]
-in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[m, mname]
-in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
-
 canvas_module[cm] := structof[m, 'canvas.vocab.code.module/Module'], not extracted[m], ename[m, cm]
 code_module[km]   := structof[m, 'canvas.vocab.code.module/Module'], extracted[m], ename[m, km]
 module_corresponds[cm, km] := canvas_module[cm], code_module[km],
