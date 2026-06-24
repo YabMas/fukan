@@ -26,4 +26,8 @@
   (Operation unclustered-modules
     "The offenders of the Subsystem membership law: authored Modules belonging to no Subsystem, as a set of module names (vacuous when no Subsystem is modelled). CozoScript over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation uncovered-public-operations
+    "The offenders of the Encapsulation law: public extracted operations with no authored op-twin and not deliberately exempt (private/export/test-support), as a set of operation names. CozoScript over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))

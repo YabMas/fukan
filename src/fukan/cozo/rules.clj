@@ -18,6 +18,7 @@ relkind[r, k]    := *t_str[r, 'rel/kind', k]
 ename[e, n]      := *t_str[e, 'entity/name', n]
 structof[e, tag] := *t_str[e, 'structure/of', tag]
 valkind[e, k]    := *t_str[e, 'val/kind', k]
+extracted[e]     := *t_bool[e, 'val/extracted', true]
 ")
 
 (def module-depends
@@ -45,4 +46,20 @@ mdep[m, n] := owns[m, a], relkind[ro, 'out'], relfrom[ro, a], relto[ro, sch],
   "
 in_subsystem[mod, sub] := structof[sub, 'canvas.vocab.code.subsystem/Subsystem'], relkind[r, 'child'], relfrom[r, sub], relto[r, mod]
 declared_dep[s, t]     := structof[s, 'canvas.vocab.code.subsystem/Subsystem'], relkind[r, 'may-depend'], relfrom[r, s], relto[r, t]
+")
+
+(def correspondence
+  "op→module membership + the authored↔extracted `op_twin` pairing (the cozo port
+   of the `op-twin` defrelation), built on `eav`. `module-corresponds?` is inlined
+   as a normalize-and-suffix match: the canvas module name's hyphens become dots,
+   and it must be the code namespace exactly or a `.`-bounded suffix of it."
+  "
+in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[m, mname]
+in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[m, mname]
+in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
+
+op_twin[a, b] := structof[a, 'canvas.vocab.code.operation/Operation'], not extracted[a], ename[a, n], in_module[a, cm],
+                 structof[b, 'canvas.vocab.code.operation/Operation'], extracted[b], ename[b, n], in_module[b, km],
+                 cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'),
+                 or(kmn == cmn, ends_with(kmn, concat('.', cmn)))
 ")

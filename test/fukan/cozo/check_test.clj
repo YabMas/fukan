@@ -88,6 +88,16 @@
       (is (empty? (ds-offenders ds "belongs to a Subsystem")) "precondition: datascript vacuous")
       (is (= (ds-offenders ds "belongs to a Subsystem") (cozo-via ds check/unclustered-modules))))))
 
+;; ── Encapsulation: a public extracted op with no authored twin ──
+(operation/Operation ^{:name "loose"} t-loose {:extracted true})
+(module/Module ^{:name "fukan.x.thing"} t-thing {:child [t-loose]})
+
+(deftest encapsulation-oracle-matches-on-a-violation
+  (testing "cozo == datascript Encapsulation offenders on an uncovered public extracted op"
+    (let [ds (a/assemble-vars [#'t-loose #'t-thing])]
+      (is (= #{"loose"} (operation/uncovered-public-operations ds)) "precondition: datascript flags it")
+      (is (= (operation/uncovered-public-operations ds) (cozo-via ds check/uncovered-public-operations))))))
+
 (deftest oracle-matches-on-the-real-model
   (testing "every ported law agrees (and is empty) on the real, conformant model"
     (let [ds (pipeline/build-model "src")]
@@ -95,4 +105,5 @@
       (is (= (ds-offenders ds "acyclic") (cozo-via ds check/cyclic-subsystems)))
       (is (= (ds-offenders ds "cross-subsystem") (cozo-via ds check/nonconformant-modules)))
       (is (= (ds-offenders ds "belongs to a Subsystem") (cozo-via ds check/unclustered-modules)))
+      (is (= (operation/uncovered-public-operations ds) (cozo-via ds check/uncovered-public-operations)))
       (is (empty? (ds-offenders ds "acyclic")) "precondition: fukan is acyclic"))))

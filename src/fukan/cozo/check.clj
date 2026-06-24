@@ -51,3 +51,18 @@ authored_module[mod] := structof[mod, 'canvas.vocab.code.module/Module'], not *t
 clustered[mod]       := in_subsystem[mod, _]
 ?[mn] := authored_module[mod], not clustered[mod], ename[mod, mn]
 "))))))
+
+(defn uncovered-public-operations
+  "The offenders of the Encapsulation law: public extracted operations with no
+   authored `op_twin` and not deliberately exempt (`:val/private`/`:val/export`/
+   `:val/test-support`), as a set of operation names. `covered`/`exempt` project
+   out the existential so the negations are bound-safe. The Cozo twin of the
+   datascript Encapsulation law."
+  [cdb]
+  (set (map first (db/q cdb (str rules/eav rules/correspondence "
+exempt[o]  := *t_bool[o, 'val/private', true]
+exempt[o]  := *t_bool[o, 'val/export', true]
+exempt[o]  := *t_bool[o, 'val/test-support', true]
+covered[o] := op_twin[s, o]
+?[on] := structof[o, 'canvas.vocab.code.operation/Operation'], extracted[o], not exempt[o], not covered[o], ename[o, on]
+")))))
