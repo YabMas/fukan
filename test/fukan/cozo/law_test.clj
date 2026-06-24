@@ -18,7 +18,7 @@
            (law/compile-law '{:offenders [?x]
                               :where [[?x :structure/of :canvas.vocab.code.module/Module]
                                       (not-join [?x] [?r :rel/from ?x] [?r :rel/kind :exposes])]}
-                            #{})))))
+                            #{} {})))))
 
 (deftest compiles-a-not=-cardinality-law
   (testing "compile-law emits the expected CozoScript for an at-most-one (not=) law"
@@ -30,7 +30,7 @@
                                       [?r1 :rel/from ?x] [?r1 :rel/kind :shape]
                                       [?r2 :rel/from ?x] [?r2 :rel/kind :shape]
                                       [(not= ?r1 ?r2)]]}
-                            #{})))))
+                            #{} {})))))
 
 (deftest compiled-laws-agree-with-datascript-on-the-real-model
   (testing "the compiler supports a family of laws, and they find no offenders on the green model"

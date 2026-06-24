@@ -12,8 +12,8 @@
   "Compile defstructure laws' datalog → CozoScript over the Cozo substrate and run
    them — the Cozo analog of structure/check."
   (Operation compile-law
-    "Compile a law's offender query (offenders + where, scope-clause prepended for a direct tag) → a CozoScript program. String compilation over a local counter atom (:state) for unique not-join helper names; throws on an unsupported form."
-    {:signature [:=> [:catn [:law :any] [:direct-tags :any]] :string]
+    "Compile a law's offender query (offenders + its :rules + where, scope-clause prepended for a direct tag) → a CozoScript program: the vocab rules in its reference closure (from the compiled-rule `index`), its own rules, helper rules, then the `?` entry. String compilation over local counter/refs atoms (:state); throws on an unsupported form."
+    {:signature [:=> [:catn [:law :any] [:direct-tags :any] [:index :any]] :string]
      :performs  [:state :throws]})
   (Operation check-structural
     "Run every currently-compilable law over the Cozo db, returning offenders (or :unsupported for laws whose form isn't compiled yet) — the Cozo analog of structure/check."
