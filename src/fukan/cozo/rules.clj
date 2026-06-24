@@ -72,6 +72,21 @@ op_twin[a, b] := structof[a, 'canvas.vocab.code.operation/Operation'], not extra
                  module_corresponds[cm, km]
 ")
 
+(def surface
+  "Code-surface descriptive primitives, built on `eav` — the reusable building
+   blocks higher-level surface readings compose. `public_op`: a non-private
+   extracted Operation (the externally-callable surface). `clientele`: the OTHER
+   modules that call a public op (its external consumers). `co_consumed`: two public
+   ops in the same module captured by a shared clientele. `consumed`: a public op
+   that has any external clientele, with its module."
+  "
+public_op[o] := structof[o, 'canvas.vocab.code.operation/Operation'], extracted[o], not isprivate[o]
+clientele[o, cm] := public_op[o], relkind[c, 'calls'], relto[c, o], relfrom[c, caller],
+                    in_module[caller, cm], in_module[o, om], cm != om
+co_consumed[a, b] := clientele[a, cm], clientele[b, cm], in_module[a, m], in_module[b, m], a < b
+consumed[o, mod] := clientele[o, cm], in_module[o, mod]
+")
+
 (def effect
   "Transitive effect reachability, built on `eav`: an op REACHES effect E if it
    directly `:performs` E, or `:calls` an op that reaches E. The cozo port of

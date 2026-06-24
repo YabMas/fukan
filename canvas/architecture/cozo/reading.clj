@@ -13,4 +13,8 @@
   (Operation module-dependencies
     "The complete module→module dependency graph (calls ∪ data-adoption) as a set of [caller callee] name pairs, computed in CozoScript over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation latent-boundaries
+    "Code modules whose public surface has split into ≥2 consumer-disjoint clienteles (Parnas/ISP boundary discovery), as {module [{:ops :clientele}…]}. Composes the surface building blocks through ConnectedComponents + a cohesion/proper gate."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))
