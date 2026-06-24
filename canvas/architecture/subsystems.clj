@@ -26,7 +26,8 @@
             [canvas.architecture.cozo.db :refer [cozo-db]]
             [canvas.architecture.cozo.mirror :refer [cozo-mirror]]
             [canvas.architecture.cozo.reading :refer [cozo-reading]]
-            [canvas.architecture.cozo.check :refer [cozo-check]]))
+            [canvas.architecture.cozo.check :refer [cozo-check]]
+            [canvas.architecture.cozo.build :refer [cozo-build]]))
 
 (declare ingestion)
 
@@ -40,12 +41,12 @@
   {:child [canvas-source extraction] :may-depend [kernel]})
 
 (Subsystem cozo
-  "The Cozo query engine (datascript→Cozo migration) — the engine seam + the EAV
-   mirror that reflects the datascript substrate so laws/readers can be checked
-   against Cozo (the oracle). A leaf during the migration: nothing in production
-   depends on it yet, and it depends on no other faculty. TRANSITIONAL shape —
-   folds into the kernel query layer at cut-over (P5)."
-  {:child [cozo-db cozo-mirror cozo-reading cozo-check] :may-depend []})
+  "The Cozo query engine (datascript→Cozo migration) — the engine seam, the EAV
+   mirror, the ported laws/readers, and the native build. Depends on the kernel
+   (the native build assembles via the kernel assembler + identity); during the
+   migration nothing in production depends on it yet. TRANSITIONAL shape — folds
+   into the kernel query layer at cut-over (P5)."
+  {:child [cozo-db cozo-mirror cozo-reading cozo-check cozo-build] :may-depend [kernel]})
 
 (Subsystem reading
   "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence

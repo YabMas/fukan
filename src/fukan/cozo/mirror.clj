@@ -37,11 +37,12 @@
     (keyword? v) [:str (subs (str v) 1)]
     :else        [:str (pr-str v)]))
 
-(defn- datom->row
-  "A datom as the `[bucket [e a v]]` it mirrors to."
-  [datom]
-  (let [[bucket v] (classify (:v datom))]
-    [bucket [(:e datom) (attr->str (:a datom)) v]]))
+(defn- triple->row
+  "An `[e a v]` triple (a = attribute keyword) as the `[bucket [e a-str v]]` it
+   loads to."
+  [[e a v]]
+  (let [[bucket cv] (classify v)]
+    [bucket [e (attr->str a) cv]]))
 
 (def relations
   "The three typed EAV relations, by bucket: stored name + Cozo value type."
@@ -49,23 +50,32 @@
    :str  {:name "t_str"  :type "String"}
    :bool {:name "t_bool" :type "Bool"}})
 
-(defn rows-by-bucket
-  "The datoms of `ds-db` grouped into `{:int #{[e a v]…} :str #{…} :bool #{…}}` —
-   the expected mirror contents, computed on the datascript side (also the oracle's
-   reference for the parity test)."
-  [ds-db]
-  (reduce (fn [acc datom]
-            (let [[bucket row] (datom->row datom)]
+(defn- datoms->buckets
+  "Group `[e a v]` triples into `{:int #{[e a v]…} :str #{…} :bool #{…}}` by value
+   type — the engine-neutral partition both build paths share."
+  [triples]
+  (reduce (fn [acc t]
+            (let [[bucket row] (triple->row t)]
               (update acc bucket conj row)))
           {:int #{} :str #{} :bool #{}}
-          (d/datoms ds-db :eavt)))
+          triples))
 
-(defn mirror
-  "Open a fresh Cozo db and load every datom of `ds-db` into the typed EAV
-   relations. Returns the open Cozo db (the caller closes it). Pure reflection —
-   no schema interpretation."
+(defn- ds-triples
+  "The `[e a v]` triples of a datascript db."
   [ds-db]
-  (let [buckets (rows-by-bucket ds-db)
+  (map (fn [d] [(:e d) (:a d) (:v d)]) (d/datoms ds-db :eavt)))
+
+(defn rows-by-bucket
+  "The datoms of `ds-db` grouped by bucket — the oracle's datascript-side reference."
+  [ds-db]
+  (datoms->buckets (ds-triples ds-db)))
+
+(defn load-datoms
+  "Open a fresh Cozo db and load the `[e a v]` triples into the typed EAV relations;
+   returns the open db (caller closes). The engine-neutral substrate WRITE — shared
+   by the datascript mirror and the datascript-free native build."
+  [triples]
+  (let [buckets (datoms->buckets triples)
         cdb     (db/open)]
     (doseq [[bucket {:keys [name type]}] relations]
       (db/q cdb (str ":create " name " {e: Int, a: String, v: " type "}"))
@@ -73,3 +83,9 @@
         (db/q cdb (str "?[e, a, v] <- $rows :put " name " {e, a, v}")
               {:rows (vec rows)})))
     cdb))
+
+(defn mirror
+  "Open a fresh Cozo db and load every datom of `ds-db` into the typed EAV
+   relations (load-datoms over the datascript datoms). Returns the open db."
+  [ds-db]
+  (load-datoms (ds-triples ds-db)))

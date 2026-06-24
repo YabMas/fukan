@@ -14,7 +14,10 @@
   (Operation rows-by-bucket
     "The db's datoms grouped into {:int/:str/:bool #{[e a v]…}} — the expected mirror contents (the oracle's datascript-side reference)."
     {:signature [:=> [:catn [:ds-db :any]] :any]})
+  (Operation load-datoms
+    "Open a fresh Cozo db and load [e a v] triples into the typed EAV relations; returns the open db. The engine-neutral substrate write shared by the mirror and the native build."
+    {:signature [:=> [:catn [:triples :any]] db/CozoDb]
+     :delegates [db/open db/q]})
   (Operation mirror
-    "Open a fresh Cozo db and load every datom of ds-db into the typed EAV relations; returns the open db."
-    {:signature [:=> [:catn [:ds-db :any]] db/CozoDb]
-     :delegates [db/open db/q]}))
+    "Open a fresh Cozo db and load every datom of ds-db into the typed EAV relations (load-datoms over the datascript datoms); returns the open db."
+    {:signature [:=> [:catn [:ds-db :any]] db/CozoDb]}))
