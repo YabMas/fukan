@@ -128,6 +128,21 @@
       (is (= #{"da"} (module/unrealized-delegates ds)) "precondition: datascript flags it")
       (is (= (module/unrealized-delegates ds) (cozo-via ds check/unrealized-delegates))))))
 
+;; ── Fidelity: an extracted cross-module call between modelled faculties, undeclared ──
+(declare t-cb)
+(operation/Operation ^{:name "ca"} t-ca {:extracted true :calls [t-cb]})
+(operation/Operation ^{:name "cb"} t-cb {:extracted true})
+(module/Module ^{:name "fukan.alpha"} t-code-alpha {:extracted true :child [t-ca]})
+(module/Module ^{:name "fukan.beta"}  t-code-beta  {:extracted true :child [t-cb]})
+(module/Module ^{:name "alpha"} t-auth-alpha "authored, corresponds fukan.alpha")
+(module/Module ^{:name "beta"}  t-auth-beta  "authored, corresponds fukan.beta")
+
+(deftest fidelity-oracle-matches-on-a-violation
+  (testing "cozo == datascript Fidelity offenders on an undeclared modelled-faculty call"
+    (let [ds (a/assemble-vars [#'t-ca #'t-cb #'t-code-alpha #'t-code-beta #'t-auth-alpha #'t-auth-beta])]
+      (is (= #{"ca"} (module/unfaithful-calls ds)) "precondition: datascript flags it")
+      (is (= (module/unfaithful-calls ds) (cozo-via ds check/unfaithful-calls))))))
+
 (deftest oracle-matches-on-the-real-model
   (testing "every ported law agrees (and is empty) on the real, conformant model"
     (let [ds (pipeline/build-model "src")]
@@ -138,4 +153,5 @@
       (is (= (operation/uncovered-public-operations ds) (cozo-via ds check/uncovered-public-operations)))
       (is (= (operation/drifted-operations ds) (cozo-via ds check/drifted-operations)))
       (is (= (module/unrealized-delegates ds) (cozo-via ds check/unrealized-delegates)))
+      (is (= (module/unfaithful-calls ds) (cozo-via ds check/unfaithful-calls)))
       (is (empty? (ds-offenders ds "acyclic")) "precondition: fukan is acyclic"))))

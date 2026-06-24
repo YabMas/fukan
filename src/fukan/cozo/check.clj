@@ -98,3 +98,19 @@ realized[cm1, cm2] := relkind[c, 'calls'], relfrom[c, e1], relto[c, e2], extract
 ?[on] := relkind[d, 'delegates'], relfrom[d, o1], relto[d, o2], not extracted[o1],
          in_module[o1, cm1], in_module[o2, cm2], cm1 != cm2, not realized[cm1, cm2], ename[o1, on]
 "))))))
+
+(defn unfaithful-calls
+  "The offenders of the Fidelity law: extracted cross-module calls between MODELLED
+   faculties (both code modules correspond to an authored module) not covered by an
+   intended delegation, as a set of extracted caller-operation names. Naturally
+   vacuous on a model-only build (the body requires extracted cross-module
+   `:calls`). The Cozo twin of the datascript `unfaithful-calls` reader."
+  [cdb]
+  (set (map first (db/q cdb (str rules/eav rules/correspondence "
+intended[km1, km2] := relkind[d, 'delegates'], relfrom[d, o1], relto[d, o2], not extracted[o1],
+                      in_module[o1, c1], in_module[o2, c2], module_corresponds[c1, km1], module_corresponds[c2, km2]
+?[en] := relkind[c, 'calls'], relfrom[c, e1], relto[c, e2], extracted[e1], extracted[e2],
+         in_module[e1, km1], in_module[e2, km2], km1 != km2,
+         module_corresponds[cm1, km1], module_corresponds[cm2, km2],
+         not intended[km1, km2], ename[e1, en]
+")))))

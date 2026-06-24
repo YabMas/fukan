@@ -38,4 +38,8 @@
   (Operation unrealized-delegates
     "The offenders of the CallRealization law: authored cross-module delegations not realized by any actual extracted call between the corresponding modules, as a set of source-operation names. CozoScript over the mirror."
     {:signature [:=> [:catn [:db db/CozoDb]] :any]
+     :delegates [db/q]})
+  (Operation unfaithful-calls
+    "The offenders of the Fidelity law: extracted cross-module calls between modelled faculties not covered by an intended delegation, as a set of extracted caller-operation names. CozoScript over the mirror."
+    {:signature [:=> [:catn [:db db/CozoDb]] :any]
      :delegates [db/q]}))
