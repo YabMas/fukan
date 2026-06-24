@@ -5,9 +5,9 @@
    op pairing `op-twin` lives in `module`, referenced here via datalog injection; the Clojure
    effect-grounding extraction is added with the extractor.)"
   (:require [clojure.set :as set]
-            [datascript.core :as d]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.substrate :as sub]))
+            [fukan.canvas.core.substrate :as sub]
+            [fukan.cozo.query :as cq]))
 
 (defn ^:export read-effect
   "Expand an effect literal — a keyword like `:io` — into Effect clauses, so
@@ -39,7 +39,7 @@
    `:calls` ∪ `:performs` (direct effects included). A pure read; the depth-of-the-call-graph truth of
    what this op touches. Empty ⇔ the op is effect-free transitively."
   [db op-eid]
-  (set (d/q '[:find [?en ...] :in $ % ?op :where (reaches-effect ?op ?en)]
+  (set (cq/q '[:find [?en ...] :in $ % ?op :where (reaches-effect ?op ?en)]
             db reaches-effect-rules op-eid)))
 
 (defn direct-throwers
@@ -47,7 +47,7 @@
    Most are ① parse-edge input-validators (legitimate); some are ② internal-invariant assertions
    (validation past the parse line). A pure read."
   [db]
-  (set (d/q '[:find [?on ...]
+  (set (cq/q '[:find [?on ...]
               :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                      [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name "throws"]]
             db)))
@@ -58,7 +58,7 @@
    (making internal-invariant throwers total) would collapse. A pure read over the reified code graph."
   [db]
   (let [direct   (direct-throwers db)
-        reachers (set (d/q '[:find [?on ...] :in $ %
+        reachers (set (cq/q '[:find [?on ...] :in $ %
                              :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                                     (reaches-effect ?o "throws")]
                            db reaches-effect-rules))]
@@ -105,10 +105,10 @@
   ;; Bind the twin (?e) through the SAME `op-twin` rule the law uses, so the reading agrees with the
   ;; law by construction — a module-BLIND `[?e :entity/name ?on]` twin lookup would grab a same-named op
   ;; in the wrong module on a name collision, fabricating a drift the precise law never sees.
-  (let [pairs    (d/q '[:find ?on ?o ?e :in $ %
+  (let [pairs    (cq/q '[:find ?on ?o ?e :in $ %
                         :where (op-twin ?o ?e) [?o :entity/name ?on]]
                        db (s/vocab-rules))
-        declared (fn [oeid] (set (d/q '[:find [?en ...] :in $ ?o :where [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]] db oeid)))]
+        declared (fn [oeid] (set (cq/q '[:find [?en ...] :in $ ?o :where [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]] db oeid)))]
     (reduce (fn [acc [on oeid teid]]
               (let [dec        (declared oeid)
                     rea        (reached-effects db teid)

@@ -233,7 +233,7 @@
    TRANSITIVE effect profile. :undeclared (code reaches it, design silent — the enforced law direction)
    is listed first; then :phantom (declared, not reached — soft: taxonomy gap or stale intent)."
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (let [drift (code-effect/effect-drift m)
           u (filter (fn [[_ d]] (seq (:undeclared d))) drift)
           p (filter (fn [[_ d]] (seq (:phantom d))) drift)]
@@ -247,7 +247,7 @@
   "Partiality spread: ops that THROW directly (mostly ① parse-edge validators) vs ops that reach :throws
    only TRANSITIVELY via a call (the ② propagation surface that containment would collapse)."
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (let [{:keys [direct transitive-only]} (code-effect/throw-spread m)]
       (println "DIRECT throwers (" (count direct) "):" (str/join " " (sort direct)))
       (println "\nTRANSITIVE-only (" (count transitive-only) "):" (str/join " " (sort transitive-only))))
