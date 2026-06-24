@@ -5,6 +5,7 @@
    Module's own CallRealization/Fidelity laws and their readers."
   (:require [clojure.string :as str]
             [datascript.core :as d]
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.rules :as rules]
@@ -54,9 +55,9 @@
   "The complete module→module dependency graph (calls ∪ data-adoption) as a set of
    [caller-name callee-name] pairs. A pure read over the reified code graph."
   [db]
-  (set (d/q '[:find ?mn ?nn :in $ %
-              :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
-            db module-depends-rules)))
+  (set (cq/q '[:find ?mn ?nn :in $ %
+               :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
+             db module-depends-rules)))
 
 ;; ── the cross-element correspondence bridge + op pairing ──────────────────────
 

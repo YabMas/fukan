@@ -149,10 +149,10 @@
 
 (defn deps
   "Print fukan's complete module→module dependency graph (calls ∪ data-adoption), one edge per line —
-   the objective backbone to reason a clean organization against."
+   the objective backbone to reason a clean organization against. (Reads the Cozo model — migrated.)"
   []
-  (if-let [m (infra-model/get-model)]
-    (doseq [[a b] (sort (code-module/module-dependencies m))]
+  (if-let [c (infra-model/get-cozo)]
+    (doseq [[a b] (sort (code-module/module-dependencies c))]
       (println (format "%-24s ⟶ %s" a b)))
     (println "No model loaded yet. Use (go) first.")))
 
