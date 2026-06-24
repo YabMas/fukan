@@ -118,10 +118,10 @@
    model. A query, not a law — unmodelled code is a coverage signal, not a violation (you
    don't model every function). Twin lookup is the injected `op-twin` rule."
   [db]
-  (->> (d/q '[:find ?on :in $ %
-              :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
-                     (not-join [?o] (op-twin ?s ?o))]
-            db (s/vocab-rules))
+  (->> (cq/q '[:find ?on :in $ %
+               :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+                      (not-join [?o] (op-twin ?s ?o))]
+             db (s/vocab-rules))
        (map first) set))
 
 (defn uncovered-public-operations

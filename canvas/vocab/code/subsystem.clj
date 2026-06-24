@@ -4,7 +4,7 @@
    (no-mutual-dependency + `:may-depend` conformance / acyclicity / membership) and the
    `latent-boundaries` interface-segregation reading. Strength-2 design opinions, beyond consistency."
   (:require [clojure.set :as set]
-            [datascript.core :as d]
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :refer [defstructure]]
             [canvas.vocab.code.module :refer [Module]]))
 
@@ -145,14 +145,14 @@
    `{module-name [{:ops [name…] :clientele [module-name…]} …]}`; empty ⇔ no module's public surface
    has split into disjoint clienteles."
   [db]
-  (let [pub      (d/q '[:find ?o ?on ?km :in $ %
+  (let [pub      (cq/q '[:find ?o ?on ?km :in $ %
                         :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]
                                (not [?o :val/private true])
                                [?o :entity/name ?on] (in-module ?o ?km)]
                       db in-module-rules)
         owner    (into {} (map (fn [[o _ km]] [o km])) pub)        ; public op-eid → owning module name
         name-of  (into {} (map (fn [[o on _]] [o on])) pub)        ; public op-eid → op name
-        callcons (d/q '[:find ?to ?fkm :in $ %
+        callcons (cq/q '[:find ?to ?fkm :in $ %
                         :where [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]
                                (in-module ?from ?fkm)]
                       db in-module-rules)

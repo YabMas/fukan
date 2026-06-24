@@ -161,8 +161,8 @@
   "Print fukan's modelled DISPATCH POINTS (Operations with a :dispatches-to fan-out) and the handlers
    each routes to — the explicit indirection seams, derived live from the held model."
   []
-  (if-let [m (infra-model/get-model)]
-    (doseq [[dpn hs] (->> (d/q '[:find ?dpn ?hn
+  (if-let [m (infra-model/get-cozo)]
+    (doseq [[dpn hs] (->> (cq/q '[:find ?dpn ?hn
                                  :where [?r :rel/kind :dispatches-to] [?r :rel/from ?dp] [?r :rel/to ?h]
                                         (not [?dp :val/extracted true])
                                         [?dp :entity/name ?dpn] [?h :entity/name ?hn]]
@@ -179,7 +179,7 @@
    the crystallized seam; you decide whether it deserves a formal split), count-invariant — a clientele
    can grow (a 2nd dialect) and the seam stays visible. Empty ⇔ no module's public surface has split."
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (let [lb (la/latent-boundaries m)]
       (if (empty? lb)
         (println "No latent boundaries — no module's public surface splits into disjoint clienteles.")
@@ -196,8 +196,8 @@
    for each module's region: a consequential effect in a meant-to-be-pure region is the
    design-attention signal. (The `purity` lens's read, printed by region.)"
   []
-  (if-let [m (infra-model/get-model)]
-    (let [rows (d/q '[:find ?mn ?on ?en
+  (if-let [m (infra-model/get-cozo)]
+    (let [rows (cq/q '[:find ?mn ?on ?en
                       :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                              [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]
                              [(not= ?en "throws")]

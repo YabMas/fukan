@@ -4,7 +4,6 @@
    pairing built on it (used by the operation/effect/fukan laws via datalog injection), plus
    Module's own CallRealization/Fidelity laws and their readers."
   (:require [clojure.string :as str]
-            [datascript.core :as d]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
@@ -177,12 +176,12 @@
    declared. Computed by set-difference in Clojure (not `not-join`) to sidestep the empty-relation
    gotcha. A signal, not a violation: you do not model every call."
   [db]
-  (let [intent (d/q '[:find ?cm1 ?cm2 :in $ %
+  (let [intent (cq/q '[:find ?cm1 ?cm2 :in $ %
                       :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
                              (not [?o1 :val/extracted true])
                              (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]]
                     db rules/substrate-rules)
-        actual (d/q '[:find ?km1 ?km2 :in $ %
+        actual (cq/q '[:find ?km1 ?km2 :in $ %
                       :where [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
                              [?e1 :val/extracted true] [?e2 :val/extracted true]
                              (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]]
@@ -220,16 +219,16 @@
    (by name + `module-corresponds?`), so removing a seam's `:dispatches-to` makes its consumers'
    delegations unreachable and surfaces them here. Asserted empty by the regression suite."
   [db]
-  (let [ext-ops     (d/q '[:find ?e ?en ?km :in $ %
+  (let [ext-ops     (cq/q '[:find ?e ?en ?km :in $ %
                            :where [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]
                                   [?e :entity/name ?en] (in-module ?e ?km)]
                          db rules/substrate-rules)
         ext-by-name (group-by second ext-ops)
         twin        (fn [on cm] (some (fn [[e _ km]] (when (module-corresponds? cm km) e))
                                       (get ext-by-name on)))
-        calls       (d/q '[:find ?from ?to
+        calls       (cq/q '[:find ?from ?to
                            :where [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]] db)
-        disp        (d/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
+        disp        (cq/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
                            :where [?dr :rel/kind :dispatches-to] [?dr :rel/from ?a1] [?dr :rel/to ?a2]
                                   (not [?a1 :val/extracted true])
                                   [?a1 :entity/name ?on1] (in-module ?a1 ?cm1)
@@ -250,7 +249,7 @@
                               (seen n)     (recur stack seen)
                               :else        (recur (into stack (get adj n)) (conj seen n))))
                           false)))
-        delegations (d/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
+        delegations (cq/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
                            :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
                                   (not [?o1 :val/extracted true])
                                   [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
