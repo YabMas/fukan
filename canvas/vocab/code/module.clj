@@ -207,59 +207,49 @@
          (map #(:entity/name (cq/entity db %)))
          set)))
 
+(def ^:private unrealized-dispatch-rules
+  "Reachability over the EXTRACTED graph, on-graph. `op-ext-twin` pairs an authored op with its
+   extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is the call graph
+   extended by modelled dispatch: a `:calls` edge, OR a `:dispatches-to` edge lifted onto the twins
+   of its authored endpoints. `ext-reaches` is its transitive closure — a rule-calls-rule recursion
+   the kernel now allows; the query negates it under stratified negation."
+  (into rules/substrate-rules
+        '[[(op-ext-twin ?a ?e)
+           [?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true])
+           [?a :entity/name ?n] (in-module ?a ?am)
+           [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]
+           [?e :entity/name ?n] (in-module ?e ?em)
+           [(canvas.vocab.code.module/module-corresponds? ?am ?em)]]
+          [(ext-edge ?from ?to) [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]]
+          [(ext-edge ?e1 ?e2)
+           [?dr :rel/kind :dispatches-to] [?dr :rel/from ?a1] [?dr :rel/to ?a2]
+           (op-ext-twin ?a1 ?e1) (op-ext-twin ?a2 ?e2)]
+          [(ext-reaches ?a ?b) (ext-edge ?a ?b)]
+          [(ext-reaches ?a ?b) (ext-edge ?a ?mid) (ext-reaches ?mid ?b)]]))
+
 (defn unrealized-dispatch
   "Authored cross-module delegations NOT realized op-level by the actual code — neither by a direct
    call nor by reaching the target THROUGH the code's call graph extended by modelled dispatch points
    (`:dispatches-to`). A set of authored source-op names; empty ⇔ every intended dependency is backed
    by a real (possibly dispatch-mediated, possibly multi-hop) call path.
 
-   A QUERY, not a law (like `uncovered-calls`): it walks reachability in Clojure (a straightforward
-   BFS). It is nonetheless a genuine CONSUMER
-   of `:dispatches-to` — a modelled dispatch point's fan-out is lifted onto the extracted call graph
-   (by name + `module-corresponds?`), so removing a seam's `:dispatches-to` makes its consumers'
-   delegations unreachable and surfaces them here. Asserted empty by the regression suite."
+   A QUERY, not a law (like `uncovered-calls`): reachability is on-graph datalog (`ext-reaches`, the
+   transitive closure of `:calls` ∪ lifted `:dispatches-to`, negated under stratification) — no Clojure
+   walk. It is nonetheless a genuine CONSUMER of `:dispatches-to`: a modelled dispatch point's fan-out is
+   lifted onto the extracted call graph (by name + `module-corresponds?`), so removing a seam's
+   `:dispatches-to` makes its consumers' delegations unreachable and surfaces them here. An offender's
+   delegation has BOTH endpoints twinned in code yet no realized path between them; a delegation whose
+   source or target has no extracted twin is out of scope. Asserted empty by the regression suite."
   [db]
-  (let [ext-ops     (cq/q '[:find ?e ?en ?km :in $ %
-                           :where [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]
-                                  [?e :entity/name ?en] (in-module ?e ?km)]
-                         db rules/substrate-rules)
-        ext-by-name (group-by second ext-ops)
-        twin        (fn [on cm] (some (fn [[e _ km]] (when (module-corresponds? cm km) e))
-                                      (get ext-by-name on)))
-        calls       (cq/q '[:find ?from ?to
-                           :where [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]] db)
-        disp        (cq/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
-                           :where [?dr :rel/kind :dispatches-to] [?dr :rel/from ?a1] [?dr :rel/to ?a2]
-                                  (not [?a1 :val/extracted true])
-                                  [?a1 :entity/name ?on1] (in-module ?a1 ?cm1)
-                                  [?a2 :entity/name ?on2] (in-module ?a2 ?cm2)]
-                         db rules/substrate-rules)
-        disp-edges  (keep (fn [[on1 cm1 on2 cm2]]
-                            (let [e1 (twin on1 cm1) e2 (twin on2 cm2)]
-                              (when (and e1 e2) [e1 e2])))
-                          disp)
-        adj         (reduce (fn [m [a b]] (update m a (fnil conj #{}) b)) {}
-                            (concat calls disp-edges))
-        reaches?    (fn [start target]
-                      (loop [stack [start] seen #{}]
-                        (if-let [n (peek stack)]
-                          (let [stack (pop stack)]
-                            (cond
-                              (= n target) true
-                              (seen n)     (recur stack seen)
-                              :else        (recur (into stack (get adj n)) (conj seen n))))
-                          false)))
-        delegations (cq/q '[:find ?on1 ?cm1 ?on2 ?cm2 :in $ %
-                           :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
-                                  (not [?o1 :val/extracted true])
-                                  [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
-                                  [?o2 :entity/name ?on2] (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]]
-                         db rules/substrate-rules)]
-    (->> delegations
-         (keep (fn [[on1 cm1 on2 cm2]]
-                 (let [e1 (twin on1 cm1) e2 (twin on2 cm2)]
-                   (when (and e1 e2 (not (reaches? e1 e2))) on1))))
-         set)))
+  (->> (cq/q '[:find ?on1 :in $ %
+               :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+                      (not [?o1 :val/extracted true])
+                      [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
+                      (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
+                      (op-ext-twin ?o1 ?e1) (op-ext-twin ?o2 ?e2)
+                      (not (ext-reaches ?e1 ?e2))]
+             db unrealized-dispatch-rules)
+       (map first) set))
 
 ;; ── Clojure extraction (ns → Module) ─────────────────────────────────────────
 

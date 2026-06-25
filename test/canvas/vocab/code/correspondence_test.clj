@@ -215,8 +215,12 @@
                 {:rel/id "B|exposes|op-b" :rel/from -2 :rel/kind :exposes :rel/to -4}
                 {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                 {:rel/id "dp|dispatches-to|h"  :rel/from -9 :rel/kind :dispatches-to :rel/to -10}
-                {:db/id -5 :structure/of :canvas.vocab.code.module/Module :entity/id "A" :entity/name "A" :val/extracted true}
-                {:db/id -6 :structure/of :canvas.vocab.code.module/Module :entity/id "B" :entity/name "B" :val/extracted true}
+                ;; the extracted (code) modules are SEPARATE nodes from the design modules — distinct
+                ;; :entity/id so they don't merge — exactly as the real build keeps design ns and code ns
+                ;; apart, bridged by `module-corresponds?` (same name here). The merge would make a single
+                ;; node both design+extracted, which never happens in reality.
+                {:db/id -5 :structure/of :canvas.vocab.code.module/Module :entity/id "Ax" :entity/name "A" :val/extracted true}
+                {:db/id -6 :structure/of :canvas.vocab.code.module/Module :entity/id "Bx" :entity/name "B" :val/extracted true}
                 {:db/id -7  :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-a" :val/extracted true}
                 {:db/id -8  :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-b" :val/extracted true}
                 {:db/id -11 :structure/of :canvas.vocab.code.operation/Operation :entity/name "dp"   :val/extracted true}
