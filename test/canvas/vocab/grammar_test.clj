@@ -118,11 +118,8 @@
 
 (deftest instances-join-their-structure
   (testing "an instance joins its reified grammar Structure by tag"
-    ;; NB `g/rules`' of-structure rule is ds-shaped — it binds via (clojure.core/str ?tag) and the
-    ;; keyword/string colon, neither of which the Cozo compiler expresses; it has no production cozo
-    ;; consumer (latent vocab — a Phase-8 cleanup item). The JOIN it encodes is asserted directly:
-    ;; an instance's :structure/of tag (mirror-stringified, no colon) names the Structure whose
-    ;; :val/tag is its colon-prefixed form.
+    ;; The instance→Structure JOIN, asserted directly: an instance's :structure/of tag
+    ;; (mirror-stringified, no colon) names the Structure whose :val/tag is its colon-prefixed form.
     (let [db   (reflected)
           itag (ffirst (cq/q '[:find ?t :where [?i :entity/name "n"] [?i :structure/of ?t]] db))]
       (is (= "Node"

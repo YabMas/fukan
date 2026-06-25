@@ -55,7 +55,8 @@
 (defstructure Structure
   "A registered defstructure, reified into the graph it defines. Slots are
    `:slot/<card>` edges (see the ns doc), not declared here; `:tag` is the
-   instance-join key (`(of-structure ?i ?s)` in `rules`); a realized concept
+   instance-join key (an instance's mirror-stringified `:structure/of` names the
+   Structure whose `:val/tag` is its colon-prefixed form); a realized concept
    carries its membership datalog as the `:form` payload of `:realizes`."
   {:tag      :string
    :value    [:? :boolean]
@@ -79,15 +80,6 @@
   "One grammar namespace, reified — the Structures it defines. (Named Vocabulary,
    not Grammar: the BNF demo owns the `Grammar` tag.)"
   {:child [:* Structure]})
-
-(def rules
-  "Extra datalog rules over the reified grammar, for queries that join the two
-   altitudes: `(of-structure ?i ?s)` binds an instance to its Structure node."
-  '[[(of-structure ?i ?s)
-     [?i :structure/of ?t]
-     [?s :structure/of :canvas.vocab.grammar/Structure]
-     [?s :val/tag ?ts]
-     [(clojure.core/str ?t) ?ts]]])
 
 ;; ── the reflector ─────────────────────────────────────────────────────────────
 
