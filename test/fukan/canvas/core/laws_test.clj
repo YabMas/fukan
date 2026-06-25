@@ -1,7 +1,7 @@
 (ns fukan.canvas.core.laws-test
-  "Law combinators: each shape's positive + negative case, including the case the
-   combinators exist to encapsulate — negation over a WHOLLY-EMPTY relation (the
-   datascript inline-not-join gotcha), which must still fire."
+  "Law combinators: each shape's positive + negative case, including negation over a
+   WHOLLY-EMPTY relation — the case datascript's inline not-join got wrong (forcing the
+   old hand-rolled negation rules) and Cozo's stratified not-join handles directly."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             ;; loaded for its side-effect: registers the Cozo check engine so s/check dispatches to it

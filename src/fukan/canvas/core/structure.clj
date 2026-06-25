@@ -401,9 +401,10 @@
 
 ;; ── law combinators: the recurring law shapes, datalog-correct by construction ─
 ;; A combinator names a law SHAPE at domain altitude and expands to the datalog —
-;; with negation routed through RULES, never inline not-join, so datascript's
-;; wholly-empty-relation gotcha is encapsulated here, once. The authored form is
-;; kept on the law as :src (the print-dual renders it back).
+;; the negation is a direct `not-join`, which Cozo's stratified negation evaluates
+;; correctly (the datascript wholly-empty-relation gotcha that once forced hand-rolled
+;; negation rules is gone). The authored form is kept on the law as :src (the
+;; print-dual renders it back).
 
 (defn- when-clauses
   "{:polarity \"code-up\"} → scalar-equality clauses on `var`."
@@ -434,30 +435,29 @@
             {whenm :when scope :scope} (kvs opts)]
         (merged scope
                 {:offenders '[?x]
-                 :rules [[(list 'law-has '?x) ['?r :rel/from '?x] ['?r :rel/kind rel]]]
-                 :where (conj (when-clauses '?x whenm) '(not (law-has ?x)))}))
+                 :where (conj (when-clauses '?x whenm)
+                              (list 'not-join '[?x] ['?r :rel/from '?x] ['?r :rel/kind rel]))}))
       has-any
       (merged nil
               {:offenders '[?x]
-               :rules (mapv (fn [rel] [(list 'law-has '?x) ['?r :rel/from '?x] ['?r :rel/kind rel]])
-                            args)
-               :where ['(not (law-has ?x))]})
+               ;; ?x has NONE of the rels = no outgoing edge for each, conjoined
+               :where (mapv (fn [rel] (list 'not-join '[?x] ['?r :rel/from '?x] ['?r :rel/kind rel]))
+                            args)})
       matched-by
       (let [[rel & opts] args
             {whenm :when scope :scope from :from} (kvs opts)]
         (merged scope
                 {:offenders '[?x]
-                 :rules [(vec (concat [(list 'law-matched '?x)]
-                                      (when from [['?c :structure/of (resolve-struct-tag from)]])
-                                      [['?r :rel/from '?c] ['?r :rel/kind rel] ['?r :rel/to '?x]]))]
-                 :where (conj (when-clauses '?x whenm) '(not (law-matched ?x)))}))
+                 :where (conj (when-clauses '?x whenm)
+                              (apply list 'not-join '[?x]
+                                     (concat (when from [['?c :structure/of (resolve-struct-tag from)]])
+                                             [['?r :rel/from '?c] ['?r :rel/kind rel] ['?r :rel/to '?x]])))}))
       target
       (let [[rel whenm] args]
         (merged nil
                 {:offenders '[?x]
-                 :rules [(vec (cons (list 'law-target-ok '?t) (when-clauses '?t whenm)))]
                  :where [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
-                         '(not (law-target-ok ?t))]}))
+                         (apply list 'not-join '[?t] (when-clauses '?t whenm))]}))
       at-most-one
       (let [[rel] args]
         (merged nil

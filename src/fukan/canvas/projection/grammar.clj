@@ -184,9 +184,8 @@
    reading to reason with, not a gate — law-hosts and not-yet-spoken grammar are
    legitimate; the human interprets.)"
   [db]
-  ;; set-filtering, not datalog negation — inline (not …) over a pattern with NO
-  ;; matches anywhere (e.g. a model with no realized-as concepts) mis-fires in
-  ;; datascript (the wholly-empty-relation gotcha the law combinators encapsulate)
+  ;; set-filtering in Clojure (this is a reader, not a law) — a plain membership test over
+  ;; the in-use tags, no datalog negation needed for the no-realized-as case.
   ;; `:structure/of` tags are KEYWORDS the mirror stringifies WITHOUT the colon, but `:val/tag` is
   ;; stored WITH it — normalize the in-use tags through `keyword` so the membership test lines up.
   (let [in-use   (into #{} (map (comp str keyword first))
