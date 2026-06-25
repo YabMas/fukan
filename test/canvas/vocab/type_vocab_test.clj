@@ -1,7 +1,9 @@
 (ns canvas.vocab.type-vocab-test
   (:require [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
+            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
+            [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; SchemaField/SchemaChoice are referred (though only Schema is called
             ;; directly) so clj-kondo resolves their instance-macro hooks.
@@ -35,7 +37,7 @@
 (SchemaHolder rec {:schema [:map [:a [:vector file-k]]]}) ; map of field a: vector-of-ref(File)
 
 (defn- build []
-  (a/assemble-vars [#'port #'email #'tags #'addr #'color #'sock #'ref-k #'combo #'tup
+  (build/vars->cozo [#'port #'email #'tags #'addr #'color #'sock #'ref-k #'combo #'tup
                     #'file-k #'lst #'rec]))
 
 ;; A ref Schema built INLINE (an `(Schema …)` seq bypasses the reader, so no :to
@@ -49,24 +51,24 @@
   (let [db (build)]
     (testing "int min/max land as queryable leaves"
       (is (= #{[1 65535]}
-             (set (d/q '[:find ?min ?max :where
+             (set (cq/q '[:find ?min ?max :where
                          [?s :val/kind "int"] [?s :val/min ?min] [?s :val/max ?max]]
                        db)))))
     (testing "the > 60000 query from the spec works"
       (is (= #{[65535]}
-             (set (d/q '[:find ?max :where
+             (set (cq/q '[:find ?max :where
                          [?s :val/kind "int"] [?s :val/max ?max] [(> ?max 60000)]]
                        db)))))
     (testing "regex is a leaf"
       (is (= #{["@"]}
-             (set (d/q '[:find ?re :where [?s :val/kind "string"] [?s :val/regex ?re]] db)))))))
+             (set (cq/q '[:find ?re :where [?s :val/kind "string"] [?s :val/regex ?re]] db)))))))
 
 (deftest collection-element-is-a-ref
   ;; scoped through the `tags` holder so the other [:vector …] fixtures (which also
   ;; produce `vector` schemas) don't pollute the assertion.
   (let [db (build)]
     (is (= #{["keyword"]}
-           (set (d/q '[:find ?ek :where
+           (set (cq/q '[:find ?ek :where
                        [?h :entity/name "tags"]
                        [?hr :rel/from ?h] [?hr :rel/kind :schema] [?hr :rel/to ?s]
                        [?s :val/kind "vector"]
@@ -78,7 +80,7 @@
   (let [db (build)]
     (testing "every field key on the addr map (scoped through the `addr` holder)"
       (is (= #{["street"] ["zip"]}
-             (set (d/q '[:find ?k :where
+             (set (cq/q '[:find ?k :where
                          [?h :entity/name "addr"]
                          [?hr :rel/from ?h] [?hr :rel/kind :schema] [?hr :rel/to ?s]
                          [?s :val/kind "map"]
@@ -87,14 +89,14 @@
                        db)))))
     (testing "the optional flag is on the field"
       (is (= #{["zip" true]}
-             (set (d/q '[:find ?k ?opt :where
+             (set (cq/q '[:find ?k ?opt :where
                          [?f :val/key ?k] [?f :val/optional ?opt] [(= ?opt true)]]
                        db)))))))
 
 (deftest enum-choices-are-queryable
   (let [db (build)]
     (is (= #{["red"] ["green"] ["blue"]}
-           (set (d/q '[:find ?c :where
+           (set (cq/q '[:find ?c :where
                        [?s :val/kind "enum"]
                        [?r :rel/from ?s] [?r :rel/kind :choice] [?r :rel/to ?ch]
                        [?ch :val/value ?c]]
@@ -104,7 +106,7 @@
   ;; a bare symbol → a ref schema whose :names edge resolves to the named Kind
   (let [db (build)]
     (is (contains?
-          (set (d/q '[:find ?n :where
+          (set (cq/q '[:find ?n :where
                       [?s :val/kind "ref"]
                       [?r :rel/from ?s] [?r :rel/kind :names] [?r :rel/to ?k]
                       [?k :entity/name ?n]]
@@ -115,7 +117,7 @@
   ;; [:vector File] → a `vector` schema whose single :of child is a ref naming File
   (let [db (build)]
     (is (= #{["File"]}
-           (set (d/q '[:find ?n :where
+           (set (cq/q '[:find ?n :where
                        [?v :val/kind "vector"]
                        [?r :rel/from ?v] [?r :rel/kind :of] [?r :rel/to ?e]
                        [?e :val/kind "ref"]
@@ -127,7 +129,7 @@
   ;; [:map [:a [:vector File]]] → a `map` schema with a required field a: vector-of-ref(File)
   (let [db (build)]
     (is (= #{["a" false "File"]}
-           (set (d/q '[:find ?key ?opt ?n :where
+           (set (cq/q '[:find ?key ?opt ?n :where
                        [?m :val/kind "map"]
                        [?fr :rel/from ?m] [?fr :rel/kind :field] [?fr :rel/to ?f]
                        [?f :val/key ?key] [?f :val/optional ?opt]
@@ -143,7 +145,7 @@
   (let [db (build)]
     (is (= #{"int" "string"}
            (set (map first
-                     (d/q '[:find ?k :where
+                     (cq/q '[:find ?k :where
                             [?s :val/kind "or"]
                             [?r :rel/from ?s] [?r :rel/kind :of] [?r :rel/to ?alt]
                             [?alt :val/kind ?k]]
@@ -153,7 +155,7 @@
   ;; [:tuple :int :int :string] — order must be preserved (:of is ordered) AND the
   ;; repeated :int must NOT content-collapse: there must be 3 children, not 2.
   (let [db   (build)
-        rows (d/q '[:find ?ord ?k :where
+        rows (cq/q '[:find ?ord ?k :where
                     [?t :val/kind "tuple"]
                     [?r :rel/from ?t] [?r :rel/kind :of] [?r :rel/to ?c]
                     [?r :rel/order ?ord] [?c :val/kind ?k]]
@@ -163,7 +165,7 @@
 (deftest ref-without-target-violates-law
   ;; An inline (Schema (kind "ref")) bypasses the reader, so no :to is produced;
   ;; the "ref must name a target" law must fire.
-  (let [db (a/assemble-vars [#'bad])]
+  (let [db (build/vars->cozo [#'bad])]
     (is (seq (s/check db)) "ref schema lacking :to is caught by check")))
 
 (deftest non-malli-shorthands-are-rejected

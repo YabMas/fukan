@@ -1,7 +1,10 @@
 (ns fukan.canvas.core.value-authoring-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+  (:require [clojure.edn :as edn]
+            [clojure.test :refer [deftest is testing]]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
+            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
+            [fukan.cozo.law]
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.substrate :as sub]))
 
@@ -74,8 +77,8 @@
   (is (= [#'t3-x #'t3-y] (:targets (first (:clauses op-bare)))))
   ;; assembled: each reified :rhs relation carries :rel/order (0,1 in authoring
   ;; order) AND the matching :rel/label
-  (let [db   (a/assemble-vars [#'op-lbl #'t3-x #'t3-y])
-        rels (->> (d/q '[:find ?ord ?lbl ?tn :in $ ?from
+  (let [db   (build/vars->cozo [#'op-lbl #'t3-x #'t3-y])
+        rels (->> (cq/q '[:find ?ord ?lbl ?tn :in $ ?from
                          :where [?r :rel/from ?from] [?r :rel/kind :rhs]
                                 [?r :rel/order ?ord] [?r :rel/label ?lbl]
                                 [?r :rel/to ?to] [?to :entity/name ?tn]]
@@ -83,14 +86,14 @@
                   (sort-by first))]
     (is (= [[0 "a" "x"] [1 "b" "y"]] rels)))
   ;; bare sequence assembles with :rel/order but no :rel/label
-  (let [db (a/assemble-vars [#'op-bare #'t3-x #'t3-y])
-        rels (->> (d/q '[:find ?ord ?tn :in $ ?from
+  (let [db (build/vars->cozo [#'op-bare #'t3-x #'t3-y])
+        rels (->> (cq/q '[:find ?ord ?tn :in $ ?from
                          :where [?r :rel/from ?from] [?r :rel/kind :rhs]
                                 [?r :rel/order ?ord]
                                 [?r :rel/to ?to] [?to :entity/name ?tn]]
                        db [:entity/id (sub/var-id #'op-bare)])
                   (sort-by first))
-        labels (d/q '[:find ?lbl :in $ ?from
+        labels (cq/q '[:find ?lbl :in $ ?from
                       :where [?r :rel/from ?from] [?r :rel/kind :rhs] [?r :rel/label ?lbl]]
                     db [:entity/id (sub/var-id #'op-bare)])]
     (is (= [[0 "x"] [1 "y"]] rels))
@@ -104,12 +107,12 @@
 
 (deftest entity-without-a-name-takes-the-vars-simple-name
   (is (nil? (:name nm-derived)) "the InstanceValue carries no name until assembly")
-  (let [db (a/assemble-vars [#'nm-derived #'nm-override])]
+  (let [db (build/vars->cozo [#'nm-derived #'nm-override])]
     (is (= "nm-derived"
-           (:entity/name (d/entity db [:entity/id (sub/var-id #'nm-derived)])))
+           (:entity/name (cq/entity db [:entity/id (sub/var-id #'nm-derived)])))
         "the node is named after its binding var")
     (is (= "explicit"
-           (:entity/name (d/entity db [:entity/id (sub/var-id #'nm-override)])))
+           (:entity/name (cq/entity db [:entity/id (sub/var-id #'nm-override)])))
         "^{:name \"…\"} meta overrides — for names the var can't carry / renamed vars")))
 
 ;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
@@ -219,10 +222,10 @@
 (Grp ^{:name "g"} grp {:child [wa wb]})
 
 (deftest wildcard-slot-accepts-any-type
-  (let [db (a/assemble-vars [#'wa #'wb #'grp])]
+  (let [db (build/vars->cozo [#'wa #'wb #'grp])]
     (is (empty? (s/check db))
         "no target-type violation when child members are of heterogeneous structures")
-    (is (= 2 (count (d/q '[:find ?e
+    (is (= 2 (count (cq/q '[:find ?e
                             :where [?r :rel/kind :child]
                                    [?r :rel/from ?g] [?g :entity/name "g"]
                                    [?r :rel/to ?e]]
@@ -258,18 +261,18 @@
     (is (seq? pred) "a predicate payload is stored as a form")
     (is (= 'fn (first pred)) "it is a (fn …) form, not an evaluated function"))
   ;; and it survives assembly into the db unchanged
-  (let [db (a/assemble-vars [#'t-focus])]
+  (let [db (build/vars->cozo [#'t-focus])]
     (is (= '[[?n :structure/of _]]
-           (:val/query (d/entity db [:entity/id (sub/var-id #'t-focus)])))
-        "the query form round-trips through assembly")))
+           (edn/read-string (:val/query (cq/entity db [:entity/id (sub/var-id #'t-focus)]))))
+        "the query form round-trips through assembly (a compound payload is pr-str'd into the Cozo mirror, read back)")))
 
 ;; ── Change 3: generic in-module rule ─────────────────────────────────────────
 ;; (in-module ?e ?mname) now resolves via :child relations, not :Grouping tag.
 ;; The Grp + wa + wb assembled above: grp is named "g" and has :child rels to wa and wb.
 
 (deftest in-module-via-child-relation
-  (let [db      (a/assemble-vars [#'wa #'wb #'grp])
-        members (d/q '[:find [?e ...]
+  (let [db      (build/vars->cozo [#'wa #'wb #'grp])
+        members (cq/q '[:find [?e ...]
                         :in $ %
                         :where (in-module ?e "g")]
                      db (s/vocab-rules))]
