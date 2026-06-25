@@ -10,26 +10,32 @@
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.typing :as typing]
+            [canvas.architecture.cozo.query :as query]
             [canvas.architecture.projection.materialize :as mat]))
 
 (Module projection-grammar
-  "Render the reified grammar back out: forms, the primer, and the grammar-drift reading."
+  "Render the reified grammar back out: forms, the primer, and the grammar-drift reading.
+   Reads through the kernel Cozo query layer (`query/q`), so its renders inherit its :throws surface."
   (Kind Form)              ; a defstructure data form (the print-dual's faithful render) — opaque
   (Kind Primer :string)    ; the reference-card string
   (Kind VocabName :string) ; a grammar namespace name
   (Operation structure-form
     "A reified Structure rendered back as its map-form defstructure (the print-dual)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Form]
-     :delegates [typing/render-type]})          ; renders refined slot targets through the type plug-point
+     :performs  [:throws]                       ; via the query compiler / render-type
+     :delegates [typing/render-type query/q query/entity]})   ; renders refined slot targets + reads the graph
   (Operation vocabulary-primer
     "One vocabulary rendered as its defstructure forms."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName]] Primer]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName]] Primer]
+     :performs  [:throws]})
   (Operation grammar-primer
     "Every vocabulary in the model — the live language reference, derived not maintained."
-    {:signature [:=> [:catn [:db substrate/StructureDb]] Primer]})
+    {:signature [:=> [:catn [:db substrate/StructureDb]] Primer]
+     :performs  [:throws]})
   (Operation unused-structures
     "The grammar-drift reading: reified Structures no instance inhabits — dead
      vocabulary. Excludes the Any wildcard and derivation-inhabited concepts:
      realized-as, and facets reached via includes (found by the loop's first
      run — Connected is spoken, just never directly). Sorted structure names."
-    {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector :string]]}))
+    {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector :string]]
+     :performs  [:throws]}))

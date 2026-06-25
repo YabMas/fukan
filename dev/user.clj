@@ -73,11 +73,11 @@
   "Print the GRAMMAR PRIMER — every vocabulary in the held model rendered back as
    its map-form defstructures, live from the reified grammar (the print-dual).
    Pass a namespace string for one vocabulary: (grammar \"lib.code\")."
-  ([] (if-let [m (infra-model/get-model)]
+  ([] (if-let [m (infra-model/get-cozo)]
         (println (gram/grammar-primer m))
         (println "No model loaded yet. Use (go) first.")))
   ([vocab-name]
-   (if-let [m (infra-model/get-model)]
+   (if-let [m (infra-model/get-cozo)]
      (println (gram/vocabulary-primer m vocab-name))
      (println "No model loaded yet. Use (go) first."))))
 

@@ -15,12 +15,25 @@
    Pure projection: model db → form / string."
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
-            [datascript.core :as d]
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.typing :as typing]))
 
 ;; ── parts: one reified Structure → its authoring ingredients ─────────────────
 
 (def ^:private malli->scalar {:string :string, :int :int, :boolean :boolean})
+
+(defn- ord
+  "A `:rel/order` cell as a long for sorting — `cq/q` returns strings over Cozo, ints over datascript."
+  [o] (cond (nil? o) -1, (string? o) (Long/parseLong o), :else (long o)))
+
+(defn- payload-form
+  "A `:val/form` / payload value as its CODE-FORM — pr-str'd to a string in the Cozo mirror, read back."
+  [v] (cond-> v (string? v) edn/read-string))
+
+(defn- struct-tag
+  "A node's `:structure/of` as a keyword — the Cozo mirror stringifies it (no colon); idempotent on
+   the datascript keyword."
+  [e] (some-> (:structure/of e) keyword))
 
 (defn- target-expr
   "A slot edge's target → its authoring type expression: a reified Structure → its
@@ -28,8 +41,8 @@
    plug-point (faithful — enum member types are stored); bare scalars map back to
    :string/:int/:boolean."
   [db t]
-  (let [e (d/entity db t)]
-    (if (= (typing/dialect-type-tag) (:structure/of e))
+  (let [e (cq/entity db t)]
+    (if (= (typing/dialect-type-tag) (struct-tag e))
       (let [f (typing/render-type db t)]
         (get malli->scalar f f))
       (symbol (:entity/name e)))))
@@ -46,39 +59,43 @@
       :else      target)))
 
 (defn- slots-of [db s]
-  (->> (d/q '[:find ?k ?l ?o ?t ?p :in $ ?s
-              :where [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]
-                     [?r :rel/order ?o] [?r :rel/to ?t]
-                     [(get-else $ ?r :rel/payload ::none) ?p]] db s)
-       (filter #(= "slot" (namespace (first %))))
-       (sort-by #(nth % 2))
-       (mapv (fn [[k l _ t p]]
-               (let [props (when (not= ::none p) {:payload p})]
-                 [(keyword l) (slot-expr k props (target-expr db t))])))))
+  ;; the optional :rel/payload is read separately and merged (no get-else on Cozo); :rel/kind is a
+  ;; keyword the mirror stringifies, so re-keywordize it for the slot/* filter + the quantifier map
+  (let [base (cq/q '[:find ?r ?k ?l ?o ?t :in $ ?s
+                     :where [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]
+                            [?r :rel/order ?o] [?r :rel/to ?t]] db s)
+        pays (into {} (cq/q '[:find ?r ?p :in $ ?s
+                              :where [?r :rel/from ?s] [?r :rel/payload ?p]] db s))]
+    (->> base
+         (filter #(= "slot" (namespace (keyword (nth % 1)))))
+         (sort-by #(ord (nth % 3)))
+         (mapv (fn [[r k l _ t]]
+                 (let [props (when-let [p (pays r)] {:payload (keyword p)})]
+                   [(keyword l) (slot-expr (keyword k) props (target-expr db t))]))))))
 
 (defn- laws-of [db s]
-  (->> (d/q '[:find ?l ?id :in $ ?s
-              :where [?r :rel/from ?s] [?r :rel/kind :law] [?r :rel/to ?l]
-                     [?l :entity/id ?id]] db s)
+  (->> (cq/q '[:find ?l ?id :in $ ?s
+               :where [?r :rel/from ?s] [?r :rel/kind :law] [?r :rel/to ?l]
+                      [?l :entity/id ?id]] db s)
        (sort-by second)
        (mapv (fn [[l _]]
-               (let [e (d/entity db l)]
+               (let [e (cq/entity db l)]
                  (merge {:desc (:val/desc e)
                          :scope (some-> (:val/scope e) edn/read-string)}
-                        (:val/form e)))))))
+                        (payload-form (:val/form e))))))))
 
 (defn- includes-of [db s]
-  (->> (d/q '[:find [?n ...] :in $ ?s
-              :where [?r :rel/from ?s] [?r :rel/kind :includes] [?r :rel/to ?t]
-                     [?t :entity/name ?n]] db s)
+  (->> (cq/q '[:find [?n ...] :in $ ?s
+               :where [?r :rel/from ?s] [?r :rel/kind :includes] [?r :rel/to ?t]
+                      [?t :entity/name ?n]] db s)
        sort (mapv symbol)))
 
 (defn- parts [db s]
-  (let [e (d/entity db s)]
+  (let [e (cq/entity db s)]
     {:name     (symbol (:entity/name e))
      :doc      (:entity/doc e)
      :value?   (boolean (:val/value e))
-     :realizes (when (:val/realizes e) (:val/form e))
+     :realizes (when (:val/realizes e) (payload-form (:val/form e)))
      :slots    (slots-of db s)
      :includes (includes-of db s)
      :laws     (laws-of db s)}))
@@ -137,12 +154,12 @@
 (defn vocabulary-primer
   "One vocabulary (a grammar namespace) rendered as its defstructure forms."
   [db vocab-name]
-  (let [members (->> (d/q '[:find ?c ?n :in $ ?vn
-                            :where [?v :structure/of :canvas.vocab.grammar/Vocabulary]
-                                   [?v :entity/name ?vn]
-                                   [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
-                                   [?c :entity/name ?n]]
-                          db vocab-name)
+  (let [members (->> (cq/q '[:find ?c ?n :in $ ?vn
+                             :where [?v :structure/of :canvas.vocab.grammar/Vocabulary]
+                                    [?v :entity/name ?vn]
+                                    [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
+                                    [?c :entity/name ?n]]
+                           db vocab-name)
                      (sort-by second)
                      (map first))]
     (str/join "\n"
@@ -153,9 +170,9 @@
   "The full GRAMMAR PRIMER: every vocabulary in the model, rendered live from the
    reified grammar — the canvas's language reference, derived not maintained."
   [db]
-  (let [vocabs (sort (d/q '[:find [?n ...]
-                            :where [?v :structure/of :canvas.vocab.grammar/Vocabulary]
-                                   [?v :entity/name ?n]] db))]
+  (let [vocabs (sort (cq/q '[:find [?n ...]
+                             :where [?v :structure/of :canvas.vocab.grammar/Vocabulary]
+                                    [?v :entity/name ?n]] db))]
     (str/join "\n\n" (map #(vocabulary-primer db %) vocabs))))
 
 ;; ── grammar drift (the dead-vocabulary reading) ───────────────────────────────
@@ -170,15 +187,17 @@
   ;; set-filtering, not datalog negation — inline (not …) over a pattern with NO
   ;; matches anywhere (e.g. a model with no realized-as concepts) mis-fires in
   ;; datascript (the wholly-empty-relation gotcha the law combinators encapsulate)
-  (let [in-use   (into #{} (map (comp str first))
-                       (d/q '[:find ?t :where [_ :structure/of ?t]] db))
+  ;; `:structure/of` tags are KEYWORDS the mirror stringifies WITHOUT the colon, but `:val/tag` is
+  ;; stored WITH it — normalize the in-use tags through `keyword` so the membership test lines up.
+  (let [in-use   (into #{} (map (comp str keyword first))
+                       (cq/q '[:find ?t :where [_ :structure/of ?t]] db))
         realized (into #{} (map first)
-                       (d/q '[:find ?s :where [?s :val/realizes _]] db))
+                       (cq/q '[:find ?s :where [?s :val/realizes _]] db))
         included (into #{} (map first)
-                       (d/q '[:find ?t :where [?r :rel/kind :includes] [?r :rel/to ?t]] db))]
-    (->> (d/q '[:find ?s ?n ?t
-                :where [?s :structure/of :canvas.vocab.grammar/Structure]
-                       [?s :entity/name ?n] [?s :val/tag ?t]]
-              db)
+                       (cq/q '[:find ?t :where [?r :rel/kind :includes] [?r :rel/to ?t]] db))]
+    (->> (cq/q '[:find ?s ?n ?t
+                 :where [?s :structure/of :canvas.vocab.grammar/Structure]
+                        [?s :entity/name ?n] [?s :val/tag ?t]]
+               db)
          (remove (fn [[s _ t]] (or (realized s) (included s) (= ":Any" t) (in-use t))))
          (map second) sort vec)))
