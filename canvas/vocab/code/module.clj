@@ -213,8 +213,8 @@
    (`:dispatches-to`). A set of authored source-op names; empty ⇔ every intended dependency is backed
    by a real (possibly dispatch-mediated, possibly multi-hop) call path.
 
-   A QUERY, not a law (like `uncovered-calls`): it walks reachability in Clojure (efficient BFS),
-   which a datalog law can't do within the kernel's law-timeout. It is nonetheless a genuine CONSUMER
+   A QUERY, not a law (like `uncovered-calls`): it walks reachability in Clojure (a straightforward
+   BFS). It is nonetheless a genuine CONSUMER
    of `:dispatches-to` — a modelled dispatch point's fan-out is lifted onto the extracted call graph
    (by name + `module-corresponds?`), so removing a seam's `:dispatches-to` makes its consumers'
    delegations unreachable and surfaces them here. Asserted empty by the regression suite."

@@ -490,50 +490,6 @@
          :rules     (unquote-lit (:rules m))
          :scope     (:scope m)}))))
 
-(defn- defined-rule-names
-  "The set of rule-head names defined in a datalog rule vector."
-  [rules]
-  (set (map (comp first first) rules)))
-
-(defn- rule-refs
-  "Defined rule-names invoked as clause heads within `clauses`, recursing into
-   not / not-join / or / and wrappers. Datom vectors `[?e :a ?v]` and predicate
-   clauses `[(pred …)]` are not rule calls, so they're skipped."
-  [clauses defined]
-  (mapcat
-   (fn [c]
-     (if (and (seq? c) (symbol? (first c)))
-       (let [h (first c)]
-         (cond
-           (#{'not 'or 'and} h)  (rule-refs (rest c) defined)
-           (= 'not-join h)       (rule-refs (drop 2 c) defined)
-           (contains? defined h) [h]
-           :else                 []))
-       []))
-   clauses))
-
-(defn- check-law-recursion!
-  "Reject a law whose :rules contains a self-recursive rule that ALSO calls
-   another rule. datascript diverges on cyclic data for that rule-calls-rule
-   shape (see the no-cycle / reachability finding) — the helper rule's clauses
-   must be inlined into the recursive rule. The *law-timeout-ms* guard is the
-   runtime backstop for divergent shapes this static check misses (e.g. mutual
-   recursion)."
-  [sname {:keys [desc rules]}]
-  (when (seq rules)
-    (let [defined (defined-rule-names rules)]
-      (doseq [rule rules]
-        (let [hname (-> rule first first)
-              refs  (set (rule-refs (rest rule) defined))]
-          (when (and (contains? refs hname) (seq (disj refs hname)))
-            (throw (ex-info
-                    (str "defstructure " sname ", law " (pr-str desc)
-                         ": recursive rule (" hname ") calls another rule "
-                         (vec (disj refs hname)) " — datascript diverges on cyclic data "
-                         "for rule-calls-rule recursion. Inline that rule's clauses "
-                         "directly into (" hname ").")
-                    {:structure sname :law desc :rule hname}))))))))
-
 (defmacro defstructure
   "Define a structure: its slots (relations-with-laws) and free laws. Registers the
    structure-definition and defines a VALUE-RETURNING instantiation macro named `sname`.
@@ -564,9 +520,8 @@
    (includes ...) / (realized-as ...); anything else is rejected at macro-expansion
    time (a silently-dropped form is a footgun).
 
-   A law's recursive :rules must INLINE their step — a self-recursive rule may
-   not call another rule, because datascript diverges on cyclic data for that
-   shape (rejected here; the *law-timeout-ms* guard backstops the rest)."
+   A law's :rules may be recursive, including rule-calls-rule (Cozo computes the
+   fixpoint with semi-naive evaluation); keep them tight — they re-run on every check."
   [sname docstring & body]
   (doseq [form body]
     (when-not (or (map? form)
@@ -588,7 +543,6 @@
                                 (name (:card s)) " ...]")
                            {:structure sname :slot (:rel s) :card (:card s)}))))
         laws   (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
-        _      (doseq [law laws] (check-law-recursion! sname law))
         reader-form (some (fn [f] (when (= 'reader (first f)) (second f)))
                           (filter #(= 'reader (first %)) body))
         ;; an instance-level authoring-syntax fn (the reader's analogue, raised from a single
@@ -654,8 +608,9 @@
    call it `(op-twin ?a ?b)` instead of repeating the clauses.
 
    `head` is the rule's argument vector; `where` its body clauses, which may reference other
-   injected rules (`in-module`, `named`, …) and call predicates. Keep `where` non-recursive:
-   vocab-injected rules run outside the per-law *law-timeout-ms* guard.
+   injected rules (`in-module`, `named`, …) and call predicates. Prefer a non-recursive `where`:
+   a vocab-injected rule is folded into EVERY law and query, so a recursive one re-evaluates
+   on every check (Cozo terminates, but pays the fixpoint each time).
 
      (defrelation :op-twin \"an authored op ?a and its extracted code twin ?b\"
        '[?a ?b]

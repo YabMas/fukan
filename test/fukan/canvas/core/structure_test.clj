@@ -154,11 +154,6 @@
   {:state [:enum "open" "closed"]
    :note  [:? [:enum "a" "b"]]})
 
-;; (A pathological "rule-calls-rule" law can't be written via defstructure — the
-;;  detector rejects it; see rule-calls-rule-recursion-is-rejected. The runtime
-;;  guard is exercised by registering such a law directly — see
-;;  pathological-recursive-law-times-out-rather-than-hangs.)
-
 ;; ── helpers ─────────────────────────────────────────────────────────────────
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name (unique within a test db).
@@ -444,27 +439,12 @@
       (is (some #(= "no Plain has a secret field" (:law %)) (s/check db))
           "the Auditor law, scoped to :Plain, flags the Plain instance"))))
 
-(deftest rule-calls-rule-recursion-is-rejected
-  (testing "defstructure rejects a self-recursive rule that calls a helper rule"
-    (let [msg (try (let [_ (macroexpand
-                            '(fukan.canvas.core.structure/defstructure BadRec "d"
-                               (law "diverges"
-                                 :offenders '[?a]
-                                 :where '[(reaches ?a ?a)]
-                                 :rules '[[(step ?x ?y) [?x :e ?y]]
-                                          [(reaches ?x ?y) (step ?x ?y)]
-                                          [(reaches ?x ?y) (step ?x ?z) (reaches ?z ?y)]])))]
-                     "no throw")
-                   (catch Throwable e
-                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
-      (is (re-find #"rule-calls-rule recursion" msg)))))
-
 (deftest divergent-recursive-law-terminates-natively-on-cozo
   (testing "a helper-rule recursion (hreach via hstep) that DIVERGED under datascript's naive
-            eval — needing the *law-timeout-ms* guard — terminates natively on Cozo's
-            semi-naive fixpoint, so check returns and the law simply fires"
-    ;; Register the law DIRECTLY — defstructure would reject this rule-calls-rule shape
-    ;; (see rule-calls-rule-recursion-is-rejected), so we bypass it to exercise the engine.
+            eval terminates natively on Cozo's semi-naive fixpoint, so check returns and the
+            law simply fires — why the kernel needs no rule-calls-rule guard"
+    ;; A rule-calls-rule shape (the kind datascript could not evaluate). Registered directly as
+    ;; a compact test-only structure; defstructure would accept it now too (the guard is gone).
     (s/register-structure!
      {:tag :Diverge :doc "test-only" :slots []
       :laws [{:desc "pathological reachability" :scope :global

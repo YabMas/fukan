@@ -26,7 +26,7 @@
 (def reaches-effect-rules
   "Transitive effect reachability over the reified code graph: an op REACHES effect E if it directly
    performs E, or it calls some op that reaches E. Purely self-recursive (`reaches-effect` calls only
-   itself + datoms — passes `check-law-recursion!`), so it is safe as a one-shot query; it saturates
+   itself + datoms), so it is safe as a one-shot query; it saturates
    to a fixpoint over the cyclic call graph (no divergence). Used by `reached-effects`/`throw-spread`.
    NB: the `EffectCorrespondence` law INLINES an identical copy in its `:rules` (a law's `:rules` is
    macro-time literal data — it cannot reference this var); keep the two copies in sync (the same
@@ -76,7 +76,7 @@
    Direction: UNDER-declaration only (`reached ∖ declared`). Over-declaration is NOT a violation — the
    classifier is necessarily incomplete (taxonomy + dynamic-dispatch gaps), so a phantom is a soft
    `effect-phantom` reading, never enforced. `:scope :global`; naturally vacuous on a model-only build.
-   The `reaches-effect` rule is purely self-recursive (passes `check-law-recursion!`, cheap — ~0.2s).
+   The `reaches-effect` rule is purely self-recursive (cheap — ~0.2s).
    The `:rules` inline a copy of `reaches-effect-rules` (a law's `:rules` is macro-time literal data —
    it cannot reference that var); keep the two in sync."
   (law "every effect a modelled op's twin transitively reaches is declared in the op's :performs"
