@@ -1,8 +1,8 @@
 (ns fukan.canvas.core.assemble-test
   (:require [clojure.test :refer [deftest is]]
-            [datascript.core :as d]
-            [fukan.canvas.core.structure :as s]
-            [fukan.canvas.core.assemble :as a]))
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
+            [fukan.canvas.core.structure :as s]))
 
 (s/defstructure Thing "t")
 (Thing ^{:name "foo"} t5-foo)  ; an instance-bearing var
@@ -10,8 +10,8 @@
 
 (deftest assemble-includes-only-instance-vars
   ;; var discovery (`collect`) is a private internal — exercise it through the public `assemble`.
-  (let [db    (a/assemble ['fukan.canvas.core.assemble-test])
-        names (set (map first (d/q '[:find ?n :where [?e :entity/name ?n]] db)))]
+  (let [db    (build/nss->cozo ['fukan.canvas.core.assemble-test])
+        names (set (map first (cq/q '[:find ?n :where [?e :entity/name ?n]] db)))]
     (is (contains? names "foo") "the instance-bearing var t5-foo (^{:name \"foo\"}) becomes a node")
     (is (not (contains? names "t5-plain")) "the plain (def t5-plain 42) is skipped")))
 
@@ -22,12 +22,12 @@
 (Box ^{:name "B"} t6-b {:links t6-a})
 
 (deftest assembles-a-cycle-into-one-db
-  (let [db (a/assemble ['fukan.canvas.core.assemble-test])
-        edges (d/q '[:find ?fn ?tn :where [?r :rel/from ?f] [?r :rel/to ?t]
+  (let [db (build/nss->cozo ['fukan.canvas.core.assemble-test])
+        edges (cq/q '[:find ?fn ?tn :where [?r :rel/from ?f] [?r :rel/to ?t]
                      [?f :structure/of ::Box]
                      [?f :entity/name ?fn] [?t :entity/name ?tn]] db)]
     (is (= #{["A" "B"] ["B" "A"]} (set edges)))
-    (is (seq (d/q '[:find ?e :in $ ?id :where [?e :entity/id ?id]]
+    (is (seq (cq/q '[:find ?e :in $ ?id :where [?e :entity/id ?id]]
                   db "fukan.canvas.core.assemble-test/t6-a")))))
 
 ;; ── Task 7: value dedup, ordered, labelled ────────────────────────────────────
@@ -52,19 +52,19 @@
 (Edge2 ^{:name "e"} t7-e {:to [knows t7-n]})
 
 (deftest value-dedup-inline
-  (let [db (a/assemble ['fukan.canvas.core.assemble-test])]
-    (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of ::Tag2] [?e :val/n "x"]] db))))))
+  (let [db (build/nss->cozo ['fukan.canvas.core.assemble-test])]
+    (is (= 1 (count (cq/q '[:find ?e :where [?e :structure/of ::Tag2] [?e :val/n "x"]] db))))))
 
 (deftest value-dedup-top-level
-  (let [db (a/assemble ['fukan.canvas.core.assemble-test])]
-    (is (= 1 (count (d/q '[:find ?e :where [?e :structure/of ::Tag2] [?e :val/n "z"]] db))))))
+  (let [db (build/nss->cozo ['fukan.canvas.core.assemble-test])]
+    (is (= 1 (count (cq/q '[:find ?e :where [?e :structure/of ::Tag2] [?e :val/n "z"]] db))))))
 
 (deftest ordered-emits-rel-order
-  (let [db (a/assemble ['fukan.canvas.core.assemble-test])
-        orders (d/q '[:find ?o ?nm :where [?r :rel/kind :items] [?r :rel/order ?o]
+  (let [db (build/nss->cozo ['fukan.canvas.core.assemble-test])
+        orders (cq/q '[:find ?o ?nm :where [?r :rel/kind :items] [?r :rel/order ?o]
                       [?r :rel/to ?t] [?t :entity/name ?nm]] db)]
     (is (= #{[0 "x"] [1 "y"]} (set orders)))))
 
 (deftest labelled-emits-rel-label
-  (let [db (a/assemble ['fukan.canvas.core.assemble-test])]
-    (is (= #{["knows"]} (set (d/q '[:find ?l :where [?r :rel/kind :to] [?r :rel/label ?l]] db))))))
+  (let [db (build/nss->cozo ['fukan.canvas.core.assemble-test])]
+    (is (= #{["knows"]} (set (cq/q '[:find ?l :where [?r :rel/kind :to] [?r :rel/label ?l]] db))))))

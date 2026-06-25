@@ -5,9 +5,12 @@
 
    Instances are top-level def-emitting forms assembled with `assemble-vars`
    (the var-capture surface); references between them are ordinary var refs."
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+  (:require [clojure.edn :as edn]
+            [clojure.test :refer [deftest is testing use-fixtures]]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
+            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
+            [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
@@ -158,26 +161,33 @@
 
 ;; ── helpers ─────────────────────────────────────────────────────────────────
 
-;; tags are ns-qualified; tests pass a short handle and match by its name (unique within a test db)
+;; tags are ns-qualified; tests pass a short handle and match by its name (unique within a test db).
+;; the Cozo mirror stringifies :structure/of (no colon), so re-keywordize ?t before `name`.
 (defn- names-of [db tag]
-  (->> (d/q '[:find ?n ?t :where [?e :structure/of ?t] [?e :entity/name ?n]] db)
-       (filter (fn [[_ t]] (= (name tag) (name t)))) (map first) set))
+  (->> (cq/q '[:find ?n ?t :where [?e :structure/of ?t] [?e :entity/name ?n]] db)
+       (filter (fn [[_ t]] (= (name tag) (name (keyword t))))) (map first) set))
 
+;; :rel/label is optional and Cozo has no get-else, so the label is read in a second query
+;; and merged (absent → "") — the same shape the production readers use.
 (defn- rels-of [db from-name kind]
-  (set (d/q '[:find ?to-name ?label
-              :in $ ?fn ?kind
-              :where [?f :entity/name ?fn]
-                     [?r :rel/from ?f] [?r :rel/kind ?kind]
-                     [?r :rel/to ?t] [?t :entity/name ?to-name]
-                     [(get-else $ ?r :rel/label "") ?label]]
-            db from-name kind)))
+  (let [base   (cq/q '[:find ?r ?toname
+                       :in $ ?fn ?kind
+                       :where [?f :entity/name ?fn]
+                              [?r :rel/from ?f] [?r :rel/kind ?kind]
+                              [?r :rel/to ?t] [?t :entity/name ?toname]]
+                     db from-name kind)
+        labels (into {} (cq/q '[:find ?r ?l :in $ ?fn ?kind
+                                :where [?f :entity/name ?fn]
+                                       [?r :rel/from ?f] [?r :rel/kind ?kind] [?r :rel/label ?l]]
+                              db from-name kind))]
+    (set (map (fn [[r to-name]] [to-name (get labels r "")]) base))))
 
 (defn- laws-firing [db tag]
   (set (map :law (filter #(= (name tag) (some-> (:structure %) name)) (s/check db)))))
 
 (defn- count-of [db tag]
-  (->> (d/q '[:find ?e ?t :where [?e :structure/of ?t]] db)
-       (filter (fn [[_ t]] (= (name tag) (name t)))) count))
+  (->> (cq/q '[:find ?e ?t :where [?e :structure/of ?t]] db)
+       (filter (fn [[_ t]] (= (name tag) (name (keyword t))))) count))
 
 ;; ── instances under test (top-level def-emitting forms, assembled per test) ──
 ;; `^{:name "…"}` overrides where the entity name repeats across cases (one var
@@ -314,7 +324,7 @@
 
 (deftest instantiation-emits-node-and-reified-relations
   (testing "an instance is a tagged Node; slot values are reified relations with labels"
-    (let [db (a/assemble-vars [#'ie-Int #'ie-Str #'ie-f])]
+    (let [db (build/vars->cozo [#'ie-Int #'ie-Str #'ie-f])]
       (is (= #{"Int" "Str"} (names-of db :Type)))
       (is (= #{"f"} (names-of db :Function)))
       (is (= #{["Int" "x"] ["Str" "y"]} (rels-of db "f" :takes))
@@ -324,33 +334,33 @@
 
 (deftest well-formed-function-passes-check
   (testing "exactly one gives, all targets Types → no violations"
-    (let [db (a/assemble-vars [#'wf-Int #'wf-f])]
+    (let [db (build/vars->cozo [#'wf-Int #'wf-f])]
       (is (empty? (laws-firing db :Function))))))
 
 (deftest docstring-sets-instance-doc
   (testing "the docstring position → :entity/doc, not a slot"
-    (let [db (a/assemble-vars [#'dc-Int #'dc-f])]
+    (let [db (build/vars->cozo [#'dc-Int #'dc-f])]
       (is (= "Builds the thing."
-             (ffirst (d/q '[:find ?d :where [?e :entity/name "f"] [?e :entity/doc ?d]] db))))
+             (ffirst (cq/q '[:find ?d :where [?e :entity/name "f"] [?e :entity/doc ?d]] db))))
       (is (empty? (laws-firing db :Function))
           "the docstring does not register as a slot or trip any law"))))
 
 (deftest cardinality-one-catches-zero-and-several
   (testing "gives (one Type): zero and several are both violations"
-    (let [db (a/assemble-vars [#'co-Int #'co-Str #'co-none #'co-several])
+    (let [db (build/vars->cozo [#'co-Int #'co-Str #'co-none #'co-several])
           firing (laws-firing db :Function)]
       (is (contains? firing "Function.gives requires exactly one (found none)"))
       (is (contains? firing "Function.gives requires exactly one (found several)")))))
 
 (deftest target-type-law-catches-wrong-target
   (testing "a gives target that is not a Type is a violation"
-    (let [db (a/assemble-vars [#'tt-Int #'tt-callee #'tt-bad])]
+    (let [db (build/vars->cozo [#'tt-Int #'tt-callee #'tt-bad])]
       (is (contains? (laws-firing db :Function)
                      "Function.gives target must be a Type")))))
 
 (deftest acyclic-tree-passes-via-instantiation
   (testing "a forward-resolved child chain (leaf←mid←root) has no cycle violation"
-    (let [db (a/assemble-vars [#'at-leaf #'at-mid #'at-root])]
+    (let [db (build/vars->cozo [#'at-leaf #'at-mid #'at-root])]
       (is (= #{"leaf" "mid" "root"} (names-of db :Tree)))
       (is (empty? (laws-firing db :Tree))
           "the recursive no-cycle law runs clean on an acyclic chain"))))
@@ -361,13 +371,13 @@
     ;; build the cyclic substrate directly here to exercise the recursive rule + offender
     ;; in isolation, decoupled from authoring.
     (let [tree-db (fn [nodes edges]
-                    (-> (sub/create)
-                        (d/db-with (for [n nodes]
-                                     {:entity/id n :entity/name (name n) :structure/of ::Tree}))
-                        (d/db-with (for [[from to] edges]
-                                     {:rel/id (str from "->" to)
-                                      :rel/from [:entity/id from] :rel/kind :child
-                                      :rel/to [:entity/id to]}))))
+                    (build/maps->cozo
+                     (for [n nodes]
+                       {:entity/id n :entity/name (name n) :structure/of ::Tree})
+                     (for [[from to] edges]
+                       {:rel/id (str from "->" to)
+                        :rel/from [:entity/id from] :rel/kind :child
+                        :rel/to [:entity/id to]})))
           acyclic (tree-db [:a :b :c] [[:a :b] [:b :c]])
           two     (tree-db [:x :y]    [[:x :y] [:y :x]])
           self    (tree-db [:s]       [[:s :s]])]
@@ -379,8 +389,8 @@
 
 (deftest forward-references-and-cycles-resolve
   (testing "var-capture (declare) resolves forward references and cycles between instances"
-    (let [db (a/assemble-vars [#'frc-a #'frc-b])]
-      (is (= 2 (count (d/q '[:find ?r :where [?r :rel/kind :child]] db)))
+    (let [db (build/vars->cozo [#'frc-a #'frc-b])]
+      (is (= 2 (count (cq/q '[:find ?r :where [?r :rel/kind :child]] db)))
           "both :child relations resolved (the forward ref is no longer skipped)")
       (is (contains? (laws-firing db :Tree) "no cycle through :child")
           "the authored cycle is real — caught by the no-cycle law"))))
@@ -395,34 +405,34 @@
 
 (deftest value-slot-stores-leaf-datom
   (testing "a scalar-typed slot stores a leaf :val/<key> datom on the node, not a relation"
-    (let [db (a/assemble-vars [#'vs-b])]
-      (is (= true  (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/open ?v]] db))))
-      (is (= "hi"  (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/label ?v]] db))))
-      (is (= 3     (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/size ?v]] db))))
-      (is (empty? (d/q '[:find ?r :where [?x :entity/name "b"] [?r :rel/from ?x]] db))
+    (let [db (build/vars->cozo [#'vs-b])]
+      (is (= true  (ffirst (cq/q '[:find ?v :where [?x :entity/name "b"] [?x :val/open ?v]] db))))
+      (is (= "hi"  (ffirst (cq/q '[:find ?v :where [?x :entity/name "b"] [?x :val/label ?v]] db))))
+      (is (= 3     (ffirst (cq/q '[:find ?v :where [?x :entity/name "b"] [?x :val/size ?v]] db))))
+      (is (empty? (cq/q '[:find ?r :where [?x :entity/name "b"] [?r :rel/from ?x]] db))
           "value slots emit no reified relations")
       (is (empty? (laws-firing db :Box))
           "a valid value-slot instance trips no law"))))
 
 (deftest value-false-is-stored-not-absent
   (testing "a stored false Bool is a present value (no none-law), distinct from absent"
-    (let [db (a/assemble-vars [#'vf-b])]
-      (is (= false (ffirst (d/q '[:find ?v :where [?x :entity/name "b"] [?x :val/open ?v]] db)))
+    (let [db (build/vars->cozo [#'vf-b])]
+      (is (= false (ffirst (cq/q '[:find ?v :where [?x :entity/name "b"] [?x :val/open ?v]] db)))
           "false is stored as a real value, not dropped")
       (is (not (contains? (laws-firing db :Box) "Box.open requires exactly one (found none)"))
           "a present false value does not trip the required none-law"))))
 
 (deftest some-cardinality-requires-at-least-one
   (testing "(some Type): zero is a violation, one or more is clean"
-    (let [zero (a/assemble-vars [#'sc-z-Int #'sc-z])
-          one  (a/assemble-vars [#'sc-o-Int #'sc-o])]
+    (let [zero (build/vars->cozo [#'sc-z-Int #'sc-z])
+          one  (build/vars->cozo [#'sc-o-Int #'sc-o])]
       (is (contains? (laws-firing zero :NonEmpty)
                      "NonEmpty.item requires at least one (found none)"))
       (is (empty? (laws-firing one :NonEmpty))))))
 
 (deftest free-law-is-scoped-to-its-owning-structure
   (testing "a free law on Tagged flags only Tagged instances, not a Plain with the same data"
-    (let [db (a/assemble-vars [#'fl-Str #'fl-p #'fl-t])
+    (let [db (build/vars->cozo [#'fl-Str #'fl-p #'fl-t])
           secret (filter #(= "no field labelled secret" (:law %)) (s/check db))]
       (is (= [::Tagged] (vec (distinct (map :structure secret)))))
       (is (= 1 (reduce + (map (comp count :offenders) secret)))
@@ -430,7 +440,7 @@
 
 (deftest law-scope-can-target-another-structure
   (testing ":scope <tag> aims a free law's subject at a different structure"
-    (let [db (a/assemble-vars [#'ls-Str #'ls-guard #'ls-p])]
+    (let [db (build/vars->cozo [#'ls-Str #'ls-guard #'ls-p])]
       (is (some #(= "no Plain has a secret field" (:law %)) (s/check db))
           "the Auditor law, scoped to :Plain, flags the Plain instance"))))
 
@@ -449,11 +459,12 @@
                      (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
       (is (re-find #"rule-calls-rule recursion" msg)))))
 
-(deftest pathological-recursive-law-times-out-rather-than-hangs
-  (testing "a divergent recursive law is bounded by *law-timeout-ms* and reported, not hung"
-    ;; Register the divergent law DIRECTLY — defstructure would reject this
-    ;; rule-calls-rule shape (see test above), so we bypass it to exercise the
-    ;; runtime guard against shapes the static check can't catch.
+(deftest divergent-recursive-law-terminates-natively-on-cozo
+  (testing "a helper-rule recursion (hreach via hstep) that DIVERGED under datascript's naive
+            eval — needing the *law-timeout-ms* guard — terminates natively on Cozo's
+            semi-naive fixpoint, so check returns and the law simply fires"
+    ;; Register the law DIRECTLY — defstructure would reject this rule-calls-rule shape
+    ;; (see rule-calls-rule-recursion-is-rejected), so we bypass it to exercise the engine.
     (s/register-structure!
      {:tag :Diverge :doc "test-only" :slots []
       :laws [{:desc "pathological reachability" :scope :global
@@ -464,36 +475,34 @@
                        [(hreach ?a ?b) (hstep ?a ?b)]
                        [(hreach ?a ?b) (hstep ?a ?z) (hreach ?z ?b)]]}]})
     ;; n1 -> n2 -> n1 as an INDIRECT graph (edges via e1/e2 reified rels), the
-    ;; shape that diverges under a helper-rule recursion.
-    (let [db (-> (sub/create)
-                 (d/db-with [{:entity/id "e1"} {:entity/id "e2"}
-                             {:entity/id "n1"} {:entity/id "n2"}])
-                 (d/db-with [{:rel/id "1" :rel/from [:entity/id "e1"] :rel/kind :h-from :rel/to [:entity/id "n1"]}
-                             {:rel/id "2" :rel/from [:entity/id "e1"] :rel/kind :h-to   :rel/to [:entity/id "n2"]}
-                             {:rel/id "3" :rel/from [:entity/id "e2"] :rel/kind :h-from :rel/to [:entity/id "n2"]}
-                             {:rel/id "4" :rel/from [:entity/id "e2"] :rel/kind :h-to   :rel/to [:entity/id "n1"]}]))]
-      (binding [s/*law-timeout-ms* 300]
-        (is (some :timed-out? (s/check db))
-            "the divergent Hang law is reported as timed-out and check still returns")))))
+    ;; shape that diverged under a helper-rule recursion.
+    (let [db (build/maps->cozo
+              [{:entity/id "e1"} {:entity/id "e2"} {:entity/id "n1"} {:entity/id "n2"}]
+              [{:rel/id "1" :rel/from [:entity/id "e1"] :rel/kind :h-from :rel/to [:entity/id "n1"]}
+               {:rel/id "2" :rel/from [:entity/id "e1"] :rel/kind :h-to   :rel/to [:entity/id "n2"]}
+               {:rel/id "3" :rel/from [:entity/id "e2"] :rel/kind :h-from :rel/to [:entity/id "n2"]}
+               {:rel/id "4" :rel/from [:entity/id "e2"] :rel/kind :h-to   :rel/to [:entity/id "n1"]}])]
+      (is (contains? (laws-firing db :Diverge) "pathological reachability")
+          "the recursion runs to a fixpoint (n1↔n2 mutually reach) and the law fires — no hang, no timeout guard"))))
 
 (deftest value-slots-well-formed-passes-check
   (testing "valid scalar values (and an absent optional) trip no law"
-    (let [db (a/assemble-vars [#'vw-b])]
+    (let [db (build/vars->cozo [#'vw-b])]
       (is (empty? (laws-firing db :Box))))))
 
 (deftest value-type-law-catches-wrong-type
   (testing "a value whose literal fails its declared scalar type is caught"
-    (let [db (a/assemble-vars [#'vt-b])]
+    (let [db (build/vars->cozo [#'vt-b])]
       (is (contains? (laws-firing db :Box) "Box.open value must satisfy :boolean")))))
 
 (deftest value-one-cardinality-catches-missing
   (testing "a required (one :T) value that is absent trips the none-law"
-    (let [db (a/assemble-vars [#'vo-b])]
+    (let [db (build/vars->cozo [#'vo-b])]
       (is (contains? (laws-firing db :Box) "Box.open requires exactly one (found none)")))))
 
 (deftest free-law-over-a-value-fires
   (testing "an author free law can bind a stored value directly (predicates ride the engine)"
-    (let [db (a/assemble-vars [#'fv-b])]
+    (let [db (build/vars->cozo [#'fv-b])]
       (is (contains? (laws-firing db :Box) "size must be positive")))))
 
 (deftest unknown-body-form-is-rejected
@@ -518,20 +527,20 @@
 
 (deftest refined-slot-accepts-a-valid-value
   (testing "values the dialect accepts trip no law (required and optional refined slots)"
-    (let [db (a/assemble-vars [#'en-ok])]
-      (is (= "open" (ffirst (d/q '[:find ?v :where [?x :entity/name "ok"] [?x :val/state ?v]] db)))
+    (let [db (build/vars->cozo [#'en-ok])]
+      (is (= "open" (ffirst (cq/q '[:find ?v :where [?x :entity/name "ok"] [?x :val/state ?v]] db)))
           "a refined slot stores a plain :val leaf, like any scalar")
       (is (empty? (laws-firing db :Gate))))))
 
 (deftest refined-slot-rejects-an-invalid-value
   (testing "a value the dialect rejects trips the refinement law"
-    (let [db (a/assemble-vars [#'en-bad])]
+    (let [db (build/vars->cozo [#'en-bad])]
       (is (contains? (laws-firing db :Gate)
                      "Gate.state value must satisfy [:enum \"open\" \"closed\"]")))))
 
 (deftest refined-slot-one-cardinality-catches-missing
   (testing "a refined slot keeps the ordinary (one …) none-law"
-    (let [db (a/assemble-vars [#'en-miss])]
+    (let [db (build/vars->cozo [#'en-miss])]
       (is (contains? (laws-firing db :Gate)
                      "Gate.state requires exactly one (found none)")))))
 
@@ -547,17 +556,17 @@
 
 (deftest data-literal-reader-expands-and-dedups
   (testing "a value structure's :reader expands a literal arg into clauses; equal literals dedup"
-    (let [db (a/assemble-vars [#'dl-h])]
+    (let [db (build/vars->cozo [#'dl-h])]
       (is (= 2 (count-of db :Wrapped)) "5, 5, 6 → two Wrapped nodes (the two 5s dedup)")
-      (is (= #{5 6} (set (map first (d/q '[:find ?n
+      (is (= #{5 6} (set (map first (cq/q '[:find ?n
                                            :where [?x :structure/of ::Wrapped] [?x :val/v ?n]]
                                          db))))))))
 
 (deftest sequence-slot-captures-position
   (testing "a [:* T] slot records :rel/order from authoring position, recovering the sequence"
-    (let [db (a/assemble-vars [#'os-Int #'os-Str #'os-s])]
+    (let [db (build/vars->cozo [#'os-Int #'os-Str #'os-s])]
       (is (= ["Int" "Str" "Int"]
-             (->> (d/q '[:find ?o ?n
+             (->> (cq/q '[:find ?o ?n
                          :where [?s :entity/name "s"] [?r :rel/from ?s] [?r :rel/kind :items]
                                 [?r :rel/order ?o] [?r :rel/to ?t] [?t :entity/name ?n]]
                        db)
@@ -566,96 +575,97 @@
 
 (deftest sequence-order-runs-across-clause-groups
   (testing "two IR clause groups for one slot order like one — the index runs across groups"
-    (let [db (a/assemble-vars [#'o2-Int #'o2-Str #'o2-s])]
+    (let [db (build/vars->cozo [#'o2-Int #'o2-Str #'o2-s])]
       (is (= [["Int" 0] ["Str" 1]]
-             (->> (d/q '[:find ?n ?o :where [?s :entity/name "s"]
+             (->> (cq/q '[:find ?n ?o :where [?s :entity/name "s"]
                                             [?r :rel/from ?s] [?r :rel/kind :items]
                                             [?r :rel/order ?o] [?r :rel/to ?t] [?t :entity/name ?n]] db)
                   (sort-by second) (mapv vec)))))))
 
 (deftest sequence-value-identity-respects-order
   (testing "order is part of a sequence value's identity: [Int Str] ≠ [Str Int], and equals itself"
-    (let [db (a/assemble-vars [#'ov-Int #'ov-Str #'ov-h])]
+    (let [db (build/vars->cozo [#'ov-Int #'ov-Str #'ov-h])]
       (is (= 2 (count-of db :OrdVal))))))
 
 (deftest set-slot-ignores-order-and-collapses-duplicates
   (testing "[:set T]: identity ignores order (reversed SetVals dedup) and duplicate targets collapse"
-    (let [db (a/assemble-vars [#'sv-Int #'sv-Str #'sv-h])]
+    (let [db (build/vars->cozo [#'sv-Int #'sv-Str #'sv-h])]
       (is (= 1 (count-of db :SetVal)) "(xs Int Str) and (xs Str Int) are ONE set value")
-      (is (= 2 (count (d/q '[:find ?r :where [?h :entity/name "h"]
+      (is (= 2 (count (cq/q '[:find ?r :where [?h :entity/name "h"]
                                              [?r :rel/from ?h] [?r :rel/kind :tags]] db)))
           "(tags Int Int Str) collapses the duplicate Int to one relation")
-      (is (empty? (d/q '[:find ?o :where [?r :rel/kind :tags] [?r :rel/order ?o]] db))
+      (is (empty? (cq/q '[:find ?o :where [?r :rel/kind :tags] [?r :rel/order ?o]] db))
           "a :set slot records no :rel/order"))))
 
 ;; ── value-identity (content-deduped, inline-anonymous value nodes) ───────────
 
 (deftest equal-value-instances-dedup-to-one-node
   (testing "two inline value instances with identical composition collapse to one node"
-    (let [db (a/assemble-vars [#'ev-h])]
+    (let [db (build/vars->cozo [#'ev-h])]
       (is (= 1 (count-of db :Pair)) "the two structurally-equal Pairs are one node"))))
 
 (deftest distinct-value-instances-are-distinct-nodes
   (testing "value instances with different composition are different nodes"
-    (let [db (a/assemble-vars [#'dv-h])]
+    (let [db (build/vars->cozo [#'dv-h])]
       (is (= 2 (count-of db :Pair))))))
 
 (deftest value-nodes-are-anonymous-and-ownerless
   (testing "a value node carries no :entity/name and is not a :child of any module"
-    (let [db (a/assemble-vars [#'vn-h])
-          pair-id (ffirst (d/q '[:find ?e :where [?e :structure/of ::Pair]] db))]
-      (is (empty? (d/q '[:find ?n :in $ ?e :where [?e :entity/name ?n]] db pair-id))
+    (let [db (build/vars->cozo [#'vn-h])
+          pair-id (ffirst (cq/q '[:find ?e :where [?e :structure/of ::Pair]] db))]
+      (is (empty? (cq/q '[:find ?n :in $ ?e :where [?e :entity/name ?n]] db pair-id))
           "no :entity/name")
-      (is (empty? (d/q '[:find ?r :in $ ?e :where [?r :rel/kind :child] [?r :rel/to ?e]] db pair-id))
+      (is (empty? (cq/q '[:find ?r :in $ ?e :where [?r :rel/kind :child] [?r :rel/to ?e]] db pair-id))
           "not a :child of any module"))))
 
 (deftest value-dedup-folds-in-entity-identity-and-nesting
   (testing "Boxed over the same inner Pair + same Type entity dedups (recursively)"
-    (let [db (a/assemble-vars [#'vd-Int #'vd-h])]
+    (let [db (build/vars->cozo [#'vd-Int #'vd-h])]
       (is (= 1 (count-of db :Boxed)) "the two Boxeds collapse")
       (is (= 1 (count-of db :Pair))  "their inner Pairs collapse too"))))
 
 (deftest distinct-entity-target-makes-distinct-value
   (testing "same scalar composition but a different entity target → distinct value nodes"
-    (let [db (a/assemble-vars [#'de-Int #'de-Str #'de-h])]
+    (let [db (build/vars->cozo [#'de-Int #'de-Str #'de-h])]
       (is (= 2 (count-of db :Boxed)) "different :ty entity → different Boxed")
       (is (= 1 (count-of db :Pair))  "but the identical inner Pairs still share"))))
 
 (deftest laws-run-over-value-nodes
   (testing "slot laws fire on deduped value nodes (type-check + relation target-type)"
-    (let [bad-scalar (a/assemble-vars [#'lr-bad-scalar-h])
-          bad-target (a/assemble-vars [#'lr-p #'lr-bad-target-h])]
+    (let [bad-scalar (build/vars->cozo [#'lr-bad-scalar-h])
+          bad-target (build/vars->cozo [#'lr-p #'lr-bad-target-h])]
       (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must satisfy :int"))
       (is (contains? (set (map :law (s/check bad-target))) "Boxed.ty target must be a Type")))))
 
 (deftest programmatic-emission-builds-a-db
   (testing "assemble-instances lets code emit instances from runtime data"
-    (let [db (a/assemble-instances
+    (let [db (build/instances->cozo
                (for [n ["a" "b"]]
                  [n (sub/->InstanceValue ::Carry n nil {:val/text n} [] false)]))]
       (is (= #{"a" "b"}
-             (set (map first (d/q '[:find ?n :where [?e :structure/of ::Carry] [?e :entity/name ?n]] db))))
+             (set (map first (cq/q '[:find ?n :where [?e :structure/of ::Carry] [?e :entity/name ?n]] db))))
           "both instances were emitted programmatically")
-      (is (= "a" (:val/text (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "a"]] db)))))
+      (is (= "a" (:val/text (cq/entity db (ffirst (cq/q '[:find ?e :where [?e :entity/name "a"]] db)))))
           "scalar slot value stored"))))
 
 (deftest payload-slot-stores-companion-data
   (testing "a scalar slot's 2nd clause arg is stored under its :payload attr"
-    (let [db (a/assemble-vars [#'pl-c1 #'pl-c2 #'pl-c3])
-          e1 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c1"]] db)))
-          e2 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c2"]] db)))
-          e3 (d/entity db (ffirst (d/q '[:find ?e :where [?e :entity/name "c3"]] db)))]
+    (let [db (build/vars->cozo [#'pl-c1 #'pl-c2 #'pl-c3])
+          e1 (cq/entity db (ffirst (cq/q '[:find ?e :where [?e :entity/name "c1"]] db)))
+          e2 (cq/entity db (ffirst (cq/q '[:find ?e :where [?e :entity/name "c2"]] db)))
+          e3 (cq/entity db (ffirst (cq/q '[:find ?e :where [?e :entity/name "c3"]] db)))]
       (is (= "hi" (:val/text e1)))
-      (is (= [:a :b] (:val/extra e1)) "the 2nd arg is captured as the payload")
+      ;; a COMPOUND payload is pr-str'd into the Cozo mirror, so it reads back as a string → edn-read
+      (is (= [:a :b] (edn/read-string (:val/extra e1))) "the 2nd arg is captured as the payload")
       (is (= "solo" (:val/text e2)))
       (is (nil? (:val/extra e2)) "no 2nd arg → no payload")
-      (is (= '(fn [x] x) (:val/extra e3))
+      (is (= '(fn [x] x) (edn/read-string (:val/extra e3)))
           "a payload code-form is stored as data (the quoted form)"))))
 
 (deftest positional-body-routes-through-syntax
   (testing "a syntax-bearing structure accepts a lone non-map body (both surfaces)"
-    (let [db (a/assemble-vars [#'pb-pos #'pb-expr #'pb-map])
-          thing-of (fn [nm] (ffirst (d/q '[:find ?v :in $ ?nm
+    (let [db (build/vars->cozo [#'pb-pos #'pb-expr #'pb-map])
+          thing-of (fn [nm] (ffirst (cq/q '[:find ?v :in $ ?nm
                                            :where [?e :entity/name ?nm] [?e :val/thing ?v]] db nm)))]
       (is (= 42 (thing-of "pb-pos")))
       (is (= 42 (thing-of "pb-expr")))
@@ -692,7 +702,7 @@
 
 (deftest scalar-checked-through-dialect-not-kernel
   (testing "a value-slot is checked via the dialect even though the kernel knows no scalar predicates"
-    (let [bad (a/assemble-vars [#'sc-bad])]
+    (let [bad (build/vars->cozo [#'sc-bad])]
       (is (contains? (set (map :law (s/check bad)))
                      "SyntClass.n value must satisfy :int")
           "the generated law routes :int through value-valid?, not a kernel predicate"))))

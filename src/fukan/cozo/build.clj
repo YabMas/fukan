@@ -60,6 +60,20 @@
   [vars]
   (mirror/load-datoms (instances->datoms (roots-of vars))))
 
+(defn instances->cozo
+  "Build a Cozo substrate from explicit `[id InstanceValue]` roots (code-EMITTED instances,
+   not interned vars) — the cozo analog of `assemble/assemble-instances`. Returns the open db."
+  [id+ivs]
+  (mirror/load-datoms (instances->datoms id+ivs)))
+
+(defn maps->cozo
+  "Build a Cozo substrate directly from raw node/rel datom-MAPS (not InstanceValues) — the
+   cozo analog of `(-> (sub/create) (d/db-with node-maps) (d/db-with rel-maps))`, the
+   low-level entry for hand-building a substrate (e.g. a test exercising a rule in isolation).
+   Dedups + resolves `[:entity/id id]` refs via `maps->datoms`, then loads. Returns the open db."
+  [node-maps rel-maps]
+  (mirror/load-datoms (maps->datoms node-maps rel-maps 0)))
+
 (defn- collect
   "Every instance-bearing interned var across the (already-required) `ns-syms`."
   [ns-syms]

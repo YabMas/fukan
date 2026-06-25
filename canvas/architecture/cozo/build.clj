@@ -20,6 +20,16 @@
     {:signature [:=> [:catn [:vars [:vector :any]]] db/CozoDb]
      :performs  [:throws]
      :delegates [substrate/value-content-key kassemble/emit-instances cmirror/load-datoms]})
+  (Operation instances->cozo
+    "Build a Cozo substrate from explicit [id InstanceValue] roots (code-emitted instances, not interned vars) — the cozo analog of assemble/assemble-instances."
+    {:signature [:=> [:catn [:id+ivs [:vector :any]]] db/CozoDb]
+     :performs  [:throws]
+     :delegates [kassemble/emit-instances cmirror/load-datoms]})
+  (Operation maps->cozo
+    "Build a Cozo substrate directly from raw node/rel datom-maps (not InstanceValues) — the low-level entry for hand-building a substrate (dedup + [:entity/id id] ref resolution, then load)."
+    {:signature [:=> [:catn [:node-maps [:vector :any]] [:rel-maps [:vector :any]]] db/CozoDb]
+     :performs  [:throws]
+     :delegates [cmirror/load-datoms]})
   (Operation nss->cozo
     "Build a Cozo substrate natively from the instance-vars of the already-loaded ns-syms — the namespace-scan entry to vars->cozo."
     {:signature [:=> [:catn [:ns-syms [:vector :symbol]]] db/CozoDb]
