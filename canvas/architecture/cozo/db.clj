@@ -1,7 +1,6 @@
 (ns canvas.architecture.cozo.db
   "Self-spec: the Cozo engine seam — `fukan.cozo.db`. Open an in-memory Cozo
-   database, run a CozoScript script to its rows, close it. The boundary the
-   datascript→Cozo migration ports laws and readers across; the only module that
+   database, run a CozoScript script to its rows, close it. The only module that
    knows the external `cozo-clj` exists. The db handle is an opaque external
    (`Kind CozoDb`, bodyless — honestly shapeless)."
   (:require [canvas.vocab.code.kind :refer [Kind]]

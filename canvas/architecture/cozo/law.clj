@@ -1,8 +1,8 @@
 (ns canvas.architecture.cozo.law
   "Self-spec: `fukan.cozo.law` — the general law engine on Cozo. Compiles a defstructure
    law's datalog (offenders + where, the same laws `structure/check` runs, read via the
-   kernel) into CozoScript over the unified `triple` view and runs it — the keystone
-   that replaces datascript's `check` at cut-over. Built alongside datascript."
+   kernel) into CozoScript over the unified `triple` view and runs it — the engine
+   `structure/check` dispatches to (registered through the kernel's check plug-point)."
   (:require [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.cozo.db :as db]

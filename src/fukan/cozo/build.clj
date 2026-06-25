@@ -1,13 +1,8 @@
 (ns fukan.cozo.build
-  "The datascript-free NATIVE build: assemble InstanceValues straight into a Cozo
-   substrate, no datascript intermediate. Reproduces what datascript's transaction
-   did implicitly — dedup nodes by `:entity/id` (value-identity) and rels by
-   `:rel/id`, assign integer eids, and resolve `:rel/from`/`:rel/to` lookup-refs —
-   then writes the datoms through the shared `mirror/load-datoms`.
-
-   The substrate it produces is content-identical to the datascript build mirrored;
-   eids differ (assigned here, not by datascript), but every query is name-based so
-   results agree — verified against the datascript build by the oracle."
+  "The NATIVE build: assemble InstanceValues straight into a Cozo substrate. Dedup nodes
+   by `:entity/id` (value-identity) and rels by `:rel/id`, assign integer eids, and resolve
+   `:rel/from`/`:rel/to` lookup-refs — then write the datoms through the shared
+   `mirror/load-datoms`. Eids are opaque (assigned here); every query is name-based."
   (:require [fukan.canvas.core.assemble :as assemble]
             [fukan.canvas.core.substrate :as sub]
             [canvas.vocab.grammar :as grammar]
@@ -29,9 +24,9 @@
       [id iv])))
 
 (defn- maps->datoms
-  "Node/rel maps → `[eid attr v]` datoms. Dedups nodes by `:entity/id` (merging their maps — the
-   value-identity datascript did via `:db.unique/identity`) and rels by `:rel/id`, assigns disjoint
-   integer eids from `offset` (nodes then rels), and resolves each `[:entity/id id]` ref to its eid."
+  "Node/rel maps → `[eid attr v]` datoms. Dedups nodes by `:entity/id` (merging their maps —
+   value-identity) and rels by `:rel/id`, assigns disjoint integer eids from `offset` (nodes then
+   rels), and resolves each `[:entity/id id]` ref to its eid."
   [nodes rels offset]
   (let [node-by-id (reduce (fn [m n] (update m (:entity/id n) merge n)) {} nodes)
         rel-by-id  (reduce (fn [m r] (assoc m (:rel/id r) r)) {} rels)
@@ -39,9 +34,8 @@
         node-eid   (zipmap (keys node-by-id) (map #(+ offset %) (range)))
         rel-eid    (zipmap (keys rel-by-id) (map #(+ offset n-nodes %) (range)))
         ref->eid   (fn [v] (if (and (vector? v) (= :entity/id (first v))) (node-eid (second v)) v))]
-    ;; KEEP :entity/id / :rel/id as datoms (datascript stored them as :db.unique/identity, so the
-    ;; mirror has them) — readers like the grammar print-dual's laws-of + the `of-structure` rule join on
-    ;; :entity/id; dropping them silently broke the grammar dual on the native build.
+    ;; KEEP :entity/id / :rel/id as datoms (the mirror stores them) — readers like the grammar
+    ;; print-dual's laws-of join on :entity/id; dropping them silently broke the grammar dual.
     (concat
      (for [[id n] node-by-id, [a v] n :when (some? v)]
        [(node-eid id) a v])
@@ -55,7 +49,7 @@
     (maps->datoms nodes rels 0)))
 
 (defn vars->cozo
-  "Build a Cozo substrate natively (no datascript) from instance-bearing `vars`:
+  "Build a Cozo substrate natively from instance-bearing `vars`:
    roots → native datoms → `mirror/load-datoms`. Returns the open Cozo db."
   [vars]
   (mirror/load-datoms (instances->datoms (roots-of vars))))
@@ -75,12 +69,11 @@
   (mirror/load-datoms (maps->datoms node-maps rel-maps 0)))
 
 (defn ^:test-support tx-maps->cozo
-  "Build a Cozo substrate from one seq of datascript-style transaction MAPS — the cozo analog
-   of `(-> (sub/create) (d/db-with tx-maps))`, replicating its tempid + `:db.unique/identity`
-   semantics: nodes merge by `:entity/id` (rels by `:rel/id`, last-wins), each `:db/id` tempid
-   resolves to its merged eid, and `:rel/from`/`:rel/to` values (a tempid or an `[:entity/id id]`
-   lookup-ref) resolve to eids. Lets a test hand-build a substrate with tempid wiring. Returns
-   the open Cozo db."
+  "Build a Cozo substrate from one seq of Datomic-style transaction MAPS, replicating tempid +
+   unique-identity semantics: nodes merge by `:entity/id` (rels by `:rel/id`, last-wins), each
+   `:db/id` tempid resolves to its merged eid, and `:rel/from`/`:rel/to` values (a tempid or an
+   `[:entity/id id]` lookup-ref) resolve to eids. Lets a test hand-build a substrate with tempid
+   wiring. Returns the open Cozo db."
   [tx-maps]
   (let [rels      (filter :rel/id tx-maps)
         nodes     (remove :rel/id tx-maps)
@@ -201,7 +194,7 @@ alle[e] := *t_bool[e, _, _]
              (for [[id r] rel-by-id, [a v] r] [(rel-eid id) a (ref->eid v)])))))
 
 (defn model->cozo
-  "Native FULL build (no datascript): the instance-vars of canvas `ns-syms` + the
+  "Native FULL build: the instance-vars of canvas `ns-syms` + the
    extraction `{:roots :var-usages}` facts → one native Cozo substrate, with the
    `:calls` graph grounded and the grammar reflected. Assembling canvas + extraction
    roots in one native pass resolves cross-refs without a union/merge. Returns the open Cozo db."

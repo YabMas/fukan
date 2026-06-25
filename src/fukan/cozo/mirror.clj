@@ -8,7 +8,7 @@
      t_bool {e: Int, a: String, v: Bool}
    The attribute keyword is stored as a plain string with no leading colon
    (`:rel/from` → \"rel/from\"), matching how the CozoScript reads it. (Named `mirror` from when
-   it reflected a datascript db; now the native build's only write path — renamed in the -cozo sweep.)"
+   it reflected a datascript db; now simply the substrate's only write path.)"
   (:require [fukan.cozo.db :as db]))
 
 (defn- attr->str

@@ -1,6 +1,5 @@
 (ns fukan.cozo.db
-  "The Cozo engine seam — a thin wrapper over `cozo-clj` that the datascript→Cozo
-   migration ports laws and readers across.
+  "The Cozo engine seam — a thin wrapper over `cozo-clj`.
 
    `open` makes an in-memory Cozo db; `q` runs a CozoScript script and returns its
    `:rows` (a vector of row-vectors), throwing on a failed query so callers don't

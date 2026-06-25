@@ -1,8 +1,8 @@
 (ns fukan.cozo.query
-  "The general datalog → CozoScript query compiler — the kernel query primitive on Cozo,
-   the cut-over replacement for datascript's `d/q` + `d/entity`. It owns the clause/rule
-   compiler (datom / not / not-join / or-join / predicates / rule-calls + the vocab-rule
-   index and reachability closure); `fukan.cozo.law` builds the law engine on top of it.
+  "The general datalog → CozoScript query compiler — the kernel query primitive on Cozo.
+   It owns the clause/rule compiler (datom / not / not-join / or-join / predicates / rule-calls
+   + the vocab-rule index and reachability closure); `fukan.cozo.law` builds the law engine on
+   top of it. `q`/`entity` are the read API the lens engine, readers, and print-duals call.
 
    `q` compiles the datalog subset fukan uses — relation (`[:find ?a ?b]`) and collection
    (`[:find [?v …]]`) find specs, an `:in` of `$` + optional `%` (rules) + bound scalar
@@ -252,7 +252,7 @@
       :else    (recur in-more v-more rules (assoc subst i v)))))
 
 (defn- lookup-ref?
-  "A datascript-style lookup-ref `[attr val]` (an attribute keyword + a value)."
+  "A lookup-ref `[attr val]` (an attribute keyword + a value)."
   [v] (and (vector? v) (= 2 (count v)) (keyword? (first v))))
 
 (defn- resolve-lookup
