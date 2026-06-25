@@ -65,7 +65,7 @@
    its subsystems, their modules, and the :may-depend DAG, derived live from the held model.
    Read this instead of `ls canvas/` to grasp fukan's shape."
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (println (arch/architecture-overview m))
     (println "No model loaded yet. Use (go) first.")))
 

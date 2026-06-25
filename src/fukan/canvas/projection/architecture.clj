@@ -3,20 +3,25 @@
    the code Subsystems, the Modules each clusters, and the declared `:may-depend` DAG, derived live
    from the model. Pure projection: model db → string. Read this instead of `ls canvas/architecture/`."
   (:require [clojure.string :as str]
-            [datascript.core :as d]))
+            [fukan.cozo.query :as cq]))
+
+(defn- ord
+  "Coerce a `:rel/order` cell to a long for sorting — `cq/q` returns strings over Cozo, ints over
+   datascript. (:child / :may-depend are ordered `:*` slots, so :rel/order is always present.)"
+  [x] (if (string? x) (Long/parseLong x) (long x)))
 
 (defn- subsystem-line [db sub-eid sub-name]
-  (let [mods (->> (d/q '[:find ?mod ?mn ?o :in $ ?sub
-                         :where [?r :rel/from ?sub] [?r :rel/kind :child] [?r :rel/to ?mod] [?mod :entity/name ?mn]
-                                [(get-else $ ?r :rel/order -1) ?o]]
-                       db sub-eid)
-                  (sort-by #(nth % 2))
+  (let [mods (->> (cq/q '[:find ?mod ?mn ?o :in $ ?sub
+                          :where [?r :rel/from ?sub] [?r :rel/kind :child] [?r :rel/to ?mod] [?mod :entity/name ?mn]
+                                 [?r :rel/order ?o]]
+                        db sub-eid)
+                  (sort-by #(ord (nth % 2)))
                   (map (fn [[_ mn _]] mn)))
-        deps (->> (d/q '[:find ?tn ?o :in $ ?sub
-                         :where [?r :rel/from ?sub] [?r :rel/kind :may-depend] [?r :rel/to ?t] [?t :entity/name ?tn]
-                                [(get-else $ ?r :rel/order -1) ?o]]
-                       db sub-eid)
-                  (sort-by second)
+        deps (->> (cq/q '[:find ?tn ?o :in $ ?sub
+                          :where [?r :rel/from ?sub] [?r :rel/kind :may-depend] [?r :rel/to ?t] [?t :entity/name ?tn]
+                                 [?r :rel/order ?o]]
+                        db sub-eid)
+                  (sort-by #(ord (second %)))
                   (map first))]
     (str (format "  ◆ %-14s " sub-name) (str/join ", " mods)
          (when (seq deps) (str "   ⟶ " (str/join ", " deps))))))
@@ -24,9 +29,9 @@
 (defn architecture-overview
   "Render fukan's subsystems + modules + the :may-depend DAG (string)."
   [db]
-  (let [subs  (->> (d/q '[:find ?s ?sn :where [?s :structure/of :canvas.vocab.code.subsystem/Subsystem] [?s :entity/name ?sn]] db)
+  (let [subs  (->> (cq/q '[:find ?s ?sn :where [?s :structure/of :canvas.vocab.code.subsystem/Subsystem] [?s :entity/name ?sn]] db)
                    (sort-by second))
-        nmod  (count (d/q '[:find ?m :where [?m :structure/of :canvas.vocab.code.module/Module]] db))]
+        nmod  (count (cq/q '[:find ?m :where [?m :structure/of :canvas.vocab.code.module/Module]] db))]
     (str/join
      "\n"
      (concat
