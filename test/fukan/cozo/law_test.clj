@@ -1,14 +1,14 @@
 (ns fukan.cozo.law-test
   "The Cozo law engine (datalog→CozoScript compiler) — first family: slot-cardinality
-   laws (datom / not / not-join / not=). Verifies the compiled CozoScript and that the
-   compiled laws agree with datascript's `check` on the real model (no false positives)."
+   laws (datom / not / not-join / not=). Unit-tests the compiled CozoScript, and that the
+   compiled law family finds no false positives on the real (green) model. (Cozo-standalone —
+   the datascript oracle this once carried retired with the dep; the broader cozo law
+   coverage now lives in the correspondence / subsystem / laws tests.)"
   (:require [clojure.test :refer [deftest is testing]]
-            ;; composition root — registers the extractor for build-model "src"
+            ;; composition root — registers the fact extractor for build-cozo-model "src"
             [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
-            [fukan.canvas.core.structure :as structure]
             [fukan.cozo.db :as db]
-            [fukan.cozo.mirror :as mirror]
             [fukan.cozo.law :as law]))
 
 (deftest compiles-a-not-join-cardinality-law
@@ -34,15 +34,13 @@
                                       [(not= ?r1 ?r2)]]}
                             #{} {})))))
 
-(deftest compiled-laws-agree-with-datascript-on-the-real-model
+(deftest compiled-laws-find-no-false-positives-on-the-real-model
   (testing "the compiler supports a family of laws, and they find no offenders on the green model"
-    (let [ds  (pipeline/build-model "src")
-          cdb (mirror/mirror ds)]
+    (let [cdb (pipeline/build-cozo-model "src")]
       (try
         (let [results  (law/check-structural cdb)
               compiled (remove :unsupported results)
               fired    (filter :offenders compiled)]
           (is (seq compiled) "precondition: the compiler supports the slot-cardinality law family")
-          (is (empty? fired) "no compiled law false-positives on the green real model")
-          (is (zero? (count (structure/check ds))) "and datascript's check agrees the model is clean"))
+          (is (empty? fired) "no compiled law false-positives on the green real model"))
         (finally (db/close cdb))))))
