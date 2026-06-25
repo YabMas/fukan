@@ -24,8 +24,18 @@
 ;; ── term + name helpers ───────────────────────────────────────────────────────
 (defn- dvar? [t] (and (symbol? t) (str/starts-with? (name t) "?")))
 (defn cvar "?e → e" [t] (subs (name t) 1))
-(defn- clit "a literal → its quoted all-string form (:calls → 'calls', 42 → '42', true → 'true')"
-  [v] (str \' (if (keyword? v) (subs (str v) 1) v) \'))
+(defn- clit
+  "A datalog literal → its CozoScript form, MATCHING the typed `triple` view: a keyword
+   is the colon-stripped quoted string the mirror stores (:calls → 'calls'), a string is
+   quoted ('ref'), and a boolean/integer is the NATIVE cozo literal (true, 42) — never
+   quoted — so it equals the native leaf the typed view returns. Other compound values
+   the mirror pr-str's, so they compare as quoted strings."
+  [v]
+  (cond
+    (keyword? v) (str \' (subs (str v) 1) \')
+    (boolean? v) (str v)
+    (integer? v) (str v)
+    :else        (str \' v \')))
 (defn- cterm "a datalog term → its CozoScript form (var → name, literal → quoted)"
   [t] (if (dvar? t) (cvar t) (clit t)))
 (defn- attr "​:rel/from → rel/from" [kw] (subs (str kw) 1))
@@ -41,9 +51,9 @@
 ;; head var range-restricted. So such a predicate is ported as a GENERATING rule (both
 ;; sides produced, then filtered), merged into the vocab index and pulled by the closure.
 (def ^:private synthetic-rules
-  {"r_canvas_module" {:lines ["r_canvas_module[cm] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], not triple[m, 'val/extracted', 'true'], triple[m, 'entity/name', cm]"]
+  {"r_canvas_module" {:lines ["r_canvas_module[cm] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], not triple[m, 'val/extracted', true], triple[m, 'entity/name', cm]"]
                       :refs #{}}
-   "r_code_module"   {:lines ["r_code_module[km] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], triple[m, 'val/extracted', 'true'], triple[m, 'entity/name', km]"]
+   "r_code_module"   {:lines ["r_code_module[km] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], triple[m, 'val/extracted', true], triple[m, 'entity/name', km]"]
                       :refs #{}}
    "r_module_corresponds" {:lines ["r_module_corresponds[cm, km] := r_canvas_module[cm], r_code_module[km], cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'), or(kmn == cmn, ends_with(kmn, concat('.', cmn)))"]
                            :refs #{"r_canvas_module" "r_code_module"}}})
@@ -61,13 +71,27 @@
 
 (declare compile-clause compile-clauses)
 
+(def ^:private comparison-ops
+  "Datalog comparison-predicate symbols → their CozoScript infix operator. Both sides are
+   compiled via `cterm`, so a literal becomes its NATIVE typed form (`(> ?max 60000)` →
+   `max > 60000`, `(= ?opt true)` → `opt == true`) — comparing against the typed `triple`
+   view's native leaves. `not=` and `=` accept the `clojure.core/`-qualified form too."
+  {'=  "==" 'clojure.core/=  "=="
+   'not= "!=" 'clojure.core/not= "!="
+   '<  "<"  'clojure.core/<  "<"
+   '>  ">"  'clojure.core/>  ">"
+   '<= "<=" 'clojure.core/<= "<="
+   '>= ">=" 'clojure.core/>= ">="})
+
 (defn- compile-predicate
-  "A `(pred args…)` predicate (the content of a `[(…)]` clause) → `[cozo-fragment refs]`. `not=`
-   (bare or `clojure.core/`-qualified) is built in; a registered fn-predicate is emitted via its
-   builder (which may name a synthetic generating rule in `refs`)."
+  "A `(pred args…)` predicate (the content of a `[(…)]` clause) → `[cozo-fragment refs]`. A
+   comparison op (`= < > <= >= not=`, bare or `clojure.core/`-qualified) is a built-in infix
+   filter; `(contains? #{…} ?v)` is set membership; a registered fn-predicate is emitted via
+   its builder (which may name a synthetic generating rule in `refs`)."
   [[op & args]]
   (cond
-    (#{'not= 'clojure.core/not=} op) [(str (cterm (first args)) " != " (cterm (second args))) #{}]
+    (contains? comparison-ops op)
+    [(str (cterm (first args)) " " (comparison-ops op) " " (cterm (second args))) #{}]
     ;; (contains? #{a b …} ?v) — set membership → an or of equalities (the set is a LITERAL, not a term)
     (and (#{'contains? 'clojure.core/contains?} op) (set? (first args)))
     [(str "or(" (str/join ", " (map #(str (cterm (second args)) " == " (clit %)) (first args))) ")") #{}]
@@ -229,13 +253,36 @@
       (= '% i) (recur in-more v-more v subst)
       :else    (recur in-more v-more rules (assoc subst i v)))))
 
+(defn- lookup-ref?
+  "A datascript-style lookup-ref `[attr val]` (an attribute keyword + a value)."
+  [v] (and (vector? v) (= 2 (count v)) (keyword? (first v))))
+
+(defn- resolve-lookup
+  "Resolve a lookup-ref `[attr val]` to its STRING eid by reading the typed bucket `val`'s
+   type lands in (the `entity/id` lookups carry string ids → t_str). Returns nil for no match."
+  [cdb [attr val]]
+  (let [a (subs (str attr) 1)
+        [rel cv] (cond
+                   (boolean? val) ["t_bool" val]
+                   (integer? val) ["t_int" val]
+                   (keyword? val) ["t_str" (subs (str val) 1)]
+                   :else          ["t_str" val])]
+    (some-> (ffirst (db/q cdb (str "?[e] := *" rel "[e, '" a "', v], v == $v") {:v cv})) str)))
+
+(defn- resolve-param
+  "A query `:in` scalar param → the value substituted into the where body: a lookup-ref is
+   resolved to its string eid (so it joins the stringified-eid `triple` view); any other
+   scalar passes through unchanged."
+  [cdb v] (if (lookup-ref? v) (resolve-lookup cdb v) v))
+
 (defn- q-cozo
   "Compile + run `query` over Cozo db `cdb` with `inputs`. Returns a SET of tuples for a
-   relation find, or a distinct vector for a collection find. All cells are STRINGS (the
-   `triple` view) — eids are opaque string handles (resolve via `entity`)."
+   relation find, or a distinct vector for a collection find. Eids are opaque STRING handles;
+   leaf values come back in their NATIVE type (Int/String/Bool, per the typed `triple` view)."
   [cdb query inputs]
   (let [{:keys [find in where]} (split-query query)
         {:keys [rules subst]}   (bind-inputs in inputs)
+        subst   (into {} (map (fn [[k v]] [k (resolve-param cdb v)]) subst))
         ;; scalar params bind only the WHERE-body's vars; a `%` rule's vars are head-scoped
         ;; and never close over query `:in` inputs — substituting a scalar into a rule would
         ;; corrupt its head (e.g. a shared name like `?op`), so the rules are passed verbatim.
@@ -251,9 +298,9 @@
 (defn q
   "Run datalog `query` over `db` like `d/q` (same argument order). POLYMORPHIC during the
    cut-over: a Cozo db is compiled + run (relation/collection finds, `:in` of `$` + optional
-   `%` rules + scalar params — cells come back as STRINGS over the `triple` view); a
-   datascript db falls through to `d/q` unchanged. The d/q branch is removed once the held
-   model is Cozo."
+   `%` rules + scalar params incl. `[attr val]` lookup-refs — EIDS come back as opaque
+   strings, leaf values in their NATIVE type over the typed `triple` view); a datascript db
+   falls through to `d/q` unchanged. The d/q branch is removed once the held model is Cozo."
   [query db & inputs]
   (if (instance? CozoJavaBridge db)
     (q-cozo db query inputs)
@@ -264,13 +311,14 @@
   "Resolve `eid` to its attribute map — the `d/entity` replacement, same argument order.
    POLYMORPHIC: a Cozo db reads the typed buckets (values in their real Int/String/Bool
    types; eid is a string handle), returning `{attr-keyword value}` (nil for an unknown
-   eid); a datascript db falls through to `d/entity`."
+   eid). `eid` may be an opaque string/number handle OR an `[attr val]` lookup-ref (resolved
+   to the matching eid first). A datascript db falls through to `d/entity`."
   [db eid]
   (if (instance? CozoJavaBridge db)
-    (let [eid  (str eid)
-          rows (mapcat (fn [bucket]
-                         (db/q db (str "?[a, v] := *" bucket "[e, a, v], e == " eid)))
-                       ["t_int" "t_str" "t_bool"])
-          m    (reduce (fn [acc [a v]] (assoc acc (keyword a) v)) {} rows)]
-      (when (seq m) (assoc m :db/id eid)))
+    (when-let [eid (if (lookup-ref? eid) (resolve-lookup db eid) (str eid))]
+      (let [rows (mapcat (fn [bucket]
+                           (db/q db (str "?[a, v] := *" bucket "[e, a, v], e == " eid)))
+                         ["t_int" "t_str" "t_bool"])
+            m    (reduce (fn [acc [a v]] (assoc acc (keyword a) v)) {} rows)]
+        (when (seq m) (assoc m :db/id eid))))
     (d/entity db eid)))

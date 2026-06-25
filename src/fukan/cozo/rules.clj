@@ -29,13 +29,18 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
 ")
 
 (def triple
-  "The unified all-string EAV view over the typed mirror relations — every datom as
-   `(e a v)` strings (eids stringified). Lets the law compiler map any `[?e :attr ?v]`
-   datalog pattern uniformly to `triple[e, 'attr', v]`; joins are string-equality."
+  "The unified EAV view over the typed mirror relations — EIDS are always strings (an
+   opaque handle), but LEAF VALUES keep their native type (Int/String/Bool), so a
+   `[?e :attr ?v]` find-var binds the real value, not a stringified one. The two
+   eid-VALUED int attributes (`rel/from`/`rel/to` — a relation's endpoint eids) are
+   stringified too, so they join with the (stringified) subject eids; every other int
+   (`rel/order` + leaf scalars) stays native. Cozo permits the mixed value column."
   "
-triple[e, a, v] := *t_int[ei, a, vi], e = to_string(ei), v = to_string(vi)
+triple[e, a, v] := *t_int[ei, a, v], a != 'rel/from', a != 'rel/to', e = to_string(ei)
+triple[e, a, v] := *t_int[ei, 'rel/from', vi], a = 'rel/from', e = to_string(ei), v = to_string(vi)
+triple[e, a, v] := *t_int[ei, 'rel/to', vi],   a = 'rel/to',   e = to_string(ei), v = to_string(vi)
 triple[e, a, v] := *t_str[ei, a, v],  e = to_string(ei)
-triple[e, a, v] := *t_bool[ei, a, vi], e = to_string(ei), v = to_string(vi)
+triple[e, a, v] := *t_bool[ei, a, v], e = to_string(ei)
 ")
 
 (def module-depends
