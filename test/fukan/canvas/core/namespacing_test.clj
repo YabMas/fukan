@@ -12,8 +12,9 @@
    <qualified-tag>]`, so a law on one `Kind` never ranges over the other's instances (the edge that
    surfaced when the subject re-grammar re-stated `Projection` at two altitudes)."
   (:require [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.query :as cq]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [canvas.vocab.code.kind :as code]))
 
@@ -35,19 +36,19 @@
     (is (not= (s/structure-by-tag ::Kind) (s/structure-by-tag :canvas.vocab.code.kind/Kind))
         "distinct definitions (the local Kind has a :note slot; canvas.vocab.code.kind/Kind has none)")
     ;; co-loaded in ONE db, instances carry distinct :structure/of and are separately queryable
-    (let [db (a/assemble-vars [#'local-kind #'lib-kind])]
+    (let [db (build/vars->cozo [#'local-kind #'lib-kind])]
       (is (= #{"local"}
-             (set (map first (d/q '[:find ?n :where [?e :structure/of ::Kind] [?e :entity/name ?n]] db)))))
+             (set (map first (cq/q '[:find ?n :where [?e :structure/of ::Kind] [?e :entity/name ?n]] db)))))
       (is (= #{"fromlib"}
-             (set (map first (d/q '[:find ?n :where [?e :structure/of :canvas.vocab.code.kind/Kind] [?e :entity/name ?n]] db)))))))
+             (set (map first (cq/q '[:find ?n :where [?e :structure/of :canvas.vocab.code.kind/Kind] [?e :entity/name ?n]] db)))))))
 
 (deftest law-scope-is-ns-precise
   (testing "a free law self-scoped to the local Kind flags only ::Kind instances — not canvas.vocab.code.kind/Kind"
-    (let [db      (a/assemble-vars [#'local-kind #'lib-kind])
+    (let [db      (build/vars->cozo [#'local-kind #'lib-kind])
           flagged (->> (s/check db)
                        (filter #(= "local-kind-flag" (:law %)))
                        (mapcat :offenders)
-                       (map (comp :entity/name #(d/entity db %) first))
+                       (map (comp :entity/name #(cq/entity db %) first))
                        set)]
       (is (contains? flagged "local") "the local law fires on its own ::Kind instance")
       (is (not (contains? flagged "fromlib"))

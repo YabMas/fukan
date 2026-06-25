@@ -1,7 +1,8 @@
 (ns canvas.vocab.type-render-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.query :as cq]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]
             ;; canvas.vocab.type: its render fn (registered per-test below) + Schema (the clj-kondo hook)
@@ -27,13 +28,13 @@
 (RenderHolder h-or    {:schema [:or :int :string]})
 (RenderHolder h-tup   {:schema [:tuple :string :int :keyword]})
 
-(defn- db [] (a/assemble-vars [#'Socket #'h-port #'h-addr #'h-color #'h-tags #'h-kw #'h-ref #'h-or #'h-tup]))
-(defn- root [db kind] (ffirst (d/q '[:find ?s :in $ ?k :where [?s :val/kind ?k]] db kind)))
+(defn- db [] (build/vars->cozo [#'Socket #'h-port #'h-addr #'h-color #'h-tags #'h-kw #'h-ref #'h-or #'h-tup]))
+(defn- root [db kind] (ffirst (cq/q '[:find ?s :in $ ?k :where [?s :val/kind ?k]] db kind)))
 
 (deftest renders-scalar-with-constraints
   (let [d*  (db)
         ;; pick the constrained int specifically — h-or contributes a bare :int
-        eid (ffirst (d/q '[:find ?s :where [?s :val/kind "int"] [?s :val/min _]] d*))]
+        eid (ffirst (cq/q '[:find ?s :where [?s :val/kind "int"] [?s :val/min _]] d*))]
     (is (= [:int {:min 1 :max 65535}] (typing/render-type d* eid)))))
 
 (deftest renders-collection
@@ -60,8 +61,8 @@
 (RenderHolder h-str-x {:schema [:enum "x"]})
 
 (deftest enum-member-type-is-stored-and-round-trips
-  (let [d* (a/assemble-vars [#'h-kw-x #'h-str-x])
-        of-holder (fn [n] (ffirst (d/q '[:find ?s :in $ ?n
+  (let [d* (build/vars->cozo [#'h-kw-x #'h-str-x])
+        of-holder (fn [n] (ffirst (cq/q '[:find ?s :in $ ?n
                                          :where [?h :entity/name ?n]
                                                 [?r :rel/from ?h] [?r :rel/kind :schema] [?r :rel/to ?s]]
                                        d* n)))]

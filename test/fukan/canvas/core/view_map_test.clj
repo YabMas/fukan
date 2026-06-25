@@ -13,8 +13,9 @@
 
    The coproduct is the only new kernel mechanic; traces + the laws ride the engine."
   (:require [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.query :as cq]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── two-view fixtures ────────────────────────────────────────────────────────
@@ -51,9 +52,9 @@
 
 (deftest traces-composes-across-views
   (testing "sa traces via→fa →realized-by→m1: three views, one query (xview is vocab-derived)"
-    (let [db    (a/assemble-vars [#'m1 #'fb #'fa #'sb #'sa])
+    (let [db    (build/vars->cozo [#'m1 #'fb #'fa #'sb #'sa])
           rules (into (vec (s/vocab-rules)) traces-rules)
-          reached (set (d/q '[:find [?nm ...] :in $ %
+          reached (set (cq/q '[:find [?nm ...] :in $ %
                               :where [?sa :entity/name "sa"] (traces ?sa ?x) [?x :entity/name ?nm]]
                             db rules))]
       (is (= #{"fa" "m1"} reached)
@@ -73,12 +74,12 @@
 
 (deftest traces-in-a-law-now-works
   (testing "the traces law is accepted and runs: sb (its concept fb has no realizing Mod) is flagged"
-    (let [db (a/assemble-vars [#'m1 #'fb #'fa #'sb #'sa])]
+    (let [db (build/vars->cozo [#'m1 #'fb #'fa #'sb #'sa])]
       (is (= #{"sb"}
              (->> (s/check db)
                   (filter #(= "every step traces to an impl module" (:law %)))
                   (mapcat :offenders) (map first)
-                  (map #(:entity/name (d/entity db %))) set))))))
+                  (map #(:entity/name (cq/entity db %))) set))))))
 
 ;; ── the functoriality law: a view-map must preserve flow ──────────────────────
 (defstructure FlowFunctor
@@ -100,13 +101,13 @@
   (->> (s/check db)
        (filter #(= "view-map preserves flow" (:law %)))
        (mapcat :offenders)
-       (map (fn [row] (set (map #(:entity/name (d/entity db %)) row))))
+       (map (fn [row] (set (map #(:entity/name (cq/entity db %)) row))))
        set))
 
 (deftest functoriality-law-catches-cross-view-drift
   (testing "aligned: SA→SB maps to FA feeds FB → no violation"
-    (let [db (a/assemble-vars [#'m1 #'fb #'fa #'sb #'sa])]
+    (let [db (build/vars->cozo [#'m1 #'fb #'fa #'sb #'sa])]
       (is (empty? (flow-offenders db)))))
   (testing "drift: SC→SD but FC does not feed FD → caught as a violation"
-    (let [db (a/assemble-vars [#'fc #'fd #'sd #'sc])]
+    (let [db (build/vars->cozo [#'fc #'fd #'sd #'sc])]
       (is (= #{#{"sc" "sd"}} (flow-offenders db))))))

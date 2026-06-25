@@ -1,7 +1,8 @@
 (ns fukan.canvas.core.composition-test
   (:require [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.query :as cq]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── product fixtures: a law-only facet + two includers ──────────────────────
@@ -40,19 +41,19 @@
   (->> (s/check db)
        (filter #(= law-desc (:law %)))
        (mapcat :offenders) (map first)
-       (map #(:entity/name (d/entity db %)))
+       (map #(:entity/name (cq/entity db %)))
        set))
 
 (deftest facet-law-ranges-over-includers
   (testing "a law on the Linked facet fires over Hub AND Spoke instances, via the inclusion rule"
-    (let [db (a/assemble-vars [#'lk-spoke #'lk-hub #'lk-iso])]
+    (let [db (build/vars->cozo [#'lk-spoke #'lk-hub #'lk-iso])]
       (is (= #{"lk-iso"} (offenders-of db "no isolated node"))
           "only the edge-less Hub is isolated; the connected Hub and the pointed-at Spoke are not"))))
 
 (deftest facet-membership-is-entailed
   (testing "(Linked ?e) entails over every includer instance"
-    (let [db    (a/assemble-vars [#'lk-spoke #'lk-hub #'lk-iso])
-          names (set (d/q '[:find [?nm ...] :in $ %
+    (let [db    (build/vars->cozo [#'lk-spoke #'lk-hub #'lk-iso])
+          names (set (cq/q '[:find [?nm ...] :in $ %
                             :where (Linked ?e) [?e :entity/name ?nm]]
                           db (s/vocab-rules)))]
       (is (= #{"lk-spoke" "lk-hub" "lk-iso"} names)))))
@@ -78,8 +79,8 @@
 
 (deftest realized-membership-is-derived
   (testing "(Flagged ?e) returns exactly the flag=true Notes"
-    (let [db    (a/assemble-vars [#'nt-on #'nt-off])
-          names (set (d/q '[:find [?nm ...] :in $ %
+    (let [db    (build/vars->cozo [#'nt-on #'nt-off])
+          names (set (cq/q '[:find [?nm ...] :in $ %
                             :where (Flagged ?e) [?e :entity/name ?nm]]
                           db (s/vocab-rules)))]
       (is (= #{"nt-on"} names)))))
@@ -97,8 +98,8 @@
 
 (deftest realized-rule-references-another-realized-rule
   (testing "FlaggedHolder realizes via Flagged — the inspect-over-signal composition"
-    (let [db    (a/assemble-vars [#'nt-on #'nt-off #'hold-on #'hold-off])
-          names (set (d/q '[:find [?nm ...] :in $ %
+    (let [db    (build/vars->cozo [#'nt-on #'nt-off #'hold-on #'hold-off])
+          names (set (cq/q '[:find [?nm ...] :in $ %
                             :where (FlaggedHolder ?e) [?e :entity/name ?nm]]
                           db (s/vocab-rules)))]
       (is (= #{"hold-on"} names)))))
@@ -119,7 +120,7 @@
 
 (deftest closed-sum-totality-has-teeth
   (testing "a Sum matching no variant is caught by the totality law"
-    (let [db (a/assemble-vars [#'sum-a #'sum-b #'sum-c])]
+    (let [db (build/vars->cozo [#'sum-a #'sum-b #'sum-c])]
       (is (= #{"sum-c"} (offenders-of db "every Sum is a VariantA or a VariantB"))))))
 
 ;; ── realized-concept guard ──────────────────────────────────────────────────

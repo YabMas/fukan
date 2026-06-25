@@ -1,8 +1,9 @@
 (ns fukan.canvas.core.lens-test
   (:require [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
+            [fukan.cozo.query :as cq]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.law]
             [fukan.canvas.core.lens :as lens :refer [Lens Check]]
-            [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 (defstructure Widget
@@ -14,10 +15,10 @@
   {:child [:* Any]})
 
 (defn- by-name [db n]
-  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
+  (ffirst (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
 
 (defn- names [db eids]
-  (set (map #(:entity/name (d/entity db %)) eids)))
+  (set (map #(:entity/name (cq/entity db %)) eids)))
 
 ;; module m: x links to y and z; module other: q
 (declare w-y w-z)
@@ -43,7 +44,7 @@
 
 (deftest evaluates-a-lens-selection-query-to-its-focus-node-set
   (testing "a lens's own selection query (over the vocab rules) yields the focus nodes"
-    (let [db (a/assemble-vars [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other
+    (let [db (build/vars->cozo [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other
                                #'lns-in-m #'lns-x-links])]
       (is (= #{"x" "y" "z"} (names db (lens/evaluate-lens db (by-name db "in-m"))))
           "kind + module selection, at domain altitude")
@@ -52,7 +53,7 @@
 
 (deftest refine-narrows-a-focus-to-members-also-matching-clauses
   (testing "refine intersects a focus with a further query — lens-within-lens; acts chain over it"
-    (let [db    (a/assemble-vars [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other])
+    (let [db    (build/vars->cozo [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other])
           all   (lens/focus-nodes db '[(Widget ?n)])                 ; x y z q
           in-m  (lens/refine db all '[(in-module ?n "m")])]          ; narrow to module m
       (is (= #{"x" "y" "z" "q"} (names db all)))
@@ -64,13 +65,13 @@
 
 (deftest prose-only-lens-is-not-evaluable
   (testing "a prose-only lens (no selection query) yields nil — TOTAL, not a throw"
-    (let [db (a/assemble-vars [#'lns-prose])]
+    (let [db (build/vars->cozo [#'lns-prose])]
       (is (nil? (lens/evaluate-lens db (by-name db "prose")))))))
 
 (deftest run-checks-fires-on-a-nonempty-gated-focus
   (testing "a Check gating a lens with a NON-EMPTY focus is a violation (offenders = the focus); a
             gated EMPTY focus passes — the use-side dual of structure/check"
-    (let [db         (a/assemble-vars [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other
+    (let [db         (build/vars->cozo [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other
                                        #'lns-in-m #'lns-none #'chk-fires #'chk-passes])
           violations (lens/run-checks db)
           by-check   (into {} (map (juxt :check identity)) violations)]
