@@ -1,8 +1,8 @@
 (ns canvas.vocab.code-test
   "Module-dependency readings on the code grammar."
   (:require [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
             [canvas.vocab.code.kind :as kind]
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as module]
@@ -24,7 +24,7 @@
 
 (deftest module-dependencies-unions-calls-and-data-adoption
   (testing "M depends on N via a delegate (call) OR via adopting a Kind N owns (data)"
-    (let [db (a/assemble-vars [#'DShape #'t-b-op #'t-a-op #'t-c-op
+    (let [db (build/vars->cozo [#'DShape #'t-b-op #'t-a-op #'t-c-op
                                #'t-mod-a #'t-mod-b #'t-mod-c #'t-mod-d])
           deps (module/module-dependencies db)]
       (is (contains? deps ["A" "B"]) "call dependency: A's op delegates to B's op")
@@ -36,8 +36,8 @@
 
 (deftest module-carries-extracted-provenance
   (testing "a Module authored with {:extracted true} stamps :val/extracted (symmetric with Operation)"
-    (let [db (a/assemble-vars [#'t-ext-mod])]
-      (is (true? (ffirst (d/q '[:find ?x :where [?m :structure/of :canvas.vocab.code.module/Module] [?m :val/extracted ?x]] db)))
+    (let [db (build/vars->cozo [#'t-ext-mod])]
+      (is (true? (ffirst (cq/q '[:find ?x :where [?m :structure/of :canvas.vocab.code.module/Module] [?m :val/extracted ?x]] db)))
           "Module :extracted is stored as :val/extracted"))))
 
 ;; ── Subsystem: clusters Modules + declares the :may-depend DAG (self-reference) ──
@@ -47,15 +47,15 @@
 
 (deftest subsystem-clusters-modules-and-declares-may-depend
   (testing "a Subsystem owns Modules via :child and declares :may-depend to another Subsystem"
-    (let [db (a/assemble-vars [#'t-fx-impl #'t-fx-infra #'t-sub-a #'t-sub-b])
-          a  (ffirst (d/q '[:find ?s :where [?s :entity/name "sub-a"]] db))]
+    (let [db (build/vars->cozo [#'t-fx-impl #'t-fx-infra #'t-sub-a #'t-sub-b])
+          a  (ffirst (cq/q '[:find ?s :where [?s :entity/name "sub-a"]] db))]
       (is (= #{"fx-impl"}
-             (set (d/q '[:find [?mn ...] :in $ ?a
+             (set (cq/q '[:find [?mn ...] :in $ ?a
                          :where [?r :rel/from ?a] [?r :rel/kind :child] [?r :rel/to ?m] [?m :entity/name ?mn]]
                        db a)))
           ":child edges reach the clustered Modules")
       (is (= #{"sub-b"}
-             (set (d/q '[:find [?tn ...] :in $ ?a
+             (set (cq/q '[:find [?tn ...] :in $ ?a
                          :where [?r :rel/from ?a] [?r :rel/kind :may-depend] [?r :rel/to ?t] [?t :entity/name ?tn]]
                        db a)))
           ":may-depend is a self-reference to another Subsystem (mirrors Operation :delegates)"))))
@@ -67,10 +67,10 @@
 
 (deftest operation-dispatches-to-handlers
   (testing "an Operation authored with :dispatches-to records ordered edges to its handler Operations"
-    (let [db (a/assemble-vars [#'t-dp-h1 #'t-dp-h2 #'t-dp])
-          dp (ffirst (d/q '[:find ?o :where [?o :entity/name "t-dp"]] db))]
+    (let [db (build/vars->cozo [#'t-dp-h1 #'t-dp-h2 #'t-dp])
+          dp (ffirst (cq/q '[:find ?o :where [?o :entity/name "t-dp"]] db))]
       (is (= #{"t-dp-h1" "t-dp-h2"}
-             (set (d/q '[:find [?hn ...] :in $ ?dp
+             (set (cq/q '[:find [?hn ...] :in $ ?dp
                          :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
                        db dp)))
           ":dispatches-to reaches each handler Operation"))))

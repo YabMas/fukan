@@ -7,7 +7,7 @@
 
 (deftest architecture-overview-renders-subsystems-and-dag
   (testing "each subsystem lists its modules and its declared dependencies"
-    (let [out (arch/architecture-overview (pipeline/build-model nil))]
+    (let [out (arch/architecture-overview (pipeline/build-cozo-model nil))]
       (is (str/includes? out "kernel"))
       (is (str/includes? out "core-structure"))
       (is (str/includes? out "orchestration"))
