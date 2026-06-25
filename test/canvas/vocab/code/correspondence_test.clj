@@ -3,7 +3,7 @@
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
             ;; loading infra.model is the composition root — it registers fukan's malli dialect AND its
-            ;; Clojure (fact) extractor + the Cozo check engine, so build-cozo-model "src" runs the build
+            ;; Clojure (fact) extractor + the Cozo check engine, so build-model "src" runs the build
             [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.structure :as s]
@@ -53,7 +53,7 @@
             :malli/schema adhere to their modelled types, so type-drift EXCLUDES them. (We
             assert these three specifically rather than global emptiness, which is fragile as
             more functions get annotated. The false-cases above prove DETECTION fires.)"
-    (let [model   (pipeline/build-cozo-model "src")
+    (let [model   (pipeline/build-model "src")
           drifted (operation/type-drifted-operations model)]
       (is (not (contains? drifted "load-model"))
           (str "load-model's :malli/schema should adhere to its model; drifted: " drifted))
@@ -66,7 +66,7 @@
   (testing "materialize-over is a real MULTI-ARG function whose :malli/schema matches its
             modelled ordered :in — same types, SAME ORDER, SAME ARITY — so it is NOT type-drifted,
             and the comparison fires on a reordered / dropped-arg code signature."
-    (let [model (pipeline/build-cozo-model "src")
+    (let [model (pipeline/build-model "src")
           op    (ffirst (cq/q '[:find ?e
                                :where [?e :structure/of :canvas.vocab.code.operation/Operation] (not [?e :val/extracted true])
                                       [?e :entity/name "materialize-over"]]
@@ -103,14 +103,14 @@
 
 (deftest call-realization-green-on-the-self-model
   (testing "module-level realization is green on the live build-model \"src\""
-    (is (empty? (module/unrealized-delegates (pipeline/build-cozo-model "src")))
+    (is (empty? (module/unrealized-delegates (pipeline/build-model "src")))
         "0 unrealized — verified by the design prototype")))
 
 (deftest uncovered-calls-backbone-complete
   (testing "slice 2: every actual cross-module call is now covered by an authored :delegates —
             the backbone is complete (detection of an UNdeclared coupling is proven on a synthetic
             db in fidelity-fires-on-an-undeclared-modelled-coupling)"
-    (let [worklist (module/uncovered-calls (pipeline/build-cozo-model "src"))]
+    (let [worklist (module/uncovered-calls (pipeline/build-model "src"))]
       (is (empty? worklist)
           (str "the :delegates backbone is complete; undeclared couplings remain: " worklist)))))
 
@@ -140,13 +140,13 @@
 
 (deftest fidelity-green-on-the-self-model
   (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
-    (is (empty? (module/unfaithful-calls (pipeline/build-cozo-model "src")))
+    (is (empty? (module/unfaithful-calls (pipeline/build-model "src")))
         "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
 
 (deftest slice-1-self-model-is-clean
   (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
             design+code self-model has zero law violations"
-    (let [model (pipeline/build-cozo-model "src")]
+    (let [model (pipeline/build-model "src")]
       (is (empty? (module/unrealized-delegates model)) "realization is green")
       (is (empty? (module/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
       (is (empty? (module/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
@@ -170,12 +170,12 @@
 
 (deftest encapsulation-green-on-the-self-model
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
-    (is (empty? (operation/uncovered-public-operations (pipeline/build-cozo-model "src")))
+    (is (empty? (operation/uncovered-public-operations (pipeline/build-model "src")))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
 
 (deftest defmultis-are-extracted-and-modelled
   (testing "both defmultis are extracted as Operations AND covered by the model (not undeclared public surface)"
-    (let [m         (pipeline/build-cozo-model "src")
+    (let [m         (pipeline/build-model "src")
           extracted (set (cq/q '[:find [?n ...]
                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
           worklist  (operation/uncovered-public-operations m)]
@@ -186,7 +186,7 @@
 
 (deftest run-probe-dispatches-to-the-eight-leaves
   (testing "run-probe is modelled as a dispatch point fanning out to all eight probe handlers"
-    (let [m  (pipeline/build-cozo-model "src")
+    (let [m  (pipeline/build-model "src")
           ;; the AUTHORED run-probe (not the extracted twin) carries the fan-out
           dp (ffirst (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name "run-probe"]
                                           (not [?o :val/extracted true])] m))]
@@ -263,7 +263,7 @@
 
 (deftest unrealized-dispatch-green-on-self-model
   (testing "every authored cross-module delegation is realized op-level (transitively, through dispatch) on the live model"
-    (is (empty? (module/unrealized-dispatch (pipeline/build-cozo-model "src")))
+    (is (empty? (module/unrealized-dispatch (pipeline/build-model "src")))
         "0 unrealized — incl. run/run-all via run-probe dispatch, and structure-form/instance-form via the target-expr helper chain")))
 
 (deftest effect-correspondence-fires-on-an-undeclared-transitive-effect
@@ -292,7 +292,7 @@
 
 (deftest effect-and-totality-green-on-the-self-model
   (testing "the merged self-model declares every effect its code reaches, and its trusted core is total"
-    (let [model (pipeline/build-cozo-model "src")]
+    (let [model (pipeline/build-model "src")]
       (is (empty? (effect/undeclared-effects model))
           "0 undeclared effects — design and extraction speak one effect language, to call-graph depth")
       (is (empty? (fukan/totality-violations model))
@@ -312,5 +312,5 @@
 
 (deftest lens-coverage-green-on-the-self-model
   (testing "every bespoke probe reader has a declared Lens twin on the live build-model \"src\""
-    (is (empty? (fukan/uncovered-readers (pipeline/build-cozo-model "src")))
+    (is (empty? (fukan/uncovered-readers (pipeline/build-model "src")))
         "0 uncovered readers — every probe-X leaf's focus is declared as a Lens instrument")))

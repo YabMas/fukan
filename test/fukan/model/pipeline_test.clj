@@ -68,7 +68,7 @@
 
 (deftest build-model-ingests-canvas-specs-into-a-structure-db
   (testing "the model is the merged structure db over the canvas/ defstructure specs"
-    (let [db (pipeline/build-cozo-model nil)]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "infra-model")
           "the canvas/infra/model spec is discovered and ingested")
       ;; infra is now modelled with the fukan-on-fukan grammar (Operation/Kind), not
@@ -80,32 +80,32 @@
 
 (deftest pipeline-links-across-to-canvas-source
   (testing "build-model is a thin entry point whose :calls link to canvas-source/extraction"
-    (let [db (pipeline/build-cozo-model nil)]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "model-pipeline")
           "the canvas/pipeline/model spec is ingested")
       ;; post-prune the pipeline subsystem is just build-model — the ingest/union
       ;; machinery lives in canvas-source now, not duplicated here
-      (is (= #{"build-model" "build-cozo-model"}            ; build-cozo-model is the transitional cozo twin (cut-over)
-             (set (cq/q '[:find [?n ...]
-                         :where [?m :entity/name "model-pipeline"]
-                                [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
-                                [?c :structure/of :canvas.vocab.code.operation/Operation] [?c :entity/name ?n]]
-                       db)))
-          "model.pipeline exposes build-model + its transitional cozo twin — no stale duplicate ingest")
-      ;; the seams: build-model's cross-module :delegates resolve to the canvas-source
-      ;; ingest/union stages and to the target extractor (design + code unified)
-      (is (= #{"build" "union-dbs"}
-             (set (cq/q '[:find [?bn ...]
-                         :where [?mp :entity/name "model-pipeline"]
-                                [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
-                                [?bm :entity/name "build-model"]
-                                [?r :rel/from ?bm] [?r :rel/kind :delegates] [?r :rel/to ?b]
-                                [?cs :entity/name "canvas-source"]
-                                [?cc :rel/kind :exposes] [?cc :rel/from ?cs] [?cc :rel/to ?b]
-                                [?b :entity/name ?bn]]
-                       db)))
-          "build-model delegates to canvas-source's build + union-dbs (its exposed API)")
-      (is (= ["run-extractor"]
+      (is (= ["build-model"]
+             (cq/q '[:find [?n ...]
+                     :where [?m :entity/name "model-pipeline"]
+                            [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
+                            [?c :structure/of :canvas.vocab.code.operation/Operation] [?c :entity/name ?n]]
+                   db))
+          "model.pipeline exposes exactly one operation — no stale duplicate ingest")
+      ;; the seams: build-model's cross-module :delegates resolve to canvas-source's namespace-load
+      ;; and to the target extractor's facts (design + code unified natively in Cozo)
+      (is (= ["require-canvas-namespaces!"]
+             (cq/q '[:find [?bn ...]
+                     :where [?mp :entity/name "model-pipeline"]
+                            [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
+                            [?bm :entity/name "build-model"]
+                            [?r :rel/from ?bm] [?r :rel/kind :delegates] [?r :rel/to ?b]
+                            [?cs :entity/name "canvas-source"]
+                            [?cc :rel/kind :exposes] [?cc :rel/from ?cs] [?cc :rel/to ?b]
+                            [?b :entity/name ?bn]]
+                   db))
+          "build-model delegates to canvas-source's require-canvas-namespaces! (its exposed API)")
+      (is (= ["extract-facts"]
              (cq/q '[:find [?en ...]
                     :where [?mp :entity/name "model-pipeline"]
                            [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
@@ -115,12 +115,12 @@
                            [?ec :rel/kind :exposes] [?ec :rel/from ?ex] [?ec :rel/to ?e]
                            [?e :entity/name ?en]]
                   db))
-          "build-model calls extraction/run-extractor — the design↔code seam, via the plug-point"))))
+          "build-model calls extraction/extract-facts — the design↔code seam, via the plug-point"))))
 
 (deftest the-structuredb-kind-is-one-shared-owned-node
   (testing "the StructureDb Kind is a single node owned by core.substrate (its node home);
             subsystems reference it (no per-subsystem Model/Db redeclaration)"
-    (let [db (pipeline/build-cozo-model nil)]
+    (let [db (pipeline/build-model nil)]
       (is (= 1 (count (cq/q '[:find ?k :where [?k :structure/of :canvas.vocab.code.kind/Kind] [?k :entity/name "StructureDb"]] db)))
           "exactly one StructureDb Kind node")
       (is (= ["core-substrate"]
@@ -137,22 +137,22 @@
           "the ref-schema naming it is one value-identified node, reused across every subsystem"))))
 
 (deftest canvas-source-effects-are-captured-and-value-identified
-  (testing "Operation effects are recorded; :io (performed by 4 stages) is one shared node"
-    (let [db (pipeline/build-cozo-model nil)]
+  (testing "Operation effects are recorded; :io (performed by several stages) is one shared node"
+    (let [db (pipeline/build-model nil)]
       (is (= 1 (count (cq/q '[:find ?e :where [?e :structure/of :canvas.vocab.code.effect/Effect] [?e :val/name "io"]] db)))
           "the :io effect is value-identified across every stage that performs it")
       (is (seq (cq/q '[:find ?r
-                      :where [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :entity/name "build"]
+                      :where [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :entity/name "require-canvas-namespaces!"]
                              [?r :rel/from ?b] [?r :rel/kind :performs] [?r :rel/to ?e]
                              [?e :structure/of :canvas.vocab.code.effect/Effect] [?e :val/name "io"]]
                     db))
-          "build performs :io"))))
+          "require-canvas-namespaces! performs :io"))))
 
 (deftest kernel-meta-model-captures-structure-composition
   (testing "the reflexive kernel model: 'a structure = slots + laws' reads off the
             REFLECTED grammar (the hand-modelled defstructure-layer Concepts are gone);
             the hand-modelled remainder is the substrate (Node, Relation)"
-    (let [db (pipeline/build-cozo-model nil)]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "core-structure"))
       (is (= #{"tag" "value" "includes" "law" "realizes"}
              (set (cq/q '[:find [?l ...]
@@ -182,14 +182,14 @@
 
 (deftest lenses-modelled-as-cross-cutting-focuses
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
-    (let [db (pipeline/build-cozo-model nil)]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Grouping) "lens"))
       (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
                        (names-of db :Lens))))))
 
 (deftest projection-subsystem-modelled-as-target-representations
   (testing "the projection view: model re-presented into targets through a lens + source→artifact mappings"
-    (let [db (pipeline/build-cozo-model nil)]
+    (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Grouping) "projection"))
       ;; Blueprint (code) + DriftClose (instructions — instruct ⊂ projection); more to come
       (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
@@ -211,7 +211,7 @@
 
 (deftest a-lens-is-reused-across-acts
   (testing "the payoff: ONE drift lens is a shared focus — the read focus AND the drift-close projection's focus"
-    (let [db (pipeline/build-cozo-model nil)]
+    (let [db (pipeline/build-model nil)]
       (is (= 1 (count (cq/q '[:find ?l :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "drift"]] db)))
           "there is exactly one drift lens node")
       (is (seq (cq/q '[:find ?l

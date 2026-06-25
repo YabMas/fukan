@@ -9,7 +9,7 @@
             [canvas.vocab.code.extractor :as tc]
             [canvas.vocab.code.operation :as corr]))
 
-;; Register fukan's FACT extractor so build-cozo-model's unified build runs it (the proof).
+;; Register fukan's FACT extractor so build-model's unified build runs it (the proof).
 (extraction/register-fact-extractor! (fn [root] (tc/extract-roots [root])))
 
 (defn- extract-cozo
@@ -84,7 +84,7 @@
             with the code extracted from src/ on one graph, and every modelled
             op-layer Operation is backed by a real function — the cross-layer
             correspondence is assertable only because both layers share that graph"
-    (let [model      (pipeline/build-cozo-model "src")        ; design + extracted code, unified
+    (let [model      (pipeline/build-model "src")        ; design + extracted code, unified
           unrealized (corr/drifted-operations model)]
       ;; sanity: build-model actually brought both layers together
       (is (seq (cq/q '[:find ?s :where [?s :structure/of :canvas.vocab.code.operation/Operation]] model)) "model has Operations")

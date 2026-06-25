@@ -13,10 +13,7 @@
    the assembled design db."
   (:require
    [clojure.java.io :as io]
-   [clojure.string :as str]
-   [datascript.core :as d]
-   [fukan.canvas.core.assemble :as assemble]
-   [fukan.canvas.core.substrate :as substrate]))
+   [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
 ;; Discovery — scan canvas/ for *.clj and derive namespace symbols
@@ -97,74 +94,10 @@
 (defn require-canvas-namespaces!
   "Discover every canvas namespace and REQUIRE it (registering its vocabulary and interning
    its instance `def`s), returning the ns symbols. The native Cozo build's instance-var scan
-   reads `ns-interns`, so the namespaces must be loaded first — this is that load step,
-   factored out of the (datascript) `build` so the cozo build can share it."
+   (`model->cozo`) reads `ns-interns`, so the namespaces must be loaded first — this is that
+   load step. (References between instances are ordinary var refs the assembler resolves; there
+   is no merge/cross-ref pass.)"
   []
   (let [nss (discover-canvas-namespaces)]
     (doseq [ns-sym nss] (require-canvas-namespace ns-sym))
     nss))
-
-;; ---------------------------------------------------------------------------
-;; Union — fold the extractor's code db onto the assembled design db (schema-driven)
-;; ---------------------------------------------------------------------------
-
-(defn- db->entity-maps
-  "Extract identity-bearing entities from one structure db as transactable data
-   — schema-driven, so any structure entity (nodes, reified relations) is carried
-   without per-attr knowledge. Returns {:entity-maps [...] :ref-txs [...]}: scalar
-   attrs as maps (cardinality-many accumulated as sets), ref-typed datoms as
-   [:db/add src-lookup-ref attr tgt-lookup-ref] over identity lookup-refs (so
-   per-db eids never leak across the merge boundary)."
-  [db]
-  (let [schema   (:schema db)
-        id-attrs (->> schema (keep (fn [[a m]] (when (= :db.unique/identity (:db/unique m)) a))) set)
-        ref?     (fn [a] (= :db.type/ref (get-in schema [a :db/valueType])))
-        many?    (fn [a] (= :db.cardinality/many (get-in schema [a :db/cardinality])))
-        ident    (fn [eid] (some (fn [a] (when-let [d (first (seq (d/datoms db :eavt eid a)))]
-                                           [a (.-v d)]))
-                                 id-attrs))
-        eids     (d/q '[:find [?e ...] :where [?e _ _]] db)
-        eid->id  (into {} (keep (fn [e] (when-let [i (ident e)] [e i])) eids))]
-    {:entity-maps (mapv (fn [[eid [ida idv]]]
-                          (reduce (fn [m datom]
-                                    (let [a (.-a datom) v (.-v datom)]
-                                      (cond (ref? a)  m
-                                            (many? a) (update m a (fnil conj #{}) v)
-                                            :else     (assoc m a v))))
-                                  {ida idv}
-                                  (d/datoms db :eavt eid)))
-                        eid->id)
-     :ref-txs    (mapcat (fn [[eid [ida idv]]]
-                           (keep (fn [datom]
-                                   (let [a (.-a datom) tgt (.-v datom)]
-                                     (when (ref? a)
-                                       (when-let [[ta tv] (eid->id tgt)]
-                                         [:db/add [ida idv] a [ta tv]]))))
-                                 (d/datoms db :eavt eid)))
-                         eid->id)}))
-
-(defn union-dbs
-  "Union a seq of structure dbs into one. Entities keep their stable identities
-   (`:entity/id` / `:rel/id`); ref-typed attrs are translated to identity lookup-refs
-   (two passes: scalars first, then refs) so they resolve in the unioned db. Used to
-   fold an extractor's code db onto the assembled design db (both carry globally
-   unique ids)."
-  [dbs]
-  (let [extractions (map db->entity-maps dbs)]
-    (-> (substrate/create)
-        (d/db-with (mapcat :entity-maps extractions))
-        (d/db-with (mapcat :ref-txs extractions)))))
-
-;; ---------------------------------------------------------------------------
-;; Build — the model
-;; ---------------------------------------------------------------------------
-
-(defn build
-  "Discover every canvas spec, require it (registering its vocabulary and interning
-   its instance `def`s), and assemble all those instance-vars into one structure db.
-   References between instances are ordinary var references resolved by the assembler
-   — there is no separate merge/cross-ref pass. This db is the model."
-  []
-  (let [nss (discover-canvas-namespaces)]
-    (doseq [ns-sym nss] (require-canvas-namespace ns-sym))
-    (assemble/assemble nss)))

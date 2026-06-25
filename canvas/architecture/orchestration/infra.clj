@@ -10,30 +10,22 @@
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.orchestration.pipeline :as pipeline]
             [canvas.architecture.ingestion.extraction :as extraction]
-            [canvas.architecture.ingestion.source :as source]
             [canvas.architecture.cozo.db :as cozo-db]
-            [canvas.architecture.cozo.build :as cozo-build]
-            [canvas.architecture.cozo.mirror :as cozo-mirror]))
+            [canvas.architecture.cozo.query :as cozo-query]))
 
 (Module infra-model
-  "The model lifecycle — load / get / refresh the held Model from a source path. During the
-   datascript→Cozo cut-over it holds the model dually: the ds db (`get-model`, oracle) + the NATIVE
-   Cozo build (`get-cozo`, what consumers read)."
-  (Operation load-model    "Build (or reload) the held Model from a src path: the ds build (oracle) + the native Cozo build (model->cozo) consumers read."
+  "The model lifecycle — load / get / refresh the held Model from a source path. The held Model is
+   the native Cozo build; `get-model`/`get-cozo` both return it."
+  (Operation load-model    "Build (or reload) the held Model from a src path — the native Cozo build, closing the prior db."
     {:signature  [:=> [:catn [:src extraction/Path]] substrate/StructureDb]
-     :performs   [:io :require :state :throws]
-     ;; build the ds oracle + the native Cozo model; canvas-namespaces/extract-roots feed model->cozo
-     :delegates  [pipeline/build-model source/canvas-namespaces cozo-build/model->cozo cozo-db/close]})
-  (Operation get-model     "The current held ds Model (the oracle), or none."
+     :performs   [:io :stderr :require :state :throws]
+     :delegates  [pipeline/build-model cozo-query/q cozo-db/close]})  ; build the cozo model; cq/q reads the count; close the prior
+  (Operation get-model     "The current held Model (the Cozo substrate), or none."
     {:signature [:=> [:cat] substrate/StructureDb]})
-  (Operation get-cozo      "The current held Model's Cozo db handle (the native build), or none."
+  (Operation get-cozo      "The current held Model's Cozo db handle — what consumers read (alias of get-model)."
     {:signature [:=> [:cat] :any]})
   (Operation refresh-model "Rebuild the Model from the last src path."
     {:signature [:=> [:cat] substrate/StructureDb]
-     :performs  [:io :require :state :throws]})
-  (Operation set-model-for-test! "Test helper — directly hold an arbitrary ds Model + its Cozo MIRROR (tests pass a ds db, so this mirrors rather than native-builds)."
-    {:signature [:=> [:catn [:m substrate/StructureDb]] :any]
-     :performs  [:state]                            ; resets the held-state atom
-     :delegates [cozo-mirror/mirror]})
+     :performs  [:io :stderr :require :state :throws]})
   (Operation get-src "The current source path the held Model was built from, or none."
     {:signature [:=> [:cat] extraction/Path]}))

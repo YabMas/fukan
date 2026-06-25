@@ -12,22 +12,7 @@
    yet."
   (:refer-clojure :exclude []))
 
-(defonce ^:private extractor (atom nil))
 (defonce ^:private fact-extractor (atom nil))
-
-(defn register-extractor!
-  "Register the project's code extractor: a fn `code-root -> structure-db`.
-   Replaces any previously registered extractor (a project has one)."
-  [f]
-  (reset! extractor f)
-  nil)
-
-(defn run-extractor
-  "Run the registered extractor over `code-root`, returning its structure-db — or
-   nil when no extractor is registered (a design-only build)."
-  [code-root]
-  (when-let [f @extractor]
-    (f code-root)))
 
 (defn register-fact-extractor!
   "Register the project's FACT extractor: a fn `code-root -> {:roots :var-usages}` (the

@@ -17,7 +17,6 @@
    Pure projection: model db → form / string."
   (:require [clojure.string :as str]
             [clojure.edn :as edn]
-            [datascript.core :as d]                ; d/touch only — realize a ds entity's attrs (cozo entities are already maps; drops at Phase 7)
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s]
@@ -87,11 +86,10 @@
    doesn't declare (reflected or extracted extras) — nothing the node carries is
    silently dropped."
   [db eid]
-  (let [e      (cq/entity db eid)
+  (let [e      (cq/entity db eid)         ; a Cozo entity is already a full attr map
         sdef   (s/structure-by-tag (struct-tag e))
         rels   (rels-by-kind db eid)
-        ;; a cozo entity is already a full attr map; a ds Entity must be touched to realize its attrs
-        vals*  (into {} (filter #(= "val" (namespace (key %)))) (if (map? e) e (d/touch e)))
+        vals*  (into {} (filter #(= "val" (namespace (key %)))) e)
         ;; a payload is a companion CODE-FORM — pr-str'd to a string in the Cozo mirror, so read it back
         payload-val (fn [pv] (cond-> pv (string? pv) edn/read-string))
         scalar-entry (fn [{:keys [rel payload]}]

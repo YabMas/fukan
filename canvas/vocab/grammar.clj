@@ -25,9 +25,8 @@
    A modelling TOOL, not core: the runtime (`check`/`assemble`/`evaluate-lens`) never
    consults the reflected nodes — they exist only so the grammar is viewable as data (the
    print-dual primer, the `unused-structures` grammar-drift reading). So it lives in
-   canvas/vocab, and the build pipeline runs `with-grammar` on every build."
+   canvas/vocab, and the native build runs `reflect` (via `build/with-grammar-cozo`) on every build."
   (:require [clojure.string :as str]
-            [datascript.core :as d]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]
             ;; Schema must be registered (and its :valid?/:reflect bridges wired) before
@@ -202,15 +201,3 @@
                            "grammar reference (check the defining ns is required)")
                       {:rel r})))
     {:nodes (vec nodes) :rels (vec rels)}))
-
-(defn with-grammar
-  "PURE: db → db′ with the model's grammar reified in (see the ns doc for shape
-   and scope). Idempotent per build — ids are deterministic, so re-reflection
-   upserts rather than duplicates. `extra-seeds` (ns-name strings) are added to the
-   reflection closure, so a namespace with NO instantiated tags still reflects — the
-   case for a pure-grammar stratum (portraits, no instances)."
-  ([db] (with-grammar db nil))
-  ([db extra-seeds]
-   (let [tags (map first (d/q '[:find ?t :where [_ :structure/of ?t]] db))
-         {:keys [nodes rels]} (reflect tags extra-seeds)]
-     (-> db (d/db-with nodes) (d/db-with rels)))))

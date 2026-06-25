@@ -20,8 +20,7 @@
    runs every structure's laws (slot-cardinality laws + free `law`s, recursive
    datalog rules supported) over a db, injecting the vocab-derived rules so laws read
    at domain altitude. The schema is minimal and classification-free."
-  (:require [datascript.core :as d]
-            [fukan.canvas.core.rules :as rules]
+  (:require [fukan.canvas.core.rules :as rules]
             ;; the node substrate this grammar sits on (the InstanceValue the macro emits,
             ;; node identity, the empty db) lives one layer down
             [fukan.canvas.core.substrate :as sub :refer [->InstanceValue]]))
@@ -738,16 +737,6 @@
   [sdef]
   (concat (slot-laws sdef) (:laws sdef)))
 
-(defn- law-scope-tag
-  "The structure tag a free law's first offender var is scoped to: its :scope
-   when set (nil when :scope is :global), else its owning structure. Slot-derived
-   laws self-scope and carry no :owner, so they get no injection."
-  [{:keys [scope owner]}]
-  (case scope
-    :global nil
-    nil     owner
-    scope))
-
 (defn direct-scope-tags
   "Qualified tags whose instances carry `:structure/of` DIRECTLY, so a law scoped to one can be
    pinned ns-precisely (`[?o :structure/of tag]`) instead of riding the short-name rule. Excludes
@@ -762,14 +751,6 @@
                 (remove facets))
           structures)))
 
-(def ^:dynamic *law-timeout-ms*
-  "Per-law wall-clock budget for `check`. A recursive law that exceeds it —
-   e.g. unbounded recursion over a cyclic/indirect graph — is reported as
-   timed-out instead of hanging the whole check. Best-effort: the underlying
-   datascript query thread is abandoned (datascript queries aren't cleanly
-   interruptible), so it runs on until it finishes or the JVM exits."
-  5000)
-
 (defn vocab-rules
   "The datascript rules derived from the live vocabulary (one per kind + per relation
    slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
@@ -777,96 +758,23 @@
   []
   (rules/derive-rules (all-structures) scalar-slot?))
 
-(defn- rules-recursive?
-  "Whether a law's own rules can recurse: some rule's body invokes a rule the law
-   itself defines (self- or mutual). Vocab-derived rules can't call a law's rules,
-   so only these need the timeout guard; plain helper rules (e.g. combinator
-   expansions) run on the fast path."
-  [rules]
-  (let [defined (defined-rule-names rules)]
-    (boolean (some #(seq (rule-refs (rest %) defined)) rules))))
-
-(defn- run-query
-  "Run a law's offender query, returning the offender rows (or nil if none).
-   Only laws with their OWN recursive `:rules` can diverge, so only they are run under
-   the *law-timeout-ms* guard (via a future); non-recursive laws run inline. Either
-   way the query gets `rules` (the vocab-derived rules merged with the law's own).
-   Returns ::timeout if a guarded query exceeds the budget."
-  [db q rules recursive?]
-  (if recursive?
-    (let [fut     (future (d/q q db rules))
-          results (deref fut *law-timeout-ms* ::timeout)]
-      (if (= results ::timeout)
-        (do (future-cancel fut) ::timeout)
-        results))
-    (d/q q db rules)))
-
-(defn- run-law [db base-rules direct-tags {:keys [offenders where rules] :as law}]
-  ;; Scope the first offender var to the law's structure. A DIRECTLY-instantiated concrete tag is
-  ;; pinned ns-precisely via `[?o :structure/of tag]` — so two same-short-named structures from
-  ;; different namespaces (e.g. a concept re-stated at two altitudes) never cross-scope. Facets
-  ;; (`includes` targets) and realized/derived concepts have no direct `:structure/of`, so they ride
-  ;; the short-name RULE `(Foo ?o)`, which chains the inclusion / realized-as rules to reach their
-  ;; members. (A same-short-name collision survives only for those rarely-co-loaded abstract tags.)
-  (let [scope-tag    (law-scope-tag law)
-        scope-clause (when scope-tag
-                       (if (contains? direct-tags scope-tag)
-                         [(first offenders) :structure/of scope-tag]
-                         (list (symbol (name scope-tag)) (first offenders))))
-        where*       (if scope-clause (vec (cons scope-clause where)) where)
-        q            (vec (concat [:find] offenders [:in '$ '%] [:where] where*))
-        ;; vocab-derived rules are always available; only actually-recursive own
-        ;; rules need the timeout guard
-        results   (run-query db q (into (vec base-rules) rules) (rules-recursive? rules))]
-    (cond
-      (= results ::timeout) ::timeout
-      (seq results)         (mapv vec results)
-      :else                 nil)))
-
 ;; ── The check-engine plug-point ───────────────────────────────────────────────
-;; `check` evaluates laws over a datascript db. An alternative backend (the Cozo law
-;; engine) registers itself here, so `check` dispatches to it for the dbs it claims —
-;; the kernel never names the backend (mirrors the typing plug-point), which avoids a
-;; structure→backend require cycle.
+;; `check` runs the laws through a registered backend (the Cozo law engine). The kernel never
+;; names the backend (mirrors the typing plug-point), which avoids a structure→backend require
+;; cycle — `fukan.cozo.law` registers itself.
 (defonce ^:private check-engine (atom nil))
 
 (defn register-check-engine!
-  "Register an alternative `check` backend: `{:claims? (fn [db]→bool) :check (fn [db]→results)}`.
-   When `:claims?` holds for the db passed to `check`, `:check` serves it instead of the datascript
-   evaluator, returning the same `[{:structure :law :offenders}]` shape. The plug-point that lets a
-   non-datascript engine (Cozo) back `check` without the kernel depending on it."
+  "Register the `check` backend: `{:claims? (fn [db]→bool) :check (fn [db]→results)}`. When
+   `:claims?` holds for the db passed to `check`, `:check` serves it, returning the
+   `[{:structure :law :offenders}]` shape. The plug-point that backs `check` with the Cozo law
+   engine without the kernel depending on it."
   [engine]
   (reset! check-engine engine)
   nil)
 
-(defn- check-datascript
-  "Run every registered structure's laws (slot-cardinality + free) over datascript `db`, with the
-   vocab-derived rules injected so law `:where`s read at domain altitude. Returns result maps:
-     {:structure :law :offenders [...]}             — a violation
-     {:structure :law :timed-out? true :message …}  — a (recursive) law that
-        exceeded *law-timeout-ms* instead of completing."
-  [db]
-  (let [base   (vocab-rules)
-        direct (direct-scope-tags (all-structures))]
-   (vec
-    (for [{:keys [tag laws] :as sdef} (all-structures)
-          {:keys [desc] :as law} (concat (slot-laws sdef) laws)
-          :let [r (run-law db base direct law)]
-          :when r]
-     (if (= r ::timeout)
-       {:structure tag :law desc :timed-out? true
-        :message (str "law exceeded *law-timeout-ms* (" *law-timeout-ms* "ms) "
-                      "without completing — likely unbounded recursion over a "
-                      "cyclic/indirect graph (recursion must run over a direct "
-                      "binary relation, not a rule-derived one)")}
-       {:structure tag :law desc :offenders r})))))
-
 (defn check
-  "Run every registered structure's laws over `db` → `[{:structure :law :offenders|:timed-out?}]`.
-   Polymorphic across the cut-over: a registered check engine that CLAIMS `db` (the Cozo backend,
-   for a Cozo db) serves it; otherwise the datascript law evaluator runs (`check-datascript`)."
+  "Run every registered structure's laws over the Cozo db `db` → `[{:structure :law :offenders}]`,
+   through the registered check engine (the Cozo law engine, wired at load by `fukan.cozo.law`)."
   [db]
-  (let [eng @check-engine]
-    (if (and eng ((:claims? eng) db))
-      ((:check eng) db)
-      (check-datascript db))))
+  ((:check @check-engine) db))

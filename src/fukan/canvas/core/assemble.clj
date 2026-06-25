@@ -1,17 +1,10 @@
 (ns fukan.canvas.core.assemble
-  (:require [datascript.core :as d]
-            [fukan.canvas.core.substrate :as s]))
+  "The assembler: walk authored InstanceValues → plain node/rel datom-maps (stamp identity,
+   resolve refs, recurse into inline values). The maps are engine-neutral; the native Cozo build
+   (`fukan.cozo.build`) writes them to the substrate."
+  (:require [fukan.canvas.core.substrate :as s]))
 
-(defn- collect
-  "Seq of [var InstanceValue] for every instance-bearing interned var across the
-   given namespaces. Internal var-discovery behind the public `assemble`."
-  [ns-syms]
-  (for [ns-sym ns-syms
-        [_ v] (ns-interns ns-sym)
-        :when (s/instance-value? (deref v))]
-    [v (deref v)]))
-
-;; ── assembler: scan instance-vars → stamp identity → resolve refs → transact ──
+;; ── assembler: instance-vars → stamp identity → resolve refs → node/rel maps ──
 
 (defn- node-id [iv owner-id path]
   ;; a named entity uses its var-id (passed in for top vars); a ^:value uses its
@@ -69,24 +62,6 @@
          (:clauses iv))]
     [nodes rels]))
 
-(defn assemble-vars
-  "Build one structure db from an explicit collection of instance-bearing vars.
-   Useful for assembling ad-hoc models (e.g. in negative tests) without a namespace scan."
-  [vars]
-  (let [[nodes rels] (reduce (fn [[nodes rels] v]
-                               (let [iv0 (deref v)
-                                     ;; a named entity authored without an explicit name
-                                     ;; takes its :entity/name from the binding var's
-                                     ;; simple name (values stay anonymous)
-                                     iv (if (and (not (:value? iv0)) (nil? (:name iv0)))
-                                          (assoc iv0 :name (s/var-simple-name v))
-                                          iv0)
-                                     id (if (:value? iv) (s/value-content-key iv) (s/var-id v))]
-                                 (walk iv id nodes rels)))
-                             [[] []]
-                             vars)]
-    (-> (s/create) (d/db-with nodes) (d/db-with rels))))
-
 (defn emit-instances
   "Walk explicit `[id InstanceValue]` roots into `{:nodes [...] :rels [...]}` maps
    WITHOUT transacting — for builders that merge into an EXISTING db (e.g. the
@@ -97,17 +72,3 @@
                              [[] []]
                              id+ivs)]
     {:nodes nodes :rels rels}))
-
-(defn assemble-instances
-  "Build one structure db from explicit `[id InstanceValue]` roots — programmatic
-   construction with no var scan, for builders that synthesize instances at runtime
-   (e.g. a code extractor). Nodes are transacted before rels so lookup-refs resolve."
-  [id+ivs]
-  (let [{:keys [nodes rels]} (emit-instances id+ivs)]
-    (-> (s/create) (d/db-with nodes) (d/db-with rels))))
-
-(defn assemble
-  "Scan `ns-syms` for instance-vars and build one structure db (nodes first, then rels).
-   Transacts all nodes before any rels so datascript lookup-refs resolve across cycles."
-  [ns-syms]
-  (assemble-vars (map first (collect ns-syms))))

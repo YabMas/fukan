@@ -77,7 +77,7 @@
    fixture (`target-clojure`/`extract`) folded on — the cozo analog of union-dbs over the fixture vars."
   ([] (model* nil))
   ([code-root]
-   (build/fold-vars->cozo (pipeline/build-cozo-model code-root)
+   (build/fold-vars->cozo (pipeline/build-model code-root)
                           [#'fx-path #'fx-sdb #'fx-extract #'fx-target])))
 
 (deftest render-dispatches-per-projection-and-kind-and-composes-references
@@ -204,7 +204,7 @@
 
 (deftest probe-foci-compose-into-a-projection
   (testing "a probe's observation foci flow straight into a projection (the seam)"
-    (let [db      (pipeline/build-cozo-model nil)
+    (let [db      (pipeline/build-model nil)
           finding (probes/run db "survey")              ; whole-model read → foci = all nodes by kind
           out     (m/materialize-finding db "Blueprint" finding)]
       (is (string? out) "the projection renders the finding's union focus")

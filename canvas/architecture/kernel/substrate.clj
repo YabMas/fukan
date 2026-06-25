@@ -26,9 +26,6 @@
    db of structure instances + their reified relations. Owned here; every subsystem adopts this one Kind.")
 
 ;; ── node construction + identity ──────────────────────────────────────────────
-(Operation create
-  "Construct an empty StructureDb — the substrate constructor builders start from."
-  {:signature [:=> [:cat] StructureDb]})
 (Operation value-content-key
   "A deterministic, purely structural identity for a ^:value InstanceValue (the content-dedup key)."
   {:signature [:=> [:catn [:iv :any]] :any]})
@@ -45,5 +42,5 @@
 (Module core-substrate
   "The node substrate the grammar sits on — node identity + value-node construction + the empty db.
    A leaf: depends on nothing; everything above adopts its `StructureDb` and builds on its primitives."
-  {:exposes [create value-content-key var-id var-simple-name instance-value?]
+  {:exposes [value-content-key var-id var-simple-name instance-value?]
    :owns    [Node Relation InstanceValue StructureDb]})

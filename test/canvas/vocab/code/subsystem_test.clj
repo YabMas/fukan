@@ -5,7 +5,7 @@
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s]
-            ;; the composition root — registers fukan's Clojure FACT extractor (so `build-cozo-model "src"`
+            ;; the composition root — registers fukan's Clojure FACT extractor (so `build-model "src"`
             ;; merges extracted code onto the design graph) AND loads the Cozo check engine for s/check
             [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
@@ -36,7 +36,7 @@
 
 (deftest fukan-module-graph-has-no-mutual-dependency
   (testing "fukan's own module graph is acyclic — the quality law is a green opt-in"
-    (is (empty? (offenders (pipeline/build-cozo-model nil) "mutually depend")))))
+    (is (empty? (offenders (pipeline/build-model nil) "mutually depend")))))
 
 ;; ── conformance fixtures: S's op delegates to T's op (cross-subsystem) ──
 (operation/Operation ^{:name "op-t"} t-op-t "callee in T")
@@ -70,7 +70,7 @@
 
 (deftest fukan-may-depend-graph-is-acyclic
   (testing "fukan's declared :may-depend DAG is acyclic"
-    (is (empty? (offenders (pipeline/build-cozo-model nil) "acyclic")))))
+    (is (empty? (offenders (pipeline/build-model nil) "acyclic")))))
 
 ;; ── membership fixtures: a module in no subsystem (with a subsystem present) ──
 (module/Module ^{:name "orphan"} t-orphan "a module in no subsystem")
@@ -96,7 +96,7 @@
 
 (deftest fukan-every-module-is-clustered
   (testing "every fukan Module belongs to a subsystem"
-    (is (empty? (offenders (pipeline/build-cozo-model nil) "belongs to a Subsystem")))))
+    (is (empty? (offenders (pipeline/build-model nil) "belongs to a Subsystem")))))
 
 ;; ── latent-boundaries (interface-segregation discovery) ──
 ;; Synthetic EXTRACTED graphs: HOST exposes public ops; consumer modules :call them. The reading
@@ -153,7 +153,7 @@
 
 (deftest fukan-latent-boundaries-post-substrate-extraction
   (testing "the substrate is a clean leaf (not flagged); core-structure keeps a print-dual reader residue"
-    (let [lb (subsystem/latent-boundaries (pipeline/build-cozo-model "src"))
+    (let [lb (subsystem/latent-boundaries (pipeline/build-model "src"))
           cs (get lb "fukan.canvas.core.structure")
           in-a-bundle? (fn [op] (some (fn [b] (some #{op} (:ops b))) cs))]
       ;; The node substrate was extracted DOWNWARD: its surface is one clientele (the builders), so it

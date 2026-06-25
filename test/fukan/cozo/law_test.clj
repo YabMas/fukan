@@ -5,7 +5,7 @@
    the datascript oracle this once carried retired with the dep; the broader cozo law
    coverage now lives in the correspondence / subsystem / laws tests.)"
   (:require [clojure.test :refer [deftest is testing]]
-            ;; composition root — registers the fact extractor for build-cozo-model "src"
+            ;; composition root — registers the fact extractor for build-model "src"
             [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [fukan.cozo.db :as db]
@@ -36,7 +36,7 @@
 
 (deftest compiled-laws-find-no-false-positives-on-the-real-model
   (testing "the compiler supports a family of laws, and they find no offenders on the green model"
-    (let [cdb (pipeline/build-cozo-model "src")]
+    (let [cdb (pipeline/build-model "src")]
       (try
         (let [results  (law/check-structural cdb)
               compiled (remove :unsupported results)

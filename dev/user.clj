@@ -3,12 +3,11 @@
 
    The HTTP server + web explorer are PAUSED during the lean-kernel rebuild
    (parked under .paused/), so the server-lifecycle helpers are gone. The
-   kernel feedback loop is now: build a store with `with-canvas`, query it
-   with `d/q`, run constraints — all in-process. `refresh` reloads code and
+   kernel feedback loop is now: build the model with `(go)`, query it
+   with `cq/q`, run constraints — all in-process. `refresh` reloads code and
    rebuilds the held model; `status` reports the model."
   (:require [clojure.string :as str]
             [clj-reload.core :as reload]
-            [datascript.core :as d]
             [fukan.cozo.query :as cq]
             [fukan.infra.model :as infra-model]
             [fukan.canvas.core.structure :as structure]
@@ -282,8 +281,8 @@
 (defn status []
   (if-let [m (infra-model/get-model)]
     (println "Model:"
-             (count (d/q '[:find ?e :where [?e :structure/of _]] m)) "structures,"
-             (count (d/q '[:find ?r :where [?r :rel/kind _]] m)) "relations"
+             (count (cq/q '[:find ?e :where [?e :structure/of _]] m)) "structures,"
+             (count (cq/q '[:find ?r :where [?r :rel/kind _]] m)) "relations"
              (str "(src: " (infra-model/get-src) ")"))
     (println "Model: not loaded")))
 

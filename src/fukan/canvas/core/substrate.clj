@@ -10,25 +10,7 @@
 
    This is the substrate the structure registry sits on — extracted DOWNWARD from the grammar so the
    foundation has a code home of its own (it long had only a self-model `Node`/`Relation` portrait)."
-  (:require [datascript.core :as d]))
-
-;; ── the db ────────────────────────────────────────────────────────────────────
-
-(def schema
-  {:entity/id    {:db/unique :db.unique/identity}
-   :entity/name  {:db/index true}
-   :entity/doc   {}                                            ; instance documentation (the docstring position)
-   :structure/of {:db/index true}                              ; the structure tag of an instance
-   ;; reified slot relations — the seam carrying :rel/label / :rel/order
-   :rel/id       {:db/unique :db.unique/identity}
-   :rel/from     {:db/valueType :db.type/ref}
-   :rel/kind     {:db/index true}
-   :rel/to       {:db/valueType :db.type/ref}
-   :rel/label    {}
-   :rel/order    {}                                           ; authoring position in a sequence (:*/:+) slot
-   :rel/payload  {}})                                         ; a payload slot's companion :val key (on reified grammar slot-edges)
-
-(defn create [] (d/empty-db schema))
+  )
 
 ;; ── value-authoring: instances as values, references as vars ──────────────────
 
