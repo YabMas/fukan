@@ -25,8 +25,6 @@
             [canvas.architecture.orchestration.core :refer [core]]
             [canvas.architecture.cozo.db :refer [cozo-db]]
             [canvas.architecture.cozo.mirror :refer [cozo-mirror]]
-            [canvas.architecture.cozo.reading :refer [cozo-reading]]
-            [canvas.architecture.cozo.check :refer [cozo-check]]
             [canvas.architecture.cozo.build :refer [cozo-build]]
             [canvas.architecture.cozo.query :refer [cozo-query]]
             [canvas.architecture.cozo.law :refer [cozo-law]]))
@@ -48,12 +46,11 @@
   {:child [canvas-source extraction] :may-depend [kernel]})
 
 (Subsystem cozo
-  "The Cozo MIGRATION cluster (datascript→Cozo) — the EAV mirror, the ported oracle laws/readers, the
-   native build, and the registered check ENGINE (`cozo-law`, wired into `structure/check` via the
-   kernel plug-point). The query PRIMITIVE itself (`cozo-query`/`cozo-db`) has folded UP into the kernel
-   query layer; what remains here is the transitional scaffolding (deleted once the native build replaces
-   the datascript mirror) plus the law engine. Depends on the kernel."
-  {:child [cozo-mirror cozo-reading cozo-check cozo-build cozo-law] :may-depend [kernel]})
+  "The Cozo cluster — the EAV mirror (`cozo-mirror`, the datom→stored-relation insert), the native build
+   (`cozo-build`), and the registered check ENGINE (`cozo-law`, wired into `structure/check` via the kernel
+   plug-point). The query PRIMITIVE itself (`cozo-query`/`cozo-db`) has folded UP into the kernel query
+   layer; what remains here is the model assembly + the law engine. Depends on the kernel."
+  {:child [cozo-mirror cozo-build cozo-law] :may-depend [kernel]})
 
 (Subsystem reading
   "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence
