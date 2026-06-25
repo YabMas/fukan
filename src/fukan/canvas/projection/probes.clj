@@ -7,10 +7,13 @@
    probe-integrity realizes the modelled `integrity` probe by composing the kernel's
    `check`."
   (:require [clojure.string :as str]
-            [datascript.core :as d]
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as structure]
             [fukan.canvas.projection.finding :as f]
             [canvas.vocab.code.operation :as corr]))
+
+;; the Cozo mirror stringifies keyword attr values (:structure/of, :rel/kind); re-keywordize for display
+(defn- kw [x] (some-> x keyword))
 
 (defn- probe-patterns
   "Recurring structures (a reading): one observation per structural triplet
@@ -19,21 +22,23 @@
   ([db] (probe-patterns db nil))
   ([db focus]
    (let [in?    (if focus (set focus) (constantly true))
-         rows   (d/q '[:find ?r ?f ?ft ?rk ?t ?tt
-                       :where [?r :rel/from ?f] [?r :rel/kind ?rk] [?r :rel/to ?t]
-                              [?f :structure/of ?ft] [?t :structure/of ?tt]] db)
+         rows   (cq/q '[:find ?r ?f ?ft ?rk ?t ?tt
+                        :where [?r :rel/from ?f] [?r :rel/kind ?rk] [?r :rel/to ?t]
+                               [?f :structure/of ?ft] [?t :structure/of ?tt]] db)
          groups (->> rows
                      (filter (fn [[_ fr _ _ t _]] (and (in? fr) (in? t))))
                      (group-by (fn [[_ _ ft rk _ tt]] [ft rk tt])))]
      (f/finding "patterns"
        (->> groups
             (filter (fn [[_ rs]] (> (count rs) 1)))
-            (sort-by (comp - count val))
+            ;; deterministic order: by descending count, then by the (keywordized) triplet key — so
+            ;; equal-count groups don't depend on the engine's row order (ds vs cozo)
+            (sort-by (fn [[k rs]] [(- (count rs)) (mapv (comp str kw) k)]))
             (mapv (fn [[[ft rk tt] rs]]
                     (f/observation
                       (into #{} (mapcat (fn [[r fr _ _ t _]] [r fr t])) rs)
                       :pattern
-                      (str (count rs) "× " ft " -[" rk "]-> " tt)))))))))
+                      (str (count rs) "× " (kw ft) " -[" (kw rk) "]-> " (kw tt))))))))))
 
 (defn- probe-integrity
   "The integrity reading: the kernel's `check` (laws → violations),
@@ -54,11 +59,11 @@
   ([db focus]
    (let [in? (if focus (set focus) (constantly true))]
      (f/finding "survey"
-       (->> (d/q '[:find ?e ?k :where [?e :structure/of ?k]] db)
+       (->> (cq/q '[:find ?e ?k :where [?e :structure/of ?k]] db)
             (filter (fn [[e _]] (in? e)))
             (reduce (fn [m [e k]] (update m k (fnil conj #{}) e)) {})
             (sort-by (comp - count val))
-            (mapv (fn [[k es]] (f/observation es :count (str (count es) " " (name k))))))))))
+            (mapv (fn [[k es]] (f/observation es :count (str (count es) " " (name (kw k)))))))))))
 
 (defn- probe-consistency
   "Operation-name ambiguity (a reading): one observation per Operation name borne by more than
@@ -66,10 +71,10 @@
   ([db] (probe-consistency db nil))
   ([db focus]
    (let [in?     (if focus (set focus) (constantly true))
-         rows    (->> (d/q '[:find ?s ?sn ?mn
-                             :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?sn]
-                                    [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
-                                    [?m :entity/name ?mn]] db)
+         rows    (->> (cq/q '[:find ?s ?sn ?mn
+                              :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?sn]
+                                     [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
+                                     [?m :entity/name ?mn]] db)
                       (filter (fn [[s _ _]] (in? s))))
          by-name (reduce (fn [acc [s sn mn]]
                            (-> acc (update-in [sn :nodes] (fnil conj #{}) s)
@@ -89,16 +94,16 @@
   ([db] (probe-tar-pit db nil))
   ([db focus]
    (let [in?  (if focus (set focus) (constantly true))
-         out  (map second (d/q '[:find ?r ?e :where [?r :rel/from ?e]] db))
-         ins  (map second (d/q '[:find ?r ?e :where [?r :rel/to ?e]] db))]
+         out  (map second (cq/q '[:find ?r ?e :where [?r :rel/from ?e]] db))
+         ins  (map second (cq/q '[:find ?r ?e :where [?r :rel/to ?e]] db))]
      (f/finding "tar-pit"
        (->> (frequencies (concat out ins))
             (filter (fn [[e _]] (in? e))) (sort-by val >) (take 10)
             (mapv (fn [[e n]]
-                    (let [ent (d/entity db e)]
+                    (let [ent (cq/entity db e)]
                       (f/observation #{e} :hotspot
                         (str n " edges: " (or (:entity/name ent) "(value)")
-                             " (" (name (:structure/of ent)) ")"))))))))))
+                             " (" (name (kw (:structure/of ent))) ")"))))))))))
 
 (defn- probe-coverage
   "Spec ↔ code coverage (a reading): extracted Operations not covered by a
@@ -110,7 +115,7 @@
      (->> (sort (corr/uncovered-operations db))
           (mapv (fn [n]
                   (f/observation
-                    (->> (d/q '[:find ?o :in $ ?n
+                    (->> (cq/q '[:find ?o :in $ ?n
                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name ?n]] db n)
                          (map first) set)
                     :gap n)))))))
@@ -125,7 +130,7 @@
      (->> (sort (corr/drifted-operations db))
           (mapv (fn [n]
                   (f/observation
-                    (->> (d/q '[:find ?s :in $ ?n
+                    (->> (cq/q '[:find ?s :in $ ?n
                                 :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?n]] db n)
                          (map first) set)
                     :gap n)))))))
@@ -141,7 +146,7 @@
      (->> (sort (corr/type-drifted-operations db))
           (mapv (fn [n]
                   (f/observation
-                    (->> (d/q '[:find ?s :in $ ?n
+                    (->> (cq/q '[:find ?s :in $ ?n
                                 :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?n]] db n)
                          (map first) set)
                     :gap n)))))))

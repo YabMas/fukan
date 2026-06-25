@@ -256,7 +256,7 @@
 (defn probes
   "Run the implemented probes against the held model, printing each finding."
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (doseq [[nm finding] (probe/run-all m)]
       (println (str "── probe " nm " ──"))
       (let [lines (pf/finding->text finding)]
