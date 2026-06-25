@@ -272,7 +272,7 @@
    or (materialize \"target.clojure\" \"Docs\")."
   ([module-name] (materialize module-name "Blueprint"))
   ([module-name projection]
-   (if-let [m (infra-model/get-model)]
+   (if-let [m (infra-model/get-cozo)]
      (let [spec (mat/materialize-module m projection module-name)]
        (if (str/blank? spec)
          (println "No Stages found in module" (pr-str module-name))

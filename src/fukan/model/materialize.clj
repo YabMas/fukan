@@ -19,49 +19,55 @@
    `materialize-projection` is the model-driven entry; the ad-hoc `materialize-focus`/
    `-module` take a projection + an explicit focus."
   (:require [clojure.string :as str]
-            [datascript.core :as d]
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.lens :as lens]))
 
 ;; ── small query helpers over the substrate ──────────────────────────────────
 
+(defn- ord
+  "A `:rel/order` cell as a long for sorting — `cq/q` returns strings over Cozo, ints over datascript."
+  [o] (cond (nil? o) -1, (string? o) (Long/parseLong o), :else (long o)))
+
 (defn- rel-target [db eid kind]
-  (ffirst (d/q '[:find ?to :in $ ?e ?k
-                 :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
-               db eid kind)))
+  (ffirst (cq/q '[:find ?to :in $ ?e ?k
+                  :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
+                db eid kind)))
 
 (defn- target-names [db eid kind name-attr]
-  (->> (d/q '[:find ?to :in $ ?e ?k
-              :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
-            db eid kind)
-       (map (fn [[to]] (name-attr (d/entity db to))))
+  (->> (cq/q '[:find ?to :in $ ?e ?k
+               :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]]
+             db eid kind)
+       (map (fn [[to]] (name-attr (cq/entity db to))))
        sort vec))
 
 (defn- owning-module [db eid]
   ;; membership is :child (generic) or, for a Module, :exposes / :owns
-  (ffirst (d/q '[:find ?mn :in $ ?e
-                 :where [?r :rel/from ?m] [?r :rel/to ?e] [?r :rel/kind ?k]
-                        [(contains? #{:child :exposes :owns} ?k)]
-                        [?m :entity/name ?mn]]
-               db eid)))
+  (ffirst (cq/q '[:find ?mn :in $ ?e
+                  :where [?r :rel/from ?m] [?r :rel/to ?e] [?r :rel/kind ?k]
+                         [(contains? #{:child :exposes :owns} ?k)]
+                         [?m :entity/name ?mn]]
+                db eid)))
 
 (defn- stage-facts
   "The shaped facts an Operation renderer needs, projection-agnostic: name, doc, owning
    module, labelled params (with their shape eids), output shape eid, effects, calls."
   [db eid]
-  (let [e (d/entity db eid)]
+  (let [e      (cq/entity db eid)
+        ;; :in params, with their optional :rel/label merged in (no get-else on Cozo)
+        params (cq/q '[:find ?r ?ord ?to :in $ ?e
+                       :where [?r :rel/from ?e] [?r :rel/kind :in] [?r :rel/to ?to] [?r :rel/order ?ord]] db eid)
+        plbls  (into {} (cq/q '[:find ?r ?lbl :in $ ?e
+                                :where [?r :rel/from ?e] [?r :rel/kind :in] [?r :rel/label ?lbl]] db eid))]
     {:nm      (:entity/name e)
      :doc     (:entity/doc e)
      :module  (owning-module db eid)
-     :params  (->> (d/q '[:find ?ord ?to ?lbl :in $ ?e
-                          :where [?r :rel/from ?e] [?r :rel/kind :in] [?r :rel/to ?to]
-                                 [?r :rel/order ?ord] [(get-else $ ?r :rel/label "") ?lbl]]
-                        db eid)
-                   (sort-by first)
-                   (mapv (fn [[_ to lbl]] {:label lbl :shape to})))
+     :params  (->> params
+                   (sort-by #(ord (nth % 1)))
+                   (mapv (fn [[r _ to]] {:label (get plbls r "") :shape to})))
      :out     (rel-target db eid :out)
      :effects   (target-names db eid :performs :val/name)
      :delegates (target-names db eid :delegates :entity/name)
-     :guidance  (:val/guidance (d/entity db eid))}))
+     :guidance  (:val/guidance e)}))
 
 ;; ── render-base: each [base projection, kind] renders itself ─────────────────
 
@@ -70,10 +76,12 @@
    fragment of that base's target form. Dispatches on `[base (:structure/of node)]`.
    Project-owned defmethods supply the per-(base, kind) production and compose referenced
    nodes by calling `render-base` again under the SAME base."
-  (fn [db base eid] [base (:structure/of (d/entity db eid))]))
+  ;; the Cozo mirror stringifies :structure/of — re-keywordize so the dispatch value matches the
+  ;; keyword-keyed defmethods (else everything falls to :default)
+  (fn [db base eid] [base (some-> (:structure/of (cq/entity db eid)) keyword)]))
 
 (defmethod render-base :default [db _ eid]
-  (:entity/name (d/entity db eid)))
+  (:entity/name (cq/entity db eid)))
 
 ;; shared structural schema rendering (target-agnostic): ref → its named Kind
 ;; (recurses to the base's :Kind/:default), vector/set/sequential → [child],
@@ -81,15 +89,15 @@
 ;; fall through to the bare combinator name and LOSE their children here — signature-only,
 ;; not round-trippable (use the dialect's `render` for a faithful form).
 (defn- schema-str [db base eid]
-  (let [e (d/entity db eid)]
+  (let [e (cq/entity db eid)]
     (case (:val/kind e)
       "ref"  (render-base db base (rel-target db eid :names))
       ("vector" "set" "sequential") (str "[" (render-base db base (rel-target db eid :of)) "]")
       "map"  (str "{" (str/join ", "
-                       (for [feid (map first (d/q '[:find ?f :in $ ?m :where
-                                                    [?r :rel/from ?m] [?r :rel/kind :field] [?r :rel/to ?f]]
-                                                  db eid))
-                             :let [f (d/entity db feid)]]
+                       (for [feid (map first (cq/q '[:find ?f :in $ ?m :where
+                                                     [?r :rel/from ?m] [?r :rel/kind :field] [?r :rel/to ?f]]
+                                                   db eid))
+                             :let [f (cq/entity db feid)]]
                          (str (:val/key f) ": " (render-base db base (rel-target db feid :schema))))) "}")
       (str (:val/kind e)))))
 
@@ -132,7 +140,7 @@
 (defn- proj-node
   "The Projection node named `projection` (nil if none — a bare base name has no node)."
   [db projection]
-  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :structure/of :fukan.canvas.core.lens/Projection] [?e :entity/name ?n]] db projection)))
+  (ffirst (cq/q '[:find ?e :in $ ?n :where [?e :structure/of :fukan.canvas.core.lens/Projection] [?e :entity/name ?n]] db projection)))
 
 (defn- base-of
   "The base a `projection` renders through: the name of the Projection it
@@ -140,13 +148,13 @@
   [db projection]
   (or (when-let [p (proj-node db projection)]
         (when-let [b (rel-target db p :contextualizes)]
-          (:entity/name (d/entity db b))))
+          (:entity/name (cq/entity db b))))
       projection))
 
 (defn- context-of
   "The framing `:context` prose a `projection` wraps its base render in, or nil."
   [db projection]
-  (when-let [p (proj-node db projection)] (:val/context (d/entity db p))))
+  (when-let [p (proj-node db projection)] (:val/context (cq/entity db p))))
 
 (defn render
   "Render `eid` under `projection` — produced under the projection's base (a
@@ -161,9 +169,10 @@
   "Whether base `base` has a SPECIFIC renderer for a node — it is named (anonymous value
    shapes compose inline, never standalone) and `[base kind]` resolves past the :default."
   [db base eid]
-  (let [e (d/entity db eid)]
+  (let [e (cq/entity db eid)]
     (and (:entity/name e)
-         (not= (get-method render-base [base (:structure/of e)])
+         ;; re-keywordize :structure/of (mirror stringifies it) so the dispatch key matches a defmethod
+         (not= (get-method render-base [base (some-> (:structure/of e) keyword)])
                (get-method render-base :default)))))
 
 (defn- compose
@@ -174,7 +183,7 @@
   (let [base (base-of db projection)
         body (->> nodes
                   (filter #(renders? db base %))
-                  (sort-by #(:entity/name (d/entity db %)))
+                  (sort-by #(:entity/name (cq/entity db %)))
                   (map #(render-base db base %))
                   (str/join "\n\n"))
         ctx  (context-of db projection)]
@@ -218,6 +227,6 @@
    contextualization). The Projection's `:maps`/`:context` are the intent manifest; the
    renderers realize them. A prose-only lens (no selection query) yields nil → renders nothing."
   [db proj-eid]
-  (let [projection (:entity/name (d/entity db proj-eid))
+  (let [projection (:entity/name (cq/entity db proj-eid))
         lens-eid   (rel-target db proj-eid :through)]
     (compose db projection (lens/evaluate-lens db lens-eid))))

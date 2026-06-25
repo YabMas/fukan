@@ -6,6 +6,7 @@
    public entry. `core.lens` lives in `canvas.architecture.kernel.lens`."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
+            [canvas.architecture.cozo.query :as query]
             [canvas.architecture.kernel.lens :as lens-engine]))
 
 (Module materialize
@@ -17,7 +18,9 @@
     {:signature [:=> [:catn [:db substrate/StructureDb] [:lens Lens]] Instruction]
      :performs  [:throws]})                        ; reaches the lens engine's query-compiler throw
   (Operation materialize-over "Render a refined focus (node-set) under a projection."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:focus [:vector Eid]]] Instruction]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:focus [:vector Eid]]] Instruction]
+     :performs  [:throws]                          ; the renderers read the graph through the query compiler
+     :delegates [query/q query/entity]})           ; the module reads node facts via the kernel query layer
   (Operation materialize-focus "Render the nodes an ad-hoc :where clause selects, under a projection."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:clauses [:vector Clause]]] Instruction]
      :performs  [:throws]                          ; via focus-nodes
@@ -30,9 +33,11 @@
      :performs  [:throws]                          ; via evaluate-lens
      :delegates [lens-engine/evaluate-lens]})
   (Operation render "Render a single node under a projection (composes the per-primitive render-base multimethod)."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:eid Eid]] Instruction]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:eid Eid]] Instruction]
+     :performs  [:throws]})                         ; the renderers read the graph through the query compiler
   (Operation materialize-finding "Compose a finding's observation foci into a projection — the probe→projection seam."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]
+     :performs  [:throws]})                         ; via materialize-over
   (Operation ^:private render-base
     "The per-(projection, kind) render dispatch point. Its defmethods have inline bodies (no named
      handler ops), so it carries no :dispatches-to fan-out — modelled for coverage."
