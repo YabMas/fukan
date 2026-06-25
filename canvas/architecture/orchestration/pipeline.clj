@@ -18,7 +18,7 @@
   (Operation build-model
     "Ingest the canvas design specs + fold the extracted code into one native Cozo substrate:
      require the canvas namespaces, gather the extraction facts through the plug-point, and
-     assemble canvas + code via model->cozo (no datascript)."
+     assemble canvas + code via model->cozo."
     {:signature [:=> [:catn [:source extraction/Path]] cozo-db/CozoDb]
      :performs  [:io :stderr :require :throws :state]
      :delegates [canvas-source/require-canvas-namespaces! extraction/extract-facts cozo-build/model->cozo]}))

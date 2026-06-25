@@ -36,8 +36,8 @@
    type-dialect plug-point + the Cozo QUERY LAYER (the datalog→CozoScript compiler `cozo-query` and its
    engine seam `cozo-db`) — foundational; depends on nothing. The query layer sits here because the
    kernel itself queries (the lens engine, the law engine), so it is infrastructure, not a peripheral
-   subsystem: the datascript→Cozo migration folds the query primitive into the kernel here (the wider
-   `cozo` cluster above remains the migration scaffolding + the registered check engine)."
+   subsystem: the query primitive lives in the kernel here, while the wider `cozo` cluster above holds
+   the model assembly (mirror + native build) and the registered check engine."
   {:child [core-substrate core-structure core-rules core-lens assemble-faculty typing cozo-db cozo-query]
    :may-depend []})
 

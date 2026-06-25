@@ -31,8 +31,8 @@
   [v] (cond-> v (string? v) edn/read-string))
 
 (defn- struct-tag
-  "A node's `:structure/of` as a keyword — the Cozo mirror stringifies it (no colon); idempotent on
-   the datascript keyword."
+  "A node's `:structure/of` as a keyword — Cozo stringifies it (no colon); `keyword` is
+   idempotent if it ever arrives a keyword."
   [e] (some-> (:structure/of e) keyword))
 
 (defn- target-expr

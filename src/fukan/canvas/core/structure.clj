@@ -752,7 +752,7 @@
           structures)))
 
 (defn vocab-rules
-  "The datascript rules derived from the live vocabulary (one per kind + per relation
+  "The datalog rules derived from the live vocabulary (one per kind + per relation
    slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
    at domain altitude: `(Operation ?s) (in-module ?s \"…\") (calls ?s ?c)`."
   []

@@ -16,8 +16,8 @@
 
 (defn register-fact-extractor!
   "Register the project's FACT extractor: a fn `code-root -> {:roots :var-usages}` (the
-   engine-agnostic extraction facts the native Cozo build consumes — no datascript). A
-   project registers one; this replaces any previous."
+   engine-agnostic extraction facts the native Cozo build consumes). A project registers
+   one; this replaces any previous."
   [f]
   (reset! fact-extractor f)
   nil)

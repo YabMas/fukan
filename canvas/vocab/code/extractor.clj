@@ -30,8 +30,8 @@
   "The engine-agnostic extraction FACTS over the Clojure source under `paths`:
    `{:roots [[id InstanceValue]…] :var-usages […]}` — the Module/Operation roots
    (Operations stamped with DIRECT effects; Modules `:val/extracted true`) plus the
-   clj-kondo var-usages used to ground the `:calls` graph. Both build paths (the
-   datascript `extract` and the native cozo build) assemble these same facts."
+   clj-kondo var-usages used to ground the `:calls` graph. The native Cozo build
+   assembles these facts onto the design graph."
   [paths]
   (let [{:keys [namespace-definitions var-definitions var-usages]} (analyze paths)
         ops-by-ns    (group-by :ns (filter #(operation/fn-defining (:defined-by %)) var-definitions))

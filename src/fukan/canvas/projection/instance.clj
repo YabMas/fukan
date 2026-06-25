@@ -29,8 +29,8 @@
   [o] (if (nil? o) -1 (long o)))
 
 (defn- struct-tag
-  "A node's `:structure/of` as a KEYWORD — the Cozo mirror stringifies it (no colon); `keyword` is
-   idempotent on the datascript keyword and re-namespaces the Cozo string (`\"ns/N\"` → `:ns/N`)."
+  "A node's `:structure/of` as a KEYWORD — Cozo stringifies it (no colon), so re-namespace the
+   string (`\"ns/N\"` → `:ns/N`); `keyword` is idempotent if it ever arrives a keyword."
   [e] (some-> (:structure/of e) keyword))
 
 (defn- rels-by-kind

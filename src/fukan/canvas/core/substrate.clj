@@ -1,7 +1,7 @@
 (ns fukan.canvas.core.substrate
   "The kernel SUBSTRATE — the node layer beneath the `defstructure` grammar: what a node IS
-   and how it is IDENTIFIED, plus the empty db they live in. Depends on NOTHING but datascript
-   (the foundation the grammar, the assembler, the checker, and value-construction all sit ON).
+   and how it is IDENTIFIED. Depends on NOTHING (the foundation the grammar, the assembler,
+   the checker, and value-construction all sit ON).
 
    A node is either a named entity (its identity is its authoring var's fully-qualified name —
    `var-id`) or a `^:value` InstanceValue (its identity is a purely-structural content key —

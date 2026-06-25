@@ -16,8 +16,8 @@
   (Kind FactExtractor [:=> [:catn [:code-root Path]] Facts])
   (Kind Facts
     "The engine-agnostic extraction facts {:roots :var-usages} — the Module/Operation roots plus
-     the var-usages used to ground the :calls graph. What the native Cozo build consumes (no
-     datascript), produced by the registered fact extractor."
+     the var-usages used to ground the :calls graph. What the native Cozo build consumes,
+     produced by the registered fact extractor."
     :map)
   (Operation register-fact-extractor! "Register the project's FACT extractor (a fn Path → Facts)."
     {:signature [:=> [:catn [:f FactExtractor]] Unit]

@@ -2,7 +2,7 @@
   "Vocab-derived datalog rules — the model made queryable in its own vocabulary.
 
    `derive-rules` is PURE: given the registered structure defs (+ a `scalar?`
-   predicate that tells relation slots from value slots), it returns a datascript
+   predicate that tells relation slots from value slots), it returns a datalog
    rules vector so queries refer to domain abstractions (`(Operation ?s)`, `(calls ?a ?b)`,
    `(in-module ?s \"…\")`) instead of substrate datoms. It takes no dependency on the
    kernel — it receives the registry data — so the kernel can consume the rules

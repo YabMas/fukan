@@ -14,7 +14,7 @@
    its shape: a `Schema` (the pluggable typing) authored positionally — a scalar
    (`:int`), a record (`[:map …]`), a union (`[:or …]`), a collection (`[:vector …]` /
    `[:map-of …]`), or an arrow (`[:=> …]`). A Kind with NO body is an opaque external
-   (a datascript db, a filesystem reality) — honestly shapeless. Owned by at most one
+   (a Cozo db, a filesystem reality) — honestly shapeless. Owned by at most one
    Module (`:owns` — others adopt it by name, they don't redefine it)."
   {:shape [:? Schema]}                          ; its shape, when it has one (authored positionally)
   (syntax shape->slots)                         ; positional malli body → the :shape slot

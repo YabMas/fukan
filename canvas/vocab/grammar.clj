@@ -157,8 +157,8 @@
 (defn reflect
   "PURE, db-agnostic: the model's reified-grammar `{:nodes :rels}` for the structure `tags` in use
    (the `:structure/of` values, as keywords) + `extra-seeds` (ns-name strings added to the reflection
-   closure, so a zero-instance grammar stratum still reflects). The caller transacts/inserts the datoms
-   onto its substrate (datascript via `with-grammar`, Cozo via the native build's upsert insert)."
+   closure, so a zero-instance grammar stratum still reflects). The caller inserts the datoms onto
+   its Cozo substrate (the native build's upsert insert)."
   [tags extra-seeds]
   (let [;; seed with this ns (the reflection self-reifies), the Schema dialect's (reflection emits
         ;; Schema value targets, so their grammar must be present), and any caller-supplied seeds

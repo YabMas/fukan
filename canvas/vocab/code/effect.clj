@@ -146,8 +146,7 @@
            (repeat :io))
    (zipmap '[clojure.core/swap! clojure.core/reset! clojure.core/swap-vals! clojure.core/reset-vals!
              clojure.core/alter clojure.core/alter-var-root clojure.core/ref-set clojure.core/vreset!
-             clojure.core/commute clojure.core/send clojure.core/send-off
-             datascript.core/transact! datascript.core/reset-conn!]
+             clojure.core/commute clojure.core/send clojure.core/send-off]
            (repeat :state))
    (zipmap '[clojure.core/require clojure.core/use clojure.core/load clojure.core/load-file
              clojure.core/load-string clojure.core/requiring-resolve clojure.core/resolve

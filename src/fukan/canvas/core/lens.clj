@@ -93,8 +93,8 @@
    caller's concern, not an exception in the core."
   [db lens-eid]
   (when-let [clauses (:val/query (cq/entity db lens-eid))]
-    ;; the :query payload round-trips through pr-str in the Cozo mirror (arrives as a string);
-    ;; datascript carries the raw clause form — read it back when it came as a string.
+    ;; the :query payload round-trips through pr-str in the Cozo substrate (arrives as a
+    ;; string) — read it back when it came as a string.
     (focus-nodes db (cond-> clauses (string? clauses) edn/read-string))))
 
 (defn refine
