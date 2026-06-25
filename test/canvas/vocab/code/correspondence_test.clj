@@ -1,12 +1,12 @@
 (ns canvas.vocab.code.correspondence-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [datascript.core :as d]
-            ;; loading infra.model is the composition root — it registers fukan's
-            ;; malli dialect AND its Clojure extractor, and offers build/load of the model
-            [fukan.infra.model :as infra-model]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
+            ;; loading infra.model is the composition root — it registers fukan's malli dialect AND its
+            ;; Clojure (fact) extractor + the Cozo check engine, so build-cozo-model "src" runs the build
+            [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.structure :as s]
-            [fukan.canvas.core.substrate :as sub]
             [canvas.vocab.type :as malli]
             [fukan.canvas.core.typing :as typing]
             ;; correspondence is now distributed across the code elements + the fukan tools
@@ -53,7 +53,7 @@
             :malli/schema adhere to their modelled types, so type-drift EXCLUDES them. (We
             assert these three specifically rather than global emptiness, which is fragile as
             more functions get annotated. The false-cases above prove DETECTION fires.)"
-    (let [model   (infra-model/load-model "src")
+    (let [model   (pipeline/build-cozo-model "src")
           drifted (operation/type-drifted-operations model)]
       (is (not (contains? drifted "load-model"))
           (str "load-model's :malli/schema should adhere to its model; drifted: " drifted))
@@ -66,8 +66,8 @@
   (testing "materialize-over is a real MULTI-ARG function whose :malli/schema matches its
             modelled ordered :in — same types, SAME ORDER, SAME ARITY — so it is NOT type-drifted,
             and the comparison fires on a reordered / dropped-arg code signature."
-    (let [model (infra-model/load-model "src")
-          op    (ffirst (d/q '[:find ?e
+    (let [model (pipeline/build-cozo-model "src")
+          op    (ffirst (cq/q '[:find ?e
                                :where [?e :structure/of :canvas.vocab.code.operation/Operation] (not [?e :val/extracted true])
                                       [?e :entity/name "materialize-over"]]
                              model))
@@ -87,9 +87,7 @@
 
 (deftest call-realization-fires-on-an-unrealized-delegation
   (testing "an authored cross-module :delegates with NO actual cross-module :calls is an offender"
-    (let [db (-> (sub/create)
-                 (d/db-with
-                  [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "A" :entity/name "A"}
+    (let [db (build/tx-maps->cozo [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "A" :entity/name "A"}
                    {:db/id -2 :structure/of :canvas.vocab.code.module/Module :entity/id "B" :entity/name "B"}
                    {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-a"}
                    {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-b"}
@@ -99,28 +97,26 @@
                    {:rel/id "B|exposes|op-b" :rel/from -2 :rel/kind :exposes :rel/to -4}
                    {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                    {:rel/id "X|child|ex" :rel/from -5 :rel/kind :child :rel/to -6}
-                   {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}]))]
+                   {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}])]
       (is (seq (module/unrealized-delegates db))
           "A->B delegation has no realizing call between corresponding modules → offender"))))
 
 (deftest call-realization-green-on-the-self-model
   (testing "module-level realization is green on the live build-model \"src\""
-    (is (empty? (module/unrealized-delegates (pipeline/build-model "src")))
+    (is (empty? (module/unrealized-delegates (pipeline/build-cozo-model "src")))
         "0 unrealized — verified by the design prototype")))
 
 (deftest uncovered-calls-backbone-complete
   (testing "slice 2: every actual cross-module call is now covered by an authored :delegates —
             the backbone is complete (detection of an UNdeclared coupling is proven on a synthetic
             db in fidelity-fires-on-an-undeclared-modelled-coupling)"
-    (let [worklist (module/uncovered-calls (pipeline/build-model "src"))]
+    (let [worklist (module/uncovered-calls (pipeline/build-cozo-model "src"))]
       (is (empty? worklist)
           (str "the :delegates backbone is complete; undeclared couplings remain: " worklist)))))
 
 (deftest fidelity-fires-on-an-undeclared-modelled-coupling
   (testing "an actual cross-module call between two MODELLED faculties with no covering :delegates fires"
-    (let [db (-> (sub/create)
-                 (d/db-with
-                  [;; two authored faculty modules a / b (not extracted) → fukan.a / fukan.b are 'modelled'
+    (let [db (build/tx-maps->cozo [;; two authored faculty modules a / b (not extracted) → fukan.a / fukan.b are 'modelled'
                    {:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "a" :entity/name "a"}
                    {:db/id -2 :structure/of :canvas.vocab.code.module/Module :entity/id "b" :entity/name "b"}
                    {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "oa"}
@@ -136,7 +132,7 @@
                    {:db/id -8 :structure/of :canvas.vocab.code.operation/Operation :entity/name "fb" :val/extracted true}
                    {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
                    {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
-                   {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}]))]
+                   {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}])]
       (is (= #{"fa"} (module/unfaithful-calls db))
           "an undeclared coupling between modelled faculties is a fidelity offender")
       (is (= #{["fukan.a" "fukan.b"]} (module/uncovered-calls db))
@@ -144,13 +140,13 @@
 
 (deftest fidelity-green-on-the-self-model
   (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
-    (is (empty? (module/unfaithful-calls (pipeline/build-model "src")))
+    (is (empty? (module/unfaithful-calls (pipeline/build-cozo-model "src")))
         "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
 
 (deftest slice-1-self-model-is-clean
   (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
             design+code self-model has zero law violations"
-    (let [model (pipeline/build-model "src")]
+    (let [model (pipeline/build-cozo-model "src")]
       (is (empty? (module/unrealized-delegates model)) "realization is green")
       (is (empty? (module/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
       (is (empty? (module/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
@@ -160,9 +156,7 @@
 
 (deftest encapsulation-fires-on-an-undeclared-public-operation
   (testing "a PUBLIC extracted op with no model twin is an offender; private/export/test-support are exempt"
-    (let [db (-> (sub/create)
-                 (d/db-with
-                  [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "fukan.m" :entity/name "fukan.m" :val/extracted true}
+    (let [db (build/tx-maps->cozo [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "fukan.m" :entity/name "fukan.m" :val/extracted true}
                    {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "leaked"   :val/extracted true}                      ; public, unmodelled → offender
                    {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "hidden"   :val/extracted true :val/private true}      ; exempt: internal
                    {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "exported" :val/extracted true :val/export true}       ; exempt: mechanism
@@ -170,19 +164,19 @@
                    {:rel/id "m|child|leaked"   :rel/from -1 :rel/kind :child :rel/to -2}
                    {:rel/id "m|child|hidden"   :rel/from -1 :rel/kind :child :rel/to -3}
                    {:rel/id "m|child|exported" :rel/from -1 :rel/kind :child :rel/to -4}
-                   {:rel/id "m|child|for-test" :rel/from -1 :rel/kind :child :rel/to -5}]))]
+                   {:rel/id "m|child|for-test" :rel/from -1 :rel/kind :child :rel/to -5}])]
       (is (= #{"leaked"} (operation/uncovered-public-operations db))
           "only the public, non-exempt, unmodelled op is flagged by the Encapsulation law"))))
 
 (deftest encapsulation-green-on-the-self-model
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
-    (is (empty? (operation/uncovered-public-operations (pipeline/build-model "src")))
+    (is (empty? (operation/uncovered-public-operations (pipeline/build-cozo-model "src")))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
 
 (deftest defmultis-are-extracted-and-modelled
   (testing "both defmultis are extracted as Operations AND covered by the model (not undeclared public surface)"
-    (let [m         (pipeline/build-model "src")
-          extracted (set (d/q '[:find [?n ...]
+    (let [m         (pipeline/build-cozo-model "src")
+          extracted (set (cq/q '[:find [?n ...]
                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
           worklist  (operation/uncovered-public-operations m)]
       (is (contains? extracted "run-probe")   "run-probe (defmulti) is extracted as an Operation")
@@ -192,13 +186,13 @@
 
 (deftest run-probe-dispatches-to-the-eight-leaves
   (testing "run-probe is modelled as a dispatch point fanning out to all eight probe handlers"
-    (let [m  (pipeline/build-model "src")
+    (let [m  (pipeline/build-cozo-model "src")
           ;; the AUTHORED run-probe (not the extracted twin) carries the fan-out
-          dp (ffirst (d/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name "run-probe"]
+          dp (ffirst (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name "run-probe"]
                                           (not [?o :val/extracted true])] m))]
       (is (= #{"probe-survey" "probe-patterns" "probe-consistency" "probe-tar-pit"
                "probe-integrity" "probe-coverage" "probe-drift" "probe-type-drift"}
-             (set (d/q '[:find [?hn ...] :in $ ?dp
+             (set (cq/q '[:find [?hn ...] :in $ ?dp
                          :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
                        m dp)))
           "the modelled fan-out names every probe leaf"))))
@@ -209,9 +203,7 @@
   "Authored A.op-a :delegates B.op-b; a dispatch point dp in A with :dispatches-to handler h; and,
    when `wired?`, the extracted call path op-a -> dp ... h -> op-b."
   [wired?]
-  (-> (sub/create)
-      (d/db-with
-       (cond-> [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "A" :entity/name "A"}
+  (build/tx-maps->cozo (cond-> [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "A" :entity/name "A"}
                 {:db/id -2 :structure/of :canvas.vocab.code.module/Module :entity/id "B" :entity/name "B"}
                 {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-a"}
                 {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-b"}
@@ -234,7 +226,7 @@
                 {:rel/id "Ax|child|h"    :rel/from -5 :rel/kind :child :rel/to -12}
                 {:rel/id "Bx|child|op-b" :rel/from -6 :rel/kind :child :rel/to -8}]
          wired? (into [{:rel/id "op-a|calls|dp" :rel/from -7  :rel/kind :calls :rel/to -11}
-                       {:rel/id "h|calls|op-b"  :rel/from -12 :rel/kind :calls :rel/to -8}])))))
+                       {:rel/id "h|calls|op-b"  :rel/from -12 :rel/kind :calls :rel/to -8}]))))
 
 (deftest unrealized-dispatch-fires-when-unrealized
   (testing "an authored cross-module delegation with no realizing code path is reported"
@@ -247,9 +239,7 @@
 
 (deftest unrealized-dispatch-green-through-registry-dispatch
   (testing "realized when the dispatch point routes DIRECTLY to the target (registry flavor, no trailing call)"
-    (let [db (-> (sub/create)
-                 (d/db-with
-                  [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "A" :entity/name "A"}
+    (let [db (build/tx-maps->cozo [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "A" :entity/name "A"}
                    {:db/id -2 :structure/of :canvas.vocab.code.module/Module :entity/id "B" :entity/name "B"}
                    {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-a"}
                    {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-b"}
@@ -267,13 +257,13 @@
                    {:rel/id "Ax|child|op-a" :rel/from -5 :rel/kind :child :rel/to -7}
                    {:rel/id "Ax|child|dp"   :rel/from -5 :rel/kind :child :rel/to -11}
                    {:rel/id "Bx|child|op-b" :rel/from -6 :rel/kind :child :rel/to -8}
-                   {:rel/id "op-a|calls|dp" :rel/from -7 :rel/kind :calls :rel/to -11}]))]
+                   {:rel/id "op-a|calls|dp" :rel/from -7 :rel/kind :calls :rel/to -11}])]
       (is (empty? (module/unrealized-dispatch db))
           "op-a -> op-b realized via op-a -> dp -> (dispatch) op-b"))))
 
 (deftest unrealized-dispatch-green-on-self-model
   (testing "every authored cross-module delegation is realized op-level (transitively, through dispatch) on the live model"
-    (is (empty? (module/unrealized-dispatch (pipeline/build-model "src")))
+    (is (empty? (module/unrealized-dispatch (pipeline/build-cozo-model "src")))
         "0 unrealized — incl. run/run-all via run-probe dispatch, and structure-form/instance-form via the target-expr helper chain")))
 
 (deftest effect-correspondence-fires-on-an-undeclared-transitive-effect
@@ -293,8 +283,8 @@
                   {:rel/id "f|calls|g"  :rel/from -4 :rel/kind :calls :rel/to -5}                          ; f → g (transitive reach)
                   io
                   {:rel/id "g|performs|io" :rel/from -5 :rel/kind :performs :rel/to -10}]                  ; g performs :io
-          undeclared-db (-> (sub/create) (d/db-with common))
-          declared-db   (-> (sub/create) (d/db-with (conj common {:rel/id "af|performs|io" :rel/from -2 :rel/kind :performs :rel/to -10})))]
+          undeclared-db (build/tx-maps->cozo common)
+          declared-db   (build/tx-maps->cozo (conj common {:rel/id "af|performs|io" :rel/from -2 :rel/kind :performs :rel/to -10}))]
       (is (= #{"f"} (effect/undeclared-effects undeclared-db))
           "f's twin transitively reaches :io (via g), but f declares nothing → under-declaration")
       (is (empty? (effect/undeclared-effects declared-db))
@@ -302,7 +292,7 @@
 
 (deftest effect-and-totality-green-on-the-self-model
   (testing "the merged self-model declares every effect its code reaches, and its trusted core is total"
-    (let [model (pipeline/build-model "src")]
+    (let [model (pipeline/build-cozo-model "src")]
       (is (empty? (effect/undeclared-effects model))
           "0 undeclared effects — design and extraction speak one effect language, to call-graph depth")
       (is (empty? (fukan/totality-violations model))
@@ -312,17 +302,15 @@
   (testing "an extracted probe reader (probe-X) with no declared Lens of the same focus is an offender;
             a reader whose Lens exists is covered, a non-probe op is ignored, and the DUAL (a Lens with
             no reader) is allowed — the law guards reader→lens only"
-    (let [db (-> (sub/create)
-                 (d/db-with
-                  [{:db/id -1 :structure/of :fukan.canvas.core.lens/Lens :entity/name "survey"}                              ; a declared focus
+    (let [db (build/tx-maps->cozo [{:db/id -1 :structure/of :fukan.canvas.core.lens/Lens :entity/name "survey"}                              ; a declared focus
                    {:db/id -2 :structure/of :fukan.canvas.core.lens/Lens :entity/name "purity"}                              ; a Lens with NO reader — allowed
                    {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "probe-survey" :val/extracted true} ; covered by the survey Lens
                    {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "probe-orphan" :val/extracted true} ; no Lens "orphan" → offender
-                   {:db/id -5 :structure/of :canvas.vocab.code.operation/Operation :entity/name "run"          :val/extracted true}]))] ; not a probe-* reader → ignored
+                   {:db/id -5 :structure/of :canvas.vocab.code.operation/Operation :entity/name "run"          :val/extracted true}])] ; not a probe-* reader → ignored
       (is (= #{"probe-orphan"} (fukan/uncovered-readers db))
           "only the probe reader with no declared Lens is flagged; the covered reader, the non-probe op, and the reader-less Lens are not"))))
 
 (deftest lens-coverage-green-on-the-self-model
   (testing "every bespoke probe reader has a declared Lens twin on the live build-model \"src\""
-    (is (empty? (fukan/uncovered-readers (pipeline/build-model "src")))
+    (is (empty? (fukan/uncovered-readers (pipeline/build-cozo-model "src")))
         "0 uncovered readers — every probe-X leaf's focus is declared as a Lens instrument")))

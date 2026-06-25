@@ -156,6 +156,29 @@ alle[e] := *t_bool[e, _, _]
 ?[max(e)] := alle[e]"))
       -1))
 
+(defn ^:test-support fold-vars->cozo
+  "Fold the instance-bearing `vars` onto an already-built Cozo db `cdb` — the cozo analog of
+   `union-dbs` folding an assembled fragment onto the model. Assembles the vars, UPSERTS nodes by
+   `:entity/id` (a var-ref to an entity already in `cdb` REUSES its eid — the value-identity dedup
+   `union-dbs` did via lookup-refs; a genuinely-new node takes a fresh eid above the current max)
+   and rels by `:rel/id`, resolving every `[:entity/id id]` ref to its existing-or-new eid, then
+   inserts. Returns `cdb`. (Mirrors `with-grammar-cozo`'s upsert, over emitted instances.)"
+  [cdb vars]
+  (let [{:keys [nodes rels]} (assemble/emit-instances (roots-of vars))
+        exist     (into {} (db/q cdb "?[id, e] := *t_str[e, 'entity/id', id]"))
+        by-id     (reduce (fn [m n] (update m (:entity/id n) merge n)) {} nodes)
+        new-ids   (vec (remove exist (keys by-id)))
+        base      (inc (max-eid cdb))
+        new-eid   (zipmap new-ids (map #(+ base %) (range)))
+        node-eid  (merge exist new-eid)
+        rel-by-id (reduce (fn [m r] (assoc m (:rel/id r) r)) {} rels)
+        rel-eid   (zipmap (keys rel-by-id) (map #(+ base (count new-ids) %) (range)))
+        ref->eid  (fn [v] (if (and (vector? v) (= :entity/id (first v))) (node-eid (second v)) v))]
+    (mirror/insert-datoms
+     cdb
+     (concat (for [id new-ids, [a v] (by-id id) :when (some? v)] [(new-eid id) a v])
+             (for [[id r] rel-by-id, [a v] r] [(rel-eid id) a (ref->eid v)])))))
+
 (defn with-grammar-cozo
   "Reflect the model's grammar into the already-built Cozo db `cdb` — the datascript-free analog of
    `grammar/with-grammar`. UPSERT by `:entity/id`: a reflected node whose id already exists (a

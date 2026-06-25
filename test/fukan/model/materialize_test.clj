@@ -1,21 +1,20 @@
 (ns fukan.model.materialize-test
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
             ;; the lens act (the grammar Lens/Projection/Mapping + the engine) + the real
             ;; self-model instance vars an ad-hoc contextualization composes over (Blueprint, survey)
             [fukan.canvas.core.lens :as lens :refer [Lens Projection Mapping]]
             [canvas.instruments.projections :refer [Blueprint]]
             [canvas.instruments.lenses :refer [survey]]
-            [fukan.canvas.core.assemble :as a]
-            [fukan.canvas.projection.canvas-source :as cs]
+            ;; composition root: registers the FACT extractor (so model* can fold extracted code) +
+            ;; the Cozo check engine, and loads the Clojure extractor (the Operation kind-rule the
+            ;; coverage/drift lenses reference + the drift lens's correspondence predicate)
+            [fukan.infra.model]
             [fukan.canvas.projection.probes :as probes]
             [fukan.model.materialize :as m]
             [fukan.model.pipeline :as pipeline]
-            ;; loaded so the vocab-derived rules carry an Operation kind-rule (coverage /
-            ;; drift lenses reference it) and the drift lens's correspondence predicate
-            ;; resolves
-            [canvas.vocab.code.extractor :as target]
             ;; the code vocab — `corr` for module-corresponds?, + the macros for the self-contained
             ;; worked-example fixture (a Module with a rich-signature Operation), which replaces the
             ;; retired extractor self-spec the tests once read
@@ -54,12 +53,13 @@
    :maps    [(Mapping {:from "a function" :to "a doc section"})]})
 
 (defn- by-name [db n]
-  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
+  (ffirst (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
 
-;; tags are ns-qualified; tests pass a short kind handle and match by its name
+;; tags are ns-qualified; tests pass a short kind handle and match by its name (the Cozo mirror
+;; stringifies :structure/of → re-keywordize the cell before `name`).
 (defn- by-kind-name [db kind n]
-  (->> (d/q '[:find ?e ?k :in $ ?n :where [?e :structure/of ?k] [?e :entity/name ?n]] db n)
-       (filter (fn [[_ k]] (= (name kind) (name k)))) ffirst))
+  (->> (cq/q '[:find ?e ?k :in $ ?n :where [?e :structure/of ?k] [?e :entity/name ?n]] db n)
+       (filter (fn [[_ k]] (= (name kind) (name (keyword k))))) ffirst))
 
 ;; A self-contained worked example: a code Module `target-clojure` exposing a rich-signature
 ;; Operation `extract` (paths: [Path] → StructureDb, performs :io). It reproduces what the retired
@@ -73,10 +73,12 @@
 (Module ^{:name "target-clojure"} fx-target {:exposes [fx-extract] :owns [fx-path fx-sdb]})
 
 (defn- model*
-  "The design-only self-model with the worked-example fixture (`target-clojure`/`extract`) unioned in."
-  []
-  (cs/union-dbs [(pipeline/build-model nil)
-                 (a/assemble-vars [#'fx-path #'fx-sdb #'fx-extract #'fx-target])]))
+  "The self-model (design-only by default, or with `code-root` extracted in) with the worked-example
+   fixture (`target-clojure`/`extract`) folded on — the cozo analog of union-dbs over the fixture vars."
+  ([] (model* nil))
+  ([code-root]
+   (build/fold-vars->cozo (pipeline/build-cozo-model code-root)
+                          [#'fx-path #'fx-sdb #'fx-extract #'fx-target])))
 
 (deftest render-dispatches-per-projection-and-kind-and-composes-references
   (testing "render [Blueprint :Operation] composes its :Schema renders (via dispatch) into the signature"
@@ -101,18 +103,14 @@
 
 (deftest materialize-view-composes-a-lens-focus-under-blueprint
   (testing "materialize-view renders each primitive a lens selects, under Blueprint (the default)"
-    (let [model   (model*)
-          lens-db (a/assemble-vars [#'mvl-target])
-          db      (cs/union-dbs [model lens-db])
-          view    (m/materialize-view db (by-name db "target"))]
+    (let [db   (build/fold-vars->cozo (model*) [#'mvl-target])
+          view (m/materialize-view db (by-name db "target"))]
       (is (str/includes? view "Implement `extract`"))
       (is (str/includes? view "paths: [Path]")))))
 
 (deftest empty-focus-materializes-to-empty-string
   (testing "a lens whose focus is empty composes to nothing"
-    (let [model   (model*)            ; loads the canvas vocab (the (Operation …) rule)
-          lens-db (a/assemble-vars [#'ef-none])
-          db      (cs/union-dbs [model lens-db])]
+    (let [db (build/fold-vars->cozo (model*) [#'ef-none])]   ; model* loads the canvas vocab (the (Operation …) rule)
       (is (= "" (m/materialize-view db (by-name db "none")))))))
 
 (deftest materialize-module-composes-a-modules-stages
@@ -136,9 +134,7 @@
 
 (deftest shipped-lenses-with-queries-are-evaluable
   (testing "every retrofitted self-model lens resolves to a node-set (no prose-only throw)"
-    (let [model (model*)
-          code  (target/extract "test/fixtures/target/sample.clj")   ; Operations, so coverage/drift resolve
-          db    (cs/union-dbs [model code])]
+    (let [db (model* "test/fixtures/target/sample.clj")]   ; sample's Operations extracted in, so coverage/drift resolve
       ;; the predicate the drift lens query invokes
       (is (corr/module-corresponds? "core-structure" "fukan.canvas.core.structure"))
       (doseq [ln ["survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"]]
@@ -177,12 +173,10 @@
 
 (deftest a-context-composes-over-any-base
   (testing "the same mechanism composes Blueprint with an arbitrary context — e.g. a refactor framing"
-    (let [model   (model*)
-          ;; the fragment includes Blueprint (+ its survey lens) so the contextualizes
-          ;; var-ref resolves; union with the model then dedups them
-          proj-db (a/assemble-vars [#'acb-stages #'acb-Refactor #'Blueprint #'survey])
-          db      (cs/union-dbs [model proj-db])
-          out     (m/materialize-projection db (by-kind-name db :Projection "Refactor"))]
+    (let [;; the fragment includes Blueprint (+ its survey lens) so the contextualizes var-ref resolves;
+          ;; folding onto the model then dedups them by :entity/id
+          db  (build/fold-vars->cozo (model*) [#'acb-stages #'acb-Refactor #'Blueprint #'survey])
+          out (m/materialize-projection db (by-kind-name db :Projection "Refactor"))]
       (is (str/includes? out "Refactor the existing implementation") "the refactor context frames the output")
       (is (str/includes? out "Implement `extract`")
           "and the body is Blueprint's specs — composed with zero Refactor-specific renderers"))))
@@ -201,18 +195,16 @@
 
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"
-    (let [model    (model*)
-          ;; a Projection whose name selects the Docs renderers and whose :through lens
-          ;; carries a selection query (the manifest's :maps are intent, not dispatched).
-          proj-db  (a/assemble-vars [#'mprd-stages #'mprd-Docs])
-          db       (cs/union-dbs [model proj-db])
-          out      (m/materialize-projection db (by-name db "Docs"))]
+    (let [;; a Projection whose name selects the Docs renderers and whose :through lens carries a
+          ;; selection query (the manifest's :maps are intent, not dispatched).
+          db  (build/fold-vars->cozo (model*) [#'mprd-stages #'mprd-Docs])
+          out (m/materialize-projection db (by-name db "Docs"))]
       (is (str/includes? out "### extract") "rendered under the projection's name (Docs)")
       (is (str/includes? out "**Grouping:** target-clojure")))))
 
 (deftest probe-foci-compose-into-a-projection
   (testing "a probe's observation foci flow straight into a projection (the seam)"
-    (let [db      (cs/build)
+    (let [db      (pipeline/build-cozo-model nil)
           finding (probes/run db "survey")              ; whole-model read → foci = all nodes by kind
           out     (m/materialize-finding db "Blueprint" finding)]
       (is (string? out) "the projection renders the finding's union focus")
