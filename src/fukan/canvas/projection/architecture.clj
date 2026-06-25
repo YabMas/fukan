@@ -6,9 +6,9 @@
             [fukan.cozo.query :as cq]))
 
 (defn- ord
-  "Coerce a `:rel/order` cell to a long for sorting — `cq/q` returns strings over Cozo, ints over
-   datascript. (:child / :may-depend are ordered `:*` slots, so :rel/order is always present.)"
-  [x] (if (string? x) (Long/parseLong x) (long x)))
+  "Coerce a `:rel/order` cell to a long for sorting — `cq/q` returns leaf cells natively.
+   (:child / :may-depend are ordered `:*` slots, so :rel/order is always present.)"
+  [x] (long x))
 
 (defn- subsystem-line [db sub-eid sub-name]
   (let [mods (->> (cq/q '[:find ?mod ?mn ?o :in $ ?sub

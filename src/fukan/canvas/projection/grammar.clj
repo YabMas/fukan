@@ -23,8 +23,8 @@
 (def ^:private malli->scalar {:string :string, :int :int, :boolean :boolean})
 
 (defn- ord
-  "A `:rel/order` cell as a long for sorting — `cq/q` returns strings over Cozo, ints over datascript."
-  [o] (cond (nil? o) -1, (string? o) (Long/parseLong o), :else (long o)))
+  "A `:rel/order` cell as a long for sorting — `cq/q` returns leaf cells natively (absent → -1)."
+  [o] (if (nil? o) -1 (long o)))
 
 (defn- payload-form
   "A `:val/form` / payload value as its CODE-FORM — pr-str'd to a string in the Cozo mirror, read back."

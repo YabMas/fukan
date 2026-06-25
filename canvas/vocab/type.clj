@@ -18,11 +18,10 @@
 
 (defn- order-of
   "Sort key for relation eid `r`: its `:rel/order` from `ords` (absent → 0), coerced to long.
-   `cq/q` returns all cells as STRINGS over Cozo and native numbers over datascript, so the
-   numeric order is normalized to stay correct on both engines."
+   `cq/q` returns leaf cells natively (typed-q), so `:rel/order` arrives a number."
   [ords r]
   (let [o (get ords r)]
-    (cond (nil? o) 0, (string? o) (Long/parseLong o), :else (long o))))
+    (if (nil? o) 0 (long o))))
 
 (defn- children
   "Target eids of `from`'s reified `rel` relations, in :rel/order order (relations with no

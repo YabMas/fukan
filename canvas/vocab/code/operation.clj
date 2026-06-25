@@ -148,9 +148,8 @@
   (let [ins  (->> (cq/q '[:find ?ord ?to :in $ ?from
                           :where [?r :rel/from ?from] [?r :rel/kind :in] [?r :rel/to ?to] [?r :rel/order ?ord]]
                         db op-eid)
-                  ;; ?ord is a string over Cozo, an int over datascript — coerce so the :in params
-                  ;; sort by true numeric order (a >9-arity op would mis-sort lexically otherwise)
-                  (sort-by (fn [[ord _]] (if (string? ord) (Long/parseLong ord) (long ord))))
+                  ;; ?ord arrives a native number (typed-q) — sort by true numeric order
+                  (sort-by (fn [[ord _]] (long ord)))
                   (mapv (fn [[_ to]] (typing/render-type db to))))
         out  (ffirst (cq/q '[:find ?to :in $ ?from
                              :where [?r :rel/from ?from] [?r :rel/kind :out] [?r :rel/to ?to]]

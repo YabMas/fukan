@@ -25,8 +25,8 @@
 ;; ── small query helpers over the substrate ──────────────────────────────────
 
 (defn- ord
-  "A `:rel/order` cell as a long for sorting — `cq/q` returns strings over Cozo, ints over datascript."
-  [o] (cond (nil? o) -1, (string? o) (Long/parseLong o), :else (long o)))
+  "A `:rel/order` cell as a long for sorting — `cq/q` returns leaf cells natively (absent → -1)."
+  [o] (if (nil? o) -1 (long o)))
 
 (defn- rel-target [db eid kind]
   (ffirst (cq/q '[:find ?to :in $ ?e ?k

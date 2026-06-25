@@ -25,9 +25,8 @@
 ;; ── parts: one node → its authoring ingredients ──────────────────────────────
 
 (defn- ord
-  "A `:rel/order` cell as a long for sorting — absent → -1; `cq/q` returns strings over Cozo, ints
-   over datascript."
-  [o] (cond (nil? o) -1, (string? o) (Long/parseLong o), :else (long o)))
+  "A `:rel/order` cell as a long for sorting — `cq/q` returns leaf cells natively (absent → -1)."
+  [o] (if (nil? o) -1 (long o)))
 
 (defn- struct-tag
   "A node's `:structure/of` as a KEYWORD — the Cozo mirror stringifies it (no colon); `keyword` is
