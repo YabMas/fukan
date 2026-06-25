@@ -68,6 +68,9 @@
   [[op & args]]
   (cond
     (#{'not= 'clojure.core/not=} op) [(str (cterm (first args)) " != " (cterm (second args))) #{}]
+    ;; (contains? #{a b …} ?v) — set membership → an or of equalities (the set is a LITERAL, not a term)
+    (and (#{'contains? 'clojure.core/contains?} op) (set? (first args)))
+    [(str "or(" (str/join ", " (map #(str (cterm (second args)) " == " (clit %)) (first args))) ")") #{}]
     (contains? predicate-registry op) ((predicate-registry op) (mapv cterm args))
     :else (throw (ex-info (str "unsupported predicate: " (pr-str (cons op args))) {:pred op}))))
 

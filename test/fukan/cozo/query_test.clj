@@ -41,6 +41,17 @@
                  (set (map first (q/q dq cdb (str eid))))))))
       (finally (db/close cdb)))))
 
+(deftest contains-set-membership-compiles
+  ;; (contains? #{a b …} ?v) is a set-membership predicate — compiles to an or of equalities
+  (let [ds  (pipeline/build-model "src")
+        cdb (mirror/mirror ds)]
+    (try
+      (let [q '[:find [?mn ...] :where [?r :rel/kind ?k] [(contains? #{:exposes :child :owns} ?k)]
+                [?r :rel/from ?m] [?m :entity/name ?mn]
+                [?m :structure/of :canvas.vocab.code.module/Module]]]
+        (is (= (set (map str (d/q q ds))) (set (q/q q cdb)))))
+      (finally (db/close cdb)))))
+
 (deftest wildcard-underscore-compiles
   ;; `_` is a discard placeholder (any value, don't bind). Cozo has no wildcard, so each `_` must
   ;; become a UNIQUE fresh var — reusing one would wrongly join the positions. Two `_`s in one query
