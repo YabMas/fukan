@@ -28,9 +28,11 @@
                             '[(Operation ?n) [?n :val/extracted true]]]})
 (Lens drift       {:focus  "spec ↔ code divergence"
                    :select ["authored operations with no extracted twin"
-                            '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)
-                              (not (Operation ?o) [?o :val/extracted true] (named ?o ?nm) (in-module ?o ?km)
-                                   [(canvas.vocab.code.module/module-corresponds? ?cm ?km)])]]})
+                            ;; "no extracted twin" is exactly the `op-twin` defrelation negated — the
+                            ;; same join the Realization law uses; a single-clause not-join over a rule,
+                            ;; correct on both engines (the explicit multi-clause form hit datascript's
+                            ;; empty-relation not-join gotcha)
+                            '[(Operation ?n) (not [?n :val/extracted true]) (not-join [?n] (op-twin ?n ?o))]]})
 (Lens type-drift  {:focus  "spec ↔ code TYPE divergence — where a modelled signature and its realizing function disagree"
                    :select ["authored operations whose realizing twin carries a type annotation"
                             '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)

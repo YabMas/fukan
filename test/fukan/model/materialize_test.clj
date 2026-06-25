@@ -121,7 +121,7 @@
       (let [bp (m/materialize-module db "Blueprint" "core-lens")]
         (is (str/includes? bp "Implement `evaluate-lens`"))
         (is (str/includes? bp "Implement `refine`"))
-        (is (str/includes? bp "Delegates: vocab-rules") "the cross-boundary dependency renders inline"))
+        (is (str/includes? bp "Delegates: q, vocab-rules") "the cross-boundary dependencies render inline"))
       (let [docs (m/materialize-module db "Docs" "core-lens")]
         (is (str/includes? docs "### evaluate-lens"))
         (is (str/includes? docs "### refine")))

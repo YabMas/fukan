@@ -14,7 +14,8 @@
    vocab (core is unopinionated about the ELEMENTS a project models, opinionated about the ACTS it
    performs on them)."
   (:require [clojure.set :as set]
-            [datascript.core :as d]
+            [clojure.edn :as edn]
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── THE FOCUS: a Lens names a slice and carries its runnable selection ─────────────────────────
@@ -78,8 +79,8 @@
    vocab-derived rules, returning the focus node-set (a set of eids). The shared
    evaluation engine behind both a stored lens and any ad-hoc focus."
   [db clauses]
-  (set (d/q (vec (concat '[:find [?n ...] :in $ %] [:where] clauses))
-            db (s/vocab-rules))))
+  (set (cq/q (vec (concat '[:find [?n ...] :in $ %] [:where] clauses))
+             db (s/vocab-rules))))
 
 (defn evaluate-lens
   "Run lens `lens-eid`'s own selection query — the `:val/query` payload it carries (its
@@ -91,8 +92,10 @@
    stays total (parse-don't-validate); deciding a prose-only lens is unevaluable is the
    caller's concern, not an exception in the core."
   [db lens-eid]
-  (when-let [clauses (:val/query (d/entity db lens-eid))]
-    (focus-nodes db clauses)))
+  (when-let [clauses (:val/query (cq/entity db lens-eid))]
+    ;; the :query payload round-trips through pr-str in the Cozo mirror (arrives as a string);
+    ;; datascript carries the raw clause form — read it back when it came as a string.
+    (focus-nodes db (cond-> clauses (string? clauses) edn/read-string))))
 
 (defn refine
   "Narrow a `focus` (a node-set) to its members that ALSO match `clauses` (binding `?n`,
@@ -109,13 +112,13 @@
    law violations: empty ⇔ every gated focus is empty (a prose-only gated lens is unevaluable, so it
    never fires). Laws gate the substrate; Checks gate a use-side focus."
   [db]
-  (for [[c verdict lens] (d/q '[:find ?c ?verdict ?lens
-                                :where [?c :structure/of :fukan.canvas.core.lens/Check]
-                                       [?c :val/verdict ?verdict]
-                                       [?g :rel/kind :gates] [?g :rel/from ?c] [?g :rel/to ?lens]]
-                              db)
+  (for [[c verdict lens] (cq/q '[:find ?c ?verdict ?lens
+                                 :where [?c :structure/of :fukan.canvas.core.lens/Check]
+                                        [?c :val/verdict ?verdict]
+                                        [?g :rel/kind :gates] [?g :rel/from ?c] [?g :rel/to ?lens]]
+                               db)
         :let  [focus (evaluate-lens db lens)]
         :when (seq focus)]
-    {:check     (:entity/name (d/entity db c))
+    {:check     (:entity/name (cq/entity db c))
      :verdict   verdict
      :offenders (set focus)}))

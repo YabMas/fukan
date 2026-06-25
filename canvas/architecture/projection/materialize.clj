@@ -14,16 +14,20 @@
   (Kind ProjectionName :string) (Kind ModuleName :string)
   (Kind Clause) (Kind Eid :int)
   (Operation materialize-view "Render a lens focus under Blueprint (the default projection)."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:lens Lens]] Instruction]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:lens Lens]] Instruction]
+     :performs  [:throws]})                        ; reaches the lens engine's query-compiler throw
   (Operation materialize-over "Render a refined focus (node-set) under a projection."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:focus [:vector Eid]]] Instruction]})
   (Operation materialize-focus "Render the nodes an ad-hoc :where clause selects, under a projection."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:clauses [:vector Clause]]] Instruction]
+     :performs  [:throws]                          ; via focus-nodes
      :delegates [lens-engine/focus-nodes]})
   (Operation materialize-module "Render a module's Operations under a projection."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:module ModuleName]] Instruction]})
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:module ModuleName]] Instruction]
+     :performs  [:throws]})                        ; reaches the lens engine's query-compiler throw
   (Operation materialize-projection "Render a modelled Projection through its own lens (model-driven)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj Projection]] Instruction]
+     :performs  [:throws]                          ; via evaluate-lens
      :delegates [lens-engine/evaluate-lens]})
   (Operation render "Render a single node under a projection (composes the per-primitive render-base multimethod)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:eid Eid]] Instruction]})
