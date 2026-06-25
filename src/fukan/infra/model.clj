@@ -27,8 +27,10 @@
             [fukan.cozo.law]
             [canvas.vocab.code.extractor :as target]))
 
-;; Register fukan's project extractor — its own Clojure source.
-(extraction/register-extractor! target/extract)  ; target alias → canvas.vocab.code.extractor
+;; Register fukan's project extractor — its own Clojure source. Both the datascript `extract`
+;; (the oracle) and the engine-agnostic `extract-roots` FACTS (what the native Cozo build consumes).
+(extraction/register-extractor! target/extract)               ; target alias → canvas.vocab.code.extractor
+(extraction/register-fact-extractor! (fn [root] (target/extract-roots [root])))
 
 (defonce ^:private state (atom {:model nil :cozo nil :src nil}))
 

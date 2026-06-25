@@ -15,6 +15,12 @@
      flows in from the CLI → build-model → run-extractor)."
     :string)
   (Kind Unit)
+  (Kind FactExtractor [:=> [:catn [:code-root Path]] Facts])
+  (Kind Facts
+    "The engine-agnostic extraction facts {:roots :var-usages} — the Module/Operation roots plus
+     the var-usages used to ground the :calls graph. What the native Cozo build consumes (no
+     datascript), produced by the registered fact extractor."
+    :map)
   (Operation register-extractor! "Register the project's extractor (a fn Path → StructureDb)."
     {:signature [:=> [:catn [:f Extractor]] Unit]
      :performs  [:state]})
@@ -23,4 +29,13 @@
      project extractor, which is now a `canvas/vocab` tool (the Clojure extractor) outside this
      built-system self-model — so the dispatch seam points beyond what `architecture/` models."
     {:signature [:=> [:catn [:code-root Path]] substrate/StructureDb]
+     :performs  [:state]})
+  (Operation register-fact-extractor! "Register the project's FACT extractor (a fn Path → Facts)."
+    {:signature [:=> [:catn [:f FactExtractor]] Unit]
+     :performs  [:state]})
+  (Operation extract-facts
+    "Run the registered fact extractor over a code-root → its {:roots :var-usages} facts (or empty
+     facts when none is registered). The engine-agnostic twin of run-extractor that the native
+     Cozo build reads."
+    {:signature [:=> [:catn [:code-root Path]] Facts]
      :performs  [:state]}))

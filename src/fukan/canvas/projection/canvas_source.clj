@@ -94,6 +94,16 @@
   []
   (discover-canvas-namespaces))
 
+(defn require-canvas-namespaces!
+  "Discover every canvas namespace and REQUIRE it (registering its vocabulary and interning
+   its instance `def`s), returning the ns symbols. The native Cozo build's instance-var scan
+   reads `ns-interns`, so the namespaces must be loaded first — this is that load step,
+   factored out of the (datascript) `build` so the cozo build can share it."
+  []
+  (let [nss (discover-canvas-namespaces)]
+    (doseq [ns-sym nss] (require-canvas-namespace ns-sym))
+    nss))
+
 ;; ---------------------------------------------------------------------------
 ;; Union — fold the extractor's code db onto the assembled design db (schema-driven)
 ;; ---------------------------------------------------------------------------

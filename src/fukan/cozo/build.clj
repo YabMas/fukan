@@ -74,6 +74,32 @@
   [node-maps rel-maps]
   (mirror/load-datoms (maps->datoms node-maps rel-maps 0)))
 
+(defn ^:test-support tx-maps->cozo
+  "Build a Cozo substrate from one seq of datascript-style transaction MAPS — the cozo analog
+   of `(-> (sub/create) (d/db-with tx-maps))`, replicating its tempid + `:db.unique/identity`
+   semantics: nodes merge by `:entity/id` (rels by `:rel/id`, last-wins), each `:db/id` tempid
+   resolves to its merged eid, and `:rel/from`/`:rel/to` values (a tempid or an `[:entity/id id]`
+   lookup-ref) resolve to eids. Lets a test hand-build a substrate with tempid wiring. Returns
+   the open Cozo db."
+  [tx-maps]
+  (let [rels      (filter :rel/id tx-maps)
+        nodes     (remove :rel/id tx-maps)
+        nkey      (fn [n] (if (contains? n :entity/id) [:id (:entity/id n)] [:tmp (:db/id n)]))
+        merged    (reduce (fn [m n] (update m (nkey n) merge n)) {} nodes)
+        node-keys (vec (keys merged))
+        key->eid  (zipmap node-keys (range))
+        n-nodes   (count node-keys)
+        rel->eid  (zipmap rels (map #(+ n-nodes %) (range)))
+        tmp->eid  (into {} (for [n nodes :when (:db/id n)] [(:db/id n) (key->eid (nkey n))]))
+        id->eid   (into {} (for [[[t v] e] key->eid :when (= t :id)] [v e]))
+        resolve   (fn [v] (cond (and (vector? v) (= :entity/id (first v))) (id->eid (second v))
+                                (integer? v)                               (tmp->eid v)
+                                :else                                      v))]
+    (mirror/load-datoms
+     (concat
+      (for [[k attrs] merged, [a v] (dissoc attrs :db/id) :when (some? v)] [(key->eid k) a v])
+      (for [r rels, [a v] (dissoc r :db/id)] [(rel->eid r) a (if (#{:rel/from :rel/to} a) (resolve v) v)])))))
+
 (defn- collect
   "Every instance-bearing interned var across the (already-required) `ns-syms`."
   [ns-syms]

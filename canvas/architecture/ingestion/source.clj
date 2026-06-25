@@ -23,4 +23,10 @@
   (Operation build "Discover + require + assemble the canvas specs → the model db."
     {:signature [:=> [:cat] substrate/StructureDb]
      :performs  [:io :stderr :require :throws]
-     :delegates [assemble/assemble]}))          ; assembles the discovered instance-vars
+     :delegates [assemble/assemble]})          ; assembles the discovered instance-vars
+  (Operation require-canvas-namespaces!
+    "Discover + require the canvas namespaces (intern their instance-vars), returning the ns syms —
+     the load step factored out of `build` so the native Cozo build can share it (its var-scan needs
+     the namespaces loaded)."
+    {:signature [:=> [:cat] [:vector :any]]
+     :performs  [:io :stderr :require :throws]}))

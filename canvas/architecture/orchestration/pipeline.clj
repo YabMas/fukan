@@ -8,6 +8,8 @@
    registered. Collaborators are cross-module var-refs (the seams)."
   (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
+            [canvas.architecture.cozo.build :as cozo-build]
+            [canvas.architecture.cozo.db :as cozo-db]
             [canvas.architecture.ingestion.source :as canvas-source]
             [canvas.architecture.ingestion.extraction :as extraction]))
 
@@ -16,4 +18,11 @@
   (Operation build-model "Ingest the design specs + fold extracted code onto one StructureDb."
     {:signature [:=> [:catn [:source extraction/Path]] substrate/StructureDb]
      :performs  [:io :require :throws]
-     :delegates [canvas-source/build extraction/run-extractor canvas-source/union-dbs]}))
+     :delegates [canvas-source/build extraction/run-extractor canvas-source/union-dbs]})
+  ;; TRANSITIONAL (datascript→Cozo cut-over): the cozo twin of build-model — requires the canvas
+  ;; namespaces, gathers the extraction facts, and assembles them natively via model->cozo. Merges
+  ;; back into build-model once the datascript path is dropped (Stage C).
+  (Operation build-cozo-model "Build the model as a native Cozo substrate (the cozo twin of build-model)."
+    {:signature [:=> [:catn [:source extraction/Path]] cozo-db/CozoDb]
+     :performs  [:io :stderr :require :throws :state]
+     :delegates [canvas-source/require-canvas-namespaces! extraction/extract-facts cozo-build/model->cozo]}))

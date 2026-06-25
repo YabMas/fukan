@@ -82,13 +82,13 @@
           "the canvas/pipeline/model spec is ingested")
       ;; post-prune the pipeline subsystem is just build-model — the ingest/union
       ;; machinery lives in canvas-source now, not duplicated here
-      (is (= ["build-model"]
-             (d/q '[:find [?n ...]
-                    :where [?m :entity/name "model-pipeline"]
-                           [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
-                           [?c :structure/of :canvas.vocab.code.operation/Operation] [?c :entity/name ?n]]
-                  db))
-          "model.pipeline exposes exactly one operation — no stale duplicate ingest")
+      (is (= #{"build-model" "build-cozo-model"}            ; build-cozo-model is the transitional cozo twin (cut-over)
+             (set (d/q '[:find [?n ...]
+                         :where [?m :entity/name "model-pipeline"]
+                                [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
+                                [?c :structure/of :canvas.vocab.code.operation/Operation] [?c :entity/name ?n]]
+                       db)))
+          "model.pipeline exposes build-model + its transitional cozo twin — no stale duplicate ingest")
       ;; the seams: build-model's cross-module :delegates resolve to the canvas-source
       ;; ingest/union stages and to the target extractor (design + code unified)
       (is (= #{"build" "union-dbs"}

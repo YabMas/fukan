@@ -15,6 +15,7 @@
   (:require [clojure.java.io :as io]
             [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.model.extraction :as extraction]
+            [fukan.cozo.build :as cozo-build]
             [canvas.vocab.grammar :as grammar]))
 
 (defn build-model
@@ -37,3 +38,16 @@
      ;; pure-grammar stratum (if any) still reflects
      ;; (with-grammar coerces the ns symbols to strings)
      (canvas-source/canvas-namespaces))))
+
+(defn ^:test-support build-cozo-model
+  "Build the model as a native Cozo substrate (no datascript) — the cozo twin of `build-model`,
+   exercised while the datascript build is cut over. Requires the canvas namespaces, gathers the
+   extraction facts through the plug-point (when `code-root` exists), and assembles them into one
+   Cozo db via `model->cozo`. TRANSITIONAL: this becomes `build-model` once the datascript path
+   is dropped (Stage C of the cut-over)."
+  [code-root]
+  (let [nss   (canvas-source/require-canvas-namespaces!)
+        facts (if (and code-root (.exists (io/file code-root)))
+                (extraction/extract-facts code-root)
+                {:roots [] :var-usages []})]
+    (cozo-build/model->cozo nss facts)))
