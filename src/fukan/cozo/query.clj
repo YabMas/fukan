@@ -273,14 +273,16 @@
    scalar passes through unchanged."
   [cdb v] (if (lookup-ref? v) (resolve-lookup cdb v) v))
 
-(defn- q-cozo
-  "Compile + run `query` over Cozo db `cdb` with `inputs`. Returns a SET of tuples for a
-   relation find, or a distinct vector for a collection find. Eids are opaque STRING handles;
-   leaf values come back in their NATIVE type (Int/String/Bool, per the typed `triple` view)."
-  [cdb query inputs]
+(defn q
+  "Run datalog `query` over the Cozo db `db`: the compiled datalog subset fukan uses —
+   relation/collection finds, `:in` of `$` + optional `%` rules + scalar params incl.
+   `[attr val]` lookup-refs. EIDS come back as opaque STRING handles; leaf values in their
+   NATIVE type (Int/String/Bool, per the typed `triple` view). A relation find returns a SET
+   of tuples; a collection find a distinct vector."
+  [query db & inputs]
   (let [{:keys [find in where]} (split-query query)
         {:keys [rules subst]}   (bind-inputs in inputs)
-        subst   (into {} (map (fn [[k v]] [k (resolve-param cdb v)]) subst))
+        subst   (into {} (map (fn [[k v]] [k (resolve-param db v)]) subst))
         ;; scalar params bind only the WHERE-body's vars; a `%` rule's vars are head-scoped
         ;; and never close over query `:in` inputs — substituting a scalar into a rule would
         ;; corrupt its head (e.g. a shared name like `?op`), so the rules are passed verbatim.
@@ -288,18 +290,10 @@
         [rule-lines body] (compile-body where* (vec rules) (vocab-index))
         head    (str/join ", " (map cvar (find-vars find)))
         program (str preamble "\n" (str/join "\n" rule-lines) "\n?[" head "] := " body)
-        rows    (db/q cdb program)]
+        rows    (db/q db program)]
     (if (collection-find? find)
       (vec (distinct (map first rows)))
       (set rows))))
-
-(defn q
-  "Run datalog `query` over the Cozo db `db` (same argument order as datascript's `d/q`, which
-   it replaces): the compiled datalog subset fukan uses — relation/collection finds, `:in` of
-   `$` + optional `%` rules + scalar params incl. `[attr val]` lookup-refs. EIDS come back as
-   opaque strings; leaf values in their NATIVE type over the typed `triple` view."
-  [query db & inputs]
-  (q-cozo db query inputs))
 
 ;; ── entity: eid → attribute map (the d/entity replacement) ─────────────────────
 (defn entity

@@ -48,11 +48,6 @@
   []
   (:cozo @state))
 
-(defn get-cozo
-  "The current model's Cozo db handle — what the consumers read (alias of `get-model`)."
-  []
-  (:cozo @state))
-
 (defn get-src [] (:src @state))
 
 (defn ^{:malli/schema [:=> [:cat] :StructureDb]} refresh-model

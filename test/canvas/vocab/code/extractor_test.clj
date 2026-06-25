@@ -12,15 +12,15 @@
 ;; Register fukan's FACT extractor so build-model's unified build runs it (the proof).
 (extraction/register-fact-extractor! (fn [root] (tc/extract-roots [root])))
 
-(defn- extract-cozo
-  "The cozo analog of `tc/extract`: the extraction FACTS for `path` assembled into a code-only
-   Cozo substrate (no canvas nss) with the :calls graph grounded + grammar reflected."
+(defn- extract
+  "The extraction FACTS for `path` assembled into a code-only Cozo substrate (no canvas nss)
+   with the :calls graph grounded + grammar reflected."
   [path]
   (build/model->cozo [] (tc/extract-roots [path])))
 
 (deftest extracts-functions-as-operations
   (testing "the clj-kondo extractor emits an Operation per defn/defn-, with privacy"
-    (let [db  (extract-cozo "test/fixtures/target/sample.clj")
+    (let [db  (extract "test/fixtures/target/sample.clj")
           ops (into {} (cq/q '[:find ?n ?p
                               :where [?e :structure/of :canvas.vocab.code.operation/Operation]
                                      [?e :entity/name ?n] [?e :val/private ?p]]
@@ -30,7 +30,7 @@
 
 (deftest lifts-malli-schema-into-sig
   (testing "an annotated defn's :malli/schema metadata is stamped as the Operation's :val/sig"
-    (let [db  (extract-cozo "test/fixtures/target/sample.clj")
+    (let [db  (extract "test/fixtures/target/sample.clj")
           sig (ffirst (cq/q '[:find ?s
                              :where [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :entity/name "alpha"]
                                     [?e :val/sig ?s]]
@@ -40,7 +40,7 @@
 
 (deftest operations-are-owned-by-their-subsystem
   (testing "each namespace becomes a Module that owns its Operations (via :child relations)"
-    (let [db    (extract-cozo "test/fixtures/target/sample.clj")
+    (let [db    (extract "test/fixtures/target/sample.clj")
           owned (cq/q '[:find ?mn ?on
                        :where [?m :structure/of :canvas.vocab.code.module/Module] [?m :entity/name ?mn]
                               [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?o]
@@ -51,7 +51,7 @@
 
 (deftest emits-calls-between-operations
   (testing "the extractor populates :calls from clj-kondo var-usages — beta calls alpha"
-    (let [db    (extract-cozo "test/fixtures/target/sample.clj")
+    (let [db    (extract "test/fixtures/target/sample.clj")
           calls (cq/q '[:find ?fromn ?ton
                        :where [?cr :rel/kind :calls] [?cr :rel/from ?f] [?cr :rel/to ?t]
                               [?f :entity/name ?fromn] [?t :entity/name ?ton]]
@@ -62,14 +62,14 @@
 
 (deftest extracted-modules-carry-provenance
   (testing "each extracted Module is stamped :val/extracted true"
-    (let [db (extract-cozo "test/fixtures/target/sample.clj")]
+    (let [db (extract "test/fixtures/target/sample.clj")]
       (is (true? (ffirst (cq/q '[:find ?x :where [?m :structure/of :canvas.vocab.code.module/Module]
                                               [?m :entity/name "sample"] [?m :val/extracted ?x]] db)))
           "the sample Module is provenance-stamped"))))
 
 (deftest extracts-defmulti-as-dispatch-operation
   (testing "a defmulti is extracted as an Operation (a dispatch point) and callers' calls to it resolve"
-    (let [db (extract-cozo "src/fukan/canvas/projection/probes.clj")]
+    (let [db (extract "src/fukan/canvas/projection/probes.clj")]
       (is (true? (ffirst (cq/q '[:find ?x :where [?o :structure/of :canvas.vocab.code.operation/Operation]
                                               [?o :entity/name "run-probe"] [?o :val/extracted ?x]] db)))
           "run-probe (a defmulti) is an extracted Operation")

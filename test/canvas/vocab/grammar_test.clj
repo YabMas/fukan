@@ -32,7 +32,7 @@
 (Node ^{:name "n"} t-node {:one-ref t-leaf :title "x" :mode "a"})
 
 (defn- reflected []
-  (build/with-grammar-cozo (build/vars->cozo [#'t-leaf #'t-node]) nil))
+  (build/with-grammar (build/vars->cozo [#'t-leaf #'t-node]) nil))
 
 (defn- struct-node [db tag-str]
   (ffirst (cq/q '[:find ?s :in $ ?t

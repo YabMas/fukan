@@ -64,7 +64,7 @@
    its subsystems, their modules, and the :may-depend DAG, derived live from the held model.
    Read this instead of `ls canvas/` to grasp fukan's shape."
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (println (arch/architecture-overview m))
     (println "No model loaded yet. Use (go) first.")))
 
@@ -72,11 +72,11 @@
   "Print the GRAMMAR PRIMER — every vocabulary in the held model rendered back as
    its map-form defstructures, live from the reified grammar (the print-dual).
    Pass a namespace string for one vocabulary: (grammar \"lib.code\")."
-  ([] (if-let [m (infra-model/get-cozo)]
+  ([] (if-let [m (infra-model/get-model)]
         (println (gram/grammar-primer m))
         (println "No model loaded yet. Use (go) first.")))
   ([vocab-name]
-   (if-let [m (infra-model/get-cozo)]
+   (if-let [m (infra-model/get-model)]
      (println (gram/vocabulary-primer m vocab-name))
      (println "No model loaded yet. Use (go) first."))))
 
@@ -85,7 +85,7 @@
    the instance print-dual. The model talks back in the language you wrote it in:
    (show 'probe) → (Act probe \"…\" {:reads model …})."
   [n]
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [eids (map first (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]]
                                 m (name n)))]
       (if (empty? eids)
@@ -98,7 +98,7 @@
    model and print the focused nodes as their authored forms — the textual model
    explorer: (focus '[(Operation ?n) (in-module ?n \"materialize\")])."
   [clauses]
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [out (inst/focus-text m clauses)]
       (println (if (str/blank? out) "Empty focus." out)))
     (println "No model loaded yet. Use (go) first.")))
@@ -108,7 +108,7 @@
    QUOTED as its authored form — the law that fired and the instance that fired
    it, side by side."
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (println (inst/violations-text m (structure/check m)))
     (println "No model loaded yet. Use (go) first.")))
 
@@ -118,7 +118,7 @@
    modelled capability. (Build with a code-root — `(go)` defaults to \"src\" — so
    the held model carries the extracted code.)"
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [d (operation/drifted-operations m)]
       (if (empty? d)
         (println "No drift — every modelled Operation is realized in code.")
@@ -131,7 +131,7 @@
    intent, or make it `defn-`). Empty ⇔ every unmodelled function is genuinely private. Grouped by
    code module. (The private half of the coverage gap is settled by definition.)"
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [w (operation/uncovered-public-operations m)]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
@@ -151,7 +151,7 @@
   "Print fukan's complete module→module dependency graph (calls ∪ data-adoption), one edge per line —
    the objective backbone to reason a clean organization against. (Reads the Cozo model — migrated.)"
   []
-  (if-let [c (infra-model/get-cozo)]
+  (if-let [c (infra-model/get-model)]
     (doseq [[a b] (sort (code-module/module-dependencies c))]
       (println (format "%-24s ⟶ %s" a b)))
     (println "No model loaded yet. Use (go) first.")))
@@ -160,7 +160,7 @@
   "Print fukan's modelled DISPATCH POINTS (Operations with a :dispatches-to fan-out) and the handlers
    each routes to — the explicit indirection seams, derived live from the held model."
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (doseq [[dpn hs] (->> (cq/q '[:find ?dpn ?hn
                                  :where [?r :rel/kind :dispatches-to] [?r :rel/from ?dp] [?r :rel/to ?h]
                                         (not [?dp :val/extracted true])
@@ -178,7 +178,7 @@
    the crystallized seam; you decide whether it deserves a formal split), count-invariant — a clientele
    can grow (a 2nd dialect) and the seam stays visible. Empty ⇔ no module's public surface has split."
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [lb (la/latent-boundaries m)]
       (if (empty? lb)
         (println "No latent boundaries — no module's public surface splits into disjoint clienteles.")
@@ -195,7 +195,7 @@
    for each module's region: a consequential effect in a meant-to-be-pure region is the
    design-attention signal. (The `purity` lens's read, printed by region.)"
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [rows (cq/q '[:find ?mn ?on ?en
                       :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                              [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]
@@ -219,7 +219,7 @@
    trusted core must be total. Empty ⇔ the trusted core is total — the property the enforced
    `Totality` law asserts."
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [w (fukan/totality-violations m)]
       (if (empty? w)
         (println "Trusted core is total — no modelled reader's code throws.")
@@ -232,7 +232,7 @@
    TRANSITIVE effect profile. :undeclared (code reaches it, design silent — the enforced law direction)
    is listed first; then :phantom (declared, not reached — soft: taxonomy gap or stale intent)."
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [drift (code-effect/effect-drift m)
           u (filter (fn [[_ d]] (seq (:undeclared d))) drift)
           p (filter (fn [[_ d]] (seq (:phantom d))) drift)]
@@ -246,7 +246,7 @@
   "Partiality spread: ops that THROW directly (mostly ① parse-edge validators) vs ops that reach :throws
    only TRANSITIVELY via a call (the ② propagation surface that containment would collapse)."
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (let [{:keys [direct transitive-only]} (code-effect/throw-spread m)]
       (println "DIRECT throwers (" (count direct) "):" (str/join " " (sort direct)))
       (println "\nTRANSITIVE-only (" (count transitive-only) "):" (str/join " " (sort transitive-only))))
@@ -255,7 +255,7 @@
 (defn probes
   "Run the implemented probes against the held model, printing each finding."
   []
-  (if-let [m (infra-model/get-cozo)]
+  (if-let [m (infra-model/get-model)]
     (doseq [[nm finding] (probe/run-all m)]
       (println (str "── probe " nm " ──"))
       (let [lines (pf/finding->text finding)]
@@ -271,7 +271,7 @@
    or (materialize \"target.clojure\" \"Docs\")."
   ([module-name] (materialize module-name "Blueprint"))
   ([module-name projection]
-   (if-let [m (infra-model/get-cozo)]
+   (if-let [m (infra-model/get-model)]
      (let [spec (mat/materialize-module m projection module-name)]
        (if (str/blank? spec)
          (println "No Stages found in module" (pr-str module-name))

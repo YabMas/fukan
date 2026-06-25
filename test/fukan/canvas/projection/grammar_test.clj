@@ -38,7 +38,7 @@
 
 (PLeaf ^{:name "l"} p-leaf)
 
-(defn- reflected [] (build/with-grammar-cozo (build/vars->cozo [#'p-leaf]) nil))
+(defn- reflected [] (build/with-grammar (build/vars->cozo [#'p-leaf]) nil))
 
 (defn- struct-node [db tag-str]
   (ffirst (cq/q '[:find ?s :in $ ?t

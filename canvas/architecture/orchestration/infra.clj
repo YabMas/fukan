@@ -15,15 +15,13 @@
 
 (Module infra-model
   "The model lifecycle — load / get / refresh the held Model from a source path. The held Model is
-   the native Cozo build; `get-model`/`get-cozo` both return it."
+   the native Cozo build; `get-model` returns it."
   (Operation load-model    "Build (or reload) the held Model from a src path — the native Cozo build, closing the prior db."
     {:signature  [:=> [:catn [:src extraction/Path]] substrate/StructureDb]
      :performs   [:io :stderr :require :state :throws]
      :delegates  [pipeline/build-model cozo-query/q cozo-db/close]})  ; build the cozo model; cq/q reads the count; close the prior
   (Operation get-model     "The current held Model (the Cozo substrate), or none."
     {:signature [:=> [:cat] substrate/StructureDb]})
-  (Operation get-cozo      "The current held Model's Cozo db handle — what consumers read (alias of get-model)."
-    {:signature [:=> [:cat] :any]})
   (Operation refresh-model "Rebuild the Model from the last src path."
     {:signature [:=> [:cat] substrate/StructureDb]
      :performs  [:io :stderr :require :state :throws]})

@@ -114,11 +114,10 @@
   [ns-syms]
   (vars->cozo (collect ns-syms)))
 
-(defn- add-calls-cozo
-  "Ground the actual call graph as `:calls` rels in `cdb` — the datascript-free
-   analog of the extractor's `add-calls`. Resolves each var-usage's caller/callee
-   to the eid of the extracted Operation named `fn` in module `ns` (a single cozo
-   query `{[ns name] → eid}`), then inserts the `:calls` rels above the current max
+(defn- add-calls
+  "Ground the actual call graph as `:calls` rels in `cdb`. Resolves each var-usage's
+   caller/callee to the eid of the extracted Operation named `fn` in module `ns` (a single
+   cozo query `{[ns name] → eid}`), then inserts the `:calls` rels above the current max
    eid. Returns `cdb`."
   [cdb var-usages]
   (let [op-eid  (into {} (map (fn [[ns name eid]] [[ns name] eid]))
@@ -162,7 +161,7 @@ alle[e] := *t_bool[e, _, _]
    `:entity/id` (a var-ref to an entity already in `cdb` REUSES its eid — the value-identity dedup
    `union-dbs` did via lookup-refs; a genuinely-new node takes a fresh eid above the current max)
    and rels by `:rel/id`, resolving every `[:entity/id id]` ref to its existing-or-new eid, then
-   inserts. Returns `cdb`. (Mirrors `with-grammar-cozo`'s upsert, over emitted instances.)"
+   inserts. Returns `cdb`. (Mirrors `with-grammar`'s upsert, over emitted instances.)"
   [cdb vars]
   (let [{:keys [nodes rels]} (assemble/emit-instances (roots-of vars))
         exist     (into {} (db/q cdb "?[id, e] := *t_str[e, 'entity/id', id]"))
@@ -179,11 +178,10 @@ alle[e] := *t_bool[e, _, _]
      (concat (for [id new-ids, [a v] (by-id id) :when (some? v)] [(new-eid id) a v])
              (for [[id r] rel-by-id, [a v] r] [(rel-eid id) a (ref->eid v)])))))
 
-(defn with-grammar-cozo
-  "Reflect the model's grammar into the already-built Cozo db `cdb` — the datascript-free analog of
-   `grammar/with-grammar`. UPSERT by `:entity/id`: a reflected node whose id already exists (a
-   `^:value` Schema shared with the model — what datascript merged via `:db.unique/identity`) REUSES
-   that eid; only the genuinely-new grammar nodes (Structure/Vocabulary/Law) take fresh eids above the
+(defn with-grammar
+  "Reflect the model's grammar into the already-built Cozo db `cdb`. UPSERT by `:entity/id`: a
+   reflected node whose id already exists (a `^:value` Schema shared with the model) REUSES that
+   eid; only the genuinely-new grammar nodes (Structure/Vocabulary/Law) take fresh eids above the
    current max. Then every (new) grammar rel resolves its refs and inserts. Returns `cdb`."
   [cdb extra-seeds]
   (let [tags     (map (comp keyword first) (db/q cdb "?[t] := *t_str[_, 'structure/of', t]"))
@@ -209,7 +207,7 @@ alle[e] := *t_bool[e, _, _]
    roots in one native pass resolves cross-refs without a union/merge. Returns the open Cozo db."
   [ns-syms {:keys [roots var-usages]}]
   (-> (mirror/load-datoms (instances->datoms (concat (roots-of (collect ns-syms)) roots)))
-      (add-calls-cozo var-usages)
+      (add-calls var-usages)
       ;; seed reflection with EVERY canvas ns (as build-model does) so a zero-instance law-holder
       ;; stratum (canvas.vocab.fukan's Totality/LensCoverage) still reflects
-      (with-grammar-cozo ns-syms)))
+      (with-grammar ns-syms)))

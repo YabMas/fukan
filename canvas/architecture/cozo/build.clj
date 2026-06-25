@@ -35,13 +35,13 @@
     {:signature [:=> [:catn [:ns-syms [:vector :symbol]]] db/CozoDb]
      :performs  [:throws]
      :delegates [substrate/instance-value?]})
-  (Operation with-grammar-cozo
-    "Reflect the model's grammar into an already-built Cozo db (the datascript-free analog of grammar/with-grammar): query the structure tags, reflect → node/rel maps, UPSERT by :entity/id (reuse the eid of a ^:value Schema shared with the model), and insert the datoms. Returns the db."
+  (Operation with-grammar
+    "Reflect the model's grammar into an already-built Cozo db: query the structure tags, reflect → node/rel maps, UPSERT by :entity/id (reuse the eid of a ^:value Schema shared with the model), and insert the datoms. Returns the db."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:extra-seeds :any]] db/CozoDb]
      :performs  [:throws]                          ; grammar/reflect throws on a dangling grammar ref
      :delegates [db/q cmirror/insert-datoms]})
   (Operation model->cozo
-    "Native FULL build: canvas instance-vars + extraction {:roots :var-usages} facts → one native Cozo substrate with the :calls graph grounded (add-calls-cozo queries the built db for op eids) and the grammar reflected. Assembling all roots in one pass resolves cross-refs without a merge."
+    "Native FULL build: canvas instance-vars + extraction {:roots :var-usages} facts → one native Cozo substrate with the :calls graph grounded (add-calls queries the built db for op eids) and the grammar reflected. Assembling all roots in one pass resolves cross-refs without a merge."
     {:signature [:=> [:catn [:ns-syms [:vector :symbol]] [:facts :map]] db/CozoDb]
      :performs  [:throws]
-     :delegates [cmirror/load-datoms db/q with-grammar-cozo]}))
+     :delegates [cmirror/load-datoms db/q with-grammar]}))

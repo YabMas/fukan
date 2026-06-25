@@ -25,7 +25,7 @@
    A modelling TOOL, not core: the runtime (`check`/`assemble`/`evaluate-lens`) never
    consults the reflected nodes — they exist only so the grammar is viewable as data (the
    print-dual primer, the `unused-structures` grammar-drift reading). So it lives in
-   canvas/vocab, and the native build runs `reflect` (via `build/with-grammar-cozo`) on every build."
+   canvas/vocab, and the native build runs `reflect` (via `build/with-grammar`) on every build."
   (:require [clojure.string :as str]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]
