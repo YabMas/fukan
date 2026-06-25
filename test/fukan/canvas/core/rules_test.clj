@@ -1,7 +1,9 @@
 (ns fukan.canvas.core.rules-test
   (:require [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
+            ;; loaded for its side-effect: registers the Cozo check engine so s/check dispatches to it
+            [fukan.cozo.law]
             [fukan.canvas.core.rules :as rules]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
@@ -48,12 +50,12 @@
 
 (deftest domain-query-equals-substrate-query
   (testing "a query over domain rules returns the same nodes as the hand-written substrate query"
-    (let [db (a/assemble-vars [#'rt-a #'rt-b #'rt-t])
+    (let [db (build/vars->cozo [#'rt-a #'rt-b #'rt-t])
           rs (s/vocab-rules)
-          via-rules (sort (d/q '[:find [?n ...] :in $ %
+          via-rules (sort (cq/q '[:find [?n ...] :in $ %
                                  :where (RuleThing ?s) (in-module ?s "t") (named ?s ?n)]
                                db rs))
-          via-substrate (sort (d/q '[:find [?n ...]
+          via-substrate (sort (cq/q '[:find [?n ...]
                                      :where [?s :structure/of ::RuleThing]
                                             [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
                                             [?m :entity/name "t"] [?s :entity/name ?n]]
@@ -63,11 +65,11 @@
 
 (deftest law-reads-via-injected-rules
   (testing "a law whose :where uses domain predicates fires correctly — check injects the rules"
-    (let [db        (a/assemble-vars [#'rt2-ok #'rt2-forbidden])
+    (let [db        (build/vars->cozo [#'rt2-ok #'rt2-forbidden])
           offenders (->> (s/check db)
                          (filter #(= "no rule-thing may be named \"forbidden\"" (:law %)))
                          (mapcat :offenders) (map first)
-                         (map #(:entity/name (d/entity db %)))
+                         (map #(:entity/name (cq/entity db %)))
                          set)]
       (is (= #{"forbidden"} offenders)
           "the law selected the offender purely through (RuleThing ?s) + (named ?s \"forbidden\")"))))
@@ -86,8 +88,8 @@
     (is (contains? (set (map (comp first first) (s/vocab-rules))) 'same-name)
         "the derived relation is a vocab rule, available to every law and query"))
   (testing "the derived relation is callable at domain altitude over the injected rules"
-    (let [db    (a/assemble-vars [#'rt3-a #'rt3-b #'rt3-c])
-          pairs (d/q '[:find ?na ?nb :in $ %
+    (let [db    (build/vars->cozo [#'rt3-a #'rt3-b #'rt3-c])
+          pairs (cq/q '[:find ?na ?nb :in $ %
                        :where (same-name ?a ?b) [?a :entity/name ?na] [?b :entity/name ?nb]]
                      db (s/vocab-rules))]
       (is (= #{["dup" "dup"]} (set pairs))

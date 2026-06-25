@@ -3,7 +3,9 @@
    combinators exist to encapsulate — negation over a WHOLLY-EMPTY relation (the
    datascript inline-not-join gotcha), which must still fire."
   (:require [clojure.test :refer [deftest is testing]]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.build :as build]
+            ;; loaded for its side-effect: registers the Cozo check engine so s/check dispatches to it
+            [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 (defn- laws [db] (set (map :law (s/check db))))
@@ -56,20 +58,20 @@
 
 (deftest matched-by-fires-on-the-wholly-empty-relation
   (testing "THE gotcha case: no :approves relation exists at all — must still fire"
-    (is (contains? (laws (a/assemble-vars [#'mb-orphan]))
+    (is (contains? (laws (build/vars->cozo [#'mb-orphan]))
                    "every flagged doc is approved by a reviewer"))))
 
 (deftest matched-by-satisfied-by-the-right-counterpart
-  (is (not (contains? (laws (a/assemble-vars [#'mb-ok-doc #'mb-rev]))
+  (is (not (contains? (laws (build/vars->cozo [#'mb-ok-doc #'mb-rev]))
                       "every flagged doc is approved by a reviewer"))))
 
 (deftest matched-by-from-filters-the-counterpart-kind
   (testing "an approval from a Bot does not satisfy :from LReviewer"
-    (is (contains? (laws (a/assemble-vars [#'mb-bot-doc #'mb-bot]))
+    (is (contains? (laws (build/vars->cozo [#'mb-bot-doc #'mb-bot]))
                    "every flagged doc is approved by a reviewer"))))
 
 (deftest matched-by-when-filters-the-subjects
-  (is (not (contains? (laws (a/assemble-vars [#'mb-plain]))
+  (is (not (contains? (laws (build/vars->cozo [#'mb-plain]))
                       "every flagged doc is approved by a reviewer"))))
 
 ;; ── has ───────────────────────────────────────────────────────────────────────
@@ -80,10 +82,10 @@
 (LRef ^{:name "plain"} h-plain {:kind "plain"})            ; not a ref — exempt
 
 (deftest has-fires-when-the-relation-is-absent
-  (is (contains? (laws (a/assemble-vars [#'h-bare])) "a ref names a target")))
+  (is (contains? (laws (build/vars->cozo [#'h-bare])) "a ref names a target")))
 
 (deftest has-satisfied-and-when-scoped
-  (let [db (a/assemble-vars [#'h-named #'h-named-t #'h-plain])]
+  (let [db (build/vars->cozo [#'h-named #'h-named-t #'h-plain])]
     (is (not (contains? (laws db) "a ref names a target")))))
 
 ;; ── has-any ───────────────────────────────────────────────────────────────────
@@ -94,8 +96,8 @@
 (LProj ^{:name "wrapper"} ha-wrapper {:wraps ha-mapper})
 
 (deftest has-any-fires-only-when-every-alternative-is-absent
-  (is (contains? (laws (a/assemble-vars [#'ha-neither])) "a proj maps or wraps"))
-  (let [db (a/assemble-vars [#'ha-doc #'ha-mapper #'ha-wrapper])]
+  (is (contains? (laws (build/vars->cozo [#'ha-neither])) "a proj maps or wraps"))
+  (let [db (build/vars->cozo [#'ha-doc #'ha-mapper #'ha-wrapper])]
     (is (not (contains? (laws db) "a proj maps or wraps")))))
 
 ;; ── target ────────────────────────────────────────────────────────────────────
@@ -106,8 +108,8 @@
 (LLift ^{:name "bad"}  t-bad  {:lifts t-down})
 
 (deftest target-checks-the-relations-targets
-  (is (not (contains? (laws (a/assemble-vars [#'t-up #'t-good])) "lifts only code-up")))
-  (is (contains? (laws (a/assemble-vars [#'t-down #'t-bad])) "lifts only code-up")))
+  (is (not (contains? (laws (build/vars->cozo [#'t-up #'t-good])) "lifts only code-up")))
+  (is (contains? (laws (build/vars->cozo [#'t-down #'t-bad])) "lifts only code-up")))
 
 ;; ── at-most-one ───────────────────────────────────────────────────────────────
 
@@ -119,8 +121,8 @@
 (LOwner ^{:name "c"} amo-c {:owns [amo-y]})
 
 (deftest at-most-one-fires-on-a-second-incoming
-  (is (contains? (laws (a/assemble-vars [#'amo-x #'amo-a #'amo-b])) "at most one owner"))
-  (is (not (contains? (laws (a/assemble-vars [#'amo-y #'amo-c])) "at most one owner"))))
+  (is (contains? (laws (build/vars->cozo [#'amo-x #'amo-a #'amo-b])) "at most one owner"))
+  (is (not (contains? (laws (build/vars->cozo [#'amo-y #'amo-c])) "at most one owner"))))
 
 ;; ── surface errors ────────────────────────────────────────────────────────────
 
