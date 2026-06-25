@@ -13,8 +13,10 @@
 
 (deftest compiles-a-not-join-cardinality-law
   (testing "compile-law emits the expected CozoScript for a none (not-join) law"
-    (is (= (str "nj_1[x] := triple[r, 'rel/from', x], triple[r, 'rel/kind', 'exposes']\n"
-                "?[x] := triple[x, 'structure/of', 'canvas.vocab.code.module/Module'], not nj_1[x]")
+    ;; the not-join helper is named by content hash (pure compiler) — `nj_hsighp` is the
+    ;; deterministic name for this clause, stable across runs
+    (is (= (str "nj_hsighp[x] := triple[r, 'rel/from', x], triple[r, 'rel/kind', 'exposes']\n"
+                "?[x] := triple[x, 'structure/of', 'canvas.vocab.code.module/Module'], not nj_hsighp[x]")
            (law/compile-law '{:offenders [?x]
                               :where [[?x :structure/of :canvas.vocab.code.module/Module]
                                       (not-join [?x] [?r :rel/from ?x] [?r :rel/kind :exposes])]}

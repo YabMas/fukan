@@ -18,14 +18,14 @@
     {:signature [:=> [:catn [:t :any]] :string]})
   (Operation vocab-index "Compile the vocabulary's rules once into a name→{:lines :refs} index (+ the synthetic fn-predicate rules)."
     {:signature [:=> [:cat] :any]
-     :performs  [:state :throws]                  ; counter/refs atoms + the per-rule compile guard
+     :performs  [:throws]                          ; reaches the compiler's unsupported-form throw
      :delegates [kstructure/vocab-rules]})
-  (Operation compile-body "Compile where-clauses + caller rules → [rule-lines body-str], emitting the reachable vocab rules."
+  (Operation compile-body "Compile where-clauses + caller rules → [rule-lines body-str], emitting the reachable vocab rules. A PURE compiler (content-named helpers, threaded wildcard counter)."
     {:signature [:=> [:catn [:where :any] [:rules :any] [:index :any]] :any]
-     :performs  [:state :throws]})
+     :performs  [:throws]})
   (Operation q "Run a datalog query over a Cozo db like d/q — relation/collection finds, an :in of $ + optional % (rules) + scalar params. Cells are strings (the triple view)."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:query :any]] :any]
-     :performs  [:state :throws]
+     :performs  [:throws]
      :delegates [compile-body vocab-index db/q]})
   (Operation entity "Resolve an eid (string) to its typed attribute map — the d/entity replacement."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:eid :any]] :any]

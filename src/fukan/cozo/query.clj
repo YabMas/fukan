@@ -49,79 +49,87 @@
                            :refs #{"r_canvas_module" "r_code_module"}}})
 
 (def ^:private predicate-registry
-  "Clojure fn-predicate symbol → a builder `(arg-terms refs) → cozo-fragment`. A builder
-   needing a generating rule records the rule name on `refs` so the closure emits it; the
-   rest are inline CozoScript expressions. `not=` is handled separately (built-in)."
+  "Clojure fn-predicate symbol → a builder `(arg-terms) → [cozo-fragment refs]`. A builder
+   needing a generating rule returns its name in `refs` so the closure emits it; the rest
+   return `#{}`. `not=` is handled separately (built-in)."
   {'canvas.vocab.code.module/module-corresponds?
-   (fn [[cm km] refs]
-     (swap! refs conj "r_module_corresponds")
-     (str "r_module_corresponds[" cm ", " km "]"))
+   (fn [[cm km]] [(str "r_module_corresponds[" cm ", " km "]") #{"r_module_corresponds"}])
    'canvas.vocab.fukan/reader-realizes-lens?
-   (fn [[rn ln] _] (str rn " = concat('probe-', " ln ")"))
+   (fn [[rn ln]] [(str rn " = concat('probe-', " ln ")") #{}])
    'clojure.string/starts-with?
-   (fn [[s prefix] _] (str "starts_with(" s ", " prefix ")"))})
+   (fn [[s prefix]] [(str "starts_with(" s ", " prefix ")") #{}])})
 
 (declare compile-clause compile-clauses)
 
 (defn- compile-predicate
-  "A `(pred args…)` predicate (the content of a `[(…)]` clause) → a cozo fragment. `not=`
-   (bare or `clojure.core/`-qualified) is built in; a registered fn-predicate is emitted
-   via its builder (which may record a synthetic-rule ref on `refs`)."
-  [[op & args] refs]
+  "A `(pred args…)` predicate (the content of a `[(…)]` clause) → `[cozo-fragment refs]`. `not=`
+   (bare or `clojure.core/`-qualified) is built in; a registered fn-predicate is emitted via its
+   builder (which may name a synthetic generating rule in `refs`)."
+  [[op & args]]
   (cond
-    (#{'not= 'clojure.core/not=} op) (str (cterm (first args)) " != " (cterm (second args)))
-    (contains? predicate-registry op) ((predicate-registry op) (mapv cterm args) refs)
+    (#{'not= 'clojure.core/not=} op) [(str (cterm (first args)) " != " (cterm (second args))) #{}]
+    (contains? predicate-registry op) ((predicate-registry op) (mapv cterm args))
     :else (throw (ex-info (str "unsupported predicate: " (pr-str (cons op args))) {:pred op}))))
 
+(defn- helper-name
+  "A unique-within-program name for a `not-join`/`or-join` helper rule, derived from the clause's
+   CONTENT (pure — no counter): distinct clauses get distinct names, identical clauses collapse to
+   one helper (correct — the program de-dupes rule lines). `prefix` keeps `nj_`/`oj_` apart."
+  [prefix c]
+  (str prefix (Long/toString (Math/abs (long (hash c))) 36)))
+
 (defn- compile-clause
-  "One datalog clause → `[cozo-fragment extra-rules]`. `counter` (an atom) names
-   not-join/or-join helper rules uniquely; `refs` (an atom set) accrues every rule name
-   the clause CALLS, so the program can emit just the reachable rules. Throws on an
-   unsupported form."
-  [c counter refs]
+  "One datalog clause → `[cozo-fragment extra-rules refs]` (PURE): `extra-rules` are the not-join/
+   or-join helper definitions it spawns (uniquely named by content), `refs` the set of rule names it
+   CALLS (so the program emits just the reachable rules). Throws on an unsupported form."
+  [c]
   (cond
     (and (vector? c) (= 3 (count c)) (keyword? (nth c 1)))
-    [(str "triple[" (cterm (nth c 0)) ", '" (attr (nth c 1)) "', " (cterm (nth c 2)) "]") nil]
+    [(str "triple[" (cterm (nth c 0)) ", '" (attr (nth c 1)) "', " (cterm (nth c 2)) "]") nil #{}]
     (and (vector? c) (= 1 (count c)) (seq? (first c)))
-    [(compile-predicate (first c) refs) nil]
-    (and (seq? c) (= 'not (first c)))
-    (let [[frag extra] (compile-clause (second c) counter refs)] [(str "not " frag) extra])
+    (let [[frag refs] (compile-predicate (first c))] [frag nil refs])
+    (and (seq? c) (= 'not (first c)) (= 2 (count c)))     ; (not <single-clause>)
+    (let [[frag extra refs] (compile-clause (second c))] [(str "not " frag) extra refs])
+    (and (seq? c) (= 'not (first c)))                     ; (not c1 c2 …) — use (not-join […] …)
+    (throw (ex-info (str "multi-clause `not` is unsupported — write it as `not-join`: " (pr-str c)) {:clause c}))
     (and (seq? c) (= 'not-join (first c)))
     (let [[_ vars & clauses] c
-          hn (str "nj_" (swap! counter inc))
+          hn (helper-name "nj_" c)
           vs (str/join ", " (map cvar vars))
-          [body extra] (compile-clauses clauses counter refs)]
-      [(str "not " hn "[" vs "]") (cons (str hn "[" vs "] := " body) extra)])
+          [body extra refs] (compile-clauses clauses)]
+      [(str "not " hn "[" vs "]") (cons (str hn "[" vs "] := " body) extra) refs])
     (and (seq? c) (= 'or-join (first c)))
     (let [[_ vars & disjuncts] c
-          hn (str "oj_" (swap! counter inc))
+          hn (helper-name "oj_" c)
           vs (str/join ", " (map cvar vars))
           parts (map (fn [d]
-                       (compile-clauses (if (and (seq? d) (= 'and (first d))) (rest d) [d]) counter refs))
+                       (compile-clauses (if (and (seq? d) (= 'and (first d))) (rest d) [d])))
                      disjuncts)]
       [(str hn "[" vs "]")
-       (concat (map (fn [[body _]] (str hn "[" vs "] := " body)) parts)
-               (mapcat second parts))])
+       (concat (map (fn [[body _ _]] (str hn "[" vs "] := " body)) parts)
+               (mapcat second parts))
+       (reduce into #{} (map #(nth % 2) parts))])
     (and (seq? c) (symbol? (first c)))
     (let [nm (rname (first c))]
-      (swap! refs conj nm)
-      [(str nm "[" (str/join ", " (map cterm (rest c))) "]") nil])
+      [(str nm "[" (str/join ", " (map cterm (rest c))) "]") nil #{nm}])
     :else
     (throw (ex-info (str "unsupported clause: " (pr-str c)) {:clause c}))))
 
 (defn- compile-clauses
-  "Compile a seq of where-clauses → `[joined-body extra-rule-lines]`."
-  [clauses counter refs]
-  (let [rs (mapv #(compile-clause % counter refs) clauses)]
-    [(str/join ", " (map first rs)) (mapcat second rs)]))
+  "Compile a seq of where-clauses → `[joined-body extra-rule-lines refs]` (PURE — refs/extras unioned)."
+  [clauses]
+  (let [rs (mapv compile-clause clauses)]
+    [(str/join ", " (map first rs))
+     (mapcat second rs)
+     (reduce into #{} (map #(nth % 2) rs))]))
 
 (defn- compile-rule
-  "A datalog rule `[(head args…) body…]` → its CozoScript definition line(s): the head
-   line plus any not-join/or-join helpers its body spawned. Shares `counter`/`refs`."
-  [[head & body] counter refs]
-  (let [[bodystr extra] (compile-clauses body counter refs)]
-    (cons (str (rname (first head)) "[" (str/join ", " (map cvar (rest head))) "] := " bodystr)
-          extra)))
+  "A datalog rule `[(head args…) body…]` → `[def-lines refs]`: the head line plus any not-join/
+   or-join helpers its body spawned, and the rule names its body calls (PURE)."
+  [[head & body]]
+  (let [[bodystr extra refs] (compile-clauses body)]
+    [(cons (str (rname (first head)) "[" (str/join ", " (map cvar (rest head))) "] := " bodystr) extra)
+     refs]))
 
 ;; ── the vocab-rule index + reachability closure ───────────────────────────────
 (defn vocab-index
@@ -131,12 +139,11 @@
   []
   (reduce (fn [idx rule]
             (try
-              (let [counter (atom 0), refs (atom #{})
-                    lines   (compile-rule rule counter refs)
-                    nm      (rname (ffirst rule))]
+              (let [[lines refs] (compile-rule rule)
+                    nm           (rname (ffirst rule))]
                 (-> idx
                     (update-in [nm :lines] (fnil into []) lines)
-                    (update-in [nm :refs] (fnil into #{}) @refs)))
+                    (update-in [nm :refs] (fnil into #{}) refs)))
               (catch clojure.lang.ExceptionInfo _ idx)))
           synthetic-rules (structure/vocab-rules)))
 
@@ -152,25 +159,37 @@
       seen)))
 
 (defn- dewild
-  "Replace each `_` placeholder in `form` with a UNIQUE fresh `?_wN` variable. Datalog `_` means
-   'any value, don't bind', but Cozo has no discard wildcard — and reusing ONE var for every `_`
-   would wrongly JOIN those positions. `counter` keeps the names unique across the whole program."
-  [form counter]
-  (walk/postwalk #(if (= '_ %) (symbol (str "?_w" (swap! counter inc))) %) form))
+  "Replace each `_` placeholder in `form` with a UNIQUE fresh `?_wN` variable (PURE — a threaded
+   counter). Datalog `_` means 'any value, don't bind', but Cozo has no discard wildcard, and
+   reusing ONE var for every `_` would wrongly JOIN those positions. Counter restarts per call, so
+   `_`s stay distinct within the form; each compiled scope (the where, each rule) is dewilded
+   separately, and Cozo rule vars are rule-local, so no cross-scope name need match."
+  [form]
+  (letfn [(go [x n]
+            (cond
+              (= '_ x)    [(symbol (str "?_w" n)) (inc n)]
+              (vector? x) (let [[items n'] (reduce (fn [[acc n] e] (let [[e' n'] (go e n)] [(conj acc e') n']))
+                                                   [[] n] x)]
+                            [items n'])
+              (seq? x)    (let [[items n'] (reduce (fn [[acc n] e] (let [[e' n'] (go e n)] [(conj acc e') n']))
+                                                   [[] n] x)]
+                            [(apply list items) n'])
+              :else       [x n]))]
+    (first (go form 0))))
 
 (defn compile-body
   "Compile `where` (a seq of clauses) + caller-supplied `extra-rules` (datalog rules) into
    `[rule-lines body-str]`: the vocab rules in the reference closure, then the extra rules,
    then any not-join/or-join helpers (deduped), and the joined where body. Shared by the
-   law engine (`compile-law`) and `q`. `_` wildcards are expanded to fresh vars first."
+   law engine (`compile-law`) and `q`. PURE — `_` wildcards are expanded (per scope) first."
   [where extra-rules index]
-  (let [counter      (atom 0)
-        where        (dewild where counter)
-        extra-rules  (dewild extra-rules counter)
-        refs         (atom #{})
-        rule-lines   (mapcat #(compile-rule % counter refs) extra-rules)
-        [body extra] (compile-clauses where counter refs)
-        vocab-lines  (mapcat #(:lines (index %)) (closure index @refs))]
+  (let [where               (dewild where)
+        [rule-lines erefs]  (reduce (fn [[lines refs] r]
+                                      (let [[l rf] (compile-rule (dewild r))]
+                                        [(into lines l) (into refs rf)]))
+                                    [[] #{}] extra-rules)
+        [body extra wrefs]  (compile-clauses where)
+        vocab-lines         (mapcat #(:lines (index %)) (closure index (into erefs wrefs)))]
     [(distinct (concat vocab-lines rule-lines extra)) body]))
 
 (def preamble "The always-prepended substrate: the unified all-string `triple` view." rules/triple)
