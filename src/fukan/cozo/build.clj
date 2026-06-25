@@ -10,6 +10,7 @@
    results agree — verified against the datascript build by the oracle."
   (:require [fukan.canvas.core.assemble :as assemble]
             [fukan.canvas.core.substrate :as sub]
+            [canvas.vocab.grammar :as grammar]
             [fukan.cozo.db :as db]
             [fukan.cozo.mirror :as mirror]
             [fukan.cozo.rules :as rules]))
@@ -27,24 +28,31 @@
           id  (if (:value? iv) (sub/value-content-key iv) (sub/var-id v))]
       [id iv])))
 
-(defn- instances->datoms
-  "`[id InstanceValue]` roots → a seq of `[eid attr v]` datoms. Dedups nodes by
-   `:entity/id` (merging their maps — the value-identity datascript did via
-   `:db.unique/identity`) and rels by `:rel/id`, assigns disjoint integer eids to
-   nodes then rels, and resolves each `[:entity/id id]` ref to the id's eid."
-  [id+ivs]
-  (let [{:keys [nodes rels]} (assemble/emit-instances id+ivs)
-        node-by-id (reduce (fn [m n] (update m (:entity/id n) merge n)) {} nodes)
+(defn- maps->datoms
+  "Node/rel maps → `[eid attr v]` datoms. Dedups nodes by `:entity/id` (merging their maps — the
+   value-identity datascript did via `:db.unique/identity`) and rels by `:rel/id`, assigns disjoint
+   integer eids from `offset` (nodes then rels), and resolves each `[:entity/id id]` ref to its eid."
+  [nodes rels offset]
+  (let [node-by-id (reduce (fn [m n] (update m (:entity/id n) merge n)) {} nodes)
         rel-by-id  (reduce (fn [m r] (assoc m (:rel/id r) r)) {} rels)
         n-nodes    (count node-by-id)
-        node-eid   (zipmap (keys node-by-id) (range))
-        rel-eid    (zipmap (keys rel-by-id) (range n-nodes (+ n-nodes (count rel-by-id))))
+        node-eid   (zipmap (keys node-by-id) (map #(+ offset %) (range)))
+        rel-eid    (zipmap (keys rel-by-id) (map #(+ offset n-nodes %) (range)))
         ref->eid   (fn [v] (if (and (vector? v) (= :entity/id (first v))) (node-eid (second v)) v))]
+    ;; KEEP :entity/id / :rel/id as datoms (datascript stored them as :db.unique/identity, so the
+    ;; mirror has them) — readers like the grammar print-dual's laws-of + the `of-structure` rule join on
+    ;; :entity/id; dropping them silently broke the grammar dual on the native build.
     (concat
-     (for [[id n] node-by-id, [a v] (dissoc n :entity/id) :when (some? v)]
+     (for [[id n] node-by-id, [a v] n :when (some? v)]
        [(node-eid id) a v])
-     (for [[id r] rel-by-id, [a v] (dissoc r :rel/id)]
+     (for [[id r] rel-by-id, [a v] r]
        [(rel-eid id) a (ref->eid v)]))))
+
+(defn- instances->datoms
+  "`[id InstanceValue]` roots → a seq of `[eid attr v]` datoms (the assembler + `maps->datoms`)."
+  [id+ivs]
+  (let [{:keys [nodes rels]} (assemble/emit-instances id+ivs)]
+    (maps->datoms nodes rels 0)))
 
 (defn vars->cozo
   "Build a Cozo substrate natively (no datascript) from instance-bearing `vars`:
@@ -80,7 +88,7 @@
         max-eid (ffirst (db/q cdb "alle[e] := *t_int[e, _, _]
 alle[e] := *t_str[e, _, _]
 alle[e] := *t_bool[e, _, _]
-?[mx] := alle[e], mx = max(e)"))
+?[max(e)] := alle[e]"))
         pairs   (->> var-usages
                      (keep (fn [{:keys [from from-var to name]}]
                              (when (and from-var to name)
@@ -98,11 +106,47 @@ alle[e] := *t_bool[e, _, _]
       (db/q cdb "?[e, a, v] <- $rows :put t_str {e, a, v}" {:rows str-rows}))
     cdb))
 
+(defn- max-eid
+  "The maximum integer eid currently in `cdb` (-1 when empty) — the offset base for additive inserts.
+   NB the aggregate goes in the rule HEAD (`?[max(e)]`); `mx = max(e)` in the body does NOT aggregate."
+  [cdb]
+  (or (ffirst (db/q cdb "alle[e] := *t_int[e, _, _]
+alle[e] := *t_str[e, _, _]
+alle[e] := *t_bool[e, _, _]
+?[max(e)] := alle[e]"))
+      -1))
+
+(defn with-grammar-cozo
+  "Reflect the model's grammar into the already-built Cozo db `cdb` — the datascript-free analog of
+   `grammar/with-grammar`. UPSERT by `:entity/id`: a reflected node whose id already exists (a
+   `^:value` Schema shared with the model — what datascript merged via `:db.unique/identity`) REUSES
+   that eid; only the genuinely-new grammar nodes (Structure/Vocabulary/Law) take fresh eids above the
+   current max. Then every (new) grammar rel resolves its refs and inserts. Returns `cdb`."
+  [cdb extra-seeds]
+  (let [tags     (map (comp keyword first) (db/q cdb "?[t] := *t_str[_, 'structure/of', t]"))
+        {:keys [nodes rels]} (grammar/reflect tags extra-seeds)
+        exist    (into {} (db/q cdb "?[id, e] := *t_str[e, 'entity/id', id]"))   ; existing {entity/id → eid}
+        by-id    (reduce (fn [m n] (update m (:entity/id n) merge n)) {} nodes)
+        new-ids  (vec (remove exist (keys by-id)))
+        base     (inc (max-eid cdb))
+        new-eid  (zipmap new-ids (map #(+ base %) (range)))
+        node-eid (merge exist new-eid)                                          ; reused (model) + new (grammar)
+        rel-by-id (reduce (fn [m r] (assoc m (:rel/id r) r)) {} rels)
+        rel-eid  (zipmap (keys rel-by-id) (map #(+ base (count new-ids) %) (range)))
+        ref->eid (fn [v] (if (and (vector? v) (= :entity/id (first v))) (node-eid (second v)) v))]
+    (mirror/insert-datoms
+     cdb
+     (concat (for [id new-ids, [a v] (by-id id) :when (some? v)] [(new-eid id) a v])
+             (for [[id r] rel-by-id, [a v] r] [(rel-eid id) a (ref->eid v)])))))
+
 (defn model->cozo
   "Native FULL build (no datascript): the instance-vars of canvas `ns-syms` + the
    extraction `{:roots :var-usages}` facts → one native Cozo substrate, with the
-   `:calls` graph grounded. Assembling canvas + extraction roots in one native pass
-   resolves cross-refs without a union/merge. Returns the open Cozo db."
+   `:calls` graph grounded and the grammar reflected. Assembling canvas + extraction
+   roots in one native pass resolves cross-refs without a union/merge. Returns the open Cozo db."
   [ns-syms {:keys [roots var-usages]}]
   (-> (mirror/load-datoms (instances->datoms (concat (roots-of (collect ns-syms)) roots)))
-      (add-calls-cozo var-usages)))
+      (add-calls-cozo var-usages)
+      ;; seed reflection with EVERY canvas ns (as build-model does) so a zero-instance law-holder
+      ;; stratum (canvas.vocab.fukan's Totality/LensCoverage) still reflects
+      (with-grammar-cozo ns-syms)))

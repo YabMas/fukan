@@ -84,6 +84,17 @@
               {:rows (vec rows)})))
     cdb))
 
+(defn insert-datoms
+  "INSERT `[e a v]` triples into an ALREADY-OPEN Cozo db (`:put`, not `:create`) — the additive
+   analog of `load-datoms`, for grounding extra datoms (the native grammar reflection) onto an
+   existing substrate. Returns `cdb`."
+  [cdb triples]
+  (let [buckets (datoms->buckets triples)]
+    (doseq [[bucket {:keys [name]}] relations]
+      (when-let [rows (seq (get buckets bucket))]
+        (db/q cdb (str "?[e, a, v] <- $rows :put " name " {e, a, v}") {:rows (vec rows)}))))
+  cdb)
+
 (defn mirror
   "Open a fresh Cozo db and load every datom of `ds-db` into the typed EAV
    relations (load-datoms over the datascript datoms). Returns the open db."

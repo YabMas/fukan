@@ -18,6 +18,10 @@
     "Open a fresh Cozo db and load [e a v] triples into the typed EAV relations; returns the open db. The engine-neutral substrate write shared by the mirror and the native build."
     {:signature [:=> [:catn [:triples :any]] db/CozoDb]
      :delegates [db/open db/q]})
+  (Operation insert-datoms
+    "INSERT [e a v] triples into an already-open Cozo db (:put, not :create) — the additive analog of load-datoms, for grounding extra datoms (the native grammar reflection) onto an existing substrate."
+    {:signature [:=> [:catn [:cdb db/CozoDb] [:triples :any]] db/CozoDb]
+     :delegates [db/q]})
   (Operation mirror
     "Open a fresh Cozo db and load every datom of ds-db into the typed EAV relations (load-datoms over the datascript datoms); returns the open db."
     {:signature [:=> [:catn [:ds-db :any]] db/CozoDb]}))

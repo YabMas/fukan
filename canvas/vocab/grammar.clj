@@ -163,6 +163,46 @@
                          (map :rel law-bits)
                          inc-rels))}))
 
+(defn reflect
+  "PURE, db-agnostic: the model's reified-grammar `{:nodes :rels}` for the structure `tags` in use
+   (the `:structure/of` values, as keywords) + `extra-seeds` (ns-name strings added to the reflection
+   closure, so a zero-instance grammar stratum still reflects). The caller transacts/inserts the datoms
+   onto its substrate (datascript via `with-grammar`, Cozo via the native build's upsert insert)."
+  [tags extra-seeds]
+  (let [;; seed with this ns (the reflection self-reifies), the Schema dialect's (reflection emits
+        ;; Schema value targets, so their grammar must be present), and any caller-supplied seeds
+        nss    (ns-closure (into (conj (set (keep target-ns tags)) this-ns "canvas.vocab.type")
+                                 (map str (or extra-seeds []))))
+        sds    (->> (s/all-structures)
+                    (filter #(contains? nss (some-> (:tag %) namespace)))
+                    (sort-by (comp str :tag)))
+        bits   (map reflect-structure sds)
+        vocabs (for [[vns members] (group-by (comp namespace :tag) sds)]
+                 {:node (let [vid (str "vocabulary:" vns)]
+                          {:entity/id vid :structure/of ::Vocabulary :entity/name vns})
+                  :rels (for [m members]
+                          {:rel/id   (str "vocabulary:" vns "|child|" (:tag m))
+                           :rel/from [:entity/id (str "vocabulary:" vns)]
+                           :rel/kind :child
+                           :rel/to   [:entity/id (structure-id (:tag m))]})})
+        any    (when (some :any? bits)
+                 [{:entity/id ":Any" :structure/of ::Structure
+                   :entity/name "Any" :val/tag ":Any"
+                   :entity/doc "The wildcard target — any node."}])
+        nodes  (concat (mapcat :nodes bits) (map :node vocabs) any)
+        rels   (concat (mapcat :rels bits) (mapcat :rels vocabs))
+        ;; a slot/includes referencing a tag NOBODY registered is a dangling grammar ref (e.g. a
+        ;; misresolved (includes Foo)) — fail with the tag, not a cryptic missing-entity error.
+        known  (into #{} (map :entity/id) nodes)]
+    (doseq [r rels
+            :let [[_ tid] (:rel/to r)]
+            :when (and (str/starts-with? tid ":") (not (contains? known tid)))]
+      (throw (ex-info (str "grammar reflection: " tid " is referenced by a slot or "
+                           "includes but no such structure is registered — dangling "
+                           "grammar reference (check the defining ns is required)")
+                      {:rel r})))
+    {:nodes (vec nodes) :rels (vec rels)}))
+
 (defn with-grammar
   "PURE: db → db′ with the model's grammar reified in (see the ns doc for shape
    and scope). Idempotent per build — ids are deterministic, so re-reflection
@@ -171,40 +211,6 @@
    case for a pure-grammar stratum (portraits, no instances)."
   ([db] (with-grammar db nil))
   ([db extra-seeds]
-   (let [tags   (map first (d/q '[:find ?t :where [_ :structure/of ?t]] db))
-         ;; seed with this ns (the reflection self-reifies), the Schema dialect's
-         ;; (reflection emits Schema value targets, so their grammar must be present),
-         ;; and any caller-supplied seeds (zero-instance grammar strata)
-         nss    (ns-closure (into (conj (set (keep target-ns tags)) this-ns "canvas.vocab.type")
-                                  (map str (or extra-seeds []))))
-         sds    (->> (s/all-structures)
-                     (filter #(contains? nss (some-> (:tag %) namespace)))
-                     (sort-by (comp str :tag)))
-         bits   (map reflect-structure sds)
-         vocabs (for [[vns members] (group-by (comp namespace :tag) sds)]
-                  {:node (let [vid (str "vocabulary:" vns)]
-                           {:entity/id vid :structure/of ::Vocabulary :entity/name vns})
-                   :rels (for [m members]
-                           {:rel/id   (str "vocabulary:" vns "|child|" (:tag m))
-                            :rel/from [:entity/id (str "vocabulary:" vns)]
-                            :rel/kind :child
-                            :rel/to   [:entity/id (structure-id (:tag m))]})})
-         any    (when (some :any? bits)
-                  [{:entity/id ":Any" :structure/of ::Structure
-                    :entity/name "Any" :val/tag ":Any"
-                    :entity/doc "The wildcard target — any node."}])
-         nodes  (concat (mapcat :nodes bits) (map :node vocabs) any)
-         rels   (concat (mapcat :rels bits) (mapcat :rels vocabs))
-         ;; a slot/includes referencing a tag NOBODY registered is a dangling
-         ;; grammar ref (e.g. a misresolved (includes Foo)) — fail with the tag,
-         ;; not datascript's cryptic missing-entity error at transact.
-         known  (into #{} (map :entity/id) nodes)
-         _      (doseq [r rels
-                        :let [[_ tid] (:rel/to r)]
-                        :when (and (str/starts-with? tid ":")
-                                   (not (contains? known tid)))]
-                  (throw (ex-info (str "grammar reflection: " tid " is referenced by a slot or "
-                                       "includes but no such structure is registered — dangling "
-                                       "grammar reference (check the defining ns is required)")
-                                  {:rel r})))]
-     (-> db (d/db-with (vec nodes)) (d/db-with (vec rels))))))
+   (let [tags (map first (d/q '[:find ?t :where [_ :structure/of ?t]] db))
+         {:keys [nodes rels]} (reflect tags extra-seeds)]
+     (-> db (d/db-with nodes) (d/db-with rels)))))
