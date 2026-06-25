@@ -4,21 +4,24 @@
    which ingests the defstructure canvas specs into one structure db.
 
    DURING THE datascript→Cozo CUT-OVER the model is held DUALLY: the datascript db
-   (the consumers not yet ported still read it) AND a Cozo mirror of it (`get-cozo`,
-   the consumers already on the Cozo law engine / readers read that). The held Cozo db
-   is closed on each reload. Once the last datascript consumer is ported, the ds build
-   is dropped and the held db becomes the native Cozo build.
+   (`get-model` — the oracle + the remaining ds-based tests) AND a Cozo db (`get-cozo`,
+   what every ported consumer reads). The held Cozo db is closed on each reload. The Cozo
+   side is now the NATIVE build (`cozo-build/model->cozo` — no datascript intermediate);
+   the ds build is held alongside only as the verification oracle until it is dropped.
 
    This is also fukan-on-itself's composition root: it registers fukan's custom code
    extractor (the Clojure extractor over fukan's `src/`) at the `fukan.model.extraction`
    plug-point. The type dialect needs no wiring here — `canvas.vocab.type` self-registers
    the full malli dialect when it loads (required below to guarantee it is)."
   (:require [datascript.core :as d]
+            [clojure.java.io :as io]
             [canvas.vocab.type]
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
+            [fukan.canvas.projection.canvas-source :as canvas-source]
             [fukan.cozo.db :as cozo-db]
             [fukan.cozo.mirror :as cozo-mirror]
+            [fukan.cozo.build :as cozo-build]
             ;; loaded for its side-effect: registers the Cozo backend at structure's
             ;; check-engine plug-point, so `(structure/check cozo-db)` runs the Cozo law engine
             [fukan.cozo.law]
@@ -30,20 +33,27 @@
 (defonce ^:private state (atom {:model nil :cozo nil :src nil}))
 
 (defn- hold!
-  "Set the held model to `db` (+ its Cozo mirror), closing the prior Cozo db first."
-  [db src]
+  "Hold the model: the datascript db `ds` (oracle) + the `cozo` db (what consumers read),
+   closing the prior Cozo db first."
+  [ds cozo src]
   (when-let [old (:cozo @state)] (cozo-db/close old))
-  (reset! state {:model db :cozo (cozo-mirror/mirror db) :src src}))
+  (reset! state {:model ds :cozo cozo :src src}))
 
 (defn ^{:malli/schema [:=> [:cat :Path] :StructureDb]} load-model
-  "Build (or reload) the model — the merged structure substrate db — for `src`."
+  "Build (or reload) the model for `src`: the datascript build (oracle) + the NATIVE Cozo build
+   (`model->cozo`, no datascript) that consumers read. (build-model loads/discovers every canvas
+   namespace first, so model->cozo's instance-var scan + the extraction facts are available.)"
   [src]
-  (let [db (pipeline/build-model src)]
-    (hold! db src)
+  (let [ds    (pipeline/build-model src)
+        facts (if (and src (.exists (io/file src)))
+                (target/extract-roots [src])
+                {:roots [] :var-usages []})
+        cozo  (cozo-build/model->cozo (canvas-source/canvas-namespaces) facts)]
+    (hold! ds cozo src)
     (println "Loaded model:"
-             (count (d/q '[:find ?e :where [?e :structure/of _]] db)) "structures,"
-             (count (d/q '[:find ?r :where [?r :rel/kind _]] db)) "relations")
-    db))
+             (count (d/q '[:find ?e :where [?e :structure/of _]] ds)) "structures,"
+             (count (d/q '[:find ?r :where [?r :rel/kind _]] ds)) "relations")
+    ds))
 
 (defn ^{:malli/schema [:=> [:cat] :StructureDb]} get-model
   "The current model (structure substrate db), or nil if not loaded."
@@ -51,8 +61,8 @@
   (:model @state))
 
 (defn get-cozo
-  "The current model's Cozo mirror (a Cozo db handle), or nil if not loaded — what the
-   ported consumers read while datascript still backs the rest."
+  "The current model's Cozo db handle (the native build), or nil if not loaded — what the
+   ported consumers read."
   []
   (:cozo @state))
 
@@ -66,6 +76,7 @@
     (do (println "No src path set. Use load-model first.") nil)))
 
 (defn ^:test-support set-model-for-test!
-  "Test helper — directly set the held model (+ its Cozo mirror). Never call from production code."
+  "Test helper — directly set the held model (a datascript db) + its Cozo MIRROR. Never call from
+   production code. (Tests pass an arbitrary ds db, so this mirrors rather than native-builds.)"
   [m]
-  (hold! m "test"))
+  (hold! m (cozo-mirror/mirror m) "test"))
