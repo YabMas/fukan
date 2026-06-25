@@ -4,9 +4,11 @@
    of the grammar print-dual's round-trip, one stratum down)."
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is]]
-            [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [datascript.core :as d]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
+            ;; loaded for its side-effect: registers the Cozo check engine so (s/check cozo-db) dispatches to it
+            [fukan.cozo.law]
             [fukan.canvas.projection.instance :as inst]
             ;; Schema: the INode :shape slot target (reader-expanded malli literals)
             [canvas.vocab.type :refer [Schema]]))
@@ -49,10 +51,10 @@
 (INode ^{:name "bad"} offender {:title "bad" :main t-a})
 
 (defn- db []
-  (a/assemble-vars [#'t-a #'t-b #'full #'bare #'offender]))
+  (build/vars->cozo [#'t-a #'t-b #'full #'bare #'offender]))
 
 (defn- by-name [db n]
-  (ffirst (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
+  (ffirst (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
 
 ;; ── the round-trip ────────────────────────────────────────────────────────────
 

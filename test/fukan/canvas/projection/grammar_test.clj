@@ -3,11 +3,10 @@
    what was authored — the round-trip is the test."
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [datascript.core :as d]
-            [fukan.canvas.core.assemble :as a]
+            [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :refer [defstructure]]
-            [fukan.canvas.projection.grammar :as g]
-            [canvas.vocab.grammar :as grammar]))
+            [fukan.canvas.projection.grammar :as g]))
 
 ;; ── the authored grammar the render must reproduce ───────────────────────────
 
@@ -39,12 +38,12 @@
 
 (PLeaf ^{:name "l"} p-leaf)
 
-(defn- reflected [] (grammar/with-grammar (a/assemble-vars [#'p-leaf])))
+(defn- reflected [] (build/with-grammar-cozo (build/vars->cozo [#'p-leaf]) nil))
 
 (defn- struct-node [db tag-str]
-  (ffirst (d/q '[:find ?s :in $ ?t
-                 :where [?s :structure/of :canvas.vocab.grammar/Structure] [?s :val/tag ?t]]
-               db tag-str)))
+  (ffirst (cq/q '[:find ?s :in $ ?t
+                  :where [?s :structure/of :canvas.vocab.grammar/Structure] [?s :val/tag ?t]]
+                db tag-str)))
 
 (deftest structure-form-round-trips-the-authoring
   (let [db (reflected)
