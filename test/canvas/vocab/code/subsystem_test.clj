@@ -1,5 +1,5 @@
 (ns canvas.vocab.code.subsystem-test
-  "The opt-in clean-architecture quality layer: no two modules mutually depend."
+  "The opt-in clean-architecture quality layer: the module-dependency graph is acyclic."
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
@@ -29,14 +29,30 @@
 (module/Module ^{:name "MA"} t-mod-ma {:exposes [t-ma-op]})
 (module/Module ^{:name "MB"} t-mod-mb {:exposes [t-mb-op]})
 
-(deftest mutual-dependency-fires
-  (testing "two modules whose ops mutually delegate violate the no-mutual-dependency law"
+(deftest module-acyclicity-fires-on-a-mutual-pair
+  (testing "two modules whose ops mutually delegate (a 2-cycle) violate the acyclicity law"
     (let [db (build/vars->cozo [#'t-ma-op #'t-mb-op #'t-mod-ma #'t-mod-mb])]
-      (is (= #{"MA" "MB"} (offenders db "mutually depend"))))))
+      (is (= #{"MA" "MB"} (offenders db "module transitively"))))))
 
-(deftest fukan-module-graph-has-no-mutual-dependency
-  (testing "fukan's own module graph is acyclic — the quality law is a green opt-in"
-    (is (empty? (offenders (pipeline/build-model nil) "mutually depend")))))
+;; a synthetic 3-cycle A→B→C→A (each op delegates to the next module's op): NO direct mutual pair,
+;; so the old 2-cycle check saw nothing — the transitive SCC law catches all three.
+(declare t3-b-op t3-c-op)
+(operation/Operation ^{:name "t3a-op"} t3-a-op {:delegates [t3-b-op]})
+(operation/Operation ^{:name "t3b-op"} t3-b-op {:delegates [t3-c-op]})
+(operation/Operation ^{:name "t3c-op"} t3-c-op {:delegates [t3-a-op]})
+(module/Module ^{:name "T3A"} t3-mod-a {:exposes [t3-a-op]})
+(module/Module ^{:name "T3B"} t3-mod-b {:exposes [t3-b-op]})
+(module/Module ^{:name "T3C"} t3-mod-c {:exposes [t3-c-op]})
+
+(deftest module-acyclicity-fires-on-a-transitive-cycle
+  (testing "a 3-module cycle T3A→T3B→T3C→T3A — no direct mutual pair, so the OLD 2-cycle check
+            missed it; the SCC law flags all three (each transitively depends on itself)"
+    (let [db (build/vars->cozo [#'t3-a-op #'t3-b-op #'t3-c-op #'t3-mod-a #'t3-mod-b #'t3-mod-c])]
+      (is (= #{"T3A" "T3B" "T3C"} (offenders db "module transitively"))))))
+
+(deftest fukan-module-graph-is-acyclic
+  (testing "fukan's own module graph is acyclic — no transitive cycle, the quality law is a green opt-in"
+    (is (empty? (offenders (pipeline/build-model nil) "module transitively")))))
 
 ;; ── conformance fixtures: S's op delegates to T's op (cross-subsystem) ──
 (operation/Operation ^{:name "op-t"} t-op-t "callee in T")
@@ -66,11 +82,11 @@
 (deftest may-depend-acyclicity-fires-on-a-cycle
   (testing "a :may-depend cycle CY-A ⇄ CY-B violates the acyclicity law"
     (let [db (build/vars->cozo [#'t-sub-cy-a #'t-sub-cy-b])]
-      (is (= #{"CY-A" "CY-B"} (offenders db "acyclic"))))))
+      (is (= #{"CY-A" "CY-B"} (offenders db "subsystem transitively"))))))
 
 (deftest fukan-may-depend-graph-is-acyclic
   (testing "fukan's declared :may-depend DAG is acyclic"
-    (is (empty? (offenders (pipeline/build-model nil) "acyclic")))))
+    (is (empty? (offenders (pipeline/build-model nil) "subsystem transitively")))))
 
 ;; ── membership fixtures: a module in no subsystem (with a subsystem present) ──
 (module/Module ^{:name "orphan"} t-orphan "a module in no subsystem")

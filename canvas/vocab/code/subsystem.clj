@@ -24,15 +24,16 @@
    instances of its own (like the correspondence law-holders); it exists to carry the cross-module
    assertions.
 
-   NO MUTUAL DEPENDENCY: no two Modules may depend on each other (M depends on N and N on M), where
-   `module-depends` is the complete graph (calls ∪ data-adoption). `:scope :global` — the offenders are
-   the Modules in the cycle; naturally vacuous when no Modules are modelled. (Full TRANSITIVE acyclicity
-   needs a `reaches`-over-`module-depends` rule that calls `module-depends` and itself — now expressible
-   since the rule-calls-rule guard is gone; this 2-cycle law is the current cut, upgradable to full SCC.)
+   ACYCLIC MODULE DEPENDENCY: no Module may transitively depend on itself — the module-dependency graph
+   (`module-depends`, the complete graph: calls ∪ data-adoption) has no cycle. `module-reaches` is its
+   transitive closure (a rule-calls-rule recursion, which the kernel now allows after the
+   `check-law-recursion!` guard was retired); a Module that `module-reaches` itself sits on a cycle (a
+   non-trivial SCC). `:scope :global` — the offenders are the Modules on a cycle; naturally vacuous when
+   no Modules are modelled. (Supersedes the earlier 2-cycle-only `M⇄N` check.)
 
    The `:rules` below INLINE `module/module-depends-rules` (a law's `:rules` is macro-time literal data
    and cannot reference the var) — keep the two copies in sync."
-  (law "no two modules mutually depend"
+  (law "the module-dependency graph is acyclic — no module transitively depends on itself"
     :scope :global
     :offenders '[?m]
     :rules '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
@@ -48,8 +49,11 @@
                 (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]))
               [?sch :val/kind "ref"]
               [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-              (module-owns ?n ?k) [(not= ?m ?n)]]]
-    :where '[(module-depends ?m ?n) (module-depends ?n ?m)])
+              (module-owns ?n ?k) [(not= ?m ?n)]]
+             ;; transitive closure of module-depends (rule-calls-rule recursion)
+             [(module-reaches ?m ?n) (module-depends ?m ?n)]
+             [(module-reaches ?m ?n) (module-depends ?m ?mid) (module-reaches ?mid ?n)]]
+    :where '[[?m :structure/of :canvas.vocab.code.module/Module] (module-reaches ?m ?m)])
 
   ;; CONFORMANCE — every cross-subsystem module dependency must follow a declared :may-depend edge.
   ;; Inlines module/module-depends-rules (sync point) + in-subsystem / declared-dep. Offender = the
