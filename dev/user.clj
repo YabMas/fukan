@@ -86,9 +86,9 @@
    the instance print-dual. The model talks back in the language you wrote it in:
    (show 'probe) → (Act probe \"…\" {:reads model …})."
   [n]
-  (if-let [m (infra-model/get-model)]
-    (let [eids (map first (d/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]]
-                               m (name n)))]
+  (if-let [m (infra-model/get-cozo)]
+    (let [eids (map first (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]]
+                                m (name n)))]
       (if (empty? eids)
         (println "No node named" (pr-str (name n)))
         (println (inst/focus-text m eids))))
@@ -99,7 +99,7 @@
    model and print the focused nodes as their authored forms — the textual model
    explorer: (focus '[(Operation ?n) (in-module ?n \"materialize\")])."
   [clauses]
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (let [out (inst/focus-text m clauses)]
       (println (if (str/blank? out) "Empty focus." out)))
     (println "No model loaded yet. Use (go) first.")))
@@ -109,7 +109,7 @@
    QUOTED as its authored form — the law that fired and the instance that fired
    it, side by side."
   []
-  (if-let [m (infra-model/get-model)]
+  (if-let [m (infra-model/get-cozo)]
     (println (inst/violations-text m (structure/check m)))
     (println "No model loaded yet. Use (go) first.")))
 

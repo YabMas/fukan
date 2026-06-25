@@ -16,27 +16,43 @@
 
    Pure projection: model db → form / string."
   (:require [clojure.string :as str]
-            [datascript.core :as d]
+            [clojure.edn :as edn]
+            [datascript.core :as d]                ; d/touch only — realize a ds entity's attrs (cozo entities are already maps; drops at Phase 7)
+            [fukan.cozo.query :as cq]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.typing :as typing]))
 
 ;; ── parts: one node → its authoring ingredients ──────────────────────────────
 
+(defn- ord
+  "A `:rel/order` cell as a long for sorting — absent → -1; `cq/q` returns strings over Cozo, ints
+   over datascript."
+  [o] (cond (nil? o) -1, (string? o) (Long/parseLong o), :else (long o)))
+
+(defn- struct-tag
+  "A node's `:structure/of` as a KEYWORD — the Cozo mirror stringifies it (no colon); `keyword` is
+   idempotent on the datascript keyword and re-namespaces the Cozo string (`\"ns/N\"` → `:ns/N`)."
+  [e] (some-> (:structure/of e) keyword))
+
 (defn- rels-by-kind
   "The node's reified relations grouped by kind: {kind [{:to :label} …]} in
-   :rel/order order (orderless relations sort stably by target id)."
+   :rel/order order (orderless relations sort stably by target id). The optional :rel/label /
+   :rel/order / target :entity/id are read separately and merged (the Cozo compiler has no get-else)."
   [db eid]
-  (->> (d/q '[:find ?k ?to ?l ?o ?tid :in $ ?e
-              :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]
-                     [(get-else $ ?r :rel/label ::none) ?l]
-                     [(get-else $ ?r :rel/order -1) ?o]
-                     [(get-else $ ?to :entity/id "") ?tid]]
-            db eid)
-       (sort-by (fn [[_ _ _ o tid]] [o tid]))
-       (reduce (fn [m [k to l _ _]]
-                 (update m k (fnil conj []) {:to to :label (when (not= ::none l) l)}))
-               {})))
+  (let [base   (cq/q '[:find ?r ?k ?to :in $ ?e
+                       :where [?r :rel/from ?e] [?r :rel/kind ?k] [?r :rel/to ?to]] db eid)
+        labels (into {} (cq/q '[:find ?r ?l :in $ ?e :where [?r :rel/from ?e] [?r :rel/label ?l]] db eid))
+        orders (into {} (cq/q '[:find ?r ?o :in $ ?e :where [?r :rel/from ?e] [?r :rel/order ?o]] db eid))
+        tids   (into {} (cq/q '[:find ?to ?tid :in $ ?e
+                                :where [?r :rel/from ?e] [?r :rel/to ?to] [?to :entity/id ?tid]] db eid))]
+    (->> base
+         (sort-by (fn [[r _ to]] [(ord (orders r)) (str (get tids to ""))]))
+         ;; :rel/kind is a keyword — the Cozo mirror stringifies it (no colon), so re-keywordize so the
+         ;; slot keys match the structure's declared rels (else every relation falls to extra-rels)
+         (reduce (fn [m [r k to]]
+                   (update m (keyword k) (fnil conj []) {:to to :label (labels r)}))
+                 {}))))
 
 (declare instance-form)
 
@@ -55,10 +71,10 @@
    entity → the VAR symbol the author referenced (falling back to the entity name for
    non-var nodes)."
   [db to]
-  (let [e (d/entity db to)]
+  (let [e (cq/entity db to)]
     (cond
-      (= (typing/dialect-type-tag) (:structure/of e)) (typing/render-type db to)
-      (nil? (:entity/name e))                         (instance-form db to)
+      (= (typing/dialect-type-tag) (struct-tag e)) (typing/render-type db to)
+      (nil? (:entity/name e))                      (instance-form db to)
       :else (symbol (or (var-simple-name e) (:entity/name e))))))
 
 (defn- element-expr [db {:keys [to label]}]
@@ -71,16 +87,19 @@
    doesn't declare (reflected or extracted extras) — nothing the node carries is
    silently dropped."
   [db eid]
-  (let [e      (d/entity db eid)
-        sdef   (s/structure-by-tag (:structure/of e))
+  (let [e      (cq/entity db eid)
+        sdef   (s/structure-by-tag (struct-tag e))
         rels   (rels-by-kind db eid)
-        vals*  (into {} (filter #(= "val" (namespace (key %)))) (d/touch e))
+        ;; a cozo entity is already a full attr map; a ds Entity must be touched to realize its attrs
+        vals*  (into {} (filter #(= "val" (namespace (key %)))) (if (map? e) e (d/touch e)))
+        ;; a payload is a companion CODE-FORM — pr-str'd to a string in the Cozo mirror, so read it back
+        payload-val (fn [pv] (cond-> pv (string? pv) edn/read-string))
         scalar-entry (fn [{:keys [rel payload]}]
                        (let [vk (keyword "val" (name rel))
                              pk (when payload (keyword "val" (name payload)))]
                          (when (contains? vals* vk)
                            {:entry [rel (if (and pk (contains? vals* pk))
-                                          [(get vals* vk) (get vals* pk)]
+                                          [(get vals* vk) (payload-val (get vals* pk))]
                                           (get vals* vk))]
                             :consumed (cond-> #{vk} pk (conj pk))})))
         rel-entry    (fn [{:keys [rel card]}]
@@ -109,7 +128,7 @@
    print-dual of the authoring override. Non-var ids (extracted/reflected nodes)
    render their entity name plainly."
   [db eid]
-  (let [e    (d/entity db eid)
+  (let [e    (cq/entity db eid)
         nm   (:entity/name e)
         var* (var-simple-name e)]
     (if (and var* (not= var* nm))
@@ -124,8 +143,8 @@
    `(Tag \"doc\"? {…})` for a value/unnamed node. The print-dual of the instance
    surface: what `(grammar)` is to the language, this is to the model."
   [db eid]
-  (let [e       (d/entity db eid)
-        tag     (:structure/of e)
+  (let [e       (cq/entity db eid)
+        tag     (struct-tag e)
         entries (slot-entries db eid)]
     (concat [(symbol (name tag))]
             (when (:entity/name e) [(name-sym db eid)])
@@ -175,16 +194,18 @@
    either datalog `:where` clauses (binding `?n`; evaluated with the vocab rules)
    or a collection of eids. Forms sort by (tag, name)."
   [db focus]
-  (let [eids (if (and (coll? focus) (every? number? focus)) focus (lens/focus-nodes db focus))
-        sorted (sort-by (fn [eid] (let [e (d/entity db eid)]
-                                    [(str (:structure/of e)) (or (:entity/name e) "")]))
+  ;; an eid collection (numbers on ds, STRING handles on cozo) vs datalog clauses (vectors/lists)
+  (let [eids (if (and (coll? focus) (every? (some-fn number? string?) focus)) focus (lens/focus-nodes db focus))
+        sorted (sort-by (fn [eid] (let [e (cq/entity db eid)]
+                                    [(str (struct-tag e)) (or (:entity/name e) "")]))
                         eids)]
     (str/join "\n\n" (map #(instance-text db %) sorted))))
 
 ;; ── violations, quoting the offending forms ───────────────────────────────────
 
 (defn- offender-text [db x]
-  (if (and (number? x) (:structure/of (d/entity db x)))
+  ;; an offender is an eid (number on ds, string handle on cozo) — resolve it to its form, else print it
+  (if (and (or (number? x) (string? x)) (:structure/of (cq/entity db x)))
     (instance-text db x)
     (pr-str x)))
 
