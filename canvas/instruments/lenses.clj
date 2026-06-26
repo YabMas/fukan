@@ -4,7 +4,12 @@
    `:select`. These are TOOL-DEFINITIONS authored against the core `Lens` grammar — not
    fukan's design. A user project authors its own lenses the same way, in its own canvas."
   (:require [fukan.canvas.core.lens :refer [Lens]]
+            [fukan.canvas.core.coverage :refer [ReaderConvention]]
             [canvas.vocab.grouping :refer [Grouping]]))
+
+;; fukan's reader convention: its Lens acts are realized by probe-prefixed reader functions
+;; (the projection/probes leaves). The core Coverage law reads this to check reader→lens coverage.
+(ReaderConvention {:prefix "probe-"})
 
 ;; fukan's focuses over its own model. A lens SELECTS a slice — it does NOT gate; checking is the
 ;; law/correspondence substrate's job (reading and checking are different acts, kept apart). So

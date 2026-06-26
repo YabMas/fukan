@@ -302,19 +302,5 @@
       (is (empty? (fukan/totality-violations model))
           "0 totality violations — every trusted-core reader (its :in is the Model) is total"))))
 
-(deftest lens-coverage-fires-on-an-orphan-reader
-  (testing "an extracted probe reader (probe-X) with no declared Lens of the same focus is an offender;
-            a reader whose Lens exists is covered, a non-probe op is ignored, and the DUAL (a Lens with
-            no reader) is allowed — the law guards reader→lens only"
-    (let [db (build/tx-maps->cozo [{:db/id -1 :structure/of :fukan.canvas.core.lens/Lens :entity/name "survey"}                              ; a declared focus
-                   {:db/id -2 :structure/of :fukan.canvas.core.lens/Lens :entity/name "purity"}                              ; a Lens with NO reader — allowed
-                   {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "probe-survey" :val/extracted true} ; covered by the survey Lens
-                   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "probe-orphan" :val/extracted true} ; no Lens "orphan" → offender
-                   {:db/id -5 :structure/of :canvas.vocab.code.operation/Operation :entity/name "run"          :val/extracted true}])] ; not a probe-* reader → ignored
-      (is (= #{"probe-orphan"} (fukan/uncovered-readers db))
-          "only the probe reader with no declared Lens is flagged; the covered reader, the non-probe op, and the reader-less Lens are not"))))
-
-(deftest lens-coverage-green-on-the-self-model
-  (testing "every bespoke probe reader has a declared Lens twin on the live build-model \"src\""
-    (is (empty? (fukan/uncovered-readers (pipeline/build-model "src")))
-        "0 uncovered readers — every probe-X leaf's focus is declared as a Lens instrument")))
+;; Coverage was lifted to fukan.canvas.core.coverage on 2026-06-26; its tests live in
+;; test/fukan/canvas/core/coverage_test.clj.

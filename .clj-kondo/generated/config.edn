@@ -14,7 +14,6 @@
    canvas.vocab.code.operation/Realization hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/ModuleArchitecture hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
-   canvas.vocab.fukan/LensCoverage hooks.fukan.structure/instance
    canvas.vocab.fukan/Totality hooks.fukan.structure/instance
    canvas.vocab.grammar/Law hooks.fukan.structure/instance
    canvas.vocab.grammar/Structure hooks.fukan.structure/instance
@@ -42,6 +41,8 @@
    fukan.canvas.core.composition-test/Note hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Spoke hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Sum hooks.fukan.structure/instance
+   fukan.canvas.core.coverage/Coverage hooks.fukan.structure/instance
+   fukan.canvas.core.coverage/ReaderConvention hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LBot hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LDoc hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LLift hooks.fukan.structure/instance

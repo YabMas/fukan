@@ -202,5 +202,5 @@ alle[e] := *t_bool[e, _, _]
   (-> (mirror/load-datoms (instances->datoms (concat (roots-of (collect ns-syms)) roots)))
       (add-calls var-usages)
       ;; seed reflection with EVERY canvas ns (as build-model does) so a zero-instance law-holder
-      ;; stratum (canvas.vocab.fukan's Totality/LensCoverage) still reflects
+      ;; stratum (e.g. canvas.vocab.fukan's Totality) still reflects
       (with-grammar ns-syms)))

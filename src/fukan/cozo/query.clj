@@ -62,8 +62,8 @@
    return `#{}`. `not=` is handled separately (built-in)."
   {'canvas.vocab.code.module/module-corresponds?
    (fn [[cm km]] [(str "r_module_corresponds[" cm ", " km "]") #{"r_module_corresponds"}])
-   'canvas.vocab.fukan/reader-realizes-lens?
-   (fn [[rn ln]] [(str rn " = concat('probe-', " ln ")") #{}])
+   'fukan.canvas.core.coverage/reader-realizes?
+   (fn [[rn p ln]] [(str rn " = concat(" p ", " ln ")") #{}])
    'clojure.string/starts-with?
    (fn [[s prefix]] [(str "starts_with(" s ", " prefix ")") #{}])})
 

@@ -17,6 +17,9 @@
             ;; loaded for its side-effect: registers the Cozo backend at structure's
             ;; check-engine plug-point, so `(structure/check model)` runs the Cozo law engine
             [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Coverage law (a src ns, so it does
+            ;; not auto-discover like canvas/**) — its convention binding lives in canvas/instruments
+            [fukan.canvas.core.coverage]
             [canvas.vocab.code.extractor :as target]))
 
 ;; Register fukan's project FACT extractor — its own Clojure source, as the engine-agnostic
