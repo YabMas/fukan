@@ -8,7 +8,7 @@
    the unified `StructureDb` every subsystem adopts) and exposes the node-construction + identity
    primitives. Extracted DOWNWARD from `core-structure`: the substrate the registry sits on, long a
    model-only `Node`/`Relation` portrait, finally has a code home."
-  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation TrustBoundary]] [canvas.vocab.code.module :refer [Module]]
             ;; [:enum …] / :keyword literals in Kind bodies check through the malli type dialect
             [canvas.vocab.type]))
 
@@ -24,6 +24,9 @@
 (Kind StructureDb
   "The unified structure db — the data realization of the model: a Cozo
    db of structure instances + their reified relations. Owned here; every subsystem adopts this one Kind.")
+
+;; StructureDb is fukan's parse-don't-validate TRUST BOUNDARY — readers over the Model must be total.
+(TrustBoundary {:kind StructureDb})
 
 ;; ── node construction + identity ──────────────────────────────────────────────
 (Operation value-content-key

@@ -20,7 +20,6 @@
             ;; loads the model↔code correspondence laws into the dev session so a
             ;; `check`/`(drift)` over the unified held model surfaces drift
             [canvas.vocab.code.operation :as operation]
-            [canvas.vocab.fukan :as fukan]
             [canvas.vocab.code.module :as code-module]
             [canvas.vocab.code.effect :as code-effect]
             [canvas.vocab.code.subsystem :as la]))
@@ -220,7 +219,7 @@
    `Totality` law asserts."
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (fukan/totality-violations m)]
+    (let [w (operation/totality-violations m)]
       (if (empty? w)
         (println "Trusted core is total — no modelled reader's code throws.")
         (do (println "Totality worklist —" (count w) "trusted-core reader(s) whose code throws:")

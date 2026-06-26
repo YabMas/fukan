@@ -11,7 +11,8 @@
             [fukan.cozo.query :as cq]
             [canvas.vocab.type :as ct :refer [Schema]]
             [canvas.vocab.code.effect :as effect :refer [Effect]]
-            [canvas.vocab.grouping :refer [Connected]]))
+            [canvas.vocab.grouping :refer [Connected]]
+            [canvas.vocab.code.kind :refer [Kind]]))
 
 (defn ^:export signature->slots
   "Operation's authoring syntax (the `(syntax …)` hook, map → map): a `:signature`
@@ -99,6 +100,29 @@
              (not [?o :val/test-support true])
              (not-join [?o] (op-twin ?s ?o))]))                       ; … with no authored twin
 
+(defstructure TrustBoundary
+  "Designates a Kind as a parse-don't-validate TRUST BOUNDARY: an Operation that takes this Kind as
+   input operates on already-trusted data, so it must be total. `:kind` points at the TRUSTED ARTIFACT
+   itself (the parsed, trusted representation — e.g. fukan's StructureDb, the Model), not a boundary
+   line; the name reads 'this Kind marks where trust holds'. The Totality law reads the designation."
+  {:kind Kind})
+
+(defstructure Totality
+  "Law-holder for code-up TOTALITY (parse-don't-validate, at the trust line): a trusted-core reader —
+   a modelled Operation whose :in references a declared TrustBoundary Kind — operates on already-trusted
+   data, so it must be TOTAL. An offender is such a reader whose extracted twin (op-twin) performs
+   :throws. `:scope :global`; vacuous when no TrustBoundary is declared. Generic: the trust boundary is
+   a parameter (a project declares its own), not a hardcoded StructureDb."
+  (law "every trusted-core reader (its :in is a declared TrustBoundary) is total — its code performs no :throws"
+    :scope :global
+    :offenders '[?o]
+    :where '[[?tb :structure/of ::TrustBoundary] [?tbr :rel/from ?tb] [?tbr :rel/kind :kind] [?tbr :rel/to ?k]
+             [?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])
+             [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?sch]
+             [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
+             (op-twin ?o ?e)
+             [?pr :rel/from ?e] [?pr :rel/kind :performs] [?pr :rel/to ?eff] [?eff :val/name "throws"]]))
+
 (defn drifted-operations
   "The AUTHORED operations in `db` with no same-named extracted operation, as a set of
    names. Empty ⇔ the model is fully realized in code. The focusable surface of the
@@ -173,6 +197,18 @@
                         (operation-sig db s)
                         (edn/read-string (:val/sig (cq/entity db o)))))))
        (map second) set))
+
+(defn totality-violations
+  "The ENFORCED TOTALITY offenders — trusted-core reader Operations (their :in references a declared
+   TrustBoundary) whose realizing code is PARTIAL, as a set of op names. Empty ⇔ the modelled trusted
+   core is total. Reads the single source of truth (the registered `Totality` law)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::Totality) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (cq/entity db %)))
+         set)))
 
 ;; ── Clojure extraction (defn → Operation) ────────────────────────────────────
 

@@ -9,11 +9,10 @@
             [fukan.canvas.core.structure :as s]
             [canvas.vocab.type :as malli]
             [fukan.canvas.core.typing :as typing]
-            ;; correspondence is now distributed across the code elements + the fukan tools
+            ;; correspondence is now distributed across the code elements
             [canvas.vocab.code.module :as module]
             [canvas.vocab.code.operation :as operation]
-            [canvas.vocab.code.effect :as effect]
-            [canvas.vocab.fukan :as fukan]))
+            [canvas.vocab.code.effect :as effect]))
 
 ;; register the project dialect (malli render + sigs-adhere?) for the `type-adheres?` path
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
@@ -299,8 +298,35 @@
     (let [model (pipeline/build-model "src")]
       (is (empty? (effect/undeclared-effects model))
           "0 undeclared effects — design and extraction speak one effect language, to call-graph depth")
-      (is (empty? (fukan/totality-violations model))
-          "0 totality violations — every trusted-core reader (its :in is the Model) is total"))))
+      (is (empty? (operation/totality-violations model))
+          "0 totality violations — every trusted-core reader (its :in is a declared TrustBoundary) is total"))))
+
+(deftest totality-fires-on-a-partial-trusted-reader
+  (testing "an authored reader whose :in references a declared TrustBoundary Kind, and whose extracted
+            twin performs :throws, is flagged; with NO TrustBoundary declared the law is vacuous —
+            proving the trust boundary is read from config, not the hardcoded StructureDb"
+    (let [throws {:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "throws"}
+          k      {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "TrustDb"}
+          tb     [{:db/id -21 :structure/of :canvas.vocab.code.operation/TrustBoundary}
+                  {:rel/id "tb|kind|k" :rel/from -21 :rel/kind :kind :rel/to -20}]
+          ;; authored reader (module m), :in references TrustDb ; extracted twin (fukan.m) throws
+          common [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                  {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader"}        ; authored
+                  {:rel/id "m|exposes|reader" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                  {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref"}                          ; the :in ref schema
+                  {:rel/id "sch|names|k" :rel/from -22 :rel/kind :names :rel/to -20}                            ; … names TrustDb
+                  {:rel/id "reader|in|sch" :rel/from -2 :rel/kind :in :rel/to -22}                              ; reader :in → the ref
+                  {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true} ; corresponds to "m"
+                  {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader" :val/extracted true} ; twin
+                  {:rel/id "km|child|reader" :rel/from -3 :rel/kind :child :rel/to -4}
+                  {:rel/id "twin|performs|throws" :rel/from -4 :rel/kind :performs :rel/to -10}                 ; twin throws
+                  throws k]
+          with-tb    (build/tx-maps->cozo (concat common tb))
+          without-tb (build/tx-maps->cozo common)]
+      (is (= #{"reader"} (operation/totality-violations with-tb))
+          "the trusted reader's twin throws → a totality violation")
+      (is (empty? (operation/totality-violations without-tb))
+          "no TrustBoundary declared → vacuous; the law reads the designation, not a hardcoded name"))))
 
 ;; Coverage was lifted to fukan.canvas.core.coverage on 2026-06-26; its tests live in
 ;; test/fukan/canvas/core/coverage_test.clj.
