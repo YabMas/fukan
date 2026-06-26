@@ -173,25 +173,22 @@
    `uncovered-operations`): actual cross-module module-calls (over `:calls`) with no corresponding
    intended cross-module delegation (over `:delegates`, bridged by `module-corresponds?`), as a set
    of [caller-module callee-module] code-module-name pairs. The couplings the design has not yet
-   declared. Computed by set-difference in Clojure (not `not-join`) to sidestep the empty-relation
-   gotcha. A signal, not a violation: you do not model every call."
+   declared. A single on-graph query — actual cross-module calls MINUS those an authored cross-module
+   delegation covers (the inner `not-join` is the `intended` shape the Fidelity law inlines) — under
+   Cozo's stratified negation; the empty-relation not-join gotcha that once forced a Clojure
+   set-difference is gone. A signal, not a violation: you do not model every call."
   [db]
-  (let [intent (cq/q '[:find ?cm1 ?cm2 :in $ %
-                      :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
-                             (not [?o1 :val/extracted true])
-                             (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]]
-                    db rules/substrate-rules)
-        actual (cq/q '[:find ?km1 ?km2 :in $ %
-                      :where [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
-                             [?e1 :val/extracted true] [?e2 :val/extracted true]
-                             (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]]
-                    db rules/substrate-rules)]
-    (->> actual
-         (remove (fn [[km1 km2]]
-                   (some (fn [[cm1 cm2]]
-                           (and (module-corresponds? cm1 km1) (module-corresponds? cm2 km2)))
-                         intent)))
-         set)))
+  (set (cq/q '[:find ?km1 ?km2 :in $ %
+               :where [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
+                      [?e1 :val/extracted true] [?e2 :val/extracted true]
+                      (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
+                      (not-join [?km1 ?km2]
+                        [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+                        (not [?o1 :val/extracted true])
+                        (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
+                        [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]
+                        [(canvas.vocab.code.module/module-corresponds? ?cm2 ?km2)])]
+             db rules/substrate-rules)))
 
 (defn unfaithful-calls
   "The ENFORCED fidelity offenders — extracted caller Operations making an undeclared cross-module
