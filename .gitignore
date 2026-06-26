@@ -7,3 +7,4 @@
 
 # Planning artifacts (design/spec/plan docs) stay out of every commit per CLAUDE.md.
 /docs/superpowers/specs/
+/docs/superpowers/plans/
