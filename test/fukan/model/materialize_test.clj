@@ -137,7 +137,7 @@
     (let [db (model* "test/fixtures/target/sample.clj")]   ; sample's Operations extracted in, so coverage/drift resolve
       ;; the predicate the drift lens query invokes
       (is (corr/module-corresponds? "core-structure" "fukan.canvas.core.structure"))
-      (doseq [ln ["survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"]]
+      (doseq [ln ["survey" "patterns" "consistency" "callers" "integrity" "coverage" "drift"]]
         (let [focus (lens/evaluate-lens db (by-kind-name db :Lens ln))]
           (is (set? focus) (str "lens " ln " evaluates to a node-set"))))
       (is (seq (lens/evaluate-lens db (by-kind-name db :Lens "survey")))

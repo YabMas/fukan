@@ -16,7 +16,7 @@
 (Lens consistency {:focus  "where contracts and structure align — or drift"
                    :select ["the contract-bearing authored operations"
                             '[(Operation ?n) (not [?n :val/extracted true])]]})
-(Lens tar-pit     {:focus  "complexity hotspots — tangles worth attention"
+(Lens callers     {:focus  "the call-graph callers — nodes that call something"
                    :select ["the call-graph callers" '[(calls ?n ?callee)]]})
 (Lens purity      {:focus  "operations that directly perform a consequential effect"
                    :select ["operations performing a consequential effect (io/state/require)"
@@ -39,4 +39,4 @@
                               [?o :val/sig _]]]})
 
 (Grouping lens
-  {:child [survey patterns consistency tar-pit purity integrity coverage drift type-drift]})
+  {:child [survey patterns consistency callers purity integrity coverage drift type-drift]})

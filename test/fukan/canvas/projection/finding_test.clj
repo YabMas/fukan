@@ -15,7 +15,7 @@
 
 (deftest finding->text-is-the-trivial-text-projection
   (testing "rendering a finding to text is just its observations' notes"
-    (let [fdg (f/finding "tar-pit"
+    (let [fdg (f/finding "callers"
                 [(f/observation #{1} :hotspot "9 edges: Foo")
                  (f/observation #{2} :hotspot "7 edges: Bar")])]
       (is (= ["9 edges: Foo" "7 edges: Bar"] (f/finding->text fdg))))))

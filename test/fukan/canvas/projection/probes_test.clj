@@ -54,10 +54,10 @@
   (testing "all eight leaves run over the self-model and yield observation findings"
     (let [db  (pipeline/build-model nil)
           all (probes/run-all db)]
-      (is (= #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift" "type-drift"}
+      (is (= #{"survey" "patterns" "consistency" "callers" "integrity" "coverage" "drift" "type-drift"}
              (set (keys all))) "the full registered probe surface")
       (is (seq (:observations (all "survey")))  "survey: counts per structure kind")
-      (is (seq (:observations (all "tar-pit"))) "tar-pit: connected hotspots")
+      (is (seq (:observations (all "callers"))) "callers: degree hotspots")
       (is (every? (fn [o] (and (set? (:focus o)) (keyword? (:as o)) (string? (:note o))))
                   (mapcat :observations (vals all)))
           "every observation is {focus tag note}"))))

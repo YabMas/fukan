@@ -184,7 +184,7 @@
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
     (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Grouping) "lens"))
-      (is (set/subset? #{"survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift"}
+      (is (set/subset? #{"survey" "patterns" "consistency" "callers" "integrity" "coverage" "drift"}
                        (names-of db :Lens))))))
 
 (deftest projection-subsystem-modelled-as-target-representations

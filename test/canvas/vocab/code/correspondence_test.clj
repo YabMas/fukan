@@ -190,7 +190,7 @@
           ;; the AUTHORED run-probe (not the extracted twin) carries the fan-out
           dp (ffirst (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name "run-probe"]
                                           (not [?o :val/extracted true])] m))]
-      (is (= #{"probe-survey" "probe-patterns" "probe-consistency" "probe-tar-pit"
+      (is (= #{"probe-survey" "probe-patterns" "probe-consistency" "probe-callers"
                "probe-integrity" "probe-coverage" "probe-drift" "probe-type-drift"}
              (set (cq/q '[:find [?hn ...] :in $ ?dp
                          :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]

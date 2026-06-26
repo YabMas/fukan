@@ -13,7 +13,7 @@
 
 (Module probes
   "The live run/run-all dispatch surface over the implemented probe leaves."
-  (Kind ProbeName [:enum "survey" "patterns" "consistency" "tar-pit" "integrity" "coverage" "drift" "type-drift"])
+  (Kind ProbeName [:enum "survey" "patterns" "consistency" "callers" "integrity" "coverage" "drift" "type-drift"])
   (Kind Finding
     [:map [:lens :string]
           [:observations [:vector [:map [:focus [:set :int]] [:as :keyword] [:note :string]]]]])
@@ -31,7 +31,7 @@
   (Operation ^:private probe-survey      "Structural overview (a reading)."      {:performs [:throws]})
   (Operation ^:private probe-patterns    "Pattern reading (a reading)."          {:performs [:throws]})
   (Operation ^:private probe-consistency "Operation-name ambiguity (a reading)." {:performs [:throws]})
-  (Operation ^:private probe-tar-pit     "Complexity hotspots (a reading)."      {:performs [:throws]})
+  (Operation ^:private probe-callers     "Caller/coupling hotspots (a reading)." {:performs [:throws]})
   (Operation ^:private probe-integrity   "The integrity reading — runs the kernel's check.")
   (Operation ^:private probe-coverage    "Spec↔code coverage (a reading)."       {:performs [:throws]})
   (Operation ^:private probe-drift       "Spec↔code drift (a reading)."          {:performs [:throws]})
@@ -40,5 +40,5 @@
     "The dispatch point: run/run-all route here, and it dispatches to the registered probe leaves
      (explicit indirection — the decoupling seam between the surface and the implementations)."
     {:performs      [:throws]
-     :dispatches-to [probe-survey probe-patterns probe-consistency probe-tar-pit
+     :dispatches-to [probe-survey probe-patterns probe-consistency probe-callers
                      probe-integrity probe-coverage probe-drift probe-type-drift]}))

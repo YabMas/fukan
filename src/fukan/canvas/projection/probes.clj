@@ -88,15 +88,17 @@
                     (f/observation nodes :ambiguity
                       (str sn " in " (count mods) " modules: " (str/join ", " (sort mods)))))))))))
 
-(defn- probe-tar-pit
-  "Complexity hotspots (a reading): the top-10 nodes by relation degree (in + out),
-   each its own single-node focus. Scopable to `focus`."
-  ([db] (probe-tar-pit db nil))
+(defn- probe-callers
+  "Realizes the `callers` lens (the `probe-` naming convention): the top-10 nodes by relation degree
+   (in + out), each its own single-node focus — a coupling/hotspot reading. (This degree-ranking is
+   richer than, and currently diverges from, the lens's `(calls ?n ?callee)` caller-selection;
+   aligning them — or splitting out a real complexity angle — is deferred.) Scopable to `focus`."
+  ([db] (probe-callers db nil))
   ([db focus]
    (let [in?  (if focus (set focus) (constantly true))
          out  (map second (cq/q '[:find ?r ?e :where [?r :rel/from ?e]] db))
          ins  (map second (cq/q '[:find ?r ?e :where [?r :rel/to ?e]] db))]
-     (f/finding "tar-pit"
+     (f/finding "callers"
        (->> (frequencies (concat out ins))
             (filter (fn [[e _]] (in? e))) (sort-by val >) (take 10)
             (mapv (fn [[e n]]
@@ -166,7 +168,7 @@
 (defmethod run-probe "survey"      [db _ focus] (probe-survey db focus))
 (defmethod run-probe "patterns"    [db _ focus] (probe-patterns db focus))
 (defmethod run-probe "consistency" [db _ focus] (probe-consistency db focus))
-(defmethod run-probe "tar-pit"     [db _ focus] (probe-tar-pit db focus))
+(defmethod run-probe "callers"     [db _ focus] (probe-callers db focus))
 (defmethod run-probe "integrity"   [db _ focus] (probe-integrity db focus))
 (defmethod run-probe "coverage"    [db _ focus] (probe-coverage db focus))
 (defmethod run-probe "drift"       [db _ focus] (probe-drift db focus))
