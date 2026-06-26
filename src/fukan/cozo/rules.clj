@@ -1,12 +1,16 @@
 (ns fukan.cozo.rules
-  "The cozo-side derived-rule substrate — CozoScript rule fragments prepended to a
-   ported query so its body speaks logical model edges, not the physical typed-EAV
-   mirror. The Cozo analog of `fukan.canvas.core.rules` (the always-injected vocab
-   rules) + `canvas.vocab.code.module/module-depends-rules`.
+  "The cozo-side CozoScript substrate — rule fragments prepended to a query so its
+   body speaks logical model edges, not the physical typed-EAV mirror. The abstraction
+   seam over physical storage: when the mirror's shape changes, only this namespace does.
+   Compose with `str`: `(str eav surface \"…query…\")`.
 
-   This is the abstraction seam over physical storage: every ported reader/law
-   composes these fragments, so when the mirror's shape changes (P4/P5 cut-over)
-   only this namespace changes. Compose with `str`: `(str eav module-depends ?…)`.")
+   `triple` (the unified value-typed EAV view) underpins the general query/law compiler
+   (`fukan.cozo.query`); `eav` (the logical edge/node/leaf decode) underpins the native
+   build's raw queries (`fukan.cozo.build`); `surface` carries the descriptive
+   code-surface primitives `latent-boundaries` composes with Cozo's `ConnectedComponents`
+   (the one reading that needs a fixed rule, so it drops below the compiler to raw
+   CozoScript). The earlier hand-ported LAW fragments (module-depends / subsystem /
+   correspondence / effect) were retired once the law/query compiler subsumed them.")
 
 (def eav
   "Logical EAV decode — reified-edge, node, and leaf views over the mirror's typed
@@ -43,50 +47,6 @@ triple[e, a, v] := *t_str[ei, a, v],  e = to_string(ei)
 triple[e, a, v] := *t_bool[ei, a, v], e = to_string(ei)
 ")
 
-(def module-depends
-  "Module ownership + the module→module dependency graph (calls ∪ data-adoption),
-   built on `eav`. The CozoScript port of `module-depends-rules`: `owns` is
-   `:exposes` ∪ `:owns` ∪ `:child`; `mdep` is a call dependency (an owned op
-   `:delegates` to another module's op) UNIONed with a data-adoption dependency
-   (an owned op's `:in`/`:out` is a ref-Schema whose `:names` reaches a Kind
-   another module owns)."
-  "
-owns[m, x] := structof[m, 'canvas.vocab.code.module/Module'], relkind[r, 'exposes'], relfrom[r, m], relto[r, x]
-owns[m, x] := structof[m, 'canvas.vocab.code.module/Module'], relkind[r, 'owns'],    relfrom[r, m], relto[r, x]
-owns[m, x] := structof[m, 'canvas.vocab.code.module/Module'], relkind[r, 'child'],   relfrom[r, m], relto[r, x]
-
-mdep[m, n] := owns[m, a], relkind[r, 'delegates'], relfrom[r, a], relto[r, b], owns[n, b], m != n
-mdep[m, n] := owns[m, a], relkind[ri, 'in'],  relfrom[ri, a], relto[ri, sch],
-              valkind[sch, 'ref'], relkind[rn, 'names'], relfrom[rn, sch], relto[rn, k], owns[n, k], m != n
-mdep[m, n] := owns[m, a], relkind[ro, 'out'], relfrom[ro, a], relto[ro, sch],
-              valkind[sch, 'ref'], relkind[rn, 'names'], relfrom[rn, sch], relto[rn, k], owns[n, k], m != n
-")
-
-(def subsystem
-  "Subsystem membership + declared `:may-depend` edges, built on `eav` — the
-   substrate the conformance/membership architecture laws read."
-  "
-in_subsystem[mod, sub] := structof[sub, 'canvas.vocab.code.subsystem/Subsystem'], relkind[r, 'child'], relfrom[r, sub], relto[r, mod]
-declared_dep[s, t]     := structof[s, 'canvas.vocab.code.subsystem/Subsystem'], relkind[r, 'may-depend'], relfrom[r, s], relto[r, t]
-")
-
-(def correspondence
-  "The authored↔extracted `op_twin` pairing (the cozo port of the `op-twin`
-   defrelation), built on `eav`. `module-corresponds?` is inlined as a
-   normalize-and-suffix match: the canvas module name's hyphens become dots, and it
-   must be the code namespace exactly or a `.`-bounded suffix of it."
-  "
-canvas_module[cm] := structof[m, 'canvas.vocab.code.module/Module'], not extracted[m], ename[m, cm]
-code_module[km]   := structof[m, 'canvas.vocab.code.module/Module'], extracted[m], ename[m, km]
-module_corresponds[cm, km] := canvas_module[cm], code_module[km],
-                              cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'),
-                              or(kmn == cmn, ends_with(kmn, concat('.', cmn)))
-
-op_twin[a, b] := structof[a, 'canvas.vocab.code.operation/Operation'], not extracted[a], ename[a, n], in_module[a, cm],
-                 structof[b, 'canvas.vocab.code.operation/Operation'], extracted[b], ename[b, n], in_module[b, km],
-                 module_corresponds[cm, km]
-")
-
 (def surface
   "Code-surface descriptive primitives, built on `eav` — the reusable building
    blocks higher-level surface readings compose. `public_op`: a non-private
@@ -100,16 +60,4 @@ clientele[o, cm] := public_op[o], relkind[c, 'calls'], relto[c, o], relfrom[c, c
                     in_module[caller, cm], in_module[o, om], cm != om
 co_consumed[a, b] := clientele[a, cm], clientele[b, cm], in_module[a, m], in_module[b, m], a < b
 consumed[o, mod] := clientele[o, cm], in_module[o, mod]
-")
-
-(def effect
-  "Effect attribution + transitive reachability, built on `eav`. `performs`: the
-   DIRECT effect an op declares/performs (op→effect-name). `reaches_effect`: an op
-   REACHES E if it directly performs E or `:calls` an op that reaches E — the cozo
-   port of `reaches-effect-rules`, a recursive rule cozo saturates to a fixpoint
-   over the (cyclic) call graph."
-  "
-performs[op, en] := relkind[pr, 'performs'], relfrom[pr, op], relto[pr, e], valname[e, en]
-reaches_effect[op, en] := performs[op, en]
-reaches_effect[op, en] := relkind[cr, 'calls'], relfrom[cr, op], relto[cr, mid], reaches_effect[mid, en]
 ")
