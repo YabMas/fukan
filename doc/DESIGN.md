@@ -78,8 +78,8 @@ A structure is a *composition of slots* plus *datalog laws*.
   cross-cutting laws like correspondence). The recurring shapes have
   **combinators** — `(law "desc" (matched-by R :from S? :when {k v}? :scope T?))`,
   `(has R :when …?)`, `(has-any R1 R2 …)`, `(target R {k v})`, `(at-most-one R)` —
-  expanding to datalog with negation routed through rules, so the datascript
-  empty-relation `not-join` gotcha is encapsulated in the kernel.
+  expanding to datalog that emits `not-join` directly — the Cozo query compiler
+  lowers stratified negation correctly, so no negation-routing dance is needed.
   `(structure/check db)` runs every law and returns the violations.
 
 ## Laws read at domain altitude — vocab-derived rules

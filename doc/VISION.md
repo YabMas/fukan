@@ -61,7 +61,7 @@ concept, a workflow, fukan's own grammar and kernel — is expressed as a struct
 one graph, and checked by running its laws.
 
 The tool is REPL-native and agent-native by construction: models are Clojure data
-on the classpath, the model is a datascript db, and the whole is queryable by a
+on the classpath, the model is a Cozo db, and the whole is queryable by a
 human or an LLM with the same datalog.
 
 ## The foundation: `defstructure`

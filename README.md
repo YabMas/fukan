@@ -61,7 +61,7 @@ or more (ordered), `[:+ T]` one or more, `[:set T]` unordered. A scalar slot
 (`[:enum "a" "b"]`, `[:int {:min 1}]`) is checked through a pluggable type dialect
 (malli ships); a slot whose target is another structure reifies a *queryable
 relation*; `^:value` structures are content-deduped anonymous nodes for nameless
-compound data. The model is a datascript db, so a human or an LLM interrogates it
+compound data. The model is a Cozo db, so a human or an LLM interrogates it
 with the **same datalog** — fukan is REPL-native and agent-native by construction.
 And the grammar itself is reflected onto the graph: vocabularies are data too, and
 `(grammar)` renders the live language reference back as the very forms above — the

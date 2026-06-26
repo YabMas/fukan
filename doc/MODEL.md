@@ -11,7 +11,7 @@
 ## The substrate is the model
 
 There is no separate model-map and no privileged kinds. The model is a single
-**datascript db** of structure instances. A `defstructure` declares a structure as a
+**Cozo db** of structure instances. A `defstructure` declares a structure as a
 composition of slots plus the datalog laws that must hold of it; instances of those
 structures, merged across all specs, *are* the model.
 
@@ -63,9 +63,9 @@ A law is a datalog constraint: `(law "desc" :offenders '[?x] :where '[…])`.
   `:rel/*` navigation.
 - **Combinators.** The recurring law shapes — `(matched-by R …)`, `(has R …)`,
   `(has-any …)`, `(target R {k v})`, `(at-most-one R)` — are authored as
-  `(law "desc" (combinator …))` and expand to datalog with negation routed through
-  rules (the datascript empty-relation `not-join` gotcha lives in the kernel, once);
-  the authored form rides the law as `:src` and round-trips through the print-dual.
+  `(law "desc" (combinator …))` and expand to datalog emitting `not-join` directly
+  (the Cozo query compiler lowers stratified negation correctly, so no negation-routing
+  is needed); the authored form rides the law as `:src` and round-trips through the print-dual.
 
 ## The registry
 
