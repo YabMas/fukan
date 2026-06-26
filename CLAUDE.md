@@ -27,13 +27,24 @@ structure substrate **is** the model (no separate model-map).
 
 **The lean kernel — `src/fukan/` (the only code on the classpath):**
 - `canvas/core/structure.clj` — the `defstructure` primitive (the slot map + laws
-  + combinators, `check`, value-identity, the reader/syntax hooks), and
+  + combinators, `check` — which dispatches to the registered check-engine —
+  value-identity, the reader/syntax hooks), and
   `canvas/core/{assemble,typing}.clj` — the global assembler and the type-dialect
   plug-point
 - `canvas/core/rules.clj` — pure vocab-derived datalog rules (kind/relation/module
   rules) auto-injected into every law so laws read at domain altitude
 - `canvas/core/lens.clj` — `evaluate-lens`: run a lens's selection query → its
   focus sub-graph
+- `canvas/core/coverage.clj` — the `Coverage` law-holder + `ReaderConvention`: an
+  act realized richly as a reader must be covered (element-agnostic; reads a
+  `{:prefix}` convention — lifted out of the old `fukan.clj` holding pen)
+- `cozo/` — the query engine. The model db **is a CozoDB**, and CozoScript (datalog)
+  is what every query, law, and reader compiles to: `cozo/query.clj` — the kernel query
+  primitive (`q`/`entity`), fukan's datalog subset → CozoScript over a typed-EAV view;
+  `cozo/law.clj` — compiles every defstructure law → CozoScript and registers the
+  check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
+  the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom
+  loaders, and the shared CozoScript rule substrate
 - `canvas/projection/canvas_source.clj` — ingestion: discover `canvas/**/*.clj`
   defstructure specs and assemble their instance vars into one structure db;
   `canvas/projection/{grammar,instance,architecture}.clj` — the two print-duals
@@ -106,9 +117,12 @@ its `defstructure` + the laws/correspondence about it + how it is extracted from
 - `canvas/vocab/code/extractor.clj` — the shared Clojure extractor orchestration (clj-kondo
   `analyze` + `op-eid` + `extract`), calling each element's builder. The HOOK for the extraction
   plug-point; the composition root registers `extract`.
-- `canvas/vocab/fukan.clj` — TEMPORARY holding pen for the fukan-SPECIFIC correspondence tools
-  (`Totality` on the `StructureDb` trust artifact; `LensCoverage` on the `Lens` act + `probe-`
-  convention). Bindings not yet lifted — awaits the parameterized-trait groundwork.
+The once-`fukan.clj` holding pen is DISSOLVED — its two fukan-specific correspondence laws were
+homed by what each is *about*, each reading a binding declared as instance data (no generic "trait"
+framework; the design↔code matching machinery is opinionated and baked, only *which* elements a
+project works with is config): `Totality` (an Operation over a trust artifact is total) → `code/
+operation.clj`, reading a `TrustBoundary {:kind}` designation (bound in `architecture/…/substrate`);
+`Coverage` → the core `canvas/core/coverage.clj` above, reading a `ReaderConvention {:prefix}`.
 
 The grouping ladder is levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace:
 an API surface + owned types) ⊂ `Subsystem` (a cluster of modules realizing a capability, with
@@ -153,9 +167,9 @@ A `defstructure` is a composition of **slots** plus **laws**:
   :global` opts a law out of self-scoping. The recurring shapes have COMBINATORS —
   `(law "desc" (matched-by R :from S? :when {k v}? :scope T?))`, `(has R :when …?)`,
   `(has-any R1 R2 …)`, `(target R {k v})`, `(at-most-one R)` — which expand to
-  datalog with negation routed through rules (the datascript empty-relation
-  `not-join` gotcha is encapsulated in the kernel; never hand-write these shapes).
-  `(structure/check db)` runs every law → violations.
+  datalog emitting `not-join` directly (the Cozo query compiler lowers stratified
+  negation correctly, so the combinators need no negation-routing dance; never
+  hand-write these shapes). `(structure/check db)` runs every law → violations.
 
 The current catalog is the source — or just run `(grammar)` in the REPL: the
 print-dual renders every vocabulary live. The files are under `canvas/vocab/**`.
@@ -163,7 +177,9 @@ print-dual renders every vocabulary live. The files are under `canvas/vocab/**`.
 A `defrelation` (in `core/structure.clj`, sibling of `defstructure`) declares a named
 custom-bodied datalog rule that `check` auto-injects into every law/query (like the
 vocab-derived rules) — the way several laws share one join (e.g. `op-twin`) without each
-re-inlining it. Keep its body non-recursive (vocab-injected rules aren't timeout-guarded).
+re-inlining it. A recursive body is now allowed (Cozo's semi-naive fixpoint terminates where
+datascript diverged — the old non-recursion guard is gone), but prefer non-recursive where you
+can: the rule pays the fixpoint on every check.
 
 ## Spec locations
 
@@ -171,8 +187,9 @@ The self-model is laid out by **altitude**, not by pipeline role:
 
 - `canvas/vocab/**` — fukan's own VOCABULARY (the grammar it models itself with): the
   structural primitives (`grouping`), the malli type dialect (`type`), grammar reflection
-  (`grammar`), the code grammar by element (`code/{kind,effect,operation,module,subsystem}` +
-  `code/extractor`), and the temp fukan-specific tools (`fukan`). Auto-discovered.
+  (`grammar`), and the code grammar by element (`code/{kind,effect,operation,module,subsystem}` +
+  `code/extractor`). Auto-discovered. (The fukan-specific Totality/Coverage laws are homed by
+  element, not held here — see above.)
 - `canvas/instruments/<kind>.clj` — fukan as a *user of itself*: its own use-side INSTANCES,
   one file per kind (`lenses.clj`, `projections.clj` — `survey`/`drift`/…,
   `Blueprint`/`DriftClose`), authored against the `Lens`/`Projection` act grammar (in
