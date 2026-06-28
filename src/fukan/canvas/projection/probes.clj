@@ -174,14 +174,16 @@
 (defmethod run-probe "drift"       [db _ focus] (probe-drift db focus))
 (defmethod run-probe "type-drift"  [db _ focus] (probe-type-drift db focus))
 
-(defn run
+(defn ^{:malli/schema [:=> [:cat :StructureDb :ProbeName] :Finding]}
+  run
   "Run probe `probe-name` against `target-db`, optionally scoped to `focus`
    (a node-set). Dispatches through `run-probe`; the :default method throws for an
    unregistered name."
   ([target-db probe-name] (run target-db probe-name nil))
   ([target-db probe-name focus] (run-probe target-db probe-name focus)))
 
-(defn run-all
+(defn ^{:malli/schema [:=> [:cat :StructureDb] :FindingMap]}
+  run-all
   "Run every registered probe leaf against `target-db` -> {probe-name finding}."
   [target-db]
   (into (sorted-map)

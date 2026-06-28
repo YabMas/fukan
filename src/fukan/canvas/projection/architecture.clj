@@ -26,7 +26,8 @@
     (str (format "  ◆ %-14s " sub-name) (str/join ", " mods)
          (when (seq deps) (str "   ⟶ " (str/join ", " deps))))))
 
-(defn architecture-overview
+(defn ^{:malli/schema [:=> [:cat :StructureDb] :string]}
+  architecture-overview
   "Render fukan's subsystems + modules + the :may-depend DAG (string)."
   [db]
   (let [subs  (->> (cq/q '[:find ?s ?sn :where [?s :structure/of :canvas.vocab.code.subsystem/Subsystem] [?s :entity/name ?sn]] db)

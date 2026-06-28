@@ -8,17 +8,20 @@
    `cozo-clj` exists; everything else speaks CozoScript strings + row vectors."
   (:require [cozo-clj.core :as cozo]))
 
-(defn open
+(defn ^{:malli/schema [:=> [:cat] :CozoDb]}
+  open
   "Open a fresh in-memory Cozo database."
   []
   (cozo/open-db))
 
-(defn close
+(defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
+  close
   "Close a Cozo database, releasing its native resources."
   [db]
   (cozo/close-db db))
 
-(defn q
+(defn ^{:malli/schema [:=> [:cat :CozoDb :string] [:vector :any]]}
+  q
   "Run CozoScript `script` against `db` and return its `:rows` (a vector of
    row-vectors). With a `params` map, the entries are bound as `$name` variables
    in the script (data crosses as JSON — no string interpolation needed).
@@ -27,7 +30,8 @@
   ([db script params]
    (:rows (cozo/query db script params))))
 
-(defn with-db
+(defn ^{:malli/schema [:=> [:cat [:=> [:catn [:db :CozoDb]] :any]] :any]}
+  with-db
   "Open a db, call `(f db)`, and close the db (even on throw). Returns f's value."
   [f]
   (let [db (open)]

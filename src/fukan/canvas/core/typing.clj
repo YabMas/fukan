@@ -29,7 +29,8 @@
 
 (defonce ^:private dialect (atom nil))
 
-(defn register-type-dialect!
+(defn ^{:malli/schema [:=> [:cat :any] :any]}
+  register-type-dialect!
   "Merge `d` (a bridge-fn map) into the registered dialect. Later registrations of
    the same key replace it; distinct keys compose."
   [d]
@@ -47,22 +48,26 @@
   (reset! dialect nil)
   nil)
 
-(defn render-type
+(defn ^{:malli/schema [:=> [:cat :StructureDb :any] :any]}
+  render-type
   "Render the type at `eid` in `db` to a code-form via the dialect, or nil."
   [db eid]
   (when-let [f (:render @dialect)] (f db eid)))
 
-(defn parse-type
+(defn ^{:malli/schema [:=> [:cat :any] :any]}
+  parse-type
   "Parse a code-form type into entity-maps via the dialect, or nil."
   [form]
   (when-let [f (:parse @dialect)] (f form)))
 
-(defn type-adheres?
+(defn ^{:malli/schema [:=> [:cat :any :any] :boolean]}
+  type-adheres?
   "Check a modelled type code-form against a realized code type-form via the dialect, or nil."
   [model-form code-form]
   (when-let [f (:adheres? @dialect)] (f model-form code-form)))
 
-(defn dialect-type-tag
+(defn ^{:malli/schema [:=> [:cat] :any]}
+  dialect-type-tag
   "The registered dialect's value-structure tag (its `:reflect-tag`) — the `:structure/of` of a
    reflected type node, or nil when no dialect is registered. Consumers that must distinguish a
    reflected type value (render it via `render-type`) from a named structure read this rather than
@@ -70,7 +75,8 @@
   []
   (:reflect-tag @dialect))
 
-(defn reflect-type
+(defn ^{:malli/schema [:=> [:cat :any] :any]}
+  reflect-type
   "Reflect a type `form` (a scalar keyword or a refined vector) into its content-deduped subgraph, or
    nil when no dialect is registered. The dialect contributes only its value-structure tag
    (`:reflect-tag`); the KERNEL builds — `value-literal->iv` constructs the value IV for that tag
@@ -83,7 +89,8 @@
           key (sub/value-content-key iv)]
       (assoc (a/emit-instances [[key iv]]) :id key))))
 
-(defn ^:export value-valid?
+(defn ^:export ^{:malli/schema [:=> [:cat :any :any] :boolean]}
+  value-valid?
   "Does scalar `value` satisfy the dialect type `form`? The refined-slot law bridge —
    generated slot laws reference this fn by symbol, late-bound through the registry.
    Unlike the other bridges this THROWS when no `:valid?` is registered: a law that

@@ -16,7 +16,8 @@
             [fukan.model.extraction :as extraction]
             [fukan.cozo.build :as cozo-build]))
 
-(defn build-model
+(defn ^{:malli/schema [:=> [:cat :Path] :CozoDb]}
+  build-model
   "Build the model — the unified native Cozo structure substrate. Requires the canvas namespaces
    (interning their instance-vars), gathers the extraction FACTS through the plug-point (when
    `code-root` names an existing source tree AND a fact extractor is registered), and assembles

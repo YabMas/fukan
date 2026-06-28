@@ -8,19 +8,22 @@
    `finding->text` is the trivial text projection of a finding — the legacy
    \"list of strings\" payload, revealed as the simplest projection (its notes).")
 
-(defn observation
+(defn ^{:malli/schema [:=> [:cat [:set :int] :keyword :string] :Observation]}
+  observation
   "One observed sub-graph: `focus` (a set of node eids), `as` (an open keyword tag),
    `note` (a human descriptor string)."
   [focus as note]
   {:focus focus :as as :note note})
 
-(defn finding
+(defn ^{:malli/schema [:=> [:cat :string [:sequential :Observation]] :Finding]}
+  finding
   "A probe's output: the lens name and its observations. A finding is a READING — gating is
    not a property of a reading; checking is the law/correspondence substrate's job."
   [lens observations]
   {:lens lens :observations (vec observations)})
 
-(defn finding->text
+(defn ^{:malli/schema [:=> [:cat :Finding] [:vector :string]]}
+  finding->text
   "The trivial text projection: a finding's observation notes, in order."
   [fdg]
   (mapv :note (:observations fdg)))

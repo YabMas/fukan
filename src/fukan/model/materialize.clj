@@ -156,7 +156,8 @@
   [db projection]
   (when-let [p (proj-node db projection)] (:val/context (cq/entity db p))))
 
-(defn render
+(defn ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName :Eid] :Instruction]}
+  render
   "Render `eid` under `projection` — produced under the projection's base (a
    contextualization renders through the base it `:contextualizes`). Per-node; a
    projection's framing `:context` is applied once at the view level (see `compose`)."
@@ -189,7 +190,8 @@
         ctx  (context-of db projection)]
     (if (and ctx (seq body)) (str ctx "\n\n" body) body)))
 
-(defn materialize-view
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Lens] :Instruction]}
+  materialize-view
   "Compose the focus of stored lens `lens-eid` under the Blueprint projection (the
    default implementation-spec target). A single-projection convenience."
   [db lens-eid]
@@ -203,25 +205,29 @@
   [db projection focus]
   (compose db projection focus))
 
-(defn materialize-finding
+(defn ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName :any] :Instruction]}
+  materialize-finding
   "The probe→projection composition seam: project the UNION of a finding's
    observation foci under `projection`. A probe emits foci; this renders them — so
    `probe → project` is substitution on the shared focus currency, no glue."
   [db projection finding]
   (materialize-over db projection (reduce into #{} (map :focus (:observations finding)))))
 
-(defn materialize-focus
+(defn ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName [:vector :Clause]] :Instruction]}
+  materialize-focus
   "Compose `projection` over an ad-hoc focus: the nodes selected by datalog `clauses`
    (binding ?n). The lensless entry — no stored Lens required."
   [db projection clauses]
   (materialize-over db projection (lens/focus-nodes db clauses)))
 
-(defn materialize-module
+(defn ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName :ModuleName] :Instruction]}
+  materialize-module
   "Compose `projection` over the Operations owned by `module-name`. The live by-module entry."
   [db projection module-name]
   (materialize-focus db projection [(list 'Operation '?n) (list 'in-module '?n module-name)]))
 
-(defn materialize-projection
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Projection] :Instruction]}
+  materialize-projection
   "The model-driven entry: materialize the modelled `Projection` node `proj-eid` — render
    its `:through` lens focus under its base, wrapped in its `:context` (if a
    contextualization). The Projection's `:maps`/`:context` are the intent manifest; the

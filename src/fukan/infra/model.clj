@@ -51,7 +51,9 @@
   []
   (:cozo @state))
 
-(defn get-src [] (:src @state))
+(defn ^{:malli/schema [:=> [:cat] :Path]}
+  get-src
+  [] (:src @state))
 
 (defn ^{:malli/schema [:=> [:cat] :StructureDb]} refresh-model
   "Rebuild the model from the last src path."

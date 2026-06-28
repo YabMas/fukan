@@ -74,7 +74,8 @@
   {:gates   Lens       ; the focus this check gates on — non-empty ⇒ violation
    :verdict :string})  ; what a non-empty focus means — the violation description
 
-(defn focus-nodes
+(defn ^{:malli/schema [:=> [:cat :StructureDb [:vector :Clause]] [:vector :Eid]]}
+  focus-nodes
   "Run datalog `:where` `clauses` (binding `?n` as the focused node) with the
    vocab-derived rules, returning the focus node-set (a set of eids). The shared
    evaluation engine behind both a stored lens and any ad-hoc focus."
@@ -82,7 +83,8 @@
   (set (cq/q (vec (concat '[:find [?n ...] :in $ %] [:where] clauses))
              db (s/vocab-rules))))
 
-(defn evaluate-lens
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] [:vector :Eid]]}
+  evaluate-lens
   "Run lens `lens-eid`'s own selection query — the `:val/query` payload it carries (its
    `:select` slot) — with the vocab-derived rules, returning the focus node-set (a set of
    eids). The selection is the focus stated runnably (model-native datalog), so it lives ON
@@ -97,7 +99,8 @@
     ;; string) — read it back when it came as a string.
     (focus-nodes db (cond-> clauses (string? clauses) edn/read-string))))
 
-(defn refine
+(defn ^{:malli/schema [:=> [:cat :StructureDb [:vector :Eid] [:vector :Clause]] [:vector :Eid]]}
+  refine
   "Narrow a `focus` (a node-set) to its members that ALSO match `clauses` (binding `?n`,
    evaluated with the vocab-derived rules) — lens-within-lens. The composable step: a
    focus refined by a further query, so acts CHAIN by passing a refined focus forward
@@ -105,7 +108,8 @@
   [db focus clauses]
   (set/intersection (set focus) (focus-nodes db clauses)))
 
-(defn run-checks
+(defn ^{:malli/schema [:=> [:cat :StructureDb] :any]}
+  run-checks
   "Evaluate every `Check` in `db`: a Check gates a Lens, so its violation is the gated lens's focus
    being NON-EMPTY — each focused node an offender. Returns a seq of
    `{:check <name> :verdict <str> :offenders <node-set>}`, the use-side dual of `structure/check`'s

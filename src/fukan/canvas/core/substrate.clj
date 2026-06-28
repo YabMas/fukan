@@ -16,20 +16,24 @@
 
 (defrecord InstanceValue [tag name doc scalars clauses value?])
 
-(defn instance-value? [x] (instance? InstanceValue x))
+(defn ^{:malli/schema [:=> [:cat :any] :boolean]}
+  instance-value? [x] (instance? InstanceValue x))
 
-(defn var-id
+(defn ^{:malli/schema [:=> [:cat :any] :string]}
+  var-id
   "The fully-qualified-var-name id of an instance-bearing var."
   [v]
   (let [m (meta v)] (str (ns-name (:ns m)) "/" (:name m))))
 
-(defn var-simple-name
+(defn ^{:malli/schema [:=> [:cat :any] :string]}
+  var-simple-name
   "The simple (unqualified) name of an instance-bearing var, as a string — the
    default `:entity/name` for an entity authored without an explicit name."
   [v]
   (name (:name (meta v))))
 
-(defn value-content-key
+(defn ^{:malli/schema [:=> [:cat :any] :any]}
+  value-content-key
   "A deterministic, purely structural identity for a ^:value InstanceValue.
    Returns a pr-str over [tag-name scalars-map slot-entries] where each entry is
    [rk-name [[label target-id] …]] with targets resolved recursively:

@@ -24,7 +24,8 @@
   [{:keys [scope owner]}]
   (case scope :global nil, nil owner, scope))
 
-(defn compile-law
+(defn ^{:malli/schema [:=> [:cat :any :any :any] :string]}
+  compile-law
   "Compile a law's offender query → a CozoScript program: the vocab rules in its reference
    closure, its own `:rules`, helper rules, then the `?` entry. A non-global law's first
    offender var is bound by a prepended scope clause: `[?o :structure/of tag]` for a DIRECT
@@ -80,7 +81,8 @@
          (filter (fn [[_ v]] (false? (typing/value-valid? target v))))
          (mapv (fn [[x _]] [(str x)])))))
 
-(defn check-structural
+(defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
+  check-structural
   "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
    = matched eid-string tuples) for laws that fire, and `{:structure :law :unsupported true}`
    for laws whose form (or a vocab rule they read) isn't compiled yet. A type-check law runs
@@ -103,7 +105,8 @@
                    (catch clojure.lang.ExceptionInfo _
                      {:structure tag :law (:desc law) :unsupported true})))))))))
 
-(defn check
+(defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
+  check
   "Run every law over the Cozo db `cdb` and return its VIOLATIONS — `[{:structure :law
    :offenders}]`, the same shape as `structure/check` (offenders are eid-string tuples).
    The Cozo replacement for `structure/check`. A law whose form isn't compilable yet

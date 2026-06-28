@@ -134,7 +134,8 @@
 
 ;; ── the data form (the authored surface, recovered) ──────────────────────────
 
-(defn instance-form
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Form]}
+  instance-form
   "The node at `eid` rendered back as its authored instance form — the def-emitting
    `(Tag name \"doc\"? {slot → value})` for a named entity, the anonymous expression
    `(Tag \"doc\"? {…})` for a value/unnamed node. The print-dual of the instance
@@ -163,7 +164,8 @@
                          (map pr-str v)) "]")
       flat)))
 
-(defn instance-text
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Text]}
+  instance-text
   "`instance-form`, formatted like the authored source: head line (tag, name,
    doc), then the slot map with aligned keys."
   [db eid]
@@ -186,7 +188,8 @@
               (str/join "\n"))
          ")")))
 
-(defn focus-text
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Focus] :Text]}
+  focus-text
   "A FOCUS rendered as its authored forms — the textual model explorer. `focus` is
    either datalog `:where` clauses (binding `?n`; evaluated with the vocab rules)
    or a collection of eids. Forms sort by (tag, name)."
@@ -206,7 +209,8 @@
     (instance-text db x)
     (pr-str x)))
 
-(defn violations-text
+(defn ^{:malli/schema [:=> [:cat :StructureDb [:vector :Violation]] :Text]}
+  violations-text
   "`check` output rendered with each offender QUOTED as its authored form — the
    law that fired and the instance that fired it, side by side."
   [db violations]

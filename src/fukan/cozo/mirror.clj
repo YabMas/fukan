@@ -53,7 +53,8 @@
           {:int #{} :str #{} :bool #{}}
           triples))
 
-(defn load-datoms
+(defn ^{:malli/schema [:=> [:cat :any] :CozoDb]}
+  load-datoms
   "Open a fresh Cozo db and load the `[e a v]` triples into the typed EAV relations;
    returns the open db (caller closes). The substrate WRITE the native build assembles into."
   [triples]
@@ -66,7 +67,8 @@
               {:rows (vec rows)})))
     cdb))
 
-(defn insert-datoms
+(defn ^{:malli/schema [:=> [:cat :CozoDb :any] :CozoDb]}
+  insert-datoms
   "INSERT `[e a v]` triples into an ALREADY-OPEN Cozo db (`:put`, not `:create`) — the additive
    analog of `load-datoms`, for grounding extra datoms (the native grammar reflection) onto an
    existing substrate. Returns `cdb`."

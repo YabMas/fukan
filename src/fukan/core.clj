@@ -19,7 +19,9 @@
           "--port" (recur remaining result) ; accepted but ignored — serving is paused
           (recur (rest args) (assoc result :src flag)))))))
 
-(defn -main [& args]
+(defn ^{:malli/schema [:=> [:cat [:sequential :string]] :nil]}
+  -main
+  [& args]
   (let [{:keys [src]} (parse-args args)]
     (when-not src
       (binding [*out* *err*]

@@ -21,7 +21,7 @@
 
 ;; ── term + name helpers ───────────────────────────────────────────────────────
 (defn- dvar? [t] (and (symbol? t) (str/starts-with? (name t) "?")))
-(defn cvar "?e → e" [t] (subs (name t) 1))
+(defn ^{:malli/schema [:=> [:cat :any] :string]} cvar "?e → e" [t] (subs (name t) 1))
 (defn- clit
   "A datalog literal → its CozoScript form, MATCHING the typed `triple` view: a keyword
    is the colon-stripped quoted string the mirror stores (:calls → 'calls'), a string is
@@ -157,7 +157,8 @@
      refs]))
 
 ;; ── the vocab-rule index + reachability closure ───────────────────────────────
-(defn vocab-index
+(defn ^{:malli/schema [:=> [:cat] :any]}
+  vocab-index
   "Compile `structure/vocab-rules` (the always-injected vocab rules) once into an index
    `rule-name → {:lines [cozo-defs] :refs #{names it calls}}`, merging a rule's multiple
    definitions. Uncompilable rules are skipped. The synthetic rules are merged in as seed."
@@ -202,7 +203,8 @@
               :else       [x n]))]
     (first (go form 0))))
 
-(defn compile-body
+(defn ^{:malli/schema [:=> [:cat :any :any :any] :any]}
+  compile-body
   "Compile `where` (a seq of clauses) + caller-supplied `extra-rules` (datalog rules) into
    `[rule-lines body-str]`: the vocab rules in the reference closure, then the extra rules,
    then any not-join/or-join helpers (deduped), and the joined where body. Shared by the
@@ -273,7 +275,8 @@
    scalar passes through unchanged."
   [cdb v] (if (lookup-ref? v) (resolve-lookup cdb v) v))
 
-(defn q
+(defn ^{:malli/schema [:=> [:cat :CozoDb :any] :any]}
+  q
   "Run datalog `query` over the Cozo db `db`: the compiled datalog subset fukan uses —
    relation/collection finds, `:in` of `$` + optional `%` rules + scalar params incl.
    `[attr val]` lookup-refs. EIDS come back as opaque STRING handles; leaf values in their
@@ -296,7 +299,8 @@
       (set rows))))
 
 ;; ── entity: eid → attribute map (the d/entity replacement) ─────────────────────
-(defn entity
+(defn ^{:malli/schema [:=> [:cat :CozoDb :any] :any]}
+  entity
   "Resolve `eid` to its attribute map (the `d/entity` replacement): reads the typed buckets,
    so values come back in their real Int/String/Bool types (eid is a string handle), returning
    `{attr-keyword value}` (nil for an unknown eid). `eid` may be an opaque string/number handle

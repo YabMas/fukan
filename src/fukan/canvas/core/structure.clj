@@ -31,7 +31,8 @@
 ;; set at parse time (`:type-form?`). The kernel knows no specific scalar types:
 ;; every value-slot check is routed through the dialect's `value-valid?`.
 
-(defn scalar-slot?
+(defn ^{:malli/schema [:=> [:cat :any] :boolean]}
+  scalar-slot?
   "True when a slot is a VALUE slot (its target is a type form — a scalar keyword or a
    refined vector — owned by the type dialect), as opposed to a structure-ref slot.
    Purely syntactic: set at parse time (`:type-form?`); the kernel knows no specific types."
@@ -44,8 +45,10 @@
 (defonce ^:private structures (atom {}))
 
 (defn ^:export register-structure! [sdef] (swap! structures assoc (:tag sdef) sdef) (:tag sdef))
-(defn all-structures [] (vals @structures))
-(defn structure-by-tag [tag] (get @structures tag))
+(defn ^{:malli/schema [:=> [:cat] [:vector :any]]}
+  all-structures [] (vals @structures))
+(defn ^{:malli/schema [:=> [:cat :keyword] :any]}
+  structure-by-tag [tag] (get @structures tag))
 
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
@@ -329,7 +332,8 @@
                    [(list 'def sym value)])
      :sym sym :tag tag}))
 
-(defn value-literal->iv
+(defn ^{:malli/schema [:=> [:cat :keyword :any] :any]}
+  value-literal->iv
   "Build a ^:value InstanceValue for value-structure `tag` from a data `literal`,
    recursing into relation targets via THEIR readers. The ONE value-construction
    path — used by reflection (a slot's type form → its Schema subgraph), so content
@@ -685,14 +689,16 @@
              (relation-slot-laws tag %))
           slots))
 
-(defn laws-of
+(defn ^{:malli/schema [:=> [:cat :any] :any]}
+  laws-of
   "Every law of structure `sdef` — the slot-derived cardinality/type laws plus its
    free `(law …)`s, the same set `check` runs. Public so an alternative engine (the
    Cozo law compiler) can evaluate the identical laws."
   [sdef]
   (concat (slot-laws sdef) (:laws sdef)))
 
-(defn direct-scope-tags
+(defn ^{:malli/schema [:=> [:cat [:vector :any]] :any]}
+  direct-scope-tags
   "Qualified tags whose instances carry `:structure/of` DIRECTLY, so a law scoped to one can be
    pinned ns-precisely (`[?o :structure/of tag]`) instead of riding the short-name rule. Excludes
    facets (`includes` targets — their members are reached via the inclusion rule, not a direct tag)
@@ -706,7 +712,8 @@
                 (remove facets))
           structures)))
 
-(defn vocab-rules
+(defn ^{:malli/schema [:=> [:cat] [:vector :Rule]]}
+  vocab-rules
   "The datalog rules derived from the live vocabulary (one per kind + per relation
    slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
    at domain altitude: `(Operation ?s) (in-module ?s \"…\") (calls ?s ?c)`."
@@ -719,7 +726,8 @@
 ;; cycle — `fukan.cozo.law` registers itself.
 (defonce ^:private check-engine (atom nil))
 
-(defn register-check-engine!
+(defn ^{:malli/schema [:=> [:cat :any] :nil]}
+  register-check-engine!
   "Register the `check` backend: `{:claims? (fn [db]→bool) :check (fn [db]→results)}`. When
    `:claims?` holds for the db passed to `check`, `:check` serves it, returning the
    `[{:structure :law :offenders}]` shape. The plug-point that backs `check` with the Cozo law
@@ -728,7 +736,8 @@
   (reset! check-engine engine)
   nil)
 
-(defn check
+(defn ^{:malli/schema [:=> [:cat :StructureDb] [:vector :Violation]]}
+  check
   "Run every registered structure's laws over the Cozo db `db` → `[{:structure :law :offenders}]`,
    through the registered check engine (the Cozo law engine, wired at load by `fukan.cozo.law`)."
   [db]

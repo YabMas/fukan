@@ -86,12 +86,14 @@
          (throw (ex-info (str "canvas-source: failed to load canvas namespace " ns-sym)
                          {:namespace ns-sym} e)))))
 
-(defn canvas-namespaces
+(defn ^{:malli/schema [:=> [:cat] [:vector :any]]}
+  canvas-namespaces
   "The auto-discovered canvas namespace symbols (public for inspection)."
   []
   (discover-canvas-namespaces))
 
-(defn require-canvas-namespaces!
+(defn ^{:malli/schema [:=> [:cat] [:vector :any]]}
+  require-canvas-namespaces!
   "Discover every canvas namespace and REQUIRE it (registering its vocabulary and interning
    its instance `def`s), returning the ns symbols. The native Cozo build's instance-var scan
    (`model->cozo`) reads `ns-interns`, so the namespaces must be loaded first — this is that

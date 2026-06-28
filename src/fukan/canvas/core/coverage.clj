@@ -12,7 +12,8 @@
    `prefix` + the lens's name. A project declares its convention; the Coverage law reads it."
   {:prefix :string})
 
-(defn ^:export reader-realizes?
+(defn ^:export ^{:malli/schema [:=> [:cat :string :string :string] :boolean]}
+  reader-realizes?
   "True when reader `rn` realizes the Lens named `ln` under convention `prefix` (rn = prefix+ln). The
    prefix-parameterized generalization of the old `probe-`-hardcoded predicate; compiled to Cozo via
    the predicate registry (`rn = concat(prefix, ln)`). Kept as the canonical definition + lint anchor."
@@ -40,7 +41,8 @@
                [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name ?ln]
                [(fukan.canvas.core.coverage/reader-realizes? ?rn ?p2 ?ln)])]))
 
-(defn uncovered-readers
+(defn ^{:malli/schema [:=> [:cat :StructureDb] :any]}
+  uncovered-readers
   "The LENS-COVERAGE worklist — extracted readers with no covering Lens, as a set of reader names.
    Reads the registered `Coverage` law's offenders (the single source of truth)."
   [db]

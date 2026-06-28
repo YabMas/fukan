@@ -14,7 +14,8 @@
 
 (defonce ^:private fact-extractor (atom nil))
 
-(defn register-fact-extractor!
+(defn ^{:malli/schema [:=> [:cat :FactExtractor] :Unit]}
+  register-fact-extractor!
   "Register the project's FACT extractor: a fn `code-root -> {:roots :var-usages}` (the
    engine-agnostic extraction facts the native Cozo build consumes). A project registers
    one; this replaces any previous."
@@ -22,7 +23,8 @@
   (reset! fact-extractor f)
   nil)
 
-(defn extract-facts
+(defn ^{:malli/schema [:=> [:cat :Path] :Facts]}
+  extract-facts
   "Run the registered fact extractor over `code-root`, returning its `{:roots :var-usages}`
    facts — or `{:roots [] :var-usages []}` when none is registered (a design-only build)."
   [code-root]

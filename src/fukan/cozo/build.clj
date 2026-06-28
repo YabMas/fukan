@@ -48,19 +48,22 @@
   (let [{:keys [nodes rels]} (assemble/emit-instances id+ivs)]
     (maps->datoms nodes rels 0)))
 
-(defn vars->cozo
+(defn ^{:malli/schema [:=> [:cat [:vector :any]] :CozoDb]}
+  vars->cozo
   "Build a Cozo substrate natively from instance-bearing `vars`:
    roots → native datoms → `mirror/load-datoms`. Returns the open Cozo db."
   [vars]
   (mirror/load-datoms (instances->datoms (roots-of vars))))
 
-(defn instances->cozo
+(defn ^{:malli/schema [:=> [:cat [:vector :any]] :CozoDb]}
+  instances->cozo
   "Build a Cozo substrate from explicit `[id InstanceValue]` roots (code-EMITTED instances,
    not interned vars) — the cozo analog of `assemble/assemble-instances`. Returns the open db."
   [id+ivs]
   (mirror/load-datoms (instances->datoms id+ivs)))
 
-(defn maps->cozo
+(defn ^{:malli/schema [:=> [:cat [:vector :any] [:vector :any]] :CozoDb]}
+  maps->cozo
   "Build a Cozo substrate directly from raw node/rel datom-MAPS (not InstanceValues) — the
    cozo analog of `(-> (sub/create) (d/db-with node-maps) (d/db-with rel-maps))`, the
    low-level entry for hand-building a substrate (e.g. a test exercising a rule in isolation).
@@ -101,7 +104,8 @@
         :when  (sub/instance-value? (deref v))]
     v))
 
-(defn nss->cozo
+(defn ^{:malli/schema [:=> [:cat [:vector :symbol]] :CozoDb]}
+  nss->cozo
   "Build a Cozo substrate natively from the instance-vars of the (already-loaded)
    `ns-syms` — the namespace-scan entry to `vars->cozo`. Returns the open Cozo db."
   [ns-syms]
@@ -171,7 +175,8 @@ alle[e] := *t_bool[e, _, _]
      (concat (for [id new-ids, [a v] (by-id id) :when (some? v)] [(new-eid id) a v])
              (for [[id r] rel-by-id, [a v] r] [(rel-eid id) a (ref->eid v)])))))
 
-(defn with-grammar
+(defn ^{:malli/schema [:=> [:cat :CozoDb :any] :CozoDb]}
+  with-grammar
   "Reflect the model's grammar into the already-built Cozo db `cdb`. UPSERT by `:entity/id`: a
    reflected node whose id already exists (a `^:value` Schema shared with the model) REUSES that
    eid; only the genuinely-new grammar nodes (Structure/Vocabulary/Law) take fresh eids above the
@@ -193,7 +198,8 @@ alle[e] := *t_bool[e, _, _]
      (concat (for [id new-ids, [a v] (by-id id) :when (some? v)] [(new-eid id) a v])
              (for [[id r] rel-by-id, [a v] r] [(rel-eid id) a (ref->eid v)])))))
 
-(defn model->cozo
+(defn ^{:malli/schema [:=> [:cat [:vector :symbol] [:map]] :CozoDb]}
+  model->cozo
   "Native FULL build: the instance-vars of canvas `ns-syms` + the
    extraction `{:roots :var-usages}` facts → one native Cozo substrate, with the
    `:calls` graph grounded and the grammar reflected. Assembling canvas + extraction

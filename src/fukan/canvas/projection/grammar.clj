@@ -110,7 +110,8 @@
             (when rules [:rules rules])
             [:offenders offenders :where where])))
 
-(defn structure-form
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Form]}
+  structure-form
   "The reified Structure at `eid` rendered back as its `defstructure` data form —
    the print-dual of the authoring surface. Laws carry their datalog unquoted
    (this is the PARSED form); `^:value` rides the name symbol's metadata."
@@ -151,7 +152,8 @@
          (str/join "\n")
          (#(str % ")")))))
 
-(defn vocabulary-primer
+(defn ^{:malli/schema [:=> [:cat :StructureDb :VocabName] :Primer]}
+  vocabulary-primer
   "One vocabulary (a grammar namespace) rendered as its defstructure forms."
   [db vocab-name]
   (let [members (->> (cq/q '[:find ?c ?n :in $ ?vn
@@ -166,7 +168,8 @@
               (concat [(str "━━ " vocab-name " — " (count members) " structures ━━") ""]
                       (interpose "" (map #(fmt-structure db %) members))))))
 
-(defn grammar-primer
+(defn ^{:malli/schema [:=> [:cat :StructureDb] :Primer]}
+  grammar-primer
   "The full GRAMMAR PRIMER: every vocabulary in the model, rendered live from the
    reified grammar — the canvas's language reference, derived not maintained."
   [db]

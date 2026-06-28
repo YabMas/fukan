@@ -62,7 +62,8 @@
          (:clauses iv))]
     [nodes rels]))
 
-(defn emit-instances
+(defn ^{:malli/schema [:=> [:cat [:vector :any]] :any]}
+  emit-instances
   "Walk explicit `[id InstanceValue]` roots into `{:nodes [...] :rels [...]}` maps
    WITHOUT transacting — for builders that merge into an EXISTING db (e.g. the
    grammar reflector). Inline-value children get owner-path / content-key ids, so

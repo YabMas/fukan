@@ -20,7 +20,8 @@
 
 (defn- rule-sym [kw] (symbol (name kw)))
 
-(defn derive-rules
+(defn ^{:malli/schema [:=> [:cat [:vector :StructureDef] :Pred] [:vector :Rule]]}
+  derive-rules
   "Datascript rules derived from `structures` (a seq of structure defs):
      kind  K        → (K ?e)     ⇐ [?e :structure/of K]      (concrete structures only)
      incl  C⊇F      → (F ?e)     ⇐ (C ?e)                    (one per (includes F))
