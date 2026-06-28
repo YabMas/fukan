@@ -80,7 +80,7 @@
 (s/defrelation :op-twin
   "an authored Operation ?a and its extracted code twin ?b — same name, corresponding module"
   '[?a ?b]
-  '[[?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
+  '[(authored ?a) [?a :entity/name ?n]
     (in-module ?a ?cm)
     [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :val/extracted true] [?b :entity/name ?n]
     (in-module ?b ?km)
@@ -212,6 +212,9 @@
    the kernel now allows; the query negates it under stratified negation."
   (into rules/substrate-rules
         '[[(op-ext-twin ?a ?e)
+           ;; the authored-op guard is INLINED here (not the `authored` defrelation): this ruleset is
+           ;; `(into substrate-rules …)`, which carries only the fixed substrate rules — defrelations
+           ;; are injected solely by `check`/`vocab-rules`, not into a hand-built `cq/q` ruleset.
            [?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true])
            [?a :entity/name ?n] (in-module ?a ?am)
            [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]

@@ -65,6 +65,16 @@
    ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
    :sig       [:? :string]})
 
+;; `authored` — the single home of the "an Operation, not extracted from code" guard the
+;; correspondence laws/lenses (and the op pairings `op-twin`/`op-ext-twin`) each quantify over.
+;; A derived UNARY membership injected into every law/query (by `check`, like the vocab-derived
+;; rules); non-recursive, so it pays no fixpoint. Its dual — an EXTRACTED op — is a plain
+;; `[?o :val/extracted true]` and needs no rule.
+(s/defrelation :authored
+  "an AUTHORED Operation ?o — a self-model's intent (not extracted from code)"
+  '[?o]
+  '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])])
+
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
 
 (defstructure Realization
@@ -77,7 +87,7 @@
     :scope :global
     :offenders '[?s]
     :where '[(Operation ?x) [?x :val/extracted true]                  ; guard: some code is extracted
-             (Operation ?s) (not [?s :val/extracted true])            ; an authored operation …
+             (authored ?s)                                            ; an authored operation …
              (not-join [?s] (op-twin ?s ?e))]))                       ; … with no extracted twin
 
 (defstructure Encapsulation
@@ -117,7 +127,7 @@
     :scope :global
     :offenders '[?o]
     :where '[[?tb :structure/of ::TrustBoundary] [?tbr :rel/from ?tb] [?tbr :rel/kind :kind] [?tbr :rel/to ?k]
-             [?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])
+             (authored ?o)
              [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?sch]
              [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
              (op-twin ?o ?e)

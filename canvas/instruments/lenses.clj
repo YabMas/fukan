@@ -20,7 +20,7 @@
                    :select ["every relation source" '[[?r :rel/from ?n]]]})
 (Lens consistency {:focus  "where contracts and structure align — or drift"
                    :select ["the contract-bearing authored operations"
-                            '[(Operation ?n) (not [?n :val/extracted true])]]})
+                            '[(authored ?n)]]})
 (Lens callers     {:focus  "the call-graph callers — nodes that call something"
                    :select ["the call-graph callers" '[(calls ?n ?callee)]]})
 (Lens purity      {:focus  "operations that directly perform a consequential effect"
@@ -35,10 +35,10 @@
                    :select ["authored operations with no extracted twin"
                             ;; "no extracted twin" is exactly the `op-twin` defrelation negated — the
                             ;; same join the Realization law uses: a not-join over the rule.
-                            '[(Operation ?n) (not [?n :val/extracted true]) (not-join [?n] (op-twin ?n ?o))]]})
+                            '[(authored ?n) (not-join [?n] (op-twin ?n ?o))]]})
 (Lens type-drift  {:focus  "spec ↔ code TYPE divergence — where a modelled signature and its realizing function disagree"
                    :select ["authored operations whose realizing twin carries a type annotation"
-                            '[(Operation ?n) (not [?n :val/extracted true]) (named ?n ?nm) (in-module ?n ?cm)
+                            '[(authored ?n) (named ?n ?nm) (in-module ?n ?cm)
                               (Operation ?o) [?o :val/extracted true] (named ?o ?nm) (in-module ?o ?km)
                               [(canvas.vocab.code.module/module-corresponds? ?cm ?km)]
                               [?o :val/sig _]]]})

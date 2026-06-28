@@ -84,7 +84,7 @@
     :offenders '[?o]
     :rules '[[(reaches-effect ?op ?en) [?pr :rel/from ?op] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]]
              [(reaches-effect ?op ?en) [?cr :rel/from ?op] [?cr :rel/kind :calls] [?cr :rel/to ?mid] (reaches-effect ?mid ?en)]]
-    :where '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])
+    :where '[(authored ?o)
              (op-twin ?o ?e)
              (reaches-effect ?e ?en)
              (not-join [?o ?en]
