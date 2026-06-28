@@ -57,7 +57,7 @@
                 (:val/max ent)   (assoc :max (:val/max ent))
                 (:val/regex ent) (assoc :re  (:val/regex ent)))]
     (case kind
-      ("int" "string" "boolean" "keyword" "double" "any" "nil")
+      ("int" "string" "boolean" "keyword" "double" "symbol" "any" "nil")
       (if (seq props) [(keyword kind) props] (keyword kind))
       ("vector" "set" "sequential")
       [(keyword kind) (render db (first (children db eid :of)))]
@@ -200,7 +200,7 @@
 (defn ^:export read-malli
   "Expand a native malli data-literal into Schema construction clauses (one level).
    Accepts only valid malli structural syntax:
-     :int :string :boolean :keyword :double   scalar leaf
+     :int :string :boolean :keyword :double :symbol   scalar leaf
      :any :nil                                 opaque/void scalar leaves
      [:int {:min _ :max _}] / [:string {:re}]  scalar + constraint leaves
      [:vector|:set|:sequential X]              collection of element X
