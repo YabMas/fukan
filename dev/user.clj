@@ -242,23 +242,22 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn type-drift
-  "TYPE correspondence (model↔code), two readings side by side:
-   ADHERENCE — modelled signatures that disagree with the code's :malli/schema (checked only where the
-   code is annotated); COVERAGE — public modelled ops whose realizing code carries NO :malli/schema (the
-   annotation worklist that gives adherence its teeth). Both empty ⇔ every public modelled op's code is
-   type-annotated AND adheres."
+  "TYPE correspondence (model↔code) readings. Coverage is now an ENFORCED law (`TypeCoverage`) — it
+   surfaces in (check); this shows the two non-gating readings: ADHERENCE (modelled signature vs the
+   code's :malli/schema) and PRECISION (public ops whose signature is still :any — under-typed, the
+   next layer to precise)."
   []
   (if-let [m (infra-model/get-model)]
     (let [drifted (operation/type-drifted-operations m)
-          uncov   (operation/type-uncovered-operations m)]
-      (println "ADHERENCE — modelled signature disagrees with the code's :malli/schema (where annotated):")
+          under   (operation/undertyped-operations m)]
+      (println "ADHERENCE — modelled signature disagrees with the code's :malli/schema:")
       (if (empty? drifted)
-        (println "  (none — every annotated function adheres to its modelled type)")
+        (println "  (none — every code signature adheres to its modelled type)")
         (doseq [on (sort drifted)] (println "  " on)))
-      (println (format "%nCOVERAGE — %d public modelled op(s) whose realizing code carries no :malli/schema:" (count uncov)))
-      (if (empty? uncov)
-        (println "  (none — every public modelled op's code declares its type)")
-        (doseq [on (sort uncov)] (println "  " on))))
+      (println (format "%nPRECISION — %d public op(s) whose signature is still :any (under-typed):" (count under)))
+      (if (empty? under)
+        (println "  (none — every public signature is fully precise)")
+        (doseq [on (sort under)] (println "  " on))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn throw-spread

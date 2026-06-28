@@ -152,6 +152,21 @@
              (op-twin ?o ?e)
              [?pr :rel/from ?e] [?pr :rel/kind :performs] [?pr :rel/to ?eff] [?eff :val/name "throws"]]))
 
+(defstructure TypeCoverage
+  "Law-holder for MANDATORY type-signature coverage — the enforced CODE-side peer of `SignatureCompleteness`.
+   Every PUBLIC modelled Operation (on a Module's `:exposes` surface, with an extracted twin) must have its
+   realizing function carry a `:malli/schema` (stamped `:val/sig` by extraction). The design already mandates
+   a signature; this mandates that the IMPLEMENTATION carries one too, so design↔code type correspondence is
+   always CHECKABLE, never silently absent. `:scope :global` (offenders are the modelled Operations); vacuous
+   on a model-only build (requires an `op-twin`). A faithful `:any` is a PRESENT signature — under-typing is a
+   separate, non-blocking concern (`undertyped-operations`), not a coverage gap."
+  (law "every public modelled operation's realizing code carries a type signature (:malli/schema)"
+    :scope :global
+    :offenders '[?o]
+    :where '[(op-twin ?o ?e)
+             [?xr :rel/kind :exposes] [?xr :rel/to ?o]                ; a public modelled op …
+             (not-join [?e] [?e :val/sig ?s])]))                      ; … whose code declares no signature
+
 (defn drifted-operations
   "The AUTHORED operations in `db` with no same-named extracted operation, as a set of
    names. Empty ⇔ the model is fully realized in code. The focusable surface of the
@@ -240,19 +255,29 @@
        (map second) set))
 
 (defn type-uncovered-operations
-  "The TYPE-COVERAGE worklist — PUBLIC modelled Operations (on a Module's `:exposes` surface, with an
-   extracted twin) whose realizing code carries NO `:malli/schema` (no `:val/sig`), as a set of names.
-   The lever that gives `type-drifted-operations` its teeth: until the code is annotated, the adherence
-   reading has almost nothing to check (it compares only where the code declares a signature). The TYPE
-   peer of `uncovered-public-operations` (which drives modelling coverage); this drives ANNOTATION
-   coverage. Empty ⇔ every public modelled op's realizing code declares its type. Twin via `op-twin`."
+  "The TYPE-COVERAGE worklist — PUBLIC modelled Operations whose realizing code carries NO `:malli/schema`,
+   as a set of names. Empty ⇔ every public modelled op's realizing code declares its type. Now ENFORCED:
+   reads the single source of truth (the registered `TypeCoverage` law)."
   [db]
-  (->> (cq/q '[:find ?on :in $ %
-               :where (op-twin ?o ?e) [?o :entity/name ?on]
-                      [?xr :rel/kind :exposes] [?xr :rel/to ?o]
-                      (not-join [?e] [?e :val/sig ?s])]
+  (let [desc (-> (s/structure-by-tag ::TypeCoverage) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (cq/entity db %)))
+         set)))
+
+(defn undertyped-operations
+  "The PRECISION worklist — PUBLIC modelled Operations whose declared signature still contains an `:any`
+   (an under-typed parameter or result), as a set of names. Distinct from coverage (the signature is
+   PRESENT but imprecise — `:any` is an honest-but-weak type); the NEXT layer of the type story. A READING,
+   not a law: `:any` is a legitimate declaration, so under-typing is a worklist, not a violation. Empty ⇔
+   every public op's signature is fully precise. Reads the rendered signature, flagging any reachable `:any`."
+  [db]
+  (->> (cq/q '[:find ?o ?on :in $ %
+               :where (authored ?o) [?o :entity/name ?on] [?xr :rel/kind :exposes] [?xr :rel/to ?o]]
              db (s/vocab-rules))
-       (map first) set))
+       (filter (fn [[oeid _]] (some #{:any} (tree-seq coll? seq (operation-sig db oeid)))))
+       (map second) set))
 
 (defn totality-violations
   "The ENFORCED TOTALITY offenders — trusted-core reader Operations (their :in references a declared

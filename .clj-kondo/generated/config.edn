@@ -15,6 +15,7 @@
    canvas.vocab.code.operation/SignatureCompleteness hooks.fukan.structure/instance
    canvas.vocab.code.operation/Totality hooks.fukan.structure/instance
    canvas.vocab.code.operation/TrustBoundary hooks.fukan.structure/instance
+   canvas.vocab.code.operation/TypeCoverage hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/ModuleArchitecture hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
    canvas.vocab.grammar/Law hooks.fukan.structure/instance
