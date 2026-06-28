@@ -10,5 +10,6 @@
 (Module core
   "The CLI entry point / composition root — drives the model lifecycle."
   (Operation -main "Entry point: build the held Model from a src path, then hand off."
-    {:performs  [:io :require :state :throws]
+    {:signature [:=> [:catn [:args [:sequential :string]]] :nil]   ; CLI args (a seq of strings) → nil (a side-effecting entry point)
+     :performs  [:io :require :state :throws]
      :delegates [infra/load-model]}))

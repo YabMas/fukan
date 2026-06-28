@@ -75,6 +75,25 @@
   '[?o]
   '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])])
 
+;; ── authored-side discipline: the public surface declares its output type ─────
+
+(defstructure SignatureCompleteness
+  "Law-holder for the AUTHORED-SIDE typing discipline (no instances; it carries the assertion). Every
+   PUBLIC authored Operation — one on a Module's `:exposes` surface — must declare an OUTPUT TYPE
+   (`:out`). ABSOLUTE — there is no opt-out: every operation returns SOMETHING, and that something has a
+   type, down to `:nil` (a side-effecting procedure) or `:any` (a genuinely dynamic return). A missing
+   `:out` is an undeclared contract, never a legitimate abstention. OUTPUT, not full signature: a nullary
+   op legitimately has no `:in`, so input-presence is unprovable; the output type is the part every op
+   has and the part the public contract turns on. Scoped to the public surface (mirroring `Encapsulation`):
+   internal ops (`:child`, not `:exposes`) are sketch-only by the boundary-sketch discipline, so their
+   signature is not a contract. `:scope :global` (offenders are Operations)."
+  (law "every public authored operation declares an output type"
+    :scope :global
+    :offenders '[?o]
+    :where '[(authored ?o)
+             [?xr :rel/kind :exposes] [?xr :rel/to ?o]                ; on a Module's public surface
+             (not-join [?o] [?or :rel/from ?o] [?or :rel/kind :out])]))  ; … with no declared output type
+
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
 
 (defstructure Realization
@@ -166,6 +185,18 @@
    `Encapsulation` law). `:val/private`/`:val/export`/`:val/test-support` are settled exclusions."
   [db]
   (let [desc (-> (s/structure-by-tag ::Encapsulation) :laws first :desc)]
+    (->> (s/check db)
+         (filter #(= desc (:law %)))
+         (mapcat :offenders) (map first)
+         (map #(:entity/name (cq/entity db %)))
+         set)))
+
+(defn untyped-operations
+  "The SIGNATURE worklist — PUBLIC authored Operations (on a Module's `:exposes` surface) with no
+   declared output type (`:out`), as a set of names. Empty ⇔ every public surface op declares its
+   output. Reads the single source of truth (the registered `SignatureCompleteness` law)."
+  [db]
+  (let [desc (-> (s/structure-by-tag ::SignatureCompleteness) :laws first :desc)]
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)

@@ -12,6 +12,7 @@
    canvas.vocab.code.operation/Encapsulation hooks.fukan.structure/instance
    canvas.vocab.code.operation/Operation hooks.fukan.structure/instance
    canvas.vocab.code.operation/Realization hooks.fukan.structure/instance
+   canvas.vocab.code.operation/SignatureCompleteness hooks.fukan.structure/instance
    canvas.vocab.code.operation/Totality hooks.fukan.structure/instance
    canvas.vocab.code.operation/TrustBoundary hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/ModuleArchitecture hooks.fukan.structure/instance

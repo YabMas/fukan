@@ -14,12 +14,9 @@
 (Module probes
   "The live run/run-all dispatch surface over the implemented probe leaves."
   (Kind ProbeName [:enum "survey" "patterns" "consistency" "callers" "integrity" "coverage" "drift" "type-drift"])
-  (Kind Finding
-    [:map [:lens :string]
-          [:observations [:vector [:map [:focus [:set :int]] [:as :keyword] [:note :string]]]]])
-  (Kind FindingMap [:map-of ProbeName Finding])
+  (Kind FindingMap [:map-of ProbeName finding/Finding])    ; Finding is owned by the finding module (adopted by name)
   (Operation run "Dispatch a named probe over a target db → a finding."
-    {:signature [:=> [:catn [:target-db substrate/StructureDb] [:probe-name ProbeName]] Finding]
+    {:signature [:=> [:catn [:target-db substrate/StructureDb] [:probe-name ProbeName]] finding/Finding]
      :performs  [:throws]
      :delegates [kernel/check finding/finding finding/observation query/q]})
   (Operation run-all "Run every implemented probe leaf → a map of findings."
