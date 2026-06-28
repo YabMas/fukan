@@ -241,6 +241,26 @@
       (doseq [[on d] (sort-by key p)] (println (format "  %-26s %s" on (sort (:phantom d))))))
     (println "No model loaded yet. Use (go) first.")))
 
+(defn type-drift
+  "TYPE correspondence (model↔code), two readings side by side:
+   ADHERENCE — modelled signatures that disagree with the code's :malli/schema (checked only where the
+   code is annotated); COVERAGE — public modelled ops whose realizing code carries NO :malli/schema (the
+   annotation worklist that gives adherence its teeth). Both empty ⇔ every public modelled op's code is
+   type-annotated AND adheres."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [drifted (operation/type-drifted-operations m)
+          uncov   (operation/type-uncovered-operations m)]
+      (println "ADHERENCE — modelled signature disagrees with the code's :malli/schema (where annotated):")
+      (if (empty? drifted)
+        (println "  (none — every annotated function adheres to its modelled type)")
+        (doseq [on (sort drifted)] (println "  " on)))
+      (println (format "%nCOVERAGE — %d public modelled op(s) whose realizing code carries no :malli/schema:" (count uncov)))
+      (if (empty? uncov)
+        (println "  (none — every public modelled op's code declares its type)")
+        (doseq [on (sort uncov)] (println "  " on))))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn throw-spread
   "Partiality spread: ops that THROW directly (mostly ① parse-edge validators) vs ops that reach :throws
    only TRANSITIVELY via a call (the ② propagation surface that containment would collapse)."

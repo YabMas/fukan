@@ -239,6 +239,21 @@
                         (edn/read-string (:val/sig (cq/entity db o)))))))
        (map second) set))
 
+(defn type-uncovered-operations
+  "The TYPE-COVERAGE worklist — PUBLIC modelled Operations (on a Module's `:exposes` surface, with an
+   extracted twin) whose realizing code carries NO `:malli/schema` (no `:val/sig`), as a set of names.
+   The lever that gives `type-drifted-operations` its teeth: until the code is annotated, the adherence
+   reading has almost nothing to check (it compares only where the code declares a signature). The TYPE
+   peer of `uncovered-public-operations` (which drives modelling coverage); this drives ANNOTATION
+   coverage. Empty ⇔ every public modelled op's realizing code declares its type. Twin via `op-twin`."
+  [db]
+  (->> (cq/q '[:find ?on :in $ %
+               :where (op-twin ?o ?e) [?o :entity/name ?on]
+                      [?xr :rel/kind :exposes] [?xr :rel/to ?o]
+                      (not-join [?e] [?e :val/sig ?s])]
+             db (s/vocab-rules))
+       (map first) set))
+
 (defn totality-violations
   "The ENFORCED TOTALITY offenders — trusted-core reader Operations (their :in references a declared
    TrustBoundary) whose realizing code is PARTIAL, as a set of op names. Empty ⇔ the modelled trusted
