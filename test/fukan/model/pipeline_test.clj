@@ -184,7 +184,7 @@
   (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
     (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Grouping) "lens"))
-      (is (set/subset? #{"survey" "patterns" "consistency" "callers" "drift"}
+      (is (set/subset? #{"everything" "relations" "operations" "effectful-operations" "unrealized-operations"}
                        (names-of db :Lens))))))
 
 (deftest projection-subsystem-modelled-as-target-representations
@@ -193,13 +193,13 @@
       (is (contains? (names-of db :Grouping) "projection"))
       ;; Blueprint (code) + DriftClose (instructions — instruct ⊂ projection); more to come
       (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
-      ;; a projection composes lens ∘ act too: Blueprint renders THROUGH the survey lens
+      ;; a projection composes lens ∘ act too: Blueprint renders THROUGH the everything lens
       (is (seq (cq/q '[:find ?l
                       :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
                              [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
-                             [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "survey"]]
+                             [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "everything"]]
                     db))
-          "Blueprint renders through the survey lens")
+          "Blueprint renders through the everything lens")
       ;; a projection is built from mappings (value-typed source→artifact pairs)
       (is (seq (cq/q '[:find ?mp
                       :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
@@ -210,16 +210,16 @@
           "the Blueprint projection maps a function → a defn"))))
 
 (deftest a-lens-is-reused-across-acts
-  (testing "the payoff: ONE drift lens is a shared focus — the read focus AND the drift-close projection's focus"
+  (testing "the payoff: ONE unrealized-operations lens is a shared focus — rendered by the DriftClose projection"
     (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (cq/q '[:find ?l :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "drift"]] db)))
-          "there is exactly one drift lens node")
+      (is (= 1 (count (cq/q '[:find ?l :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "unrealized-operations"]] db)))
+          "there is exactly one unrealized-operations lens node")
       (is (seq (cq/q '[:find ?l
-                      :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "drift"]
+                      :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "unrealized-operations"]
                              ;; rendered by a projection (drift-close) THROUGH the same focus
                              [?pj :structure/of :fukan.canvas.core.lens/Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
                     db))
-          "the one drift focus is rendered by the DriftClose projection"))))
+          "the one unrealized-operations focus is rendered by the DriftClose projection"))))
 
 (deftest projection-that-is-neither-base-nor-contextualization-is-caught
   (testing "a projection with neither mappings nor a contextualized base trips the flavour law"

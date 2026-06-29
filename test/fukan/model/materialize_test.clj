@@ -4,10 +4,10 @@
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
             ;; the lens act (the grammar Lens/Projection/Mapping + the engine) + the real
-            ;; self-model instance vars an ad-hoc contextualization composes over (Blueprint, survey)
+            ;; self-model instance vars an ad-hoc contextualization composes over (Blueprint, everything)
             [fukan.canvas.core.lens :as lens :refer [Lens Projection Mapping]]
             [canvas.instruments.projections :refer [Blueprint]]
-            [canvas.instruments.lenses :refer [survey]]
+            [canvas.instruments.lenses :refer [everything]]
             ;; composition root: registers the FACT extractor (so model* can fold extracted code) +
             ;; the Cozo check engine, and loads the Clojure extractor (the Operation kind-rule the
             ;; coverage/drift lenses reference + the drift lens's correspondence predicate)
@@ -31,7 +31,7 @@
   {:select '[(Operation ?n) (in-module ?n "no-such-module")]})
 
 ;; an ad-hoc contextualization of the SHIPPED Blueprint — no Refactor renderer exists.
-;; projection/Blueprint (+ its survey lens) is included in the assembled fragment so its
+;; projection/Blueprint (+ its everything lens) is included in the assembled fragment so its
 ;; var-ref resolves; union with the model then dedups it.
 (Lens ^{:name "stages"} acb-stages "x"
   {:select '[(Operation ?n) (in-module ?n "target-clojure")]})
@@ -132,19 +132,19 @@
 (deftest shipped-lenses-with-queries-are-evaluable
   (testing "every retrofitted self-model lens resolves to a node-set (no prose-only throw)"
     (let [db (model* "test/fixtures/target/sample.clj")]   ; sample's Operations extracted in, so drift resolves
-      ;; the predicate the drift lens query invokes
+      ;; the predicate the unrealized-operations lens query invokes
       (is (corr/module-corresponds? "core-structure" "fukan.canvas.core.structure"))
-      (doseq [ln ["survey" "patterns" "consistency" "callers" "drift"]]
+      (doseq [ln ["everything" "relations" "operations" "effectful-operations" "unrealized-operations"]]
         (let [focus (lens/evaluate-lens db (by-kind-name db :Lens ln))]
           (is (set? focus) (str "lens " ln " evaluates to a node-set"))))
-      (is (seq (lens/evaluate-lens db (by-kind-name db :Lens "survey")))
-          "survey (whole model) is non-empty"))))
+      (is (seq (lens/evaluate-lens db (by-kind-name db :Lens "everything")))
+          "everything (whole model) is non-empty"))))
 
 (deftest materialize-projection-runs-the-shipped-blueprint
-  (testing "Blueprint (through the now-query-bearing survey lens) materializes the model's Operations"
+  (testing "Blueprint (through the everything lens) materializes the model's Operations"
     (let [db  (model*)
           out (m/materialize-projection db (by-kind-name db :Projection "Blueprint"))]
-      ;; survey selects the whole model; compose renders only the kinds Blueprint covers
+      ;; everything selects the whole model; compose renders only the kinds Blueprint covers
       ;; (named Operations), not every node as a bare name
       (is (str/includes? out "Implement `extract`"))
       (is (str/includes? out "Implement `check`") "Operations from across modules are projected")
@@ -168,9 +168,9 @@
 
 (deftest a-context-composes-over-any-base
   (testing "the same mechanism composes Blueprint with an arbitrary context — e.g. a refactor framing"
-    (let [;; the fragment includes Blueprint (+ its survey lens) so the contextualizes var-ref resolves;
+    (let [;; the fragment includes Blueprint (+ its everything lens) so the contextualizes var-ref resolves;
           ;; folding onto the model then dedups them by :entity/id
-          db  (build/fold-vars->cozo (model*) [#'acb-stages #'acb-Refactor #'Blueprint #'survey])
+          db  (build/fold-vars->cozo (model*) [#'acb-stages #'acb-Refactor #'Blueprint #'everything])
           out (m/materialize-projection db (by-kind-name db :Projection "Refactor"))]
       (is (str/includes? out "Refactor the existing implementation") "the refactor context frames the output")
       (is (str/includes? out "Implement `extract`")
@@ -200,7 +200,7 @@
 (deftest reading-foci-compose-into-a-projection
   (testing "a reading's observation foci flow straight into another projection (the seam)"
     (let [db      (pipeline/build-model nil)
-          finding (m/read-projection db (by-kind-name db :Projection "Survey")) ; whole-model read → foci = all nodes by kind
+          finding (m/read-projection db (by-kind-name db :Projection "Patterns")) ; recurring triplets → foci = relations + their endpoints
           out     (m/materialize-finding db "Blueprint" finding)]
       (is (string? out) "the projection renders the finding's union focus")
       (is (str/includes? out "Implement")

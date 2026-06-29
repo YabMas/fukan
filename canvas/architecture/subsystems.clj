@@ -54,8 +54,8 @@
 (Subsystem projection
   "Graph → artifacts: materialization (implementation specs, docs, AND the reading Findings) + the
    Finding output type + the instance/grammar print-duals + the system-map overview. The readings —
-   survey/patterns/consistency/callers — are Projections whose target artifact is a Finding, rendered
-   through their lens by materialize/render-finding; there is no separate probe/reading faculty."
+   patterns/consistency — are Projections whose target artifact is a Finding, rendered through their
+   lens by materialize/render-finding; there is no separate probe/reading faculty."
   {:child [materialize finding-faculty projection-instance projection-grammar architecture] :may-depend [kernel]})
 
 (Subsystem orchestration

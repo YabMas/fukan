@@ -260,17 +260,6 @@
 
 (defn- kw [x] (some-> x keyword))   ; the Cozo mirror stringifies :structure/of / :rel/kind
 
-(defn- survey-finding
-  "Structural overview: one observation per structure kind in the focus, its sub-focus those nodes."
-  [db focus]
-  (let [in? (set focus)]
-    (f/finding "Survey"
-      (->> (cq/q '[:find ?e ?k :where [?e :structure/of ?k]] db)
-           (filter (fn [[e _]] (in? e)))
-           (reduce (fn [m [e k]] (update m k (fnil conj #{}) e)) {})
-           (sort-by (comp - count val))
-           (mapv (fn [[k es]] (f/observation es :count (str (count es) " " (name (kw k))))))))))
-
 (defn- patterns-finding
   "Recurring structures: one observation per structural triplet (source-tag, rel-kind, target-tag)
    borne by >1 focused relation; the sub-focus is each matching relation plus its endpoints."
@@ -313,21 +302,6 @@
                    (f/observation nodes :ambiguity
                      (str sn " in " (count mods) " modules: " (str/join ", " (sort mods))))))))))
 
-(defn- callers-finding
-  "Coupling hotspots: the focus's top-10 nodes by relation degree (in + out), each its own sub-focus."
-  [db focus]
-  (let [in?  (set focus)
-        out  (map second (cq/q '[:find ?r ?e :where [?r :rel/from ?e]] db))
-        ins  (map second (cq/q '[:find ?r ?e :where [?r :rel/to ?e]] db))]
-    (f/finding "Callers"
-      (->> (frequencies (concat out ins))
-           (filter (fn [[e _]] (in? e))) (sort-by val >) (take 10)
-           (mapv (fn [[e n]]
-                   (let [ent (cq/entity db e)]
-                     (f/observation #{e} :hotspot
-                       (str n " edges: " (or (:entity/name ent) "(value)")
-                            " (" (name (kw (:structure/of ent))) ")")))))))))
-
 (defmulti render-finding
   "Render reading projection `proj`'s lens focus `nodes` into a Finding — the read dual of
    render-base. Project-owned defmethods supply the per-projection aggregation; each routes to a
@@ -337,10 +311,8 @@
 (defmethod render-finding :default [_ proj _]
   (throw (ex-info (str "no reading renderer for projection " (pr-str proj)) {:projection proj})))
 
-(defmethod render-finding "Survey"      [db _ focus] (survey-finding db focus))
 (defmethod render-finding "Patterns"    [db _ focus] (patterns-finding db focus))
 (defmethod render-finding "Consistency" [db _ focus] (consistency-finding db focus))
-(defmethod render-finding "Callers"     [db _ focus] (callers-finding db focus))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Finding]}
   read-projection

@@ -191,7 +191,7 @@
   "The EFFECT SURFACE: extracted operations that DIRECTLY perform a consequential effect
    (:io/:state/:require — logging excluded), grouped by code module. Cross-reference (architecture)
    for each module's region: a consequential effect in a meant-to-be-pure region is the
-   design-attention signal. (The `purity` lens's read, printed by region.)"
+   design-attention signal. (The `effectful-operations` lens's read, printed by region.)"
   []
   (if-let [m (infra-model/get-model)]
     (let [rows (cq/q '[:find ?mn ?on ?en
@@ -270,7 +270,7 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn readings
-  "Run fukan's reading projections (Survey/Patterns/Consistency/Callers) against the held model,
+  "Run fukan's reading projections (Patterns/Consistency) against the held model,
    printing each Finding — each renders its lens focus into observations via materialize/render-finding."
   []
   (if-let [m (infra-model/get-model)]

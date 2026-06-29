@@ -1,8 +1,8 @@
 (ns fukan.model.readings-test
-  "The READINGS — survey/patterns/consistency/callers, now Projections whose target artifact is a
-   Finding, rendered through their :through lens by materialize/render-finding. The defining property
-   (vs the old probes): a reading renders ONLY its lens's focus — it never re-selects, so it cannot
-   drift from its lens."
+  "The READINGS — patterns/consistency, Projections whose target artifact is a Finding, rendered
+   through their :through lens by materialize/render-finding. The defining property (vs the old
+   probes): a reading renders ONLY its lens's focus — it never re-selects, so it cannot drift from
+   its lens."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.query :as cq]
             [fukan.model.pipeline :as pipeline]
@@ -14,14 +14,13 @@
   (ffirst (cq/q '[:find ?e :in $ ?n
                   :where [?e :structure/of :fukan.canvas.core.lens/Projection] [?e :entity/name ?n]] db nm)))
 
-(deftest read-all-runs-the-four-reading-projections
+(deftest read-all-runs-the-reading-projections
   (testing "read-all renders every reading projection through its lens into a Finding, keyed by name"
     (let [db  (pipeline/build-model nil)
           all (m/read-all db)]
-      (is (= #{"Survey" "Patterns" "Consistency" "Callers"} (set (keys all)))
-          "the four reading projections")
-      (is (seq (:observations (all "Survey")))  "survey: counts per structure kind")
-      (is (seq (:observations (all "Callers"))) "callers: degree hotspots")
+      (is (= #{"Patterns" "Consistency"} (set (keys all)))
+          "the reading projections")
+      (is (seq (:observations (all "Patterns"))) "patterns: recurring structural triplets")
       (is (every? (fn [o] (and (set? (:focus o)) (keyword? (:as o)) (string? (:note o))))
                   (mapcat :observations (vals all)))
           "every observation is {focus tag note}"))))

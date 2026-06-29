@@ -51,15 +51,11 @@
      route to named finding helpers in inline bodies (not extracted), so it carries no :dispatches-to
      fan-out — modelled for coverage."
     {})
-  ;; the four reading renderers — each aggregates its lens focus into observations, delegating to the
+  ;; the two reading renderers — each aggregates its lens focus into observations, delegating to the
   ;; finding constructors (this is the materialize→finding coupling the readings introduce, declared here)
-  (Operation ^:private survey-finding "Count the focus's nodes by structure kind."
-    {:performs [:throws] :delegates [finding/finding finding/observation]})
   (Operation ^:private patterns-finding "Group the focus's relations by structural triplet (the recurring ones)."
     {:performs [:throws] :delegates [finding/finding finding/observation]})
   (Operation ^:private consistency-finding "Group the focus's Operations by name (ambiguous across modules)."
-    {:performs [:throws] :delegates [finding/finding finding/observation]})
-  (Operation ^:private callers-finding "Rank the focus's nodes by relation degree (the hotspots)."
     {:performs [:throws] :delegates [finding/finding finding/observation]})
   (Operation read-projection "Run a reading projection: evaluate its :through lens, render the focus into a Finding."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] finding/Finding]

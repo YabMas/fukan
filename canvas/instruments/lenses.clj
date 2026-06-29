@@ -6,23 +6,23 @@
   (:require [fukan.canvas.core.lens :refer [Lens]]
             [canvas.vocab.grouping :refer [Grouping]]))
 
-;; fukan's focuses over its own model. A lens SELECTS a slice — it does NOT gate; checking is the
-;; law/correspondence substrate's job (reading and checking are different acts, kept apart). So
-;; there is no gating/non-gating partition here — every entry is just a focus.
-(Lens survey "the whole model's structure"
+;; fukan's focuses over its own model. A lens is UNOPINIONATED — it names the structural SLICE it
+;; highlights, not an interpretation of what it surfaces (that belongs to whatever composes over it:
+;; a Projection, a reading, a future tool-set). So each name describes the slice, never an intent.
+;; A lens SELECTS — it does NOT gate; checking is the law/correspondence substrate's job (reading and
+;; checking are different acts). There is no gating/non-gating partition here — every entry is a focus.
+(Lens everything "every node — the whole model, unnarrowed (the maximal focus; whole-model projections render through it)"
   {:select '[[?n :structure/of _]]})
-(Lens patterns "recurring structures across the model"
+(Lens relations "every reified relation"
   {:select '[[?n :rel/kind _]]})
-(Lens consistency "where operation names collide across modules"
+(Lens operations "every operation"
   {:select '[(Operation ?n)]})
-(Lens callers "the call-graph callers — nodes with outgoing edges"
-  {:select '[[?r :rel/from ?n]]})
-(Lens purity "operations that directly perform a consequential effect (io/state/require)"
+(Lens effectful-operations "operations that directly perform a consequential effect (io/state/require)"
   {:select '[(Operation ?n) (performs ?n ?e) [?e :val/name ?en] [(not= ?en "throws")]]})
-(Lens drift "spec ↔ code divergence — authored operations with no extracted twin"
+(Lens unrealized-operations "authored operations with no extracted twin"
   ;; "no extracted twin" is exactly the `op-twin` defrelation negated — the same join the
   ;; Realization law uses: a not-join over the rule.
   {:select '[(authored ?n) (not-join [?n] (op-twin ?n ?o))]})
 
 (Grouping lens
-  {:child [survey patterns consistency callers purity drift]})
+  {:child [everything relations operations effectful-operations unrealized-operations]})
