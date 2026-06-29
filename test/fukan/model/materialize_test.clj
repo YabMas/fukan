@@ -25,28 +25,24 @@
 ;; (build-model nil = design-only, no extraction). Ad-hoc lenses/projections are
 ;; top-level value defs assembled and unioned onto the model.
 
-(Lens ^{:name "target"} mvl-target
-  {:focus  "the target extractor's stages"
-   :select ["target stages" '[(Operation ?n) (in-module ?n "target-clojure")]]})
-(Lens ^{:name "none"} ef-none
-  {:focus  "nothing"
-   :select ["nothing" '[(Operation ?n) (in-module ?n "no-such-module")]]})
+(Lens ^{:name "target"} mvl-target "the target extractor's stages"
+  {:select '[(Operation ?n) (in-module ?n "target-clojure")]})
+(Lens ^{:name "none"} ef-none "nothing"
+  {:select '[(Operation ?n) (in-module ?n "no-such-module")]})
 
 ;; an ad-hoc contextualization of the SHIPPED Blueprint — no Refactor renderer exists.
 ;; projection/Blueprint (+ its survey lens) is included in the assembled fragment so its
 ;; var-ref resolves; union with the model then dedups it.
-(Lens ^{:name "stages"} acb-stages
-  {:focus  "x"
-   :select ["target stages" '[(Operation ?n) (in-module ?n "target-clojure")]]})
+(Lens ^{:name "stages"} acb-stages "x"
+  {:select '[(Operation ?n) (in-module ?n "target-clojure")]})
 (Projection ^{:name "Refactor"} acb-Refactor
   {:through        acb-stages
    :contextualizes Blueprint
    :context        "Refactor the existing implementation to match these specs:"})
 
 ;; an ad-hoc Docs projection whose name selects the Docs renderers
-(Lens ^{:name "stages"} mprd-stages
-  {:focus  "target stages"
-   :select ["target stages" '[(Operation ?n) (in-module ?n "target-clojure")]]})
+(Lens ^{:name "stages"} mprd-stages "target stages"
+  {:select '[(Operation ?n) (in-module ?n "target-clojure")]})
 (Projection ^{:name "Docs"} mprd-Docs
   {:through mprd-stages
    :maps    [(Mapping {:from "a function" :to "a doc section"})]})

@@ -1,7 +1,7 @@
 (ns fukan.canvas.core.lens
   "Lens evaluation — a focus resolved to a genuine sub-graph.
 
-   A lens carries ONE selection query (its `:val/query`: datalog `:where` clauses
+   A lens carries ONE selection query (its `:val/select`: datalog `:where` clauses
    binding `?n` as the focused node). `evaluate-lens` runs it with the vocab-derived
    rules — so it reads at domain altitude — and returns the focus node-set; the
    induced relations among those nodes are the rest of the sub-graph. Transitive
@@ -21,15 +21,14 @@
 ;; ── THE FOCUS: a Lens names a slice and carries its runnable selection ─────────────────────────
 
 (defstructure Lens
-  "A focus over the model — what it brings into view / weighs as salient. `:focus` is the prose
-   description of the slice; `:select` is the focus's own executable form — the datalog selection
-   (binding `?n`, evaluated by `evaluate-lens`) that resolves the prose to a genuine sub-graph. The
+  "A focus over the model — what it brings into view / weighs as salient. Its description is the
+   instance docstring; `:select` is the focus's own executable form — the datalog selection (binding
+   `?n`, evaluated by `evaluate-lens`) that resolves the description to a genuine sub-graph. The
    selection lives HERE, not in a realization shim: it is model-native datalog — it references no
    code, only the graph's own vocabulary, exactly like a law's `:where` or a `realized-as`
    derivation. It is the focus stated runnably, not a second thing that could drift from it. A lens
    with no `:select` is prose-only (not evaluable)."
-  {:focus  :string                          ; the prose description of the slice
-   :select [:? {:payload :query} :string]}) ; recap + the datalog selection (the :query payload)
+  {:select [:? {:form true} :any]})         ; the datalog selection (binding ?n) — an opaque code-form leaf
 
 ;; ── THE SYNTHESIS: a Projection re-presents the model through a Lens ───────────────────────────
 
@@ -85,7 +84,7 @@
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] [:vector :Eid]]}
   evaluate-lens
-  "Run lens `lens-eid`'s own selection query — the `:val/query` payload it carries (its
+  "Run lens `lens-eid`'s own selection query — the `:val/select` form it carries (its
    `:select` slot) — with the vocab-derived rules, returning the focus node-set (a set of
    eids). The selection is the focus stated runnably (model-native datalog), so it lives ON
    the lens; no `:realizes` indirection. TOTAL: a prose-only lens (no `:select`) is not
@@ -94,8 +93,8 @@
    stays total (parse-don't-validate); deciding a prose-only lens is unevaluable is the
    caller's concern, not an exception in the core."
   [db lens-eid]
-  (when-let [clauses (:val/query (cq/entity db lens-eid))]
-    ;; the :query payload round-trips through pr-str in the Cozo substrate (arrives as a
+  (when-let [clauses (:val/select (cq/entity db lens-eid))]
+    ;; the :select form round-trips through pr-str in the Cozo substrate (arrives as a
     ;; string) — read it back when it came as a string.
     (focus-nodes db (cond-> clauses (string? clauses) edn/read-string))))
 

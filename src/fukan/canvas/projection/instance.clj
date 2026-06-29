@@ -91,13 +91,15 @@
         vals*  (into {} (filter #(= "val" (namespace (key %)))) e)
         ;; a payload is a companion CODE-FORM — pr-str'd to a string in the Cozo mirror, so read it back
         payload-val (fn [pv] (cond-> pv (string? pv) edn/read-string))
-        scalar-entry (fn [{:keys [rel payload]}]
+        scalar-entry (fn [{:keys [rel payload form]}]
                        (let [vk (keyword "val" (name rel))
                              pk (when payload (keyword "val" (name payload)))]
                          (when (contains? vals* vk)
-                           {:entry [rel (if (and pk (contains? vals* pk))
+                           {:entry [rel (cond
+                                          (and pk (contains? vals* pk))
                                           [(get vals* vk) (payload-val (get vals* pk))]
-                                          (get vals* vk))]
+                                          form (payload-val (get vals* vk)) ; an opaque code-form leaf — read it back
+                                          :else (get vals* vk))]
                             :consumed (cond-> #{vk} pk (conj pk))})))
         rel-entry    (fn [{:keys [rel card]}]
                        (when-let [es (get rels rel)]

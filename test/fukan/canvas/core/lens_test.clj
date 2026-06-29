@@ -30,13 +30,13 @@
 (Grp ^{:name "other"} w-other {:child [w-q]})
 
 ;; each lens carries its own selection (model-native datalog — no realization shim)
-(Lens ^{:name "in-m"}    lns-in-m    {:focus  "widgets in m"
-                                      :select ["widgets in m" '[(Widget ?n) (in-module ?n "m")]]})
-(Lens ^{:name "x-links"} lns-x-links {:focus  "what x links to"
-                                      :select ["x's links" '[(named ?root "x") (links ?root ?n)]]})
-(Lens ^{:name "prose"}   lns-prose   {:focus "just words"})
-(Lens ^{:name "none"}    lns-none    {:focus  "widgets in a module that doesn't exist"
-                                      :select ["none" '[(Widget ?n) (in-module ?n "nope")]]})
+(Lens ^{:name "in-m"}    lns-in-m    "widgets in m"
+  {:select '[(Widget ?n) (in-module ?n "m")]})
+(Lens ^{:name "x-links"} lns-x-links "what x links to"
+  {:select '[(named ?root "x") (links ?root ?n)]})
+(Lens ^{:name "prose"}   lns-prose   "just words")
+(Lens ^{:name "none"}    lns-none    "widgets in a module that doesn't exist"
+  {:select '[(Widget ?n) (in-module ?n "nope")]})
 
 ;; a Check gates a lens — a non-empty focus is a violation
 (Check ^{:name "widgets-in-m"} chk-fires  {:gates lns-in-m :verdict "widgets exist in m"})
