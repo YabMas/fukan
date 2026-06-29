@@ -315,5 +315,5 @@
       (is (empty? (operation/totality-violations without-tb))
           "no TrustBoundary declared → vacuous; the law reads the designation, not a hardcoded name"))))
 
-;; Coverage was lifted to fukan.canvas.core.coverage on 2026-06-26; its tests live in
-;; test/fukan/canvas/core/coverage_test.clj.
+;; The Lens-act Coverage law (probe-reader → Lens) was DISSOLVED on 2026-06-29: readings became
+;; Projections with a mandatory :through Lens slot, so the guarantee is now structural, not a law.
