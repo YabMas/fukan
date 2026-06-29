@@ -34,10 +34,7 @@ structure substrate **is** the model (no separate model-map).
 - `canvas/core/rules.clj` — pure vocab-derived datalog rules (kind/relation/module
   rules) auto-injected into every law so laws read at domain altitude
 - `canvas/core/lens.clj` — `evaluate-lens`: run a lens's selection query → its
-  focus sub-graph
-- `canvas/core/coverage.clj` — the `Coverage` law-holder + `ReaderConvention`: an
-  act realized richly as a reader must be covered (element-agnostic; reads a
-  `{:prefix}` convention — lifted out of the old `fukan.clj` holding pen)
+  focus sub-graph; also OWNS the act grammar (`Lens`/`Projection`/`Check`)
 - `cozo/` — the query engine. The model db **is a CozoDB**, and CozoScript (datalog)
   is what every query, law, and reader compiles to: `cozo/query.clj` — the kernel query
   primitive (`q`/`entity`), fukan's datalog subset → CozoScript over a typed-EAV view;
@@ -50,11 +47,14 @@ structure substrate **is** the model (no separate model-map).
   `canvas/projection/{grammar,instance,architecture}.clj` — the two print-duals
   (grammar → defstructure forms; model nodes → authored instance forms) + the
   system map
-- `canvas/projection/{finding,probes}.clj` — the probe surface (`finding`
-  = the runtime finding/reading output type; read the model → findings).
+- `canvas/projection/finding.clj` — the runtime Finding/reading output type (a list of
+  Observations). There is no separate "probe" surface: the readings (survey/patterns/
+  consistency/callers) are Projections rendered through their lens by `model/materialize.clj`'s
+  `render-finding` — the read dual of Blueprint (see "the act grammar" below).
 - `model/pipeline.clj` → `build-model`; `model/extraction.clj` — the code→model
   extractor plug-point (a registry slot, blind to the language); `model/materialize.clj`
-  — model→implementation-spec projection
+  — model→artifact projection: Blueprint/Docs render to text (`render-base`), the readings
+  render to Findings (`render-finding`) — both are Projection-through-Lens
 - `infra/model.clj` (composition root — registers the project extractor + loads the dialect), `core.clj`
 
 fukan's own **vocabulary** — the code grammar (Kind/Effect/Operation/Module/Subsystem),
@@ -117,12 +117,14 @@ its `defstructure` + the laws/correspondence about it + how it is extracted from
 - `canvas/vocab/code/extractor.clj` — the shared Clojure extractor orchestration (clj-kondo
   `analyze` + `op-eid` + `extract`), calling each element's builder. The HOOK for the extraction
   plug-point; the composition root registers `extract`.
-The once-`fukan.clj` holding pen is DISSOLVED — its two fukan-specific correspondence laws were
-homed by what each is *about*, each reading a binding declared as instance data (no generic "trait"
+The once-`fukan.clj` holding pen is DISSOLVED — its fukan-specific correspondence machinery was
+homed by what it is *about*, reading a binding declared as instance data (no generic "trait"
 framework; the design↔code matching machinery is opinionated and baked, only *which* elements a
 project works with is config): `Totality` (an Operation over a trust artifact is total) → `code/
-operation.clj`, reading a `TrustBoundary {:kind}` designation (bound in `architecture/…/substrate`);
-`Coverage` → the core `canvas/core/coverage.clj` above, reading a `ReaderConvention {:prefix}`.
+operation.clj`, reading a `TrustBoundary {:kind}` designation (bound in `architecture/…/substrate`).
+(The Lens-act `Coverage` law that once also lived here — then in `core/coverage.clj` — was DISSOLVED
+2026-06-29: the readings became Projections with a mandatory `:through Lens` slot, so its
+guarantee — a reading's selection traces to a declared Lens — is now structural, not a law.)
 
 The grouping ladder is levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace:
 an API surface + owned types) ⊂ `Subsystem` (a cluster of modules realizing a capability, with
@@ -188,14 +190,15 @@ The self-model is laid out by **altitude**, not by pipeline role:
 - `canvas/vocab/**` — fukan's own VOCABULARY (the grammar it models itself with): the
   structural primitives (`grouping`), the malli type dialect (`type`), grammar reflection
   (`grammar`), and the code grammar by element (`code/{kind,effect,operation,module,subsystem}` +
-  `code/extractor`). Auto-discovered. (The fukan-specific Totality/Coverage laws are homed by
+  `code/extractor`). Auto-discovered. (The fukan-specific Totality law is homed by
   element, not held here — see above.)
 - `canvas/instruments/<kind>.clj` — fukan as a *user of itself*: its own use-side INSTANCES,
-  one file per kind (`lenses.clj`, `projections.clj` — `survey`/`drift`/…,
-  `Blueprint`/`DriftClose`), authored against the `Lens`/`Projection` act grammar (in
-  `core/lens.clj`). A separated TOOL-DEFINITIONS area, not part of fukan's design.
+  one file per kind (`lenses.clj` — `survey`/`patterns`/`drift`/…; `projections.clj` —
+  `Blueprint`/`DriftClose` + the readings `Survey`/`Patterns`/`Consistency`/`Callers`),
+  authored against the `Lens`/`Projection`/`Check` act grammar (in `core/lens.clj`). A
+  separated TOOL-DEFINITIONS area, not part of fukan's design.
 - `canvas/architecture/<area>/…` — fukan as a *built* system: one self-spec per `src/`
-  module, grouped by area (`kernel`/`ingestion`/`reading`/`projection`/`orchestration`), plus
+  module, grouped by area (`kernel`/`ingestion`/`cozo`/`projection`/`orchestration`), plus
   `subsystems.clj` (the capability clusters + the declared `:may-depend` DAG the
   architecture-quality laws enforce). Models ONLY fukan's `src/` — the vocab, dialect, and
   extractor are tools fukan *uses*, not part of its built design.
