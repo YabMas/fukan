@@ -12,7 +12,6 @@
             ;; the Cozo check engine, and loads the Clojure extractor (the Operation kind-rule the
             ;; coverage/drift lenses reference + the drift lens's correspondence predicate)
             [fukan.infra.model]
-            [fukan.canvas.projection.probes :as probes]
             [fukan.model.materialize :as m]
             [fukan.model.pipeline :as pipeline]
             ;; the code vocab — `corr` for module-corresponds?, + the macros for the self-contained
@@ -202,10 +201,10 @@
       (is (str/includes? out "### extract") "rendered under the projection's name (Docs)")
       (is (str/includes? out "**Grouping:** target-clojure")))))
 
-(deftest probe-foci-compose-into-a-projection
-  (testing "a probe's observation foci flow straight into a projection (the seam)"
+(deftest reading-foci-compose-into-a-projection
+  (testing "a reading's observation foci flow straight into another projection (the seam)"
     (let [db      (pipeline/build-model nil)
-          finding (probes/run db "survey")              ; whole-model read → foci = all nodes by kind
+          finding (m/read-projection db (by-kind-name db :Projection "Survey")) ; whole-model read → foci = all nodes by kind
           out     (m/materialize-finding db "Blueprint" finding)]
       (is (string? out) "the projection renders the finding's union focus")
       (is (str/includes? out "Implement")

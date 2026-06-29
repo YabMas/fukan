@@ -69,15 +69,15 @@
 
 (deftest extracts-defmulti-as-dispatch-operation
   (testing "a defmulti is extracted as an Operation (a dispatch point) and callers' calls to it resolve"
-    (let [db (extract "src/fukan/canvas/projection/probes.clj")]
+    (let [db (extract "src/fukan/model/materialize.clj")]
       (is (true? (ffirst (cq/q '[:find ?x :where [?o :structure/of :canvas.vocab.code.operation/Operation]
-                                              [?o :entity/name "run-probe"] [?o :val/extracted ?x]] db)))
-          "run-probe (a defmulti) is an extracted Operation")
+                                              [?o :entity/name "render-finding"] [?o :val/extracted ?x]] db)))
+          "render-finding (a defmulti) is an extracted Operation")
       (is (contains? (set (cq/q '[:find ?fromn ?ton
                                  :where [?c :rel/kind :calls] [?c :rel/from ?f] [?c :rel/to ?t]
                                         [?f :entity/name ?fromn] [?t :entity/name ?ton]] db))
-                     ["run" "run-probe"])
-          "run -> run-probe resolves as a :calls edge now that the point is a node"))))
+                     ["read-projection" "render-finding"])
+          "read-projection -> render-finding resolves as a :calls edge now that the point is a node"))))
 
 (deftest every-modelled-stage-is-realized-in-src
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/)

@@ -15,7 +15,6 @@
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
-            [fukan.canvas.projection.probes :as probe]
             [fukan.model.materialize :as mat]
             ;; loads the model↔code correspondence laws into the dev session so a
             ;; `check`/`(drift)` over the unified held model surfaces drift
@@ -270,12 +269,13 @@
       (println "\nTRANSITIVE-only (" (count transitive-only) "):" (str/join " " (sort transitive-only))))
     (println "No model loaded yet. Use (go) first.")))
 
-(defn probes
-  "Run the implemented probes against the held model, printing each finding."
+(defn readings
+  "Run fukan's reading projections (Survey/Patterns/Consistency/Callers) against the held model,
+   printing each Finding — each renders its lens focus into observations via materialize/render-finding."
   []
   (if-let [m (infra-model/get-model)]
-    (doseq [[nm finding] (probe/run-all m)]
-      (println (str "── probe " nm " ──"))
+    (doseq [[nm finding] (mat/read-all m)]
+      (println (str "── reading " nm " ──"))
       (let [lines (pf/finding->text finding)]
         (if (empty? lines)
           (println "  (nothing)")
@@ -314,7 +314,7 @@
   (focus '[(Operation ?n) (in-module ?n "materialize")])
   (check)
   (drift)
-  (probes)
+  (readings)
   (dispatch)
   (materialize "target.clojure")
   (status))

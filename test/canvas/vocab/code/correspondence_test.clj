@@ -178,22 +178,10 @@
           extracted (set (cq/q '[:find [?n ...]
                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
           worklist  (operation/uncovered-public-operations m)]
-      (is (contains? extracted "run-probe")   "run-probe (defmulti) is extracted as an Operation")
-      (is (contains? extracted "render-base") "render-base (defmulti) is extracted as an Operation")
-      (is (not (contains? worklist "run-probe"))   "run-probe is covered, not an undeclared public surface")
-      (is (not (contains? worklist "render-base")) "render-base is covered, not an undeclared public surface"))))
-
-(deftest run-probe-dispatches-to-the-four-leaves
-  (testing "run-probe is modelled as a dispatch point fanning out to all four probe handlers"
-    (let [m  (pipeline/build-model "src")
-          ;; the AUTHORED run-probe (not the extracted twin) carries the fan-out
-          dp (ffirst (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name "run-probe"]
-                                          (not [?o :val/extracted true])] m))]
-      (is (= #{"probe-survey" "probe-patterns" "probe-consistency" "probe-callers"}
-             (set (cq/q '[:find [?hn ...] :in $ ?dp
-                         :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
-                       m dp)))
-          "the modelled fan-out names every probe leaf"))))
+      (is (contains? extracted "render-base")    "render-base (defmulti) is extracted as an Operation")
+      (is (contains? extracted "render-finding") "render-finding (defmulti) is extracted as an Operation")
+      (is (not (contains? worklist "render-base"))    "render-base is covered, not an undeclared public surface")
+      (is (not (contains? worklist "render-finding")) "render-finding is covered, not an undeclared public surface"))))
 
 ;; Tiny model: authored A.op-a :delegates B.op-b. "Same module name" authored/extracted pairs make
 ;; module-corresponds? trivial (segs "A" is a suffix of segs "A").
@@ -266,7 +254,7 @@
 (deftest unrealized-dispatch-green-on-self-model
   (testing "every authored cross-module delegation is realized op-level (transitively, through dispatch) on the live model"
     (is (empty? (module/unrealized-dispatch (pipeline/build-model "src")))
-        "0 unrealized — incl. run/run-all via run-probe dispatch, and structure-form/instance-form via the target-expr helper chain")))
+        "0 unrealized — every authored :dispatches-to fan-out is realized op-level (transitively, through dispatch). (Now vacuous on the self-model — the probe dispatch point dissolved; the machinery stays covered by the fixture above.)")))
 
 (deftest effect-correspondence-fires-on-an-undeclared-transitive-effect
   (testing "an authored op whose twin TRANSITIVELY reaches an effect it doesn't declare is flagged

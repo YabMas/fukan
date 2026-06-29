@@ -15,8 +15,7 @@
             [canvas.architecture.kernel.typing :refer [typing]]
             [canvas.architecture.ingestion.source :refer [canvas-source]]
             [canvas.architecture.ingestion.extraction :refer [extraction]]
-            [canvas.architecture.reading.probes :refer [probes]]
-            [canvas.architecture.reading.finding :refer [finding-faculty]]
+            [canvas.architecture.projection.finding :refer [finding-faculty]]
             [canvas.architecture.projection.materialize :refer [materialize]]
             [canvas.architecture.projection.instance :refer [projection-instance]]
             [canvas.architecture.projection.grammar :refer [projection-grammar]]
@@ -53,14 +52,12 @@
    layer; what remains here is the model assembly + the law engine. Depends on the kernel."
   {:child [cozo-mirror cozo-build cozo-law] :may-depend [kernel]})
 
-(Subsystem reading
-  "Lenses over the graph: probe dispatch + the Finding output type. (The model↔code correspondence
-   it composes now lives with the code vocab in `canvas.vocab.code.*` — vocab, not a self-modelled faculty.)"
-  {:child [probes finding-faculty] :may-depend [kernel]})
-
 (Subsystem projection
-  "Graph → artifacts: materialization + the instance/grammar print-duals + the system-map overview."
-  {:child [materialize projection-instance projection-grammar architecture] :may-depend [kernel]})
+  "Graph → artifacts: materialization (implementation specs, docs, AND the reading Findings) + the
+   Finding output type + the instance/grammar print-duals + the system-map overview. The readings —
+   survey/patterns/consistency/callers — are Projections whose target artifact is a Finding, rendered
+   through their lens by materialize/render-finding; there is no separate probe/reading faculty."
+  {:child [materialize finding-faculty projection-instance projection-grammar architecture] :may-depend [kernel]})
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject

@@ -21,7 +21,8 @@
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.lens :as lens]
-            [fukan.canvas.core.typing :as typing]))
+            [fukan.canvas.core.typing :as typing]
+            [fukan.canvas.projection.finding :as f]))
 
 ;; ── small query helpers over the substrate ──────────────────────────────────
 
@@ -220,9 +221,9 @@
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName :any] :Instruction]}
   materialize-finding
-  "The probe→projection composition seam: project the UNION of a finding's
-   observation foci under `projection`. A probe emits foci; this renders them — so
-   `probe → project` is substitution on the shared focus currency, no glue."
+  "The reading→projection composition seam: project the UNION of a finding's
+   observation foci under `projection`. A reading emits foci; this renders them — so
+   `read → project` is substitution on the shared focus currency, no glue."
   [db projection finding]
   (materialize-over db projection (reduce into #{} (map :focus (:observations finding)))))
 
@@ -249,3 +250,115 @@
   (let [projection (:entity/name (cq/entity db proj-eid))
         lens-eid   (rel-target db proj-eid :through)]
     (compose db projection (lens/evaluate-lens db lens-eid))))
+
+;; ── the readings: render a lens focus into a Finding (the read dual of render-base) ──────────
+;; render-base produces a per-node text fragment; render-finding aggregates the WHOLE focus into
+;; observations — a reading observes patterns ACROSS nodes. Each helper is a named top-level defn-
+;; (not inline in the defmethod) so its finding/query calls are real, extractable edges. The focus
+;; is whatever the projection's :through lens selected — a reading never re-selects, so it cannot
+;; drift from its lens.
+
+(defn- kw [x] (some-> x keyword))   ; the Cozo mirror stringifies :structure/of / :rel/kind
+
+(defn- survey-finding
+  "Structural overview: one observation per structure kind in the focus, its sub-focus those nodes."
+  [db focus]
+  (let [in? (set focus)]
+    (f/finding "Survey"
+      (->> (cq/q '[:find ?e ?k :where [?e :structure/of ?k]] db)
+           (filter (fn [[e _]] (in? e)))
+           (reduce (fn [m [e k]] (update m k (fnil conj #{}) e)) {})
+           (sort-by (comp - count val))
+           (mapv (fn [[k es]] (f/observation es :count (str (count es) " " (name (kw k))))))))))
+
+(defn- patterns-finding
+  "Recurring structures: one observation per structural triplet (source-tag, rel-kind, target-tag)
+   borne by >1 focused relation; the sub-focus is each matching relation plus its endpoints."
+  [db focus]
+  (let [in?    (set focus)
+        rows   (cq/q '[:find ?r ?f ?ft ?rk ?t ?tt
+                       :where [?r :rel/from ?f] [?r :rel/kind ?rk] [?r :rel/to ?t]
+                              [?f :structure/of ?ft] [?t :structure/of ?tt]] db)
+        groups (->> rows
+                    (filter (fn [[r _ _ _ _ _]] (in? r)))
+                    (group-by (fn [[_ _ ft rk _ tt]] [ft rk tt])))]
+    (f/finding "Patterns"
+      (->> groups
+           (filter (fn [[_ rs]] (> (count rs) 1)))
+           ;; deterministic order: by descending count, then by the (keywordized) triplet key
+           (sort-by (fn [[k rs]] [(- (count rs)) (mapv (comp str kw) k)]))
+           (mapv (fn [[[ft rk tt] rs]]
+                   (f/observation (into #{} (mapcat (fn [[r fr _ _ t _]] [r fr t])) rs)
+                                  :pattern
+                                  (str (count rs) "× " (kw ft) " -[" (kw rk) "]-> " (kw tt)))))))))
+
+(defn- consistency-finding
+  "Operation-name ambiguity: one observation per Operation name in the focus borne by >1 module."
+  [db focus]
+  (let [in?     (set focus)
+        rows    (->> (cq/q '[:find ?s ?sn ?mn
+                             :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?sn]
+                                    [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
+                                    [?m :entity/name ?mn]] db)
+                     (filter (fn [[s _ _]] (in? s))))
+        by-name (reduce (fn [acc [s sn mn]]
+                          (-> acc (update-in [sn :nodes] (fnil conj #{}) s)
+                                  (update-in [sn :mods]  (fnil conj #{}) mn)))
+                        {} rows)]
+    (f/finding "Consistency"
+      (->> by-name
+           (filter (fn [[_ {:keys [mods]}]] (> (count mods) 1)))
+           (sort-by key)
+           (mapv (fn [[sn {:keys [nodes mods]}]]
+                   (f/observation nodes :ambiguity
+                     (str sn " in " (count mods) " modules: " (str/join ", " (sort mods))))))))))
+
+(defn- callers-finding
+  "Coupling hotspots: the focus's top-10 nodes by relation degree (in + out), each its own sub-focus."
+  [db focus]
+  (let [in?  (set focus)
+        out  (map second (cq/q '[:find ?r ?e :where [?r :rel/from ?e]] db))
+        ins  (map second (cq/q '[:find ?r ?e :where [?r :rel/to ?e]] db))]
+    (f/finding "Callers"
+      (->> (frequencies (concat out ins))
+           (filter (fn [[e _]] (in? e))) (sort-by val >) (take 10)
+           (mapv (fn [[e n]]
+                   (let [ent (cq/entity db e)]
+                     (f/observation #{e} :hotspot
+                       (str n " edges: " (or (:entity/name ent) "(value)")
+                            " (" (name (kw (:structure/of ent))) ")")))))))))
+
+(defmulti render-finding
+  "Render reading projection `proj`'s lens focus `nodes` into a Finding — the read dual of
+   render-base. Project-owned defmethods supply the per-projection aggregation; each routes to a
+   named helper so the finding/query calls stay extractable (defmethod bodies are not)."
+  (fn [_db proj _nodes] proj))
+
+(defmethod render-finding :default [_ proj _]
+  (throw (ex-info (str "no reading renderer for projection " (pr-str proj)) {:projection proj})))
+
+(defmethod render-finding "Survey"      [db _ focus] (survey-finding db focus))
+(defmethod render-finding "Patterns"    [db _ focus] (patterns-finding db focus))
+(defmethod render-finding "Consistency" [db _ focus] (consistency-finding db focus))
+(defmethod render-finding "Callers"     [db _ focus] (callers-finding db focus))
+
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Finding]}
+  read-projection
+  "Run reading projection `proj-eid`: evaluate its :through lens, render the focus into a Finding —
+   the read dual of materialize-projection (which renders the focus to text). A prose-only lens
+   (no selection query) yields a nil focus → an empty finding."
+  [db proj-eid]
+  (let [proj  (:entity/name (cq/entity db proj-eid))
+        focus (lens/evaluate-lens db (rel-target db proj-eid :through))]
+    (render-finding db proj (or focus #{}))))
+
+(defn ^{:malli/schema [:=> [:cat :StructureDb] :FindingMap]}
+  read-all
+  "Run every reading projection present in `db` (a render-finding method whose Projection node
+   exists) → {projection-name finding}, sorted by name."
+  [db]
+  (into (sorted-map)
+        (for [pn   (remove #{:default} (keys (methods render-finding)))
+              :let [pe (proj-node db pn)]
+              :when pe]
+          [pn (read-projection db pe)])))

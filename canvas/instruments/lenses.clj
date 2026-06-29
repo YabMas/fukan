@@ -17,12 +17,11 @@
 (Lens survey      {:focus  "the whole model's structure"
                    :select ["every node" '[[?n :structure/of _]]]})
 (Lens patterns    {:focus  "recurring structures across the model"
-                   :select ["every relation source" '[[?r :rel/from ?n]]]})
-(Lens consistency {:focus  "where contracts and structure align — or drift"
-                   :select ["the contract-bearing authored operations"
-                            '[(authored ?n)]]})
-(Lens callers     {:focus  "the call-graph callers — nodes that call something"
-                   :select ["the call-graph callers" '[(calls ?n ?callee)]]})
+                   :select ["every reified relation" '[[?n :rel/kind _]]]})
+(Lens consistency {:focus  "where operation names collide across modules"
+                   :select ["every operation" '[(Operation ?n)]]})
+(Lens callers     {:focus  "the call-graph callers — nodes with outgoing edges"
+                   :select ["nodes with an outgoing edge" '[[?r :rel/from ?n]]]})
 (Lens purity      {:focus  "operations that directly perform a consequential effect"
                    :select ["operations performing a consequential effect (io/state/require)"
                             '[(Operation ?n) (performs ?n ?e) [?e :val/name ?en] [(not= ?en "throws")]]]})
