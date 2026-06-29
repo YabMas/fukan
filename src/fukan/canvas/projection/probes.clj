@@ -3,14 +3,12 @@
    Each is a pure (model-db -> finding) reader. `run-probe` is the registry: each leaf
    self-registers via `defmethod run-probe`, and `run`/`run-all` are the live entry:
    run a probe against the held model.
-   probe-patterns implements the Instruction projected from the `patterns` probe;
-   probe-integrity realizes the modelled `integrity` probe by composing the kernel's
-   `check`."
+   probe-patterns implements the Instruction projected from the `patterns` probe.
+   (The correspondence reports — integrity/coverage/drift/type-drift — are NOT probes; they
+   are the law/correspondence substrate, surfaced directly by the dev helpers.)"
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
-            [fukan.canvas.core.structure :as structure]
-            [fukan.canvas.projection.finding :as f]
-            [canvas.vocab.code.operation :as corr]))
+            [fukan.canvas.projection.finding :as f]))
 
 ;; the Cozo mirror stringifies keyword attr values (:structure/of, :rel/kind); re-keywordize for display
 (defn- kw [x] (some-> x keyword))
@@ -39,18 +37,6 @@
                       (into #{} (mapcat (fn [[r fr _ _ t _]] [r fr t])) rs)
                       :pattern
                       (str (count rs) "× " (kw ft) " -[" (kw rk) "]-> " (kw tt))))))))))
-
-(defn- probe-integrity
-  "The integrity reading: the kernel's `check` (laws → violations),
-   each violation an observation whose focus is its offender node-set. Empty ⇔ every
-   law holds. Global — `focus` accepted for a uniform signature but ignored."
-  ([db] (probe-integrity db nil))
-  ([db _focus]
-   (f/finding "integrity"
-     (mapv (fn [v]
-             (f/observation (into #{} (mapcat identity) (:offenders v))
-                            :violation (str v)))
-           (structure/check db)))))
 
 (defn- probe-survey
   "A structural overview (a reading): one observation per structure kind, its focus the
@@ -107,52 +93,6 @@
                         (str n " edges: " (or (:entity/name ent) "(value)")
                              " (" (name (kw (:structure/of ent))) ")"))))))))))
 
-(defn- probe-coverage
-  "Spec ↔ code coverage (a reading): extracted Operations not covered by a
-   Operation, each an observation whose focus is the uncovered Operation node(s). Empty ⇔
-   every Operation is modelled. Global — `focus` accepted but ignored."
-  ([db] (probe-coverage db nil))
-  ([db _focus]
-   (f/finding "coverage"
-     (->> (sort (corr/uncovered-operations db))
-          (mapv (fn [n]
-                  (f/observation
-                    (->> (cq/q '[:find ?o :in $ ?n
-                                :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name ?n]] db n)
-                         (map first) set)
-                    :gap n)))))))
-
-(defn- probe-drift
-  "Spec ↔ code divergence (a reading): modelled Operations not realized by an
-   Operation, each an observation whose focus is the unrealized Operation node(s). Empty ⇔
-   the model is fully realized. Global — `focus` accepted but ignored."
-  ([db] (probe-drift db nil))
-  ([db _focus]
-   (f/finding "drift"
-     (->> (sort (corr/drifted-operations db))
-          (mapv (fn [n]
-                  (f/observation
-                    (->> (cq/q '[:find ?s :in $ ?n
-                                :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?n]] db n)
-                         (map first) set)
-                    :gap n)))))))
-
-(defn- probe-type-drift
-  "Spec ↔ code TYPE divergence (a reading): modelled Operations whose type disagrees
-   with the realizing function's declared `:malli/schema`, each an observation whose focus is
-   the type-drifted Operation node(s). Only checked where the code carries an annotation. Empty
-   ⇔ every annotated function adheres to its model. Global — `focus` accepted but ignored."
-  ([db] (probe-type-drift db nil))
-  ([db _focus]
-   (f/finding "type-drift"
-     (->> (sort (corr/type-drifted-operations db))
-          (mapv (fn [n]
-                  (f/observation
-                    (->> (cq/q '[:find ?s :in $ ?n
-                                :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?n]] db n)
-                         (map first) set)
-                    :gap n)))))))
-
 (defmulti run-probe
   "The probe surface as a self-registering multimethod: dispatch on probe-name.
    A probe leaf registers by `(defmethod run-probe \"<name>\" [db _ focus] …)`, so
@@ -169,10 +109,6 @@
 (defmethod run-probe "patterns"    [db _ focus] (probe-patterns db focus))
 (defmethod run-probe "consistency" [db _ focus] (probe-consistency db focus))
 (defmethod run-probe "callers"     [db _ focus] (probe-callers db focus))
-(defmethod run-probe "integrity"   [db _ focus] (probe-integrity db focus))
-(defmethod run-probe "coverage"    [db _ focus] (probe-coverage db focus))
-(defmethod run-probe "drift"       [db _ focus] (probe-drift db focus))
-(defmethod run-probe "type-drift"  [db _ focus] (probe-type-drift db focus))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :ProbeName] :Finding]}
   run

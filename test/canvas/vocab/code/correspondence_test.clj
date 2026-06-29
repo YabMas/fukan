@@ -183,14 +183,13 @@
       (is (not (contains? worklist "run-probe"))   "run-probe is covered, not an undeclared public surface")
       (is (not (contains? worklist "render-base")) "render-base is covered, not an undeclared public surface"))))
 
-(deftest run-probe-dispatches-to-the-eight-leaves
-  (testing "run-probe is modelled as a dispatch point fanning out to all eight probe handlers"
+(deftest run-probe-dispatches-to-the-four-leaves
+  (testing "run-probe is modelled as a dispatch point fanning out to all four probe handlers"
     (let [m  (pipeline/build-model "src")
           ;; the AUTHORED run-probe (not the extracted twin) carries the fan-out
           dp (ffirst (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :entity/name "run-probe"]
                                           (not [?o :val/extracted true])] m))]
-      (is (= #{"probe-survey" "probe-patterns" "probe-consistency" "probe-callers"
-               "probe-integrity" "probe-coverage" "probe-drift" "probe-type-drift"}
+      (is (= #{"probe-survey" "probe-patterns" "probe-consistency" "probe-callers"}
              (set (cq/q '[:find [?hn ...] :in $ ?dp
                          :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
                        m dp)))

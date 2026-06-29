@@ -136,16 +136,14 @@
 
 (deftest shipped-lenses-with-queries-are-evaluable
   (testing "every retrofitted self-model lens resolves to a node-set (no prose-only throw)"
-    (let [db (model* "test/fixtures/target/sample.clj")]   ; sample's Operations extracted in, so coverage/drift resolve
+    (let [db (model* "test/fixtures/target/sample.clj")]   ; sample's Operations extracted in, so drift resolves
       ;; the predicate the drift lens query invokes
       (is (corr/module-corresponds? "core-structure" "fukan.canvas.core.structure"))
-      (doseq [ln ["survey" "patterns" "consistency" "callers" "integrity" "coverage" "drift"]]
+      (doseq [ln ["survey" "patterns" "consistency" "callers" "drift"]]
         (let [focus (lens/evaluate-lens db (by-kind-name db :Lens ln))]
           (is (set? focus) (str "lens " ln " evaluates to a node-set"))))
       (is (seq (lens/evaluate-lens db (by-kind-name db :Lens "survey")))
-          "survey (whole model) is non-empty")
-      (is (seq (lens/evaluate-lens db (by-kind-name db :Lens "coverage")))
-          "coverage selects the extracted Operations"))))
+          "survey (whole model) is non-empty"))))
 
 (deftest materialize-projection-runs-the-shipped-blueprint
   (testing "Blueprint (through the now-query-bearing survey lens) materializes the model's Operations"
