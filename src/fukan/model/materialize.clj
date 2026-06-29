@@ -20,7 +20,8 @@
    `-module` take a projection + an explicit focus."
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
-            [fukan.canvas.core.lens :as lens]))
+            [fukan.canvas.core.lens :as lens]
+            [fukan.canvas.core.typing :as typing]))
 
 ;; ── small query helpers over the substrate ──────────────────────────────────
 
@@ -101,6 +102,16 @@
                          (str (:val/key f) ": " (render-base db base (rel-target db feid :schema))))) "}")
       (str (:val/kind e)))))
 
+;; the MACHINE type signature for an Operation — the faithful malli `:malli/schema` form
+;; (`[:=> [:cat <each :in>] <:out|:nil>]`), each shape rendered through the DIALECT
+;; (`typing/render-type`, not the prose `schema-str`). Mirrors the vocab's `operation-sig` so a
+;; projected op carries the exact metadata the implementer attaches — which `TypeCoverage` then
+;; enforces on the realizing code. A top-level fn (not inline in the Blueprint method) so the
+;; materialize→typing dependency is a real call the extractor sees (defmethod bodies are not extracted).
+(defn- operation-malli [db params out]
+  [:=> (into [:cat] (map #(typing/render-type db (:shape %)) params))
+   (if out (typing/render-type db out) :nil)])
+
 ;; ── base: Blueprint — the model projected to implementation specs ────────────
 
 (defmethod render-base ["Blueprint" :canvas.vocab.type/Schema] [db b eid] (schema-str db b eid))
@@ -108,16 +119,18 @@
 (defmethod render-base ["Blueprint" :canvas.vocab.code.operation/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects delegates guidance]} (stage-facts db eid)
         sig    (str "(" nm (apply str (map #(str " " (:label %)) params)) ")")
-        ptypes (str/join ", " (map #(str (:label %) ": " (render-base db b (:shape %))) params))]
+        ptypes (str/join ", " (map #(str (:label %) ": " (render-base db b (:shape %))) params))
+        malli  (operation-malli db params out)]
     (str "Implement `" nm "` in module `" module "`.\n"
          (when doc (str "Intent: " doc "\n"))
          "Signature: " sig (when (seq params) (str " where " ptypes))
          " → " (if out (render-base db b out) "Unit") "\n"
+         "Type (attach as `^{:malli/schema …}`): " (pr-str malli) "\n"
          (when (seq effects) (str "Effects: " (str/join ", " effects) "\n"))
          (when (seq delegates) (str "Delegates: " (str/join ", " delegates) "\n"))
          (when guidance (str "Guidance: " guidance "\n"))
-         "This is an implementation specification projected from the model — realize it "
-         "as a function honoring this signature and intent.")))
+         "This is an implementation specification projected from the model — realize it as a "
+         "function honoring this signature (attach the `:malli/schema` shown) and intent.")))
 
 ;; ── base: Docs — the model projected to reference documentation ──────────────
 

@@ -87,6 +87,8 @@
       (is (str/includes? text "Implement `extract` in module `target-clojure`"))
       (is (str/includes? text "paths: [Path]") "the :in Schema rendered via render :Schema (vector → [Kind])")
       (is (str/includes? text "→ StructureDb"))
+      (is (str/includes? text (pr-str [:=> [:cat [:vector :Path]] :StructureDb]))
+          "the faithful machine :malli/schema form is emitted (via the dialect, not the prose signature)")
       (is (str/includes? text "Effects: io")))))
 
 (deftest the-same-node-renders-differently-per-projection

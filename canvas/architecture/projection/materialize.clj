@@ -7,6 +7,7 @@
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.cozo.query :as query]
+            [canvas.architecture.kernel.typing :as typing]
             [canvas.architecture.kernel.lens :as lens-engine]))
 
 (Module materialize
@@ -41,4 +42,9 @@
   (Operation ^:private render-base
     "The per-(projection, kind) render dispatch point. Its defmethods have inline bodies (no named
      handler ops), so it carries no :dispatches-to fan-out — modelled for coverage."
-    {}))
+    {})
+  (Operation ^:private operation-malli
+    "The Blueprint method's schema-emitter: an Operation's faithful `:malli/schema` form, each shape
+     rendered through the type dialect. A named top-level helper (not inline in the defmethod) so the
+     materialize→typing dependency is a real, extractable call — the inline defmethod body is not."
+    {:delegates [typing/render-type]}))
