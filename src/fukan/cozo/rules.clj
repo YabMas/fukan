@@ -2,7 +2,7 @@
   "The cozo-side CozoScript substrate — rule fragments prepended to a query so its
    body speaks logical model edges, not the physical typed-EAV mirror. The abstraction
    seam over physical storage: when the mirror's shape changes, only this namespace does.
-   Compose with `str`: `(str eav surface \"…query…\")`.
+   Compose with `str`: `(str eav \"…query…\")` (code-surface fragments live in vocab, not here).
 
    `triple` (the unified value-typed EAV view) underpins the general query/law compiler
    (`fukan.cozo.query`); `eav` (the logical edge/node/leaf decode) underpins the native

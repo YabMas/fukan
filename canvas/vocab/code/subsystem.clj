@@ -135,7 +135,7 @@ consumed[o, mod] := clientele[o, cm], in_module[o, mod]
    may grow and the bundle stays disjoint from the rest — so the seam stays visible, unlike a
    single-consumer test which goes silent exactly as a shared internal surface accretes more consumers.
 
-   ON-GRAPH, COMPOSITIONAL — the `cozo.rules/surface` building blocks (`public_op` / `clientele` /
+   ON-GRAPH, COMPOSITIONAL — the local `surface` building blocks (`public_op` / `clientele` /
    `co_consumed` / `consumed`, over the EXTRACTED `:calls` graph) feed Cozo's `ConnectedComponents`
    fixed rule: a public op's clientele is the OTHER code modules that call it; two ops are co-consumed
    when their clienteles overlap; the connected components of the co-consumed graph are the candidate
