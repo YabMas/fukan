@@ -56,7 +56,7 @@
    :delegates [:* {:transitive true} Operation]  ; designed dependencies; :transitive ⇒ derive-rules emits delegates+ (the closure)
    :dispatches-to [:* Operation]     ; indirection: handler Operations this dispatch point routes to (authored intent — a design statement, not an extracted fact)
    :guidance  [:? :string]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection
-   :calls     [:* Operation]         ; the ACTUAL call graph (extraction's actuals; not authored)
+   :calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals; not authored); :transitive ⇒ calls+ (reach-through-calls)
    :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
    :export    [:? :boolean]          ; intentionally public for MECHANISM (macro emission / dynamic dispatch); settled, not a coverage gap (from ^:export)
    :test-support [:? :boolean]       ; intentionally public for TEST-SUPPORT (test isolation / setup, never called from production); settled (from ^:test-support)

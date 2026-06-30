@@ -185,3 +185,18 @@
           focus (lens/focus-nodes db '[(via :delegates Operation effectful)])]
       (is (= #{"comp-a" "comp-b"} (names db focus))
           "a and b reach the effectful c through delegation; c reaches no effectful op via delegation"))))
+
+(deftest the-extracted-calls-relation-marked-transitive-earns-its-closure
+  (testing "the :calls slot (extracted-actuals, never authored) marked :transitive gives derive-rules a calls+ closure"
+    (let [db (build/maps->cozo
+              [{:entity/id "ca" :structure/of :canvas.vocab.code.operation/Operation :entity/name "ca"}
+               {:entity/id "cb" :structure/of :canvas.vocab.code.operation/Operation :entity/name "cb"}
+               {:entity/id "cc" :structure/of :canvas.vocab.code.operation/Operation :entity/name "cc"}]
+              [{:rel/id "r-ab" :rel/from [:entity/id "ca"] :rel/kind :calls :rel/to [:entity/id "cb"]}
+               {:rel/id "r-bc" :rel/from [:entity/id "cb"] :rel/kind :calls :rel/to [:entity/id "cc"]}])
+          reach (fn [n] (set (map first (cq/q '[:find ?bn :in $ % ?an
+                                                :where [?a :entity/name ?an] (calls+ ?a ?b) [?b :entity/name ?bn]]
+                                              db (s/vocab-rules) n))))]
+      (is (= #{"cb" "cc"} (reach "ca")) "ca reaches cb and cc transitively via the calls graph")
+      (is (= #{"cc"} (reach "cb")) "cb reaches cc")
+      (is (empty? (reach "cc")) "cc calls nothing"))))
