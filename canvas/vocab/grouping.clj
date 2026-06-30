@@ -13,7 +13,7 @@
    ownership semantics; a code `Module` is a Grouping that adds those. `in-module` resolves
    over these `:child` relations (no privileged `:Grouping` tag in the kernel — a grouping is
    ordinary vocab)."
-  {:child [:* Any]})
+  {:child [:* {:member true} Any]})
 
 (defstructure Connected
   "Facet: a node that participates in the directed graph over its own kind — it is not
