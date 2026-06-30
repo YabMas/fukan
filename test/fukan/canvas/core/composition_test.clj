@@ -178,3 +178,10 @@
     (let [db  (build/vars->cozo [#'op-a #'op-b #'op-c])
           eff (set (cq/q '[:find [?o ...] :in $ % :where (effectful ?o)] db (s/vocab-rules)))]
       (is (= #{"comp-c"} (names db eff)) "only c directly performs an effect (:io)"))))
+
+(deftest via-composes-a-property-along-a-transitive-relation
+  (testing "(via :delegates Operation effectful) = ops that transitively delegate to a directly-effectful op"
+    (let [db    (build/vars->cozo [#'op-a #'op-b #'op-c])
+          focus (lens/focus-nodes db '[(via :delegates Operation effectful)])]
+      (is (= #{"comp-a" "comp-b"} (names db focus))
+          "a and b reach the effectful c through delegation; c reaches no effectful op via delegation"))))

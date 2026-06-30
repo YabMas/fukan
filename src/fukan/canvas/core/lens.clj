@@ -73,13 +73,34 @@
   {:gates   Lens       ; the focus this check gates on — non-empty ⇒ violation
    :verdict :string})  ; what a non-empty focus means — the violation description
 
+(defn- expand-via
+  "Composition sugar: expand each `(via R Scope P)` clause into the property P transported along
+   relation R's generated closure R+ at altitude Scope —
+     (via R Scope P)  ⇒  (Scope ?n) (R+ ?n ?o) (P ?o)
+   — ?n is in focus if it reaches a P-node along R by ≥1 hop. R is a keyword (its `R+` closure must be
+   declared `:transitive`); Scope and P are symbols (a kind-rule and a property rule). Non-`via` clauses
+   pass through unchanged; each occurrence gets a fresh intermediate var."
+  [clauses]
+  (vec (apply concat
+              (map-indexed
+               (fn [i clause]
+                 (if (and (seq? clause) (= 'via (first clause)))
+                   (let [[_ r scope p] clause
+                         r+ (symbol (str (name r) "+"))
+                         o  (symbol (str "?_via" i))]
+                     [(list scope '?n) (list r+ '?n o) (list p o)])
+                   [clause]))
+               clauses))))
+
 (defn ^{:malli/schema [:=> [:cat :StructureDb [:vector :Clause]] [:vector :Eid]]}
   focus-nodes
   "Run datalog `:where` `clauses` (binding `?n` as the focused node) with the
    vocab-derived rules, returning the focus node-set (a set of eids). The shared
-   evaluation engine behind both a stored lens and any ad-hoc focus."
+   evaluation engine behind both a stored lens and any ad-hoc focus.
+   A `(via R Scope P)` clause composes a property `P` along relation `R`'s transitive
+   closure at altitude `Scope` (see `expand-via`)."
   [db clauses]
-  (set (cq/q (vec (concat '[:find [?n ...] :in $ %] [:where] clauses))
+  (set (cq/q (vec (concat '[:find [?n ...] :in $ %] [:where] (expand-via clauses)))
              db (s/vocab-rules))))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] [:vector :Eid]]}
