@@ -81,6 +81,15 @@
    not Grammar: the BNF demo owns the `Grammar` tag.)"
   {:child [:* Structure]})
 
+(defstructure Relation
+  "A reflected relation KIND (`:child`/`:calls`/`:delegates`/…), reified so the grammar's EDGE
+   vocabulary is queryable like its node vocabulary (`Structure`). Carries its relation-CHARACTERS —
+   the slot-options that drive rule generation: `:transitive` (a transitive-closure relation) and
+   `:member` (a membership-union relation). A reflection TOOL, derived from the slots that use the
+   kind (not authored); the runtime never reads it."
+  {:transitive [:? :boolean]
+   :member     [:? :boolean]})
+
 ;; ── the reflector ─────────────────────────────────────────────────────────────
 
 (defn- structure-id [tag] (str tag))   ; ":ns/Name" — the colon keeps it clear of var-ids
@@ -180,7 +189,16 @@
                  [{:entity/id ":Any" :structure/of ::Structure
                    :entity/name "Any" :val/tag ":Any"
                    :entity/doc "The wildcard target — any node."}])
-        nodes  (concat (mapcat :nodes bits) (map :node vocabs) any)
+        ;; reflect relation KINDS — one Relation node per distinct (non-scalar) slot kind, stamped with
+        ;; the relation-characters its slots DECLARE (aggregated across all slots of that kind). Completes
+        ;; grammar reflection: edge-kinds reified, not just node-types.
+        relation-nodes
+        (for [[rk slots*] (group-by :rel (remove s/scalar-slot? (mapcat :slots sds)))
+              :let [chars (into #{} (mapcat #(filter % [:member :transitive])) slots*)]]
+          (cond-> {:entity/id (str "relation:" (name rk)) :structure/of ::Relation :entity/name (name rk)}
+            (:transitive chars) (assoc :val/transitive true)
+            (:member chars)     (assoc :val/member true)))
+        nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes)
         rels   (concat (mapcat :rels bits) (mapcat :rels vocabs))
         ;; a slot/includes referencing a tag NOBODY registered is a dangling grammar ref (e.g. a
         ;; misresolved (includes Foo)) — fail with the tag, not a cryptic missing-entity error.
