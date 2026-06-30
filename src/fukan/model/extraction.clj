@@ -16,18 +16,20 @@
 
 (defn ^{:malli/schema [:=> [:cat :FactExtractor] :Unit]}
   register-fact-extractor!
-  "Register the project's FACT extractor: a fn `code-root -> {:roots :var-usages}` (the
-   engine-agnostic extraction facts the native Cozo build consumes). A project registers
-   one; this replaces any previous."
+  "Register the project's FACT extractor: a fn `code-root -> {:roots :ground}` (the
+   engine-agnostic extraction facts the native Cozo build consumes). `:ground` is a
+   post-build `(cozo-db) -> cozo-db` closure (or nil) that grounds engine-specific
+   derived edges (e.g. the `:calls` graph). A project registers one; this replaces
+   any previous."
   [f]
   (reset! fact-extractor f)
   nil)
 
 (defn ^{:malli/schema [:=> [:cat :Path] :Facts]}
   extract-facts
-  "Run the registered fact extractor over `code-root`, returning its `{:roots :var-usages}`
-   facts — or `{:roots [] :var-usages []}` when none is registered (a design-only build)."
+  "Run the registered fact extractor over `code-root`, returning its `{:roots :ground}`
+   facts — or `{:roots [] :ground nil}` when none is registered (a design-only build)."
   [code-root]
   (if-let [f @fact-extractor]
     (f code-root)
-    {:roots [] :var-usages []}))
+    {:roots [] :ground nil}))

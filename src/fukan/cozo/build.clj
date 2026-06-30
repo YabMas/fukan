@@ -7,8 +7,7 @@
             [fukan.canvas.core.substrate :as sub]
             [canvas.vocab.grammar :as grammar]
             [fukan.cozo.db :as db]
-            [fukan.cozo.mirror :as mirror]
-            [fukan.cozo.rules :as rules]))
+            [fukan.cozo.mirror :as mirror]))
 
 (defn- roots-of
   "`[id InstanceValue]` roots for `vars`, mirroring assemble-vars' identity rule:
@@ -111,37 +110,6 @@
   [ns-syms]
   (vars->cozo (collect ns-syms)))
 
-(defn- add-calls
-  "Ground the actual call graph as `:calls` rels in `cdb`. Resolves each var-usage's
-   caller/callee to the eid of the extracted Operation named `fn` in module `ns` (a single
-   cozo query `{[ns name] → eid}`), then inserts the `:calls` rels above the current max
-   eid. Returns `cdb`."
-  [cdb var-usages]
-  (let [op-eid  (into {} (map (fn [[ns name eid]] [[ns name] eid]))
-                      (db/q cdb (str rules/eav "
-?[ns, name, eid] := structof[eid, 'canvas.vocab.code.operation/Operation'], extracted[eid],
-                   ename[eid, name], in_module[eid, ns]")))
-        max-eid (ffirst (db/q cdb "alle[e] := *t_int[e, _, _]
-alle[e] := *t_str[e, _, _]
-alle[e] := *t_bool[e, _, _]
-?[max(e)] := alle[e]"))
-        pairs   (->> var-usages
-                     (keep (fn [{:keys [from from-var to name]}]
-                             (when (and from-var to name)
-                               (let [c (op-eid [(str from) (str from-var)])
-                                     e (op-eid [(str to)   (str name)])]
-                                 (when (and c e (not= c e)) [c e])))))
-                     distinct vec)
-        int-rows (vec (mapcat (fn [n [c e]]
-                                (let [rid (+ max-eid 1 n)]
-                                  [[rid "rel/from" c] [rid "rel/to" e] [rid "rel/order" n]]))
-                              (range) pairs))
-        str-rows (vec (map-indexed (fn [n _] [(+ max-eid 1 n) "rel/kind" "calls"]) pairs))]
-    (when (seq pairs)
-      (db/q cdb "?[e, a, v] <- $rows :put t_int {e, a, v}" {:rows int-rows})
-      (db/q cdb "?[e, a, v] <- $rows :put t_str {e, a, v}" {:rows str-rows}))
-    cdb))
-
 (defn- max-eid
   "The maximum integer eid currently in `cdb` (-1 when empty) — the offset base for additive inserts.
    NB the aggregate goes in the rule HEAD (`?[max(e)]`); `mx = max(e)` in the body does NOT aggregate."
@@ -201,12 +169,15 @@ alle[e] := *t_bool[e, _, _]
 (defn ^{:malli/schema [:=> [:cat [:vector :symbol] [:map]] :CozoDb]}
   model->cozo
   "Native FULL build: the instance-vars of canvas `ns-syms` + the
-   extraction `{:roots :var-usages}` facts → one native Cozo substrate, with the
-   `:calls` graph grounded and the grammar reflected. Assembling canvas + extraction
-   roots in one native pass resolves cross-refs without a union/merge. Returns the open Cozo db."
-  [ns-syms {:keys [roots var-usages]}]
+   extraction `{:roots :ground}` facts → one native Cozo substrate, with the extractor's
+   `:ground` closure called generically (e.g. to ground the `:calls` graph) and the grammar
+   reflected. Assembling canvas + extraction roots in one native pass resolves cross-refs
+   without a union/merge. Returns the open Cozo db."
+  [ns-syms {:keys [roots ground]}]
   (-> (mirror/load-datoms (instances->datoms (concat (roots-of (collect ns-syms)) roots)))
-      (add-calls var-usages)
+      ;; the extractor's post-build grounding hook (e.g. grounding the :calls graph) — the engine
+      ;; calls it generically, naming no code-vocab
+      (cond-> ground ground)
       ;; seed reflection with EVERY canvas ns (as build-model does) so a zero-instance law-holder
       ;; stratum (e.g. ModuleArchitecture) still reflects
       (with-grammar ns-syms)))
