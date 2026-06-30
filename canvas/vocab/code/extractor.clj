@@ -35,7 +35,7 @@
    above the current max eid. Returns `cdb`."
   [cdb var-usages]
   (let [op-eid  (into {} (map (fn [[ns name eid]] [[ns name] eid]))
-                      (db/q cdb (str rules/eav "
+                      (db/q cdb (str rules/eav module/in-module-cozo "
 ?[ns, name, eid] := structof[eid, 'canvas.vocab.code.operation/Operation'], extracted[eid],
                    ename[eid, name], in_module[eid, ns]")))
         max-eid (ffirst (db/q cdb "alle[e] := *t_int[e, _, _]

@@ -84,6 +84,16 @@
   "r_module_corresponds" {:lines ["r_module_corresponds[cm, km] := r_canvas_module[cm], r_code_module[km], cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'), or(kmn == cmn, ends_with(kmn, concat('.', cmn)))"]
                           :refs #{"r_canvas_module" "r_code_module"}}})
 
+;; The module-membership CozoScript fragment (op→owning-module-name over child/exposes/owns) — it names
+;; code-vocab relations, so it lives in VOCAB, prepended (after the generic `rules/eav`) by the cozo
+;; consumers that need raw-CozoScript membership: `latent-boundaries` and the extractor's :calls grounding.
+(def in-module-cozo
+  "
+in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[m, mname]
+in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[m, mname]
+in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
+")
+
 ;; op-twin — the model↔code Operation pairing, defined ONCE as a derived relation and injected
 ;; into every correspondence law/query at domain altitude (by `check`, like the vocab-derived rules).
 ;; An authored op ?a is twinned with an extracted op ?b of the same NAME in a CORRESPONDING module

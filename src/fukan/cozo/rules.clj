@@ -14,8 +14,9 @@
 
 (def eav
   "Logical EAV decode — reified-edge, node, and leaf views over the mirror's typed
-   relations, plus the foundational `in_module` membership (op→owning-module-name).
-   The universal base prepended to every cozo query."
+   relations. A purely generic, vocab-agnostic decode: the universal base prepended to
+   every cozo query. Code-surface CozoScript that names code-vocab (`in_module` over
+   child/exposes/owns) lives in vocab (`canvas.vocab.code.module/in-module-cozo`), not here."
   "
 relfrom[r, e]    := *t_int[r, 'rel/from', e]
 relto[r, e]      := *t_int[r, 'rel/to', e]
@@ -26,10 +27,6 @@ valkind[e, k]    := *t_str[e, 'val/kind', k]
 valname[e, n]    := *t_str[e, 'val/name', n]
 extracted[e]     := *t_bool[e, 'val/extracted', true]
 isprivate[e]     := *t_bool[e, 'val/private', true]
-
-in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[m, mname]
-in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[m, mname]
-in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
 ")
 
 (def triple

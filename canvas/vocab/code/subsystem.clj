@@ -6,7 +6,7 @@
   (:require [fukan.cozo.db :as db]
             [fukan.cozo.rules :as rules]
             [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.vocab.code.module :refer [Module]]))
+            [canvas.vocab.code.module :refer [Module in-module-cozo]]))
 
 (defstructure Subsystem
   "A cluster of Modules realizing a capability — the rung above Module in the grouping ladder
@@ -150,7 +150,7 @@ consumed[o, mod] := clientele[o, cm], in_module[o, mod]
    That domain fact is also load-bearing mechanically — `ConnectedComponents` panics on a wholly-empty
    edge relation — so we short-circuit before calling it."
   [db]
-  (let [base (str rules/eav surface)]
+  (let [base (str rules/eav in-module-cozo surface)]
     (if (empty? (db/q db (str base "?[a, b] := co_consumed[a, b]")))
       (sorted-map)
       (->> (db/q db (str base "
