@@ -72,6 +72,18 @@
         c    (segs cm)]
     (= c (take-last (count c) (segs km)))))
 
+;; The module-correspondence Cozo port — registered into the query compiler's predicate-port SPI so the
+;; GENERIC kernel compiler need not name `Module` or re-implement module-corresponds? in CozoScript.
+(cq/register-predicate-port!
+ 'canvas.vocab.code.module/module-corresponds?
+ (fn [[cm km]] [(str "r_module_corresponds[" cm ", " km "]") #{"r_module_corresponds"}])
+ {"r_canvas_module" {:lines ["r_canvas_module[cm] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], not triple[m, 'val/extracted', true], triple[m, 'entity/name', cm]"]
+                     :refs #{}}
+  "r_code_module"   {:lines ["r_code_module[km] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], triple[m, 'val/extracted', true], triple[m, 'entity/name', km]"]
+                     :refs #{}}
+  "r_module_corresponds" {:lines ["r_module_corresponds[cm, km] := r_canvas_module[cm], r_code_module[km], cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'), or(kmn == cmn, ends_with(kmn, concat('.', cmn)))"]
+                          :refs #{"r_canvas_module" "r_code_module"}}})
+
 ;; op-twin — the model↔code Operation pairing, defined ONCE as a derived relation and injected
 ;; into every correspondence law/query at domain altitude (by `check`, like the vocab-derived rules).
 ;; An authored op ?a is twinned with an extracted op ?b of the same NAME in a CORRESPONDING module

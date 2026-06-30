@@ -14,6 +14,9 @@
 (Module cozo-query
   "The Cozo query primitive — compile a datalog query/where to CozoScript and run it; resolve
    an eid to its attributes. The clause/rule compiler the law engine and readers share."
+  (Operation register-predicate-port! "Register a vocab fn-predicate's CozoScript port (sym, builder, synthetic rule defs) into the compiler's atom-backed registry. Vocab calls this at load (the typing-plug-point pattern)."
+    {:signature [:=> [:catn [:sym :symbol] [:builder :any] [:synthetic :map]] :nil]
+     :performs  [:state]})
   (Operation cvar "A datalog var → its CozoScript name (?e → e)."
     {:signature [:=> [:catn [:t :any]] :string]})
   (Operation vocab-index "Compile the vocabulary's rules once into a name→{:lines :refs} index (+ the synthetic fn-predicate rules)."

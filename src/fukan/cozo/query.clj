@@ -49,21 +49,27 @@
 ;; head var range-restricted. So such a predicate is ported as a GENERATING rule (both
 ;; sides produced, then filtered), merged into the vocab index and pulled by the closure.
 (def ^:private synthetic-rules
-  {"r_canvas_module" {:lines ["r_canvas_module[cm] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], not triple[m, 'val/extracted', true], triple[m, 'entity/name', cm]"]
-                      :refs #{}}
-   "r_code_module"   {:lines ["r_code_module[km] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], triple[m, 'val/extracted', true], triple[m, 'entity/name', km]"]
-                      :refs #{}}
-   "r_module_corresponds" {:lines ["r_module_corresponds[cm, km] := r_canvas_module[cm], r_code_module[km], cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'), or(kmn == cmn, ends_with(kmn, concat('.', cmn)))"]
-                           :refs #{"r_canvas_module" "r_code_module"}}})
+  "rule-name → {:lines :refs} CozoScript defs that registered predicate-ports reference (seeded into
+   the index). Vocab-contributed via `register-predicate-port!` — the kernel seeds none."
+  (atom {}))
 
 (def ^:private predicate-registry
-  "Clojure fn-predicate symbol → a builder `(arg-terms) → [cozo-fragment refs]`. A builder
-   needing a generating rule returns its name in `refs` so the closure emits it; the rest
-   return `#{}`. `not=` is handled separately (built-in)."
-  {'canvas.vocab.code.module/module-corresponds?
-   (fn [[cm km]] [(str "r_module_corresponds[" cm ", " km "]") #{"r_module_corresponds"}])
-   'clojure.string/starts-with?
-   (fn [[s prefix]] [(str "starts_with(" s ", " prefix ")") #{}])})
+  "Clojure fn-predicate symbol → a builder `(arg-terms) → [cozo-fragment refs]`. Seeded with GENERIC
+   ports only; vocab registers domain predicates via `register-predicate-port!`.
+   `not=`/comparisons/`contains?` are handled separately (built-ins)."
+  (atom {'clojure.string/starts-with?
+         (fn [[s prefix]] [(str "starts_with(" s ", " prefix ")") #{}])}))
+
+(defn ^{:malli/schema [:=> [:cat :symbol :any :map] :nil]}
+  register-predicate-port!
+  "Register a vocab fn-predicate's CozoScript port: `sym` (the fn symbol used in datalog), `builder`
+   ((arg-terms) → [fragment refs]), and `synthetic` ({rule-name → {:lines :refs}}) defining the rules
+   `builder` references. Vocab calls this at load (the typing-plug-point pattern); the compiler then
+   ports `sym` and emits `synthetic`'s rules on demand. Returns nil."
+  [sym builder synthetic]
+  (swap! predicate-registry assoc sym builder)
+  (swap! synthetic-rules merge synthetic)
+  nil)
 
 (declare compile-clause compile-clauses)
 
@@ -91,7 +97,7 @@
     ;; (contains? #{a b …} ?v) — set membership → an or of equalities (the set is a LITERAL, not a term)
     (and (#{'contains? 'clojure.core/contains?} op) (set? (first args)))
     [(str "or(" (str/join ", " (map #(str (cterm (second args)) " == " (clit %)) (first args))) ")") #{}]
-    (contains? predicate-registry op) ((predicate-registry op) (mapv cterm args))
+    (contains? @predicate-registry op) ((@predicate-registry op) (mapv cterm args))
     :else (throw (ex-info (str "unsupported predicate: " (pr-str (cons op args))) {:pred op}))))
 
 (defn- helper-name
@@ -169,7 +175,7 @@
                     (update-in [nm :lines] (fnil into []) lines)
                     (update-in [nm :refs] (fnil into #{}) refs)))
               (catch clojure.lang.ExceptionInfo _ idx)))
-          synthetic-rules (structure/vocab-rules)))
+          @synthetic-rules (structure/vocab-rules)))
 
 (defn- closure
   "The set of vocab-rule names reachable from `seeds` through the index's `:refs`."
