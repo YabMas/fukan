@@ -79,7 +79,8 @@
      (via R Scope P)  ⇒  (Scope ?n) (R+ ?n ?o) (P ?o)
    — ?n is in focus if it reaches a P-node along R by ≥1 hop. R is a keyword (its `R+` closure must be
    declared `:transitive`); Scope and P are symbols (a kind-rule and a property rule). Non-`via` clauses
-   pass through unchanged; each occurrence gets a fresh intermediate var."
+   pass through unchanged; each occurrence gets a fresh intermediate var. TOP-LEVEL only: a `via` nested
+   inside a `not-join`/`or-join` is NOT expanded (negated transport is not yet supported)."
   [clauses]
   (vec (apply concat
               (map-indexed
