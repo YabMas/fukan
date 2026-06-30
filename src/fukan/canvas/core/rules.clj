@@ -18,8 +18,8 @@
 
 (def ^:private character-implies
   "Relation-character ⟹ the characters it confers (closed transitively by `close-chars`). Generic —
-   extend by adding entries. Membership entails transitivity (rollup up the containment ladder)."
-  {:member #{:transitive}})
+   extend by adding entries. Containment entails transitivity (rollup up the containment ladder)."
+  {:contains #{:transitive}})
 
 (defn- close-chars
   "A relation's full character set: `chars` closed under `character-implies` to a fixpoint."
@@ -37,8 +37,8 @@
      copr  V=k₁|k₂  → (V ?a ?b)  ⇐ (kᵢ ?a ?b)                (one per :relation-coproduct member)
      drv   D≔head·w → (D head…)  ⇐ <where…>                  (one per (defrelation …))
      rel   slot R   → (R ?a ?b)  ⇐ [?r :rel/from ?a] …
-     mem   slot R:mem  → (member c m) ⇐ (R c m)   (union of :member slots)
-     trans  R:trans    → (R+ a b) ⇐ (R a b) ∪ (R a m)(R+ m b)   (per :transitive name; :member ⟹ member+)
+     cont  slot R:cont → (contains c m) ⇐ (R c m)   (union of :contains slots)
+     trans  R:trans    → (R+ a b) ⇐ (R a b) ∪ (R a m)(R+ m b)   (per :transitive name; :contains ⟹ contains+)
    plus the fixed substrate rules. `scalar?` splits relation slots from value slots.
    Realized concepts, relation-coproducts, and derived relations carry no instances, so they
    get no kind-rule."
@@ -64,20 +64,20 @@
         rel-rules  (for [r rel-kinds]
                      [(list (rule-sym r) '?a '?b)
                       ['?r :rel/from '?a] ['?r :rel/kind r] ['?r :rel/to '?b]])
-        slots*       (remove scalar? (mapcat :slots structures))
-        member-kinds (->> slots* (filter :member) (map :rel) distinct)
-        trans-kinds  (->> slots* (filter :transitive) (map :rel) distinct)
+        slots*         (remove scalar? (mapcat :slots structures))
+        contains-kinds (->> slots* (filter :contains) (map :rel) distinct)
+        trans-kinds    (->> slots* (filter :transitive) (map :rel) distinct)
         ;; the transitive-closure generator — applies to a relation NAME (a slot kind OR a generated union)
-        closure      (fn [rname] (let [r+ (symbol (str (name rname) "+"))]
-                                   [[(list r+ '?a '?b) (list rname '?a '?b)]
-                                    [(list r+ '?a '?b) (list rname '?a '?mid) (list r+ '?mid '?b)]]))
-        ;; the :member union — one same-head disjunct per marked relation kind
-        member-rules (for [k member-kinds] [(list 'member '?c '?m) (list (rule-sym k) '?c '?m)])
-        ;; relation names that carry :transitive — directly, or by implication (member ⟹ transitive)
-        trans-names  (cond-> (set (map rule-sym trans-kinds))
-                       (and (seq member-kinds) (contains? (close-chars #{:member}) :transitive)) (conj 'member))
-        closure-rules (mapcat closure trans-names)
-        ;; in-module (name-keyed) is DERIVED from `member` — the kernel no longer hardcodes child/exposes/owns
-        in-module-rules (when (seq member-kinds)
-                          [[(list 'in-module '?e '?mname) (list 'member '?m '?e) ['?m :entity/name '?mname]]])]
-    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules member-rules closure-rules in-module-rules substrate-rules))))
+        closure        (fn [rname] (let [r+ (symbol (str (name rname) "+"))]
+                                     [[(list r+ '?a '?b) (list rname '?a '?b)]
+                                      [(list r+ '?a '?b) (list rname '?a '?mid) (list r+ '?mid '?b)]]))
+        ;; the :contains union — one same-head disjunct per marked relation kind
+        contains-rules (for [k contains-kinds] [(list 'contains '?c '?m) (list (rule-sym k) '?c '?m)])
+        ;; relation names that carry :transitive — directly, or by implication (contains ⟹ transitive)
+        trans-names    (cond-> (set (map rule-sym trans-kinds))
+                         (and (seq contains-kinds) (contains? (close-chars #{:contains}) :transitive)) (conj 'contains))
+        closure-rules  (mapcat closure trans-names)
+        ;; in-module (name-keyed) is DERIVED from `contains` — the kernel no longer hardcodes child/exposes/owns
+        in-module-rules (when (seq contains-kinds)
+                          [[(list 'in-module '?e '?mname) (list 'contains '?m '?e) ['?m :entity/name '?mname]]])]
+    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules contains-rules closure-rules in-module-rules substrate-rules))))

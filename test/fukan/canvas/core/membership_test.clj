@@ -18,28 +18,28 @@
 
 (defn- names [db eids] (set (map #(:entity/name (cq/entity db %)) eids)))
 
-(deftest member-unions-the-membership-relations-and-rolls-up
-  (testing "the :member character generates `member` (the child/exposes/owns union) + member+ (closure)"
+(deftest contains-unions-the-containment-relations-and-rolls-up
+  (testing "the :contains character generates `contains` (the child/exposes/owns union) + contains+ (closure)"
     (let [db (build/vars->cozo [#'mc-op #'mc-mod #'mc-sub])
           q  (fn [rule a] (set (cq/q (vec (concat '[:find [?m ...] :in $ % ?an :where [?a :entity/name ?an]]
                                                   [(list rule '?a '?m)]))
                                      db (s/vocab-rules) a)))]
-      ;; direct membership (exposes / child) collapses to `member`
-      (is (= #{"m-op"}  (names db (q 'member  "m-mod"))) "m-mod members m-op (via :exposes)")
-      (is (= #{"m-mod"} (names db (q 'member  "m-sub"))) "m-sub members m-mod (via :child)")
-      ;; transitive membership (the rollup) reaches the op from the subsystem
-      (is (= #{"m-op" "m-mod"} (names db (q 'member+ "m-sub"))) "m-sub member+ reaches both"))))
+      ;; direct containment (exposes / child) collapses to `contains`
+      (is (= #{"m-op"}  (names db (q 'contains  "m-mod"))) "m-mod contains m-op (via :exposes)")
+      (is (= #{"m-mod"} (names db (q 'contains  "m-sub"))) "m-sub contains m-mod (via :child)")
+      ;; transitive containment (the rollup) reaches the op from the subsystem
+      (is (= #{"m-op" "m-mod"} (names db (q 'contains+ "m-sub"))) "m-sub contains+ reaches both"))))
 
-(deftest via-member-lands-effectful-at-module-and-subsystem
-  (testing "(via :member Scope effectful) rolls the effectful property up the membership ladder"
+(deftest via-contains-lands-effectful-at-module-and-subsystem
+  (testing "(via :contains Scope effectful) rolls the effectful property up the containment ladder"
     (let [db (build/vars->cozo [#'mc-op #'mc-mod #'mc-sub])]
-      (is (= #{"m-mod"} (names db (lens/focus-nodes db '[(via :member Module effectful)])))
+      (is (= #{"m-mod"} (names db (lens/focus-nodes db '[(via :contains Module effectful)])))
           "the module that contains a directly-effectful op")
-      (is (= #{"m-sub"} (names db (lens/focus-nodes db '[(via :member Subsystem effectful)])))
+      (is (= #{"m-sub"} (names db (lens/focus-nodes db '[(via :contains Subsystem effectful)])))
           "the subsystem that transitively contains a directly-effectful op"))))
 
-(deftest in-module-is-derived-from-member-and-substrate-names-no-vocab
-  (testing "in-module still resolves (now via member), and substrate-rules names no vocab relation"
+(deftest in-module-is-derived-from-contains-and-substrate-names-no-vocab
+  (testing "in-module still resolves (now via contains), and substrate-rules names no vocab relation"
     (let [db (build/vars->cozo [#'mc-op #'mc-mod #'mc-sub])]
       (is (= #{"m-mod"} (set (cq/q '[:find [?mn ...] :in $ % :where [?o :entity/name "m-op"] (in-module ?o ?mn)]
                                    db (s/vocab-rules))))

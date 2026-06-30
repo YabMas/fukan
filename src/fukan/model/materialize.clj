@@ -44,9 +44,9 @@
        sort vec))
 
 (defn- owning-module [db eid]
-  ;; membership via the vocab-declared `member` relation (derive-rules) — no hardcoded relation kinds
+  ;; membership via the vocab-declared `contains` relation (derive-rules) — no hardcoded relation kinds
   (ffirst (cq/q '[:find ?mn :in $ % ?e
-                  :where (member ?m ?e) [?m :entity/name ?mn]]
+                  :where (contains ?m ?e) [?m :entity/name ?mn]]
                 db (s/vocab-rules) eid)))
 
 (defn- stage-facts

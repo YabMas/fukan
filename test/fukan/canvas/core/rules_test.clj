@@ -83,7 +83,7 @@
       (is (contains? heads 'bar))
       (is (contains? heads 'named) "always includes the fixed substrate rule `named`")
       (is (not (contains? heads 'in-module))
-          "in-module is DERIVED (from :member slots), absent when no :member slot is present"))))
+          "in-module is DERIVED (from :contains slots), absent when no :contains slot is present"))))
 
 (deftest defrelation-emits-an-injected-custom-rule
   (testing "defrelation registers a custom-bodied derived relation, injected into vocab-rules"

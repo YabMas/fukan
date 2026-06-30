@@ -85,10 +85,10 @@
   "A reflected relation KIND (`:child`/`:calls`/`:delegates`/…), reified so the grammar's EDGE
    vocabulary is queryable like its node vocabulary (`Structure`). Carries its relation-CHARACTERS —
    the slot-options that drive rule generation: `:transitive` (a transitive-closure relation) and
-   `:member` (a membership-union relation). A reflection TOOL, derived from the slots that use the
-   kind (not authored); the runtime never reads it."
+   `:contains` (a containment-union relation — `from` contains `to`). A reflection TOOL, derived from
+   the slots that use the kind (not authored); the runtime never reads it."
   {:transitive [:? :boolean]
-   :member     [:? :boolean]})
+   :contains   [:? :boolean]})
 
 ;; ── the reflector ─────────────────────────────────────────────────────────────
 
@@ -194,10 +194,10 @@
         ;; grammar reflection: edge-kinds reified, not just node-types.
         relation-nodes
         (for [[rk slots*] (group-by :rel (remove s/scalar-slot? (mapcat :slots sds)))
-              :let [chars (into #{} (mapcat #(filter % [:member :transitive])) slots*)]]
+              :let [chars (into #{} (mapcat #(filter % [:contains :transitive])) slots*)]]
           (cond-> {:entity/id (str "relation:" (name rk)) :structure/of ::Relation :entity/name (name rk)}
             (:transitive chars) (assoc :val/transitive true)
-            (:member chars)     (assoc :val/member true)))
+            (:contains chars)   (assoc :val/contains true)))
         nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes)
         rels   (concat (mapcat :rels bits) (mapcat :rels vocabs))
         ;; a slot/includes referencing a tag NOBODY registered is a dangling grammar ref (e.g. a

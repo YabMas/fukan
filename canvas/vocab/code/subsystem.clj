@@ -14,7 +14,7 @@
    subsystems it is allowed to depend on (`:may-depend` — the intended architecture DAG, as declared
    intent). `:may-depend` is a self-reference, exactly like `Operation :delegates` — the assembler
    resolves the var-refs."
-  {:child      [:* {:member true} Module]   ; the Modules this subsystem clusters
+  {:child      [:* {:contains true} Module]   ; the Modules this subsystem clusters
    :may-depend [:* Subsystem]})   ; the subsystems it is allowed to depend on (declared intent)
 
 ;; ── clean-architecture quality laws over the module/subsystem graph ───────────

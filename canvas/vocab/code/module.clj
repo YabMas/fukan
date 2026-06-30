@@ -21,9 +21,9 @@
    internal membership / ownership backbone (`in-module` resolves over `:exposes`/`:owns`/`:child`),
    the home for grain a module is source-of-truth-for but no one else consumes. The discriminant is
    adoption: a data-shape no other module names is internal grain (`:child`), not a boundary (`:owns`)."
-  {:exposes [:* {:member true} Operation]   ; the public API surface — Operations callers depend on
-   :owns    [:* {:member true} Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
-   :child   [:* {:member true} Any]         ; internal members + grain no other module consumes
+  {:exposes [:* {:contains true} Operation]   ; the public API surface — Operations callers depend on
+   :owns    [:* {:contains true} Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
+   :child   [:* {:contains true} Any]         ; internal members + grain no other module consumes
    :extracted [:? :boolean]})        ; provenance: true ⇒ from code extraction; absent/false ⇒ authored (symmetric with Operation)
 
 ;; ── derived module-dependency readings ────────────────────────────────
