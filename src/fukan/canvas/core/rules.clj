@@ -29,6 +29,7 @@
      copr  V=k₁|k₂  → (V ?a ?b)  ⇐ (kᵢ ?a ?b)                (one per :relation-coproduct member)
      drv   D≔head·w → (D head…)  ⇐ <where…>                  (one per (defrelation …))
      rel   slot R   → (R ?a ?b)  ⇐ [?r :rel/from ?a] …
+     trans  R:trans   → (R+ a b)   ⇐ (R a b) ∪ (R a m)(R+ m b)   (one per :transitive relation slot)
    plus the fixed substrate rules. `scalar?` splits relation slots from value slots.
    Realized concepts, relation-coproducts, and derived relations carry no instances, so they
    get no kind-rule."
@@ -53,5 +54,16 @@
                         distinct)
         rel-rules  (for [r rel-kinds]
                      [(list (rule-sym r) '?a '?b)
-                      ['?r :rel/from '?a] ['?r :rel/kind r] ['?r :rel/to '?b]])]
-    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules substrate-rules))))
+                      ['?r :rel/from '?a] ['?r :rel/kind r] ['?r :rel/to '?b]])
+        trans-rules  (let [kinds (->> (mapcat :slots structures)
+                                      (remove scalar?)
+                                      (filter :transitive)
+                                      (map :rel)
+                                      distinct)]
+                       (mapcat (fn [r]
+                                 (let [base (rule-sym r)            ; (delegates ?a ?b)
+                                       r+   (symbol (str (name r) "+"))]
+                                   [[(list r+ '?a '?b) (list base '?a '?b)]
+                                    [(list r+ '?a '?b) (list base '?a '?mid) (list r+ '?mid '?b)]]))
+                               kinds))]
+    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules trans-rules substrate-rules))))

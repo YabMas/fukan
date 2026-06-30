@@ -3,7 +3,9 @@
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
             [fukan.cozo.law]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]))
+            [fukan.canvas.core.lens :as lens]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [canvas.vocab.code.operation :refer [Operation]]))
 
 ;; ── product fixtures: a law-only facet + two includers ──────────────────────
 (defstructure Linked
@@ -151,3 +153,22 @@
              (realized-as '[(Note ?e)])
              (realized-as '[(Note ?e)])))
         "multiple realized-as is rejected")))
+
+;; ── transitive closure fixtures: a delegates chain a → b → c ────────────────
+
+(declare op-b op-c)
+(Operation ^{:name "comp-a"} op-a {:delegates [op-b]})
+(Operation ^{:name "comp-b"} op-b {:delegates [op-c]})
+(Operation ^{:name "comp-c"} op-c {:performs [:io]})
+
+(defn- names [db eids] (set (map #(:entity/name (cq/entity db %)) eids)))
+
+(deftest delegates-closure-rule-is-generated
+  (testing "marking :delegates :transitive yields a delegates+ transitive-closure rule"
+    (let [db    (build/vars->cozo [#'op-a #'op-b #'op-c])
+          reach (fn [n] (set (cq/q '[:find [?b ...] :in $ % ?an
+                                     :where [?a :entity/name ?an] (delegates+ ?a ?b)]
+                                   db (s/vocab-rules) n)))]
+      (is (= #{"comp-b" "comp-c"} (names db (reach "comp-a"))) "a reaches b and c transitively")
+      (is (= #{"comp-c"}          (names db (reach "comp-b"))) "b reaches c")
+      (is (empty? (reach "comp-c")) "c delegates to nothing"))))
