@@ -9,14 +9,10 @@
    (in `check`) without a `structure ↔ rules` cycle.")
 
 (def substrate-rules
-  "Fixed rules for substrate relations that are not structure slots.
-   `in-module` is generic: 'e is in module named mname' means some node m named mname
-   contains e — via `:child` (generic membership), or, for a `Module`, via `:exposes`
-   (a public Operation) or `:owns` (an owned Kind). No :Grouping tag / :module/child needed."
-  '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
-    [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
-    [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
-    [(named ?e ?n) [?e :entity/name ?n]]])
+  "Fixed rules for substrate relations — vocab-agnostic: only `named` (over the substrate
+   `:entity/name` attribute). `in-module` is NOT here — it is derived from the vocab-declared
+   `member` relation in `derive-rules`, so the kernel names no code-vocab relation kind."
+  '[[(named ?e ?n) [?e :entity/name ?n]]])
 
 (defn- rule-sym [kw] (symbol (name kw)))
 
@@ -80,5 +76,8 @@
         ;; relation names that carry :transitive — directly, or by implication (member ⟹ transitive)
         trans-names  (cond-> (set (map rule-sym trans-kinds))
                        (and (seq member-kinds) (contains? (close-chars #{:member}) :transitive)) (conj 'member))
-        closure-rules (mapcat closure trans-names)]
-    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules member-rules closure-rules substrate-rules))))
+        closure-rules (mapcat closure trans-names)
+        ;; in-module (name-keyed) is DERIVED from `member` — the kernel no longer hardcodes child/exposes/owns
+        in-module-rules (when (seq member-kinds)
+                          [[(list 'in-module '?e '?mname) (list 'member '?m '?e) ['?m :entity/name '?mname]]])]
+    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules member-rules closure-rules in-module-rules substrate-rules))))

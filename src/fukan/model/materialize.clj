@@ -21,6 +21,7 @@
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.lens :as lens]
+            [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.typing :as typing]
             [fukan.canvas.projection.finding :as f]))
 
@@ -43,12 +44,10 @@
        sort vec))
 
 (defn- owning-module [db eid]
-  ;; membership is :child (generic) or, for a Module, :exposes / :owns
-  (ffirst (cq/q '[:find ?mn :in $ ?e
-                  :where [?r :rel/from ?m] [?r :rel/to ?e] [?r :rel/kind ?k]
-                         [(contains? #{:child :exposes :owns} ?k)]
-                         [?m :entity/name ?mn]]
-                db eid)))
+  ;; membership via the vocab-declared `member` relation (derive-rules) — no hardcoded relation kinds
+  (ffirst (cq/q '[:find ?mn :in $ % ?e
+                  :where (member ?m ?e) [?m :entity/name ?mn]]
+                db (s/vocab-rules) eid)))
 
 (defn- stage-facts
   "The shaped facts an Operation renderer needs, projection-agnostic: name, doc, owning

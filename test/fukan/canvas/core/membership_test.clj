@@ -4,6 +4,7 @@
             [fukan.cozo.build :as build]
             [fukan.cozo.law]
             [fukan.canvas.core.lens :as lens]
+            [fukan.canvas.core.rules]
             [fukan.canvas.core.structure :as s]
             [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.module :refer [Module]]
@@ -36,3 +37,14 @@
           "the module that contains a directly-effectful op")
       (is (= #{"m-sub"} (names db (lens/focus-nodes db '[(via :member Subsystem effectful)])))
           "the subsystem that transitively contains a directly-effectful op"))))
+
+(deftest in-module-is-derived-from-member-and-substrate-names-no-vocab
+  (testing "in-module still resolves (now via member), and substrate-rules names no vocab relation"
+    (let [db (build/vars->cozo [#'mc-op #'mc-mod #'mc-sub])]
+      (is (= #{"m-mod"} (set (cq/q '[:find [?mn ...] :in $ % :where [?o :entity/name "m-op"] (in-module ?o ?mn)]
+                                   db (s/vocab-rules))))
+          "m-op is in module m-mod (via the derived in-module)"))
+    ;; the de-leak itself: substrate-rules must not name child/exposes/owns
+    (let [pr (pr-str fukan.canvas.core.rules/substrate-rules)]
+      (is (not (or (re-find #":child" pr) (re-find #":exposes" pr) (re-find #":owns" pr)))
+          "substrate-rules names no code-vocab relation kind"))))

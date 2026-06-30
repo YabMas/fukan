@@ -81,7 +81,9 @@
           heads (set (map (comp first first) rs))]
       (is (contains? heads 'Foo))
       (is (contains? heads 'bar))
-      (is (contains? heads 'in-module) "always includes the fixed substrate rules"))))
+      (is (contains? heads 'named) "always includes the fixed substrate rule `named`")
+      (is (not (contains? heads 'in-module))
+          "in-module is DERIVED (from :member slots), absent when no :member slot is present"))))
 
 (deftest defrelation-emits-an-injected-custom-rule
   (testing "defrelation registers a custom-bodied derived relation, injected into vocab-rules"

@@ -6,6 +6,7 @@
    public entry. `core.lens` lives in `canvas.architecture.kernel.lens`."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
+            [canvas.architecture.kernel.structure :as kstructure]
             [canvas.architecture.cozo.query :as query]
             [canvas.architecture.kernel.typing :as typing]
             [canvas.architecture.kernel.lens :as lens-engine]
@@ -41,6 +42,11 @@
   (Operation materialize-finding "Compose a finding's observation foci into a projection — the reading→projection seam."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]
      :performs  [:throws]})                         ; via materialize-over
+  (Operation ^:private owning-module
+    "Resolve the module name that directly owns a node — via the vocab-declared `member` relation
+     (not hardcoded relation kinds), so the kernel names no code-vocab relation."
+    {:performs  [:throws]                          ; via query/q (the compiler can throw)
+     :delegates [kstructure/vocab-rules query/q]})
   (Operation ^:private render-base
     "The per-(projection, kind) render dispatch point. Its defmethods have inline bodies (no named
      handler ops), so it carries no :dispatches-to fan-out — modelled for coverage."
