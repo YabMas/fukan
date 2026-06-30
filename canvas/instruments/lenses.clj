@@ -17,12 +17,10 @@
   {:select '[[?n :rel/kind _]]})
 (Lens operations "every operation"
   {:select '[(Operation ?n)]})
-(Lens effectful-operations "operations that directly perform a consequential effect (io/state/require)"
-  {:select '[(Operation ?n) (performs ?n ?e) [?e :val/name ?en] [(not= ?en "throws")]]})
 (Lens unrealized-operations "authored operations with no extracted twin"
   ;; "no extracted twin" is exactly the `op-twin` defrelation negated — the same join the
   ;; Realization law uses: a not-join over the rule.
   {:select '[(authored ?n) (not-join [?n] (op-twin ?n ?o))]})
 
 (Grouping lens
-  {:child [everything relations operations effectful-operations unrealized-operations]})
+  {:child [everything relations operations unrealized-operations]})

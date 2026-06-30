@@ -172,3 +172,9 @@
       (is (= #{"comp-b" "comp-c"} (names db (reach "comp-a"))) "a reaches b and c transitively")
       (is (= #{"comp-c"}          (names db (reach "comp-b"))) "b reaches c")
       (is (empty? (reach "comp-c")) "c delegates to nothing"))))
+
+(deftest effectful-is-a-property-of-directly-effectful-ops
+  (testing "the effectful defrelation selects ops that directly perform a consequential effect"
+    (let [db  (build/vars->cozo [#'op-a #'op-b #'op-c])
+          eff (set (cq/q '[:find [?o ...] :in $ % :where (effectful ?o)] db (s/vocab-rules)))]
+      (is (= #{"comp-c"} (names db eff)) "only c directly performs an effect (:io)"))))

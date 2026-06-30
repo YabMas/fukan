@@ -21,6 +21,13 @@
   {:name :string}
   (reader read-effect))
 
+(s/defrelation :effectful
+  "an Operation that DIRECTLY performs a consequential effect (io/state/require) — NOT :throws, which
+   is partiality (read by (totality)), not a consequential world-effect. The leaf PROPERTY that the
+   composition operator transports along a transitive relation, e.g. (via :delegates Operation effectful)."
+  '[?o]
+  '[(Operation ?o) (performs ?o ?e) [?e :val/name ?en] [(not= ?en "throws")]])
+
 ;; ── transitive effect reachability (the effect-language correspondence instrument) ──
 
 (def reaches-effect-rules

@@ -134,7 +134,7 @@
     (let [db (model* "test/fixtures/target/sample.clj")]   ; sample's Operations extracted in, so drift resolves
       ;; the predicate the unrealized-operations lens query invokes
       (is (corr/module-corresponds? "core-structure" "fukan.canvas.core.structure"))
-      (doseq [ln ["everything" "relations" "operations" "effectful-operations" "unrealized-operations"]]
+      (doseq [ln ["everything" "relations" "operations" "unrealized-operations"]]
         (let [focus (lens/evaluate-lens db (by-kind-name db :Lens ln))]
           (is (set? focus) (str "lens " ln " evaluates to a node-set"))))
       (is (seq (lens/evaluate-lens db (by-kind-name db :Lens "everything")))
