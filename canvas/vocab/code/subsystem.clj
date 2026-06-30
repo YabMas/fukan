@@ -107,6 +107,21 @@
 
 ;; ── latent-boundary discovery (interface segregation, bottom-up) ──────────────
 
+(def ^:private surface
+  "Code-surface descriptive CozoScript primitives, built on `rules/eav` — the reusable building blocks
+   `latent-boundaries` composes with Cozo's `ConnectedComponents`. `public_op`: a non-private extracted
+   Operation (the externally-callable surface). `clientele`: the OTHER modules that call a public op.
+   `co_consumed`: two public ops in the same module captured by a shared clientele. `consumed`: a public
+   op with any external clientele, plus its module. NB names code-vocab (`Operation`/`:calls`) — which is
+   why it lives in vocab, not the generic cozo substrate."
+  "
+public_op[o] := structof[o, 'canvas.vocab.code.operation/Operation'], extracted[o], not isprivate[o]
+clientele[o, cm] := public_op[o], relkind[c, 'calls'], relto[c, o], relfrom[c, caller],
+                    in_module[caller, cm], in_module[o, om], cm != om
+co_consumed[a, b] := clientele[a, cm], clientele[b, cm], in_module[a, m], in_module[b, m], a < b
+consumed[o, mod] := clientele[o, cm], in_module[o, mod]
+")
+
 (defn latent-boundaries
   "Bottom-up boundary DISCOVERY (Parnas's decomposition criterion / Interface Segregation, made
    mechanical): code Modules whose PUBLIC surface has split into ≥2 consumer-DISJOINT clienteles — a
@@ -135,7 +150,7 @@
    That domain fact is also load-bearing mechanically — `ConnectedComponents` panics on a wholly-empty
    edge relation — so we short-circuit before calling it."
   [db]
-  (let [base (str rules/eav rules/surface)]
+  (let [base (str rules/eav surface)]
     (if (empty? (db/q db (str base "?[a, b] := co_consumed[a, b]")))
       (sorted-map)
       (->> (db/q db (str base "

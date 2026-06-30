@@ -6,11 +6,11 @@
 
    `triple` (the unified value-typed EAV view) underpins the general query/law compiler
    (`fukan.cozo.query`); `eav` (the logical edge/node/leaf decode) underpins the native
-   build's raw queries (`fukan.cozo.build`); `surface` carries the descriptive
-   code-surface primitives `latent-boundaries` composes with Cozo's `ConnectedComponents`
-   (the one reading that needs a fixed rule, so it drops below the compiler to raw
-   CozoScript). The earlier hand-ported LAW fragments (module-depends / subsystem /
-   correspondence / effect) were retired once the law/query compiler subsumed them.")
+   build's raw queries (`fukan.cozo.build`). Code-surface CozoScript that names code-vocab
+   (`Operation`/`:calls` — e.g. the `surface` rules `latent-boundaries` composes) lives in
+   VOCAB (`canvas.vocab.code.subsystem`), not here: this substrate is vocab-agnostic. The
+   earlier hand-ported LAW fragments (module-depends / subsystem / correspondence / effect)
+   were retired once the law/query compiler subsumed them.")
 
 (def eav
   "Logical EAV decode — reified-edge, node, and leaf views over the mirror's typed
@@ -45,19 +45,4 @@ triple[e, a, v] := *t_int[ei, 'rel/from', vi], a = 'rel/from', e = to_string(ei)
 triple[e, a, v] := *t_int[ei, 'rel/to', vi],   a = 'rel/to',   e = to_string(ei), v = to_string(vi)
 triple[e, a, v] := *t_str[ei, a, v],  e = to_string(ei)
 triple[e, a, v] := *t_bool[ei, a, v], e = to_string(ei)
-")
-
-(def surface
-  "Code-surface descriptive primitives, built on `eav` — the reusable building
-   blocks higher-level surface readings compose. `public_op`: a non-private
-   extracted Operation (the externally-callable surface). `clientele`: the OTHER
-   modules that call a public op (its external consumers). `co_consumed`: two public
-   ops in the same module captured by a shared clientele. `consumed`: a public op
-   that has any external clientele, with its module."
-  "
-public_op[o] := structof[o, 'canvas.vocab.code.operation/Operation'], extracted[o], not isprivate[o]
-clientele[o, cm] := public_op[o], relkind[c, 'calls'], relto[c, o], relfrom[c, caller],
-                    in_module[caller, cm], in_module[o, om], cm != om
-co_consumed[a, b] := clientele[a, cm], clientele[b, cm], in_module[a, m], in_module[b, m], a < b
-consumed[o, mod] := clientele[o, cm], in_module[o, mod]
 ")
