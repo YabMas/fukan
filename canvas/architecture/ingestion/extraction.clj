@@ -15,15 +15,15 @@
   (Kind Unit)
   (Kind FactExtractor [:=> [:catn [:code-root Path]] Facts])
   (Kind Facts
-    "The engine-agnostic extraction facts {:roots :var-usages} — the Module/Operation roots plus
-     the var-usages used to ground the :calls graph. What the native Cozo build consumes,
-     produced by the registered fact extractor."
+    "The extraction facts {:roots :ground} — the Module/Operation roots plus a post-build :ground
+     closure ((db)→db) the extractor supplies to ground engine-specific derived edges (the :calls
+     graph). What the native Cozo build consumes, produced by the registered fact extractor."
     :map)
   (Operation register-fact-extractor! "Register the project's FACT extractor (a fn Path → Facts)."
     {:signature [:=> [:catn [:f FactExtractor]] Unit]
      :performs  [:state]})
   (Operation extract-facts
-    "Run the registered fact extractor over a code-root → its {:roots :var-usages} facts (or empty
+    "Run the registered fact extractor over a code-root → its {:roots :ground} facts (or empty
      facts when none is registered). Routes to the registered project extractor, a `canvas/vocab`
      tool (the Clojure extractor) outside this built-system self-model — the dispatch seam points
      beyond what `architecture/` models."

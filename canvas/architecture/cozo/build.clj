@@ -40,7 +40,7 @@
      :performs  [:throws]                          ; grammar/reflect throws on a dangling grammar ref
      :delegates [db/q cmirror/insert-datoms]})
   (Operation model->cozo
-    "Native FULL build: canvas instance-vars + extraction {:roots :var-usages} facts → one native Cozo substrate with the :calls graph grounded (add-calls queries the built db for op eids) and the grammar reflected. Assembling all roots in one pass resolves cross-refs without a merge."
+    "Native FULL build: canvas instance-vars + extraction {:roots :ground} facts → one native Cozo substrate with the extractor's post-build :ground hook run (it grounds the :calls graph) and the grammar reflected. Assembling all roots in one pass resolves cross-refs without a merge."
     {:signature [:=> [:catn [:ns-syms [:vector :symbol]] [:facts :map]] db/CozoDb]
      :performs  [:throws]
      :delegates [cmirror/load-datoms db/q with-grammar]}))

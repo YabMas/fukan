@@ -20,7 +20,7 @@
             [canvas.vocab.code.extractor :as target]))
 
 ;; Register fukan's project FACT extractor — its own Clojure source, as the engine-agnostic
-;; `{:roots :var-usages}` facts the native Cozo build consumes.
+;; `{:roots :ground}` facts the native Cozo build consumes (`:ground` is the post-build :calls grounding).
 (extraction/register-fact-extractor! (fn [root] (target/extract-roots [root])))  ; target → canvas.vocab.code.extractor
 
 (defonce ^:private state (atom {:cozo nil :src nil}))

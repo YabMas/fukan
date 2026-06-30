@@ -27,5 +27,5 @@
   (let [nss   (canvas-source/require-canvas-namespaces!)
         facts (if (and code-root (.exists (io/file code-root)))
                 (extraction/extract-facts code-root)
-                {:roots [] :var-usages []})]
+                {:roots [] :ground nil})]
     (cozo-build/model->cozo nss facts)))
