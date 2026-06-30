@@ -284,10 +284,9 @@
   "Operation-name ambiguity: one observation per Operation name in the focus borne by >1 module."
   [db focus]
   (let [in?     (set focus)
-        rows    (->> (cq/q '[:find ?s ?sn ?mn
+        rows    (->> (cq/q '[:find ?s ?sn ?mn :in $ %
                              :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?sn]
-                                    [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?s]
-                                    [?m :entity/name ?mn]] db)
+                                    (in-module ?s ?mn)] db (s/vocab-rules))
                      (filter (fn [[s _ _]] (in? s))))
         by-name (reduce (fn [acc [s sn mn]]
                           (-> acc (update-in [sn :nodes] (fnil conj #{}) s)
