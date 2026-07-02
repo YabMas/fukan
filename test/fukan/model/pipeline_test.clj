@@ -180,12 +180,13 @@
       (is (contains? (set (map :law (s/check bad)))
                      "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
 
-(deftest lenses-modelled-as-cross-cutting-focuses
-  (testing "the lens view: each lens is a focus over the model (the old lenses + checks' aspects)"
+(deftest projections-carry-their-own-foci-inline
+  (testing "projections carry their focus inline — fukan mints no standalone Lens nodes"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Grouping) "lens"))
-      (is (set/subset? #{"everything" "relations" "operations" "unrealized-operations"}
-                       (names-of db :Lens))))))
+      (is (contains? (names-of db :Grouping) "projection"))
+      ;; no standalone Lens nodes — all focuses live inline as :val/select on their Projection
+      (is (empty? (names-of db :Lens))
+          "fukan's instruments hold no standalone Lens nodes"))))
 
 (deftest projection-subsystem-modelled-as-target-representations
   (testing "the projection view: model re-presented into targets through a lens + source→artifact mappings"
@@ -193,13 +194,17 @@
       (is (contains? (names-of db :Grouping) "projection"))
       ;; Blueprint (code) + DriftClose (instructions — instruct ⊂ projection); more to come
       (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
-      ;; a projection composes lens ∘ act too: Blueprint renders THROUGH the everything lens
-      (is (seq (cq/q '[:find ?l
-                      :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
-                             [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]
-                             [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "everything"]]
-                    db))
-          "Blueprint renders through the everything lens")
+      ;; Blueprint has NO focus (no :through, no :select) — absence of narrowing IS the maximal focus
+      (is (empty? (cq/q '[:find ?l
+                          :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
+                                 [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]]
+                         db))
+          "Blueprint has no :through — it renders the whole model (the maximal focus)")
+      (is (empty? (cq/q '[:find ?s :in $ ?n
+                          :where [?p :structure/of :fukan.canvas.core.lens/Projection]
+                                 [?p :entity/name ?n] [?p :val/select ?s]]
+                        db "Blueprint"))
+          "Blueprint declares no inline :select either — no focus key at all")
       ;; a projection is built from mappings (value-typed source→artifact pairs)
       (is (seq (cq/q '[:find ?mp
                       :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
@@ -209,17 +214,15 @@
                     db))
           "the Blueprint projection maps a function → a defn"))))
 
-(deftest a-lens-is-reused-across-acts
-  (testing "the payoff: ONE unrealized-operations lens is a shared focus — rendered by the DriftClose projection"
+(deftest driftclose-carries-its-own-inline-select
+  (testing "DriftClose carries its own inline :select — the unrealized-operations selection, not a named lens"
     (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (cq/q '[:find ?l :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "unrealized-operations"]] db)))
-          "there is exactly one unrealized-operations lens node")
-      (is (seq (cq/q '[:find ?l
-                      :where [?l :structure/of :fukan.canvas.core.lens/Lens] [?l :entity/name "unrealized-operations"]
-                             ;; rendered by a projection (drift-close) THROUGH the same focus
-                             [?pj :structure/of :fukan.canvas.core.lens/Projection] [?rj :rel/from ?pj] [?rj :rel/kind :through] [?rj :rel/to ?l]]
-                    db))
-          "the one unrealized-operations focus is rendered by the DriftClose projection"))))
+      ;; DriftClose has an inline :val/select (the not-join over op-twin), not a :through relation
+      (is (seq (cq/q '[:find ?s :where [?p :structure/of :fukan.canvas.core.lens/Projection]
+                                       [?p :entity/name "DriftClose"]
+                                       [?p :val/select ?s]]
+                     db))
+          "DriftClose carries its focus as an inline :select"))))
 
 (deftest projection-that-is-neither-base-nor-contextualization-is-caught
   (testing "a projection with neither mappings nor a contextualized base trips the flavour law"

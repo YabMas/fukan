@@ -1,8 +1,8 @@
 (ns fukan.model.readings-test
   "The READINGS — patterns/consistency/depth, Projections whose target artifact is a Finding, rendered
-   through their :through lens by materialize/render-finding. The defining property (vs the old
-   probes): a reading renders ONLY its lens's focus — it never re-selects, so it cannot drift from
-   its lens."
+   from their resolved focus (each reading's own inline :select) by materialize/render-finding. The
+   defining property: a reading renders ONLY its resolved focus — it never re-selects, so the focus
+   cannot drift from the reading."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
@@ -26,8 +26,8 @@
                   (mapcat :observations (vals all)))
           "every observation is {focus tag note}"))))
 
-(deftest a-reading-renders-only-its-lens-focus
-  (testing "Patterns renders the relation nodes its :through lens selects — and ONLY them"
+(deftest a-reading-renders-only-its-focus
+  (testing "Patterns renders the relation nodes its inline :select focuses — and ONLY them"
     (let [db     (pipeline/build-model nil)
           result (m/read-projection db (proj db "Patterns"))]
       (is (= "Patterns" (:lens result)))

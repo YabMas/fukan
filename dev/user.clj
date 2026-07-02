@@ -271,7 +271,7 @@
 
 (defn readings
   "Run fukan's reading projections against the held model,
-   printing each Finding — each renders its lens focus into observations via materialize/render-finding."
+   printing each Finding — each renders its focus into observations via materialize/render-finding."
   []
   (if-let [m (infra-model/get-model)]
     (doseq [[nm finding] (mat/read-all m)]

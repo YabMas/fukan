@@ -33,7 +33,7 @@ structure substrate **is** the model (no separate model-map).
   plug-point
 - `canvas/core/rules.clj` — pure vocab-derived datalog rules (kind/relation/module
   rules) auto-injected into every law so laws read at domain altitude
-- `canvas/core/lens.clj` — `evaluate-lens`: run a lens's selection query → its
+- `canvas/core/lens.clj` — `evaluate-lens`/`projection-focus`: resolve a selection (a lens's, or a Projection's own inline `:select`) → its
   focus sub-graph; also OWNS the act grammar (`Lens`/`Projection`/`Check`)
 - `cozo/` — the query engine. The model db **is a CozoDB**, and CozoScript (datalog)
   is what every query, law, and reader compiles to: `cozo/query.clj` — the kernel query
@@ -123,8 +123,7 @@ framework; the design↔code matching machinery is opinionated and baked, only *
 project works with is config): `Totality` (an Operation over a trust artifact is total) → `code/
 operation.clj`, reading a `TrustBoundary {:kind :parsed-by}` designation (bound in `architecture/…/infra`).
 (The Lens-act `Coverage` law that once also lived here — then in `core/coverage.clj` — was DISSOLVED
-2026-06-29: the readings became Projections with a mandatory `:through Lens` slot, so its
-guarantee — a reading's selection traces to a declared Lens — is now structural, not a law.)
+2026-06-29: a projection now carries its focus ITSELF — an inline `:select`, a named `Lens` only when a focus is genuinely shared, none = the whole model — so the guarantee (a reading's selection cannot drift from the reading) is structural, not a law.)
 
 The grouping ladder is levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace:
 an API surface + owned types) ⊂ `Subsystem` (a cluster of modules realizing a capability, with
@@ -193,8 +192,7 @@ The self-model is laid out by **altitude**, not by pipeline role:
   `code/extractor`). Auto-discovered. (The fukan-specific Totality law is homed by
   element, not held here — see above.)
 - `canvas/instruments/<kind>.clj` — fukan as a *user of itself*: its own use-side INSTANCES,
-  one file per kind (`lenses.clj` — `survey`/`patterns`/`drift`/…; `projections.clj` —
-  `Blueprint`/`DriftClose` + the readings `Survey`/`Patterns`/`Consistency`/`Callers`),
+  (`projections.clj` — `Blueprint`/`DriftClose` + the readings `Patterns`/`Consistency`/`Depth`/`Boundary`, each carrying its own inline `:select`; a `Lens` is minted only for a genuinely shared focus — currently none),
   authored against the `Lens`/`Projection`/`Check` act grammar (in `core/lens.clj`). A
   separated TOOL-DEFINITIONS area, not part of fukan's design.
 - `canvas/architecture/<area>/…` — fukan as a *built* system: one self-spec per `src/`
