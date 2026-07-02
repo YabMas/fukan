@@ -616,6 +616,12 @@
    a vocab-injected rule is folded into EVERY law and query, so a recursive one re-evaluates
    on every check (Cozo terminates, but pays the fixpoint each time).
 
+   A head arg may be an AGGREGATE application — `'[?m (count ?op)]` — making the derived
+   relation a MEASURE: a relation targeting a computed scalar, the derived-side mirror of a
+   scalar slot (declared relations already target scalar leaves). Plain head vars group;
+   supported aggregates are count/sum/min/max/mean. Name a measure only when a consumer
+   earns it — the inline `(measure …)` clause is the compositional default.
+
      (defrelation :op-twin \"an authored op ?a and its extracted code twin ?b\"
        '[?a ?b]
        '[[?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]

@@ -107,6 +107,23 @@
   [prefix c]
   (str prefix (Long/toString (Math/abs (long (hash c))) 36)))
 
+(def ^:private agg-ops
+  "Rule-head / inline-measure aggregate symbols → their native CozoScript aggregate.
+   Whitelist grows under pressure."
+  {'count "count" 'sum "sum" 'min "min" 'max "max" 'mean "mean"})
+
+(defn- chead
+  "A rule-HEAD term → CozoScript: a plain var (`?k` → `k`, a group key) or an aggregate
+   application (`(count ?v)` → `count(v)`, per `agg-ops`). Cozo aggregates live in rule
+   heads only; plain head vars are the group-by keys (Cozo semantics). Aggregate
+   stratification (no recursion through an aggregate) is enforced by Cozo itself."
+  [t]
+  (cond
+    (dvar? t) (cvar t)
+    (and (seq? t) (= 2 (count t)) (contains? agg-ops (first t)) (dvar? (second t)))
+    (str (agg-ops (first t)) "(" (cvar (second t)) ")")
+    :else (throw (ex-info (str "unsupported rule-head term: " (pr-str t)) {:term t}))))
+
 (defn- compile-clause
   "One datalog clause → `[cozo-fragment extra-rules refs]` (PURE): `extra-rules` are the not-join/
    or-join helper definitions it spawns (uniquely named by content), `refs` the set of rule names it
@@ -154,10 +171,12 @@
 
 (defn- compile-rule
   "A datalog rule `[(head args…) body…]` → `[def-lines refs]`: the head line plus any not-join/
-   or-join helpers its body spawned, and the rule names its body calls (PURE)."
+   or-join helpers its body spawned, and the rule names its body calls (PURE). A head arg may be
+   an aggregate application `(agg ?v)` (see `chead`) — the rule is then a MEASURE: its plain head
+   vars group, its aggregate positions fold."
   [[head & body]]
   (let [[bodystr extra refs] (compile-clauses body)]
-    [(cons (str (rname (first head)) "[" (str/join ", " (map cvar (rest head))) "] := " bodystr) extra)
+    [(cons (str (rname (first head)) "[" (str/join ", " (map chead (rest head))) "] := " bodystr) extra)
      refs]))
 
 ;; ── the vocab-rule index + reachability closure ───────────────────────────────
