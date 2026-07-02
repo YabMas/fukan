@@ -66,6 +66,9 @@
   (Operation ^:private depth-finding
     "Module depth: per focused module, interface size (:exposes count) against implementation size (contains-members count), shallowest first — inline measures, ratio computed at render."
     {:performs [:throws] :delegates [finding/finding finding/observation]})
+  (Operation ^:private boundary-finding
+    "The trust story per focused TrustBoundary: declared parsers + failure channels, undeclared producers, validator-shaped ops — inline queries over produces/parsed-by, judgment surface."
+    {:performs [:throws] :delegates [finding/finding finding/observation]})
   (Operation read-projection "Run a reading projection: evaluate its :through lens, render the focus into a Finding."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] finding/Finding]
      :performs  [:throws]                          ; via evaluate-lens

@@ -23,6 +23,8 @@
   {:select '[(authored ?n) (not-join [?n] (op-twin ?n ?o))]})
 (Lens modules "every module"
   {:select '[(Module ?n)]})
+(Lens trust-boundaries "every trust-boundary designation"
+  {:select '[(TrustBoundary ?n)]})
 
 (Grouping lens
-  {:child [everything relations operations modules unrealized-operations]})
+  {:child [everything relations operations modules trust-boundaries unrealized-operations]})

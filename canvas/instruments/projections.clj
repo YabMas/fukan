@@ -4,7 +4,7 @@
    the core `Lens`/`Projection` grammar."
   (:require [fukan.canvas.core.lens :refer [Projection Mapping]]
             [canvas.vocab.grouping :refer [Grouping]]
-            [canvas.instruments.lenses :refer [everything unrealized-operations relations operations modules]]))
+            [canvas.instruments.lenses :refer [everything unrealized-operations relations operations modules trust-boundaries]]))
 
 (Projection Blueprint
   "The model projected to implementation code — the first projection target."
@@ -44,5 +44,11 @@
   {:through modules
    :maps    [(Mapping {:from "a module" :to "a depth observation"})]})
 
+(Projection Boundary
+  "The trust story per boundary — declared parsers and their failure channels, undeclared
+   producers, validator-shaped ops (a reading)."
+  {:through trust-boundaries
+   :maps    [(Mapping {:from "a trust boundary" :to "a boundary observation"})]})
+
 (Grouping projection
-  {:child [Blueprint DriftClose Patterns Consistency Depth]})
+  {:child [Blueprint DriftClose Patterns Consistency Depth Boundary]})

@@ -270,7 +270,7 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn readings
-  "Run fukan's reading projections (Patterns/Consistency) against the held model,
+  "Run fukan's reading projections against the held model,
    printing each Finding — each renders its lens focus into observations via materialize/render-finding."
   []
   (if-let [m (infra-model/get-model)]

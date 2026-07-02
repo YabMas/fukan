@@ -330,6 +330,57 @@
                      (str nm ": interface " iface " ops / implementation " impl " members"
                           (if depth (String/format java.util.Locale/ROOT " (depth %.1f)" (to-array [depth])) " (no public surface)")))))))))
 
+(defn- boundary-finding
+  "The trust story per focused TrustBoundary (parse-don't-validate): its DECLARED parsers with
+   their failure channel (:throws declared, or none — a parser claiming to totally parse raw
+   input is the judgment flag); UNDECLARED producers (ops whose :out names the trusted Kind
+   without being declared — a reader handing held state along is fine, a second parse point is
+   not); VALIDATOR-SHAPED ops (public, take the Kind, return boolean — the validate-smell).
+   A judgment surface, not a gate: the categories are surfaced, the verdicts are human."
+  [db focus]
+  (let [in?      (set focus)
+        rows     (cq/q '[:find ?tb ?k ?kn :in $ %
+                         :where (TrustBoundary ?tb)
+                                [?kr :rel/from ?tb] [?kr :rel/kind :kind] [?kr :rel/to ?k]
+                                [?k :entity/name ?kn]]
+                       db (s/vocab-rules))
+        throws?  (fn [op] (seq (cq/q '[:find ?eff :in $ ?op
+                                       :where [?pr :rel/from ?op] [?pr :rel/kind :performs]
+                                              [?pr :rel/to ?eff] [?eff :val/name "throws"]]
+                                     db op)))
+        obs      (for [[tb k kn] rows
+                       :when (in? tb)
+                       :let  [parsers   (cq/q '[:find ?o ?on :in $ ?tb
+                                                :where [?pr :rel/from ?tb] [?pr :rel/kind :parsed-by]
+                                                       [?pr :rel/to ?o] [?o :entity/name ?on]]
+                                              db tb)
+                              declared? (set (map first parsers))
+                              producers (cq/q '[:find ?o ?on :in $ % ?k
+                                                :where (produces ?o ?k) [?o :entity/name ?on]]
+                                              db (s/vocab-rules) k)
+                              checks    (cq/q '[:find ?o ?on :in $ % ?k
+                                                :where (authored ?o) [?o :entity/name ?on]
+                                                       [?xr :rel/kind :exposes] [?xr :rel/to ?o]
+                                                       [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?isch]
+                                                       [?isch :val/kind "ref"] [?nr :rel/from ?isch] [?nr :rel/kind :names] [?nr :rel/to ?k]
+                                                       [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?osch]
+                                                       [?osch :val/kind "boolean"]]
+                                              db (s/vocab-rules) k)]
+                       ob    (concat
+                              (for [[o on] (sort-by second parsers)]
+                                (f/observation #{tb o} :parser
+                                  (str kn " ← parsed by " on
+                                       (if (throws? o) " (fails by throw)" " (declares no failure channel)"))))
+                              (for [[o on] (sort-by second producers)
+                                    :when (not (declared? o))]
+                                (f/observation #{tb o} :producer
+                                  (str on " outputs " kn " but is not a declared parser — reader or second parse point?")))
+                              (for [[o on] (sort-by second checks)]
+                                (f/observation #{tb o} :validator-shaped
+                                  (str on " takes " kn " and returns boolean — validate-shaped (parse, don't validate?)"))))]
+                   ob)]
+    (f/finding "Boundary" (vec obs))))
+
 (defmulti render-finding
   "Render reading projection `proj`'s lens focus `nodes` into a Finding — the read dual of
    render-base. Project-owned defmethods supply the per-projection aggregation; each routes to a
@@ -342,6 +393,7 @@
 (defmethod render-finding "Patterns"    [db _ focus] (patterns-finding db focus))
 (defmethod render-finding "Consistency" [db _ focus] (consistency-finding db focus))
 (defmethod render-finding "Depth"       [db _ focus] (depth-finding db focus))
+(defmethod render-finding "Boundary"    [db _ focus] (boundary-finding db focus))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Finding]}
   read-projection
