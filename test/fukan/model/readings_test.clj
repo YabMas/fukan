@@ -1,23 +1,48 @@
 (ns fukan.model.readings-test
-  "The READINGS — patterns/consistency/depth, Projections whose target artifact is a Finding, rendered
-   from their resolved focus (each reading's own inline :select) by materialize/render-finding. The
-   defining property: a reading renders ONLY its resolved focus — it never re-selects, so the focus
-   cannot drift from the reading."
+  "The READINGS — Projections whose target artifact is a Finding, rendered from their resolved
+   focus (each reading's own inline :select) by materialize/render-finding. The defining property:
+   a reading renders ONLY its resolved focus — it never re-selects, so the focus cannot drift from
+   the reading.
+
+   fukan's own instrument INSTANCES are PARKED (it ships no Projections), so these tests exercise
+   the reading MACHINERY through ad-hoc instances carrying the same names the render-finding
+   methods dispatch on — folded onto the model exactly as the shipped registry once was."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
+            [fukan.canvas.core.lens :refer [Projection]]
             [fukan.model.pipeline :as pipeline]
             ;; composition root: registers the FACT extractor + the Cozo check engine
             [fukan.infra.model]
             [fukan.model.materialize :as m]))
+
+;; ad-hoc reading instances — the names match the registered render-finding methods
+(Projection ^{:name "Patterns"} rt-patterns
+  "Recurring structures — structural triplets borne by more than one relation (a reading)."
+  {:select '[[?n :rel/kind _]]})
+(Projection ^{:name "Consistency"} rt-consistency
+  "Operation-name ambiguity — names borne by more than one module (a reading)."
+  {:select '[(Operation ?n)]})
+(Projection ^{:name "Depth"} rt-depth
+  "Module depth — interface size against implementation size, shallowest first (a reading)."
+  {:select '[(Module ?n)]})
+(Projection ^{:name "Boundary"} rt-boundary
+  "The trust story per boundary — parsers, producers, validator shapes (a reading)."
+  {:select '[(TrustBoundary ?n)]})
+
+(defn- model+readings
+  "The design model with the four ad-hoc reading instances folded on."
+  []
+  (build/fold-vars->cozo (pipeline/build-model nil)
+                         [#'rt-patterns #'rt-consistency #'rt-depth #'rt-boundary]))
 
 (defn- proj [db nm]
   (ffirst (cq/q '[:find ?e :in $ ?n
                   :where [?e :structure/of :fukan.canvas.core.lens/Projection] [?e :entity/name ?n]] db nm)))
 
 (deftest read-all-runs-the-reading-projections
-  (testing "read-all renders every reading projection through its lens into a Finding, keyed by name"
-    (let [db  (pipeline/build-model nil)
+  (testing "read-all renders every reading projection present in the db into a Finding, keyed by name"
+    (let [db  (model+readings)
           all (m/read-all db)]
       (is (= #{"Patterns" "Consistency" "Depth" "Boundary"} (set (keys all)))
           "the reading projections")
@@ -26,9 +51,13 @@
                   (mapcat :observations (vals all)))
           "every observation is {focus tag note}"))))
 
+(deftest read-all-is-quiet-without-instances
+  (testing "the parked state: fukan ships no Projection instances, so read-all finds nothing to run"
+    (is (= {} (m/read-all (pipeline/build-model nil))))))
+
 (deftest a-reading-renders-only-its-focus
   (testing "Patterns renders the relation nodes its inline :select focuses — and ONLY them"
-    (let [db     (pipeline/build-model nil)
+    (let [db     (model+readings)
           result (m/read-projection db (proj db "Patterns"))]
       (is (= "Patterns" (:lens result)))
       (is (seq (:observations result)) "the self-model has recurring structures")
@@ -37,7 +66,7 @@
         (is (set? (:focus o)))
         (is (seq (:focus o))))
       ;; the anti-drift property: render reads ONLY its focus — an empty focus yields nothing, even
-      ;; though the whole db is full of relations. (A relation-less lens focus ⇒ no patterns.)
+      ;; though the whole db is full of relations. (A relation-less focus ⇒ no patterns.)
       (is (empty? (:observations (m/render-finding db "Patterns" #{})))
           "empty focus ⇒ no patterns — the render never re-queries past its focus"))))
 
@@ -48,7 +77,7 @@
 
 (deftest depth-reading-surfaces-interface-vs-implementation
   (testing "Depth renders per-module interface/implementation counts, shallowest first"
-    (let [db     (pipeline/build-model nil)
+    (let [db     (model+readings)
           result (m/read-projection db (proj db "Depth"))]
       (is (= "Depth" (:lens result)))
       (is (seq (:observations result)) "the self-model has modules")
@@ -60,7 +89,7 @@
 
 (deftest boundary-reading-tells-the-trust-story
   (testing "Boundary renders per-trust-boundary: declared parsers, undeclared producers, validator shapes"
-    (let [db     (pipeline/build-model nil)
+    (let [db     (model+readings)
           result (m/read-projection db (proj db "Boundary"))
           notes  (mapv :note (:observations result))
           tagged (fn [as] (filter #(= as (:as %)) (:observations result)))]

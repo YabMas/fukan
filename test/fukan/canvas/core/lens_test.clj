@@ -3,7 +3,7 @@
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
             [fukan.cozo.law]
-            [fukan.canvas.core.lens :as lens :refer [Lens Check Projection Mapping]]
+            [fukan.canvas.core.lens :as lens :refer [Lens Check Projection]]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 (defstructure Widget
@@ -86,24 +86,19 @@
 ;; lens (a NAMED shared focus), or neither — no narrowing = the whole model.
 (Projection ^{:name "pf-inline"} pf-inline
   "inline focus: the projection carries its own selection"
-  {:select '[(Widget ?n) (in-module ?n "m")]
-   :maps   [(Mapping {:from "a widget" :to "a spec"})]})
+  {:select '[(Widget ?n) (in-module ?n "m")]})
 (Projection ^{:name "pf-through"} pf-through
   "named focus: renders through a shared lens"
-  {:through lns-in-m
-   :maps    [(Mapping {:from "a widget" :to "a spec"})]})
+  {:through lns-in-m})
 (Projection ^{:name "pf-whole"} pf-whole
-  "no focus: the whole model"
-  {:maps [(Mapping {:from "a widget" :to "a spec"})]})
+  "no focus: the whole model")
 (Projection ^{:name "pf-prose"} pf-prose
   "through a prose-only lens: not evaluable"
-  {:through lns-prose
-   :maps    [(Mapping {:from "a widget" :to "a spec"})]})
+  {:through lns-prose})
 (Projection ^{:name "pf-both"} pf-both
   "ILLEGAL: both an inline :select and a :through lens — the never-both law's offender"
   {:select  '[(Widget ?n)]
-   :through lns-in-m
-   :maps    [(Mapping {:from "a widget" :to "a spec"})]})
+   :through lns-in-m})
 
 (deftest projection-focus-resolves-three-ways
   (testing "inline :select / :through lens / no focus (whole model); prose-only :through stays nil"

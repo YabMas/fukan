@@ -191,10 +191,11 @@ The self-model is laid out by **altitude**, not by pipeline role:
   (`grammar`), and the code grammar by element (`code/{kind,effect,operation,module,subsystem}` +
   `code/extractor`). Auto-discovered. (The fukan-specific Totality law is homed by
   element, not held here — see above.)
-- `canvas/instruments/<kind>.clj` — fukan as a *user of itself*: its own use-side INSTANCES,
-  (`projections.clj` — `Blueprint`/`DriftClose` + the readings `Patterns`/`Consistency`/`Depth`/`Boundary`, each carrying its own inline `:select`; a `Lens` is minted only for a genuinely shared focus — currently none),
-  authored against the `Lens`/`Projection`/`Check` act grammar (in `core/lens.clj`). A
-  separated TOOL-DEFINITIONS area, not part of fukan's design.
+- `canvas/instruments/` — fukan as a *user of itself*: its use-side INSTANCES (Lens/Projection
+  tool-definitions authored against the act grammar in `core/lens.clj`). Currently **PARKED —
+  fukan ships none** (the dir is empty/absent): the act grammar and the renderers
+  (`model/materialize.clj`) stay, exercised by ad-hoc instances in tests; `read-all` is quiet
+  on a plain build. Revived when the instrument vision (the Principle bundle) lands.
 - `canvas/architecture/<area>/…` — fukan as a *built* system: one self-spec per `src/`
   module, grouped by area (`kernel`/`ingestion`/`cozo`/`projection`/`orchestration`), plus
   `subsystems.clj` (the capability clusters + the declared `:may-depend` DAG the
@@ -301,5 +302,5 @@ mixing them corrupts history.
   (each file = structure + correspondence + extraction), the malli dialect (`type`), grammar
   reflection (`grammar`), grouping; the Clojure extractor is `code/extractor.clj`, the
   cross-element correspondence (`module-corresponds?`/`op-twin`) is in `code/module.clj`
-- `canvas/{instruments,architecture}/` — fukan-on-fukan's use-side instruments
-  (tool-definitions) and the built-system self-specs (modules + subsystems + `:may-depend` DAG)
+- `canvas/architecture/` — fukan-on-fukan's built-system self-specs (modules + subsystems +
+  `:may-depend` DAG); the use-side instruments area (`canvas/instruments/`) is currently PARKED

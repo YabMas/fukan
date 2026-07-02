@@ -3,7 +3,7 @@
    WITH the vocab-derived rules, to a focus node-set, and refine a focus by a further query
    (lens-within-lens). Split out of the rule-derivation machinery so the chain stays acyclic:
    lens-engine → kernel → query-engine. This module now ALSO owns the act grammar — the
-   `Lens`/`Projection`/`Mapping`/`Check` structures — fukan-native apparatus, not domain vocab,
+   `Lens`/`Projection`/`Check` structures — fukan-native apparatus, not domain vocab,
    alongside the machinery that runs it (incl. `run-checks`, the use-side dual of `check`)."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.structure :as kernel]

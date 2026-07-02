@@ -11,7 +11,7 @@
 
    No cycle: it depends on the kernel for `vocab-rules`, the kernel does not depend back.
 
-   This module also OWNS the act grammar — the `Lens`/`Projection`/`Mapping` structures below.
+   This module also OWNS the act grammar — the `Lens`/`Projection`/`Check` structures below.
    Being opinionated about these acts is deliberate: they are fukan-NATIVE apparatus, not domain
    vocab (core is unopinionated about the ELEMENTS a project models, opinionated about the ACTS it
    performs on them)."
@@ -37,31 +37,23 @@
 
 ;; ── THE SYNTHESIS: a Projection re-presents the model from a focus ─────────────────────────────
 
-(defstructure ^:value Mapping
-  "One source-kind → target-artifact rule within a projection — value-identified by its (from, to)."
-  {:from :string     ; the source structure kind
-   :to   :string})   ; the target artifact it becomes
-
 (defstructure Projection
   "A projected representation of the model — a target we render it into. Two flavours, composing:
-     a BASE projection renders source kinds directly — it `:maps` each focused kind to a target
-     artifact (Blueprint → implementation specs; Docs → documentation).
+     a BASE projection renders source kinds directly into its target artifact (Blueprint →
+     implementation specs; Docs → documentation) — the kind→artifact mapping lives in the
+     REGISTERED RENDERERS, not on the node.
      a CONTEXTUALIZATION renders THROUGH a base it `:contextualizes`, wrapping that base's output in
-     a framing `:context` (DriftClose = Blueprint framed as drift to close). It adds no mappings of
-     its own — it reuses the base's, told differently.
-   Either flavour declares its FOCUS one of three ways: an inline `:select` (its OWN selection —
-   the default home for a single-consumer focus), a `:through` Lens (a NAMED focus, minted only
-   when a selection is genuinely shared), or NEITHER — no narrowing is the maximal focus, the
-   whole model (Blueprint). Never both; `projection-focus` is the one resolution."
+     a framing `:context` (DriftClose = Blueprint framed as drift to close) — the base's rendering,
+     told differently.
+   A projection node carries the FOCUS and the INTERPRETATION (its docstring); the focus is
+   declared one of three ways: an inline `:select` (its OWN selection — the default home for a
+   single-consumer focus), a `:through` Lens (a NAMED focus, minted only when a selection is
+   genuinely shared), or NEITHER — no narrowing is the maximal focus, the whole model (Blueprint).
+   Never both; `projection-focus` is the one resolution."
   {:select         [:? {:form true} :any] ; the projection's own inline selection (binding ?n)
    :through        [:? Lens]              ; …or a NAMED shared focus
-   :maps           [:* Mapping]           ; a BASE's source→artifact mappings (the HOW)
    :contextualizes [:? Projection]        ; a CONTEXTUALIZATION's base projection
    :context        [:? :string]}          ; the framing prose wrapped around the base render
-  ;; a projection is one flavour or the other — it declares mappings (base) or frames
-  ;; another (contextualization); neither would render nothing.
-  (law "a projection is a base (declares mappings) or a contextualization (frames another)"
-    (has-any :maps :contextualizes))
   (law "a projection focuses inline (:select) or through a named lens (:through), never both"
     :offenders '[?p]
     :where '[[?p :val/select ?s]

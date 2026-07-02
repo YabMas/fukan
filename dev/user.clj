@@ -270,8 +270,10 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn readings
-  "Run fukan's reading projections against the held model,
-   printing each Finding — each renders its focus into observations via materialize/render-finding."
+  "Run the reading projections present in the held model, printing each Finding — each renders
+   its focus into observations via materialize/render-finding. NOTE: fukan's own instrument
+   instances are PARKED (no shipped Projections), so this prints nothing on a plain build;
+   the reading machinery is exercised through ad-hoc instances (see readings_test)."
   []
   (if-let [m (infra-model/get-model)]
     (doseq [[nm finding] (mat/read-all m)]

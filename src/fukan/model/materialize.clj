@@ -14,7 +14,7 @@
    the same composes Blueprint with a 'new feature' or 'refactor' context — no new
    renderers). The base/context relationship lives in the MODEL (the Projection's
    `:contextualizes` + `:context`); this code reads it and applies it. Per Option A, a
-   Projection's `:maps` are the intent manifest; these renderers are their realization.
+   kind→artifact mapping lives HERE, in the registered renderers — the Projection node carries the focus and interpretation.
 
    `materialize-projection` is the model-driven entry; the ad-hoc `materialize-focus`/
    `-module` take a projection + an explicit focus."
@@ -243,8 +243,8 @@
   materialize-projection
   "The model-driven entry: materialize the modelled `Projection` node `proj-eid` — render
    its resolved focus (inline `:select` / `:through` lens / whole model) under its base,
-   wrapped in its `:context` (if a contextualization). The Projection's `:maps`/`:context`
-   are the intent manifest; the renderers realize them. A prose-only `:through` lens yields
+   wrapped in its `:context` (if a contextualization). The Projection's `:context`
+   is the intent manifest; the renderers realize the kind→artifact mapping. A prose-only `:through` lens yields
    nil → renders nothing."
   [db proj-eid]
   (let [projection (:entity/name (cq/entity db proj-eid))]

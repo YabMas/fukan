@@ -13,7 +13,6 @@
             [canvas.vocab.type :as dialect]
             [fukan.model.pipeline :as pipeline]
             [canvas.vocab.code.kind :refer [Kind]]
-            [canvas.vocab.grouping :refer [Grouping]]
             [fukan.canvas.core.lens :refer [Projection]]))
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name (the Cozo mirror
@@ -29,8 +28,6 @@
   {:card [:enum "one" "many"]})
 (ECard ^{:name "Bad"} ec-bad {:card "lots"})
 
-;; a projection that is neither a base nor a contextualization
-(Projection ^{:name "Empty"} pe-Empty)
 
 ;; an arrow-shaped Kind — Task 4 (scalars only, so render round-trips exactly)
 (Kind ^{:name "Arrow"} k-arrow [:=> [:catn [:code-root :string]] :int])
@@ -180,52 +177,9 @@
       (is (contains? (set (map :law (s/check bad)))
                      "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
 
-(deftest projections-carry-their-own-foci-inline
-  (testing "projections carry their focus inline — fukan mints no standalone Lens nodes"
+(deftest instrument-instances-are-parked
+  (testing "fukan ships NO instrument instances — the act grammar and renderers stay dormant,
+            exercised by ad-hoc instances in the lens/materialize/readings tests"
     (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Grouping) "projection"))
-      ;; no standalone Lens nodes — all focuses live inline as :val/select on their Projection
-      (is (empty? (names-of db :Lens))
-          "fukan's instruments hold no standalone Lens nodes"))))
-
-(deftest projection-subsystem-modelled-as-target-representations
-  (testing "the projection view: model re-presented into targets through a lens + source→artifact mappings"
-    (let [db (pipeline/build-model nil)]
-      (is (contains? (names-of db :Grouping) "projection"))
-      ;; Blueprint (code) + DriftClose (instructions — instruct ⊂ projection); more to come
-      (is (set/subset? #{"Blueprint" "DriftClose"} (names-of db :Projection)))
-      ;; Blueprint has NO focus (no :through, no :select) — absence of narrowing IS the maximal focus
-      (is (empty? (cq/q '[:find ?l
-                          :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
-                                 [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]]
-                         db))
-          "Blueprint has no :through — it renders the whole model (the maximal focus)")
-      (is (empty? (cq/q '[:find ?s :in $ ?n
-                          :where [?p :structure/of :fukan.canvas.core.lens/Projection]
-                                 [?p :entity/name ?n] [?p :val/select ?s]]
-                        db "Blueprint"))
-          "Blueprint declares no inline :select either — no focus key at all")
-      ;; a projection is built from mappings (value-typed source→artifact pairs)
-      (is (seq (cq/q '[:find ?mp
-                      :where [?p :structure/of :fukan.canvas.core.lens/Projection] [?p :entity/name "Blueprint"]
-                             [?r :rel/from ?p] [?r :rel/kind :maps] [?r :rel/to ?mp]
-                             [?mp :structure/of :fukan.canvas.core.lens/Mapping]
-                             [?mp :val/from "a function"] [?mp :val/to "a defn"]]
-                    db))
-          "the Blueprint projection maps a function → a defn"))))
-
-(deftest driftclose-carries-its-own-inline-select
-  (testing "DriftClose carries its own inline :select — the unrealized-operations selection, not a named lens"
-    (let [db (pipeline/build-model nil)]
-      ;; DriftClose has an inline :val/select (the not-join over op-twin), not a :through relation
-      (is (seq (cq/q '[:find ?s :where [?p :structure/of :fukan.canvas.core.lens/Projection]
-                                       [?p :entity/name "DriftClose"]
-                                       [?p :val/select ?s]]
-                     db))
-          "DriftClose carries its focus as an inline :select"))))
-
-(deftest projection-that-is-neither-base-nor-contextualization-is-caught
-  (testing "a projection with neither mappings nor a contextualized base trips the flavour law"
-    (let [db (build/vars->cozo [#'pe-Empty])]
-      (is (contains? (set (map :law (s/check db)))
-                     "a projection is a base (declares mappings) or a contextualization (frames another)")))))
+      (is (empty? (names-of db :Projection)) "no Projection instances")
+      (is (empty? (names-of db :Lens)) "no Lens instances"))))

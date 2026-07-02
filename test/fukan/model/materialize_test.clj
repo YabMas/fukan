@@ -3,22 +3,21 @@
             [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; the lens act (the grammar Lens/Projection/Mapping + the engine) + the real
-            ;; self-model instance vars an ad-hoc contextualization composes over (Blueprint)
-            [fukan.canvas.core.lens :as lens :refer [Lens Projection Mapping]]
-            [canvas.instruments.projections :refer [Blueprint]]
+            ;; the lens act — the grammar Lens/Projection + the engine (fukan's own instrument
+            ;; instances are PARKED; the fixtures below are ad-hoc instances)
+            [fukan.canvas.core.lens :as lens :refer [Lens Projection]]
             ;; composition root: registers the FACT extractor (so model* can fold extracted code) +
             ;; the Cozo check engine, and loads the Clojure extractor (the Operation kind-rule the
             ;; coverage/drift lenses reference + the drift lens's correspondence predicate)
             [fukan.infra.model]
             [fukan.model.materialize :as m]
             [fukan.model.pipeline :as pipeline]
-            ;; the code vocab — `corr` for module-corresponds?, + the macros for the self-contained
+            ;; the code vocab — the macros for the self-contained
             ;; worked-example fixture (a Module with a rich-signature Operation), which replaces the
             ;; retired extractor self-spec the tests once read
             [canvas.vocab.code.kind :refer [Kind]]
             [canvas.vocab.code.operation :refer [Operation]]
-            [canvas.vocab.code.module :as corr :refer [Module]]))
+            [canvas.vocab.code.module :refer [Module]]))
 
 ;; materialize is the pure LOWER direction — it projects the design model alone
 ;; (build-model nil = design-only, no extraction). Ad-hoc lenses/projections are
@@ -34,17 +33,24 @@
 ;; var-ref resolves; union with the model then dedups it.
 (Lens ^{:name "stages"} acb-stages "x"
   {:select '[(Operation ?n) (in-module ?n "target-clojure")]})
+;; ad-hoc base + contextualization (instruments are parked — no shipped Blueprint node)
+(Projection ^{:name "Blueprint"} acb-Blueprint
+  "The model projected to implementation code — ad-hoc whole-model base (no focus).")
+(Projection ^{:name "DriftClose"} acb-DriftClose
+  "Blueprint framed as drift to close — ad-hoc contextualization."
+  {:contextualizes acb-Blueprint
+   :select         '[(authored ?n) (not-join [?n] (op-twin ?n ?o))]
+   :context        "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:"})
 (Projection ^{:name "Refactor"} acb-Refactor
   {:through        acb-stages
-   :contextualizes Blueprint
+   :contextualizes acb-Blueprint
    :context        "Refactor the existing implementation to match these specs:"})
 
 ;; an ad-hoc Docs projection whose name selects the Docs renderers
 (Lens ^{:name "stages"} mprd-stages "target stages"
   {:select '[(Operation ?n) (in-module ?n "target-clojure")]})
 (Projection ^{:name "Docs"} mprd-Docs
-  {:through mprd-stages
-   :maps    [(Mapping {:from "a function" :to "a doc section"})]})
+  {:through mprd-stages})
 
 (defn- by-name [db n]
   (ffirst (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
@@ -128,20 +134,9 @@
       (is (str/includes? spec "Implement `materialize-view`")
           "the materialize module's own modelled Operation is projected"))))
 
-(deftest shipped-projections-resolve-their-focus
-  (testing "every shipped projection resolves a focus: its inline :select, or whole-model when none"
-    (let [db (model* "test/fixtures/target/sample.clj")]   ; sample's Operations extracted in, so drift resolves
-      ;; the predicate the DriftClose inline selection invokes
-      (is (corr/module-corresponds? "core-structure" "fukan.canvas.core.structure"))
-      (doseq [pn ["DriftClose" "Patterns" "Consistency" "Depth" "Boundary"]]
-        (let [focus (lens/projection-focus db (by-kind-name db :Projection pn))]
-          (is (set? focus) (str "projection " pn " resolves its inline :select to a node-set"))))
-      (is (seq (lens/projection-focus db (by-kind-name db :Projection "Blueprint")))
-          "Blueprint (no focus) = the whole model, non-empty"))))
-
-(deftest materialize-projection-runs-the-shipped-blueprint
-  (testing "Blueprint (no focus — the whole model) materializes the model's Operations"
-    (let [db  (model*)
+(deftest materialize-projection-renders-a-whole-model-base
+  (testing "a Blueprint base with NO focus (the whole model) materializes the model's Operations"
+    (let [db  (build/fold-vars->cozo (model*) [#'acb-Blueprint])
           out (m/materialize-projection db (by-kind-name db :Projection "Blueprint"))]
       ;; no focus = the whole model; compose renders only the kinds Blueprint covers
       ;; (named Operations), not every node as a bare name
@@ -153,8 +148,8 @@
 (deftest driftclose-contextualizes-blueprint-not-duplicates-it
   (testing "DriftClose composes Blueprint — its specs framed by a drift context, not a parallel renderer"
     ;; design-only model: no extracted code → every modelled Operation drifts → the drift
-    ;; lens selects them all → DriftClose = Blueprint's specs under a drift-closing context.
-    (let [db  (model*)
+    ;; selection picks them all → DriftClose = Blueprint's specs under a drift-closing context.
+    (let [db  (build/fold-vars->cozo (model*) [#'acb-Blueprint #'acb-DriftClose])
           out (m/materialize-projection db (by-kind-name db :Projection "DriftClose"))]
       (is (str/includes? out "modelled but have no realizing function") "the drift context preamble")
       (is (str/includes? out "Implement `extract` in module `target-clojure`")
@@ -167,9 +162,8 @@
 
 (deftest a-context-composes-over-any-base
   (testing "the same mechanism composes Blueprint with an arbitrary context — e.g. a refactor framing"
-    (let [;; the fragment includes Blueprint so the contextualizes var-ref resolves;
-          ;; folding onto the model then dedups them by :entity/id
-          db  (build/fold-vars->cozo (model*) [#'acb-stages #'acb-Refactor #'Blueprint])
+    (let [;; the fragment includes the ad-hoc Blueprint base so the contextualizes var-ref resolves
+          db  (build/fold-vars->cozo (model*) [#'acb-stages #'acb-Refactor #'acb-Blueprint])
           out (m/materialize-projection db (by-kind-name db :Projection "Refactor"))]
       (is (str/includes? out "Refactor the existing implementation") "the refactor context frames the output")
       (is (str/includes? out "Implement `extract`")
@@ -190,15 +184,19 @@
 (deftest materialize-projection-reads-the-modelled-projection
   (testing "materialize-projection renders a modelled Projection through its OWN lens under its OWN name"
     (let [;; a Projection whose name selects the Docs renderers and whose :through lens carries a
-          ;; selection query (the manifest's :maps are intent, not dispatched).
+          ;; selection query.
           db  (build/fold-vars->cozo (model*) [#'mprd-stages #'mprd-Docs])
           out (m/materialize-projection db (by-name db "Docs"))]
       (is (str/includes? out "### extract") "rendered under the projection's name (Docs)")
       (is (str/includes? out "**Grouping:** target-clojure")))))
 
+(Projection ^{:name "Patterns"} rfc-patterns
+  "Recurring structures (a reading) — ad-hoc; the shipped instruments are parked."
+  {:select '[[?n :rel/kind _]]})
+
 (deftest reading-foci-compose-into-a-projection
   (testing "a reading's observation foci flow straight into another projection (the seam)"
-    (let [db      (pipeline/build-model nil)
+    (let [db      (build/fold-vars->cozo (pipeline/build-model nil) [#'rfc-patterns])
           finding (m/read-projection db (by-kind-name db :Projection "Patterns")) ; recurring triplets → foci = relations + their endpoints
           out     (m/materialize-finding db "Blueprint" finding)]
       (is (string? out) "the projection renders the finding's union focus")
