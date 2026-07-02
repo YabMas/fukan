@@ -75,6 +75,17 @@
   '[?o]
   '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])])
 
+;; `produces` — the :out mirror of Totality's :in navigation: an authored Operation and the Kind
+;; its output type NAMES. Direct refs only (a `ref` schema's `:names` edge); descent into wrapped
+;; shapes ([:or K :nil]) grows under pressure. Consumers: the TrustBoundary parser cross-check law
+;; and the Boundary reading.
+(s/defrelation :produces
+  "an authored Operation ?o whose :out schema is a ref naming Kind ?k"
+  '[?o ?k]
+  '[(authored ?o)
+    [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
+    [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]])
+
 ;; ── authored-side discipline: the public surface declares its output type ─────
 
 (defstructure SignatureCompleteness

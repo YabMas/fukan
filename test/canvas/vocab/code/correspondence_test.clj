@@ -317,3 +317,25 @@
 
 ;; The Lens-act Coverage law (probe-reader → Lens) was DISSOLVED on 2026-06-29: readings became
 ;; Projections with a mandatory :through Lens slot, so the guarantee is now structural, not a law.
+
+;; ── produces: the derived op→Kind output relation (the :out mirror of Totality's :in navigation) ──
+
+(deftest produces-derives-authored-output-kinds
+  (testing "(produces ?o ?k) pairs an authored op with the Kind its :out ref names; boolean outs derive nothing"
+    (let [k      {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
+          parser [{:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it"}
+                  {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref"}
+                  {:rel/id "sch|names|k" :rel/from -22 :rel/kind :names :rel/to -20}
+                  {:rel/id "p|out|sch" :rel/from -2 :rel/kind :out :rel/to -22}]
+          check* [{:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "check-it"}
+                  {:db/id -23 :structure/of :canvas.vocab.type/Schema :val/kind "boolean"}
+                  {:rel/id "c|out|bool" :rel/from -3 :rel/kind :out :rel/to -23}]
+          ;; an EXTRACTED op with the same :out shape must NOT derive (produces is authored-side)
+          extr   [{:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it" :val/extracted true}
+                  {:rel/id "e|out|sch" :rel/from -4 :rel/kind :out :rel/to -22}]
+          db     (build/tx-maps->cozo (concat [k] parser check* extr))
+          pairs  (set (cq/q '[:find ?on ?kn :in $ %
+                              :where (produces ?o ?k) [?o :entity/name ?on] [?k :entity/name ?kn]]
+                            db (s/vocab-rules)))]
+      (is (= #{["parse-it" "Artifact"]} pairs)
+          "only the authored ref-out op derives; boolean-out and extracted ops do not"))))
