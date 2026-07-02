@@ -41,6 +41,9 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  canvas.principles.parse-dont-validate
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   canvas.vocab.code.kind
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}

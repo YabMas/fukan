@@ -4,9 +4,9 @@
    a reading renders ONLY its resolved focus — it never re-selects, so the focus cannot drift from
    the reading.
 
-   fukan's own instrument INSTANCES are PARKED (it ships no Projections), so these tests exercise
-   the reading MACHINERY through ad-hoc instances carrying the same names the render-finding
-   methods dispatch on — folded onto the model exactly as the shipped registry once was."
+   fukan's own Boundary reading ships via canvas/principles/parse_dont_validate. The other
+   readings (Patterns/Consistency/Depth) are exercised through ad-hoc instances carrying the same
+   names the render-finding methods dispatch on — folded onto the model for these tests."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
@@ -26,15 +26,12 @@
 (Projection ^{:name "Depth"} rt-depth
   "Module depth — interface size against implementation size, shallowest first (a reading)."
   {:select '[(Module ?n)]})
-(Projection ^{:name "Boundary"} rt-boundary
-  "The trust story per boundary — parsers, producers, validator shapes (a reading)."
-  {:select '[(TrustBoundary ?n)]})
 
 (defn- model+readings
-  "The design model with the four ad-hoc reading instances folded on."
+  "The design model with the three ad-hoc reading instances folded on (Boundary ships with the model)."
   []
   (build/fold-vars->cozo (pipeline/build-model nil)
-                         [#'rt-patterns #'rt-consistency #'rt-depth #'rt-boundary]))
+                         [#'rt-patterns #'rt-consistency #'rt-depth]))
 
 (defn- proj [db nm]
   (ffirst (cq/q '[:find ?e :in $ ?n
@@ -51,9 +48,9 @@
                   (mapcat :observations (vals all)))
           "every observation is {focus tag note}"))))
 
-(deftest read-all-is-quiet-without-instances
-  (testing "the parked state: fukan ships no Projection instances, so read-all finds nothing to run"
-    (is (= {} (m/read-all (pipeline/build-model nil))))))
+(deftest principled-readings-ship-with-the-model
+  (testing "the principle files mint the shipped readings — a plain build carries them"
+    (is (= #{"Boundary"} (set (keys (m/read-all (pipeline/build-model nil))))))))
 
 (deftest a-reading-renders-only-its-focus
   (testing "Patterns renders the relation nodes its inline :select focuses — and ONLY them"
@@ -89,7 +86,7 @@
 
 (deftest boundary-reading-tells-the-trust-story
   (testing "Boundary renders per-trust-boundary: declared parsers, undeclared producers, validator shapes"
-    (let [db     (model+readings)
+    (let [db     (pipeline/build-model nil)
           result (m/read-projection db (proj db "Boundary"))
           notes  (mapv :note (:observations result))
           tagged (fn [as] (filter #(= as (:as %)) (:observations result)))]

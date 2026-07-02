@@ -13,7 +13,8 @@
             ;; correspondence is now distributed across the code elements
             [canvas.vocab.code.module :as module]
             [canvas.vocab.code.operation :as operation]
-            [canvas.vocab.code.effect :as effect]))
+            [canvas.principles.parse-dont-validate :as pdv]
+            [canvas.principles.declared-effects :as declared-effects]))
 
 ;; register the project dialect (malli render + sigs-adhere?) for the `type-adheres?` path
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
@@ -276,17 +277,17 @@
                   {:rel/id "g|performs|io" :rel/from -5 :rel/kind :performs :rel/to -10}]                  ; g performs :io
           undeclared-db (build/tx-maps->cozo common)
           declared-db   (build/tx-maps->cozo (conj common {:rel/id "af|performs|io" :rel/from -2 :rel/kind :performs :rel/to -10}))]
-      (is (= #{"f"} (effect/undeclared-effects undeclared-db))
+      (is (= #{"f"} (declared-effects/undeclared-effects undeclared-db))
           "f's twin transitively reaches :io (via g), but f declares nothing → under-declaration")
-      (is (empty? (effect/undeclared-effects declared-db))
+      (is (empty? (declared-effects/undeclared-effects declared-db))
           "declaring :io on the authored f satisfies EffectCorrespondence"))))
 
 (deftest effect-and-totality-green-on-the-self-model
   (testing "the merged self-model declares every effect its code reaches, and its trusted core is total"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (effect/undeclared-effects model))
+      (is (empty? (declared-effects/undeclared-effects model))
           "0 undeclared effects — design and extraction speak one effect language, to call-graph depth")
-      (is (empty? (operation/totality-violations model))
+      (is (empty? (pdv/totality-violations model))
           "0 totality violations — every trusted-core reader (its :in is a declared TrustBoundary) is total"))))
 
 (deftest totality-fires-on-a-partial-trusted-reader
@@ -295,7 +296,7 @@
             proving the trust boundary is read from config, not the hardcoded StructureDb"
     (let [throws {:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "throws"}
           k      {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "TrustDb"}
-          tb     [{:db/id -21 :structure/of :canvas.vocab.code.operation/TrustBoundary}
+          tb     [{:db/id -21 :structure/of :canvas.principles.parse-dont-validate/TrustBoundary}
                   {:rel/id "tb|kind|k" :rel/from -21 :rel/kind :kind :rel/to -20}]
           ;; authored reader (module m), :in references TrustDb ; extracted twin (fukan.m) throws
           common [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
@@ -311,9 +312,9 @@
                   throws k]
           with-tb    (build/tx-maps->cozo (concat common tb))
           without-tb (build/tx-maps->cozo common)]
-      (is (= #{"reader"} (operation/totality-violations with-tb))
+      (is (= #{"reader"} (pdv/totality-violations with-tb))
           "the trusted reader's twin throws → a totality violation")
-      (is (empty? (operation/totality-violations without-tb))
+      (is (empty? (pdv/totality-violations without-tb))
           "no TrustBoundary declared → vacuous; the law reads the designation, not a hardcoded name"))))
 
 ;; The Lens-act Coverage law (probe-reader → Lens) was DISSOLVED on 2026-06-29: readings became
@@ -361,7 +362,7 @@
                     {:db/id -23 :structure/of :canvas.vocab.type/Schema :val/kind "boolean"}
                     {:rel/id "c|out|bool" :rel/from -3 :rel/kind :out :rel/to -23}]
           tb      (fn [op-id suffix]
-                    [{:db/id -21 :structure/of :canvas.vocab.code.operation/TrustBoundary}
+                    [{:db/id -21 :structure/of :canvas.principles.parse-dont-validate/TrustBoundary}
                      {:rel/id (str "tb|kind|k" suffix) :rel/from -21 :rel/kind :kind :rel/to -20}
                      {:rel/id (str "tb|parsed-by|" suffix) :rel/from -21 :rel/kind :parsed-by :rel/to op-id}])
           honest   (build/tx-maps->cozo (concat [k] parser imposter (tb -2 "honest")))
@@ -374,7 +375,7 @@
 (deftest trust-boundary-requires-a-parser
   (testing "the [:+ :parsed-by] cardinality makes an undeclared parser a structural violation"
     (let [k  {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
-          tb [{:db/id -21 :structure/of :canvas.vocab.code.operation/TrustBoundary}
+          tb [{:db/id -21 :structure/of :canvas.principles.parse-dont-validate/TrustBoundary}
               {:rel/id "tb|kind|k" :rel/from -21 :rel/kind :kind :rel/to -20}]
           db (build/tx-maps->cozo (concat [k] tb))]
       (is (seq (law-violations db "parsed-by"))

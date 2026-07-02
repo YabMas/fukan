@@ -177,9 +177,10 @@
       (is (contains? (set (map :law (s/check bad)))
                      "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
 
-(deftest instrument-instances-are-parked
-  (testing "fukan ships NO instrument instances — the act grammar and renderers stay dormant,
-            exercised by ad-hoc instances in the lens/materialize/readings tests"
+(deftest principled-readings-are-the-shipped-projections
+  (testing "fukan's Projection instances are exactly the principled readings; still no Lens instances"
     (let [db (pipeline/build-model nil)]
-      (is (empty? (names-of db :Projection)) "no Projection instances")
-      (is (empty? (names-of db :Lens)) "no Lens instances"))))
+      (is (= #{"Boundary"} (names-of db :Projection))
+          "the parse-dont-validate principle ships its Boundary reading")
+      (is (empty? (names-of db :Lens))
+          "foci stay inline — no standalone Lens nodes"))))

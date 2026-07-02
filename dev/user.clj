@@ -21,7 +21,9 @@
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as code-module]
             [canvas.vocab.code.effect :as code-effect]
-            [canvas.vocab.code.subsystem :as la]))
+            [canvas.vocab.code.subsystem :as la]
+            [canvas.principles.parse-dont-validate :as pdv]
+            [canvas.principles.declared-effects :as declared-effects]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -218,7 +220,7 @@
    `Totality` law asserts."
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (operation/totality-violations m)]
+    (let [w (pdv/totality-violations m)]
       (if (empty? w)
         (println "Trusted core is total — no modelled reader's code throws.")
         (do (println "Totality worklist —" (count w) "trusted-core reader(s) whose code throws:")
@@ -231,7 +233,7 @@
    is listed first; then :phantom (declared, not reached — soft: taxonomy gap or stale intent)."
   []
   (if-let [m (infra-model/get-model)]
-    (let [drift (code-effect/effect-drift m)
+    (let [drift (declared-effects/effect-drift m)
           u (filter (fn [[_ d]] (seq (:undeclared d))) drift)
           p (filter (fn [[_ d]] (seq (:phantom d))) drift)]
       (println "UNDECLARED — code reaches an effect the design never declared (the law worklist):")

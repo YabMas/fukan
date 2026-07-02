@@ -3,8 +3,10 @@
 ;; the defstructure forms in: src lib canvas test.
 {:hooks
  {:analyze-call
-  {canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
-   canvas.vocab.code.effect/EffectCorrespondence hooks.fukan.structure/instance
+  {canvas.principles.declared-effects/EffectCorrespondence hooks.fukan.structure/instance
+   canvas.principles.parse-dont-validate/Totality hooks.fukan.structure/instance
+   canvas.principles.parse-dont-validate/TrustBoundary hooks.fukan.structure/instance
+   canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
    canvas.vocab.code.kind/Kind hooks.fukan.structure/instance
    canvas.vocab.code.module/CallRealization hooks.fukan.structure/instance
    canvas.vocab.code.module/Fidelity hooks.fukan.structure/instance
@@ -13,8 +15,6 @@
    canvas.vocab.code.operation/Operation hooks.fukan.structure/instance
    canvas.vocab.code.operation/Realization hooks.fukan.structure/instance
    canvas.vocab.code.operation/SignatureCompleteness hooks.fukan.structure/instance
-   canvas.vocab.code.operation/Totality hooks.fukan.structure/instance
-   canvas.vocab.code.operation/TrustBoundary hooks.fukan.structure/instance
    canvas.vocab.code.operation/TypeCoverage hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/ModuleArchitecture hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
