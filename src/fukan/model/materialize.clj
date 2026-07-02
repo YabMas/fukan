@@ -300,6 +300,36 @@
                    (f/observation nodes :ambiguity
                      (str sn " in " (count mods) " modules: " (str/join ", " (sort mods))))))))))
 
+(defn- depth-finding
+  "Module depth (APoSD): interface size (the :exposes count) against implementation size (the
+   direct contains-members count) per focused module, SHALLOWEST first — a large interface over
+   a small implementation reads shallow; the verdict is a judgment call, so this is a reading,
+   not a Check. Counts come from inline `(measure …)` clauses; aggregate rows are inner joins,
+   so absent groups default to 0 at the merge here, and the depth ratio (members per exposed op)
+   is computed render-side (datalog has no arithmetic expression position)."
+  [db focus]
+  (let [in?    (set focus)
+        counts (fn [where]
+                 (into {} (filter (comp in? first))
+                       (cq/q (into '[:find ?m ?k :in $ % :where] where) db (s/vocab-rules))))
+        iface  (counts '[(Module ?m)
+                         (measure ?k (count ?op)
+                           [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?op])])
+        impl   (counts '[(Module ?m)
+                         (measure ?k (count ?x) (contains ?m ?x))])
+        rows   (for [m     focus
+                     :let  [i (get iface m 0), n (get impl m 0)]
+                     :when (pos? (max i n))]
+                 {:m m :nm (:entity/name (cq/entity db m)) :iface i :impl n
+                  :depth (when (pos? i) (/ (double n) i))})]
+    (f/finding "Depth"
+      (->> rows
+           (sort-by (fn [{:keys [depth nm]}] [(or depth Double/MAX_VALUE) nm]))
+           (mapv (fn [{:keys [m nm iface impl depth]}]
+                   (f/observation #{m} :depth
+                     (str nm ": interface " iface " ops / implementation " impl " members"
+                          (if depth (String/format java.util.Locale/ROOT " (depth %.1f)" (to-array [depth])) " (no public surface)")))))))))
+
 (defmulti render-finding
   "Render reading projection `proj`'s lens focus `nodes` into a Finding — the read dual of
    render-base. Project-owned defmethods supply the per-projection aggregation; each routes to a
@@ -311,6 +341,7 @@
 
 (defmethod render-finding "Patterns"    [db _ focus] (patterns-finding db focus))
 (defmethod render-finding "Consistency" [db _ focus] (consistency-finding db focus))
+(defmethod render-finding "Depth"       [db _ focus] (depth-finding db focus))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Finding]}
   read-projection

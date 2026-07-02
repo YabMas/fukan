@@ -21,6 +21,8 @@
   ;; "no extracted twin" is exactly the `op-twin` defrelation negated — the same join the
   ;; Realization law uses: a not-join over the rule.
   {:select '[(authored ?n) (not-join [?n] (op-twin ?n ?o))]})
+(Lens modules "every module"
+  {:select '[(Module ?n)]})
 
 (Grouping lens
-  {:child [everything relations operations unrealized-operations]})
+  {:child [everything relations operations modules unrealized-operations]})

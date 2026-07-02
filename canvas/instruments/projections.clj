@@ -4,7 +4,7 @@
    the core `Lens`/`Projection` grammar."
   (:require [fukan.canvas.core.lens :refer [Projection Mapping]]
             [canvas.vocab.grouping :refer [Grouping]]
-            [canvas.instruments.lenses :refer [everything unrealized-operations relations operations]]))
+            [canvas.instruments.lenses :refer [everything unrealized-operations relations operations modules]]))
 
 (Projection Blueprint
   "The model projected to implementation code — the first projection target."
@@ -39,5 +39,10 @@
   {:through operations
    :maps    [(Mapping {:from "an operation" :to "an ambiguity observation"})]})
 
+(Projection Depth
+  "Module depth — interface size against implementation size, shallowest first (a reading)."
+  {:through modules
+   :maps    [(Mapping {:from "a module" :to "a depth observation"})]})
+
 (Grouping projection
-  {:child [Blueprint DriftClose Patterns Consistency]})
+  {:child [Blueprint DriftClose Patterns Consistency Depth]})
