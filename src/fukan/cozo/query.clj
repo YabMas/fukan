@@ -71,7 +71,7 @@
   (swap! synthetic-rules merge synthetic)
   nil)
 
-(declare compile-clause compile-clauses)
+(declare compile-clause compile-clauses dewild)
 
 (def ^:private comparison-ops
   "Datalog comparison-predicate symbols → their CozoScript infix operator. Both sides are
@@ -124,6 +124,57 @@
     (str (agg-ops (first t)) "(" (cvar (second t)) ")")
     :else (throw (ex-info (str "unsupported rule-head term: " (pr-str t)) {:term t}))))
 
+;; ── inline measures: (measure ?out (agg ?var) body…) lifted to aux rules ──────
+;; Cozo aggregates only in rule heads, so an inline measure is lifted at compile time into a
+;; content-addressed auxiliary rule and replaced with a call binding the inferred GROUP vars +
+;; the out var — the same synthesis move as the not-join helpers and predicate-ports.
+
+(defn- vars-of
+  "Every ?var in `form`, first-appearance order, deduped."
+  [form]
+  (distinct (filter dvar? (tree-seq coll? seq form))))
+
+(defn- measure-clause? [c] (and (seq? c) (= 'measure (first c))))
+
+(defn- parse-measure
+  "Validate `(measure ?out (agg ?v) body…)` → {:out :agg :avar :body}. Throws on malformed."
+  [[_ out agg-form & body :as c]]
+  (let [[agg avar] (when (seq? agg-form) agg-form)]
+    (when-not (and (dvar? out) (seq? agg-form) (= 2 (count agg-form))
+                   (contains? agg-ops agg) (dvar? avar) (seq body))
+      (throw (ex-info (str "malformed measure clause — want (measure ?out (agg ?var) body…), agg one of "
+                           (keys agg-ops) ": " (pr-str c)) {:clause c})))
+    (when (some #{out} (vars-of body))
+      (throw (ex-info (str "measure out-var " out " must not appear in its body: " (pr-str c)) {:clause c})))
+    (when-not (some #{avar} (vars-of body))
+      (throw (ex-info (str "measure aggregate var " avar " must appear in its body: " (pr-str c)) {:clause c})))
+    {:out out :agg agg :avar avar :body (vec body)}))
+
+(defn- expand-measures
+  "Lift each TOP-LEVEL `(measure ?out (agg ?v) body…)` in `clauses` into a synthesized aggregate
+   rule, replacing it with a call binding the inferred group vars + `?out`. Group vars = body
+   vars ∩ (sibling-clause vars ∪ `outer-vars`) — Soufflé-style inference; `outer-vars` carries
+   the enclosing scope (find vars / rule-head vars / law offenders). Returns [clauses' aux-rules];
+   an aux body may itself contain measures — they expand when the aux rule is compiled (nesting
+   falls out of the recursion). Note the inner-join semantics: an empty group yields NO row (not
+   a zero) — callers wanting defaults supply them after the query.
+   ⚠ Body-local var names are NOT private across sibling measure clauses: grouping inference
+   tree-walks the sibling clauses INCLUDING other measures' bodies, so a var reused as a body
+   local in two sibling measures becomes a group key of both — and an aggregate var that also
+   appears in a sibling clause or the find spec becomes a group key, degenerating the aggregate
+   to per-value counts. Give each measure body fresh local names."
+  [outer-vars clauses]
+  (reduce (fn [[cs rules] c]
+            (if (measure-clause? c)
+              (let [{:keys [out agg avar body]} (parse-measure c)
+                    shared (set (concat outer-vars (vars-of (remove #{c} clauses))))
+                    gvars  (vec (filter shared (vars-of body)))
+                    head   (symbol (helper-name "measure_" [gvars c]))]
+                [(conj cs (apply list head (conj gvars out)))
+                 (conj rules (into [(apply list head (conj gvars (list agg avar)))] body))])
+              [(conj cs c) rules]))
+          [[] []] clauses))
+
 (defn- compile-clause
   "One datalog clause → `[cozo-fragment extra-rules refs]` (PURE): `extra-rules` are the not-join/
    or-join helper definitions it spawns (uniquely named by content), `refs` the set of rule names it
@@ -155,6 +206,9 @@
        (concat (map (fn [[body _ _]] (str hn "[" vs "] := " body)) parts)
                (mapcat second parts))
        (reduce into #{} (map #(nth % 2) parts))])
+    (and (seq? c) (= 'measure (first c)))
+    (throw (ex-info (str "(measure …) is not supported inside not-join/or-join — lift it to the top level: "
+                         (pr-str c)) {:clause c}))
     (and (seq? c) (symbol? (first c)))
     (let [nm (rname (first c))]
       [(str nm "[" (str/join ", " (map cterm (rest c))) "]") nil #{nm}])
@@ -170,14 +224,20 @@
      (reduce into #{} (map #(nth % 2) rs))]))
 
 (defn- compile-rule
-  "A datalog rule `[(head args…) body…]` → `[def-lines refs]`: the head line plus any not-join/
-   or-join helpers its body spawned, and the rule names its body calls (PURE). A head arg may be
-   an aggregate application `(agg ?v)` (see `chead`) — the rule is then a MEASURE: its plain head
-   vars group, its aggregate positions fold."
+  "A datalog rule `[(head args…) body…]` → `[def-lines refs]`: the head line, any not-join/
+   or-join helpers, and any lifted-measure aux rules its body spawned (compiled recursively —
+   nested measures fall out), plus the rule names its body calls (PURE). A head arg may be an
+   aggregate application `(agg ?v)` (see `chead`) — the rule is then a MEASURE."
   [[head & body]]
-  (let [[bodystr extra refs] (compile-clauses body)]
-    [(cons (str (rname (first head)) "[" (str/join ", " (map chead (rest head))) "] := " bodystr) extra)
-     refs]))
+  (let [[body* aux]          (expand-measures (filter dvar? (rest head)) body)
+        [bodystr extra refs] (compile-clauses body*)
+        [aux-lines aux-refs] (reduce (fn [[ls rs] r]
+                                       (let [[l rf] (compile-rule (dewild r))]
+                                         [(into ls l) (into rs rf)]))
+                                     [[] #{}] aux)]
+    [(concat [(str (rname (first head)) "[" (str/join ", " (map chead (rest head))) "] := " bodystr)]
+             extra aux-lines)
+     (into refs aux-refs)]))
 
 ;; ── the vocab-rule index + reachability closure ───────────────────────────────
 (defn ^{:malli/schema [:=> [:cat] :any]}
@@ -226,19 +286,23 @@
               :else       [x n]))]
     (first (go form 0))))
 
-(defn ^{:malli/schema [:=> [:cat :any :any :any] :any]}
+(defn ^{:malli/schema [:=> [:cat :any :any :any :any] :any]}
   compile-body
   "Compile `where` (a seq of clauses) + caller-supplied `extra-rules` (datalog rules) into
    `[rule-lines body-str]`: the vocab rules in the reference closure, then the extra rules,
    then any not-join/or-join helpers (deduped), and the joined where body. Shared by the
-   law engine (`compile-law`) and `q`. PURE — `_` wildcards are expanded (per scope) first."
-  [where extra-rules index]
+   law engine (`compile-law`) and `q`. PURE — `_` wildcards are expanded (per scope) first,
+   then top-level `(measure …)` clauses are lifted to aux rules (`expand-measures`), with
+   `outer-vars` (find vars / law offenders) counting toward grouping inference."
+  [where extra-rules index outer-vars]
   (let [where               (dewild where)
+        [where* aux]        (expand-measures outer-vars where)
+        extra-rules         (into (vec extra-rules) aux)
         [rule-lines erefs]  (reduce (fn [[lines refs] r]
                                       (let [[l rf] (compile-rule (dewild r))]
                                         [(into lines l) (into refs rf)]))
                                     [[] #{}] extra-rules)
-        [body extra wrefs]  (compile-clauses where)
+        [body extra wrefs]  (compile-clauses where*)
         vocab-lines         (mapcat #(:lines (index %)) (closure index (into erefs wrefs)))]
     [(distinct (concat vocab-lines rule-lines extra)) body]))
 
@@ -313,7 +377,7 @@
         ;; and never close over query `:in` inputs — substituting a scalar into a rule would
         ;; corrupt its head (e.g. a shared name like `?op`), so the rules are passed verbatim.
         where*  (walk/postwalk-replace subst where)
-        [rule-lines body] (compile-body where* (vec rules) (vocab-index))
+        [rule-lines body] (compile-body where* (vec rules) (vocab-index) (find-vars find))
         head    (str/join ", " (map cvar (find-vars find)))
         program (str preamble "\n" (str/join "\n" rule-lines) "\n?[" head "] := " body)
         rows    (db/q db program)]

@@ -114,4 +114,6 @@
    fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
+   fukan.cozo.measure-test/MtCrate hooks.fukan.structure/instance
+   fukan.cozo.measure-test/MtThing hooks.fukan.structure/instance
    fukan.model.pipeline-test/ECard hooks.fukan.structure/instance}}}

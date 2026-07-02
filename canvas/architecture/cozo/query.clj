@@ -23,8 +23,8 @@
     {:signature [:=> [:cat] :any]
      :performs  [:throws]                          ; reaches the compiler's unsupported-form throw
      :delegates [kstructure/vocab-rules]})
-  (Operation compile-body "Compile where-clauses + caller rules → [rule-lines body-str], emitting the reachable vocab rules. A PURE compiler (content-named helpers, threaded wildcard counter)."
-    {:signature [:=> [:catn [:where :any] [:rules :any] [:index :any]] :any]
+  (Operation compile-body "Compile where-clauses + caller rules + outer-scope vars (find vars / law offenders — they count toward inline-measure grouping inference) → [rule-lines body-str], emitting the reachable vocab rules. A PURE compiler (content-named helpers, threaded wildcard counter, lifted-measure aux rules)."
+    {:signature [:=> [:catn [:where :any] [:rules :any] [:index :any] [:outer-vars :any]] :any]
      :performs  [:throws]})
   (Operation q "Run a datalog query over a Cozo db like d/q — relation/collection finds, an :in of $ + optional % (rules) + scalar params. Cells are strings (the triple view)."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:query :any]] :any]

@@ -38,7 +38,7 @@
                          [(first offenders) :structure/of st]
                          (list (symbol (name st)) (first offenders))))
         where*       (cond->> where scope-clause (cons scope-clause))
-        [rule-lines body] (query/compile-body where* rules index)]
+        [rule-lines body] (query/compile-body where* rules index offenders)]
     (str/join "\n" (concat rule-lines
                            [(str "?[" (str/join ", " (map query/cvar offenders)) "] := " body)]))))
 
