@@ -6,6 +6,8 @@
    rules — so it reads at domain altitude — and returns the focus node-set; the
    induced relations among those nodes are the rest of the sub-graph. Transitive
    scope (closure) is just recursion within that single query, not a separate knob.
+   `projection-focus` resolves a Projection's focus the same way — its own inline
+   `:select`, a named `:through` Lens, or (absent both) the whole model.
 
    No cycle: it depends on the kernel for `vocab-rules`, the kernel does not depend back.
 
@@ -27,10 +29,13 @@
    selection lives HERE, not in a realization shim: it is model-native datalog — it references no
    code, only the graph's own vocabulary, exactly like a law's `:where` or a `realized-as`
    derivation. It is the focus stated runnably, not a second thing that could drift from it. A lens
-   with no `:select` is prose-only (not evaluable)."
+   with no `:select` is prose-only (not evaluable).
+   A Lens is the OPTIONAL naming act for a focus — the `defrelation` of selections: minted when
+   a selection is genuinely shared (≥2 consumers) or wants independent addressability. A
+   single-consumer focus belongs INLINE on its Projection (`:select` there)."
   {:select [:? {:form true} :any]})         ; the datalog selection (binding ?n) — an opaque code-form leaf
 
-;; ── THE SYNTHESIS: a Projection re-presents the model through a Lens ───────────────────────────
+;; ── THE SYNTHESIS: a Projection re-presents the model from a focus ─────────────────────────────
 
 (defstructure ^:value Mapping
   "One source-kind → target-artifact rule within a projection — value-identified by its (from, to)."
@@ -42,19 +47,25 @@
      a BASE projection renders source kinds directly — it `:maps` each focused kind to a target
      artifact (Blueprint → implementation specs; Docs → documentation).
      a CONTEXTUALIZATION renders THROUGH a base it `:contextualizes`, wrapping that base's output in
-     a framing `:context` (DriftClose = Blueprint framed as drift to close; the same composes
-     Blueprint with a 'new feature' or 'refactor' context). It adds no mappings of its own — it
-     reuses the base's, told differently.
-   Either flavour renders THROUGH a `Lens` (the WHAT). The same lens can feed a read and a
-   projection (the drift lens feeds drift readings AND DriftClose)."
-  {:through        Lens              ; the focus it renders through (the WHAT)
-   :maps           [:* Mapping]      ; a BASE's source→artifact mappings (the HOW)
-   :contextualizes [:? Projection]   ; a CONTEXTUALIZATION's base projection
-   :context        [:? :string]}     ; the framing prose wrapped around the base render
+     a framing `:context` (DriftClose = Blueprint framed as drift to close). It adds no mappings of
+     its own — it reuses the base's, told differently.
+   Either flavour declares its FOCUS one of three ways: an inline `:select` (its OWN selection —
+   the default home for a single-consumer focus), a `:through` Lens (a NAMED focus, minted only
+   when a selection is genuinely shared), or NEITHER — no narrowing is the maximal focus, the
+   whole model (Blueprint). Never both; `projection-focus` is the one resolution."
+  {:select         [:? {:form true} :any] ; the projection's own inline selection (binding ?n)
+   :through        [:? Lens]              ; …or a NAMED shared focus
+   :maps           [:* Mapping]           ; a BASE's source→artifact mappings (the HOW)
+   :contextualizes [:? Projection]        ; a CONTEXTUALIZATION's base projection
+   :context        [:? :string]}          ; the framing prose wrapped around the base render
   ;; a projection is one flavour or the other — it declares mappings (base) or frames
   ;; another (contextualization); neither would render nothing.
   (law "a projection is a base (declares mappings) or a contextualization (frames another)"
-    (has-any :maps :contextualizes)))
+    (has-any :maps :contextualizes))
+  (law "a projection focuses inline (:select) or through a named lens (:through), never both"
+    :offenders '[?p]
+    :where '[[?p :val/select ?s]
+             [?tr :rel/from ?p] [?tr :rel/kind :through]]))
 
 ;; ── THE GATE: a Check turns a Lens's focus into a verdict ──────────────────────────────────────
 
@@ -119,6 +130,24 @@
     ;; the :select form round-trips through pr-str in the Cozo substrate (arrives as a
     ;; string) — read it back when it came as a string.
     (focus-nodes db (cond-> clauses (string? clauses) edn/read-string))))
+
+(defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] [:vector :Eid]]}
+  projection-focus
+  "Resolve Projection node `proj-eid`'s FOCUS — the node-set it renders. Three-way:
+   an inline `:select` (its own `:val/select` form) → `focus-nodes`; else a `:through`
+   Lens → `evaluate-lens` (a prose-only lens still yields nil = not evaluable, the
+   caller's concern); else NO focus declared → the WHOLE MODEL (absence of narrowing is
+   the maximal focus). The one resolution `materialize-projection` and `read-projection`
+   share."
+  [db proj-eid]
+  (let [clauses (:val/select (cq/entity db proj-eid))]
+    (if clauses
+      (focus-nodes db (cond-> clauses (string? clauses) edn/read-string))
+      (if-let [l (ffirst (cq/q '[:find ?l :in $ ?p
+                                 :where [?r :rel/from ?p] [?r :rel/kind :through] [?r :rel/to ?l]]
+                               db proj-eid))]
+        (evaluate-lens db l)
+        (focus-nodes db '[[?n :structure/of _]])))))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb [:vector :Eid] [:vector :Clause]] [:vector :Eid]]}
   refine

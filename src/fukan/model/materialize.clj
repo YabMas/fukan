@@ -242,20 +242,20 @@
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Projection] :Instruction]}
   materialize-projection
   "The model-driven entry: materialize the modelled `Projection` node `proj-eid` — render
-   its `:through` lens focus under its base, wrapped in its `:context` (if a
-   contextualization). The Projection's `:maps`/`:context` are the intent manifest; the
-   renderers realize them. A prose-only lens (no selection query) yields nil → renders nothing."
+   its resolved focus (inline `:select` / `:through` lens / whole model) under its base,
+   wrapped in its `:context` (if a contextualization). The Projection's `:maps`/`:context`
+   are the intent manifest; the renderers realize them. A prose-only `:through` lens yields
+   nil → renders nothing."
   [db proj-eid]
-  (let [projection (:entity/name (cq/entity db proj-eid))
-        lens-eid   (rel-target db proj-eid :through)]
-    (compose db projection (lens/evaluate-lens db lens-eid))))
+  (let [projection (:entity/name (cq/entity db proj-eid))]
+    (compose db projection (lens/projection-focus db proj-eid))))
 
 ;; ── the readings: render a lens focus into a Finding (the read dual of render-base) ──────────
 ;; render-base produces a per-node text fragment; render-finding aggregates the WHOLE focus into
 ;; observations — a reading observes patterns ACROSS nodes. Each helper is a named top-level defn-
 ;; (not inline in the defmethod) so its finding/query calls are real, extractable edges. The focus
-;; is whatever the projection's :through lens selected — a reading never re-selects, so it cannot
-;; drift from its lens.
+;; is whatever the projection's own `:select` (or its `:through` lens) resolved — a reading never
+;; re-selects, so the focus cannot drift from the reading.
 
 (defn- kw [x] (some-> x keyword))   ; the Cozo mirror stringifies :structure/of / :rel/kind
 
@@ -397,12 +397,13 @@
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Finding]}
   read-projection
-  "Run reading projection `proj-eid`: evaluate its :through lens, render the focus into a Finding —
-   the read dual of materialize-projection (which renders the focus to text). A prose-only lens
-   (no selection query) yields a nil focus → an empty finding."
+  "Run reading projection `proj-eid`: resolve its focus (inline `:select` / `:through`
+   lens / whole model), render it into a Finding — the read dual of materialize-projection
+   (which renders the focus to text). A prose-only `:through` lens yields a nil focus → an
+   empty finding."
   [db proj-eid]
   (let [proj  (:entity/name (cq/entity db proj-eid))
-        focus (lens/evaluate-lens db (rel-target db proj-eid :through))]
+        focus (lens/projection-focus db proj-eid)]
     (render-finding db proj (or focus #{}))))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb] :FindingMap]}

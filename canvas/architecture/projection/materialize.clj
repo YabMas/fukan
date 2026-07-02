@@ -1,9 +1,11 @@
 (ns canvas.architecture.projection.materialize
   "Self-spec: fukan's materialize / LOWER layer (`fukan.model.materialize`) — the inverse of the
    target layer's extraction. It composes per-primitive `render` instructions (a multimethod — the
-   open extension point, modelled for coverage but its inline-method fan-out is not) over a Lens's
-   focus, projecting the model into an implementation specification. `materialize-view` is the
-   public entry. `core.lens` lives in `canvas.architecture.kernel.lens`."
+   open extension point, modelled for coverage but its inline-method fan-out is not) over a
+   resolved focus (a projection's inline `:select`, a named Lens, or the whole model), projecting
+   the model into an implementation specification. `materialize-projection` is the model-driven
+   entry (`materialize-view` is a lens-eid convenience). `core.lens` lives in
+   `canvas.architecture.kernel.lens`."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.structure :as kstructure]
@@ -13,7 +15,7 @@
             [canvas.architecture.projection.finding :as finding]))
 
 (Module materialize
-  "Project the model down into an implementation spec, through a Lens focus + a Projection."
+  "Project the model down into an implementation spec through a resolved focus + a Projection."
   (Kind Lens) (Kind Instruction) (Kind Projection)
   (Kind ProjectionName :string) (Kind ModuleName :string)
   (Kind Clause) (Kind Eid :int)
@@ -32,10 +34,10 @@
   (Operation materialize-module "Render a module's Operations under a projection."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:module ModuleName]] Instruction]
      :performs  [:throws]})                        ; reaches the lens engine's query-compiler throw
-  (Operation materialize-projection "Render a modelled Projection through its own lens (model-driven)."
+  (Operation materialize-projection "Render a modelled Projection through its resolved focus (model-driven)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj Projection]] Instruction]
-     :performs  [:throws]                          ; via evaluate-lens
-     :delegates [lens-engine/evaluate-lens]})
+     :performs  [:throws]                          ; via projection-focus
+     :delegates [lens-engine/projection-focus]})
   (Operation render "Render a single node under a projection (composes the per-primitive render-base multimethod)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:eid Eid]] Instruction]
      :performs  [:throws]})                         ; the renderers read the graph through the query compiler
@@ -69,10 +71,10 @@
   (Operation ^:private boundary-finding
     "The trust story per focused TrustBoundary: declared parsers + failure channels, undeclared producers, validator-shaped ops — inline queries over produces/parsed-by, judgment surface."
     {:performs [:throws] :delegates [finding/finding finding/observation]})
-  (Operation read-projection "Run a reading projection: evaluate its :through lens, render the focus into a Finding."
+  (Operation read-projection "Run a reading projection: resolve its focus, render it into a Finding."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] finding/Finding]
-     :performs  [:throws]                          ; via evaluate-lens
-     :delegates [lens-engine/evaluate-lens]})
+     :performs  [:throws]                          ; via projection-focus
+     :delegates [lens-engine/projection-focus]})
   (Operation read-all "Run every reading projection present in the db → a map of findings."
     {:signature [:=> [:catn [:db substrate/StructureDb]] FindingMap]
      :performs  [:throws]})                         ; via read-projection / the query compiler

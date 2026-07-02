@@ -24,6 +24,10 @@
     {:signature [:=> [:catn [:db substrate/StructureDb] [:lens-eid Eid]] [:vector Eid]]
      :performs  [:throws]                          ; reaches focus-nodes' query-compiler throw
      :delegates [query/entity]})
+  (Operation projection-focus "Resolve a Projection node's focus: inline :select → focus-nodes; :through lens → evaluate-lens; none → the whole model."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] [:vector Eid]]
+     :performs  [:throws]                          ; reaches focus-nodes' query-compiler throw
+     :delegates [query/entity query/q]})
   (Operation refine "Narrow a focus to members also matching further clauses (lens-within-lens)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:focus [:vector Eid]] [:clauses [:vector Clause]]] [:vector Eid]]
      :performs  [:throws]})                        ; reaches focus-nodes' query-compiler throw

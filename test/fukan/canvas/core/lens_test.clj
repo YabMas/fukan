@@ -3,7 +3,7 @@
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
             [fukan.cozo.law]
-            [fukan.canvas.core.lens :as lens :refer [Lens Check]]
+            [fukan.canvas.core.lens :as lens :refer [Lens Check Projection Mapping]]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 (defstructure Widget
@@ -12,7 +12,7 @@
 
 (defstructure Grp
   "A grouping fixture — :child relations place members in a module (in-module)."
-  {:child [:* Any]})
+  {:child [:* {:contains true} Any]})
 
 (defn- by-name [db n]
   (ffirst (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
@@ -80,3 +80,50 @@
       (is (= "widgets exist in m" (:verdict (by-check "widgets-in-m"))))
       (is (= #{"x" "y" "z"} (names db (:offenders (by-check "widgets-in-m"))))
           "the offenders are the gated lens's focus"))))
+
+;; ── projection-focus: the three-way focus resolution ─────────────────────────
+;; a projection declares its focus one of three ways: an inline :select, a :through
+;; lens (a NAMED shared focus), or neither — no narrowing = the whole model.
+(Projection ^{:name "pf-inline"} pf-inline
+  "inline focus: the projection carries its own selection"
+  {:select '[(Widget ?n) (in-module ?n "m")]
+   :maps   [(Mapping {:from "a widget" :to "a spec"})]})
+(Projection ^{:name "pf-through"} pf-through
+  "named focus: renders through a shared lens"
+  {:through lns-in-m
+   :maps    [(Mapping {:from "a widget" :to "a spec"})]})
+(Projection ^{:name "pf-whole"} pf-whole
+  "no focus: the whole model"
+  {:maps [(Mapping {:from "a widget" :to "a spec"})]})
+(Projection ^{:name "pf-prose"} pf-prose
+  "through a prose-only lens: not evaluable"
+  {:through lns-prose
+   :maps    [(Mapping {:from "a widget" :to "a spec"})]})
+(Projection ^{:name "pf-both"} pf-both
+  "ILLEGAL: both an inline :select and a :through lens — the never-both law's offender"
+  {:select  '[(Widget ?n)]
+   :through lns-in-m
+   :maps    [(Mapping {:from "a widget" :to "a spec"})]})
+
+(deftest projection-focus-resolves-three-ways
+  (testing "inline :select / :through lens / no focus (whole model); prose-only :through stays nil"
+    (let [db (build/vars->cozo [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other
+                               #'lns-in-m #'lns-prose
+                               #'pf-inline #'pf-through #'pf-whole #'pf-prose])]
+      (is (= #{"x" "y" "z"} (names db (lens/projection-focus db (by-name db "pf-inline"))))
+          "inline :select is the projection's own focus")
+      (is (= #{"x" "y" "z"} (names db (lens/projection-focus db (by-name db "pf-through"))))
+          ":through delegates to the named lens")
+      (is (contains? (names db (lens/projection-focus db (by-name db "pf-whole"))) "q")
+          "no focus = the whole model (q is outside module m, still in focus)")
+      (is (nil? (lens/projection-focus db (by-name db "pf-prose")))
+          "a prose-only :through lens is not evaluable — nil, the caller's concern"))))
+
+(deftest a-projection-cannot-carry-both-focus-sources
+  (testing "the never-both law fires on a projection with :select AND :through"
+    (let [db   (build/vars->cozo [#'lns-in-m #'pf-both])
+          offs (->> (s/check db)
+                    (filter #(re-find #"never both" (:law %)))
+                    (mapcat :offenders) (map first)
+                    (map #(:entity/name (cq/entity db %))) set)]
+      (is (= #{"pf-both"} offs)))))
