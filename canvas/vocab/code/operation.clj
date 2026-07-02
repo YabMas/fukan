@@ -141,11 +141,21 @@
              (not-join [?o] (op-twin ?s ?o))]))                       ; … with no authored twin
 
 (defstructure TrustBoundary
-  "Designates a Kind as a parse-don't-validate TRUST BOUNDARY: an Operation that takes this Kind as
-   input operates on already-trusted data, so it must be total. `:kind` points at the TRUSTED ARTIFACT
-   itself (the parsed, trusted representation — e.g. fukan's StructureDb, the Model), not a boundary
-   line; the name reads 'this Kind marks where trust holds'. The Totality law reads the designation."
-  {:kind Kind})
+  "Designates a parse-don't-validate TRUST BOUNDARY — the complete boundary story in one element.
+   `:kind` points at the TRUSTED ARTIFACT (the parsed, trusted representation — e.g. fukan's
+   StructureDb): the `Totality` law reads it and holds the core below the line total. `:parsed-by`
+   declares the operations that ESTABLISH that trust — the parse points where raw input becomes the
+   trusted representation. DECLARED, not derived: an op that merely happens to output the Kind (a
+   reader handing held state along, e.g. a get-accessor) is not a parser; intent distinguishes them,
+   and the cross-check law below keeps the declaration honest against the type structure (`produces`).
+   At least one parser is mandatory (`[:+]`): trust with no declared source is an unfounded assumption."
+  {:kind      Kind
+   :parsed-by [:+ Operation]}
+  (law "every declared parser produces the boundary kind (its :out names it)"
+    :offenders '[?tb ?o]
+    :where '[[?pr :rel/from ?tb] [?pr :rel/kind :parsed-by] [?pr :rel/to ?o]
+             [?kr :rel/from ?tb] [?kr :rel/kind :kind] [?kr :rel/to ?k]
+             (not-join [?o ?k] (produces ?o ?k))]))
 
 (defstructure Totality
   "Law-holder for code-up TOTALITY (parse-don't-validate, at the trust line): a trusted-core reader —

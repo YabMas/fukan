@@ -121,7 +121,7 @@ The once-`fukan.clj` holding pen is DISSOLVED — its fukan-specific corresponde
 homed by what it is *about*, reading a binding declared as instance data (no generic "trait"
 framework; the design↔code matching machinery is opinionated and baked, only *which* elements a
 project works with is config): `Totality` (an Operation over a trust artifact is total) → `code/
-operation.clj`, reading a `TrustBoundary {:kind}` designation (bound in `architecture/…/substrate`).
+operation.clj`, reading a `TrustBoundary {:kind :parsed-by}` designation (bound in `architecture/…/infra`).
 (The Lens-act `Coverage` law that once also lived here — then in `core/coverage.clj` — was DISSOLVED
 2026-06-29: the readings became Projections with a mandatory `:through Lens` slot, so its
 guarantee — a reading's selection traces to a declared Lens — is now structural, not a law.)

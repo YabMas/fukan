@@ -6,7 +6,7 @@
 
    Authored as one nested `Module` form: the operations live inside it (no separate `def`s),
    each interned as a var by the def-emitting macro so cross-refs stay var-refs."
-  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+  (:require [canvas.vocab.code.operation :refer [Operation TrustBoundary]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.orchestration.pipeline :as pipeline]
             [canvas.architecture.ingestion.extraction :as extraction]
@@ -27,3 +27,11 @@
      :performs  [:io :stderr :require :state :throws]})
   (Operation get-src "The current source path the held Model was built from, or none."
     {:signature [:=> [:cat] extraction/Path]}))
+
+;; StructureDb is fukan's parse-don't-validate TRUST BOUNDARY. The designation lives HERE — where
+;; the boundary is STAFFED — because the parse points are this module's lifecycle ops (substrate,
+;; which owns the Kind, cannot reference back without a require cycle). `load-model`/`refresh-model`
+;; ESTABLISH the trust (raw source → held Model); `get-model` merely hands the held artifact along
+;; (a reader, deliberately NOT declared). Readers over the Model must be total (Totality).
+(TrustBoundary infra-trust-boundary {:kind      substrate/StructureDb
+                                     :parsed-by [load-model refresh-model]})

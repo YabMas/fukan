@@ -1,5 +1,6 @@
 (ns canvas.vocab.code.correspondence-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.string]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
             ;; loading infra.model is the composition root — it registers fukan's malli dialect AND its
@@ -339,3 +340,42 @@
                             db (s/vocab-rules)))]
       (is (= #{["parse-it" "Artifact"]} pairs)
           "only the authored ref-out op derives; boolean-out and extracted ops do not"))))
+
+;; ── TrustBoundary :parsed-by — declaration cross-checked against structure ──────────────────────
+
+(defn- law-violations
+  "check results whose :law description contains `substr`."
+  [db substr]
+  (filter #(clojure.string/includes? (:law %) substr) (s/check db)))
+
+(deftest parser-declaration-cross-checked-against-produces
+  (testing "a declared parser that does not produce the boundary kind is an offender pair"
+    (let [k       {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
+          ;; honest parser: :out ref names Artifact
+          parser  [{:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it"}
+                   {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref"}
+                   {:rel/id "sch|names|k" :rel/from -22 :rel/kind :names :rel/to -20}
+                   {:rel/id "p|out|sch" :rel/from -2 :rel/kind :out :rel/to -22}]
+          ;; imposter: boolean :out — declared as parser but produces nothing
+          imposter [{:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "check-it"}
+                    {:db/id -23 :structure/of :canvas.vocab.type/Schema :val/kind "boolean"}
+                    {:rel/id "c|out|bool" :rel/from -3 :rel/kind :out :rel/to -23}]
+          tb      (fn [op-id suffix]
+                    [{:db/id -21 :structure/of :canvas.vocab.code.operation/TrustBoundary}
+                     {:rel/id (str "tb|kind|k" suffix) :rel/from -21 :rel/kind :kind :rel/to -20}
+                     {:rel/id (str "tb|parsed-by|" suffix) :rel/from -21 :rel/kind :parsed-by :rel/to op-id}])
+          honest   (build/tx-maps->cozo (concat [k] parser imposter (tb -2 "honest")))
+          lying    (build/tx-maps->cozo (concat [k] parser imposter (tb -3 "lying")))]
+      (is (empty? (law-violations honest "every declared parser produces"))
+          "a parser whose :out names the boundary kind satisfies the cross-check")
+      (is (= 1 (count (mapcat :offenders (law-violations lying "every declared parser produces"))))
+          "declaring the boolean-out op as parser fires the cross-check"))))
+
+(deftest trust-boundary-requires-a-parser
+  (testing "the [:+ :parsed-by] cardinality makes an undeclared parser a structural violation"
+    (let [k  {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
+          tb [{:db/id -21 :structure/of :canvas.vocab.code.operation/TrustBoundary}
+              {:rel/id "tb|kind|k" :rel/from -21 :rel/kind :kind :rel/to -20}]
+          db (build/tx-maps->cozo (concat [k] tb))]
+      (is (seq (law-violations db "parsed-by"))
+          "a TrustBoundary declaring no parser violates the generated cardinality law"))))
