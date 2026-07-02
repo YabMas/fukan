@@ -7,8 +7,8 @@
    `triple` (the unified value-typed EAV view) underpins the general query/law compiler
    (`fukan.cozo.query`); `eav` (the logical edge/node/leaf decode) underpins the native
    build's raw queries (`fukan.cozo.build`). Code-surface CozoScript that names code-vocab
-   (`Operation`/`:calls` — e.g. the `surface` rules `latent-boundaries` composes) lives in
-   VOCAB (`canvas.vocab.code.subsystem`), not here: this substrate is vocab-agnostic. The
+   (`Operation`/`:calls` — e.g. the `surface` rules in `canvas.principles.layered-architecture`)
+   lives in canvas, not here: this substrate is vocab-agnostic. The
    earlier hand-ported LAW fragments (module-depends / subsystem / correspondence / effect)
    were retired once the law/query compiler subsumed them.")
 

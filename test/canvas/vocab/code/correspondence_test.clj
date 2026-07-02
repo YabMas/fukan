@@ -14,7 +14,8 @@
             [canvas.vocab.code.module :as module]
             [canvas.vocab.code.operation :as operation]
             [canvas.principles.parse-dont-validate :as pdv]
-            [canvas.principles.declared-effects :as declared-effects]))
+            [canvas.principles.declared-effects :as declared-effects]
+            [canvas.principles.layered-architecture :as layered]))
 
 ;; register the project dialect (malli render + sigs-adhere?) for the `type-adheres?` path
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
@@ -99,19 +100,19 @@
                    {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                    {:rel/id "X|child|ex" :rel/from -5 :rel/kind :child :rel/to -6}
                    {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}])]
-      (is (seq (module/unrealized-delegates db))
+      (is (seq (layered/unrealized-delegates db))
           "A->B delegation has no realizing call between corresponding modules → offender"))))
 
 (deftest call-realization-green-on-the-self-model
   (testing "module-level realization is green on the live build-model \"src\""
-    (is (empty? (module/unrealized-delegates (pipeline/build-model "src")))
+    (is (empty? (layered/unrealized-delegates (pipeline/build-model "src")))
         "0 unrealized — verified by the design prototype")))
 
 (deftest uncovered-calls-backbone-complete
   (testing "slice 2: every actual cross-module call is now covered by an authored :delegates —
             the backbone is complete (detection of an UNdeclared coupling is proven on a synthetic
             db in fidelity-fires-on-an-undeclared-modelled-coupling)"
-    (let [worklist (module/uncovered-calls (pipeline/build-model "src"))]
+    (let [worklist (layered/uncovered-calls (pipeline/build-model "src"))]
       (is (empty? worklist)
           (str "the :delegates backbone is complete; undeclared couplings remain: " worklist)))))
 
@@ -134,23 +135,23 @@
                    {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
                    {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
                    {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}])]
-      (is (= #{"fa"} (module/unfaithful-calls db))
+      (is (= #{"fa"} (layered/unfaithful-calls db))
           "an undeclared coupling between modelled faculties is a fidelity offender")
-      (is (= #{["fukan.a" "fukan.b"]} (module/uncovered-calls db))
+      (is (= #{["fukan.a" "fukan.b"]} (layered/uncovered-calls db))
           "the same coupling appears in the broader query"))))
 
 (deftest fidelity-green-on-the-self-model
   (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
-    (is (empty? (module/unfaithful-calls (pipeline/build-model "src")))
+    (is (empty? (layered/unfaithful-calls (pipeline/build-model "src")))
         "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
 
 (deftest slice-1-self-model-is-clean
   (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
             design+code self-model has zero law violations"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (module/unrealized-delegates model)) "realization is green")
-      (is (empty? (module/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
-      (is (empty? (module/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
+      (is (empty? (layered/unrealized-delegates model)) "realization is green")
+      (is (empty? (layered/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
+      (is (empty? (layered/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
       (is (empty? (s/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (s/check model)))))))

@@ -111,17 +111,18 @@ its `defstructure` + the laws/correspondence about it + how it is extracted from
   correspondence — `module-corresponds?` (the canvas-module↔code-ns name bridge) and `op-twin`
   (the authored-op↔extracted-op pairing, a `defrelation`) — lives in `module.clj`; the
   operation/effect/`fukan` laws reach it via datalog injection (no compile cycle, since the
-  build auto-loads every element). `subsystem.clj` also holds the clean-architecture quality
-  laws (`ModuleArchitecture`: no-mutual-dependency + `:may-depend` conformance/acyclicity/
-  membership) + `latent-boundaries`.
+  build auto-loads every element). Adopted-principle law-holders (`Totality`/`TrustBoundary`,
+  `EffectCorrespondence`, `ModuleArchitecture`, `CallRealization`/`Fidelity`) live in
+  `canvas/principles/` (one file per principle), not in the element files.
 - `canvas/vocab/code/extractor.clj` — the shared Clojure extractor orchestration (clj-kondo
   `analyze` + `op-eid` + `extract`), calling each element's builder. The HOOK for the extraction
   plug-point; the composition root registers `extract`.
 The once-`fukan.clj` holding pen is DISSOLVED — its fukan-specific correspondence machinery was
 homed by what it is *about*, reading a binding declared as instance data (no generic "trait"
 framework; the design↔code matching machinery is opinionated and baked, only *which* elements a
-project works with is config): `Totality` (an Operation over a trust artifact is total) → `code/
-operation.clj`, reading a `TrustBoundary {:kind :parsed-by}` designation (bound in `architecture/…/infra`).
+project works with is config): `Totality` + `TrustBoundary` (parse-don't-validate: an Operation
+over a trust artifact is total) → `canvas/principles/parse_dont_validate.clj`, reading a
+`TrustBoundary {:kind :parsed-by}` designation (bound in `architecture/…/infra`).
 (The Lens-act `Coverage` law that once also lived here — then in `core/coverage.clj` — was DISSOLVED
 2026-06-29: a projection now carries its focus ITSELF — an inline `:select`, a named `Lens` only when a focus is genuinely shared, none = the whole model — so the guarantee (a reading's selection cannot drift from the reading) is structural, not a law.)
 
@@ -189,13 +190,18 @@ The self-model is laid out by **altitude**, not by pipeline role:
 - `canvas/vocab/**` — fukan's own VOCABULARY (the grammar it models itself with): the
   structural primitives (`grouping`), the malli type dialect (`type`), grammar reflection
   (`grammar`), and the code grammar by element (`code/{kind,effect,operation,module,subsystem}` +
-  `code/extractor`). Auto-discovered. (The fukan-specific Totality law is homed by
-  element, not held here — see above.)
+  `code/extractor`). Auto-discovered.
+- `canvas/principles/<source>.clj` — fukan's ADOPTED PRINCIPLES, one namespace per source
+  (parse_dont_validate, declared_effects, layered_architecture, deep_modules): each bundles
+  the law-holders, derived relations, law-reader helpers, and reading instances realizing
+  that principle, with the source + judgment guidance in the ns docstring. The ns IS the
+  bundle — no `Principle` structure is minted (deliberately deferred). Element files keep
+  what an element IS; principle files hold what we DEMAND of the system.
 - `canvas/instruments/` — fukan as a *user of itself*: its use-side INSTANCES (Lens/Projection
   tool-definitions authored against the act grammar in `core/lens.clj`). Currently **PARKED —
   fukan ships none** (the dir is empty/absent): the act grammar and the renderers
-  (`model/materialize.clj`) stay, exercised by ad-hoc instances in tests; `read-all` is quiet
-  on a plain build. Revived when the instrument vision (the Principle bundle) lands.
+  (`model/materialize.clj`) stay exercised; the principled readings (`Depth` + `Boundary`) ship
+  from `canvas/principles/` and appear in `read-all` on a plain build.
 - `canvas/architecture/<area>/…` — fukan as a *built* system: one self-spec per `src/`
   module, grouped by area (`kernel`/`ingestion`/`cozo`/`projection`/`orchestration`), plus
   `subsystems.clj` (the capability clusters + the declared `:may-depend` DAG the
@@ -302,5 +308,6 @@ mixing them corrupts history.
   (each file = structure + correspondence + extraction), the malli dialect (`type`), grammar
   reflection (`grammar`), grouping; the Clojure extractor is `code/extractor.clj`, the
   cross-element correspondence (`module-corresponds?`/`op-twin`) is in `code/module.clj`
+- `canvas/principles/` (ns `canvas.principles.*`) — the adopted architectural principles, one file per source: each bundles the law-holders + readers + reading instances realizing that principle (`parse_dont_validate`, `declared_effects`, `layered_architecture`, `deep_modules`)
 - `canvas/architecture/` — fukan-on-fukan's built-system self-specs (modules + subsystems +
   `:may-depend` DAG); the use-side instruments area (`canvas/instruments/`) is currently PARKED

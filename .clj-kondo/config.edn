@@ -44,6 +44,15 @@
   canvas.principles.parse-dont-validate
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  canvas.principles.declared-effects
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.principles.layered-architecture
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
+  canvas.principles.deep-modules
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   canvas.vocab.code.kind
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}

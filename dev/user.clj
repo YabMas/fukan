@@ -21,7 +21,7 @@
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as code-module]
             [canvas.vocab.code.effect :as code-effect]
-            [canvas.vocab.code.subsystem :as la]
+            [canvas.principles.layered-architecture :as la]
             [canvas.principles.parse-dont-validate :as pdv]
             [canvas.principles.declared-effects :as declared-effects]))
 

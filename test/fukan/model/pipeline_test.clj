@@ -180,7 +180,7 @@
 (deftest principled-readings-are-the-shipped-projections
   (testing "fukan's Projection instances are exactly the principled readings; still no Lens instances"
     (let [db (pipeline/build-model nil)]
-      (is (= #{"Boundary"} (names-of db :Projection))
-          "the parse-dont-validate principle ships its Boundary reading")
+      (is (= #{"Depth" "Boundary"} (names-of db :Projection))
+          "the principle files ship exactly the principled readings")
       (is (empty? (names-of db :Lens))
           "foci stay inline — no standalone Lens nodes"))))

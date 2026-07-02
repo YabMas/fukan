@@ -11,10 +11,11 @@
             [fukan.model.pipeline :as pipeline]
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as module]
-            [canvas.vocab.code.subsystem :as subsystem]))
+            [canvas.vocab.code.subsystem :as subsystem]
+            [canvas.principles.layered-architecture :as layered]))
 
 (defn- law-desc [substr]
-  (->> (s/structure-by-tag :canvas.vocab.code.subsystem/ModuleArchitecture) :laws
+  (->> (s/structure-by-tag :canvas.principles.layered-architecture/ModuleArchitecture) :laws
        (map :desc) (filter #(str/includes? % substr)) first))
 
 (defn- offenders [db substr]
@@ -133,7 +134,7 @@
   (testing "a module whose public ops split into two consumer-disjoint bundles is surfaced"
     (let [db (build/vars->cozo [#'t-a1 #'t-a2 #'t-b1 #'t-b2 #'t-host
                                #'t-cx-op #'t-cx #'t-cy-op #'t-cy])
-          lb (subsystem/latent-boundaries db)
+          lb (layered/latent-boundaries db)
           bundles (->> (get lb "HOST") (map (comp set :ops)) set)]
       (is (= #{"HOST"} (set (keys lb))) "only HOST has a split surface (consumers have no clientele)")
       (is (= #{#{"a1" "a2"} #{"b1" "b2"}} bundles)
@@ -149,7 +150,7 @@
 (deftest latent-boundary-silent-on-cohesive-surface
   (testing "a module whose whole public surface shares one clientele is NOT flagged"
     (let [db (build/vars->cozo [#'t-c1 #'t-c2 #'t-coh #'t-cz-op #'t-cz])]
-      (is (empty? (subsystem/latent-boundaries db))
+      (is (empty? (layered/latent-boundaries db))
           "one clientele = the whole surface = no proper sub-interface"))))
 
 ;; LONE: d1 captured by CW, d2 by CV — two disjoint clienteles but each a LONE op (no cohesion).
@@ -164,12 +165,12 @@
 (deftest latent-boundary-cohesion-gate-rejects-lone-captives
   (testing "disjoint clienteles of LONE ops (no ≥2-op bundle) are below the cohesion gate"
     (let [db (build/vars->cozo [#'t-d1 #'t-d2 #'t-lone #'t-cw-op #'t-cw #'t-cv-op #'t-cv])]
-      (is (empty? (subsystem/latent-boundaries db))
+      (is (empty? (layered/latent-boundaries db))
           "a latent sub-interface is a bundle, not a lone captive op"))))
 
 (deftest fukan-latent-boundaries-post-substrate-extraction
   (testing "the substrate is a clean leaf (not flagged); core-structure keeps a print-dual reader residue"
-    (let [lb (subsystem/latent-boundaries (pipeline/build-model "src"))
+    (let [lb (layered/latent-boundaries (pipeline/build-model "src"))
           cs (get lb "fukan.canvas.core.structure")
           in-a-bundle? (fn [op] (some (fn [b] (some #{op} (:ops b))) cs))]
       ;; The node substrate was extracted DOWNWARD: its surface is one clientele (the builders), so it

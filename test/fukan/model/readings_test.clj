@@ -4,9 +4,9 @@
    a reading renders ONLY its resolved focus — it never re-selects, so the focus cannot drift from
    the reading.
 
-   fukan's own Boundary reading ships via canvas/principles/parse_dont_validate. The other
-   readings (Patterns/Consistency/Depth) are exercised through ad-hoc instances carrying the same
-   names the render-finding methods dispatch on — folded onto the model for these tests."
+   fukan's Boundary and Depth readings ship via canvas/principles/ (parse_dont_validate and
+   deep_modules respectively). Patterns/Consistency are exercised through ad-hoc instances carrying
+   the same names the render-finding methods dispatch on — folded onto the model for these tests."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
@@ -23,15 +23,12 @@
 (Projection ^{:name "Consistency"} rt-consistency
   "Operation-name ambiguity — names borne by more than one module (a reading)."
   {:select '[(Operation ?n)]})
-(Projection ^{:name "Depth"} rt-depth
-  "Module depth — interface size against implementation size, shallowest first (a reading)."
-  {:select '[(Module ?n)]})
 
 (defn- model+readings
-  "The design model with the three ad-hoc reading instances folded on (Boundary ships with the model)."
+  "The design model with the two ad-hoc reading instances folded on (Boundary + Depth ship with the model)."
   []
   (build/fold-vars->cozo (pipeline/build-model nil)
-                         [#'rt-patterns #'rt-consistency #'rt-depth]))
+                         [#'rt-patterns #'rt-consistency]))
 
 (defn- proj [db nm]
   (ffirst (cq/q '[:find ?e :in $ ?n
@@ -50,7 +47,7 @@
 
 (deftest principled-readings-ship-with-the-model
   (testing "the principle files mint the shipped readings — a plain build carries them"
-    (is (= #{"Boundary"} (set (keys (m/read-all (pipeline/build-model nil))))))))
+    (is (= #{"Depth" "Boundary"} (set (keys (m/read-all (pipeline/build-model nil))))))))
 
 (deftest a-reading-renders-only-its-focus
   (testing "Patterns renders the relation nodes its inline :select focuses — and ONLY them"
@@ -74,7 +71,7 @@
 
 (deftest depth-reading-surfaces-interface-vs-implementation
   (testing "Depth renders per-module interface/implementation counts, shallowest first"
-    (let [db     (model+readings)
+    (let [db     (pipeline/build-model nil)
           result (m/read-projection db (proj db "Depth"))]
       (is (= "Depth" (:lens result)))
       (is (seq (:observations result)) "the self-model has modules")

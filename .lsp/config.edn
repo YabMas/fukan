@@ -59,4 +59,8 @@
               canvas.vocab.code.module
               canvas.vocab.code.subsystem
               canvas.vocab.type-vocab-test
-              canvas.vocab.type-render-test}}}}
+              canvas.vocab.type-render-test
+              canvas.principles.parse-dont-validate
+              canvas.principles.declared-effects
+              canvas.principles.layered-architecture
+              canvas.principles.deep-modules}}}}

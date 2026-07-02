@@ -4,19 +4,19 @@
 {:hooks
  {:analyze-call
   {canvas.principles.declared-effects/EffectCorrespondence hooks.fukan.structure/instance
+   canvas.principles.layered-architecture/CallRealization hooks.fukan.structure/instance
+   canvas.principles.layered-architecture/Fidelity hooks.fukan.structure/instance
+   canvas.principles.layered-architecture/ModuleArchitecture hooks.fukan.structure/instance
    canvas.principles.parse-dont-validate/Totality hooks.fukan.structure/instance
    canvas.principles.parse-dont-validate/TrustBoundary hooks.fukan.structure/instance
    canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
    canvas.vocab.code.kind/Kind hooks.fukan.structure/instance
-   canvas.vocab.code.module/CallRealization hooks.fukan.structure/instance
-   canvas.vocab.code.module/Fidelity hooks.fukan.structure/instance
    canvas.vocab.code.module/Module hooks.fukan.structure/instance
    canvas.vocab.code.operation/Encapsulation hooks.fukan.structure/instance
    canvas.vocab.code.operation/Operation hooks.fukan.structure/instance
    canvas.vocab.code.operation/Realization hooks.fukan.structure/instance
    canvas.vocab.code.operation/SignatureCompleteness hooks.fukan.structure/instance
    canvas.vocab.code.operation/TypeCoverage hooks.fukan.structure/instance
-   canvas.vocab.code.subsystem/ModuleArchitecture hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
    canvas.vocab.grammar/Law hooks.fukan.structure/instance
    canvas.vocab.grammar/Relation hooks.fukan.structure/instance
