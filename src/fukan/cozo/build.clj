@@ -174,7 +174,13 @@ alle[e] := *t_bool[e, _, _]
    reflected. Assembling canvas + extraction roots in one native pass resolves cross-refs
    without a union/merge. Returns the open Cozo db."
   [ns-syms {:keys [roots ground]}]
-  (-> (mirror/load-datoms (instances->datoms (concat (roots-of (collect ns-syms)) roots)))
+  (-> (mirror/load-datoms
+       (instances->datoms
+        (concat (roots-of (collect ns-syms))
+                ;; provenance is the KERNEL's: every non-value node arriving through the
+                ;; extraction plug-point is stamped fact-stratum HERE — extractors no longer
+                ;; hand-stamp (`sub/stamp-stratum` skips ^:value targets)
+                (map (fn [[id iv]] [id (sub/stamp-stratum iv)]) roots))))
       ;; the extractor's post-build grounding hook (e.g. grounding the :calls graph) — the engine
       ;; calls it generically, naming no code-vocab
       (cond-> ground ground)

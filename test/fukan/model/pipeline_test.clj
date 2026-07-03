@@ -184,3 +184,16 @@
           "the principle files ship exactly the principled readings")
       (is (empty? (names-of db :Lens))
           "foci stay inline — no standalone Lens nodes"))))
+
+(deftest extraction-provenance-is-kernel-stamped
+  (testing "the BUILD stamps fact-stratum at the merge — extracted modules/ops carry it, values never do"
+    (let [db (pipeline/build-model "src")]
+      (is (seq (cq/q '[:find ?m :where [?m :structure/of :canvas.vocab.code.module/Module]
+                       [?m :val/extracted true]] db))
+          "extracted modules carry the provenance attribute (kernel-stamped)")
+      (is (seq (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation]
+                       [?o :val/extracted true]] db))
+          "extracted operations carry it too")
+      (is (empty? (cq/q '[:find ?e :where [?e :structure/of :canvas.vocab.code.effect/Effect]
+                          [?e :val/extracted true]] db))
+          "^:value Effect nodes are stratum-free — never stamped"))))

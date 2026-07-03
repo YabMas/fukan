@@ -106,3 +106,17 @@
       (is (= 1 (count (filter #{'twin} heads))) "exactly one `twin` rule (the custom body), no kind-rule")
       (is (= '[?a ?b] (rest (ffirst (filter #(= 'twin (ffirst %)) rs))))
           "the rule head carries the declared arity"))))
+
+(deftest strata-rules-classify-provenance
+  (testing "(fact ?n) / (design ?n) split nodes by the kernel provenance attribute"
+    (let [db (build/maps->cozo
+              [{:entity/id "d" :structure/of :canvas.vocab.code.operation/Operation :entity/name "d-op"}
+               {:entity/id "f" :structure/of :canvas.vocab.code.operation/Operation :entity/name "f-op"
+                :val/extracted true}]
+              [])]
+      (is (= #{"f-op"}
+             (set (cq/q '[:find [?n ...] :in $ % :where (fact ?e) [?e :entity/name ?n]]
+                        db rules/substrate-rules))))
+      (is (= #{"d-op"}
+             (set (cq/q '[:find [?n ...] :in $ % :where (design ?e) [?e :entity/name ?n]]
+                        db rules/substrate-rules)))))))

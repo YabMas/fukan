@@ -19,6 +19,34 @@
 (defn ^{:malli/schema [:=> [:cat :any] :boolean]}
   instance-value? [x] (instance? InstanceValue x))
 
+(def stratum-attr
+  "The PROVENANCE attribute — the design/fact stratum marker. The BUILD stamps it on every
+   non-value node arriving through the extraction plug-point (`fukan.cozo.build/model->cozo`
+   via `stamp-stratum`); the generic `(fact ?n)`/`(design ?n)` substrate rules
+   (`fukan.canvas.core.rules/substrate-rules`) read it — embedded LITERALLY in
+   `fukan.canvas.core.rules` in BOTH `substrate-rules` AND the twin-rule generator in
+   `derive-rules` (rules are pure quoted data; keep all three in sync). Vocab may additionally declare an authoring slot
+   storing the same attribute (the test-fabrication surface)."
+  :val/extracted)
+
+(defn ^{:malli/schema [:=> [:cat :any] :any]}
+  stamp-stratum
+  "Stamp an InstanceValue tree as FACT-stratum: `stratum-attr` true on `iv` and, recursively,
+   on every nested non-value instance target. `^:value` instances stay unstamped —
+   content-deduped values are STRATUM-FREE (a design-side and a fact-side occurrence of an
+   equal value are ONE node; stamping would fork their content keys)."
+  [iv]
+  (if (:value? iv)
+    iv
+    (-> iv
+        (update :scalars assoc stratum-attr true)
+        (update :clauses (fn [cs]
+                           (mapv (fn [c]
+                                   (update c :targets
+                                           (fn [ts]
+                                             (mapv #(if (instance-value? %) (stamp-stratum %) %) ts))))
+                                 cs))))))
+
 (defn ^{:malli/schema [:=> [:cat :any] :string]}
   var-id
   "The fully-qualified-var-name id of an instance-bearing var."

@@ -1,6 +1,6 @@
 (ns canvas.vocab.code.operation
   "Code vocab — `Operation`: the unified computational unit, AUTHORED (a self-model's intent)
-   or EXTRACTED from code (`:extracted true`), plus its model↔code correspondence: the
+   or EXTRACTED from code (fact-stratum, stamped by the build), plus its model↔code correspondence: the
    Realization/Encapsulation laws + the drift/coverage/type-drift readers. (The op pairing
    `op-twin` itself lives in `module` — it is built on the Module name bridge — and is referenced
    here via datalog injection; the `defn→Operation`+`:calls` extraction is added with the extractor.)"
@@ -38,8 +38,8 @@
 (defstructure Operation
   "A named unit of computation — the UNIFIED computational unit. An `Operation` is either
    AUTHORED (a self-model's intent: input/output Shapes, Effects, intended calls) or
-   EXTRACTED from code (`:extracted true`, stamped by the plug-point — name + privacy, and
-   actual calls). A modelled Operation corresponds 1-on-1 (by name + corresponding Module)
+   EXTRACTED from code (fact-stratum, stamped by the BUILD at the merge — name + privacy from
+   the plug-point, and actual calls). A modelled Operation corresponds 1-on-1 (by name + corresponding Module)
    to its extracted twin; the two stay distinct nodes so spec and actual remain checkable.
 
    Authored with a malli signature: `(Operation f \"doc\" {:signature [:=> [:catn [:name Type] …] Out] :delegates […]})`
@@ -267,13 +267,13 @@
 
 (defn extract-operation
   "Build an extracted Operation InstanceValue from a clj-kondo var-definition `v` and the set of
-   effect keywords `effs` directly attributed to it. Stamps `:val/extracted`, privacy, the `^:export`/
-   `^:test-support` mechanism flags, the realized `:malli/schema` signature (`:val/sig`), and the
-   direct effects as `:performs` (each a content-deduped Effect value, via `effect/effect-iv`)."
+   effect keywords `effs` directly attributed to it. Stamps privacy, the `^:export`/`^:test-support`
+   mechanism flags, the realized `:malli/schema` signature (`:val/sig`), and the direct effects as
+   `:performs` (each a content-deduped Effect value, via `effect/effect-iv`).
+   Provenance (`:val/extracted`) is stamped by the BUILD at the merge (`substrate/stamp-stratum`), not here."
   [v effs]
   (sub/->InstanceValue ::Operation (str (:name v)) nil
-                       (cond-> {:val/private (boolean (:private v))
-                                :val/extracted true}
+                       (cond-> {:val/private (boolean (:private v))}
                          (:export (:meta v))       (assoc :val/export true)
                          (:test-support (:meta v)) (assoc :val/test-support true)
                          (:malli/schema (:meta v)) (assoc :val/sig (pr-str (:malli/schema (:meta v)))))

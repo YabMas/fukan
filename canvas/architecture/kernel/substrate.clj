@@ -38,9 +38,12 @@
 (Operation instance-value?
   "Whether a value is an InstanceValue — the predicate the assembler scans interned vars with."
   {:signature [:=> [:catn [:x :any]] :boolean]})
+(Operation stamp-stratum
+  "Stamp an InstanceValue tree as fact-stratum — provenance on it and every nested non-value instance; ^:value nodes are stratum-free."
+  {:signature [:=> [:catn [:iv :any]] :any]})
 
 (Module core-substrate
   "The node substrate the grammar sits on — node identity + value-node construction + the empty db.
    A leaf: depends on nothing; everything above adopts its `StructureDb` and builds on its primitives."
-  {:exposes [value-content-key var-id var-simple-name instance-value?]
+  {:exposes [value-content-key var-id var-simple-name instance-value? stamp-stratum]
    :owns    [Node Relation InstanceValue StructureDb]})

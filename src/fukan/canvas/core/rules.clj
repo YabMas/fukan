@@ -9,10 +9,16 @@
    (in `check`) without a `structure ↔ rules` cycle.")
 
 (def substrate-rules
-  "Fixed rules for substrate relations — vocab-agnostic: only `named` (over the substrate
-   `:entity/name` attribute). `in-module` is NOT here — it is derived from the vocab-declared
-   `member` relation in `derive-rules`, so the kernel names no code-vocab relation kind."
-  '[[(named ?e ?n) [?e :entity/name ?n]]])
+  "Fixed rules for substrate relations — vocab-agnostic: `named` (over `:entity/name`) and the
+   two PROVENANCE strata over the stratum attribute (`substrate/stratum-attr` = `:val/extracted`,
+   embedded literally here because these rules are pure quoted data — keep in sync): `(fact ?n)`
+   a node stamped by the build as extracted-from-code, `(design ?n)` an authored node (the
+   positive `:structure/of` clause keeps the rule range-bound under negation). `in-module` is
+   NOT here — it is derived from the vocab-declared `member` relation in `derive-rules`, so the
+   kernel names no code-vocab relation kind."
+  '[[(named ?e ?n) [?e :entity/name ?n]]
+    [(fact ?n) [?n :val/extracted true]]
+    [(design ?n) [?n :structure/of ?_k] (not [?n :val/extracted true])]])
 
 (defn- rule-sym [kw] (symbol (name kw)))
 

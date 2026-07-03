@@ -161,7 +161,8 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
 
 (defn extract-module
   "Build an extracted Module InstanceValue named `mname` owning the given extracted Operation
-   InstanceValues (`op-ivs`) via `:child`, stamped `:val/extracted true` (provenance)."
+   InstanceValues (`op-ivs`) via `:child`. Provenance (`:val/extracted`) is stamped by the BUILD
+   at the merge (`substrate/stamp-stratum`), not here."
   [mname op-ivs]
-  (sub/->InstanceValue ::Module (str mname) nil {:val/extracted true}
+  (sub/->InstanceValue ::Module (str mname) nil nil
                        [{:rk :child :card :many :targets (vec op-ivs)}] false))

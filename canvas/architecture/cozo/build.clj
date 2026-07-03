@@ -43,4 +43,4 @@
     "Native FULL build: canvas instance-vars + extraction {:roots :ground} facts → one native Cozo substrate with the extractor's post-build :ground hook run (it grounds the :calls graph) and the grammar reflected. Assembling all roots in one pass resolves cross-refs without a merge."
     {:signature [:=> [:catn [:ns-syms [:vector :symbol]] [:facts :map]] db/CozoDb]
      :performs  [:throws]
-     :delegates [cmirror/load-datoms db/q with-grammar]}))
+     :delegates [cmirror/load-datoms db/q with-grammar substrate/stamp-stratum]}))

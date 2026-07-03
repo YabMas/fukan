@@ -9,7 +9,7 @@
    The per-element mapping lives WITH each element (`operation/extract-operation`, `module/extract-module`,
    `effect/op-effects`); this namespace is the shared orchestration — run clj-kondo, group, call the
    element builders → the engine-agnostic FACTS `{:roots :ground}`. The extractor OWNS no
-   vocabulary — it EMITS instances by tag (stamping `:extracted true`). It is the HOOK for the
+   vocabulary — it EMITS instances by tag (the BUILD stamps provenance at the merge). It is the HOOK for the
    `fukan.model.extraction` plug-point; the composition root registers `extract-roots` as the fact
    extractor (the native Cozo build assembles the facts + calls the :ground closure). clj-kondo is
    the wheel we don't reinvent."
@@ -62,9 +62,10 @@ alle[e] := *t_bool[e, _, _]
 (defn extract-roots
   "The engine-agnostic extraction FACTS over the Clojure source under `paths`:
    `{:roots [[id InstanceValue]…] :ground (fn [cdb] …)}` — the Module/Operation roots
-   (Operations stamped with DIRECT effects; Modules `:val/extracted true`) plus a post-build
-   `:ground` closure that grounds the `:calls` graph from the clj-kondo var-usages. The native
-   Cozo build assembles these facts onto the design graph and calls `:ground` generically."
+   (Operations stamped with DIRECT effects) plus a post-build `:ground` closure that grounds
+   the `:calls` graph from the clj-kondo var-usages. The native Cozo build assembles these
+   facts onto the design graph, stamps stratum provenance at the merge (`stamp-stratum`), and
+   calls `:ground` generically."
   [paths]
   (let [{:keys [namespace-definitions var-definitions var-usages]} (analyze paths)
         ops-by-ns    (group-by :ns (filter #(operation/fn-defining (:defined-by %)) var-definitions))
