@@ -756,3 +756,43 @@
                                            {:r [:* {:faithful true} TBadR2]}))))               ; :faithful without :realized-by
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR3 "d"
                                            {:r [:* {:covered-from [:calls* :performs]} TBadR3]}))))))  ; throws: the structure declares no :transitive base slot for :calls*
+
+(deftest relation-demand-both-families-forbidden
+  (testing "a slot carrying both :realized-by and :covered-from throws at expansion"
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR4 "d"
+                                           {:calls [:* {:transitive true} TBadR4]
+                                            :r [:* {:realized-by :calls :altitude :container
+                                                    :covered-from [:calls* :r]} TBadR4]})))))) ; both :realized-by and :covered-from on the same slot
+
+(deftest correspondence-reshapes-the-seam
+  (testing "(s/correspondence) collects kinds, relation demands, and the key index from the registry"
+    (let [seam (s/correspondence)
+          op   :canvas.vocab.code.operation/Operation]
+      (is (= 'canvas.vocab.code.module/module-corresponds?
+             (get-in seam [:kinds :canvas.vocab.code.module/Module :bridge]))
+          "Module is the bridged root")
+      (is (= 3 (count (get-in seam [:kinds op :demands]))) "Operation's three node demands")
+      (is (= #{:corresponds/Operation.realized :corresponds/Operation.type-coverage
+               :corresponds/Operation.covered}
+             (into #{} (map :key) (get-in seam [:kinds op :demands])))
+          "node demands carry their FULL derived keys")
+      (is (= #{[:delegates #{:corresponds/Operation.delegates-realized
+                             :corresponds/Operation.delegates-faithful}]
+               [:performs  #{:corresponds/Operation.performs-covered}]}
+             (into #{} (map (juxt :rel (comp set :keys)))
+                   (filter #(= op (:owner %)) (:relations seam))))
+          "relation demands with their derived keys")
+      (is (= {:owner op :via :relation :rel :delegates :direction :faithful}
+             (select-keys (get-in seam [:keys :corresponds/Operation.delegates-faithful])
+                          [:owner :via :rel :direction]))
+          "the key index points every key at its generating declaration"))))
+
+(deftest correspondence-guards-cross-family-key-collisions
+  (testing "a node-demand :key colliding with a relation-derived key throws, naming both sources"
+    (let [sdefs [{:tag :x/T
+                  :corresponds {:basis :by-name
+                                :demands [{:demand :realized :key :r-realized}]}
+                  :slots [{:rel :r :card :many :target :x/T
+                           :realized-by :q :altitude :container}]}]]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"duplicate correspondence law key"
+                            (s/correspondence* sdefs))))))

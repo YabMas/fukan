@@ -613,6 +613,11 @@
                                 (name (:card s)) " ...]")
                            {:structure sname :slot (:rel s) :card (:card s)}))))
         _      (doseq [s slots]
+                 (when (and (:realized-by s) (:covered-from s))
+                   (throw (ex-info (str "defstructure " sname ": slot " (:rel s)
+                                        " declares BOTH :realized-by and :covered-from — one relation demand"
+                                        " family per slot (the generator and the seam each assume it)")
+                                   {:structure sname :slot (:rel s)})))
                  (when-let [cf (:covered-from s)]
                    (let [closure-ok? (fn [x] (and (or (keyword? x) (symbol? x))
                                                    (= \* (last (name x)))))]
@@ -932,6 +937,55 @@
                     (:realized-by slot) (container-demand-laws tag slot)
                     (:covered-from slot) [(covered-from-law tag slot)]))
                 (remove scalar-slot? slots))))
+
+(defn ^{:malli/schema [:=> [:cat [:sequential :any]] :map]}
+  correspondence*
+  "The correspondence SEAM of `sdefs` as one data structure — the collected morphism (pure;
+   `correspondence` applies it to the live registry). {:kinds tag→{:basis :bridge :demands},
+   :relations [{:owner :rel …demand options… :keys}], :keys full-key→source-pointer}. Assembling
+   the `:keys` index GUARDS cross-family key collisions (two declarations deriving one law key
+   would silently union their offender sets in `violations-of`) — it throws, naming both sources.
+   The A↔B surface-neutral core: an alternative authoring surface (a `defcorrespondence` block)
+   would WRITE what this READS."
+  [sdefs]
+  (let [kinds     (into {}
+                        (for [{:keys [tag corresponds]} sdefs :when corresponds]
+                          [tag (update corresponds :demands
+                                       (fn [ds] (mapv #(assoc % :key (demand-key tag (or (:key %) (:demand %)))) ds)))]))
+        relations (vec
+                   (for [{:keys [tag slots]} sdefs
+                         {:keys [rel realized-by altitude faithful covered-from]} slots
+                         :when (or realized-by covered-from)]
+                     (cond-> {:owner tag :rel rel}
+                       realized-by  (assoc :realized-by realized-by :altitude altitude
+                                           :keys (cond-> [(demand-key tag (str (name rel) "-realized"))]
+                                                   faithful (conj (demand-key tag (str (name rel) "-faithful")))))
+                       faithful     (assoc :faithful true)
+                       covered-from (assoc :covered-from covered-from
+                                           :keys [(demand-key tag (str (name rel) "-covered"))]))))
+        entries   (concat
+                   (for [[tag {:keys [demands]}] kinds, d demands]
+                     [(:key d) {:owner tag :via :node :demand (dissoc d :key)}])
+                   ;; key/direction zip truncates correctly: a slot is one demand family (realized|faithful pair OR covered),
+                   ;; never both — guarded at defstructure time, so (:keys r) and the direction vec always align.
+                   (for [r relations, [k dir] (map vector (:keys r)
+                                                   (if (:covered-from r) [:covered] [:realized :faithful]))]
+                     [k {:owner (:owner r) :via :relation :rel (:rel r) :direction dir}]))
+        keys*     (reduce (fn [acc [k src]]
+                            (when (contains? acc k)
+                              (throw (ex-info (str "duplicate correspondence law key " k
+                                                   " — derived by both " (pr-str (acc k))
+                                                   " and " (pr-str src))
+                                              {:key k :first (acc k) :second src})))
+                            (assoc acc k src))
+                          {} entries)]
+    {:kinds kinds :relations relations :keys keys*}))
+
+(defn ^{:malli/schema [:=> [:cat] :map]}
+  correspondence
+  "The live registry's correspondence seam — see `correspondence*`."
+  []
+  (correspondence* (all-structures)))
 
 (defn ^{:malli/schema [:=> [:cat :any] :any]}
   laws-of

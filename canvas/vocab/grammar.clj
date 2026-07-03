@@ -169,6 +169,9 @@
    closure, so a zero-instance grammar stratum still reflects). The caller inserts the datoms onto
    its Cozo substrate (the native build's upsert insert)."
   [tags extra-seeds]
+  ;; assemble the seam for its VALIDATION side-effect: a cross-family duplicate law key
+  ;; throws here, so the guard fires on every build (reflection runs on every build)
+  (s/correspondence)
   (let [;; seed with this ns (the reflection self-reifies), the Schema dialect's (reflection emits
         ;; Schema value targets, so their grammar must be present), and any caller-supplied seeds
         nss    (ns-closure (into (conj (set (keep target-ns tags)) this-ns "canvas.vocab.type")
