@@ -68,7 +68,7 @@
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
    :performs  [:* Effect]            ; side effects
-   :delegates [:* {:transitive true} Operation]  ; designed dependencies; :transitive ⇒ derive-rules emits delegates+ (the closure)
+   :delegates [:* {:transitive true :realized-by :calls :altitude :container :faithful true} Operation]  ; designed dependencies; :transitive ⇒ delegates+; :realized-by/:faithful ⇒ generated CallRealization/Fidelity pair at module altitude
    :dispatches-to [:* Operation]     ; indirection: handler Operations this dispatch point routes to (authored intent — a design statement, not an extracted fact)
    :guidance  [:? :string]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection
    :calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals; not authored); :transitive ⇒ calls+ (reach-through-calls)

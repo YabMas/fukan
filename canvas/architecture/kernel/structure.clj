@@ -40,9 +40,11 @@
   {:signature [:=> [:cat] [:vector :any]]})
 (Operation laws-of
   "Every law of a structure — slot-derived cardinality/type laws, correspondence-demand laws
-   (generated from (realized …)/(covered …) sub-forms), plus its free laws, the same set
-   check runs. Public so the Cozo law engine can evaluate the identical laws."
-  {:signature [:=> [:catn [:sdef :any]] :any]})
+   (generated from (realized …)/(covered …) sub-forms and from relation slots carrying
+   :realized-by/:altitude/:faithful), plus its free laws, the same set check runs.
+   Public so the Cozo law engine can evaluate the identical laws."
+  {:signature [:=> [:catn [:sdef :any]] :any]
+   :performs  [:throws]})
 (Operation direct-scope-tags
   "Qualified tags whose instances carry :structure/of DIRECTLY, so a scoped law can pin ns-precisely
    instead of riding the short-name rule. Excludes facets + realized/coproduct/derived concepts."

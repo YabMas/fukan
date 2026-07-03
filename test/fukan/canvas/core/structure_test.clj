@@ -747,3 +747,12 @@
                                            (corresponds :by-name (covered {:require [[?t :val/p ?_v]]}))))))  ; :require is realized-only
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD3 "d"
                                            (corresponds :by-name (realized) (realized))))))))  ; duplicate default key
+
+(deftest relation-demand-options-validate
+  (testing "malformed relation-demand slot options throw at expansion"
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR1 "d"
+                                           {:r [:* {:realized-by :calls} TBadR1]}))))          ; no :altitude :container
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR2 "d"
+                                           {:r [:* {:faithful true} TBadR2]}))))               ; :faithful without :realized-by
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR3 "d"
+                                           {:r [:* {:covered-from [:calls* :performs]} TBadR3]}))))))  ; arrives with Task 4

@@ -612,6 +612,19 @@
                                 " must be bare (one) or [:? ...] (optional), not [:"
                                 (name (:card s)) " ...]")
                            {:structure sname :slot (:rel s) :card (:card s)}))))
+        _      (doseq [s slots]
+                 (when (:covered-from s)
+                   (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
+                                        " :covered-from arrives with the covered-from slice")
+                                   {:structure sname :slot (:rel s)})))
+                 (when (and (:faithful s) (not (:realized-by s)))
+                   (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
+                                        " :faithful requires :realized-by")
+                                   {:structure sname :slot (:rel s)})))
+                 (when (and (:realized-by s) (not= :container (:altitude s)))
+                   (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
+                                        " :altitude :node has no consumer yet — declare :container")
+                                   {:structure sname :slot (:rel s)}))))
         laws   (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
         reader-form (some (fn [f] (when (= 'reader (first f)) (second f)))
                           (filter #(= 'reader (first %)) body))
@@ -786,6 +799,69 @@
   [tag local]
   (keyword "corresponds" (str (name tag) "." (name local))))
 
+(defn- bridged-root-tags
+  "Tags of every corresponds kind declaring a bridge — the ROOT kinds. The container-demand
+   vacuity guard ranges over ALL of them (include-but-harmless: a test-registered root with no
+   fact instances contributes a never-matching disjunct, the same idiom as the generated twin
+   disjuncts). Deferral (extend under pressure): the principled guard kind for a container
+   demand is the slot's own CONTAINER type, not \"any root\" — derive it from containment once
+   a second real root kind exists."
+  []
+  (vec (for [s (all-structures) :when (:bridge (:corresponds s))] (:tag s))))
+
+(defn- root-guard-clause
+  "The vacuity-guard clause(s) for a container-altitude realized law: ensures at least one
+   root-kind fact instance exists before the not-join fires (so the law is vacuously true when
+   no code has been extracted). With one root: a plain two-datom pair; with several: a single
+   or-join clause (include-but-harmless — a test-registered root with no fact instances
+   contributes a never-matching disjunct). Throws when no bridged root kind is registered."
+  []
+  (let [roots (bridged-root-tags)]
+    (when (empty? roots)
+      (throw (ex-info "container-altitude demand needs at least one bridged corresponds kind (none registered)"
+                      {:roots roots})))
+    (if (= 1 (count roots))
+      [['?_g :structure/of (first roots)] '[?_g :val/extracted true]]
+      [(apply list 'or-join '[?_g]
+              (for [r roots]
+                (list 'and ['?_g :structure/of r] '[?_g :val/extracted true])))])))
+
+(defn- container-demand-laws
+  "Generated laws for a relation slot carrying {:realized-by R' :altitude :container
+   :faithful bool} on structure `tag`: the realized direction (design edge ⇒ some fact R'
+   edge between the twinned containers — twin INSIDE the not-join, bound-on-entry, so a
+   container with NO twin still offends, exactly the dissolved CallRealization's semantics)
+   and, when :faithful, the covered direction (fact R' edge between CLAIMED — positively
+   twinned — containers ⇒ some design edge; the dissolved Fidelity)."
+  [tag {:keys [rel realized-by faithful]}]
+  (let [guard (root-guard-clause)]
+    (cond-> [{:key  (demand-key tag (str (name rel) "-realized"))
+              :desc (str (name tag) "." (name rel) ": every cross-container design edge is realized by a "
+                         realized-by " edge between the twinned containers")
+              :offenders '[?a]
+              :where (into guard
+                           [['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
+                            '(not [?a :val/extracted true])
+                            '(contains ?ca ?a) '(contains ?cb ?b) '[(not= ?ca ?cb)]
+                            (list 'not-join '[?ca ?cb]
+                                  ['?cr :rel/from '?e1] ['?cr :rel/kind realized-by] ['?cr :rel/to '?e2]
+                                  '[?e1 :val/extracted true] '[?e2 :val/extracted true]
+                                  '(contains ?ka ?e1) '(contains ?kb ?e2)
+                                  '(twin ?ca ?ka) '(twin ?cb ?kb))])}]
+      faithful
+      (conj {:key  (demand-key tag (str (name rel) "-faithful"))
+             :desc (str (name tag) "." (name rel) ": every " realized-by
+                        " edge between twinned containers is covered by a design edge")
+             :offenders '[?e1]
+             :where [['?cr :rel/from '?e1] ['?cr :rel/kind realized-by] ['?cr :rel/to '?e2]
+                     '[?e1 :val/extracted true] '[?e2 :val/extracted true]
+                     '(contains ?ka ?e1) '(contains ?kb ?e2) '[(not= ?ka ?kb)]
+                     '(twin ?ca ?ka) '(twin ?cb ?kb)
+                     (list 'not-join '[?ca ?cb]
+                           ['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
+                           '(not [?a :val/extracted true])
+                           '(contains ?ca ?a) '(contains ?cb ?b))]}))))
+
 (defn- node-demand-law
   "One generated law map for a node-level demand on structure `tag`."
   [tag {:keys [demand key desc when require unless]}]
@@ -814,9 +890,14 @@
                            ['(not-join [?x] (twin ?s ?x))]))})))
 
 (defn- correspondence-laws
-  "Every generated demand law of `sdef` — the correspondence analogue of `slot-laws`."
-  [{:keys [tag corresponds]}]
-  (mapv #(node-demand-law tag %) (:demands corresponds)))
+  "Every generated demand law of `sdef` — node demands from (corresponds …) sub-forms plus
+   container demands from relation slots carrying {:realized-by R' :altitude :container}."
+  [{:keys [tag slots corresponds]}]
+  (into (mapv #(node-demand-law tag %) (:demands corresponds))
+        (mapcat (fn [slot]
+                  (when (:realized-by slot)
+                    (container-demand-laws tag slot)))
+                (remove scalar-slot? slots))))
 
 (defn ^{:malli/schema [:=> [:cat :any] :any]}
   laws-of

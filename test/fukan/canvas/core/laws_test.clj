@@ -188,3 +188,83 @@
                      "lonely"))
       (is (empty? (s/violations-of (mk false) :corresponds/Operation.realized))
           "no code extracted → the realized demand is vacuous (the guard)"))))
+
+;; ── container-altitude relation demands (delegates-realized / delegates-faithful) ──
+
+(defn- names
+  "Entity names for a set of offender eids — maps `violations-of` eids → entity names via `cq/entity`."
+  [db eids]
+  (set (map #(:entity/name (cq/entity db %)) eids)))
+
+;; The COMMON BASE (raw tx-maps): design modules s,t with s-op→(delegates)→t-op, code modules
+;; fukan.s/fukan.t with twins s-op/t-op. The five dbs derive from it by stated deltas.
+(def ^:private container-base
+  [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "s"}
+   {:db/id -2 :structure/of :canvas.vocab.code.module/Module :entity/name "t"}
+   {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "s-op"}
+   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "t-op"}
+   {:rel/id "s|exposes|s-op" :rel/from -1 :rel/kind :exposes :rel/to -3}
+   {:rel/id "t|exposes|t-op" :rel/from -2 :rel/kind :exposes :rel/to -4}
+   {:rel/id "s-op|delegates|t-op" :rel/from -3 :rel/kind :delegates :rel/to -4}
+   {:db/id -5 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.s" :val/extracted true}
+   {:db/id -6 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.t" :val/extracted true}
+   {:db/id -7 :structure/of :canvas.vocab.code.operation/Operation :entity/name "s-op" :val/extracted true}
+   {:db/id -8 :structure/of :canvas.vocab.code.operation/Operation :entity/name "t-op" :val/extracted true}
+   {:rel/id "ks|child|s" :rel/from -5 :rel/kind :child :rel/to -7}
+   {:rel/id "kt|child|t" :rel/from -6 :rel/kind :child :rel/to -8}])
+
+;; no-call-db: base as-is (delegation, twins, NO :calls edge → realized offender s-op)
+(def ^:private no-call-db (build/tx-maps->cozo container-base))
+
+;; with-call-db: base + :calls edge between code twins → realized green
+(def ^:private with-call-db
+  (build/tx-maps->cozo (conj container-base {:rel/id "call" :rel/from -7 :rel/kind :calls :rel/to -8})))
+
+;; untwinned-module-db: base MINUS -5/-7 and their rels (module s has NO twin;
+;; keep -6/-8 so a root-kind fact exists → realized offender s-op)
+(def ^:private untwinned-module-db
+  (build/tx-maps->cozo
+   (filterv #(and (not= -5 (:db/id %))
+                  (not= -7 (:db/id %))
+                  (not= "ks|child|s" (:rel/id %)))
+            container-base)))
+
+;; undeclared-call-base: base MINUS delegates rel, MINUS orig -7, PLUS renamed ext-s-op (-7), PLUS :calls edge
+(def ^:private undeclared-call-base
+  (-> (filterv #(and (not= "s-op|delegates|t-op" (:rel/id %))
+                     (not= -7 (:db/id %)))
+               container-base)
+      (conj {:db/id -7 :structure/of :canvas.vocab.code.operation/Operation :entity/name "ext-s-op" :val/extracted true})
+      (conj {:rel/id "call" :rel/from -7 :rel/kind :calls :rel/to -8})))
+
+;; undeclared-call-db: undeclared-call-base as a db (faithful offender: ext-s-op)
+(def ^:private undeclared-call-db (build/tx-maps->cozo undeclared-call-base))
+
+;; declared-call-db: base + :calls edge (same as with-call-db — faithful green)
+(def ^:private declared-call-db with-call-db)
+
+;; unclaimed-container-db: undeclared-call-base MINUS design module -2/-4 and their rels
+;; (callee container has no design twin → NOT claimed → no faithful fire)
+(def ^:private unclaimed-container-db
+  (build/tx-maps->cozo
+   (filterv #(and (not= -2 (:db/id %))
+                  (not= -4 (:db/id %))
+                  (not= "t|exposes|t-op" (:rel/id %)))
+            undeclared-call-base)))
+
+(deftest delegates-realized-fires-without-a-backing-call
+  (testing "a cross-container design delegation with twinned containers but no fact call between them"
+    (is (= #{"s-op"} (names no-call-db (s/violations-of no-call-db :corresponds/Operation.delegates-realized))))
+    (is (empty? (s/violations-of with-call-db :corresponds/Operation.delegates-realized)))))
+
+(deftest delegates-realized-fires-when-the-container-has-no-twin-at-all
+  (testing "OLD CallRealization semantics preserved: a delegation from a module with NO extracted
+            twin is an offender once ANY root-kind fact exists (the not-join is vacuously false)"
+    (is (= #{"s-op"} (names untwinned-module-db (s/violations-of untwinned-module-db :corresponds/Operation.delegates-realized))))))
+
+(deftest delegates-faithful-fires-on-an-undeclared-call-between-claimed-containers
+  (testing "a fact call between twinned containers with no design delegation covering it"
+    (is (= #{"ext-s-op"} (names undeclared-call-db (s/violations-of undeclared-call-db :corresponds/Operation.delegates-faithful))))
+    (is (empty? (s/violations-of declared-call-db :corresponds/Operation.delegates-faithful)))
+    (is (empty? (s/violations-of unclaimed-container-db :corresponds/Operation.delegates-faithful))
+        "a call into an UNMODELLED container is a coverage signal (uncovered-calls), not a fidelity violation")))

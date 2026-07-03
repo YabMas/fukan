@@ -2,7 +2,8 @@
   "Code vocab — `Module`: a code boundary (one namespace), its derived module-dependency reading,
    AND the CROSS-ELEMENT correspondence: the `module-corresponds?` name bridge + the `op-twin`
    alias of the kernel twin (the (corresponds …) declarations carry the pairing).
-   CallRealization/Fidelity and their readers have moved to `canvas.principles.layered-architecture`."
+   The call-graph correspondence laws are GENERATED from Operation's `:delegates` slot options;
+   their readers live in `canvas.principles.layered-architecture`."
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]

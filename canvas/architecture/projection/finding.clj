@@ -7,7 +7,7 @@
    dependencies). It lives in the `projection` subsystem alongside `materialize`, whose render-finding
    readings delegate here to build their findings — keeping that coupling intra-subsystem. It OWNS the
    `Observation`/`Finding` data-shapes (materialize adopts `Finding` by name) and types its public
-   surface, which lets `materialize` declare the `:delegates [finding/finding …]` the Fidelity law requires."
+   surface, which lets `materialize` declare the `:delegates [finding/finding …]` the generated delegates-realized demand requires."
   (:require [canvas.vocab.code.kind :refer [Kind]]
             [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]))
 

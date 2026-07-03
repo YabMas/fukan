@@ -26,8 +26,9 @@
    (`fukan.canvas.core.rules/substrate-rules`) read it — embedded LITERALLY in
    `fukan.canvas.core.rules` in BOTH `substrate-rules` AND the twin-rule generator in
    `derive-rules` (rules are pure quoted data; keep all three in sync). Also inlined
-   literally in `fukan.canvas.core.structure`'s demand-law generator (`node-demand-law`) —
-   update all four sites in concert. Vocab may additionally declare an authoring slot
+   literally in the demand-law generators in `fukan.canvas.core.structure` around
+   `correspondence-laws` (node-demand-law / container-demand-laws / root-guard-clause /
+   covered-from-law) — update all in concert. Vocab may additionally declare an authoring slot
    storing the same attribute (the test-fabrication surface)."
   :val/extracted)
 

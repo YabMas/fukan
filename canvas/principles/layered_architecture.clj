@@ -5,10 +5,19 @@
    Dependencies are DECLARED and DIRECTED: the module graph is acyclic and fully clustered
    (`ModuleArchitecture`: acyclicity + membership totality — the `:may-depend`
    conformance/acyclicity teeth ride `Subsystem` itself, slot semantics with the slot); the
-   code call graph realizes the declared design (`CallRealization`, `Fidelity`);
+   code call graph realizes the declared design (the generated `:corresponds/Operation.delegates-realized`
+   and `:corresponds/Operation.delegates-faithful` demand laws, derived from Operation's `:delegates`
+   slot carrying `{:realized-by :calls :altitude :container :faithful true}`);
    `latent-boundaries` discovers bottom-up boundaries the design hasn't drawn yet (Parnas/ISP
-   consumer-disjointness — the information-hiding flavour). Judgment readers:
-   `uncovered-calls`, `unfaithful-calls`, `unrealized-delegates`."
+   consumer-disjointness — the information-hiding flavour).
+
+   Realization is at MODULE-DEPENDENCY altitude, not exact op-pair: real dependencies are often
+   indirect (dispatch, internal leaves) — the author sketches the module dependency on an exposed op.
+   Fidelity is scoped to MODELLED-BOTH-ENDS: a call into an unmodelled namespace is a coverage gap
+   (the `uncovered-calls` query), NOT a fidelity violation — we only enforce boundaries we claim to model.
+
+   Generated laws: `:corresponds/Operation.delegates-realized`, `:corresponds/Operation.delegates-faithful`.
+   Judgment readers: `uncovered-calls`, `unfaithful-calls`, `unrealized-delegates`."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.db :as db]
@@ -134,89 +143,19 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
            (reduce-kv (fn [acc mod bs] (assoc acc mod (vec (sort-by (comp count :ops) > bs))))
                       (sorted-map))))))
 
-;; ── model↔code CALL realization laws and readers ─────────────────────────────
-
-(defstructure CallRealization
-  "Law-holder for the model↔code CALL realization — no instances of its own; the relation-level dual
-   of the op-level `Realization`. The INTERPRETATION seam between INTENT (`:delegates`, authored) and
-   FACT (`:calls`, extracted), at MODULE-DEPENDENCY altitude: every authored CROSS-MODULE delegation
-   must be realized by SOME actual cross-module call between the corresponding modules
-   (`module-corresponds?`). Module-level, not exact op-pair: real dependencies are often indirect
-   (dispatch, internal leaves) — the author sketches the module dependency on an exposed op.
-   `:scope :global` (offenders are authored delegation source ops). Vacuity guard: extraction happened
-   ⟺ ≥1 extracted Module, so the law guards on the extracted-Module set (~14), NOT on `:calls` — an
-   earlier `[?anycall :rel/kind :calls]` datom guard bound an unused var to every call (~202×),
-   cartesian-multiplying the whole law (~20s of `check`). Negation via an inline `not-join` with the
-   corresponding-module names bound on entry (mirroring the op-level `Realization` law) keeps
-   `?cm1`/`?cm2` bound, avoiding a free-variable blow-up. The `:rules` inline `in-module`
-   (self-contained — the inlined-`:rules` convention)."
-  (law "every intended cross-module delegation is realized by an actual call between the corresponding modules"
-    :scope :global
-    :offenders '[?o1]
-    :rules '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
-             [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
-             [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]]
-    ;; vacuity guard on the extracted-Module set (~14), NOT on :calls (~202): an earlier
-    ;; `[?anycall :rel/kind :calls]` bound an unused var to every call, cartesian-multiplying the law.
-    :where '[[?_xm :structure/of :canvas.vocab.code.module/Module] [?_xm :val/extracted true]
-             [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
-             (not [?o1 :val/extracted true])
-             (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
-             (not-join [?cm1 ?cm2]
-               [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
-               [?e1 :val/extracted true] [?e2 :val/extracted true]
-               (in-module ?e1 ?km1) (in-module ?e2 ?km2)
-               [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]
-               [(canvas.vocab.code.module/module-corresponds? ?cm2 ?km2)])]))
-
-(defstructure Fidelity
-  "Law-holder for code-up FIDELITY — the ENFORCED dual of the `uncovered-calls` query. Every actual
-   cross-module call BETWEEN MODELLED faculties must be covered by an intended `:delegates`. Scoped to
-   modelled-both-ends: a call into an UNMODELLED namespace is a coverage gap (the `uncovered-calls`
-   query), NOT a fidelity violation — we only enforce boundaries we have claimed to model (a code
-   module is modelled when an authored faculty module `module-corresponds?` it). With THIS law green
-   AND the `subsystem` DAG-conformance (over `:delegates`) green, the actual code call graph provably
-   conforms to the declared `:may-depend` DAG — the architecture finally bites on code. `:scope
-   :global` (offenders are the extracted caller ops). Naturally vacuous on a model-only build — the body
-   requires extracted cross-module `:calls`, of which there are none without extraction (an earlier
-   `[?anydel :rel/kind :delegates]` guard added only a ~30× cartesian multiply, ~3.7s of `check`);
-   negation via inline not-join with `?km1`/`?km2` bound on entry (no free-variable blow-up); the
-   `intended` rule inlines `in-module` (the inlined-`:rules` convention)."
-  (law "every actual cross-module call between modelled faculties is covered by an intended delegation"
-    :scope :global
-    :offenders '[?e1]
-    :rules '[[(in-module ?e ?mname) [?r :rel/kind :child]   [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
-             [(in-module ?e ?mname) [?r :rel/kind :exposes] [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
-             [(in-module ?e ?mname) [?r :rel/kind :owns]    [?r :rel/from ?m] [?r :rel/to ?e] [?m :entity/name ?mname]]
-             [(intended ?km1 ?km2)
-              [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
-              (not [?o1 :val/extracted true])
-              (in-module ?o1 ?c1) (in-module ?o2 ?c2)
-              [(canvas.vocab.code.module/module-corresponds? ?c1 ?km1)]
-              [(canvas.vocab.code.module/module-corresponds? ?c2 ?km2)]]]
-    ;; no vacuity guard needed: the body REQUIRES extracted cross-module :calls, so it is naturally
-    ;; vacuous on a model-only build. An earlier `[?anydel :rel/kind :delegates]` guard added only a
-    ;; ~30× cartesian multiply.
-    :where '[[?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
-             [?e1 :val/extracted true] [?e2 :val/extracted true]
-             (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
-             [?am1 :structure/of :canvas.vocab.code.module/Module] (not [?am1 :val/extracted true]) [?am1 :entity/name ?cm1]
-             [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]
-             [?am2 :structure/of :canvas.vocab.code.module/Module] (not [?am2 :val/extracted true]) [?am2 :entity/name ?cm2]
-             [(canvas.vocab.code.module/module-corresponds? ?cm2 ?km2)]
-             (not (intended ?km1 ?km2))]))
+;; ── model↔code CALL realization readers ──────────────────────────────────────
+;; The laws are GENERATED from Operation's :delegates slot options
+;; {:realized-by :calls :altitude :container :faithful true} — see canvas.vocab.code.operation.
+;; The generated keys are :corresponds/Operation.delegates-realized and
+;; :corresponds/Operation.delegates-faithful. The readers below are thin wrappers over
+;; s/violations-of (the generic worklist reader).
 
 (defn unrealized-delegates
   "The authored source Operations whose cross-module delegation is NOT realized by any actual call
    between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
-   is backed by real code. Reads the single source of truth (the registered CallRealization law)."
+   is backed by real code. Reads the generated demand (:corresponds/Operation.delegates-realized)."
   [db-arg]
-  (let [desc (-> (s/structure-by-tag ::CallRealization) :laws first :desc)]
-    (->> (s/check db-arg)
-         (filter #(= desc (:law %)))
-         (mapcat :offenders) (map first)
-         (map #(:entity/name (cq/entity db-arg %)))
-         set)))
+  (set (map #(:entity/name (cq/entity db-arg %)) (s/violations-of db-arg :corresponds/Operation.delegates-realized))))
 
 (defn uncovered-calls
   "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law, like
@@ -224,7 +163,8 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
    intended cross-module delegation (over `:delegates`, bridged by `module-corresponds?`), as a set
    of [caller-module callee-module] code-module-name pairs. The couplings the design has not yet
    declared. A single on-graph query — actual cross-module calls MINUS those an authored cross-module
-   delegation covers (the inner `not-join` is the `intended` shape the Fidelity law inlines) — under
+   delegation covers (the inner `not-join` is the intended shape the generated delegates-faithful
+   demand negates) — under
    Cozo's stratified negation; the empty-relation not-join gotcha that once forced a Clojure
    set-difference is gone. A signal, not a violation: you do not model every call."
   [db-arg]
@@ -244,12 +184,7 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
   "The ENFORCED fidelity offenders — extracted caller Operations making an undeclared cross-module
    call between MODELLED faculties, as a set of op names. Empty ⇔ every modelled-faculty coupling in
    the code is declared as intent (so, with DAG-conformance green, the code conforms to the
-   `:may-depend` DAG). The modelled-both-ends subset of `uncovered-calls`; reads the registered
-   Fidelity law (the single source of truth)."
+   `:may-depend` DAG). The modelled-both-ends subset of `uncovered-calls`; reads the generated demand
+   (:corresponds/Operation.delegates-faithful)."
   [db-arg]
-  (let [desc (-> (s/structure-by-tag ::Fidelity) :laws first :desc)]
-    (->> (s/check db-arg)
-         (filter #(= desc (:law %)))
-         (mapcat :offenders) (map first)
-         (map #(:entity/name (cq/entity db-arg %)))
-         set)))
+  (set (map #(:entity/name (cq/entity db-arg %)) (s/violations-of db-arg :corresponds/Operation.delegates-faithful))))
