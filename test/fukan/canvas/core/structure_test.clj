@@ -686,3 +686,27 @@
       (is (contains? (set (map :law (s/check bad)))
                      "SyntClass.n value must satisfy :int")
           "the generated law routes :int through value-valid?, not a kernel predicate"))))
+
+;; ── corresponds: the model↔code twin-hood declaration ──────────────────────
+(defn- tc-bridge "test root-bridge predicate" [a b] (= a b))
+
+(defstructure TCorrRoot "corresponds test: a ROOT kind (bridged)"
+  (corresponds :by-name (bridge tc-bridge)))
+
+(defstructure TCorrNested "corresponds test: a NESTED kind (same name within twinned containers)"
+  (corresponds :by-name))
+
+(deftest corresponds-registers-basis-and-bridge
+  (testing "the (corresponds …) body form lands in the registry, bridge fully qualified"
+    (is (= {:basis :by-name :bridge 'fukan.canvas.core.structure-test/tc-bridge}
+           (:corresponds (s/structure-by-tag ::TCorrRoot))))
+    (is (= {:basis :by-name :bridge nil}
+           (:corresponds (s/structure-by-tag ::TCorrNested))))
+    (is (nil? (:corresponds (s/structure-by-tag ::Plain)))
+        "an undeclared structure carries no :corresponds")))
+
+(deftest corresponds-rejects-malformed-declarations
+  (testing "unknown basis / unknown sub-form / unresolvable bridge all throw at expansion"
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadBasis "d" (corresponds :by-vibes)))))
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadSub "d" (corresponds :by-name (realized))))))
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadBridge "d" (corresponds :by-name (bridge nope-not-defined))))))))

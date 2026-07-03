@@ -80,6 +80,8 @@
    fukan.canvas.core.structure-test/Seq2 hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/SetVal hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/SyntClass hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/TCorrNested hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/TCorrRoot hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Tagged hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Tree hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Type hooks.fukan.structure/instance

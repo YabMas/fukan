@@ -473,6 +473,39 @@
                            "matched-by, target, or at-most-one")
                       {:form form})))))
 
+(defn- parse-corresponds
+  "Parse a `(corresponds …)` body-form tail into `{:basis :by-name, :bridge qualified-sym|nil}`.
+   `:by-name` is the only basis: a ROOT kind (with a `(bridge f)` sub-form) pairs design/fact
+   instances whose names satisfy the bridge predicate; a NESTED kind (no bridge) pairs
+   same-named design/fact instances whose containers twin. The bridge must RESOLVE at expansion
+   time (define it above the defstructure) and is stored fully qualified. A ROOT bridge must
+   also carry a registered Cozo predicate port (`cq/register-predicate-port!`); an unported
+   bridge fails every vocab-rules query loudly at compile (\"unsupported predicate: …\") — far
+   from the defstructure, so declare-and-port together. Demand sub-forms
+   ((realized …)/(covered …)) arrive with the node-demand slice — rejected here."
+  [sname forms]
+  (let [[basis & subs] forms]
+    (when-not (= :by-name basis)
+      (throw (ex-info (str "defstructure " sname ": unknown corresponds basis " (pr-str basis)
+                           " — only :by-name is supported")
+                      {:structure sname :basis basis})))
+    (doseq [f subs]
+      (when-not (and (seq? f) (= 'bridge (first f)) (= 2 (count f)) (symbol? (second f)))
+        (throw (ex-info (str "defstructure " sname ": unknown corresponds sub-form " (pr-str f)
+                             " — expected (bridge f)")
+                        {:structure sname :form f}))))
+    (when (> (count subs) 1)
+      (throw (ex-info (str "defstructure " sname ": multiple (bridge …) forms")
+                      {:structure sname})))
+    (let [bsym    (second (first subs))
+          bridged (when bsym
+                    (if-let [v (resolve bsym)]
+                      (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
+                      (throw (ex-info (str "defstructure " sname ": corresponds bridge " bsym
+                                           " does not resolve — define it above the defstructure")
+                                      {:structure sname :bridge bsym}))))]
+      {:basis :by-name :bridge bridged})))
+
 (defn- parse-law
   "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?)
    — or `(law \"desc\" (combinator …))`, expanded by `combinator-law`.
@@ -521,17 +554,17 @@
    values, def-wrapped instances): (Function \"doc\"? {slot → value}?)
 
    Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
-   (includes ...) / (realized-as ...); anything else is rejected at macro-expansion
-   time (a silently-dropped form is a footgun).
+   (includes ...) / (realized-as ...) / (corresponds ...); anything else is rejected
+   at macro-expansion time (a silently-dropped form is a footgun).
 
    A law's :rules may be recursive, including rule-calls-rule (Cozo computes the
    fixpoint with semi-naive evaluation); keep them tight — they re-run on every check."
   [sname docstring & body]
   (doseq [form body]
     (when-not (or (map? form)
-                  (and (seq? form) (#{'law 'reader 'syntax 'includes 'realized-as} (first form))))
+                  (and (seq? form) (#{'law 'reader 'syntax 'includes 'realized-as 'corresponds} (first form))))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected a slots map, (law ...), (reader ...), (syntax ...), (includes ...) or (realized-as ...)")
+                           " — expected a slots map, (law ...), (reader ...), (syntax ...), (includes ...), (realized-as ...) or (corresponds ...)")
                       {:structure sname :form form}))))
   (when (> (count (filter map? body)) 1)
     (throw (ex-info (str "defstructure " sname ": multiple slots maps — declare all slots in one map")
@@ -567,8 +600,22 @@
                  (when (> (count (filter #(and (seq? %) (= 'realized-as (first %))) body)) 1)
                    (throw (ex-info (str "defstructure " sname ": multiple (realized-as …) forms")
                                    {:structure sname}))))
+        corresponds (let [cs (filter #(and (seq? %) (= 'corresponds (first %))) body)]
+                      (when (> (count cs) 1)
+                        (throw (ex-info (str "defstructure " sname ": multiple (corresponds …) forms")
+                                        {:structure sname})))
+                      (when-let [c (first cs)]
+                        (when value?
+                          (throw (ex-info (str "defstructure " sname ": a ^:value structure cannot correspond"
+                                               " — values are stratum-free (content-deduped across strata)")
+                                          {:structure sname})))
+                        (when realized
+                          (throw (ex-info (str "defstructure " sname ": a realized concept cannot correspond"
+                                               " — it has no instances to twin")
+                                          {:structure sname})))
+                        (parse-corresponds sname (rest c))))
         sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
-                :includes includes :realized-as realized}]
+                :includes includes :realized-as realized :corresponds corresponds}]
     `(do
        (register-structure! (cond-> '~sdef
                               ~reader-form (assoc :reader ~reader-form)
@@ -622,13 +669,11 @@
    supported aggregates are count/sum/min/max/mean. Name a measure only when a consumer
    earns it — the inline `(measure …)` clause is the compositional default.
 
-     (defrelation :op-twin \"an authored op ?a and its extracted code twin ?b\"
-       '[?a ?b]
-       '[[?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true]) [?a :entity/name ?n]
-         (in-module ?a ?cm)
-         [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :val/extracted true] [?b :entity/name ?n]
-         (in-module ?b ?km)
-         [(canvas.vocab.code.module/module-corresponds? ?cm ?km)]])"
+     (defrelation :produces \"an authored Operation ?o whose :out schema is a ref naming Kind ?k\"
+       '[?o ?k]
+       '[(authored ?o)
+         [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
+         [?sch :val/kind \"ref\"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]])"
   [rtag docstring head where]
   (let [tag (keyword (name rtag))]
     `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws [] :includes []
