@@ -221,6 +221,21 @@
          wired? (into [{:rel/id "op-a|calls|dp" :rel/from -7  :rel/kind :calls :rel/to -11}
                        {:rel/id "h|calls|op-b"  :rel/from -12 :rel/kind :calls :rel/to -8}]))))
 
+(deftest generic-twin-matches-the-legacy-op-twin-pairing
+  (testing "the kernel twin rules reproduce the retired hand-written op-twin pairs exactly (self-model)"
+    (let [db     (pipeline/build-model "src")
+          legacy '[[(legacy-twin ?a ?b)
+                    [?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true])
+                    [?a :entity/name ?n] (in-module ?a ?cm)
+                    [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :val/extracted true]
+                    [?b :entity/name ?n] (in-module ?b ?km)
+                    [(canvas.vocab.code.module/module-corresponds? ?cm ?km)]]]
+          rules  (into (s/vocab-rules) legacy)
+          pairs  (fn [head] (set (cq/q (into [:find '?a '?b :in '$ '% :where] [(list head '?a '?b)]) db rules)))]
+      (is (seq (pairs 'op-twin)) "the self-model has twins")
+      (is (= (pairs 'legacy-twin) (pairs 'op-twin))
+          "alias(twin)-derived pairs == the legacy hand-written pairing, node for node"))))
+
 (deftest unrealized-dispatch-fires-when-unrealized
   (testing "an authored cross-module delegation with no realizing code path is reported"
     (is (contains? (module/unrealized-dispatch (dispatch-fixture false)) "op-a"))))

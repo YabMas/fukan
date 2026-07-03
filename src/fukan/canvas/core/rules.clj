@@ -45,6 +45,7 @@
      rel   slot R   → (R ?a ?b)  ⇐ [?r :rel/from ?a] …
      cont  slot R:cont → (contains c m) ⇐ (R c m)   (union of :contains slots)
      trans  R:trans    → (R+ a b) ⇐ (R a b) ∪ (R a m)(R+ m b)   (per :transitive name; :contains ⟹ contains+)
+     twin  (corresponds) → (twin ?a ?b) ⇐ bridge | same-name ∧ containers-twin  (one per corresponding kind)
    plus the fixed substrate rules. `scalar?` splits relation slots from value slots.
    Realized concepts, relation-coproducts, and derived relations carry no instances, so they
    get no kind-rule."
@@ -85,5 +86,24 @@
         closure-rules  (mapcat closure trans-names)
         ;; in-module (name-keyed) is DERIVED from `contains` — the kernel no longer hardcodes child/exposes/owns
         in-module-rules (when (seq contains-kinds)
-                          [[(list 'in-module '?e '?mname) (list 'contains '?m '?e) ['?m :entity/name '?mname]]])]
-    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules contains-rules closure-rules in-module-rules substrate-rules))))
+                          [[(list 'in-module '?e '?mname) (list 'contains '?m '?e) ['?m :entity/name '?mname]]])
+        ;; ── generic model↔code TWIN-HOOD from (corresponds …) declarations ──
+        ;; A ROOT kind (bridge) pairs design/fact instances whose names satisfy the bridge
+        ;; predicate; a NESTED kind pairs same-named design/fact instances whose containers
+        ;; twin (the generic `contains` union). Stratum clauses are INLINED — not (design ?a)
+        ;; — so each disjunct stays range-bound per-kind instead of materializing the global
+        ;; design set (the stratum attribute is substrate/stratum-attr, literal here).
+        twin-rules (for [{:keys [tag corresponds]} concrete :when corresponds]
+                     (if-let [bridge (:bridge corresponds)]
+                       [(list 'twin '?a '?b)
+                        ['?a :structure/of tag] (list 'not ['?a :val/extracted true])
+                        ['?b :structure/of tag] ['?b :val/extracted true]
+                        ['?a :entity/name '?an] ['?b :entity/name '?bn]
+                        [(list bridge '?an '?bn)]]
+                       [(list 'twin '?a '?b)
+                        ['?a :structure/of tag] (list 'not ['?a :val/extracted true])
+                        ['?b :structure/of tag] ['?b :val/extracted true]
+                        ['?a :entity/name '?n] ['?b :entity/name '?n]
+                        (list 'contains '?ca '?a) (list 'contains '?cb '?b)
+                        (list 'twin '?ca '?cb)]))]
+    (vec (concat kind-rules incl-rules real-rules copr-rules drv-rules rel-rules contains-rules closure-rules in-module-rules twin-rules substrate-rules))))

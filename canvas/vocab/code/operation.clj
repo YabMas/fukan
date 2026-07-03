@@ -47,8 +47,11 @@
 
    A boundary sketch authors `:delegates` (the cross-module surfaces it relies on — designed
    dependencies) and `:guidance` (implementer-directed intent); it does NOT author `:calls` —
-   internal wiring is extraction's job. `:calls` is therefore the EXTRACTED actual-call graph."
+   internal wiring is extraction's job. `:calls` is therefore the EXTRACTED actual-call graph.
+
+   Corresponds NESTED (:by-name): a design Operation twins the same-named extracted one within twinned Modules."
   (includes Connected)
+  (corresponds :by-name)             ; NESTED twin: same name within twinned Module containers
   (syntax signature->slots)          ; {:signature [:=> [:catn …] Out]} authoring entry (vocab-owned)
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)

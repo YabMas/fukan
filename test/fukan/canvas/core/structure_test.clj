@@ -690,6 +690,16 @@
 ;; ── corresponds: the model↔code twin-hood declaration ──────────────────────
 (defn- tc-bridge "test root-bridge predicate" [a b] (= a b))
 
+;; tc-bridge's Cozo port — a corresponds bridge is compiled into the generated twin rule, so it
+;; needs a CozoScript translation like any law/query predicate (module-corresponds? sets the
+;; pattern). Equality, no aux rules. Without this, EVERY vocab-rules-consuming query would throw
+;; on the un-portable TCorrRoot disjunct — the kernel is deliberately LOUD there (a declared but
+;; unwired bridge is a programming error, not a config gap).
+(cq/register-predicate-port!
+ 'fukan.canvas.core.structure-test/tc-bridge
+ (fn [[a b]] [(str a " == " b) #{}])
+ {})
+
 (defstructure TCorrRoot "corresponds test: a ROOT kind (bridged)"
   (corresponds :by-name (bridge tc-bridge)))
 

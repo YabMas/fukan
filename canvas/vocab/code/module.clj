@@ -1,7 +1,7 @@
 (ns canvas.vocab.code.module
   "Code vocab — `Module`: a code boundary (one namespace), its derived module-dependency reading,
    AND the CROSS-ELEMENT correspondence: the `module-corresponds?` name bridge + the `op-twin`
-   pairing built on it (used by the operation/effect/fukan laws via datalog injection).
+   alias of the kernel twin (the (corresponds …) declarations carry the pairing).
    CallRealization/Fidelity and their readers have moved to `canvas.principles.layered-architecture`."
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
@@ -10,6 +10,34 @@
             [fukan.canvas.core.rules :as rules]
             [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.kind :refer [Kind]]))
+
+;; ── the cross-element correspondence bridge ───────────────────────────────────
+;; MUST be defined before Module's defstructure: the (corresponds …) body-form
+;; resolves the bridge symbol at macro-expansion time.
+
+(defn ^:export module-corresponds?
+  "True when code namespace `km` realizes canvas module `cm`. Deterministic, separator-agnostic:
+   split both on `[-.]` into segments; the canvas name's segments must be a SUFFIX of the code
+   namespace's. So `infra-model` ← `fukan.infra.model`, `canvas-source` ←
+   `fukan.canvas.projection.canvas-source`, `core-structure` ← `fukan.canvas.core.structure`.
+   (Canvas module names are hyphenated and equal their vars; the code path is dotted — this rule
+   bridges the two without the model authoring a second name string.)"
+  [cm km]
+  (let [segs #(str/split % #"[-.]")
+        c    (segs cm)]
+    (= c (take-last (count c) (segs km)))))
+
+;; The module-correspondence Cozo port — registered into the query compiler's predicate-port SPI so the
+;; GENERIC kernel compiler need not name `Module` or re-implement module-corresponds? in CozoScript.
+(cq/register-predicate-port!
+ 'canvas.vocab.code.module/module-corresponds?
+ (fn [[cm km]] [(str "r_module_corresponds[" cm ", " km "]") #{"r_module_corresponds"}])
+ {"r_canvas_module" {:lines ["r_canvas_module[cm] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], not triple[m, 'val/extracted', true], triple[m, 'entity/name', cm]"]
+                     :refs #{}}
+  "r_code_module"   {:lines ["r_code_module[km] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], triple[m, 'val/extracted', true], triple[m, 'entity/name', km]"]
+                     :refs #{}}
+  "r_module_corresponds" {:lines ["r_module_corresponds[cm, km] := r_canvas_module[cm], r_code_module[km], cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'), or(kmn == cmn, ends_with(kmn, concat('.', cmn)))"]
+                          :refs #{"r_canvas_module" "r_code_module"}}})
 
 (defstructure Module
   "A code module — one cohesion boundary (a namespace). Like a `Grouping` it collects members
@@ -20,7 +48,12 @@
    that CROSS THE BOUNDARY — Kinds other modules ADOPT by name (and don't redefine); `:child` is the
    internal membership / ownership backbone (`in-module` resolves over `:exposes`/`:owns`/`:child`),
    the home for grain a module is source-of-truth-for but no one else consumes. The discriminant is
-   adoption: a data-shape no other module names is internal grain (`:child`), not a boundary (`:owns`)."
+   adoption: a data-shape no other module names is internal grain (`:child`), not a boundary (`:owns`).
+
+   Corresponds as the ROOT of the twin ladder: a design Module twins an extracted one via the
+   `module-corresponds?` name bridge (the `(corresponds …)` declaration — nested kinds twin within
+   these pairs)."
+  (corresponds :by-name (bridge module-corresponds?))
   {:exposes [:* {:contains true} Operation]   ; the public API surface — Operations callers depend on
    :owns    [:* {:contains true} Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
    :child   [:* {:contains true} Any]         ; internal members + grain no other module consumes
@@ -60,31 +93,7 @@
                :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
              db module-depends-rules)))
 
-;; ── the cross-element correspondence bridge + op pairing ──────────────────────
-
-(defn ^:export module-corresponds?
-  "True when code namespace `km` realizes canvas module `cm`. Deterministic, separator-agnostic:
-   split both on `[-.]` into segments; the canvas name's segments must be a SUFFIX of the code
-   namespace's. So `infra-model` ← `fukan.infra.model`, `canvas-source` ←
-   `fukan.canvas.projection.canvas-source`, `core-structure` ← `fukan.canvas.core.structure`.
-   (Canvas module names are hyphenated and equal their vars; the code path is dotted — this rule
-   bridges the two without the model authoring a second name string.)"
-  [cm km]
-  (let [segs #(str/split % #"[-.]")
-        c    (segs cm)]
-    (= c (take-last (count c) (segs km)))))
-
-;; The module-correspondence Cozo port — registered into the query compiler's predicate-port SPI so the
-;; GENERIC kernel compiler need not name `Module` or re-implement module-corresponds? in CozoScript.
-(cq/register-predicate-port!
- 'canvas.vocab.code.module/module-corresponds?
- (fn [[cm km]] [(str "r_module_corresponds[" cm ", " km "]") #{"r_module_corresponds"}])
- {"r_canvas_module" {:lines ["r_canvas_module[cm] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], not triple[m, 'val/extracted', true], triple[m, 'entity/name', cm]"]
-                     :refs #{}}
-  "r_code_module"   {:lines ["r_code_module[km] := triple[m, 'structure/of', 'canvas.vocab.code.module/Module'], triple[m, 'val/extracted', true], triple[m, 'entity/name', km]"]
-                     :refs #{}}
-  "r_module_corresponds" {:lines ["r_module_corresponds[cm, km] := r_canvas_module[cm], r_code_module[km], cmn = regex_replace_all(cm, '-', '.'), kmn = regex_replace_all(km, '-', '.'), or(kmn == cmn, ends_with(kmn, concat('.', cmn)))"]
-                          :refs #{"r_canvas_module" "r_code_module"}}})
+;; ── op pairing ───────────────────────────────────────────────────────────────
 
 ;; The module-membership CozoScript fragment (op→owning-module-name over child/exposes/owns) — it names
 ;; code-vocab relations, so it lives in VOCAB, prepended (after the generic `rules/eav`) by the cozo
@@ -96,19 +105,17 @@ in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[
 in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
 ")
 
-;; op-twin — the model↔code Operation pairing, defined ONCE as a derived relation and injected
-;; into every correspondence law/query at domain altitude (by `check`, like the vocab-derived rules).
-;; An authored op ?a is twinned with an extracted op ?b of the same NAME in a CORRESPONDING module
-;; (`module-corresponds?`). This is the single home of the matching the operation/effect/fukan laws
-;; reference; it lives here because it is built on the Module bridge (the cross-element correspondence).
+;; op-twin — an alias of the generic kernel `twin` restricted to the Operation kind.
+;; The pairing semantics live in the (corresponds …) declarations: Module = the bridged root,
+;; Operation = nested by name within twinned Modules. This alias exists for the correspondence
+;; laws/readers that reference op-twin by name; the actual rules are generated by `derive-rules`.
 (s/defrelation :op-twin
-  "an authored Operation ?a and its extracted code twin ?b — same name, corresponding module"
+  "an authored Operation ?a and its extracted code twin ?b — the generic kernel `twin`
+   restricted to Operation kind. The pairing semantics live in the (corresponds …)
+   declarations (Module = the bridged root, Operation = nested by name); this alias exists
+   for the correspondence laws/readers that reference op-twin."
   '[?a ?b]
-  '[(authored ?a) [?a :entity/name ?n]
-    (in-module ?a ?cm)
-    [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :val/extracted true] [?b :entity/name ?n]
-    (in-module ?b ?km)
-    [(canvas.vocab.code.module/module-corresponds? ?cm ?km)]])
+  '[[?a :structure/of :canvas.vocab.code.operation/Operation] (twin ?a ?b)])
 
 (def ^:private unrealized-dispatch-rules
   "Reachability over the EXTRACTED graph, on-graph. `op-ext-twin` pairs an authored op with its

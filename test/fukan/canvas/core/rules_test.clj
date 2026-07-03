@@ -107,6 +107,23 @@
       (is (= '[?a ?b] (rest (ffirst (filter #(= 'twin (ffirst %)) rs))))
           "the rule head carries the declared arity"))))
 
+(deftest twin-pairs-design-and-fact-across-the-containment-ladder
+  (testing "root kinds twin by bridge; nested kinds twin by name within twinned containers"
+    (let [db (build/maps->cozo
+              [{:entity/id "cm" :structure/of :canvas.vocab.code.module/Module :entity/name "infra-model"}
+               {:entity/id "km" :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.infra.model" :val/extracted true}
+               {:entity/id "co" :structure/of :canvas.vocab.code.operation/Operation :entity/name "load-model"}
+               {:entity/id "ko" :structure/of :canvas.vocab.code.operation/Operation :entity/name "load-model" :val/extracted true}
+               {:entity/id "stray" :structure/of :canvas.vocab.code.operation/Operation :entity/name "load-model" :val/extracted true}]
+              [{:rel/id "r1" :rel/from [:entity/id "cm"] :rel/kind :exposes :rel/to [:entity/id "co"]}
+               {:rel/id "r2" :rel/from [:entity/id "km"] :rel/kind :child   :rel/to [:entity/id "ko"]}])
+          twins (set (cq/q '[:find ?an ?bn :in $ %
+                             :where (twin ?a ?b) [?a :entity/name ?an] [?b :entity/name ?bn]]
+                           db (s/vocab-rules)))]
+      (is (contains? twins ["infra-model" "fukan.infra.model"]) "module pair twins via the bridge")
+      (is (contains? twins ["load-model" "load-model"]) "op pair twins by name within the twinned containers")
+      (is (= 2 (count twins)) "the un-contained same-named stray op does NOT twin"))))
+
 (deftest strata-rules-classify-provenance
   (testing "(fact ?n) / (design ?n) split nodes by the kernel provenance attribute"
     (let [db (build/maps->cozo

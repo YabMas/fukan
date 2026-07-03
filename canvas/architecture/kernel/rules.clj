@@ -4,6 +4,13 @@
    relation slot, plus fixed substrate rules), so a law/lens names domain predicates, not raw
    triples. A boundary sketch — one exposed capability, `derive-rules`.
 
+   Rule families derived by `derive-rules`: kind rules (one per concrete structure), inclusion
+   rules (per `includes`), realized-as rules, coproduct rules, derived-relation rules (per
+   `defrelation`), relation rules (per relation slot), containment union (`contains`), transitive
+   closures (`R+`), `in-module`, twin rules from `(corresponds …)` declarations (one disjunct per
+   corresponding kind — ROOT kinds pair via a bridge predicate, NESTED kinds pair same-named
+   instances whose direct containers twin), and the fixed substrate rules.
+
    It is the upstream half of the kernel's query machinery: the kernel's `vocab-rules` bridge
    delegates to `derive-rules`, and the lens ENGINE (`canvas.architecture.kernel.lens`) evaluates
    queries against those rules. `core.rules` references nothing else, so the chain is acyclic

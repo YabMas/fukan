@@ -109,7 +109,7 @@ its `defstructure` + the laws/correspondence about it + how it is extracted from
   (Kind / Effect / Operation / Module / Subsystem). Each element file carries its structure +
   *its* model↔code correspondence laws/readers + *its* Clojure extraction. The cross-element
   correspondence — `module-corresponds?` (the canvas-module↔code-ns name bridge) and `op-twin`
-  (the authored-op↔extracted-op pairing, a `defrelation`) — lives in `module.clj`; the
+  (an alias of the kernel `twin`, derived from the `(corresponds …)` declarations) — lives in `module.clj`; the
   operation/effect/`fukan` laws reach it via datalog injection (no compile cycle, since the
   build auto-loads every element). Adopted-principle law-holders (`TrustBoundary`,
   `EffectCorrespondence`, `ModuleArchitecture`, `CallRealization`/`Fidelity`) live in
@@ -311,7 +311,7 @@ mixing them corrupts history.
 - `canvas/vocab/` (ns `canvas.vocab.*`) — fukan's vocabulary: the code grammar by element
   (each file = structure + correspondence + extraction), the malli dialect (`type`), grammar
   reflection (`grammar`), grouping; the Clojure extractor is `code/extractor.clj`, the
-  cross-element correspondence (`module-corresponds?`/`op-twin`) is in `code/module.clj`
+  cross-element correspondence (`module-corresponds?`/`op-twin` — the authored-op↔extracted-op pairing, now an ALIAS of the kernel `twin` derived from (corresponds …) declarations) is in `code/module.clj`
 - `canvas/principles/` (ns `canvas.principles.*`) — the adopted architectural principles, one file per source: each bundles the law-holders + readers + reading instances realizing that principle (`parse_dont_validate`, `declared_effects`, `layered_architecture`, `deep_modules`)
 - `canvas/architecture/` — fukan-on-fukan's built-system self-specs (modules + subsystems +
   `:may-depend` DAG); the use-side instruments area (`canvas/instruments/`) is currently PARKED
