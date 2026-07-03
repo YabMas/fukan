@@ -9,16 +9,23 @@
    grammar are legitimate — the human interprets.)"
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
+            [canvas.architecture.kernel.structure :as kstructure]
             [canvas.architecture.kernel.typing :as typing]
             [canvas.architecture.cozo.query :as query]
             [canvas.architecture.projection.materialize :as mat]))
 
 (Module projection-grammar
-  "Render the reified grammar back out: forms, the primer, and the grammar-drift reading.
-   Reads through the kernel Cozo query layer (`query/q`), so its renders inherit its :throws surface."
+  "Render the reified grammar back out: forms, the primer, the correspondence card (registry-direct), and the grammar-drift reading.
+   The first two read through the kernel Cozo query layer (`query/q`); the card reads only the structure registry."
   (Kind Form)              ; a defstructure data form (the print-dual's faithful render) — opaque
   (Kind Primer :string)    ; the reference-card string
   (Kind VocabName :string) ; a grammar namespace name
+  (Operation correspondence-card
+    "The correspondence SEAM rendered as one card — the twin ladder and every demand with its
+     stable law key (the generated laws, visible and attributed). Registry-direct: no db needed."
+    {:signature [:=> [:cat] Primer]
+     :performs  [:throws]
+     :delegates [kstructure/correspondence kstructure/all-structures kstructure/laws-of]})
   (Operation structure-form
     "A reified Structure rendered back as its map-form defstructure (the print-dual).
      Includes the `(corresponds …)` declaration (demands + bridge) and slot props

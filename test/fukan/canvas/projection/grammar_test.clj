@@ -116,6 +116,22 @@
       (is (str/includes? p "━━ canvas.vocab.grammar — "))
       (is (str/includes? p "(defstructure Structure")))))
 
+(deftest primer-counts-operations-generated-laws
+  (testing "the primer's corresponds pointer agrees with the generator (3 node + 2 delegates + 1 performs)"
+    (let [db (pipeline/build-model nil)]
+      (is (str/includes? (g/vocabulary-primer db "canvas.vocab.code.operation")
+                         "; ⇒ 6 generated laws")))))
+
+(deftest correspondence-card-shows-the-seam-and-its-generated-laws
+  (testing "the card renders the twin ladder and every demand with its stable key"
+    (let [card (g/correspondence-card)]
+      (is (str/includes? card "module-corresponds?") "the root bridge is named")
+      (is (str/includes? card ":corresponds/Operation.realized"))
+      (is (str/includes? card ":corresponds/Operation.delegates-faithful"))
+      (is (str/includes? card ":corresponds/Operation.performs-covered"))
+      (is (str/includes? card "every authored operation is realized")
+          "descs come from the generated laws — the six invisible laws become visible"))))
+
 (deftest print-dual-round-trips-the-correspondence-seam
   (testing "the reflected Operation renders its corresponds form and demand slot options back"
     (let [db   (pipeline/build-model nil)

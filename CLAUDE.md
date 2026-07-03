@@ -279,6 +279,7 @@ structure substrate which is the model:
   `(focus '[(Operation ?n) …])` — render a datalog-selected slice as authored
   forms (the textual model explorer); `(check)` — violations with each offender
   quoted as its form.
+- `(correspondence)` — the design↔fact seam as one card: twin ladder + every demand with its stable law key.
 - Build a db directly: top-level instance `def`s + `(a/assemble-vars [#'x …])`, query with
   `d/q`, run `(s/check db)`.
 - **Never** use `remove-ns`, `require :reload`, or `(reload/reload)` directly.

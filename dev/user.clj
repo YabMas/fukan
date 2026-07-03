@@ -80,6 +80,12 @@
      (println (gram/vocabulary-primer m vocab-name))
      (println "No model loaded yet. Use (go) first."))))
 
+(defn correspondence
+  "Print the CORRESPONDENCE CARD — the design↔fact seam as one object: the twin ladder and every
+   demand with its stable law key (the generated laws, visible and attributed). Registry-direct."
+  []
+  (println (gram/correspondence-card)))
+
 (defn show
   "Print every model node named `n` (a string or symbol) as its AUTHORED form —
    the instance print-dual. The model talks back in the language you wrote it in:

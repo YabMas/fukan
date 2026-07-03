@@ -315,3 +315,34 @@
 (deftest performs-covered-includes-the-twin-s-DIRECT-effects
   (testing "the reflexive base: an effect the twin performs directly (zero call hops) must be declared"
     (is (= #{"d"} (names direct-effect-db (s/violations-of direct-effect-db :corresponds/Operation.performs-covered))))))
+
+;; ── seam↔generator key invariant ─────────────────────────────────────────────
+
+(deftest seam-keys-equal-generated-law-keys
+  (testing "the seam's key index and the generated laws agree exactly — neither can drift"
+    (is (= (set (keys (:keys (s/correspondence))))
+           (into #{} (comp (mapcat s/laws-of) (keep :key)
+                           (filter #(= "corresponds" (namespace %))))
+                 (s/all-structures))))))
+
+;; ── type-coverage generated law (ledgered dedicated offender test) ────────────
+
+(deftest generated-type-coverage-fires-on-a-signatureless-twin
+  (testing "a public modelled op whose twin carries no :val/sig is an offender; with a sig, green
+            (the ledgered dedicated offender test for :corresponds/Operation.type-coverage)"
+    (let [mk (fn [twin-extras]
+               (build/tx-maps->cozo
+                [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                 {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
+                 {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                 {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                 (merge {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation
+                         :entity/name "f" :val/extracted true}
+                        twin-extras)
+                 {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]))
+          no-sig   (mk {})
+          with-sig (mk {:val/sig "[:=> [:cat :any] :any]"})]
+      (is (= #{"f"} (names no-sig (s/violations-of no-sig :corresponds/Operation.type-coverage)))
+          "twin exists but carries no signature → offender")
+      (is (empty? (s/violations-of with-sig :corresponds/Operation.type-coverage))
+          "the same twin with a :val/sig → green"))))
