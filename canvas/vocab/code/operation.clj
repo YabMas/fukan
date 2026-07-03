@@ -67,7 +67,7 @@
   (syntax signature->slots)          ; {:signature [:=> [:catn …] Out]} authoring entry (vocab-owned)
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
-   :performs  [:* Effect]            ; side effects
+   :performs  [:* {:covered-from [:calls* :performs]} Effect]  ; side effects; :covered-from ⇒ every effect the twin REACHES is declared (ex-EffectCorrespondence; over-declaration is soft — effect-drift)
    :delegates [:* {:transitive true :realized-by :calls :altitude :container :faithful true} Operation]  ; designed dependencies; :transitive ⇒ delegates+; :realized-by/:faithful ⇒ generated CallRealization/Fidelity pair at module altitude
    :dispatches-to [:* Operation]     ; indirection: handler Operations this dispatch point routes to (authored intent — a design statement, not an extracted fact)
    :guidance  [:? :string]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection

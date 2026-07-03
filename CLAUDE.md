@@ -111,12 +111,14 @@ its `defstructure` + the laws/correspondence about it + how it is extracted from
   correspondence — `module-corresponds?` (the canvas-module↔code-ns name bridge) and `op-twin`
   (an alias of the kernel `twin`, derived from the `(corresponds …)` declarations) — lives in `module.clj`; the
   operation/effect/`fukan` laws reach it via datalog injection (no compile cycle, since the
-  build auto-loads every element). Adopted-principle law-holders (`TrustBoundary`,
-  `EffectCorrespondence`, `ModuleArchitecture`, `CallRealization`/`Fidelity`) live in
-  `canvas/principles/` (one file per principle), not in the element files. A law that is a
-  declaration's SLOT SEMANTICS rides the declaring structure itself (`Subsystem` carries the
-  `:may-depend` conformance/acyclicity teeth; `TrustBoundary` carries its parser cross-check +
-  the totality law) — slot teeth with the slot, adopted demands in the principle files.
+  build auto-loads every element). Adopted-principle law-holders (`TrustBoundary` +
+  `ModuleArchitecture`) live in `canvas/principles/` (one file per principle), not in
+  the element files; the correspondence demands (effect/call/encapsulation) now ride
+  Operation's `(corresponds …)` declaration and slot options, their laws GENERATED. A
+  law that is a declaration's SLOT SEMANTICS rides the declaring structure itself
+  (`Subsystem` carries the `:may-depend` conformance/acyclicity teeth; `TrustBoundary`
+  carries its parser cross-check + the totality law) — slot teeth with the slot,
+  adopted demands in the principle files.
 - `canvas/vocab/code/extractor.clj` — the shared Clojure extractor orchestration (clj-kondo
   `analyze` + `op-eid` + `extract`), calling each element's builder. The HOOK for the extraction
   plug-point; the composition root registers `extract`.
@@ -176,6 +178,12 @@ A `defstructure` is a composition of **slots** plus **laws**:
   datalog emitting `not-join` directly (the Cozo query compiler lowers stratified
   negation correctly, so the combinators need no negation-routing dance; never
   hand-write these shapes). `(structure/check db)` runs every law → violations.
+- Correspondence demands are declared per-slot or per-structure — `(realized …)` /
+  `(covered …)` in `(corresponds …)`; `:realized-by` / `:faithful` on a relation slot
+  (container-altitude call demand); `:covered-from [R* S]` on a relation slot (path
+  demand: every target the twin reaches over R*·S must be declared) — and their laws
+  are GENERATED. Never hand-write `realized` / `covered` / `call-realization` /
+  `fidelity` / `covered-from` shapes by hand.
 
 The current catalog is the source — or just run `(grammar)` in the REPL: the
 print-dual renders every vocabulary live. The files are under `canvas/vocab/**`.

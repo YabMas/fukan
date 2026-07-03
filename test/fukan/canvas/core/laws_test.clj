@@ -268,3 +268,50 @@
     (is (empty? (s/violations-of declared-call-db :corresponds/Operation.delegates-faithful)))
     (is (empty? (s/violations-of unclaimed-container-db :corresponds/Operation.delegates-faithful))
         "a call into an UNMODELLED container is a coverage signal (uncovered-calls), not a fidelity violation")))
+
+;; ── :covered-from path demand (ex-EffectCorrespondence) ──────────────────────
+
+;; The COMMON BASE (raw tx-maps): one shared io Effect node (-10), design module m (-1),
+;; authored op f (-2) exposed by m; extracted module fukan.m (-3), extracted twin f (-4)
+;; calls extracted g (-5), g performs io (-10). Both strata share the SAME Effect node
+;; (content-deduped ^:value) — identity semantics.
+(def ^:private effect-base
+  [{:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}
+   {:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+   {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
+   {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+   {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+   {:db/id -5 :structure/of :canvas.vocab.code.operation/Operation :entity/name "g" :val/extracted true}
+   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}
+   {:rel/id "km|child|g" :rel/from -3 :rel/kind :child :rel/to -5}
+   {:rel/id "f|calls|g"  :rel/from -4 :rel/kind :calls :rel/to -5}
+   {:rel/id "g|performs|io" :rel/from -5 :rel/kind :performs :rel/to -10}])
+;; undeclared-db = effect-base (twin reaches io via g; design f declares nothing → offender f)
+;; declared-db   = base + authored f performs same io value node → green (identity semantics)
+(def ^:private undeclared-db  (build/tx-maps->cozo effect-base))
+(def ^:private declared-db
+  (build/tx-maps->cozo (conj effect-base {:rel/id "af|performs|io" :rel/from -2 :rel/kind :performs :rel/to -10})))
+
+;; direct-effect-db: fresh minimal pair — design op "d" exposed by "m2", extracted twin "d"
+;; performs io DIRECTLY (no call hops), no design :performs → offender d (the reflexive base)
+(def ^:private direct-effect-db
+  (build/tx-maps->cozo
+   [{:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}
+    {:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m2"}
+    {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "d"}
+    {:rel/id "m2|exposes|d" :rel/from -1 :rel/kind :exposes :rel/to -2}
+    {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m2" :val/extracted true}
+    {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "d" :val/extracted true}
+    {:rel/id "km2|child|d" :rel/from -3 :rel/kind :child :rel/to -4}
+    {:rel/id "d|performs|io" :rel/from -4 :rel/kind :performs :rel/to -10}]))
+
+(deftest performs-covered-fires-on-a-transitively-reached-undeclared-effect
+  (testing "the twin reaches io via a call chain; the design op declares nothing → offender;
+            declaring io (same value node) → green"
+    (is (= #{"f"} (names undeclared-db (s/violations-of undeclared-db :corresponds/Operation.performs-covered))))
+    (is (empty? (s/violations-of declared-db :corresponds/Operation.performs-covered)))))
+
+(deftest performs-covered-includes-the-twin-s-DIRECT-effects
+  (testing "the reflexive base: an effect the twin performs directly (zero call hops) must be declared"
+    (is (= #{"d"} (names direct-effect-db (s/violations-of direct-effect-db :corresponds/Operation.performs-covered))))))

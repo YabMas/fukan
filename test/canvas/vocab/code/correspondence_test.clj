@@ -168,7 +168,7 @@
                    {:rel/id "m|child|exported" :rel/from -1 :rel/kind :child :rel/to -4}
                    {:rel/id "m|child|for-test" :rel/from -1 :rel/kind :child :rel/to -5}])]
       (is (= #{"leaked"} (operation/uncovered-public-operations db))
-          "only the public, non-exempt, unmodelled op is flagged by the Encapsulation law"))))
+          "only the public, non-exempt, unmodelled op is flagged by the covered demand"))))
 
 (deftest encapsulation-green-on-the-self-model
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
@@ -276,7 +276,7 @@
 
 (deftest effect-correspondence-fires-on-an-undeclared-transitive-effect
   (testing "an authored op whose twin TRANSITIVELY reaches an effect it doesn't declare is flagged
-            (the EffectCorrespondence under-declaration direction, over the recursive reaches-effect rule);
+            (the dissolved EffectCorrespondence direction — now the generated performs-covered demand);
             declaring the effect on the authored op clears it"
     (let [io     {:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}
           ;; authored f (module m) ; extracted twin f (module fukan.m, corresponds to m) calls g ; g performs :io
@@ -296,7 +296,7 @@
       (is (= #{"f"} (declared-effects/undeclared-effects undeclared-db))
           "f's twin transitively reaches :io (via g), but f declares nothing → under-declaration")
       (is (empty? (declared-effects/undeclared-effects declared-db))
-          "declaring :io on the authored f satisfies EffectCorrespondence"))))
+          "declaring :io on the authored f satisfies the generated performs-covered demand"))))
 
 (deftest effect-and-totality-green-on-the-self-model
   (testing "the merged self-model declares every effect its code reaches, and its trusted core is total"

@@ -613,10 +613,21 @@
                                 (name (:card s)) " ...]")
                            {:structure sname :slot (:rel s) :card (:card s)}))))
         _      (doseq [s slots]
-                 (when (:covered-from s)
-                   (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
-                                        " :covered-from arrives with the covered-from slice")
-                                   {:structure sname :slot (:rel s)})))
+                 (when-let [cf (:covered-from s)]
+                   (let [closure-ok? (fn [x] (and (or (keyword? x) (symbol? x))
+                                                   (= \* (last (name x)))))]
+                     (when-not (and (vector? cf) (= 2 (count cf))
+                                    (closure-ok? (first cf))
+                                    (keyword? (second cf)))
+                       (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
+                                            " :covered-from must be [closure-sym* final-kw]")
+                                       {:structure sname :slot (:rel s) :covered-from cf})))
+                     (let [cn     (name (first cf))
+                           base-kw (keyword (subs cn 0 (dec (count cn))))]
+                       (when-not (some #(and (= (:rel %) base-kw) (:transitive %)) slots)
+                         (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
+                                              " :covered-from closure over a relation not declared :transitive on this structure")
+                                         {:structure sname :slot (:rel s) :covered-from cf :base base-kw}))))))
                  (when (and (:faithful s) (not (:realized-by s)))
                    (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
                                         " :faithful requires :realized-by")
@@ -889,14 +900,37 @@
                            (map (fn [c] (list 'not c)) unless)
                            ['(not-join [?x] (twin ?s ?x))]))})))
 
+(defn- covered-from-law
+  "Generated law for {:covered-from [R* S]} on slot `rel` of `tag`: every target the fact
+   twin reaches over the path must be a target of the design instance's own `rel` edge —
+   compared by NODE IDENTITY (^:value targets are stratum-free: content-equal ⇒ one node)."
+  [tag {:keys [rel covered-from]}]
+  (let [[closure final] covered-from
+        base   (keyword (subs (name closure) 0 (dec (count (name closure)))))
+        base+  (symbol (str (name base) "+"))
+        reach  (symbol (str "reach-" (name rel)))]
+    {:key (demand-key tag (str (name rel) "-covered"))
+     :desc (str (name tag) "." (name rel) ": every target the twin reaches via " covered-from
+                " is declared on the design side")
+     :offenders '[?x]
+     :rules [[(list reach '?t '?v) ['?pr :rel/from '?t] ['?pr :rel/kind final] ['?pr :rel/to '?v]]
+             [(list reach '?t '?v) (list base+ '?t '?mid) ['?pr :rel/from '?mid] ['?pr :rel/kind final] ['?pr :rel/to '?v]]]
+     :where [['?x :structure/of tag] '(not [?x :val/extracted true])
+             '(twin ?x ?t)
+             (list reach '?t '?v)
+             (list 'not-join '[?x ?v]
+                   ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v])]}))
+
 (defn- correspondence-laws
   "Every generated demand law of `sdef` — node demands from (corresponds …) sub-forms plus
-   container demands from relation slots carrying {:realized-by R' :altitude :container}."
+   container demands from relation slots carrying {:realized-by R' :altitude :container} plus
+   node-level path demands from relation slots carrying {:covered-from [R* S]}."
   [{:keys [tag slots corresponds]}]
   (into (mapv #(node-demand-law tag %) (:demands corresponds))
         (mapcat (fn [slot]
-                  (when (:realized-by slot)
-                    (container-demand-laws tag slot)))
+                  (cond
+                    (:realized-by slot) (container-demand-laws tag slot)
+                    (:covered-from slot) [(covered-from-law tag slot)]))
                 (remove scalar-slot? slots))))
 
 (defn ^{:malli/schema [:=> [:cat :any] :any]}

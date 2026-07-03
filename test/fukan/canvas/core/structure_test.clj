@@ -755,4 +755,4 @@
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR2 "d"
                                            {:r [:* {:faithful true} TBadR2]}))))               ; :faithful without :realized-by
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR3 "d"
-                                           {:r [:* {:covered-from [:calls* :performs]} TBadR3]}))))))  ; arrives with Task 4
+                                           {:r [:* {:covered-from [:calls* :performs]} TBadR3]}))))))  ; throws: the structure declares no :transitive base slot for :calls*
