@@ -39,7 +39,8 @@
    grammar reflection reads to project the registry onto the model."
   {:signature [:=> [:cat] [:vector :any]]})
 (Operation laws-of
-  "Every law of a structure — slot-derived cardinality/type laws plus its free laws, the same set
+  "Every law of a structure — slot-derived cardinality/type laws, correspondence-demand laws
+   (generated from (realized …)/(covered …) sub-forms), plus its free laws, the same set
    check runs. Public so the Cozo law engine can evaluate the identical laws."
   {:signature [:=> [:catn [:sdef :any]] :any]})
 (Operation direct-scope-tags

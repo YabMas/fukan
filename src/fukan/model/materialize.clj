@@ -105,8 +105,9 @@
 ;; the MACHINE type signature for an Operation — the faithful malli `:malli/schema` form
 ;; (`[:=> [:cat <each :in>] <:out|:nil>]`), each shape rendered through the DIALECT
 ;; (`typing/render-type`, not the prose `schema-str`). Mirrors the vocab's `operation-sig` so a
-;; projected op carries the exact metadata the implementer attaches — which `TypeCoverage` then
-;; enforces on the realizing code. A top-level fn (not inline in the Blueprint method) so the
+;; projected op carries the exact metadata the implementer attaches — which the generated
+;; type-coverage demand (:corresponds/Operation.type-coverage) then enforces on the realizing
+;; code. A top-level fn (not inline in the Blueprint method) so the
 ;; materialize→typing dependency is a real call the extractor sees (defmethod bodies are not extracted).
 (defn- operation-malli [db params out]
   [:=> (into [:cat] (map #(typing/render-type db (:shape %)) params))

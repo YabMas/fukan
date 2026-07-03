@@ -1,9 +1,11 @@
 (ns canvas.vocab.code.operation
   "Code vocab — `Operation`: the unified computational unit, AUTHORED (a self-model's intent)
-   or EXTRACTED from code (fact-stratum, stamped by the build), plus its model↔code correspondence: the
-   Realization/Encapsulation laws + the drift/coverage/type-drift readers. (The op pairing
-   `op-twin` itself lives in `module` — it is built on the Module name bridge — and is referenced
-   here via datalog injection; the `defn→Operation`+`:calls` extraction is added with the extractor.)"
+   or EXTRACTED from code (fact-stratum, stamped by the build), plus its model↔code correspondence.
+   The three node-level demands (realized / type-coverage / covered) ride the `(corresponds …)`
+   declaration on Operation — no separate law-holder defstructures. The drift/coverage/type-drift
+   readers name the generated law keys directly. (The op pairing `op-twin` itself lives in `module`
+   — it is built on the Module name bridge — and is referenced here via datalog injection; the
+   `defn→Operation`+`:calls` extraction is added with the extractor.)"
   (:require [clojure.edn :as edn]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
@@ -51,7 +53,17 @@
 
    Corresponds NESTED (:by-name): a design Operation twins the same-named extracted one within twinned Modules."
   (includes Connected)
-  (corresponds :by-name)             ; NESTED twin: same name within twinned Module containers
+  (corresponds :by-name
+    ;; ex-Realization — vacuity guard: ∃ extracted Operation (fires only when code is extracted)
+    (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
+    ;; ex-TypeCoverage — positive twin (a missing twin is `realized`'s offence); public surface only
+    (realized {:key :type-coverage
+               :desc "every public modelled operation's realizing code carries a type signature (:malli/schema)"
+               :when '[[?xr :rel/kind :exposes] [?xr :rel/to ?x]]
+               :require '[[?t :val/sig ?_s]]})
+    ;; ex-Encapsulation — the exemption flags are VOCAB's (the kernel never names them)
+    (covered  {:desc "every public extracted operation is covered by the model or deliberately exempt"
+               :unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]}))
   (syntax signature->slots)          ; {:signature [:=> [:catn …] Out]} authoring entry (vocab-owned)
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
@@ -87,7 +99,7 @@
    type, down to `:nil` (a side-effecting procedure) or `:any` (a genuinely dynamic return). A missing
    `:out` is an undeclared contract, never a legitimate abstention. OUTPUT, not full signature: a nullary
    op legitimately has no `:in`, so input-presence is unprovable; the output type is the part every op
-   has and the part the public contract turns on. Scoped to the public surface (mirroring `Encapsulation`):
+   has and the part the public contract turns on. Scoped to the public surface (mirroring the covered demand):
    internal ops (`:child`, not `:exposes`) are sketch-only by the boundary-sketch discipline, so their
    signature is not a contract. `:scope :global` (offenders are Operations)."
   (law "every public authored operation declares an output type"
@@ -99,66 +111,14 @@
              (not-join [?o] [?or :rel/from ?o] [?or :rel/kind :out])]))  ; … with no declared output type
 
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
-
-(defstructure Realization
-  "A law-holder for the model↔code correspondence — it has no instances of its own; it exists to
-   carry the cross-layer assertion. `:scope :global` (its offenders are Operations). The leading
-   extracted-Operation clause is the real guard: the law is vacuous when no code is extracted. The
-   twin's existence is the injected `op-twin` rule (registered in `module`): an authored op with no
-   `(op-twin ?s ?e)` has no realizing code."
-  (law "every authored operation is realized by an extracted operation of the same name in the corresponding module"
-    :scope :global
-    :offenders '[?s]
-    :where '[(Operation ?x) [?x :val/extracted true]                  ; guard: some code is extracted
-             (authored ?s)                                            ; an authored operation …
-             (not-join [?s] (op-twin ?s ?e))]))                       ; … with no extracted twin
-
-(defstructure Encapsulation
-  "Law-holder for code-up ENCAPSULATION — the ENFORCED dual of the `uncovered-public-operations`
-   query, at OPERATION altitude (the op-level peer of the relation-level `Fidelity`). Every PUBLIC
-   extracted operation must be COVERED by the model (an `op-twin`) OR deliberately exempt:
-     - `:val/private`      — an internal (encapsulation working as intended)
-     - `:val/export`       — public for MECHANISM (macro-emitted substrate / a var reached only via
-                             dynamic dispatch: a datalog predicate, a `(syntax …)`/reader hook)
-     - `:val/test-support` — public only for TEST isolation/setup (never called from production)
-   A public, non-exempt, unmodelled function is an UNDECLARED PUBLIC SURFACE: the model must name it
-   (intent), or it must be hidden. `:scope :global`; vacuous on a model-only build (the leading
-   `:val/extracted true` clause)."
-  (law "every public extracted operation is covered by the model or deliberately exempt"
-    :scope :global
-    :offenders '[?o]
-    :where '[[?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]
-             (not [?o :val/private true])
-             (not [?o :val/export true])
-             (not [?o :val/test-support true])
-             (not-join [?o] (op-twin ?s ?o))]))                       ; … with no authored twin
-
-(defstructure TypeCoverage
-  "Law-holder for MANDATORY type-signature coverage — the enforced CODE-side peer of `SignatureCompleteness`.
-   Every PUBLIC modelled Operation (on a Module's `:exposes` surface, with an extracted twin) must have its
-   realizing function carry a `:malli/schema` (stamped `:val/sig` by extraction). The design already mandates
-   a signature; this mandates that the IMPLEMENTATION carries one too, so design↔code type correspondence is
-   always CHECKABLE, never silently absent. `:scope :global` (offenders are the modelled Operations); vacuous
-   on a model-only build (requires an `op-twin`). A faithful `:any` is a PRESENT signature — under-typing is a
-   separate, non-blocking concern (`undertyped-operations`), not a coverage gap."
-  (law "every public modelled operation's realizing code carries a type signature (:malli/schema)"
-    :scope :global
-    :offenders '[?o]
-    :where '[(op-twin ?o ?e)
-             [?xr :rel/kind :exposes] [?xr :rel/to ?o]                ; a public modelled op …
-             (not-join [?e] [?e :val/sig ?s])]))                      ; … whose code declares no signature
+;; The three demands (realized / type-coverage / covered) are declared above as (corresponds …)
+;; sub-forms on Operation; see the `corresponds` entry. No separate law-holder defstructures.
 
 (defn drifted-operations
-  "The AUTHORED operations in `db` with no same-named extracted operation, as a set of
-   names. Empty ⇔ the model is fully realized in code. The focusable surface of the
-   correspondence concern; reads the single source of truth (the registered Realization law)."
+  "The AUTHORED operations with no extracted twin, as a set of names. Empty ⇔ the model is fully
+   realized in code. Reads the generated realized demand (:corresponds/Operation.realized)."
   [db]
-  (let [desc (-> (s/structure-by-tag ::Realization) :laws first :desc)]
-    (->> (s/check db)
-         (filter #(= desc (:law %)))
-         (mapcat :offenders) (map first)
-         (map #(:entity/name (cq/entity db %)))
-         set)))
+  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :corresponds/Operation.realized))))
 
 (defn uncovered-operations
   "The DUAL of drifted-operations — EXTRACTED operations in `db` with no authored operation
@@ -173,24 +133,16 @@
        (map first) set))
 
 (defn uncovered-public-operations
-  "The ENCAPSULATION worklist — the PUBLIC subset of `uncovered-operations`: extracted operations
-   that are PUBLIC (not `:val/private true`) AND have no authored twin. The principle (the dual at
-   op-granularity of `uncovered-calls`): a function the model does not name should be an internal
-   detail — so a PUBLIC uncovered function is an UNDECLARED PUBLIC SURFACE, demanding a decision
-   (model it as intent, or make it private). Reads the single source of truth (the registered
-   `Encapsulation` law). `:val/private`/`:val/export`/`:val/test-support` are settled exclusions."
+  "The ENCAPSULATION worklist — PUBLIC extracted operations with no authored twin and no exemption flag.
+   A public, non-exempt, unmodelled function is an UNDECLARED PUBLIC SURFACE: model it or make it private.
+   Reads the generated covered demand (:corresponds/Operation.covered)."
   [db]
-  (let [desc (-> (s/structure-by-tag ::Encapsulation) :laws first :desc)]
-    (->> (s/check db)
-         (filter #(= desc (:law %)))
-         (mapcat :offenders) (map first)
-         (map #(:entity/name (cq/entity db %)))
-         set)))
+  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :corresponds/Operation.covered))))
 
 (defn untyped-operations
   "The SIGNATURE worklist — PUBLIC authored Operations (on a Module's `:exposes` surface) with no
    declared output type (`:out`), as a set of names. Empty ⇔ every public surface op declares its
-   output. Reads the single source of truth (the registered `SignatureCompleteness` law)."
+   output. Reads the SignatureCompleteness law by its stable :key."
   [db]
   (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :signature-completeness))))
 
@@ -232,15 +184,10 @@
 
 (defn type-uncovered-operations
   "The TYPE-COVERAGE worklist — PUBLIC modelled Operations whose realizing code carries NO `:malli/schema`,
-   as a set of names. Empty ⇔ every public modelled op's realizing code declares its type. Now ENFORCED:
-   reads the single source of truth (the registered `TypeCoverage` law)."
+   as a set of names. Empty ⇔ every public modelled op's realizing code declares its type. Reads the
+   generated type-coverage demand (:corresponds/Operation.type-coverage)."
   [db]
-  (let [desc (-> (s/structure-by-tag ::TypeCoverage) :laws first :desc)]
-    (->> (s/check db)
-         (filter #(= desc (:law %)))
-         (mapcat :offenders) (map first)
-         (map #(:entity/name (cq/entity db %)))
-         set)))
+  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :corresponds/Operation.type-coverage))))
 
 (defn undertyped-operations
   "The PRECISION worklist — PUBLIC modelled Operations whose declared signature still contains an `:any`

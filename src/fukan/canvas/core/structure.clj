@@ -473,38 +473,70 @@
                            "matched-by, target, or at-most-one")
                       {:form form})))))
 
+(defn- parse-demand
+  "Parse a `(realized …)`/`(covered …)` corresponds sub-form → a demand map. Allowed option keys:
+   realized → :key :desc :when :require ; covered → :key :desc :when :unless. Datalog vectors
+   (:when/:require/:unless) pass through unquote-lit. Anything else throws, naming the form."
+  [sname f]
+  (let [[dk opts] [(keyword (first f)) (second f)]
+        allowed   (case dk :realized #{:key :desc :when :require} :covered #{:key :desc :when :unless})]
+    (when (and opts (not (map? opts)))
+      (throw (ex-info (str "defstructure " sname ": " (first f) " options must be a map") {:form f})))
+    (doseq [k (keys opts)]
+      (when-not (allowed k)
+        (throw (ex-info (str "defstructure " sname ": " (first f) " does not take " k
+                             " — allowed: " allowed) {:form f :key k}))))
+    {:demand dk
+     :key    (:key opts)  :desc (:desc opts)
+     :when   (unquote-lit (:when opts)) :require (unquote-lit (:require opts))
+     :unless (unquote-lit (:unless opts))}))
+
 (defn- parse-corresponds
-  "Parse a `(corresponds …)` body-form tail into `{:basis :by-name, :bridge qualified-sym|nil}`.
+  "Parse a `(corresponds …)` body-form tail into `{:basis :by-name, :bridge qualified-sym|nil, :demands [...]}`.
    `:by-name` is the only basis: a ROOT kind (with a `(bridge f)` sub-form) pairs design/fact
    instances whose names satisfy the bridge predicate; a NESTED kind (no bridge) pairs
    same-named design/fact instances whose containers twin. The bridge must RESOLVE at expansion
    time (define it above the defstructure) and is stored fully qualified. A ROOT bridge must
    also carry a registered Cozo predicate port (`cq/register-predicate-port!`); an unported
    bridge fails every vocab-rules query loudly at compile (\"unsupported predicate: …\") — far
-   from the defstructure, so declare-and-port together. Demand sub-forms
-   ((realized …)/(covered …)) arrive with the node-demand slice — rejected here."
+   from the defstructure, so declare-and-port together.
+   Demand sub-forms `(realized …)`/`(covered …)` declare node-level design↔fact demands and are
+   collected as `:demands` (vector, may be empty). Each demand's local key is `(or :key :demand)`;
+   duplicate local keys within the same structure throw at expansion. Option keys:
+   realized → :key :desc :when :require ; covered → :key :desc :when :unless."
   [sname forms]
   (let [[basis & subs] forms]
     (when-not (= :by-name basis)
       (throw (ex-info (str "defstructure " sname ": unknown corresponds basis " (pr-str basis)
                            " — only :by-name is supported")
                       {:structure sname :basis basis})))
-    (doseq [f subs]
-      (when-not (and (seq? f) (= 'bridge (first f)) (= 2 (count f)) (symbol? (second f)))
+    (let [bridge-subs  (filter #(and (seq? %) (= 'bridge (first %))) subs)
+          demand-subs  (filter #(and (seq? %) ('#{realized covered} (first %))) subs)
+          unknown-subs (remove #(or (and (seq? %) (= 'bridge (first %)))
+                                    (and (seq? %) ('#{realized covered} (first %)))) subs)]
+      (doseq [f unknown-subs]
         (throw (ex-info (str "defstructure " sname ": unknown corresponds sub-form " (pr-str f)
-                             " — expected (bridge f)")
-                        {:structure sname :form f}))))
-    (when (> (count subs) 1)
-      (throw (ex-info (str "defstructure " sname ": multiple (bridge …) forms")
-                      {:structure sname})))
-    (let [bsym    (second (first subs))
-          bridged (when bsym
-                    (if-let [v (resolve bsym)]
-                      (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
-                      (throw (ex-info (str "defstructure " sname ": corresponds bridge " bsym
-                                           " does not resolve — define it above the defstructure")
-                                      {:structure sname :bridge bsym}))))]
-      {:basis :by-name :bridge bridged})))
+                             " — expected (bridge f), (realized …), or (covered …)")
+                        {:structure sname :form f})))
+      (when (> (count bridge-subs) 1)
+        (throw (ex-info (str "defstructure " sname ": multiple (bridge …) forms")
+                        {:structure sname})))
+      (let [bsym    (second (first bridge-subs))
+            bridged (when bsym
+                      (if-let [v (resolve bsym)]
+                        (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
+                        (throw (ex-info (str "defstructure " sname ": corresponds bridge " bsym
+                                             " does not resolve — define it above the defstructure")
+                                        {:structure sname :bridge bsym}))))
+            demands  (mapv #(parse-demand sname %) demand-subs)
+            ;; key-derivation: (or :key :demand); throw on duplicates within the structure
+            _        (let [local-keys (map #(or (:key %) (:demand %)) demands)
+                           dupes (filter #(> (count (filter #{%} local-keys)) 1) (distinct local-keys))]
+                       (doseq [d dupes]
+                         (throw (ex-info (str "defstructure " sname ": duplicate demand key " (pr-str d))
+                                         {:structure sname :key d}))))]
+        (cond-> {:basis :by-name :bridge bridged}
+          (seq demands) (assoc :demands demands))))))
 
 (defn- parse-law
   "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?)
@@ -741,13 +773,59 @@
              (relation-slot-laws tag %))
           slots))
 
+;; ── correspondence demand laws: generated from (corresponds …) declarations ──
+;; The demand SHAPES (design↔fact, node level). Bodies inline the stratum literal
+;; (:val/extracted — see substrate/stratum-attr's sync note) for range-boundedness and call
+;; the injected twin rule. Guard discipline (the dissolved holders' hard-won lessons):
+;; plain realized guards on ∃ fact instance OF THIS KIND (small set, no cartesian multiply);
+;; realized-with-:require binds the twin POSITIVELY (a missing twin is plain realized's
+;; offence — no double-fire); covered needs no guard (its subject IS a fact instance).
+
+(defn- demand-key
+  "A demand's full stable law key: :corresponds/<Short>.<local>."
+  [tag local]
+  (keyword "corresponds" (str (name tag) "." (name local))))
+
+(defn- node-demand-law
+  "One generated law map for a node-level demand on structure `tag`."
+  [tag {:keys [demand key desc when require unless]}]
+  (let [k (demand-key tag (or key demand))]
+    (case demand
+      :realized
+      (if require
+        {:key k :offenders '[?x]
+         :desc (or desc (str (name tag) " (" (clojure.core/name (or key demand)) "): every design instance's twin satisfies the requirement"))
+         :where (vec (concat [['?x :structure/of tag] '(not [?x :val/extracted true])]
+                             when
+                             ['(twin ?x ?t)
+                              (apply list 'not-join '[?t] require)]))}
+        {:key k :offenders '[?x]
+         :desc (or desc (str (name tag) ": every design instance is realized by a fact twin"))
+         :where (vec (concat [['?_g :structure/of tag] '[?_g :val/extracted true]
+                              ['?x :structure/of tag] '(not [?x :val/extracted true])]
+                             when
+                             ['(not-join [?x] (twin ?x ?t))]))})
+      :covered
+      {:key k :offenders '[?x]
+       :desc (or desc (str (name tag) ": every fact instance is covered by a design twin or deliberately exempt"))
+       :where (vec (concat [['?x :structure/of tag] '[?x :val/extracted true]]
+                           when
+                           (map (fn [c] (list 'not c)) unless)
+                           ['(not-join [?x] (twin ?s ?x))]))})))
+
+(defn- correspondence-laws
+  "Every generated demand law of `sdef` — the correspondence analogue of `slot-laws`."
+  [{:keys [tag corresponds]}]
+  (mapv #(node-demand-law tag %) (:demands corresponds)))
+
 (defn ^{:malli/schema [:=> [:cat :any] :any]}
   laws-of
   "Every law of structure `sdef` — the slot-derived cardinality/type laws plus its
-   free `(law …)`s, the same set `check` runs. Public so an alternative engine (the
-   Cozo law compiler) can evaluate the identical laws."
+   correspondence-demand laws (generated from `(realized …)`/`(covered …)` sub-forms)
+   plus its free `(law …)`s, the same set `check` runs. Public so an alternative engine
+   (the Cozo law compiler) can evaluate the identical laws."
   [sdef]
-  (concat (slot-laws sdef) (:laws sdef)))
+  (concat (slot-laws sdef) (correspondence-laws sdef) (:laws sdef)))
 
 (defn ^{:malli/schema [:=> [:cat [:vector :any]] :any]}
   direct-scope-tags

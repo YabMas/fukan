@@ -4,6 +4,7 @@
    old hand-rolled negation rules) and Cozo's stratified not-join handles directly."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
+            [fukan.cozo.query :as cq]
             ;; loaded for its side-effect: registers the Cozo check engine so s/check dispatches to it
             [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
@@ -169,3 +170,21 @@
       (is (= (set (map first (:offenders vio)))
              (s/violations-of db :totality))
           "violations-of returns exactly the first-offender eids of the keyed law"))))
+
+;; ── generated correspondence demand laws ─────────────────────────────────────
+
+(deftest generated-realized-law-matches-the-dissolved-realization
+  (testing "an authored op with no twin is an offender iff any code is extracted (the guard)"
+    (let [mk (fn [with-code?]
+               (build/tx-maps->cozo
+                (cond-> [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "m" :entity/name "m"}
+                         {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "lonely"}
+                         {:rel/id "m|exposes|lonely" :rel/from -1 :rel/kind :exposes :rel/to -2}]
+                  with-code? (conj {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation
+                                    :entity/name "other" :val/extracted true}))))
+          guarded (mk true)]
+      (is (contains? (set (map #(:entity/name (cq/entity guarded %))
+                               (s/violations-of guarded :corresponds/Operation.realized)))
+                     "lonely"))
+      (is (empty? (s/violations-of (mk false) :corresponds/Operation.realized))
+          "no code extracted → the realized demand is vacuous (the guard)"))))

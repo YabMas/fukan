@@ -716,7 +716,34 @@
         "an undeclared structure carries no :corresponds")))
 
 (deftest corresponds-rejects-malformed-declarations
-  (testing "unknown basis / unknown sub-form / unresolvable bridge all throw at expansion"
+  (testing "unknown basis / unresolvable bridge all throw at expansion"
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadBasis "d" (corresponds :by-vibes)))))
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadSub "d" (corresponds :by-name (realized))))))
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadBridge "d" (corresponds :by-name (bridge nope-not-defined))))))))
+
+;; ── demand sub-forms: (realized …)/(covered …) ───────────────────────────────
+
+(defstructure TCorrDemand "corresponds test: node demands (parse-level only — no instances)"
+  (corresponds :by-name
+    (realized)
+    (realized {:key :req-check :desc "twin carries p"
+               :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]]})
+    (covered  {:unless '[[?x :val/private true]]})))
+
+(deftest corresponds-demands-register
+  (testing "(realized …)/(covered …) sub-forms land as :demands with derived keys"
+    ;; TCorrDemand is a fresh nested-corresponding test structure declaring all three shapes
+    (is (= [{:demand :realized :key nil :desc nil :when nil :require nil :unless nil}
+            {:demand :realized :key :req-check :desc "twin carries p"
+             :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]] :unless nil}
+            {:demand :covered :key nil :desc nil :when nil :require nil
+             :unless '[[?x :val/private true]]}]
+           (:demands (:corresponds (s/structure-by-tag ::TCorrDemand)))))))
+
+(deftest corresponds-demands-validate
+  (testing "malformed demands throw at expansion"
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD1 "d"
+                                           (corresponds :by-name (realized {:unless [[?x :val/p true]]}))))))  ; :unless is covered-only
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD2 "d"
+                                           (corresponds :by-name (covered {:require [[?t :val/p ?_v]]}))))))  ; :require is realized-only
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD3 "d"
+                                           (corresponds :by-name (realized) (realized))))))))  ; duplicate default key

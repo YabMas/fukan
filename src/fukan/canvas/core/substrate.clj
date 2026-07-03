@@ -25,7 +25,9 @@
    via `stamp-stratum`); the generic `(fact ?n)`/`(design ?n)` substrate rules
    (`fukan.canvas.core.rules/substrate-rules`) read it — embedded LITERALLY in
    `fukan.canvas.core.rules` in BOTH `substrate-rules` AND the twin-rule generator in
-   `derive-rules` (rules are pure quoted data; keep all three in sync). Vocab may additionally declare an authoring slot
+   `derive-rules` (rules are pure quoted data; keep all three in sync). Also inlined
+   literally in `fukan.canvas.core.structure`'s demand-law generator (`node-demand-law`) —
+   update all four sites in concert. Vocab may additionally declare an authoring slot
    storing the same attribute (the test-fabrication surface)."
   :val/extracted)
 

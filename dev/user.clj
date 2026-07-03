@@ -243,10 +243,10 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn type-drift
-  "TYPE correspondence (model↔code) readings. Coverage is now an ENFORCED law (`TypeCoverage`) — it
-   surfaces in (check); this shows the two non-gating readings: ADHERENCE (modelled signature vs the
-   code's :malli/schema) and PRECISION (public ops whose signature is still :any — under-typed, the
-   next layer to precise)."
+  "TYPE correspondence (model↔code) readings. Coverage is enforced by the generated type-coverage
+   demand — it surfaces in (check); this shows the two non-gating readings: ADHERENCE (modelled
+   signature vs the code's :malli/schema) and PRECISION (public ops whose signature is still
+   :any — under-typed, the next layer to precise)."
   []
   (if-let [m (infra-model/get-model)]
     (let [drifted (operation/type-drifted-operations m)

@@ -11,11 +11,8 @@
    canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
    canvas.vocab.code.kind/Kind hooks.fukan.structure/instance
    canvas.vocab.code.module/Module hooks.fukan.structure/instance
-   canvas.vocab.code.operation/Encapsulation hooks.fukan.structure/instance
    canvas.vocab.code.operation/Operation hooks.fukan.structure/instance
-   canvas.vocab.code.operation/Realization hooks.fukan.structure/instance
    canvas.vocab.code.operation/SignatureCompleteness hooks.fukan.structure/instance
-   canvas.vocab.code.operation/TypeCoverage hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
    canvas.vocab.grammar/Law hooks.fukan.structure/instance
    canvas.vocab.grammar/Relation hooks.fukan.structure/instance
@@ -80,6 +77,7 @@
    fukan.canvas.core.structure-test/Seq2 hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/SetVal hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/SyntClass hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/TCorrDemand hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/TCorrNested hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/TCorrRoot hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Tagged hooks.fukan.structure/instance
