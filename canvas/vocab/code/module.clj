@@ -33,9 +33,10 @@
    graph — call dependencies (an owned Operation `:delegates` to another module's Operation) UNIONed
    with data-adoption (an owned Operation's `:in`/`:out` is a ref-`Schema` whose `:names` edge reaches
    a `Kind` another module owns). `module-owns` is ownership via `:exposes`/`:owns`/`:child`.
-   NB: `ModuleArchitecture` (in `canvas.principles.layered-architecture`) INLINES an identical copy
-   of these rules (a law's `:rules` is macro-time literal data — it cannot reference this var); keep
-   the two copies in sync."
+   NB: `ModuleArchitecture` (in `canvas.principles.layered-architecture`) and `Subsystem`'s
+   `:may-depend` conformance law (in `canvas.vocab.code.subsystem`) each INLINE a copy of these
+   rules (a law's `:rules` is macro-time literal data — it cannot reference this var); keep all
+   copies in sync."
   '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
     [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
     [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]

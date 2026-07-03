@@ -14,8 +14,13 @@
             [canvas.vocab.code.subsystem :as subsystem]
             [canvas.principles.layered-architecture :as layered]))
 
-(defn- law-desc [substr]
-  (->> (s/structure-by-tag :canvas.principles.layered-architecture/ModuleArchitecture) :laws
+(defn- law-desc
+  "The matching law desc across the two homes: the adopted demands (`ModuleArchitecture`) and
+   `Subsystem`'s own :may-depend slot-semantics laws."
+  [substr]
+  (->> [:canvas.principles.layered-architecture/ModuleArchitecture
+        :canvas.vocab.code.subsystem/Subsystem]
+       (mapcat (comp :laws s/structure-by-tag))
        (map :desc) (filter #(str/includes? % substr)) first))
 
 (defn- offenders [db substr]

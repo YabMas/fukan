@@ -7,19 +7,21 @@
    validator throws the knowledge away); never re-establish trust deep in the core (shotgun
    parsing).
 
-   The bundle: `TrustBoundary` designates the trusted Kind + its declared parsers (with the
-   parser↔`produces` cross-check law); `Totality` holds the core below the line total;
+   The bundle: `TrustBoundary` designates the trusted Kind + its declared parsers, and carries
+   the principle's TEETH as its own laws (the parser↔`produces` cross-check; the totality law
+   holding the core below the line total — the laws are what DECLARING a boundary means);
    `produces` derives who constructs which Kind from the type graph; the `Boundary` reading
    surfaces the judgment material — undeclared producers (reader handing held state along is
    fine; a second parse point is not) and validator-shaped ops (public, take the Kind, return
    boolean: parse, don't validate)."
-  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
+  (:require [clojure.string :as str]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.lens :refer [Projection]]
             [fukan.cozo.query :as cq]
             [canvas.vocab.code.kind :refer [Kind]]
             [canvas.vocab.code.operation :refer [Operation]]))
 
-;; `produces` — the :out mirror of Totality's :in navigation: an authored Operation and the Kind
+;; `produces` — the :out mirror of the totality law's :in navigation: an authored Operation and the Kind
 ;; its output type NAMES. Direct refs only (a `ref` schema's `:names` edge); descent into wrapped
 ;; shapes ([:or K :nil]) grows under pressure. Consumers: the TrustBoundary parser cross-check law
 ;; and the Boundary reading.
@@ -33,26 +35,27 @@
 (defstructure TrustBoundary
   "Designates a parse-don't-validate TRUST BOUNDARY — the complete boundary story in one element.
    `:kind` points at the TRUSTED ARTIFACT (the parsed, trusted representation — e.g. fukan's
-   StructureDb): the `Totality` law reads it and holds the core below the line total. `:parsed-by`
-   declares the operations that ESTABLISH that trust — the parse points where raw input becomes the
-   trusted representation. DECLARED, not derived: an op that merely happens to output the Kind (a
-   reader handing held state along, e.g. a get-accessor) is not a parser; intent distinguishes them,
-   and the cross-check law below keeps the declaration honest against the type structure (`produces`).
-   At least one parser is mandatory (`[:+]`): trust with no declared source is an unfounded assumption."
+   StructureDb); `:parsed-by` declares the operations that ESTABLISH that trust — the parse points
+   where raw input becomes the trusted representation. DECLARED, not derived: an op that merely
+   happens to output the Kind (a reader handing held state along, e.g. a get-accessor) is not a
+   parser; intent distinguishes them. At least one parser is mandatory (`[:+]`): trust with no
+   declared source is an unfounded assumption.
+
+   The laws are what DECLARING a boundary MEANS for the rest of the graph — slot semantics riding
+   the declaration. CROSS-CHECK: `:parsed-by` stays honest against the type structure — every
+   declared parser `produces` the boundary kind. TOTALITY (code-up, at the trust line): a
+   trusted-core reader — a modelled Operation whose `:in` references the declared Kind — operates
+   on already-trusted data, so it must be TOTAL; an offender is such a reader whose extracted twin
+   (`op-twin`) performs `:throws`. Totality's offenders are Operations, hence `:scope :global`;
+   both laws are naturally vacuous when no TrustBoundary is declared. Generic: the trust boundary
+   is a parameter (a project declares its own), not a hardcoded StructureDb."
   {:kind      Kind
    :parsed-by [:+ Operation]}
   (law "every declared parser produces the boundary kind (its :out names it)"
     :offenders '[?tb ?o]
     :where '[[?pr :rel/from ?tb] [?pr :rel/kind :parsed-by] [?pr :rel/to ?o]
              [?kr :rel/from ?tb] [?kr :rel/kind :kind] [?kr :rel/to ?k]
-             (not-join [?o ?k] (produces ?o ?k))]))
-
-(defstructure Totality
-  "Law-holder for code-up TOTALITY (parse-don't-validate, at the trust line): a trusted-core reader —
-   a modelled Operation whose :in references a declared TrustBoundary Kind — operates on already-trusted
-   data, so it must be TOTAL. An offender is such a reader whose extracted twin (op-twin) performs
-   :throws. `:scope :global`; vacuous when no TrustBoundary is declared. Generic: the trust boundary is
-   a parameter (a project declares its own), not a hardcoded StructureDb."
+             (not-join [?o ?k] (produces ?o ?k))])
   (law "every trusted-core reader (its :in is a declared TrustBoundary) is total — its code performs no :throws"
     :scope :global
     :offenders '[?o]
@@ -66,9 +69,10 @@
 (defn totality-violations
   "The ENFORCED TOTALITY offenders — trusted-core reader Operations (their :in references a declared
    TrustBoundary) whose realizing code is PARTIAL, as a set of op names. Empty ⇔ the modelled trusted
-   core is total. Reads the single source of truth (the registered `Totality` law)."
+   core is total. Reads the single source of truth (the totality law registered on `TrustBoundary`)."
   [db]
-  (let [desc (-> (s/structure-by-tag ::Totality) :laws first :desc)]
+  (let [desc (->> (s/structure-by-tag ::TrustBoundary) :laws (map :desc)
+                  (filter #(str/starts-with? % "every trusted-core reader")) first)]
     (->> (s/check db)
          (filter #(= desc (:law %)))
          (mapcat :offenders) (map first)

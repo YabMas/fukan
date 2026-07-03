@@ -217,7 +217,7 @@
   "The TOTALITY worklist — trusted-core READER operations (their modelled `:in` is the Model /
    StructureDb) whose realizing code is PARTIAL (performs :throws). Parse-don't-validate says the
    trusted core must be total. Empty ⇔ the trusted core is total — the property the enforced
-   `Totality` law asserts."
+   totality law (on `TrustBoundary`) asserts."
   []
   (if-let [m (infra-model/get-model)]
     (let [w (pdv/totality-violations m)]

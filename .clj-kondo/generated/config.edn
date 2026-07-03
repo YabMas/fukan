@@ -7,7 +7,6 @@
    canvas.principles.layered-architecture/CallRealization hooks.fukan.structure/instance
    canvas.principles.layered-architecture/Fidelity hooks.fukan.structure/instance
    canvas.principles.layered-architecture/ModuleArchitecture hooks.fukan.structure/instance
-   canvas.principles.parse-dont-validate/Totality hooks.fukan.structure/instance
    canvas.principles.parse-dont-validate/TrustBoundary hooks.fukan.structure/instance
    canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
    canvas.vocab.code.kind/Kind hooks.fukan.structure/instance

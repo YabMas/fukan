@@ -111,25 +111,29 @@ its `defstructure` + the laws/correspondence about it + how it is extracted from
   correspondence — `module-corresponds?` (the canvas-module↔code-ns name bridge) and `op-twin`
   (the authored-op↔extracted-op pairing, a `defrelation`) — lives in `module.clj`; the
   operation/effect/`fukan` laws reach it via datalog injection (no compile cycle, since the
-  build auto-loads every element). Adopted-principle law-holders (`Totality`/`TrustBoundary`,
+  build auto-loads every element). Adopted-principle law-holders (`TrustBoundary`,
   `EffectCorrespondence`, `ModuleArchitecture`, `CallRealization`/`Fidelity`) live in
-  `canvas/principles/` (one file per principle), not in the element files.
+  `canvas/principles/` (one file per principle), not in the element files. A law that is a
+  declaration's SLOT SEMANTICS rides the declaring structure itself (`Subsystem` carries the
+  `:may-depend` conformance/acyclicity teeth; `TrustBoundary` carries its parser cross-check +
+  the totality law) — slot teeth with the slot, adopted demands in the principle files.
 - `canvas/vocab/code/extractor.clj` — the shared Clojure extractor orchestration (clj-kondo
   `analyze` + `op-eid` + `extract`), calling each element's builder. The HOOK for the extraction
   plug-point; the composition root registers `extract`.
 The once-`fukan.clj` holding pen is DISSOLVED — its fukan-specific correspondence machinery was
 homed by what it is *about*, reading a binding declared as instance data (no generic "trait"
 framework; the design↔code matching machinery is opinionated and baked, only *which* elements a
-project works with is config): `Totality` + `TrustBoundary` (parse-don't-validate: an Operation
-over a trust artifact is total) → `canvas/principles/parse_dont_validate.clj`, reading a
-`TrustBoundary {:kind :parsed-by}` designation (bound in `architecture/…/infra`).
+project works with is config): `TrustBoundary` (parse-don't-validate: an Operation over a trust
+artifact is total — the totality law rides the designation itself) →
+`canvas/principles/parse_dont_validate.clj`, reading a `TrustBoundary {:kind :parsed-by}`
+designation (bound in `architecture/…/infra`).
 (The Lens-act `Coverage` law that once also lived here — then in `core/coverage.clj` — was DISSOLVED
 2026-06-29: a projection now carries its focus ITSELF — an inline `:select`, a named `Lens` only when a focus is genuinely shared, none = the whole model — so the guarantee (a reading's selection cannot drift from the reading) is structural, not a law.)
 
 The grouping ladder is levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace:
 an API surface + owned types) ⊂ `Subsystem` (a cluster of modules realizing a capability, with
-a declared `:may-depend` DAG the architecture-quality laws enforce against the extracted code
-graph). There is **no convenience umbrella** — Clojure can't re-export the generated
+a declared `:may-depend` DAG it enforces ITSELF — conformance + acyclicity are its slot-semantics
+laws — against the extracted code graph). There is **no convenience umbrella** — Clojure can't re-export the generated
 instance-constructor macros, so consumers `require` the specific elements they use; structure
 tags are verbose (`:canvas.vocab.code.operation/Operation`). Grow this vocab **only under
 concrete design pressure** — never a methodology/middle layer designed abstractly ahead of real

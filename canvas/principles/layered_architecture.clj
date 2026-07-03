@@ -2,12 +2,13 @@
   "PRINCIPLE — layered, intentional architecture (Ousterhout APoSD; DDD bounded contexts;
    Parnas information hiding).
 
-   Dependencies are DECLARED and DIRECTED: subsystems form a `:may-depend` DAG the extracted
-   call graph must conform to (`ModuleArchitecture`: no mutual module dependencies,
-   conformance, acyclicity, membership); the code call graph realizes the declared design
-   (`CallRealization`, `Fidelity`); `latent-boundaries` discovers bottom-up boundaries the
-   design hasn't drawn yet (Parnas/ISP consumer-disjointness — the information-hiding
-   flavour). Judgment readers: `uncovered-calls`, `unfaithful-calls`, `unrealized-delegates`."
+   Dependencies are DECLARED and DIRECTED: the module graph is acyclic and fully clustered
+   (`ModuleArchitecture`: acyclicity + membership totality — the `:may-depend`
+   conformance/acyclicity teeth ride `Subsystem` itself, slot semantics with the slot); the
+   code call graph realizes the declared design (`CallRealization`, `Fidelity`);
+   `latent-boundaries` discovers bottom-up boundaries the design hasn't drawn yet (Parnas/ISP
+   consumer-disjointness — the information-hiding flavour). Judgment readers:
+   `uncovered-calls`, `unfaithful-calls`, `unrealized-delegates`."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.db :as db]
@@ -18,9 +19,10 @@
 ;; ── clean-architecture quality laws over the module/subsystem graph ───────────
 
 (defstructure ModuleArchitecture
-  "A law-holder for clean-architecture quality constraints over the module/subsystem graph — it has no
-   instances of its own (like the correspondence law-holders); it exists to carry the cross-module
-   assertions.
+  "A law-holder for the ADOPTED layering demands over the module graph — it has no instances of its
+   own (like the correspondence law-holders); it carries the cross-module assertions no single
+   element's declaration gives meaning to. (The `:may-depend` slot's own teeth — conformance + DAG
+   acyclicity — ride `Subsystem` itself: slot semantics live with the slot.)
 
    ACYCLIC MODULE DEPENDENCY: no Module may transitively depend on itself — the module-dependency graph
    (`module-depends`, the complete graph: calls ∪ data-adoption) has no cycle. `module-reaches` is its
@@ -30,7 +32,7 @@
    no Modules are modelled. (Supersedes the earlier 2-cycle-only `M⇄N` check.)
 
    The `:rules` below INLINE `module/module-depends-rules` (a law's `:rules` is macro-time literal data
-   and cannot reference the var) — keep the two copies in sync."
+   and cannot reference the var) — keep the copies in sync."
   (law "the module-dependency graph is acyclic — no module transitively depends on itself"
     :scope :global
     :offenders '[?m]
@@ -52,42 +54,6 @@
              [(module-reaches ?m ?n) (module-depends ?m ?n)]
              [(module-reaches ?m ?n) (module-depends ?m ?mid) (module-reaches ?mid ?n)]]
     :where '[[?m :structure/of :canvas.vocab.code.module/Module] (module-reaches ?m ?m)])
-
-  ;; CONFORMANCE — every cross-subsystem module dependency must follow a declared :may-depend edge.
-  ;; Inlines module/module-depends-rules (sync point) + in-subsystem / declared-dep. Offender = the
-  ;; module whose dep crosses an undeclared subsystem boundary. Vacuous when no Subsystems / no
-  ;; cross-subsystem deps exist.
-  (law "every cross-subsystem module dependency follows a declared :may-depend edge"
-    :scope :global
-    :offenders '[?m]
-    :rules '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
-             [(module-depends ?m ?n)
-              (module-owns ?m ?op1) [?dr :rel/from ?op1] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
-              (module-owns ?n ?op2) [(not= ?m ?n)]]
-             [(module-depends ?m ?n)
-              (module-owns ?m ?op)
-              (or-join [?op ?sch]
-                (and [?ir :rel/from ?op] [?ir :rel/kind :in]  [?ir :rel/to ?sch])
-                (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]))
-              [?sch :val/kind "ref"]
-              [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-              (module-owns ?n ?k) [(not= ?m ?n)]]
-             [(in-subsystem ?mod ?sub) [?sub :structure/of :canvas.vocab.code.subsystem/Subsystem] [?cr :rel/from ?sub] [?cr :rel/kind :child] [?cr :rel/to ?mod]]
-             [(declared-dep ?s ?t)     [?s :structure/of :canvas.vocab.code.subsystem/Subsystem]   [?mr :rel/from ?s]   [?mr :rel/kind :may-depend] [?mr :rel/to ?t]]]
-    :where '[(module-depends ?m ?n)
-             (in-subsystem ?m ?s) (in-subsystem ?n ?t) [(not= ?s ?t)]
-             (not (declared-dep ?s ?t))])
-
-  ;; DAG ACYCLICITY — the :may-depend edges are direct subsystem→subsystem relations, so sub-reaches
-  ;; is PURELY self-recursive (follows :may-depend, calls only itself).
-  (law "the :may-depend graph is acyclic — no subsystem transitively depends on itself"
-    :scope :global
-    :offenders '[?s]
-    :rules '[[(sub-reaches ?s ?t) [?r :rel/from ?s] [?r :rel/kind :may-depend] [?r :rel/to ?t]]
-             [(sub-reaches ?s ?t) [?r :rel/from ?s] [?r :rel/kind :may-depend] [?r :rel/to ?mid] (sub-reaches ?mid ?t)]]
-    :where '[[?s :structure/of :canvas.vocab.code.subsystem/Subsystem] (sub-reaches ?s ?s)])
 
   ;; MEMBERSHIP TOTALITY — every AUTHORED Module belongs to a Subsystem, so conformance has full
   ;; coverage. Guarded by [?_s :structure/of :canvas.vocab.code.subsystem/Subsystem] (a direct datom) →
