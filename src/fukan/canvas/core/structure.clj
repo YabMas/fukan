@@ -521,7 +521,8 @@
             (throw (ex-info (str "a combinator law takes one form: " (pr-str form)) {:form form})))
           (combinator-law desc (first kvs)))
       (let [m (apply hash-map kvs)]
-        {:desc desc
+        {:desc      desc
+         :key       (:key m)
          :offenders (unquote-lit (:offenders m))
          :where     (unquote-lit (:where m))
          :rules     (unquote-lit (:rules m))
@@ -793,3 +794,11 @@
    through the registered check engine (the Cozo law engine, wired at load by `fukan.cozo.law`)."
   [db]
   ((:check @check-engine) db))
+
+(defn ^{:malli/schema [:=> [:cat :any :keyword] :any]}
+  violations-of
+  "The offender eids of the law keyed `k` — the generic reader behind every law-specific
+   worklist fn (filter `check` by the law's stable `:key`, first offender var). Returns a
+   set of eid strings; callers name them through their query layer."
+  [db k]
+  (->> (check db) (filter #(= k (:key %))) (mapcat :offenders) (map first) set))

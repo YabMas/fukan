@@ -14,8 +14,7 @@
    surfaces the judgment material — undeclared producers (reader handing held state along is
    fine; a second parse point is not) and validator-shaped ops (public, take the Kind, return
    boolean: parse, don't validate)."
-  (:require [clojure.string :as str]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]
+  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.lens :refer [Projection]]
             [fukan.cozo.query :as cq]
             [canvas.vocab.code.kind :refer [Kind]]
@@ -57,6 +56,7 @@
              [?kr :rel/from ?tb] [?kr :rel/kind :kind] [?kr :rel/to ?k]
              (not-join [?o ?k] (produces ?o ?k))])
   (law "every trusted-core reader (its :in is a declared TrustBoundary) is total — its code performs no :throws"
+    :key   :totality
     :scope :global
     :offenders '[?o]
     :where '[[?tb :structure/of ::TrustBoundary] [?tbr :rel/from ?tb] [?tbr :rel/kind :kind] [?tbr :rel/to ?k]
@@ -69,15 +69,9 @@
 (defn totality-violations
   "The ENFORCED TOTALITY offenders — trusted-core reader Operations (their :in references a declared
    TrustBoundary) whose realizing code is PARTIAL, as a set of op names. Empty ⇔ the modelled trusted
-   core is total. Reads the single source of truth (the totality law registered on `TrustBoundary`)."
+   core is total. Reads the totality law on `TrustBoundary` by its stable :key."
   [db]
-  (let [desc (->> (s/structure-by-tag ::TrustBoundary) :laws (map :desc)
-                  (filter #(str/starts-with? % "every trusted-core reader")) first)]
-    (->> (s/check db)
-         (filter #(= desc (:law %)))
-         (mapcat :offenders) (map first)
-         (map #(:entity/name (cq/entity db %)))
-         set)))
+  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :totality))))
 
 ;; the principle's JUDGMENT surface — rendered by materialize/render-finding "Boundary"
 (Projection Boundary

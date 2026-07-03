@@ -93,7 +93,9 @@
     (vec (for [[tag law] (all-laws)]
            (if-let [vc (value-check-law law)]
              (let [offs (value-offenders cdb vc)]
-               (cond-> {:structure tag :law (:desc law)} (seq offs) (assoc :offenders offs)))
+               (cond-> {:structure tag :law (:desc law)}
+                 (:key law) (assoc :key (:key law))
+                 (seq offs) (assoc :offenders offs)))
              (let [program (try (compile-law law direct-tags index)
                                 (catch clojure.lang.ExceptionInfo _ ::unsupported))]
                (if (= program ::unsupported)
@@ -101,6 +103,7 @@
                  (try
                    (let [rows (db/q cdb (str query/preamble "\n" program))]
                      (cond-> {:structure tag :law (:desc law)}
+                       (:key law) (assoc :key (:key law))
                        (seq rows) (assoc :offenders (vec rows))))
                    (catch clojure.lang.ExceptionInfo _
                      {:structure tag :law (:desc law) :unsupported true})))))))))
@@ -115,7 +118,7 @@
    vocabulary compiles, so on a fukan-only registry this is a complete check."
   [cdb]
   (vec (for [r (check-structural cdb) :when (:offenders r)]
-         (select-keys r [:structure :law :offenders]))))
+         (select-keys r [:structure :law :key :offenders]))))
 
 ;; Register this engine as `structure/check`'s Cozo backend: it claims any Cozo db, so
 ;; `(structure/check cozo-db)` routes here (the kernel never names Cozo — the plug-point does).

@@ -91,6 +91,7 @@
    internal ops (`:child`, not `:exposes`) are sketch-only by the boundary-sketch discipline, so their
    signature is not a contract. `:scope :global` (offenders are Operations)."
   (law "every public authored operation declares an output type"
+    :key   :signature-completeness
     :scope :global
     :offenders '[?o]
     :where '[(authored ?o)
@@ -191,12 +192,7 @@
    declared output type (`:out`), as a set of names. Empty ⇔ every public surface op declares its
    output. Reads the single source of truth (the registered `SignatureCompleteness` law)."
   [db]
-  (let [desc (-> (s/structure-by-tag ::SignatureCompleteness) :laws first :desc)]
-    (->> (s/check db)
-         (filter #(= desc (:law %)))
-         (mapcat :offenders) (map first)
-         (map #(:entity/name (cq/entity db %)))
-         set)))
+  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :signature-completeness))))
 
 (defn operation-sig
   "Render the AUTHORED Operation at `op-eid` to a malli function-schema

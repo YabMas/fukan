@@ -51,10 +51,14 @@
    dispatches to it without the kernel naming the backend (mirrors the typing plug-point)."
   {:signature [:=> [:catn [:engine :any]] :nil]
    :performs  [:state]})
+(Operation violations-of
+  "The offender eids of the law keyed k — the generic reader behind every law-specific worklist (filters check by the law's stable :key)."
+  {:signature [:=> [:catn [:db substrate/StructureDb] [:k :keyword]] :any]
+   :delegates [check]})
 
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:exposes [check vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
-             laws-of direct-scope-tags register-check-engine!]
+             laws-of direct-scope-tags register-check-engine! violations-of]
    :owns    [Violation]                          ; the check output shape (others adopt by name)
    :child   [Rule]})                              ; internal grain: the rules-output type
