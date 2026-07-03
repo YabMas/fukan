@@ -59,18 +59,22 @@
       :else      target)))
 
 (defn- slots-of [db s]
-  ;; the optional :rel/payload is read separately and merged (no get-else on Cozo); :rel/kind is a
-  ;; keyword the mirror stringifies, so re-keywordize it for the slot/* filter + the quantifier map
-  (let [base (cq/q '[:find ?r ?k ?l ?o ?t :in $ ?s
-                     :where [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]
-                            [?r :rel/order ?o] [?r :rel/to ?t]] db s)
-        pays (into {} (cq/q '[:find ?r ?p :in $ ?s
-                              :where [?r :rel/from ?s] [?r :rel/payload ?p]] db s))]
+  ;; the optional :rel/payload and :rel/props are read separately and merged (no get-else on Cozo);
+  ;; :rel/kind is a keyword the mirror stringifies, so re-keywordize it for the slot/* filter + the quantifier map
+  (let [base  (cq/q '[:find ?r ?k ?l ?o ?t :in $ ?s
+                      :where [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]
+                             [?r :rel/order ?o] [?r :rel/to ?t]] db s)
+        pays  (into {} (cq/q '[:find ?r ?p :in $ ?s
+                               :where [?r :rel/from ?s] [?r :rel/payload ?p]] db s))
+        propm (into {} (cq/q '[:find ?r ?p :in $ ?s
+                               :where [?r :rel/from ?s] [?r :rel/props ?p]] db s))]
     (->> base
          (filter #(= "slot" (namespace (keyword (nth % 1)))))
          (sort-by #(ord (nth % 3)))
          (mapv (fn [[r k l _ t]]
-                 (let [props (when-let [p (pays r)] {:payload (keyword p)})]
+                 (let [char-props (some-> (propm r) payload-form)
+                       pay-props  (when-let [p (pays r)] {:payload (keyword p)})
+                       props      (not-empty (merge char-props pay-props))]
                    [(keyword l) (slot-expr (keyword k) props (target-expr db t))]))))))
 
 (defn- laws-of [db s]
@@ -92,13 +96,14 @@
 
 (defn- parts [db s]
   (let [e (cq/entity db s)]
-    {:name     (symbol (:entity/name e))
-     :doc      (:entity/doc e)
-     :value?   (boolean (:val/value e))
-     :realizes (when (:val/realizes e) (payload-form (:val/form e)))
-     :slots    (slots-of db s)
-     :includes (includes-of db s)
-     :laws     (laws-of db s)}))
+    {:name       (symbol (:entity/name e))
+     :doc        (:entity/doc e)
+     :value?     (boolean (:val/value e))
+     :realizes   (when (:val/realizes e) (payload-form (:val/form e)))
+     :corresponds (some-> (:val/corresponds e) payload-form)
+     :slots      (slots-of db s)
+     :includes   (includes-of db s)
+     :laws       (laws-of db s)}))
 
 ;; ── the data form (round-trip) ────────────────────────────────────────────────
 
@@ -110,17 +115,31 @@
             (when rules [:rules rules])
             [:offenders offenders :where where])))
 
+(defn- demand-form
+  "A corresponds demand map → its authored sub-form: `(realized {opts})` or `(realized)`.
+   Nil-valued option entries are pruned so the rendered form is minimal."
+  [{:keys [demand] :as d}]
+  (let [opts (not-empty (into {} (remove (comp nil? val)) (dissoc d :demand)))]
+    (if opts (list (symbol (name demand)) opts) (list (symbol (name demand))))))
+
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Form]}
   structure-form
   "The reified Structure at `eid` rendered back as its `defstructure` data form —
    the print-dual of the authoring surface. Laws carry their datalog unquoted
-   (this is the PARSED form); `^:value` rides the name symbol's metadata."
+   (this is the PARSED form); `^:value` rides the name symbol's metadata.
+   A `(corresponds …)` declaration renders after `(includes …)`, restoring the
+   correspondence seam and its demand sub-forms; slot props (characters + demand
+   options) render in the slots map's props position."
   [db eid]
-  (let [{:keys [name doc value? slots includes realizes laws]} (parts db eid)]
+  (let [{:keys [name doc value? slots includes corresponds realizes laws]} (parts db eid)]
     (concat ['defstructure (if value? (with-meta name {:value true}) name)]
             (when doc [doc])
             (when (seq slots) [(apply array-map (mapcat identity slots))])
             (when (seq includes) [(cons 'includes includes)])
+            (when corresponds
+              [(concat ['corresponds (:basis corresponds)]
+                       (when-let [b (:bridge corresponds)] [(list 'bridge b)])
+                       (map demand-form (:demands corresponds)))])
             (when realizes [(list 'realized-as realizes)])
             (map law-form laws))))
 
@@ -140,13 +159,42 @@
                         slots))
          "}")))
 
+(defn- slot-props-map
+  "Extract the props map (if any) from a rendered slot value: `[quantifier props target]`
+   or `[props target]` (one-card with props). Returns nil when no props map is present."
+  [sv]
+  (when (vector? sv)
+    (let [f (first sv) s (second sv)]
+      (cond
+        (map? f) f          ; [props target] — one-card with props
+        (map? s) s          ; [quantifier props target] — quantifier + props
+        :else nil))))
+
+(defn- count-slot-generated
+  "The number of demand laws generated from a structure's slot props:
+   each `:realized-by` slot contributes 1 (+1 when `:faithful`); each `:covered-from` slot contributes 1."
+  [slots]
+  (->> slots
+       (map (fn [[_ sv]] (slot-props-map sv)))
+       (remove nil?)
+       (reduce (fn [n pm]
+                 (+ n
+                    (if (:covered-from pm) 1 0)
+                    (if (:realized-by pm) (+ 1 (if (:faithful pm) 1 0)) 0)))
+               0)))
+
 (defn- fmt-structure [db s]
-  (let [{:keys [name doc value? slots includes realizes laws]} (parts db s)]
+  (let [{:keys [name doc value? slots includes corresponds realizes laws]} (parts db s)
+        n-generated (when corresponds
+                      (+ (count (:demands corresponds))
+                         (count-slot-generated slots)))]
     (->> (concat
           [(str "(defstructure " (when value? "^:value ") name)]
           (when doc [(str "  " (pr-str (first-line doc)))])
           (when (seq slots) [(fmt-slots slots)])
           (when (seq includes) [(str "  (includes " (str/join " " includes) ")")])
+          (when corresponds
+            [(str "  (corresponds " (:basis corresponds) " …)  ; ⇒ " n-generated " generated laws")])
           (when realizes [(str "  (realized-as '" (pr-str realizes) ")")])
           (map #(str "  (law " (pr-str (:desc %)) " …)") laws))
          (str/join "\n")

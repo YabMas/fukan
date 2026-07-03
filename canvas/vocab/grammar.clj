@@ -112,29 +112,32 @@
 (defn- reflect-structure
   "One sdef → {:nodes … :rels …} for its Structure node, Law children, slot and
    includes edges, and any Schema value targets."
-  [{:keys [tag doc slots laws includes value? realized-as]}]
+  [{:keys [tag doc slots laws includes value? realized-as corresponds]}]
   (let [sid  (structure-id tag)
         node (cond-> {:entity/id sid :structure/of ::Structure
                       :entity/name (name tag) :val/tag (str tag)}
                doc         (assoc :entity/doc doc)
                value?      (assoc :val/value true)
-               realized-as (assoc :val/realizes (pr-str realized-as) :val/form realized-as))
+               realized-as (assoc :val/realizes (pr-str realized-as) :val/form realized-as)
+               corresponds (assoc :val/corresponds (pr-str (into {} (remove (comp nil? val)) corresponds))))
         slot-bits
         (map-indexed
          (fn [i sl]
-           (let [label (name (:rel sl))
-                 kind  (keyword "slot" (name (:card sl)))
+           (let [label  (name (:rel sl))
+                 kind   (keyword "slot" (name (:card sl)))
                  [tid emitted] (if (s/scalar-slot? sl)
                                  (let [sub (typing/reflect-type (:target sl))]
                                    [(:id sub) sub])
-                                 [(structure-id (:target sl)) nil])]
+                                 [(structure-id (:target sl)) nil])
+                 props* (not-empty (dissoc sl :rel :card :target :type-form? :payload))]
              {:emitted emitted
               :any?    (= :Any (:target sl))
               :rel     (cond-> {:rel/id   (str sid "|" (name kind) "|" label)
                                 :rel/from [:entity/id sid] :rel/kind kind
                                 :rel/to   [:entity/id tid]
                                 :rel/label label :rel/order i}
-                         (:payload sl) (assoc :rel/payload (:payload sl)))}))
+                         (:payload sl) (assoc :rel/payload (:payload sl))
+                         props*        (assoc :rel/props (pr-str props*)))}))
          slots)
         law-bits
         (map-indexed

@@ -6,7 +6,10 @@
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :refer [defstructure]]
-            [fukan.canvas.projection.grammar :as g]))
+            [fukan.canvas.projection.grammar :as g]
+            ;; side-effect: registers fukan's malli dialect + Clojure extractor + check engine
+            [fukan.infra.model]
+            [fukan.model.pipeline :as pipeline]))
 
 ;; ── the authored grammar the render must reproduce ───────────────────────────
 
@@ -112,3 +115,21 @@
           p  (g/grammar-primer db)]
       (is (str/includes? p "━━ canvas.vocab.grammar — "))
       (is (str/includes? p "(defstructure Structure")))))
+
+(deftest print-dual-round-trips-the-correspondence-seam
+  (testing "the reflected Operation renders its corresponds form and demand slot options back"
+    (let [db   (pipeline/build-model nil)
+          eid  (ffirst (cq/q '[:find ?s :where [?s :structure/of :canvas.vocab.grammar/Structure]
+                               [?s :val/tag ":canvas.vocab.code.operation/Operation"]] db))
+          form (g/structure-form db eid)
+          body (set (filter seq? form))
+          corr (first (filter #(= 'corresponds (first %)) body))
+          slots (first (filter map? form))]
+      (is (some? corr) "the corresponds body form renders")
+      (is (= :by-name (second corr)))
+      (is (= 3 (count (filter #(and (seq? %) (#{'realized 'covered} (first %))) corr)))
+          "all three node demands render as sub-forms")
+      (is (= {:transitive true :realized-by :calls :altitude :container :faithful true}
+             (second (:delegates slots)))
+          "characters AND demand options render in the slot props position")
+      (is (= {:covered-from [:calls* :performs]} (second (:performs slots)))))))

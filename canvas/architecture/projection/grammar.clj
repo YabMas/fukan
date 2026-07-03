@@ -20,7 +20,9 @@
   (Kind Primer :string)    ; the reference-card string
   (Kind VocabName :string) ; a grammar namespace name
   (Operation structure-form
-    "A reified Structure rendered back as its map-form defstructure (the print-dual)."
+    "A reified Structure rendered back as its map-form defstructure (the print-dual).
+     Includes the `(corresponds …)` declaration (demands + bridge) and slot props
+     (relation characters + demand options) — the correspondence seam round-trips."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Form]
      :performs  [:throws]                       ; via the query compiler / render-type
      :delegates [typing/render-type query/q query/entity]})   ; renders refined slot targets + reads the graph
