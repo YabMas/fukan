@@ -11,7 +11,7 @@
    schema reference; this dialect owns ALL interpretation (`render`/`valid?`/`sigs-adhere?`)."
   (:require [malli.core :as m]
             [fukan.cozo.query :as cq]
-            [fukan.canvas.core.structure :refer [defstructure]]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]))
 
 ;; ── the runtime bridges (the hook into the typing plug-point) ──────────────────
@@ -291,3 +291,12 @@
   (reader read-malli)
   (law "a ref schema must name a target"
     (has :names :when {:kind "ref"})))
+
+;; names-kind — the type-ref → named-Kind navigation as a DEFRELATION (injected into every law/query
+;; by check/vocab-rules), so the consumers that chase a ref Schema to the type it names — `produces`
+;; and the TrustBoundary totality law (canvas.principles.parse-dont-validate), and `module-depends`
+;; data-adoption (canvas.vocab.code.module) — read it by name instead of each inlining the 3-clause chain.
+(s/defrelation :names-kind
+  "a ref Schema ?sch whose :names edge reaches the type ?k it names — the ref-Schema→named-type navigation."
+  '[?sch ?k]
+  '[[?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]])

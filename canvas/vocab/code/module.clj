@@ -84,11 +84,9 @@
       (and [?dr :rel/from ?op] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
            (module-owns ?n ?op2))
       (and [?ir :rel/from ?op] [?ir :rel/kind :in]  [?ir :rel/to ?sch]
-           [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-           (module-owns ?n ?k))
+           (names-kind ?sch ?k) (module-owns ?n ?k))
       (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]
-           [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-           (module-owns ?n ?k)))
+           (names-kind ?sch ?k) (module-owns ?n ?k)))
     [(not= ?m ?n)]])
 
 (defn module-dependencies

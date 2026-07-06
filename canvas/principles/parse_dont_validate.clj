@@ -29,7 +29,7 @@
   '[?o ?k]
   '[(authored ?o)
     [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
-    [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]])
+    (names-kind ?sch ?k)])
 
 (defstructure TrustBoundary
   "Designates a parse-don't-validate TRUST BOUNDARY — the complete boundary story in one element.
@@ -62,7 +62,7 @@
     :where '[[?tb :structure/of ::TrustBoundary] [?tbr :rel/from ?tb] [?tbr :rel/kind :kind] [?tbr :rel/to ?k]
              (authored ?o)
              [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?sch]
-             [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
+             (names-kind ?sch ?k)
              (op-twin ?o ?e)
              [?pr :rel/from ?e] [?pr :rel/kind :performs] [?pr :rel/to ?eff] [?eff :val/name "throws"]]))
 
