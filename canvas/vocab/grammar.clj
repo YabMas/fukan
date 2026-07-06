@@ -44,13 +44,11 @@
    :scope [:? :string]
    :query [{:payload :form} :string]}
   ;; OWNERSHIP — the reflector's self-check. A Law has no independent existence: it is asserted BY a
-  ;; Structure (ownership-on-owner), so every reified Law must have an incoming `:law` edge. An orphan
-  ;; Law is a defect of THIS reflection, not a modelling mistake — which is why it lives here on the
-  ;; reified type (self-scoped to `:canvas.vocab.grammar/Law`), not as a design law on a modelled portrait.
+  ;; Structure (ownership-on-owner), so every reified Law must be the target of some `:law` edge. An
+  ;; orphan Law is a defect of THIS reflection, not a modelling mistake — which is why it lives here on
+  ;; the reified type (self-scoped to `:canvas.vocab.grammar/Law`), not as a design law on a portrait.
   (law "every reified Law is owned by an asserting Structure"
-    :offenders '[?l]
-    :rules '[[(asserted ?l) [?r :rel/kind :law] [?r :rel/to ?l]]]
-    :where '[(not (asserted ?l))]))
+    (matched-by :law)))
 
 (defstructure Structure
   "A registered defstructure, reified into the graph it defines. Slots are
@@ -64,17 +62,11 @@
    :law      [:* Law]
    :realizes [:? {:payload :form} :string]}
   ;; TOTALITY — the reflector's self-check. A Structure's identity IS its defining namespace, so every
-  ;; reified Structure belongs to a Vocabulary (an incoming `:child` edge from a `:canvas.vocab.grammar/Vocabulary`
-  ;; node). The synthetic `:Any` wildcard is not an authored Structure, so it is exempt. A missing
+  ;; reified Structure is the target of a `:child` edge from its `Vocabulary`. The synthetic `:Any`
+  ;; wildcard is not an authored Structure, so it is exempt (:unless its tag is ":Any"). A missing
   ;; Vocabulary is a defect of THIS reflection — hence here, self-scoped to `:canvas.vocab.grammar/Structure`.
   (law "every reified Structure is defined in a Vocabulary"
-    :offenders '[?s]
-    :rules '[[(in-vocabulary ?s)
-              [?v :structure/of :canvas.vocab.grammar/Vocabulary]
-              [?r :rel/kind :child] [?r :rel/from ?v] [?r :rel/to ?s]]]
-    :where '[[?s :val/tag ?tag]
-             [(clojure.core/not= ?tag ":Any")]
-             (not (in-vocabulary ?s))]))
+    (matched-by :child :from Vocabulary :unless {:tag ":Any"})))
 
 (defstructure Vocabulary
   "One grammar namespace, reified — the Structures it defines. (Named Vocabulary,

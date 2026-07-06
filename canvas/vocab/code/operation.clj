@@ -78,7 +78,18 @@
    :extracted [:? :boolean]          ; provenance: true ⇒ from code; absent/false ⇒ authored
    ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
    ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
-   :sig       [:? :string]})
+   :sig       [:? :string]}
+  ;; AUTHORED-SIDE typing discipline — every PUBLIC authored Operation (on a Module's `:exposes`
+  ;; surface) declares an OUTPUT TYPE. ABSOLUTE, no opt-out: every op returns SOMETHING with a type,
+  ;; down to `:nil` (side-effecting) or `:any` (genuinely dynamic) — a missing `:out` is an undeclared
+  ;; contract, never a legitimate abstention. OUTPUT, not full signature: a nullary op legitimately has
+  ;; no `:in`, so the output type is the part every op has and the part the public contract turns on.
+  ;; Rides Operation itself (the law is about its `:out` slot) — no separate holder. Self-scoped to
+  ;; Operation; the datalog :when narrows to the public authored surface.
+  (law "every public authored operation declares an output type"
+    (has :out :when '[(authored ?x)
+                      [?xr :rel/kind :exposes] [?xr :rel/to ?x]])
+    :key :signature-completeness))
 
 ;; `authored` — the single home of the "an Operation, not extracted from code" guard the
 ;; correspondence laws/lenses (and the op pairings `op-twin`/`op-ext-twin`) each quantify over.
@@ -89,26 +100,6 @@
   "an AUTHORED Operation ?o — a self-model's intent (not extracted from code)"
   '[?o]
   '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])])
-
-;; ── authored-side discipline: the public surface declares its output type ─────
-
-(defstructure SignatureCompleteness
-  "Law-holder for the AUTHORED-SIDE typing discipline (no instances; it carries the assertion). Every
-   PUBLIC authored Operation — one on a Module's `:exposes` surface — must declare an OUTPUT TYPE
-   (`:out`). ABSOLUTE — there is no opt-out: every operation returns SOMETHING, and that something has a
-   type, down to `:nil` (a side-effecting procedure) or `:any` (a genuinely dynamic return). A missing
-   `:out` is an undeclared contract, never a legitimate abstention. OUTPUT, not full signature: a nullary
-   op legitimately has no `:in`, so input-presence is unprovable; the output type is the part every op
-   has and the part the public contract turns on. Scoped to the public surface (mirroring the covered demand):
-   internal ops (`:child`, not `:exposes`) are sketch-only by the boundary-sketch discipline, so their
-   signature is not a contract. `:scope :global` (offenders are Operations)."
-  (law "every public authored operation declares an output type"
-    :key   :signature-completeness
-    :scope :global
-    :offenders '[?o]
-    :where '[(authored ?o)
-             [?xr :rel/kind :exposes] [?xr :rel/to ?o]                ; on a Module's public surface
-             (not-join [?o] [?or :rel/from ?o] [?or :rel/kind :out])]))  ; … with no declared output type
 
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
 ;; The three demands (realized / type-coverage / covered) are declared above as (corresponds …)
@@ -142,7 +133,7 @@
 (defn untyped-operations
   "The SIGNATURE worklist — PUBLIC authored Operations (on a Module's `:exposes` surface) with no
    declared output type (`:out`), as a set of names. Empty ⇔ every public surface op declares its
-   output. Reads the SignatureCompleteness law by its stable :key."
+   output. Reads the signature-completeness law (on Operation) by its stable :key."
   [db]
   (cq/violation-names db :signature-completeness))
 

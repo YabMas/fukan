@@ -9,7 +9,6 @@
    canvas.vocab.code.kind/Kind hooks.fukan.structure/instance
    canvas.vocab.code.module/Module hooks.fukan.structure/instance
    canvas.vocab.code.operation/Operation hooks.fukan.structure/instance
-   canvas.vocab.code.operation/SignatureCompleteness hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
    canvas.vocab.grammar/Law hooks.fukan.structure/instance
    canvas.vocab.grammar/Relation hooks.fukan.structure/instance
