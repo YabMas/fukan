@@ -118,7 +118,7 @@
   "The AUTHORED operations with no extracted twin, as a set of names. Empty ⇔ the model is fully
    realized in code. Reads the generated realized demand (:corresponds/Operation.realized)."
   [db]
-  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :corresponds/Operation.realized))))
+  (cq/violation-names db :corresponds/Operation.realized))
 
 (defn uncovered-operations
   "The DUAL of drifted-operations — EXTRACTED operations in `db` with no authored operation
@@ -137,14 +137,14 @@
    A public, non-exempt, unmodelled function is an UNDECLARED PUBLIC SURFACE: model it or make it private.
    Reads the generated covered demand (:corresponds/Operation.covered)."
   [db]
-  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :corresponds/Operation.covered))))
+  (cq/violation-names db :corresponds/Operation.covered))
 
 (defn untyped-operations
   "The SIGNATURE worklist — PUBLIC authored Operations (on a Module's `:exposes` surface) with no
    declared output type (`:out`), as a set of names. Empty ⇔ every public surface op declares its
    output. Reads the SignatureCompleteness law by its stable :key."
   [db]
-  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :signature-completeness))))
+  (cq/violation-names db :signature-completeness))
 
 (defn operation-sig
   "Render the AUTHORED Operation at `op-eid` to a malli function-schema
@@ -187,7 +187,7 @@
    as a set of names. Empty ⇔ every public modelled op's realizing code declares its type. Reads the
    generated type-coverage demand (:corresponds/Operation.type-coverage)."
   [db]
-  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :corresponds/Operation.type-coverage))))
+  (cq/violation-names db :corresponds/Operation.type-coverage))
 
 (defn undertyped-operations
   "The PRECISION worklist — PUBLIC modelled Operations whose declared signature still contains an `:any`

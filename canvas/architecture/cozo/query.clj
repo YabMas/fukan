@@ -32,4 +32,7 @@
      :delegates [compile-body vocab-index db/q]})
   (Operation entity "Resolve an eid (string) to its typed attribute map — the d/entity replacement."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:eid :any]] :any]
-     :delegates [db/q]}))
+     :delegates [db/q]})
+  (Operation violation-names "The :entity/name of every offender of the law keyed k — the read-side pairing of the kernel's violations-of (which returns eids), resolving each through entity. The one home for the recurring worklist-reader shape."
+    {:signature [:=> [:catn [:cdb db/CozoDb] [:k :keyword]] :any]
+     :delegates [entity kstructure/violations-of]}))

@@ -71,7 +71,7 @@
    TrustBoundary) whose realizing code is PARTIAL, as a set of op names. Empty ⇔ the modelled trusted
    core is total. Reads the totality law on `TrustBoundary` by its stable :key."
   [db]
-  (set (map #(:entity/name (cq/entity db %)) (s/violations-of db :totality))))
+  (cq/violation-names db :totality))
 
 ;; the principle's JUDGMENT surface — rendered by materialize/render-finding "Boundary"
 (Projection Boundary

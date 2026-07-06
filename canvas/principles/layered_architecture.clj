@@ -155,7 +155,7 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
    between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
    is backed by real code. Reads the generated demand (:corresponds/Operation.delegates-realized)."
   [db-arg]
-  (set (map #(:entity/name (cq/entity db-arg %)) (s/violations-of db-arg :corresponds/Operation.delegates-realized))))
+  (cq/violation-names db-arg :corresponds/Operation.delegates-realized))
 
 (defn uncovered-calls
   "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law, like
@@ -187,4 +187,4 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
    `:may-depend` DAG). The modelled-both-ends subset of `uncovered-calls`; reads the generated demand
    (:corresponds/Operation.delegates-faithful)."
   [db-arg]
-  (set (map #(:entity/name (cq/entity db-arg %)) (s/violations-of db-arg :corresponds/Operation.delegates-faithful))))
+  (cq/violation-names db-arg :corresponds/Operation.delegates-faithful))
