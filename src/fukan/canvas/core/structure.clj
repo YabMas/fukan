@@ -493,6 +493,54 @@
                            "matched-by, target, or at-most-one")
                       {:form form})))))
 
+;; ── declaration registry: the means-of-growth seam ───────────────────────────
+;; A defstructure decomposes into DECLARATIONS, each emitting Terms (derived relations) and/or
+;; Laws (constraints). A declaration handler is `(fn [decl sdef] → {:terms [rule…] :laws [law…]})`,
+;; keyed by `:kind`; the derive side (rules/derive-rules, laws-of) dispatches through the registry
+;; so a new kind of thing-you-can-say is a registered handler, not a new parser branch. Stage A wires
+;; the EXISTING constructs through it (surface unchanged); the built-in handlers register at load.
+
+(defonce ^:private declaration-handlers (atom {}))
+
+(defn ^:export register-declaration!
+  "Register a declaration handler — `kind → (fn [decl sdef] → {:terms [rule…] :laws [law…]})`.
+   The generic seam (`terms-of`/`laws-of`) dispatches through these; built-ins register at load."
+  [kind handler] (swap! declaration-handlers assoc kind handler) kind)
+
+(defn ^:export ^{:malli/schema [:=> [:cat] [:set :any]]}
+  declaration-kinds "The registered declaration kinds." [] (set (keys @declaration-handlers)))
+
+(defn ^:export handle-declaration
+  "Dispatch one declaration to its registered handler → `{:terms […] :laws […]}` (empty when the
+   kind has no handler yet — Stage A registers them incrementally)."
+  [decl sdef]
+  (if-let [h (@declaration-handlers (:kind decl))] (h decl sdef) {:terms [] :laws []}))
+
+(defmacro defdeclaration
+  "Register a declaration handler for `kind`: `(defdeclaration :k [decl sdef] body…)` where body
+   returns `{:terms [rule…] :laws [law…]}`."
+  [kind [decl-sym sdef-sym] & body]
+  `(register-declaration! ~kind (fn [~decl-sym ~sdef-sym] ~@body)))
+
+(defn ^:export sdef->declarations
+  "Adapt an sdef (built by the unchanged parser) into typed declaration maps for the registry — a
+   pure re-expression of the sdef's fields; the parser is untouched. `:kind :kind` is the node-kind
+   membership Term, emitted only for CONCRETE structures (not realized/coproduct/derived concepts)."
+  [{:keys [slots laws corresponds realized-as relation-coproduct derived-rule includes]}]
+  (concat
+   (when-not (or realized-as relation-coproduct derived-rule) [{:kind :kind}])
+   (for [sl slots] {:kind :slot :slot sl})
+   (for [sl slots :when (:transitive sl)]   {:kind :transitive :slot sl})
+   (for [sl slots :when (:contains sl)]     {:kind :contains :slot sl})
+   (for [sl slots :when (:realized-by sl)]  {:kind :realized-by :slot sl})
+   (for [sl slots :when (:covered-from sl)] {:kind :covered-from :slot sl})
+   (for [f includes] {:kind :includes :facet f})
+   (when realized-as       [{:kind :realized-as :body realized-as}])
+   (when relation-coproduct [{:kind :coproduct :members relation-coproduct}])
+   (when derived-rule      [{:kind :defrelation :rule derived-rule}])
+   (when corresponds       [{:kind :correspondence :corresponds corresponds}])
+   (for [law laws] {:kind :free-law :law law})))
+
 (defn- parse-demand
   "Parse a `(realized …)`/`(covered …)` corresponds sub-form → a demand map. Allowed option keys:
    realized → :key :desc :when :require ; covered → :key :desc :when :unless. Datalog vectors
