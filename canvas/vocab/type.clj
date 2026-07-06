@@ -23,29 +23,30 @@
   (let [o (get ords r)]
     (if (nil? o) 0 (long o))))
 
-(defn- children
-  "Target eids of `from`'s reified `rel` relations, in :rel/order order (relations with no
-   :rel/order sort as 0 — harmless for unordered slots). Targets and orders are read in two
-   queries and merged in Clojure — `cq/q` (Cozo) has no `get-else` builtin to default order."
+(defn- sorted-rel-rows
+  "The reified `rel` relations of `from` as `[?r ?to]` rows sorted by :rel/order (relations with no
+   :rel/order sort as 0 — harmless for unordered slots) — the shared fetch behind `children`/
+   `labelled-children`. Targets and orders are read in two queries and merged in Clojure — `cq/q`
+   (Cozo) has no `get-else` builtin to default order."
   [db from rel]
   (let [tos  (cq/q '[:find ?r ?to :in $ ?from ?k :where
                      [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]] db from rel)
         ords (into {} (cq/q '[:find ?r ?ord :in $ ?from ?k :where
                               [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/order ?ord]] db from rel))]
-    (->> tos (sort-by #(order-of ords (first %))) (mapv second))))
+    (sort-by #(order-of ords (first %)) tos)))
+
+(defn- children
+  "Target eids of `from`'s reified `rel` relations, in :rel/order order."
+  [db from rel]
+  (mapv second (sorted-rel-rows db from rel)))
 
 (defn- labelled-children
   "Like `children` but returns [to label] pairs in :rel/order order — for arrow :in params
-   (absent label → \"\"). Same two-query merge as `children`, plus the labels."
+   (absent label → \"\"). The shared sorted fetch, plus the per-relation labels."
   [db from rel]
-  (let [tos  (cq/q '[:find ?r ?to :in $ ?from ?k :where
-                     [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/to ?to]] db from rel)
-        ords (into {} (cq/q '[:find ?r ?ord :in $ ?from ?k :where
-                              [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/order ?ord]] db from rel))
-        lbls (into {} (cq/q '[:find ?r ?lbl :in $ ?from ?k :where
+  (let [lbls (into {} (cq/q '[:find ?r ?lbl :in $ ?from ?k :where
                               [?r :rel/from ?from] [?r :rel/kind ?k] [?r :rel/label ?lbl]] db from rel))]
-    (->> tos (sort-by #(order-of ords (first %)))
-         (mapv (fn [[r to]] [to (get lbls r "")])))))
+    (mapv (fn [[r to]] [to (get lbls r "")]) (sorted-rel-rows db from rel))))
 
 (defn render
   "Render the Schema at `eid` in `db` back to a malli data-form."
