@@ -410,24 +410,44 @@
 ;; negation rules is gone). The authored form is kept on the law as :src (the
 ;; print-dual renders it back).
 
-(defn- when-clauses
-  "{:polarity \"code-up\"} → scalar-equality clauses on `var`."
-  [var when-map]
-  (mapv (fn [[k v]] [var (keyword "val" (clojure.core/name k)) v]) when-map))
+(defn- qualifier-clauses
+  "A combinator's `:when` subject-filter → positive where-clauses on `var`. A scalar MAP
+   `{k v}` is sugar for `:val/k`-equality (`[var :val/k v]` per entry); a raw datalog
+   clause-VECTOR is spliced verbatim (it uses `var` as the subject, e.g.
+   `'[(authored ?x) [?xr :rel/kind :exposes] [?xr :rel/to ?x]]`) — the same datalog the
+   correspondence demands' `:when`/`:require` accept. nil → none."
+  [var when]
+  (cond
+    (nil? when) []
+    (map? when)  (mapv (fn [[k v]] [var (keyword "val" (clojure.core/name k)) v]) when)
+    :else        (vec (unquote-lit when))))
+
+(defn- exemption-clauses
+  "A combinator's `:unless` exemption → NEGATED where-clauses on `var`. A scalar MAP `{k v}`
+   is sugar for `(not [var :val/k v])` per entry; a raw datalog clause-VECTOR has each clause
+   negated (`(not c)`), like the `covered` demand's `:unless`. nil → none."
+  [var unless]
+  (cond
+    (nil? unless) []
+    (map? unless)  (mapv (fn [[k v]] (list 'not [var (keyword "val" (clojure.core/name k)) v])) unless)
+    :else          (mapv (fn [c] (list 'not c)) (unquote-lit unless))))
 
 (defn- combinator-law
   "Expand `(law \"desc\" (combinator …))` into a parsed law map:
 
-     (has R :when {k v}?)        every instance (satisfying :when) has ≥1 outgoing R
+     (has R :when Q? :unless E?)  every instance (satisfying :when, not :unless) has ≥1 outgoing R
      (has-any R1 R2 …)           … has at least one of the Rs
-     (matched-by R :from S? :when {k v}? :scope T?)
+     (matched-by R :from S? :when Q? :unless E? :scope T?)
                                  every instance is the TARGET of some R (from an S)
      (target R {k v})            every R-target satisfies the value conditions
      (at-most-one R)             at most one incoming R (a unique owner/matcher)
 
-   :when filters the law's subjects by scalar values; :from constrains the
-   matching counterpart's structure; :scope (a structure symbol) hosts the law
-   about ANOTHER structure's instances (default: self-scoped to the owner)."
+   :when (Q) filters the law's subjects, :unless (E) exempts them — each a scalar map
+   `{k v}` (sugar for `:val/k`-equality / its negation) OR a raw datalog clause-vector
+   (spliced positive / negated, using `?x` as the subject), the same datalog the
+   correspondence demands accept; :from constrains the matching counterpart's structure;
+   :scope (a structure symbol) hosts the law about ANOTHER structure's instances (default:
+   self-scoped to the owner)."
   [desc form]
   (let [[op & args] form
         kvs    (fn [xs] (apply hash-map xs))
@@ -436,10 +456,10 @@
     (case op
       has
       (let [[rel & opts] args
-            {whenm :when scope :scope} (kvs opts)]
+            {whenm :when unlessm :unless scope :scope} (kvs opts)]
         (merged scope
                 {:offenders '[?x]
-                 :where (conj (when-clauses '?x whenm)
+                 :where (conj (into (qualifier-clauses '?x whenm) (exemption-clauses '?x unlessm))
                               (list 'not-join '[?x] ['?r :rel/from '?x] ['?r :rel/kind rel]))}))
       has-any
       (merged nil
@@ -449,10 +469,10 @@
                             args)})
       matched-by
       (let [[rel & opts] args
-            {whenm :when scope :scope from :from} (kvs opts)]
+            {whenm :when unlessm :unless scope :scope from :from} (kvs opts)]
         (merged scope
                 {:offenders '[?x]
-                 :where (conj (when-clauses '?x whenm)
+                 :where (conj (into (qualifier-clauses '?x whenm) (exemption-clauses '?x unlessm))
                               (apply list 'not-join '[?x]
                                      (concat (when from [['?c :structure/of (resolve-struct-tag from)]])
                                              [['?r :rel/from '?c] ['?r :rel/kind rel] ['?r :rel/to '?x]])))}))
@@ -461,7 +481,7 @@
         (merged nil
                 {:offenders '[?x]
                  :where [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
-                         (apply list 'not-join '[?t] (when-clauses '?t whenm))]}))
+                         (apply list 'not-join '[?t] (qualifier-clauses '?t whenm))]}))
       at-most-one
       (let [[rel] args]
         (merged nil
@@ -549,9 +569,16 @@
   [form]
   (let [[_ desc & kvs] form]
     (if (and (seq? (first kvs)) (symbol? (ffirst kvs)))
-      (do (when (next kvs)
-            (throw (ex-info (str "a combinator law takes one form: " (pr-str form)) {:form form})))
-          (combinator-law desc (first kvs)))
+      ;; a combinator law: the combinator form, optionally followed by a single :key (the one
+      ;; law-level option a combinator can't express — a worklist reader addresses the law by it).
+      (let [law  (combinator-law desc (first kvs))
+            opts (apply hash-map (rest kvs))]
+        (doseq [k (keys opts)]
+          (when-not (= k :key)
+            (throw (ex-info (str "a combinator law takes the combinator form and an optional :key: "
+                                 (pr-str form))
+                            {:form form}))))
+        (cond-> law (:key opts) (assoc :key (:key opts))))
       (let [m (apply hash-map kvs)]
         {:desc      desc
          :key       (:key m)

@@ -128,6 +128,67 @@
   (is (contains? (laws (build/vars->cozo [#'amo-x #'amo-a #'amo-b])) "at most one owner"))
   (is (not (contains? (laws (build/vars->cozo [#'amo-y #'amo-c])) "at most one owner"))))
 
+;; ── qualified :when / exempting :unless (datalog + scalar-map) ────────────────
+
+(defstructure LGate
+  "has with a DATALOG :when (a relation-presence qualifier) AND a DATALOG :unless — an
+   instance targeted by a :holds edge, unless it is skipped, must carry :names."
+  {:skip  [:? :boolean]
+   :names [:? LDoc]}
+  (law "a held, non-skipped gate names a target"
+    (has :names
+         :when   '[[?hr :rel/kind :holds] [?hr :rel/to ?x]]
+         :unless '[[?x :val/skip true]])
+    :key :held-gate))
+(defstructure LHolder "holds gates" {:holds [:* LGate]})
+
+(LGate ^{:name "unheld"} qg-unheld)                        ; no :holds edge → :when excludes it
+(LGate ^{:name "held-bare"} qg-held-bare)
+(LHolder ^{:name "h1"} qg-h1 {:holds [qg-held-bare]})      ; held, no :names → offends
+(LDoc  ^{:name "gt"} qg-target)
+(LGate ^{:name "held-named"} qg-held-named {:names qg-target})
+(LHolder ^{:name "h2"} qg-h2 {:holds [qg-held-named]})     ; held, has :names → fine
+(LGate ^{:name "held-skip"} qg-held-skip {:skip true})
+(LHolder ^{:name "h3"} qg-h3 {:holds [qg-held-skip]})      ; held, no :names, skipped → exempt
+
+(deftest has-with-datalog-when-and-unless
+  (testing "a datalog :when qualifies subjects by a relation clause; a datalog :unless exempts them"
+    (is (contains? (laws (build/vars->cozo [#'qg-held-bare #'qg-h1]))
+                   "a held, non-skipped gate names a target"))
+    (is (not (contains? (laws (build/vars->cozo [#'qg-unheld]))
+                        "a held, non-skipped gate names a target")))
+    (is (not (contains? (laws (build/vars->cozo [#'qg-held-named #'qg-h2 #'qg-target]))
+                        "a held, non-skipped gate names a target")))
+    (is (not (contains? (laws (build/vars->cozo [#'qg-held-skip #'qg-h3]))
+                        "a held, non-skipped gate names a target")))))
+
+(defstructure LMember
+  "matched-by with a scalar-map :unless — every member must be held by a Group, except a
+   synthetic one (exempt by :tag)."
+  {:tag [:? :string]}
+  (law "every member is grouped except the synthetic"
+    (matched-by :holds-member :from LGroup :unless {:tag "synthetic"})))
+(defstructure LGroup "groups members" {:holds-member [:* LMember]})
+
+(LMember ^{:name "loose"} em-loose)                        ; not held → offends
+(LMember ^{:name "kept"} em-kept)
+(LGroup  ^{:name "g"} em-g {:holds-member [em-kept]})      ; held → fine
+(LMember ^{:name "synthetic"} em-synth {:tag "synthetic"}) ; not held but exempt
+
+(deftest matched-by-with-scalar-unless
+  (testing "a scalar-map :unless exempts matching subjects"
+    (is (contains? (laws (build/vars->cozo [#'em-loose]))
+                   "every member is grouped except the synthetic"))
+    (is (not (contains? (laws (build/vars->cozo [#'em-kept #'em-g]))
+                        "every member is grouped except the synthetic")))
+    (is (not (contains? (laws (build/vars->cozo [#'em-synth]))
+                        "every member is grouped except the synthetic")))))
+
+(deftest combinator-key-rides-a-combinator-law
+  (testing "a trailing :key on a combinator law flows into violations-of"
+    (let [db (build/vars->cozo [#'qg-held-bare #'qg-h1])]
+      (is (seq (s/violations-of db :held-gate))))))
+
 ;; ── surface errors ────────────────────────────────────────────────────────────
 
 (deftest unknown-combinator-is-rejected-at-expansion

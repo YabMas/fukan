@@ -40,7 +40,11 @@
    fukan.canvas.core.composition-test/Sum hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LBot hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LDoc hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LGate hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LGroup hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LHolder hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LLift hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LMember hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LOwned hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LOwner hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LProj hooks.fukan.structure/instance
