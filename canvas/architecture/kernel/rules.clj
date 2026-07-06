@@ -1,26 +1,15 @@
 (ns canvas.architecture.kernel.rules
-  "Self-spec: fukan's RULE-DERIVATION machinery — `core.rules` (`fukan.canvas.core.rules`):
-   derive datalog rules from the live vocabulary (a kind rule per structure, a relation rule per
-   relation slot, plus fixed substrate rules), so a law/lens names domain predicates, not raw
-   triples. A boundary sketch — one exposed capability, `derive-rules`.
+  "Self-spec: fukan's FIXED SUBSTRATE RULES — `core.rules` (`fukan.canvas.core.rules`): the
+   vocab-agnostic datalog the model always carries (`named` / `fact` / `design`), which the kernel's
+   declaration registry (`structure/terms-of`) composes into the vocabulary-derived rules.
 
-   Rule families derived by `derive-rules`: kind rules (one per concrete structure), inclusion
-   rules (per `includes`), realized-as rules, coproduct rules, derived-relation rules (per
-   `defrelation`), relation rules (per relation slot), containment union (`contains`), transitive
-   closures (`R+`), `in-module`, twin rules from `(corresponds …)` declarations (one disjunct per
-   corresponding kind — ROOT kinds pair via a bridge predicate, NESTED kinds pair same-named
-   instances whose direct containers twin), and the fixed substrate rules.
-
-   It is the upstream half of the kernel's query machinery: the kernel derives the same rules
-   through its declaration registry (`vocab-rules` → `terms-of`), with `derive-rules` kept on as the
-   independent reference emitter that the golden fidelity test pins that seam to; the fixed substrate
-   rules `terms-of` composes in also live here. The lens ENGINE (`canvas.architecture.kernel.lens`)
-   evaluates queries against the derived rules. `core.rules` references nothing else, so the chain is
-   acyclic (lens-engine → kernel → query-engine)."
-  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]))
+   The rule DERIVATION itself — a kind rule per structure, a relation rule per slot, inclusion /
+   coproduct / defrelation / `contains` union / transitive closures / `in-module` / correspondence
+   `twin` — lives in the kernel's declaration handlers (`canvas.architecture.kernel.structure`), NOT
+   here. This module holds only the fixed substrate a pure data def; it exposes no operations and
+   references nothing else, so the chain stays acyclic (lens-engine → kernel → query-engine)."
+  (:require [canvas.vocab.code.module :refer [Module]]))
 
 (Module core-rules
-  "Derive datalog rules from the live vocabulary so laws/lenses read at domain altitude."
-  (Kind StructureDef) (Kind Pred) (Kind Rule)                                ; owned data-shapes
-  (Operation derive-rules "Derive the datalog rules from the live structure defs."
-    {:signature [:=> [:catn [:structures [:vector StructureDef]] [:scalar? Pred]] [:vector Rule]]}))
+  "The fixed, vocab-agnostic substrate rules (named / fact / design) the model always carries; the
+   kernel's declaration registry (structure/terms-of) composes them into the vocab-derived rules.")

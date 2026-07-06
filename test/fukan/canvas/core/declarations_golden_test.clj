@@ -1,17 +1,16 @@
 (ns fukan.canvas.core.declarations-golden-test
-  "Characterization gate for the Term/Law derive-side refactor (Stage A): the full set of derived
-   Terms (derive-rules) and Laws (laws-of) over fukan's SELF-MODEL vocabulary must stay
-   byte-identical while emission is re-plumbed through the declaration registry. Not a spec of WHAT
-   the rules are — a lock that they do not CHANGE.
+  "Characterization lock for the kernel's declaration-registry emission: the full set of derived
+   Terms (`structure/terms-of`) and Laws (`structure/laws-of`) over fukan's SELF-MODEL vocabulary
+   must not CHANGE silently. Not a spec of WHAT the rules are — a snapshot gate on the sole rule
+   emitter (both seams dispatch the declaration handlers).
 
    Scoped to the `canvas.vocab.*`/`canvas.principles.*` structures (required below so they are all
    registered), NOT `all-structures` — the global registry also accumulates test fixtures during a
    full run, which would make the snapshot unstable."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [clojure.string :as str]
             [fukan.cozo.law]                        ; registers the check engine (load side-effect)
             [fukan.canvas.core.structure :as s]
-            [fukan.canvas.core.rules :as rules]
             ;; force the full self-model vocabulary to register
             [canvas.vocab.grouping]
             [canvas.vocab.type]
@@ -38,7 +37,7 @@
 (defn normalized-terms
   "Every derived Term over the self-model, as a stable sorted-set of pr-str'd rules."
   []
-  (into (sorted-set) (map pr-str) (rules/derive-rules (self-model-structures) s/scalar-slot?)))
+  (into (sorted-set) (map pr-str) (s/terms-of (self-model-structures))))
 
 (defn normalized-laws
   "Every Law over the self-model, as a stable sorted-set of pr-str'd law data."
@@ -57,25 +56,10 @@
   (let [terms (normalized-terms)]
     (is (= (:count golden-terms) (count terms)) "self-model Term count changed")
     (is (= (:hash golden-terms) (hash terms))
-        "derived Terms changed — the Stage-A refactor must be behavior-preserving")))
+        "derived Terms changed — emission must be behavior-preserving")))
 
 (deftest laws-are-stable
   (let [laws (normalized-laws)]
     (is (= (:count golden-laws) (count laws)) "self-model Law count changed")
     (is (= (:hash golden-laws) (hash laws))
-        "derived Laws changed — the Stage-A refactor must be behavior-preserving")))
-
-;; ── fidelity: the declaration handlers reproduce the bespoke emission byte-for-byte ──
-
-(deftest handlers-reproduce-derive-rules
-  (testing "registry-driven terms-of == rules/derive-rules over the self-model (as a set)"
-    (is (= (into (sorted-set) (map pr-str) (rules/derive-rules (self-model-structures) s/scalar-slot?))
-           (into (sorted-set) (map pr-str) (s/terms-of (self-model-structures)))))))
-
-(deftest handlers-reproduce-laws-of
-  (testing "per structure, handler-emitted Laws == laws-of (as a set)"
-    (doseq [sdef (self-model-structures)]
-      (is (= (into (sorted-set) (map pr-str) (s/laws-of sdef))
-             (into (sorted-set) (map pr-str)
-                   (mapcat #(:laws (s/handle-declaration % sdef)) (s/sdef->declarations sdef))))
-          (str "Law drift for " (:tag sdef))))))
+        "derived Laws changed — emission must be behavior-preserving")))

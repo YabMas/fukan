@@ -4,7 +4,7 @@
    overview(concept) → subsystem(impl) chain:
 
    1. `defrelation-coproduct` makes the cross-view link a VOCAB-DERIVED relation
-      (`xview` = :via ∪ :realized-by) — union rules emitted by `derive-rules`.
+      (`xview` = :via ∪ :realized-by) — union rules emitted by the `:coproduct` handler.
    2. `traces` composes that coproduct across views in one query.
    3. because `xview` is vocab-derived (not law-local), a recursive `traces` rule is
       now expressible AS A LAW's :rules — the recursion guard no longer trips — so a

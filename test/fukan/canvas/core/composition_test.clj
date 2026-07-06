@@ -187,7 +187,7 @@
           "a and b reach the effectful c through delegation; c reaches no effectful op via delegation"))))
 
 (deftest the-extracted-calls-relation-marked-transitive-earns-its-closure
-  (testing "the :calls slot (extracted-actuals, never authored) marked :transitive gives derive-rules a calls+ closure"
+  (testing "the :calls slot (extracted-actuals, never authored) marked :transitive gives `terms-of` a calls+ closure"
     (let [db (build/maps->cozo
               [{:entity/id "ca" :structure/of :canvas.vocab.code.operation/Operation :entity/name "ca"}
                {:entity/id "cb" :structure/of :canvas.vocab.code.operation/Operation :entity/name "cb"}

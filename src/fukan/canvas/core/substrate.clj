@@ -23,13 +23,12 @@
   "The PROVENANCE attribute — the design/fact stratum marker. The BUILD stamps it on every
    non-value node arriving through the extraction plug-point (`fukan.cozo.build/model->cozo`
    via `stamp-stratum`); the generic `(fact ?n)`/`(design ?n)` substrate rules
-   (`fukan.canvas.core.rules/substrate-rules`) read it — embedded LITERALLY in
-   `fukan.canvas.core.rules` in BOTH `substrate-rules` AND the twin-rule generator in
-   `derive-rules` (rules are pure quoted data; keep all three in sync). Also inlined
-   literally in the demand-law generators in `fukan.canvas.core.structure` around
-   `correspondence-laws` (node-demand-law / container-demand-laws / root-guard-clause /
-   covered-from-law) — update all in concert. Vocab may additionally declare an authoring slot
-   storing the same attribute (the test-fabrication surface)."
+   (`fukan.canvas.core.rules/substrate-rules`) read it — embedded LITERALLY in `substrate-rules`
+   (rules are pure quoted data; keep in sync) AND, in `fukan.canvas.core.structure`, in the
+   `:correspondence` declaration handler (the twin-rule generator) and the demand-law generators
+   (node-demand-law / container-demand-laws / root-guard-clause / covered-from-law) — update all in
+   concert. Vocab may additionally declare an authoring slot storing the same attribute (the
+   test-fabrication surface)."
   :val/extracted)
 
 (defn ^{:malli/schema [:=> [:cat :any] :any]}

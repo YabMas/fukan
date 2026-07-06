@@ -74,21 +74,15 @@
       (is (= #{"forbidden"} offenders)
           "the law selected the offender purely through (RuleThing ?s) + (named ?s \"forbidden\")"))))
 
-(deftest derive-rules-is-pure
-  (testing "derive-rules is a pure fn of the structure defs it is handed"
-    (let [rs (rules/derive-rules [{:tag :Foo :slots [{:rel :bar :target :Foo}]}]
-                                 (constantly false))
-          heads (set (map (comp first first) rs))]
-      (is (contains? heads 'Foo))
-      (is (contains? heads 'bar))
-      (is (contains? heads 'named) "always includes the fixed substrate rule `named`")
-      (is (not (contains? heads 'in-module))
-          "in-module is DERIVED (from :contains slots), absent when no :contains slot is present"))))
-
 (deftest defrelation-emits-an-injected-custom-rule
   (testing "defrelation registers a custom-bodied derived relation, injected into vocab-rules"
     (is (contains? (set (map (comp first first) (s/vocab-rules))) 'same-name)
         "the derived relation is a vocab rule, available to every law and query"))
+  (testing "yields ONLY its custom rule — no spurious unary kind-rule (a derived relation has no instances)"
+    (let [same-name-rules (filter #(= 'same-name (ffirst %)) (s/vocab-rules))]
+      (is (seq same-name-rules))
+      (is (every? #(= 2 (count (rest (first %)))) same-name-rules)
+          "every `same-name` rule is the binary custom body; no unary (kind) rule slipped in")))
   (testing "the derived relation is callable at domain altitude over the injected rules"
     (let [db    (build/vars->cozo [#'rt3-a #'rt3-b #'rt3-c])
           pairs (cq/q '[:find ?na ?nb :in $ %
@@ -96,16 +90,6 @@
                      db (s/vocab-rules))]
       (is (= #{["dup" "dup"]} (set pairs))
           "only the two distinct same-named nodes pair — the custom predicate body fired"))))
-
-(deftest defrelation-gets-no-spurious-kind-rule
-  (testing "a derived-relation entry yields ONLY its custom rule — no unary kind-rule, no instances"
-    (let [rs    (rules/derive-rules [{:tag :twin :derived-rule {:head '[?a ?b]
-                                                                 :where '[[?a :x ?v] [?b :x ?v]]}}]
-                                    (constantly false))
-          heads (map (comp first first) rs)]
-      (is (= 1 (count (filter #{'twin} heads))) "exactly one `twin` rule (the custom body), no kind-rule")
-      (is (= '[?a ?b] (rest (ffirst (filter #(= 'twin (ffirst %)) rs))))
-          "the rule head carries the declared arity"))))
 
 (deftest twin-pairs-design-and-fact-across-the-containment-ladder
   (testing "root kinds twin by bridge; nested kinds twin by name within twinned containers"

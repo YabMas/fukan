@@ -496,9 +496,9 @@
 ;; ── declaration registry: the means-of-growth seam ───────────────────────────
 ;; A defstructure decomposes into DECLARATIONS, each emitting Terms (derived relations) and/or
 ;; Laws (constraints). A declaration handler is `(fn [decl sdef] → {:terms [rule…] :laws [law…]})`,
-;; keyed by `:kind`; the derive side (rules/derive-rules, laws-of) dispatches through the registry
-;; so a new kind of thing-you-can-say is a registered handler, not a new parser branch. Stage A wires
-;; the EXISTING constructs through it (surface unchanged); the built-in handlers register at load.
+;; keyed by `:kind`; BOTH emitters (`terms-of`, `laws-of`) dispatch through the registry, so a new
+;; kind of thing-you-can-say is a registered handler, not a new parser branch. The built-in handlers
+;; (the existing constructs) register at load; the surface is unchanged.
 
 (defonce ^:private declaration-handlers (atom {}))
 
@@ -771,7 +771,7 @@
 (defmacro defrelation-coproduct
   "Declare a relation as the COPRODUCT (union) of existing relation kinds:
    `(V ?a ?b) ⇐ (kᵢ ?a ?b)` for each member kᵢ. Registers a vocab entry carrying
-   `:relation-coproduct`; `derive-rules` emits the union rules so laws/lenses can read
+   `:relation-coproduct`; the `:coproduct` handler emits the union rules so laws/lenses can read
    the umbrella relation `V` at domain altitude. It is the relation-level analogue of a
    `realized-as` coproduct (one level up, over `:rel/kind` instead of node kinds): it has
    no slots, laws, constructor, or instances. Members must be live relation kinds — i.e.
@@ -994,11 +994,10 @@
                    ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v])]}))
 
 ;; ── built-in declaration handlers ────────────────────────────────────────────
-;; Each existing construct as a registered handler emitting Terms and/or Laws. Both production seams
-;; now dispatch through here: `laws-of` (the law side) and `vocab-rules`→`terms-of` (the term side).
-;; `rules/derive-rules` survives as the independent reference oracle the declarations-golden fidelity
-;; test checks `terms-of` against, byte-for-byte — kept deliberately so the two emitters can diverge
-;; loudly rather than silently.
+;; Each existing construct as a registered handler emitting Terms and/or Laws — the SOLE rule/law
+;; emitter. Both production seams dispatch through here: `laws-of` (the law side) and
+;; `vocab-rules`→`terms-of` (the term side). `fukan.canvas.core.rules` now holds only the fixed
+;; substrate rules `terms-of` composes in; the declarations-golden test freezes this emission.
 
 (defn- rule-sym [kw] (symbol (name kw)))
 
@@ -1076,10 +1075,9 @@
 
 (defn ^:export terms-of
   "All derived Terms over `structures` via the declaration handlers + the global containment addendum
-   (contains+ closure + in-module, when any :contains slot exists) + the fixed substrate rules — the
-   registry-driven equal of `rules/derive-rules`, proven SET-identical by the declarations-golden
-   fidelity test. The production term source (`vocab-rules` dispatches here); `derive-rules` stays on
-   as the independent oracle that fidelity test pins us to."
+   (contains+ closure + in-module, when any :contains slot exists) + the fixed substrate rules
+   (`rules/substrate-rules`) — the SOLE term emitter, dispatched by `vocab-rules`. The
+   declarations-golden test freezes its self-model output."
   [structures]
   (let [per   (mapcat (fn [sdef] (mapcat #(:terms (handle-declaration % sdef)) (sdef->declarations sdef)))
                       structures)
@@ -1169,8 +1167,7 @@
    slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
    at domain altitude: `(Operation ?s) (in-module ?s \"…\") (calls ?s ?c)`. Emitted through the
    declaration handlers via `terms-of` — the same registry seam the law side (`laws-of`) dispatches
-   through. `rules/derive-rules` is the independent reference oracle the golden fidelity test pins
-   `terms-of` to (same rule set; sorted, byte-identical vectors)."
+   through; the declarations-golden test freezes this seam's self-model output."
   []
   (terms-of (all-structures)))
 
