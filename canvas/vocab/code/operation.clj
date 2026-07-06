@@ -91,15 +91,19 @@
                       [?xr :rel/kind :exposes] [?xr :rel/to ?x]])
     :key :signature-completeness))
 
-;; `authored` — the single home of the "an Operation, not extracted from code" guard the
+;; `authored`/`extracted-op` — the paired "an Operation, {not,} extracted from code" guards the
 ;; correspondence laws/lenses (and the op pairings `op-twin`/`op-ext-twin`) each quantify over.
-;; A derived UNARY membership injected into every law/query (by `check`, like the vocab-derived
-;; rules); non-recursive, so it pays no fixpoint. Its dual — an EXTRACTED op — is a plain
-;; `[?o :val/extracted true]` and needs no rule.
+;; Derived UNARY membership rules injected into every law AND every `cq/q` (the vocab-index is
+;; ambient — a `cq/q` need not pass them); non-recursive, so they pay no fixpoint.
 (s/defrelation :authored
   "an AUTHORED Operation ?o — a self-model's intent (not extracted from code)"
   '[?o]
   '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])])
+
+(s/defrelation :extracted-op
+  "an EXTRACTED Operation ?o — a fact stamped from code (the dual of `authored`)"
+  '[?o]
+  '[[?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]])
 
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
 ;; The three demands (realized / type-coverage / covered) are declared above as (corresponds …)
@@ -117,10 +121,10 @@
    model. A query, not a law — unmodelled code is a coverage signal, not a violation (you
    don't model every function). Twin lookup is the injected `op-twin` rule."
   [db]
-  (->> (cq/q '[:find ?on :in $ %
-               :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+  (->> (cq/q '[:find ?on :in $
+               :where (extracted-op ?o) [?o :entity/name ?on]
                       (not-join [?o] (op-twin ?s ?o))]
-             db (s/vocab-rules))
+             db)
        (map first) set))
 
 (defn uncovered-public-operations
@@ -164,9 +168,9 @@
    carries a `:val/sig`; collects the authored Operation's name when its rendered type does NOT
    adhere to the twin's realized signature."
   [db]
-  (->> (cq/q '[:find ?s ?sn ?o :in $ %
+  (->> (cq/q '[:find ?s ?sn ?o :in $
                :where (op-twin ?s ?o) [?s :entity/name ?sn] [?o :val/sig ?sig]]
-             db (s/vocab-rules))
+             db)
        (filter (fn [[s _ o]]
                  (not (typing/type-adheres?
                         (operation-sig db s)
@@ -187,9 +191,9 @@
    not a law: `:any` is a legitimate declaration, so under-typing is a worklist, not a violation. Empty ⇔
    every public op's signature is fully precise. Reads the rendered signature, flagging any reachable `:any`."
   [db]
-  (->> (cq/q '[:find ?o ?on :in $ %
+  (->> (cq/q '[:find ?o ?on :in $
                :where (authored ?o) [?o :entity/name ?on] [?xr :rel/kind :exposes] [?xr :rel/to ?o]]
-             db (s/vocab-rules))
+             db)
        (filter (fn [[oeid _]] (some #{:any} (tree-seq coll? seq (operation-sig db oeid)))))
        (map second) set))
 

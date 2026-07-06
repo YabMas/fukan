@@ -58,7 +58,7 @@
    (validation past the parse line). A pure read."
   [db]
   (set (cq/q '[:find [?on ...]
-              :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+              :where (extracted-op ?o) [?o :entity/name ?on]
                      [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name "throws"]]
             db)))
 
@@ -69,7 +69,7 @@
   [db]
   (let [direct   (direct-throwers db)
         reachers (set (cq/q '[:find [?on ...] :in $ %
-                             :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+                             :where (extracted-op ?o) [?o :entity/name ?on]
                                     (reaches-effect ?o "throws")]
                            db reaches-effect-rules))]
     {:direct direct :transitive-only (set/difference reachers direct)}))

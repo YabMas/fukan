@@ -22,7 +22,6 @@
             [fukan.cozo.query :as cq]
             [fukan.cozo.db :as db]
             [fukan.cozo.rules :refer [eav]]
-            [fukan.canvas.core.rules :as rules]
             [canvas.vocab.code.module :as module]))
 
 ;; ── clean-architecture quality laws over the module/subsystem graph ───────────
@@ -153,17 +152,17 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
    Cozo's stratified negation; the empty-relation not-join gotcha that once forced a Clojure
    set-difference is gone. A signal, not a violation: you do not model every call."
   [db-arg]
-  (set (cq/q '[:find ?km1 ?km2 :in $ %
+  (set (cq/q '[:find ?km1 ?km2 :in $
                :where [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
                       [?e1 :val/extracted true] [?e2 :val/extracted true]
                       (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
                       (not-join [?km1 ?km2]
                         [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
-                        (not [?o1 :val/extracted true])
+                        (authored ?o1)
                         (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
                         [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]
                         [(canvas.vocab.code.module/module-corresponds? ?cm2 ?km2)])]
-             db-arg rules/substrate-rules)))
+             db-arg)))
 
 (defn unfaithful-calls
   "The ENFORCED fidelity offenders — extracted caller Operations making an undeclared cross-module

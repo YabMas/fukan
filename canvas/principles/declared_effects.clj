@@ -12,7 +12,6 @@
    law's identity semantics). Over-declaration is a soft reading (the classifier is
    necessarily incomplete), surfaced by `effect-drift`."
   (:require [clojure.set :as set]
-            [fukan.canvas.core.structure :as s]
             [fukan.cozo.query :as cq]
             [canvas.vocab.code.effect :as effect]))
 
@@ -31,9 +30,9 @@
   ;; Bind the twin (?e) through the SAME `op-twin` rule the law uses, so the reading agrees with the
   ;; law by construction — a module-BLIND `[?e :entity/name ?on]` twin lookup would grab a same-named op
   ;; in the wrong module on a name collision, fabricating a drift the precise law never sees.
-  (let [pairs    (cq/q '[:find ?on ?o ?e :in $ %
+  (let [pairs    (cq/q '[:find ?on ?o ?e :in $
                         :where (op-twin ?o ?e) [?o :entity/name ?on]]
-                       db (s/vocab-rules))
+                       db)
         declared (fn [oeid] (set (cq/q '[:find [?en ...] :in $ ?o :where [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]] db oeid)))]
     (reduce (fn [acc [on oeid teid]]
               (let [dec        (declared oeid)

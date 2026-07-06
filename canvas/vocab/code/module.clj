@@ -8,7 +8,6 @@
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
-            [fukan.canvas.core.rules :as rules]
             [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.kind :refer [Kind]]))
 
@@ -93,9 +92,9 @@
   "The complete module→module dependency graph (calls ∪ data-adoption) as a set of
    [caller-name callee-name] pairs. A pure read over the reified code graph."
   [db]
-  (set (cq/q '[:find ?mn ?nn :in $ %
+  (set (cq/q '[:find ?mn ?nn :in $
                :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
-             db (s/vocab-rules))))
+             db)))
 
 ;; ── op pairing ───────────────────────────────────────────────────────────────
 
@@ -126,23 +125,19 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
    extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is the call graph
    extended by modelled dispatch: a `:calls` edge, OR a `:dispatches-to` edge lifted onto the twins
    of its authored endpoints. `ext-reaches` is its transitive closure — a rule-calls-rule recursion
-   the kernel now allows; the query negates it under stratified negation."
-  (into rules/substrate-rules
-        '[[(op-ext-twin ?a ?e)
-           ;; the authored-op guard is INLINED here (not the `authored` defrelation): this ruleset is
-           ;; `(into substrate-rules …)`, which carries only the fixed substrate rules — defrelations
-           ;; are injected solely by `check`/`vocab-rules`, not into a hand-built `cq/q` ruleset.
-           [?a :structure/of :canvas.vocab.code.operation/Operation] (not [?a :val/extracted true])
-           [?a :entity/name ?n] (in-module ?a ?am)
-           [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :val/extracted true]
-           [?e :entity/name ?n] (in-module ?e ?em)
-           [(canvas.vocab.code.module/module-corresponds? ?am ?em)]]
-          [(ext-edge ?from ?to) [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]]
-          [(ext-edge ?e1 ?e2)
-           [?dr :rel/kind :dispatches-to] [?dr :rel/from ?a1] [?dr :rel/to ?a2]
-           (op-ext-twin ?a1 ?e1) (op-ext-twin ?a2 ?e2)]
-          [(ext-reaches ?a ?b) (ext-edge ?a ?b)]
-          [(ext-reaches ?a ?b) (ext-edge ?a ?mid) (ext-reaches ?mid ?b)]]))
+   the kernel now allows; the query negates it under stratified negation. The injected vocab rules
+   (`authored`/`extracted-op`/`in-module`) are ambient in any `cq/q` — only these on-graph
+   reachability rules need be supplied."
+  '[[(op-ext-twin ?a ?e)
+     (authored ?a) [?a :entity/name ?n] (in-module ?a ?am)
+     (extracted-op ?e) [?e :entity/name ?n] (in-module ?e ?em)
+     [(canvas.vocab.code.module/module-corresponds? ?am ?em)]]
+    [(ext-edge ?from ?to) [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]]
+    [(ext-edge ?e1 ?e2)
+     [?dr :rel/kind :dispatches-to] [?dr :rel/from ?a1] [?dr :rel/to ?a2]
+     (op-ext-twin ?a1 ?e1) (op-ext-twin ?a2 ?e2)]
+    [(ext-reaches ?a ?b) (ext-edge ?a ?b)]
+    [(ext-reaches ?a ?b) (ext-edge ?a ?mid) (ext-reaches ?mid ?b)]])
 
 (defn unrealized-dispatch
   "Authored cross-module delegations NOT realized op-level by the actual code — neither by a direct
@@ -160,7 +155,7 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
   [db]
   (->> (cq/q '[:find ?on1 :in $ %
                :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
-                      (not [?o1 :val/extracted true])
+                      (authored ?o1)
                       [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
                       (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
                       (op-ext-twin ?o1 ?e1) (op-ext-twin ?o2 ?e2)
