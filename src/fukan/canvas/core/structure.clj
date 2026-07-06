@@ -994,10 +994,11 @@
                    ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v])]}))
 
 ;; ── built-in declaration handlers ────────────────────────────────────────────
-;; Each existing construct as a registered handler emitting Terms and/or Laws — the same output the
-;; bespoke `rules/derive-rules` branches and `laws-of` families produce (proven byte-faithful by the
-;; declarations-golden fidelity test). Stage A: registered + proven, NOT yet wired into production
-;; emission (derive-rules/laws-of still run their branches); the relocation/delete follows.
+;; Each existing construct as a registered handler emitting Terms and/or Laws. Both production seams
+;; now dispatch through here: `laws-of` (the law side) and `vocab-rules`→`terms-of` (the term side).
+;; `rules/derive-rules` survives as the independent reference oracle the declarations-golden fidelity
+;; test checks `terms-of` against, byte-for-byte — kept deliberately so the two emitters can diverge
+;; loudly rather than silently.
 
 (defn- rule-sym [kw] (symbol (name kw)))
 
@@ -1077,8 +1078,8 @@
   "All derived Terms over `structures` via the declaration handlers + the global containment addendum
    (contains+ closure + in-module, when any :contains slot exists) + the fixed substrate rules — the
    registry-driven equal of `rules/derive-rules`, proven SET-identical by the declarations-golden
-   fidelity test. NOT yet the production term source: the Cozo compiler is order-sensitive and this
-   emits a different (also-valid) rule order than derive-rules' known-good one — see `vocab-rules`."
+   fidelity test. The production term source (`vocab-rules` dispatches here); `derive-rules` stays on
+   as the independent oracle that fidelity test pins us to."
   [structures]
   (let [per   (mapcat (fn [sdef] (mapcat #(:terms (handle-declaration % sdef)) (sdef->declarations sdef)))
                       structures)
@@ -1167,13 +1168,11 @@
   "The datalog rules derived from the live vocabulary (one per kind + per relation
    slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
    at domain altitude: `(Operation ?s) (in-module ?s \"…\") (calls ?s ?c)`. Emitted through the
-   declaration handlers (`terms-of`) — proven set-identical to this by the golden fidelity test.
-   NB: still routed through `rules/derive-rules` for the exact rule ORDER — the Cozo law/query
-   compiler is order-sensitive (independent closure rules like contains+/calls+ evaluate differently
-   under reordering), and derive-rules' order is the known-good one. Switching `vocab-rules` to
-   `terms-of` awaits making the compiler order-insensitive (see the term-law Stage-A notes)."
+   declaration handlers via `terms-of` — the same registry seam the law side (`laws-of`) dispatches
+   through. `rules/derive-rules` is the independent reference oracle the golden fidelity test pins
+   `terms-of` to (same rule set; sorted, byte-identical vectors)."
   []
-  (rules/derive-rules (all-structures) scalar-slot?))
+  (terms-of (all-structures)))
 
 ;; ── The check-engine plug-point ───────────────────────────────────────────────
 ;; `check` runs the laws through a registered backend (the Cozo law engine). The kernel never

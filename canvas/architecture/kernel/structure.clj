@@ -7,7 +7,6 @@
    code is a projection of the model 1-on-1. The NODE substrate it sits on — `Node`/`Relation`/
    `InstanceValue`/`StructureDb` + node identity — lives one layer down in `core-substrate`."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
-            [canvas.architecture.kernel.rules :as query-engine]
             [canvas.architecture.kernel.substrate :as substrate]))
 
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────
@@ -15,9 +14,9 @@
 (Kind Rule)
 
 (Operation vocab-rules
-  "The datalog rules derived from the live vocabulary, injected into laws/lenses."
-  {:signature [:=> [:cat] [:vector Rule]]
-   :delegates [query-engine/derive-rules]})
+  "The datalog rules derived from the live vocabulary, injected into laws/lenses — dispatched
+   through the declaration registry (`terms-of`, same module), so no cross-module delegate."
+  {:signature [:=> [:cat] [:vector Rule]]})
 (Operation check
   "Run every structure's laws over the model db; yield the violations."
   {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector Violation]]

@@ -11,10 +11,12 @@
    corresponding kind — ROOT kinds pair via a bridge predicate, NESTED kinds pair same-named
    instances whose direct containers twin), and the fixed substrate rules.
 
-   It is the upstream half of the kernel's query machinery: the kernel's `vocab-rules` bridge
-   delegates to `derive-rules`, and the lens ENGINE (`canvas.architecture.kernel.lens`) evaluates
-   queries against those rules. `core.rules` references nothing else, so the chain is acyclic
-   (lens-engine → kernel → query-engine)."
+   It is the upstream half of the kernel's query machinery: the kernel derives the same rules
+   through its declaration registry (`vocab-rules` → `terms-of`), with `derive-rules` kept on as the
+   independent reference emitter that the golden fidelity test pins that seam to; the fixed substrate
+   rules `terms-of` composes in also live here. The lens ENGINE (`canvas.architecture.kernel.lens`)
+   evaluates queries against the derived rules. `core.rules` references nothing else, so the chain is
+   acyclic (lens-engine → kernel → query-engine)."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]))
 
 (Module core-rules
