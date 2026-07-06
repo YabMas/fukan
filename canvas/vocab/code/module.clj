@@ -60,31 +60,36 @@
    :child   [:* {:contains true} Any]         ; internal members + grain no other module consumes
    :extracted [:? :boolean]})        ; provenance: true ⇒ from code extraction; absent/false ⇒ authored (symmetric with Operation)
 
-;; ── derived module-dependency readings ────────────────────────────────
+;; ── derived module-dependency relations ───────────────────────────────
+;; `module-owns` / `module-depends` are DEFRELATIONS — injected into every law and query by
+;; `check`/`vocab-rules`, so the laws that need them (Subsystem `:may-depend` conformance,
+;; ModuleArchitecture acyclicity) and the reader below reference them BY NAME instead of each
+;; re-inlining a copy. The compiler emits only the rules a query actually reaches, so laws that
+;; never mention module-depends pay nothing. `module-owns` is Module ownership expressed as the
+;; generic `contains` union (`rules/derive-rules`) restricted to a Module container — Module's
+;; :exposes/:owns/:child are all {:contains true}.
 
-(def module-depends-rules
-  "Datalog over the reified code graph: `module-depends` is the COMPLETE module→module dependency
-   graph — call dependencies (an owned Operation `:delegates` to another module's Operation) UNIONed
-   with data-adoption (an owned Operation's `:in`/`:out` is a ref-`Schema` whose `:names` edge reaches
-   a `Kind` another module owns). `module-owns` is ownership via `:exposes`/`:owns`/`:child`.
-   NB: `ModuleArchitecture` (in `canvas.principles.layered-architecture`) and `Subsystem`'s
-   `:may-depend` conformance law (in `canvas.vocab.code.subsystem`) each INLINE a copy of these
-   rules (a law's `:rules` is macro-time literal data — it cannot reference this var); keep all
-   copies in sync."
-  '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
-    [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
-    [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
-    [(module-depends ?m ?n)                                  ; call dependency
-     (module-owns ?m ?op1) [?dr :rel/from ?op1] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
-     (module-owns ?n ?op2) [(not= ?m ?n)]]
-    [(module-depends ?m ?n)                                  ; data-adoption dependency
-     (module-owns ?m ?op)
-     (or-join [?op ?sch]
-       (and [?ir :rel/from ?op] [?ir :rel/kind :in]  [?ir :rel/to ?sch])
-       (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]))
-     [?sch :val/kind "ref"]
-     [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-     (module-owns ?n ?k) [(not= ?m ?n)]]])
+(s/defrelation :module-owns
+  "Module ?m owns ?x — the `contains` union (:exposes/:owns/:child) restricted to a Module container."
+  '[?m ?x]
+  '[[?m :structure/of :canvas.vocab.code.module/Module] (contains ?m ?x)])
+
+(s/defrelation :module-depends
+  "the COMPLETE module→module dependency graph: a call dependency (?m owns an op that :delegates to
+   an op ?n owns) UNIONed with data-adoption (?m owns an op whose :in/:out ref-Schema :names a Kind
+   ?n owns). The reader `module-dependencies` and the layering laws read this by name."
+  '[?m ?n]
+  '[(module-owns ?m ?op)
+    (or-join [?op ?n]
+      (and [?dr :rel/from ?op] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
+           (module-owns ?n ?op2))
+      (and [?ir :rel/from ?op] [?ir :rel/kind :in]  [?ir :rel/to ?sch]
+           [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
+           (module-owns ?n ?k))
+      (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]
+           [?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
+           (module-owns ?n ?k)))
+    [(not= ?m ?n)]])
 
 (defn module-dependencies
   "The complete module→module dependency graph (calls ∪ data-adoption) as a set of
@@ -92,7 +97,7 @@
   [db]
   (set (cq/q '[:find ?mn ?nn :in $ %
                :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
-             db module-depends-rules)))
+             db (s/vocab-rules))))
 
 ;; ── op pairing ───────────────────────────────────────────────────────────────
 

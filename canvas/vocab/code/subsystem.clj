@@ -4,8 +4,16 @@
    architecture that isn't enforced is prose); the ADOPTED layering demands (module-graph
    acyclicity, membership totality) and the `latent-boundaries` reading live in
    `canvas.principles.layered-architecture`."
-  (:require [fukan.canvas.core.structure :refer [defstructure]]
+  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [canvas.vocab.code.module :refer [Module]]))
+
+;; in-subsystem — Subsystem membership as a DEFRELATION (the `contains` union restricted to a
+;; Subsystem container), so the conformance law here and ModuleArchitecture's membership-totality
+;; law (in canvas.principles.layered-architecture) read it by name instead of each inlining a copy.
+(s/defrelation :in-subsystem
+  "Module ?mod is clustered by Subsystem ?sub — the `contains` union restricted to a Subsystem container."
+  '[?mod ?sub]
+  '[[?sub :structure/of :canvas.vocab.code.subsystem/Subsystem] (contains ?sub ?mod)])
 
 (defstructure Subsystem
   "A cluster of Modules realizing a capability — the rung above Module in the grouping ladder
@@ -17,32 +25,17 @@
    The laws are the SLOT SEMANTICS of `:may-depend` — what declaring the DAG MEANS; without them
    the slot is prose. CONFORMANCE: every cross-subsystem module dependency (`module-depends`, the
    complete graph: calls ∪ data-adoption) follows a declared `:may-depend` edge — the offender is
-   the crossing Module, hence `:scope :global`; the `:rules` INLINE a copy of
-   `canvas.vocab.code.module/module-depends-rules` (a law's `:rules` is macro-time literal data —
-   it cannot reference the var; keep the copies in sync). DAG ACYCLICITY (self-scoped): no
-   Subsystem `sub-reaches` itself over `:may-depend` — a cyclic declaration is incoherent intent.
-   Both are naturally vacuous when no Subsystems / no cross-subsystem deps are modelled."
+   the crossing Module, hence `:scope :global`. `module-depends` and `in-subsystem` are injected
+   defrelations (read by name, no inlined copy); only `declared-dep` (this slot's own reading) is
+   a local `:rules` entry. DAG ACYCLICITY (self-scoped): no Subsystem `sub-reaches` itself over
+   `:may-depend` — a cyclic declaration is incoherent intent. Both are naturally vacuous when no
+   Subsystems / no cross-subsystem deps are modelled."
   {:child      [:* {:contains true} Module]   ; the Modules this subsystem clusters
    :may-depend [:* Subsystem]}   ; the subsystems it is allowed to depend on (declared intent)
   (law "every cross-subsystem module dependency follows a declared :may-depend edge"
     :scope :global
     :offenders '[?m]
-    :rules '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
-             [(module-depends ?m ?n)
-              (module-owns ?m ?op1) [?dr :rel/from ?op1] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
-              (module-owns ?n ?op2) [(not= ?m ?n)]]
-             [(module-depends ?m ?n)
-              (module-owns ?m ?op)
-              (or-join [?op ?sch]
-                (and [?ir :rel/from ?op] [?ir :rel/kind :in]  [?ir :rel/to ?sch])
-                (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]))
-              [?sch :val/kind "ref"]
-              [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-              (module-owns ?n ?k) [(not= ?m ?n)]]
-             [(in-subsystem ?mod ?sub) [?sub :structure/of :canvas.vocab.code.subsystem/Subsystem] [?cr :rel/from ?sub] [?cr :rel/kind :child] [?cr :rel/to ?mod]]
-             [(declared-dep ?s ?t)     [?s :structure/of :canvas.vocab.code.subsystem/Subsystem]   [?mr :rel/from ?s]   [?mr :rel/kind :may-depend] [?mr :rel/to ?t]]]
+    :rules '[[(declared-dep ?s ?t) [?s :structure/of :canvas.vocab.code.subsystem/Subsystem] [?mr :rel/from ?s] [?mr :rel/kind :may-depend] [?mr :rel/to ?t]]]
     :where '[(module-depends ?m ?n)
              (in-subsystem ?m ?s) (in-subsystem ?n ?t) [(not= ?s ?t)]
              (not (declared-dep ?s ?t))])

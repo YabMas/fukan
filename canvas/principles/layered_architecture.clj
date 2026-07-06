@@ -40,39 +40,24 @@
    non-trivial SCC). `:scope :global` — the offenders are the Modules on a cycle; naturally vacuous when
    no Modules are modelled. (Supersedes the earlier 2-cycle-only `M⇄N` check.)
 
-   The `:rules` below INLINE `module/module-depends-rules` (a law's `:rules` is macro-time literal data
-   and cannot reference the var) — keep the copies in sync."
+   `module-depends` and `in-subsystem` are injected defrelations (from `code/module` and
+   `code/subsystem`) read by name; only `module-reaches` (this law's own transitive closure over
+   `module-depends`, a rule-calls-rule recursion the kernel allows) is a local `:rules` entry."
   (law "the module-dependency graph is acyclic — no module transitively depends on itself"
     :scope :global
     :offenders '[?m]
-    :rules '[[(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :owns]    [?r :rel/to ?x]]
-             [(module-owns ?m ?x) [?m :structure/of :canvas.vocab.code.module/Module] [?r :rel/from ?m] [?r :rel/kind :child]   [?r :rel/to ?x]]
-             [(module-depends ?m ?n)
-              (module-owns ?m ?op1) [?dr :rel/from ?op1] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
-              (module-owns ?n ?op2) [(not= ?m ?n)]]
-             [(module-depends ?m ?n)
-              (module-owns ?m ?op)
-              (or-join [?op ?sch]
-                (and [?ir :rel/from ?op] [?ir :rel/kind :in]  [?ir :rel/to ?sch])
-                (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]))
-              [?sch :val/kind "ref"]
-              [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-              (module-owns ?n ?k) [(not= ?m ?n)]]
-             ;; transitive closure of module-depends (rule-calls-rule recursion)
-             [(module-reaches ?m ?n) (module-depends ?m ?n)]
+    :rules '[[(module-reaches ?m ?n) (module-depends ?m ?n)]
              [(module-reaches ?m ?n) (module-depends ?m ?mid) (module-reaches ?mid ?n)]]
     :where '[[?m :structure/of :canvas.vocab.code.module/Module] (module-reaches ?m ?m)])
 
   ;; MEMBERSHIP TOTALITY — every AUTHORED Module belongs to a Subsystem, so conformance has full
   ;; coverage. Guarded by [?_s :structure/of :canvas.vocab.code.subsystem/Subsystem] (a direct datom) →
-  ;; vacuous for subsystem-free models. Negation routes through the `in-subsystem` rule so the
-  ;; zero-member case dodges datascript's empty-relation not-join gotcha. Extracted code-fact modules
-  ;; (`:val/extracted true`) are out of scope for design-membership — (not [?mod :val/extracted true]).
+  ;; vacuous for subsystem-free models. Negation routes through the injected `in-subsystem` defrelation
+  ;; so the zero-member case dodges datascript's empty-relation not-join gotcha. Extracted code-fact
+  ;; modules (`:val/extracted true`) are out of scope for design-membership — (not [?mod :val/extracted true]).
   (law "every Module belongs to a Subsystem"
     :scope :global
     :offenders '[?mod]
-    :rules '[[(in-subsystem ?mod ?sub) [?sub :structure/of :canvas.vocab.code.subsystem/Subsystem] [?cr :rel/from ?sub] [?cr :rel/kind :child] [?cr :rel/to ?mod]]]
     :where '[[?_s :structure/of :canvas.vocab.code.subsystem/Subsystem]
              [?mod :structure/of :canvas.vocab.code.module/Module]
              (not [?mod :val/extracted true])
