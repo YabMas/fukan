@@ -869,14 +869,6 @@
     (cond-> [type-law]
       (= card :one) (conj none-law))))
 
-(defn- slot-laws
-  "Derive laws for a structure's slots, dispatching value vs relation slots."
-  [{:keys [tag slots]}]
-  (mapcat #(if (scalar-slot? %)
-             (value-slot-laws tag %)
-             (relation-slot-laws tag %))
-          slots))
-
 ;; ── correspondence demand laws: generated from (corresponds …) declarations ──
 ;; The demand SHAPES (design↔fact, node level). Bodies inline the stratum literal
 ;; (:val/extracted — see substrate/stratum-attr's sync note) for range-boundedness and call
@@ -1001,18 +993,6 @@
              (list 'not-join '[?x ?v]
                    ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v])]}))
 
-(defn- correspondence-laws
-  "Every generated demand law of `sdef` — node demands from (corresponds …) sub-forms plus
-   container demands from relation slots carrying {:realized-by R' :altitude :container} plus
-   node-level path demands from relation slots carrying {:covered-from [R* S]}."
-  [{:keys [tag slots corresponds]}]
-  (into (mapv #(node-demand-law tag %) (:demands corresponds))
-        (mapcat (fn [slot]
-                  (cond
-                    (:realized-by slot) (container-demand-laws tag slot)
-                    (:covered-from slot) [(covered-from-law tag slot)]))
-                (remove scalar-slot? slots))))
-
 ;; ── built-in declaration handlers ────────────────────────────────────────────
 ;; Each existing construct as a registered handler emitting Terms and/or Laws — the same output the
 ;; bespoke `rules/derive-rules` branches and `laws-of` families produce (proven byte-faithful by the
@@ -1096,8 +1076,9 @@
 (defn ^:export terms-of
   "All derived Terms over `structures` via the declaration handlers + the global containment addendum
    (contains+ closure + in-module, when any :contains slot exists) + the fixed substrate rules — the
-   registry-driven equal of `rules/derive-rules` (Stage A: proven byte-faithful; not yet wired into
-   `vocab-rules`)."
+   registry-driven equal of `rules/derive-rules`, proven SET-identical by the declarations-golden
+   fidelity test. NOT yet the production term source: the Cozo compiler is order-sensitive and this
+   emits a different (also-valid) rule order than derive-rules' known-good one — see `vocab-rules`."
   [structures]
   (let [per   (mapcat (fn [sdef] (mapcat #(:terms (handle-declaration % sdef)) (sdef->declarations sdef)))
                       structures)
@@ -1161,9 +1142,10 @@
   "Every law of structure `sdef` — the slot-derived cardinality/type laws plus its
    correspondence-demand laws (generated from `(realized …)`/`(covered …)` sub-forms)
    plus its free `(law …)`s, the same set `check` runs. Public so an alternative engine
-   (the Cozo law compiler) can evaluate the identical laws."
+   (the Cozo law compiler) can evaluate the identical laws. Dispatched through the declaration
+   handlers (no consumer depends on law order — every one treats the result as a set)."
   [sdef]
-  (concat (slot-laws sdef) (correspondence-laws sdef) (:laws sdef)))
+  (vec (mapcat #(:laws (handle-declaration % sdef)) (sdef->declarations sdef))))
 
 (defn ^{:malli/schema [:=> [:cat [:vector :any]] :any]}
   direct-scope-tags
@@ -1184,7 +1166,12 @@
   vocab-rules
   "The datalog rules derived from the live vocabulary (one per kind + per relation
    slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
-   at domain altitude: `(Operation ?s) (in-module ?s \"…\") (calls ?s ?c)`."
+   at domain altitude: `(Operation ?s) (in-module ?s \"…\") (calls ?s ?c)`. Emitted through the
+   declaration handlers (`terms-of`) — proven set-identical to this by the golden fidelity test.
+   NB: still routed through `rules/derive-rules` for the exact rule ORDER — the Cozo law/query
+   compiler is order-sensitive (independent closure rules like contains+/calls+ evaluate differently
+   under reordering), and derive-rules' order is the known-good one. Switching `vocab-rules` to
+   `terms-of` awaits making the compiler order-insensitive (see the term-law Stage-A notes)."
   []
   (rules/derive-rules (all-structures) scalar-slot?))
 
