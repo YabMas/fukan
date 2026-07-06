@@ -7,7 +7,7 @@
    Scoped to the `canvas.vocab.*`/`canvas.principles.*` structures (required below so they are all
    registered), NOT `all-structures` — the global registry also accumulates test fixtures during a
    full run, which would make the snapshot unstable."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
             [fukan.cozo.law]                        ; registers the check engine (load side-effect)
             [fukan.canvas.core.structure :as s]
@@ -64,3 +64,18 @@
     (is (= (:count golden-laws) (count laws)) "self-model Law count changed")
     (is (= (:hash golden-laws) (hash laws))
         "derived Laws changed — the Stage-A refactor must be behavior-preserving")))
+
+;; ── fidelity: the declaration handlers reproduce the bespoke emission byte-for-byte ──
+
+(deftest handlers-reproduce-derive-rules
+  (testing "registry-driven terms-of == rules/derive-rules over the self-model (as a set)"
+    (is (= (into (sorted-set) (map pr-str) (rules/derive-rules (self-model-structures) s/scalar-slot?))
+           (into (sorted-set) (map pr-str) (s/terms-of (self-model-structures)))))))
+
+(deftest handlers-reproduce-laws-of
+  (testing "per structure, handler-emitted Laws == laws-of (as a set)"
+    (doseq [sdef (self-model-structures)]
+      (is (= (into (sorted-set) (map pr-str) (s/laws-of sdef))
+             (into (sorted-set) (map pr-str)
+                   (mapcat #(:laws (s/handle-declaration % sdef)) (s/sdef->declarations sdef))))
+          (str "Law drift for " (:tag sdef))))))

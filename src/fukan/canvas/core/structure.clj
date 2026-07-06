@@ -1013,6 +1013,100 @@
                     (:covered-from slot) [(covered-from-law tag slot)]))
                 (remove scalar-slot? slots))))
 
+;; ── built-in declaration handlers ────────────────────────────────────────────
+;; Each existing construct as a registered handler emitting Terms and/or Laws — the same output the
+;; bespoke `rules/derive-rules` branches and `laws-of` families produce (proven byte-faithful by the
+;; declarations-golden fidelity test). Stage A: registered + proven, NOT yet wired into production
+;; emission (derive-rules/laws-of still run their branches); the relocation/delete follows.
+
+(defn- rule-sym [kw] (symbol (name kw)))
+
+(defn- closure-rules
+  "The transitive-closure rules for a relation NAME `rname` — `(R+ a b) ⇐ (R a b) ∪ (R a m)(R+ m b)`."
+  [rname]
+  (let [r+ (symbol (str (name rname) "+"))]
+    [[(list r+ '?a '?b) (list rname '?a '?b)]
+     [(list r+ '?a '?b) (list rname '?a '?mid) (list r+ '?mid '?b)]]))
+
+;; Registered with `register-declaration!` + a plain `fn` (not the `defdeclaration` sugar) so the
+;; kernel's own handlers lint natively; `defdeclaration` is the project-facing growth macro.
+(register-declaration! :kind
+  (fn [_ sdef]
+    {:terms [[(list (rule-sym (:tag sdef)) '?e) ['?e :structure/of (:tag sdef)]]] :laws []}))
+
+(register-declaration! :slot
+  (fn [{:keys [slot]} sdef]
+    (let [tag (:tag sdef)]
+      (if (scalar-slot? slot)
+        {:terms [] :laws (value-slot-laws tag slot)}
+        {:terms [[(list (rule-sym (:rel slot)) '?a '?b)
+                  ['?r :rel/from '?a] ['?r :rel/kind (:rel slot)] ['?r :rel/to '?b]]]
+         :laws  (relation-slot-laws tag slot)}))))
+
+(register-declaration! :transitive
+  (fn [{:keys [slot]} _sdef] {:terms (closure-rules (rule-sym (:rel slot))) :laws []}))
+
+(register-declaration! :contains
+  (fn [{:keys [slot]} _sdef]
+    {:terms [[(list 'contains '?c '?m) (list (rule-sym (:rel slot)) '?c '?m)]] :laws []}))
+
+(register-declaration! :includes
+  (fn [{:keys [facet]} sdef]
+    {:terms [[(list (rule-sym facet) '?e) (list (rule-sym (:tag sdef)) '?e)]] :laws []}))
+
+(register-declaration! :realized-as
+  (fn [{:keys [body]} sdef]
+    {:terms [(into [(list (rule-sym (:tag sdef)) '?e)] body)] :laws []}))
+
+(register-declaration! :coproduct
+  (fn [{:keys [members]} sdef]
+    {:terms (vec (for [m members]
+                   [(list (rule-sym (:tag sdef)) '?a '?b) (list (rule-sym m) '?a '?b)]))
+     :laws []}))
+
+(register-declaration! :defrelation
+  (fn [{:keys [rule]} sdef]
+    {:terms [(into [(apply list (rule-sym (:tag sdef)) (:head rule))] (:where rule))] :laws []}))
+
+(register-declaration! :realized-by
+  (fn [{:keys [slot]} sdef] {:terms [] :laws (container-demand-laws (:tag sdef) slot)}))
+
+(register-declaration! :covered-from
+  (fn [{:keys [slot]} sdef] {:terms [] :laws [(covered-from-law (:tag sdef) slot)]}))
+
+(register-declaration! :correspondence
+  (fn [{:keys [corresponds]} sdef]
+    (let [tag (:tag sdef)]
+      {:terms [(if-let [bridge (:bridge corresponds)]
+               [(list 'twin '?a '?b)
+                ['?a :structure/of tag] (list 'not ['?a :val/extracted true])
+                ['?b :structure/of tag] ['?b :val/extracted true]
+                ['?a :entity/name '?an] ['?b :entity/name '?bn]
+                [(list bridge '?an '?bn)]]
+               [(list 'twin '?a '?b)
+                ['?a :structure/of tag] (list 'not ['?a :val/extracted true])
+                ['?b :structure/of tag] ['?b :val/extracted true]
+                ['?a :entity/name '?n] ['?b :entity/name '?n]
+                (list 'contains '?ca '?a) (list 'contains '?cb '?b)
+                (list 'twin '?ca '?cb)])]
+       :laws (mapv #(node-demand-law tag %) (:demands corresponds))})))
+
+(register-declaration! :free-law (fn [{:keys [law]} _sdef] {:terms [] :laws [law]}))
+
+(defn ^:export terms-of
+  "All derived Terms over `structures` via the declaration handlers + the global containment addendum
+   (contains+ closure + in-module, when any :contains slot exists) + the fixed substrate rules — the
+   registry-driven equal of `rules/derive-rules` (Stage A: proven byte-faithful; not yet wired into
+   `vocab-rules`)."
+  [structures]
+  (let [per   (mapcat (fn [sdef] (mapcat #(:terms (handle-declaration % sdef)) (sdef->declarations sdef)))
+                      structures)
+        conts (seq (filter :contains (remove scalar-slot? (mapcat :slots structures))))
+        globl (when conts
+                (concat (closure-rules 'contains)
+                        [[(list 'in-module '?e '?mname) (list 'contains '?m '?e) ['?m :entity/name '?mname]]]))]
+    (vec (distinct (concat per globl rules/substrate-rules)))))
+
 (defn ^{:malli/schema [:=> [:cat [:sequential :any]] :map]}
   correspondence*
   "The correspondence SEAM of `sdefs` as one data structure — the collected morphism (pure;
