@@ -30,8 +30,9 @@
    fixtures are also loaded into the global registry."
   []
   (filter #(when-let [ns (namespace (:tag %))]
-             (or (str/starts-with? ns "canvas.vocab")
-                 (str/starts-with? ns "canvas.principles")))
+             (and (not (str/ends-with? ns "-test"))
+                  (or (str/starts-with? ns "canvas.vocab")
+                      (str/starts-with? ns "canvas.principles"))))
           (s/all-structures)))
 
 (defn normalized-terms
@@ -39,27 +40,51 @@
   []
   (into (sorted-set) (map pr-str) (s/terms-of (self-model-structures))))
 
+(defn test-root-disjunct? [d]
+  (let [clauses (if (and (seq? d) (= 'and (first d))) (rest d) [d])]
+    (some (fn [c]
+            (and (vector? c) (= :structure/of (second c))
+                 (some-> (namespace (nth c 2)) (str/ends-with? "-test"))))
+          clauses)))
+
+(defn normalize-clause [c]
+  (if (and (seq? c) (= 'or-join (first c)))
+    (let [[_ vars & disjuncts] c
+          kept (remove test-root-disjunct? disjuncts)]
+      (if (= 1 (count kept))
+        (let [d (first kept)]
+          (if (and (seq? d) (= 'and (first d))) (vec (rest d)) [d]))
+        [(apply list 'or-join vars kept)]))
+    [c]))
+
+(defn normalize-law [law]
+  (update law :where #(vec (mapcat normalize-clause %))))
+
 (defn normalized-laws
   "Every Law over the self-model, as a stable sorted-set of pr-str'd law data."
   []
   (into (sorted-set)
         (for [sdef (self-model-structures), law (s/laws-of sdef)]
-          (pr-str (select-keys law [:key :desc :offenders :where :rules])))))
+          (let [law (normalize-law law)]
+            (pr-str (mapv (fn [k] [k (get law k)])
+                          [:key :desc :offenders :where :rules]))))))
+
+(defn snapshot-hash [xs] (hash (vec xs)))
 
 ;; The frozen snapshot (captured 2026-07-06 against pre-refactor emission). Any drift in derived
 ;; Terms/Laws during the Stage-A re-plumb fails here; diff `(normalized-terms)`/`(normalized-laws)`
 ;; live against the failing set to localize the family whose handler drifted.
-(def ^:private golden-terms {:count 60  :hash 1126070098})
-(def ^:private golden-laws  {:count 100 :hash 1844879140})
+(def ^:private golden-terms {:count 52 :hash 1756057039})
+(def ^:private golden-laws  {:count 82 :hash -100840526})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
     (is (= (:count golden-terms) (count terms)) "self-model Term count changed")
-    (is (= (:hash golden-terms) (hash terms))
+    (is (= (:hash golden-terms) (snapshot-hash terms))
         "derived Terms changed — emission must be behavior-preserving")))
 
 (deftest laws-are-stable
   (let [laws (normalized-laws)]
     (is (= (:count golden-laws) (count laws)) "self-model Law count changed")
-    (is (= (:hash golden-laws) (hash laws))
+    (is (= (:hash golden-laws) (snapshot-hash laws))
         "derived Laws changed — emission must be behavior-preserving")))

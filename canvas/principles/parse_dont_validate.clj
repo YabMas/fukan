@@ -14,7 +14,8 @@
    surfaces the judgment material — undeclared producers (reader handing held state along is
    fine; a second parse point is not) and validator-shaped ops (public, take the Kind, return
    boolean: parse, don't validate)."
-  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
+  (:require [clojure.set :as set]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.lens :refer [Projection]]
             [fukan.cozo.query :as cq]
             [canvas.vocab.code.kind :refer [Kind]]
@@ -72,6 +73,29 @@
    core is total. Reads the totality law on `TrustBoundary` by its stable :key."
   [db]
   (cq/violation-names db :totality))
+
+(defn direct-throwers
+  "Extracted ops that directly perform `:throws` — the partiality leaves.
+   Most are parse-edge input parsers; some are internal invariant assertions."
+  [db]
+  (set (cq/q '[:find [?on ...]
+              :where (extracted-op ?o) [?o :entity/name ?on]
+                     [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e]
+                     [?e :val/name "throws"]]
+            db)))
+
+(defn throw-spread
+  "How partiality spreads:
+   `{:direct #{ops that throw themselves}
+     :transitive-only #{ops that reach :throws only via a call}}`."
+  [db]
+  (let [direct   (direct-throwers db)
+        reachers (set (cq/q '[:find [?on ...]
+                              :where (extracted-op ?o) [?o :entity/name ?on]
+                                     (path ?o [:calls* :performs] ?e)
+                                     [?e :val/name "throws"]]
+                           db))]
+    {:direct direct :transitive-only (set/difference reachers direct)}))
 
 ;; the principle's JUDGMENT surface — rendered by materialize/render-finding "Boundary"
 (Projection Boundary

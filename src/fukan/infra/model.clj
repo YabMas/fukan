@@ -17,11 +17,11 @@
             ;; loaded for its side-effect: registers the Cozo backend at structure's
             ;; check-engine plug-point, so `(structure/check model)` runs the Cozo law engine
             [fukan.cozo.law]
-            [canvas.vocab.code.extractor :as target]))
+            [canvas.vocab.code.extractors :as target]))
 
 ;; Register fukan's project FACT extractor — its own Clojure source, as the engine-agnostic
 ;; `{:roots :ground}` facts the native Cozo build consumes (`:ground` is the post-build :calls grounding).
-(extraction/register-fact-extractor! (fn [root] (target/extract-roots [root])))  ; target → canvas.vocab.code.extractor
+(extraction/register-fact-extractor! (fn [root] (target/extract-roots [root])))  ; target -> canvas.vocab.code.extractors
 
 (defonce ^:private state (atom {:cozo nil :src nil}))
 

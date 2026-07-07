@@ -13,6 +13,7 @@
             ;; correspondence is now distributed across the code elements
             [canvas.vocab.code.module :as module]
             [canvas.vocab.code.operation :as operation]
+            [canvas.vocab.code.effect]
             [canvas.principles.parse-dont-validate :as pdv]
             [canvas.principles.declared-effects :as declared-effects]
             [canvas.principles.layered-architecture :as layered]))
@@ -298,6 +299,10 @@
       (is (empty? (declared-effects/undeclared-effects declared-db))
           "declaring :io on the authored f satisfies the generated performs-covered demand"))))
 
+(deftest effect-vocab-does-not-name-transitive-reachability
+  (testing "effect reachability is expressed by composing :calls* and :performs at the consuming layer"
+    (is (not (contains? (ns-publics 'canvas.vocab.code.effect) 'reached-effects)))))
+
 (deftest effect-and-totality-green-on-the-self-model
   (testing "the merged self-model declares every effect its code reaches, and its trusted core is total"
     (let [model (pipeline/build-model "src")]
@@ -332,6 +337,17 @@
           "the trusted reader's twin throws → a totality violation")
       (is (empty? (pdv/totality-violations without-tb))
           "no TrustBoundary declared → vacuous; the law reads the designation, not a hardcoded name"))))
+
+(deftest partiality-spread-lives-with-parse-dont-validate
+  (testing "partiality spread is a principle reading, not generic Effect vocabulary"
+    (let [db (build/tx-maps->cozo
+              [{:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "throws"}
+               {:db/id -1 :structure/of :canvas.vocab.code.operation/Operation :entity/name "caller" :val/extracted true}
+               {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "thrower" :val/extracted true}
+               {:rel/id "caller|calls|thrower" :rel/from -1 :rel/kind :calls :rel/to -2}
+               {:rel/id "thrower|performs|throws" :rel/from -2 :rel/kind :performs :rel/to -10}])]
+      (is (= {:direct #{"thrower"} :transitive-only #{"caller"}}
+             (pdv/throw-spread db))))))
 
 ;; The Lens-act Coverage law (probe-reader → Lens) was DISSOLVED on 2026-06-29: readings became
 ;; Projections with a mandatory :through Lens slot, so the guarantee is now structural, not a law.

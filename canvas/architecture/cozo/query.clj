@@ -28,7 +28,7 @@
      :performs  [:throws]})
   (Operation q "Run a datalog query over a Cozo db like d/q — relation/collection finds, an :in of $ + optional % (rules) + scalar params. Cells are strings (the triple view)."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:query :any]] :any]
-     :performs  [:throws]
+     :performs  [:throws :state]
      :delegates [compile-body vocab-index db/q]})
   (Operation entity "Resolve an eid (string) to its typed attribute map — the d/entity replacement."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:eid :any]] :any]

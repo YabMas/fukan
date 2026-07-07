@@ -31,20 +31,20 @@
      Includes the `(corresponds …)` declaration (demands + bridge) and slot props
      (relation characters + demand options) — the correspondence seam round-trips."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Form]
-     :performs  [:throws]                       ; via the query compiler / render-type
+     :performs  [:throws :state]                ; via the query compiler / render-type
      :delegates [typing/render-type query/q query/entity]})   ; renders refined slot targets + reads the graph
   (Operation vocabulary-primer
     "One vocabulary rendered as its defstructure forms."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName]] Primer]
-     :performs  [:throws]})
+     :performs  [:throws :state]})
   (Operation grammar-primer
     "Every vocabulary in the model — the live language reference, derived not maintained."
     {:signature [:=> [:catn [:db substrate/StructureDb]] Primer]
-     :performs  [:throws]})
+     :performs  [:throws :state]})
   (Operation unused-structures
     "The grammar-drift reading: reified Structures no instance inhabits — dead
      vocabulary. Excludes the Any wildcard and derivation-inhabited concepts:
      realized-as, and facets reached via includes (found by the loop's first
      run — Connected is spoken, just never directly). Sorted structure names."
     {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector :string]]
-     :performs  [:throws]}))
+     :performs  [:throws :state]}))

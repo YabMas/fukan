@@ -11,5 +11,5 @@
   "The code-side architecture overview — subsystems, their modules, and the :may-depend DAG."
   (Operation architecture-overview "Render the subsystem clustering + the :may-depend DAG from the held model."
     {:signature [:=> [:catn [:model substrate/StructureDb]] :string]
-     :performs  [:throws]                          ; via the query compiler
+     :performs  [:throws :state]                   ; via the query compiler
      :delegates [query/q]}))

@@ -94,17 +94,23 @@
                          o  (symbol (str "?_via" i))]
                      [(list scope '?n) (list r+ '?n o) (list p o)])
                    [clause]))
-               clauses))))
+              clauses))))
+
+(defn- expand-selection
+  "Expand the lens-facing composition sugar into ordinary datalog clauses."
+  [clauses]
+  (s/expand-clauses (expand-via clauses)))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb [:vector :Clause]] [:vector :Eid]]}
   focus-nodes
   "Run datalog `:where` `clauses` (binding `?n` as the focused node) with the
    vocab-derived rules, returning the focus node-set (a set of eids). The shared
    evaluation engine behind both a stored lens and any ad-hoc focus.
-   A `(via R Scope P)` clause composes a property `P` along relation `R`'s transitive
-   closure at altitude `Scope` (see `expand-via`)."
+   A `(path ?from [:r :s* :t+] ?to)` clause composes relation paths, and `(via R Scope P)`
+   composes a property `P` along relation `R`'s transitive closure at altitude `Scope`
+   (see `expand-via`)."
   [db clauses]
-  (set (cq/q (vec (concat '[:find [?n ...] :in $ %] [:where] (expand-via clauses)))
+  (set (cq/q (vec (concat '[:find [?n ...] :in $ %] [:where] (expand-selection clauses)))
              db (s/vocab-rules))))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] [:vector :Eid]]}

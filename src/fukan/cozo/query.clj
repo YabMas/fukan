@@ -366,9 +366,10 @@
   q
   "Run datalog `query` over the Cozo db `db`: the compiled datalog subset fukan uses —
    relation/collection finds, `:in` of `$` + optional `%` rules + scalar params incl.
-   `[attr val]` lookup-refs. EIDS come back as opaque STRING handles; leaf values in their
-   NATIVE type (Int/String/Bool, per the typed `triple` view). A relation find returns a SET
-   of tuples; a collection find a distinct vector."
+   `[attr val]` lookup-refs. Top-level `(path ?from [:r :s* :t+] ?to)` clauses are expanded
+   after scalar substitution, so path endpoints may be query inputs. EIDS come back as opaque
+   STRING handles; leaf values in their NATIVE type (Int/String/Bool, per the typed `triple`
+   view). A relation find returns a SET of tuples; a collection find a distinct vector."
   [query db & inputs]
   (let [{:keys [find in where]} (split-query query)
         {:keys [rules subst]}   (bind-inputs in inputs)
@@ -376,7 +377,7 @@
         ;; scalar params bind only the WHERE-body's vars; a `%` rule's vars are head-scoped
         ;; and never close over query `:in` inputs — substituting a scalar into a rule would
         ;; corrupt its head (e.g. a shared name like `?op`), so the rules are passed verbatim.
-        where*  (walk/postwalk-replace subst where)
+        where*  (structure/expand-clauses (walk/postwalk-replace subst where))
         [rule-lines body] (compile-body where* (vec rules) (vocab-index) (find-vars find))
         head    (str/join ", " (map cvar (find-vars find)))
         program (str preamble "\n" (str/join "\n" rule-lines) "\n?[" head "] := " body)

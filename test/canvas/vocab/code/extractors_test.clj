@@ -1,4 +1,4 @@
-(ns canvas.vocab.code.extractor-test
+(ns canvas.vocab.code.extractors-test
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
@@ -6,7 +6,8 @@
             [fukan.cozo.law]
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
-            [canvas.vocab.code.extractor :as tc]
+            [canvas.vocab.code.extractors :as tc]
+            [canvas.vocab.code.extractors.clojure.effect :as clj-effect]
             [canvas.vocab.code.operation :as corr]))
 
 ;; Register fukan's FACT extractor so build-model's unified build runs it (the proof).
@@ -17,6 +18,14 @@
    with the :calls graph grounded + grammar reflected."
   [path]
   (build/model->cozo [] (tc/extract-roots [path])))
+
+(deftest clojure-effect-classification-is-owned-by-the-clojure-extractor
+  (testing "Clojure var-usages classify direct effects outside the generic Effect vocab"
+    (is (= {["demo" "load"] #{:io}
+            ["demo" "boom"] #{:throws}}
+           (clj-effect/op-effects [{:from 'demo :from-var 'load :to 'clojure.core :name 'slurp}
+                                   {:from 'demo :from-var 'boom :to 'clojure.core :name 'throw}
+                                   {:from 'demo :from-var 'log :to 'clojure.core :name 'println}])))))
 
 (deftest extracts-functions-as-operations
   (testing "the clj-kondo extractor emits an Operation per defn/defn-, with privacy"

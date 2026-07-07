@@ -12,14 +12,13 @@
    law's identity semantics). Over-declaration is a soft reading (the classifier is
    necessarily incomplete), surfaced by `effect-drift`."
   (:require [clojure.set :as set]
-            [fukan.cozo.query :as cq]
-            [canvas.vocab.code.effect :as effect]))
+            [fukan.cozo.query :as cq]))
 
 (defn effect-drift
   "The effect-language correspondence reading: per MODELLED operation, the disagreement between its
    authored `:performs` intent and its extracted twin's TRANSITIVE effect profile (the truth, to the
-   depth of the call graph; `reached-effects`). Twin via the shared `op-twin` rule. Returns
-   `{op-name {:undeclared #{…} :phantom #{…}}}` for every op with a disagreement:
+   depth of the call graph: `(path ?op [:calls* :performs] ?effect)`). Twin via the shared
+   `op-twin` rule. Returns `{op-name {:undeclared #{…} :phantom #{…}}}` for every op with a disagreement:
      :undeclared = reached ∖ declared — code reaches an effect the design never declared (HARD: the
                    enforced law direction).
      :phantom    = declared ∖ reached — the design declares an effect the code does not reach (SOFT:
@@ -33,10 +32,17 @@
   (let [pairs    (cq/q '[:find ?on ?o ?e :in $
                         :where (op-twin ?o ?e) [?o :entity/name ?on]]
                        db)
-        declared (fn [oeid] (set (cq/q '[:find [?en ...] :in $ ?o :where [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]] db oeid)))]
+        declared (fn [oeid] (set (cq/q '[:find [?en ...] :in $ ?o
+                                         :where [?pr :rel/from ?o] [?pr :rel/kind :performs]
+                                                [?pr :rel/to ?e] [?e :val/name ?en]]
+                                       db oeid)))
+        reached  (fn [teid] (set (cq/q '[:find [?en ...] :in $ ?op
+                                         :where (path ?op [:calls* :performs] ?e)
+                                                [?e :val/name ?en]]
+                                       db teid)))]
     (reduce (fn [acc [on oeid teid]]
               (let [dec        (declared oeid)
-                    rea        (effect/reached-effects db teid)
+                    rea        (reached teid)
                     undeclared (set/difference rea dec)
                     phantom    (set/difference dec rea)]
                 (if (or (seq undeclared) (seq phantom))
@@ -50,6 +56,6 @@
    direction). Empty ⇔ design declares every effect the code reaches, to the depth of the call graph.
    The enforced invariant is the `:corresponds/Operation.performs-covered` generated law; this reader
    is the FAST surface (derived from `effect-drift`, not a full `check`). Law and reader agree by
-   construction (both follow the same op-twin pairing and by-name reached-effects)."
+   construction (both follow the same op-twin pairing and composed effect reach)."
   [db]
   (set (for [[on m] (effect-drift db) :when (seq (:undeclared m))] on)))

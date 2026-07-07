@@ -35,6 +35,9 @@
    fukan.canvas.core.composition-test/Hub hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Linked hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Note hooks.fukan.structure/instance
+   fukan.canvas.core.composition-test/PathAudit hooks.fukan.structure/instance
+   fukan.canvas.core.composition-test/PathMark hooks.fukan.structure/instance
+   fukan.canvas.core.composition-test/PathNode hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Spoke hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Sum hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LBot hooks.fukan.structure/instance

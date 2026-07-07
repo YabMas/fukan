@@ -20,7 +20,8 @@
    runs every structure's laws (slot-cardinality laws + free `law`s, recursive
    datalog rules supported) over a db, injecting the vocab-derived rules so laws read
    at domain altitude. The schema is minimal and classification-free."
-  (:require [fukan.canvas.core.rules :as rules]
+  (:require [clojure.string :as str]
+            [fukan.canvas.core.rules :as rules]
             ;; the node substrate this grammar sits on (the InstanceValue the macro emits,
             ;; node identity, the empty db) lives one layer down
             [fukan.canvas.core.substrate :as sub :refer [->InstanceValue]]))
@@ -58,6 +59,89 @@
 ;; ── value-authoring: instance-form / value-form ──────────────────────────────
 
 (defn- unquote-lit [v] (if (and (seq? v) (= 'quote (first v))) (second v) v))
+
+;; ── authoring clause composition ─────────────────────────────────────────────
+
+(defn- path-segment
+  "Parse a path segment keyword into `[rule quantifier]`, where quantifier is one
+   of `:one`, `:one+`, or `:zero+`. The compact authoring surface mirrors regular
+   path notation: `:calls`, `:calls+`, `:calls*`."
+  [seg]
+  (when-not (or (keyword? seg) (symbol? seg))
+    (throw (ex-info (str "path segment must be a keyword or symbol: " (pr-str seg)) {:segment seg})))
+  (let [n (name seg)]
+    (cond
+      (str/ends-with? n "*") [(symbol (subs n 0 (dec (count n)))) :zero+]
+      (str/ends-with? n "+") [(symbol (subs n 0 (dec (count n)))) :one+]
+      :else                  [(symbol n) :one])))
+
+(defn- dvar? [x] (and (symbol? x) (str/starts-with? (name x) "?")))
+
+(defn- and-disjunct [clauses]
+  (case (count clauses)
+    0 (throw (ex-info "path expansion produced an empty disjunct" {}))
+    1 (first clauses)
+    (apply list 'and clauses)))
+
+(declare path-clauses*)
+
+(defn- path-star-clause [from rule rest-steps to fresh]
+  (let [mid (fresh)
+        join-vars (vec (distinct (filter dvar? [from to])))
+        zero (path-clauses* from rest-steps to fresh)
+        plus (cons (list (symbol (str (name rule) "+")) from mid)
+                   (path-clauses* mid rest-steps to fresh))]
+    (list 'or-join join-vars (and-disjunct zero) (and-disjunct plus))))
+
+(defn- path-clauses*
+  "Compile a path expression into datalog clauses. `*` means zero or more hops,
+   so `[:calls* :performs]` expands to direct `:performs` OR `calls+` followed by
+   `:performs`."
+  [from steps to fresh]
+  (if (empty? steps)
+    [(list '= from to)]
+    (let [[rule q] (path-segment (first steps))
+          more (next steps)
+          final? (nil? more)
+          target (if final? to (fresh))]
+      (case q
+        :one
+        (cons (list rule from target)
+              (when-not final? (path-clauses* target more to fresh)))
+
+        :one+
+        (cons (list (symbol (str (name rule) "+")) from target)
+              (when-not final? (path-clauses* target more to fresh)))
+
+        :zero+
+        [(path-star-clause from rule more to fresh)]))))
+
+(defn ^:export expand-clauses
+  "Expand authoring-layer composition clauses into ordinary datalog clauses.
+
+   Supported forms:
+     `(path ?from [:r :s* :t+] ?to)` — relational composition over generated
+     relation rules (`r`) and closure rules (`s+`/`t+`). `*` is zero-or-more,
+     so it includes the zero-hop case; `+` is one-or-more.
+
+   Expansion is top-level only, matching the existing `(via …)` behavior."
+  [clauses]
+  (vec
+   (apply concat
+          (map-indexed
+           (fn [i clause]
+             (if (and (seq? clause) (= 'path (first clause)))
+               (let [[_ from steps to] clause]
+                 (when-not (and (= 4 (count clause)) (vector? steps))
+                   (throw (ex-info (str "path clause must be (path ?from [segments...] ?to): "
+                                        (pr-str clause))
+                                   {:clause clause})))
+                 (let [counter (atom 0)
+                       fresh (fn []
+                               (symbol (str "?_path" i "_" (swap! counter inc))))]
+                   (path-clauses* from steps to fresh)))
+               [clause]))
+           clauses))))
 
 (defn- ref-arg->form
   "Code for one relation-slot target: a symbol → (var sym); an inline (Tag ...) form
@@ -650,7 +734,7 @@
         {:desc      desc
          :key       (:key m)
          :offenders (unquote-lit (:offenders m))
-         :where     (unquote-lit (:where m))
+         :where     (expand-clauses (unquote-lit (:where m)))
          :rules     (unquote-lit (:rules m))
          :scope     (:scope m)}))))
 
@@ -1005,19 +1089,14 @@
    twin reaches over the path must be a target of the design instance's own `rel` edge —
    compared by NODE IDENTITY (^:value targets are stratum-free: content-equal ⇒ one node)."
   [tag {:keys [rel covered-from]}]
-  (let [[closure final] covered-from
-        base   (keyword (subs (name closure) 0 (dec (count (name closure)))))
-        base+  (symbol (str (name base) "+"))
-        reach  (symbol (str "reach-" (name rel)))]
+  (let [[closure final] covered-from]
     {:key (demand-key tag (str (name rel) "-covered"))
      :desc (str (name tag) "." (name rel) ": every target the twin reaches via " covered-from
                 " is declared on the design side")
      :offenders '[?x]
-     :rules [[(list reach '?t '?v) ['?pr :rel/from '?t] ['?pr :rel/kind final] ['?pr :rel/to '?v]]
-             [(list reach '?t '?v) (list base+ '?t '?mid) ['?pr :rel/from '?mid] ['?pr :rel/kind final] ['?pr :rel/to '?v]]]
      :where [['?x :structure/of tag] '(not [?x :val/extracted true])
              '(twin ?x ?t)
-             (list reach '?t '?v)
+             (first (expand-clauses [(list 'path '?t [closure final] '?v)]))
              (list 'not-join '[?x ?v]
                    ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v])]}))
 

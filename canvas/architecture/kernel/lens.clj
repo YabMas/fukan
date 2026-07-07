@@ -18,20 +18,20 @@
   (Kind Eid :int)
   (Operation focus-nodes "Run :where clauses (binding ?n) with the vocab rules → focus node-set."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:clauses [:vector Clause]]] [:vector Eid]]
-     :performs  [:throws]                          ; the query compiler throws on an unsupported clause
+     :performs  [:throws :state]                   ; the query compiler throws on an unsupported clause / reads state
      :delegates [kernel/vocab-rules query/q]})
   (Operation evaluate-lens "Read a stored lens's query, then resolve it to a focus node-set (a prose-only lens yields nil)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:lens-eid Eid]] [:vector Eid]]
-     :performs  [:throws]                          ; reaches focus-nodes' query-compiler throw
+     :performs  [:throws :state]                   ; reaches focus-nodes' query-compiler throw/state
      :delegates [query/entity]})
   (Operation projection-focus "Resolve a Projection node's focus: inline :select → focus-nodes; :through lens → evaluate-lens; none → the whole model."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] [:vector Eid]]
-     :performs  [:throws]                          ; reaches focus-nodes' query-compiler throw
+     :performs  [:throws :state]                   ; reaches focus-nodes' query-compiler throw/state
      :delegates [query/entity query/q]})
   (Operation refine "Narrow a focus to members also matching further clauses (lens-within-lens)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:focus [:vector Eid]] [:clauses [:vector Clause]]] [:vector Eid]]
-     :performs  [:throws]})                        ; reaches focus-nodes' query-compiler throw
+     :performs  [:throws :state]})                 ; reaches focus-nodes' query-compiler throw/state
   (Operation run-checks "Evaluate every Check — a non-empty gated lens focus is a violation (the use-side dual of structure/check)."
     {:signature [:=> [:catn [:db substrate/StructureDb]] :any]
-     :performs  [:throws]
+     :performs  [:throws :state]
      :delegates [query/q query/entity]}))

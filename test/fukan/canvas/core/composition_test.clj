@@ -5,6 +5,7 @@
             [fukan.cozo.law]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [canvas.vocab.code.module]
             [canvas.vocab.code.operation :refer [Operation]]))
 
 ;; ── product fixtures: a law-only facet + two includers ──────────────────────
@@ -160,6 +161,7 @@
 (Operation ^{:name "comp-a"} op-a {:delegates [op-b]})
 (Operation ^{:name "comp-b"} op-b {:delegates [op-c]})
 (Operation ^{:name "comp-c"} op-c {:performs [:io]})
+(Operation ^{:name "comp-throws"} op-throws {:performs [:throws]})
 
 (defn- names [db eids] (set (map #(:entity/name (cq/entity db %)) eids)))
 
@@ -174,10 +176,11 @@
       (is (empty? (reach "comp-c")) "c delegates to nothing"))))
 
 (deftest effectful-is-a-property-of-directly-effectful-ops
-  (testing "the effectful defrelation selects ops that directly perform a consequential effect"
-    (let [db  (build/vars->cozo [#'op-a #'op-b #'op-c])
+  (testing "the effectful defrelation selects ops that directly perform any effect"
+    (let [db  (build/vars->cozo [#'op-a #'op-b #'op-c #'op-throws])
           eff (set (cq/q '[:find [?o ...] :in $ % :where (effectful ?o)] db (s/vocab-rules)))]
-      (is (= #{"comp-c"} (names db eff)) "only c directly performs an effect (:io)"))))
+      (is (= #{"comp-c" "comp-throws"} (names db eff))
+          ":throws is an effect; consumers that only care about a subset filter downstream"))))
 
 (deftest via-composes-a-property-along-a-transitive-relation
   (testing "(via :delegates Operation effectful) = ops that transitively delegate to a directly-effectful op"
@@ -200,3 +203,79 @@
       (is (= #{"cb" "cc"} (reach "ca")) "ca reaches cb and cc transitively via the calls graph")
       (is (= #{"cc"} (reach "cb")) "cb reaches cc")
       (is (empty? (reach "cc")) "cc calls nothing"))))
+
+(deftest path-clause-composes-relations-with-star-closure
+  (testing "(path ?op [:calls* :performs] ?effect) composes zero-or-more calls with performs"
+    (let [db (build/maps->cozo
+              [{:entity/id "pa" :structure/of :canvas.vocab.code.operation/Operation :entity/name "pa"}
+               {:entity/id "pb" :structure/of :canvas.vocab.code.operation/Operation :entity/name "pb"}
+               {:entity/id "pc" :structure/of :canvas.vocab.code.operation/Operation :entity/name "pc"}
+               {:entity/id "io" :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}]
+              [{:rel/id "p-ab" :rel/from [:entity/id "pa"] :rel/kind :calls :rel/to [:entity/id "pb"]}
+               {:rel/id "p-bc" :rel/from [:entity/id "pb"] :rel/kind :calls :rel/to [:entity/id "pc"]}
+               {:rel/id "p-cio" :rel/from [:entity/id "pc"] :rel/kind :performs :rel/to [:entity/id "io"]}])
+          reached (set (cq/q (vec (concat '[:find [?opn ...] :in $ % :where]
+                                           (s/expand-clauses '[(path ?op [:calls* :performs] ?effect)
+                                                               [?op :entity/name ?opn]
+                                                               [?effect :val/name "io"]])))
+                              db (s/vocab-rules)))]
+      (is (= #{"pa" "pb" "pc"} reached)
+          ":calls* includes the zero-hop operation that directly performs the effect"))))
+
+(deftest query-expands-path-after-parameter-substitution
+  (testing "a path endpoint can be supplied through :in without corrupting the or-join helper"
+    (let [db (build/maps->cozo
+              [{:entity/id "qa" :structure/of :canvas.vocab.code.operation/Operation :entity/name "qa"}
+               {:entity/id "qb" :structure/of :canvas.vocab.code.operation/Operation :entity/name "qb"}
+               {:entity/id "qio" :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}]
+              [{:rel/id "q-ab" :rel/from [:entity/id "qa"] :rel/kind :calls :rel/to [:entity/id "qb"]}
+               {:rel/id "q-bio" :rel/from [:entity/id "qb"] :rel/kind :performs :rel/to [:entity/id "qio"]}])
+          qa (ffirst (cq/q '[:find ?o :where [?o :entity/name "qa"]] db))]
+      (is (= #{"io"}
+             (set (cq/q '[:find [?en ...] :in $ ?op
+                          :where (path ?op [:calls* :performs] ?effect)
+                                 [?effect :val/name ?en]]
+                        db qa)))))))
+
+(deftest lens-focus-expands-path-clauses
+  (testing "lens selections can compose a path without minting a named reaches-effect relation"
+    (let [db (build/vars->cozo [#'op-a #'op-b #'op-c])
+          focus (lens/focus-nodes db '[(Operation ?n)
+                                       (path ?n [:delegates* :performs] ?effect)
+                                       [?effect :val/name "io"]])]
+      (is (= #{"comp-a" "comp-b" "comp-c"} (names db focus))
+          "delegates* includes the directly effectful operation as the zero-hop case"))))
+
+(defstructure PathMark
+  "A test-only path target."
+  {:kind :string})
+
+(defstructure PathNode
+  "A test-only node with a transitive edge and a terminal mark."
+  {:next [:* {:transitive true} PathNode]
+   :marks [:* PathMark]})
+
+(PathMark pmark-io {:kind "io"})
+(declare pnode-b pnode-c)
+(PathNode pnode-a {:next [pnode-b]})
+(PathNode pnode-b {:next [pnode-c]})
+(PathNode pnode-c {:marks [pmark-io]})
+
+(defstructure PathAudit
+  "Flags test nodes that reach a mark through relation composition."
+  (law "operation reaches io"
+    :scope ::PathNode
+    :offenders '[?o]
+    :where '[(path ?o [:next* :marks] ?mark)
+             [?mark :val/kind "io"]]))
+
+(deftest laws-expand-path-clauses
+  (testing "laws use the same path composition authoring layer as readings"
+    (let [db (build/vars->cozo [#'pmark-io #'pnode-a #'pnode-b #'pnode-c])
+          offenders (->> (s/check db)
+                         (filter #(= "operation reaches io" (:law %)))
+                         (mapcat :offenders)
+                         (map first)
+                         (names db)
+                         set)]
+      (is (= #{"pnode-a" "pnode-b" "pnode-c"} offenders)))))

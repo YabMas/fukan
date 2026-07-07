@@ -20,7 +20,6 @@
             ;; `check`/`(drift)` over the unified held model surfaces drift
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as code-module]
-            [canvas.vocab.code.effect :as code-effect]
             [canvas.principles.layered-architecture :as la]
             [canvas.principles.parse-dont-validate :as pdv]
             [canvas.principles.declared-effects :as declared-effects]))
@@ -199,7 +198,8 @@
   "The EFFECT SURFACE: extracted operations that DIRECTLY perform a consequential effect
    (:io/:state/:require — logging excluded), grouped by code module. Cross-reference (architecture)
    for each module's region: a consequential effect in a meant-to-be-pure region is the
-   design-attention signal. (The `effectful` property's read, printed by region.)"
+   design-attention signal. This is a downstream subset of `Effect`; partiality reads `:throws`
+   separately."
   []
   (if-let [m (infra-model/get-model)]
     (let [rows (cq/q '[:find ?mn ?on ?en
@@ -212,7 +212,7 @@
         (println "No effect surface — no extracted op performs a consequential effect.")
         (let [by-mod (group-by first rows)]
           (println "Effect surface —" (count (set (map (juxt first second) rows)))
-                   "effectful op(s) in" (count by-mod) "module(s):")
+                   "world-effect op(s) in" (count by-mod) "module(s):")
           (doseq [[mn rs] (sort-by key by-mod)]
             (println (format "  %s" mn))
             (doseq [[on ers] (sort-by key (group-by second rs))]
@@ -272,7 +272,7 @@
    only TRANSITIVELY via a call (the ② propagation surface that containment would collapse)."
   []
   (if-let [m (infra-model/get-model)]
-    (let [{:keys [direct transitive-only]} (code-effect/throw-spread m)]
+    (let [{:keys [direct transitive-only]} (pdv/throw-spread m)]
       (println "DIRECT throwers (" (count direct) "):" (str/join " " (sort direct)))
       (println "\nTRANSITIVE-only (" (count transitive-only) "):" (str/join " " (sort transitive-only))))
     (println "No model loaded yet. Use (go) first.")))

@@ -22,18 +22,18 @@
   (Operation instance-form
     "A model node rendered back as its authored instance form (the data dual)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Form]
-     :performs  [:throws]                          ; render-type → the query compiler
+     :performs  [:throws :state]                   ; render-type → the query compiler
      :delegates [kernel/structure-by-tag typing/render-type query/q query/entity]})   ; resolve the structure + render refined targets + read the graph
   (Operation instance-text
     "instance-form, formatted like the authored source (aligned slot map)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Text]
-     :performs  [:throws]})                        ; via instance-form
+     :performs  [:throws :state]})                 ; via instance-form
   (Operation focus-text
     "A focus (clauses or eids) rendered as its authored forms — the textual model explorer."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:focus Focus]] Text]
-     :performs  [:throws]                          ; via focus-nodes (the query compiler)
+     :performs  [:throws :state]                   ; via focus-nodes (the query compiler)
      :delegates [lens-engine/focus-nodes]})
   (Operation violations-text
     "check output with each offender quoted as its authored form, fix-adjacent."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:violations [:vector kernel/Violation]]] Text]
-     :performs  [:throws]}))                        ; via instance-text
+     :performs  [:throws :state]}))                 ; via instance-text

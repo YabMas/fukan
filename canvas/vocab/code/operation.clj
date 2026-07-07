@@ -8,11 +8,10 @@
    `defn→Operation`+`:calls` extraction is added with the extractor.)"
   (:require [clojure.edn :as edn]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
             [fukan.cozo.query :as cq]
             [canvas.vocab.type :as ct :refer [Schema]]
-            [canvas.vocab.code.effect :as effect :refer [Effect]]
+            [canvas.vocab.code.effect :refer [Effect]]
             [canvas.vocab.grouping :refer [Connected]]
             [canvas.vocab.code.kind :refer [Kind]]))
 
@@ -218,29 +217,3 @@
              db)
        (filter (fn [[oeid _]] (some #{:any} (tree-seq coll? seq (operation-sig db oeid)))))
        (map second) set))
-
-;; ── Clojure extraction (defn → Operation) ────────────────────────────────────
-
-(def fn-defining
-  "clj-kondo `:defined-by` values that denote a computation unit (an Operation). `defn`/`defn-`
-   are functions; `defmulti` is a DISPATCH POINT — also an Operation (callers depend on it; its
-   handler fan-out is authored intent, see `:dispatches-to`). `def`, `defmacro`, `defmethod`, …
-   stay excluded — `defmethod` defines no var."
-  #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti})
-
-(defn extract-operation
-  "Build an extracted Operation InstanceValue from a clj-kondo var-definition `v` and the set of
-   effect keywords `effs` directly attributed to it. Stamps privacy, the `^:export`/`^:test-support`
-   mechanism flags, the realized `:malli/schema` signature (`:val/sig`), and the direct effects as
-   `:performs` (each a content-deduped Effect value, via `effect/effect-iv`).
-   Provenance (`:val/extracted`) is stamped by the BUILD at the merge (`substrate/stamp-stratum`), not here."
-  [v effs]
-  (sub/->InstanceValue ::Operation (str (:name v)) nil
-                       (cond-> {:val/private (boolean (:private v))}
-                         (:export (:meta v))       (assoc :val/export true)
-                         (:test-support (:meta v)) (assoc :val/test-support true)
-                         (:malli/schema (:meta v)) (assoc :val/sig (pr-str (:malli/schema (:meta v)))))
-                       (cond-> []
-                         (seq effs) (conj {:rk :performs :card :many
-                                           :targets (mapv effect/effect-iv (sort effs))}))
-                       false))
