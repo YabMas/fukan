@@ -717,8 +717,17 @@
                                         " :altitude :node has no consumer yet — declare :container")
                                    {:structure sname :slot (:rel s)}))))
         laws   (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
-        reader-form (some (fn [f] (when (= 'reader (first f)) (second f)))
-                          (filter #(= 'reader (first %)) body))
+        explicit-reader (some (fn [f] (when (= 'reader (first f)) (second f)))
+                              (filter #(= 'reader (first %)) body))
+        ;; a ^:value structure with exactly one scalar slot and no explicit (reader …) is a
+        ;; LITERAL ATOM: authoring a bare scalar (`:io`) fills that slot. The synthesized reader
+        ;; is VERBATIM — the kernel stores the literal as-is (it knows no scalar types, so it
+        ;; cannot coerce), hence the slot's declared type must match the authored literal. The
+        ;; degenerate-case dual of the auto-generated scalar type-check law.
+        reader-form (or explicit-reader
+                        (when (and value? (= 1 (count slots)) (scalar-slot? (first slots)))
+                          (let [slot-sym (symbol (name (:rel (first slots))))]
+                            `(fn [lit#] [(list '~slot-sym lit#)]))))
         ;; an instance-level authoring-syntax fn (the reader's analogue, raised from a single
         ;; slot's literal to the whole instance arg-tail): applied to the body before clause
         ;; parsing, so a structure owns its surface sugar (e.g. Operation's `->`) — NOT core.
