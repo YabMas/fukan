@@ -73,12 +73,18 @@
   [cdb {:keys [tag val-attr target]}]
   (let [tag-s  (subs (str tag) 1)
         attr-s (subs (str val-attr) 1)
+        validate-value (fn [v]
+                         ;; The mirror stores keyword scalar values in t_str without the
+                         ;; leading colon, matching query literal compilation. Rehydrate for
+                         ;; the hybrid type-law check so :keyword slots validate the authored
+                         ;; value rather than the storage encoding.
+                         (if (= :keyword target) (keyword v) v))
         rows   (mapcat (fn [bucket]
                          (db/q cdb (str "?[x, v] := *" bucket "[x, '" attr-s "', v], "
                                         "*t_str[x, 'structure/of', '" tag-s "']")))
                        ["t_int" "t_str" "t_bool"])]
     (->> rows
-         (filter (fn [[_ v]] (false? (typing/value-valid? target v))))
+         (filter (fn [[_ v]] (false? (typing/value-valid? target (validate-value v)))))
          (mapv (fn [[x _]] [(str x)])))))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}

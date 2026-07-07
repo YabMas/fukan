@@ -17,16 +17,38 @@
             [canvas.vocab.code.kind :refer [Kind]]))
 
 (defn ^:export signature->slots
-  "Operation's authoring syntax (the `(syntax …)` hook, map → map): a `:signature`
-   pseudo-key is rewritten into the ordered+labelled `:in` vector and the `:out` entry.
-   The value is a malli function schema `[:=> INPUT OUTPUT]`; INPUT is `[:catn [:name Type] …]`
-   (named params → ordered + labelled `[name Type]` pairs) or `[:cat]` (nullary). A
-   `[:cat Type …]` (positional, unnamed) is REJECTED — name your parameters. The Types are
-   ordinary malli, expanded by the Schema reader (a bare symbol is a var-ref to a Kind)."
-  [m]
-  (if-not (contains? m :signature)
-    m
-    (let [form (:signature m)]
+  "Operation's authoring syntax. Existing map form remains valid:
+   `{:signature [:=> INPUT OUTPUT] :performs [...]}`.
+
+   The concise form makes the signature the primary body:
+   `(Operation f [:=> INPUT OUTPUT] {:performs [...]})`.
+
+   The signature is rewritten into the ordered+labelled `:in` vector and the `:out` entry.
+   INPUT is `[:catn [:name Type] …]` (named params → ordered + labelled `[name Type]`
+   pairs) or `[:cat]` (nullary). A `[:cat Type …]` (positional, unnamed) is REJECTED —
+   name your parameters. The Types are ordinary malli, expanded by the Schema reader."
+  [body]
+  (let [m (cond
+            (map? body) body
+
+            (and (vector? body) (= :=> (first body)))
+            {:signature body}
+
+            (and (vector? body) (vector? (first body)) (= :=> (ffirst body)))
+            (let [[signature opts] body]
+              (when-not (or (nil? opts) (map? opts))
+                (throw (ex-info (str "operation options after a positional signature must be a map: "
+                                     (pr-str opts))
+                                {:body body})))
+              (assoc (or opts {}) :signature signature))
+
+            :else
+            (throw (ex-info (str "operation body must be a slots map or a signature form: "
+                                 (pr-str body))
+                            {:body body})))]
+    (if-not (contains? m :signature)
+      m
+      (let [form (:signature m)]
       (when-not (and (vector? form) (= :=> (first form)) (= 3 (count form)))
         (throw (ex-info (str "signature must be a malli function schema [:=> INPUT OUTPUT]: " (pr-str form)) {:form form})))
       (let [[_ input output] form]
@@ -35,7 +57,7 @@
           (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))
         (let [in (ct/catn->pairs input)]
           (cond-> (-> m (dissoc :signature) (assoc :out output))
-            (seq in) (assoc :in in)))))))
+            (seq in) (assoc :in in))))))))
 
 (defstructure Operation
   "A named unit of computation — the UNIFIED computational unit. An `Operation` is either

@@ -124,10 +124,22 @@
 (def t4-s1 (Shp {:kind "leaf"}))
 (def t4-s2 (Shp {:kind "leaf"}))
 
+(s/defstructure ^:value Atom "single-scalar atom" {:name :keyword})
+
+(def t4-atom (Atom :io))
+
+(defn t4-atom-of [kw]
+  (Atom kw))
+
 (deftest value-structures-dedupe-by-content
   (is (:value? t4-s1))
   ;; equal content → equal computed id (the assembler will stamp :entity/id from this)
   (is (= (sub/value-content-key t4-s1) (sub/value-content-key t4-s2))))
+
+(deftest single-scalar-value-structure-accepts-direct-literal
+  (testing "a generated single-scalar reader works in expression position too"
+    (is (= {:val/name :io} (:scalars t4-atom)))
+    (is (= {:val/name :throws} (:scalars (t4-atom-of :throws))))))
 
 ;; ── Task 7b: reader-slot expansion ───────────────────────────────────────────
 ;; A ^:value structure that declares a (reader fn) allows slot args to be

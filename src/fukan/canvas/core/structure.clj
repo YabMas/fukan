@@ -174,6 +174,17 @@
   [sdef m]
   (if-let [syn (:syntax sdef)] (syn m) m))
 
+(defn- syntax-input
+  "The non-nested instance body handed to a `(syntax f)` hook. With no syntax hook,
+   the only legal body is one slots map. With a hook, one body form keeps the old
+   behavior; multiple forms are passed as a vector so the vocab can own a compact
+   domain surface such as `(Operation f signature opts)`."
+  [sdef body]
+  (cond
+    (empty? body) {}
+    (and (:syntax sdef) (next body)) (vec body)
+    :else (first body)))
+
 (defn- build-instance-form
   "Shared clause-walker behind `instance-form`, `value-form` and `expand-instance`.
    Builds the `->InstanceValue` call with `name-expr` (a string form or nil-literal),
@@ -231,13 +242,14 @@
     ;; (a non-map arg-tail) — the hook normalizes it to the slots map; without a hook
     ;; the body must still be empty or a single slots map.
     (when-not (or (empty? body)
-                  (and (empty? (rest body)) (or (map? one) (:syntax sdef))))
+                  (and (empty? (rest body)) (or (map? one) (:syntax sdef)))
+                  (and (:syntax sdef) (seq body)))
       (throw (ex-info (str (clojure.core/name tag) ": an instance is `("
                            (clojure.core/name tag) " \"doc\"? {slot → value}?)` — got "
                            (pr-str (vec body)))
                       {:tag tag :body (vec body)})))
     (build-instance-form tag nil doc false
-                         (map->clauses tag sdef (apply-syntax sdef (if (some? one) one {}))))))
+                         (map->clauses tag sdef (apply-syntax sdef (syntax-input sdef body))))))
 
 (defn ^:export value-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance —
@@ -248,9 +260,15 @@
   (let [sdef (structure-by-tag tag)]
     (when-not sdef
       (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
-    (if (and (= 1 (count body)) (map? (first body)))
+    (cond
+      (and (= 1 (count body)) (map? (first body)))
       (build-instance-form tag nil nil true
                            (map->clauses tag sdef (apply-syntax sdef (first body))))
+
+      (and (= 1 (count body)) (:reader sdef) (reader-literal? (first body)))
+      (build-instance-form tag nil nil true ((:reader sdef) (first body)))
+
+      :else
       (build-instance-form tag nil nil true body))))
 
 ;; ── the named-instance surface: def-emitting, defstructure's mirror ──────────
@@ -310,13 +328,14 @@
         cls   (remove nested-instance? body)
         one   (first cls)
         _     (when-not (or (empty? cls)
-                            (and (empty? (rest cls)) (or (map? one) (:syntax sdef))))
+                            (and (empty? (rest cls)) (or (map? one) (:syntax sdef)))
+                            (and (:syntax sdef) (seq cls)))
                 (throw (ex-info (str (clojure.core/name tag) " " sym ": an instance is `("
                                      (clojure.core/name tag)
                                      " name \"doc\"? {slot → value}? nested…)` — got "
                                      (pr-str (vec cls)))
                                 {:tag tag :sym sym :body (vec cls)})))
-        m     (apply-syntax sdef (if (some? one) one {}))
+        m     (apply-syntax sdef (syntax-input sdef cls))
         kids  (mapv (fn [nf] (assoc (expand-instance (resolve-struct-tag (first nf)) (rest nf))
                                     :private? (boolean (:private (meta (second nf)))))) nests)
         routed (->> kids

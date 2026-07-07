@@ -17,10 +17,30 @@
 (operation/Operation ^{:name "a-op"} t-a-op {:delegates [t-b-op]})
 ;; c-op takes a DShape (a ref to a Kind owned by module D) → data-adoption dependency c→d
 (operation/Operation ^{:name "c-op"} t-c-op {:signature [:=> [:catn [:x DShape]] :nil]})
+(operation/Operation ^{:name "sig-op"} t-sig-op
+  [:=> [:catn [:x DShape]] :nil]
+  {:performs [:io] :delegates [t-b-op]})
 (module/Module ^{:name "A"} t-mod-a {:exposes [t-a-op]})
 (module/Module ^{:name "B"} t-mod-b {:exposes [t-b-op]})
 (module/Module ^{:name "C"} t-mod-c {:exposes [t-c-op]})
 (module/Module ^{:name "D"} t-mod-d {:owns [DShape]})
+
+(deftest operation-signature-can-be-the-primary-body
+  (testing "Operation syntax accepts a primary signature plus an options map"
+    (let [db (build/vars->cozo [#'DShape #'t-b-op #'t-sig-op])
+          op (ffirst (cq/q '[:find ?o :where [?o :entity/name "sig-op"]] db))]
+      (is (= #{"nil"}
+             (set (cq/q '[:find [?k ...] :in $ ?op
+                         :where [?r :rel/from ?op] [?r :rel/kind :out] [?r :rel/to ?s]
+                                [?s :val/kind ?k]]
+                       db op)))
+          "the positional signature still produces the :out schema")
+      (is (= #{"io"}
+             (set (cq/q '[:find [?en ...] :in $ ?op
+                         :where [?r :rel/from ?op] [?r :rel/kind :performs] [?r :rel/to ?e]
+                                [?e :val/name ?en]]
+                       db op)))
+          "the options map still authors secondary slots"))))
 
 (deftest module-dependencies-unions-calls-and-data-adoption
   (testing "M depends on N via a delegate (call) OR via adopting a Kind N owns (data)"

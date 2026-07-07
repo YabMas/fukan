@@ -50,7 +50,7 @@
 ;; Terms/Laws during the Stage-A re-plumb fails here; diff `(normalized-terms)`/`(normalized-laws)`
 ;; live against the failing set to localize the family whose handler drifted.
 (def ^:private golden-terms {:count 60  :hash 1126070098})
-(def ^:private golden-laws  {:count 100 :hash 737435605})
+(def ^:private golden-laws  {:count 100 :hash 1844879140})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

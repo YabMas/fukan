@@ -8,20 +8,14 @@
    here via datalog injection.)"
   (:require [clojure.set :as set]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.substrate :as sub]
             [fukan.cozo.query :as cq]))
-
-(defn ^:export read-effect
-  "Expand an effect literal — a keyword like `:io` — into Effect clauses, so
-   effects author as `:performs [:io :require]`."
-  [kw]
-  [(list 'name (name kw))])
 
 (defstructure ^:value Effect
   "A named side effect an Operation performs (e.g. :io, :require, :stderr, :throws).
-   Value-identified — `:io` is one node shared across every Operation that performs it."
-  {:name :string}
-  (reader read-effect))
+   Value-identified — `:io` is one node shared across every Operation that performs it.
+   A single-scalar `^:value` atom: the kernel derives its literal reader, so effects
+   author as `:performs [:io :require]` and `:val/name` holds the keyword verbatim."
+  {:name :keyword})
 
 (s/defrelation :effectful
   "an Operation that DIRECTLY performs a consequential effect (io/state/require) — NOT :throws, which
@@ -119,7 +113,7 @@
   "A value-identified Effect InstanceValue for effect keyword `kw` — content-identical to an
    authored `(Effect :kw)`, so extracted and authored effects collapse to one node."
   [kw]
-  (sub/->InstanceValue ::Effect nil nil {:val/name (name kw)} [] true))
+  (Effect kw))
 
 (defn op-effects
   "Map {[caller-ns-str caller-fn-str] #{effect-kw …}} from clj-kondo var-usages — every resolvable
