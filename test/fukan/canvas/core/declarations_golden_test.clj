@@ -78,8 +78,12 @@
 ;; read `(exposed ?x)` (a new defrelation) instead of the inline `:exposes` EAV — behavior-preserving
 ;; (the rule expands to the same clauses; live check unchanged at 0 violations), so only the emitted
 ;; `:where` form moved. Terms unaffected (a defrelation is not a declaration Term).
+;; Laws hash refreshed again 2026-07-08: `authored`/`extracted-op` (redundant per-kind aliases of the
+;; kernel's universal `design`/`fact` substrate rules) were dissolved, so the signature-completeness +
+;; totality laws now read `(design …)` — behavior-preserving (live check still 0 violations, count
+;; still 82). Terms unaffected: those defrelations had unqualified tags, already outside this snapshot.
 (def ^:private golden-terms {:count 52 :hash 1756057039})
-(def ^:private golden-laws  {:count 82 :hash 150712395})
+(def ^:private golden-laws  {:count 82 :hash -692722681})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

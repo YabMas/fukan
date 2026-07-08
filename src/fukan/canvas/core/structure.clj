@@ -517,7 +517,7 @@
   "A combinator's `:when` subject-filter → positive where-clauses on `var`. A scalar MAP
    `{k v}` is sugar for `:val/k`-equality (`[var :val/k v]` per entry); a raw datalog
    clause-VECTOR is spliced verbatim (it uses `var` as the subject, e.g.
-   `'[(authored ?x) [?xr :rel/kind :exposes] [?xr :rel/to ?x]]`) — the same datalog the
+   `'[(design ?x) [?xr :rel/kind :exposes] [?xr :rel/to ?x]]`) — the same datalog the
    correspondence demands' `:when`/`:require` accept. nil → none."
   [var when]
   (cond
@@ -929,7 +929,7 @@
 
      (defrelation :produces \"an authored Operation ?o whose :out schema is a ref naming Kind ?k\"
        '[?o ?k]
-       '[(authored ?o)
+       '[(design ?o)
          [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
          [?sch :val/kind \"ref\"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]])"
   [rtag docstring head where]

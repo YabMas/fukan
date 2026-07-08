@@ -39,7 +39,7 @@
 (Projection ^{:name "DriftClose"} acb-DriftClose
   "Blueprint framed as drift to close — ad-hoc contextualization."
   {:contextualizes acb-Blueprint
-   :select         '[(authored ?n) (not-join [?n] (op-twin ?n ?o))]
+   :select         '[(Operation ?n) (design ?n) (not-join [?n] (op-twin ?n ?o))]
    :context        "The following capabilities are modelled but have no realizing function (drift). Implement each so the model and code correspond:"})
 (Projection ^{:name "Refactor"} acb-Refactor
   {:through        acb-stages

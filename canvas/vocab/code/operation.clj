@@ -108,22 +108,13 @@
   ;; Rides Operation itself (the law is about its `:out` slot) — no separate holder. Self-scoped to
   ;; Operation; the datalog :when narrows to the public authored surface.
   (law "every public authored operation declares an output type"
-    (has :out :when '[(authored ?x) (exposed ?x)])
+    (has :out :when '[(design ?x) (exposed ?x)])
     :key :signature-completeness))
 
-;; `authored`/`extracted-op` — the paired "an Operation, {not,} extracted from code" guards the
-;; correspondence laws/lenses (and the op pairings `op-twin`/`op-ext-twin`) each quantify over.
-;; Derived UNARY membership rules injected into every law AND every `cq/q` (the vocab-index is
-;; ambient — a `cq/q` need not pass them); non-recursive, so they pay no fixpoint.
-(s/defrelation :authored
-  "an AUTHORED Operation ?o — a self-model's intent (not extracted from code)"
-  '[?o]
-  '[[?o :structure/of :canvas.vocab.code.operation/Operation] (not [?o :val/extracted true])])
-
-(s/defrelation :extracted-op
-  "an EXTRACTED Operation ?o — a fact stamped from code (the dual of `authored`)"
-  '[?o]
-  '[[?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]])
+;; The provenance split an Operation quantifies over is NOT vocab: `(design ?o)` (authored, not
+;; extracted) and `(fact ?o)` (extracted from code) are the kernel's universal substrate rules
+;; (`fukan.canvas.core.rules`), ambient in every law and `cq/q`. Combine with the op-kind rule
+;; `(Operation ?o)` — or lean on an op-specific edge already in the clause — where op-ness matters.
 
 ;; `exposed` — an Operation on SOME Module's public `:exposes` surface. The recurring
 ;; "public surface" predicate the signature/type demands and the precision reading each
@@ -195,7 +186,7 @@
    every public op's signature is fully precise. Reads the rendered signature, flagging any reachable `:any`."
   [db]
   (->> (cq/q '[:find ?o ?on :in $
-               :where (authored ?o) [?o :entity/name ?on] (exposed ?o)]
+               :where (design ?o) [?o :entity/name ?on] (exposed ?o)]
              db)
        (filter (fn [[oeid _]] (some #{:any} (tree-seq coll? seq (operation-sig db oeid)))))
        (map second) set))

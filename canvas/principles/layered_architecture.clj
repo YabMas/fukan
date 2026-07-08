@@ -158,7 +158,7 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
                       (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
                       (not-join [?km1 ?km2]
                         [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
-                        (authored ?o1)
+                        (design ?o1)
                         (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
                         [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]
                         [(canvas.vocab.code.module/module-corresponds? ?cm2 ?km2)])]

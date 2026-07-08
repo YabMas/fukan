@@ -126,12 +126,13 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
    extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is the call graph
    extended by modelled dispatch: a `:calls` edge, OR a `:dispatches-to` edge lifted onto the twins
    of its authored endpoints. `ext-reaches` is its transitive closure — a rule-calls-rule recursion
-   the kernel now allows; the query negates it under stratified negation. The injected vocab rules
-   (`authored`/`extracted-op`/`in-module`) are ambient in any `cq/q` — only these on-graph
-   reachability rules need be supplied."
+   the kernel now allows; the query negates it under stratified negation. The injected rules
+   (`Operation`/`design`/`fact`/`in-module`) are ambient in any `cq/q` — only these on-graph
+   reachability rules need be supplied. `in-module` binds Kinds too, so op-ness is guarded here
+   explicitly with `(Operation …)` (the design/fact stratum rules are kind-agnostic)."
   '[[(op-ext-twin ?a ?e)
-     (authored ?a) [?a :entity/name ?n] (in-module ?a ?am)
-     (extracted-op ?e) [?e :entity/name ?n] (in-module ?e ?em)
+     (Operation ?a) (design ?a) [?a :entity/name ?n] (in-module ?a ?am)
+     (Operation ?e) (fact ?e) [?e :entity/name ?n] (in-module ?e ?em)
      [(canvas.vocab.code.module/module-corresponds? ?am ?em)]]
     [(ext-edge ?from ?to) [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]]
     [(ext-edge ?e1 ?e2)
@@ -156,7 +157,7 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
   [db]
   (->> (cq/q '[:find ?on1 :in $ %
                :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
-                      (authored ?o1)
+                      (design ?o1)
                       [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
                       (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
                       (op-ext-twin ?o1 ?e1) (op-ext-twin ?o2 ?e2)

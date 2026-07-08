@@ -28,7 +28,7 @@
 (s/defrelation :produces
   "an authored Operation ?o whose :out schema is a ref naming Kind ?k"
   '[?o ?k]
-  '[(authored ?o)
+  '[(design ?o)
     [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
     (names-kind ?sch ?k)])
 
@@ -61,7 +61,7 @@
     :scope :global
     :offenders '[?o]
     :where '[[?tb :structure/of ::TrustBoundary] [?tbr :rel/from ?tb] [?tbr :rel/kind :kind] [?tbr :rel/to ?k]
-             (authored ?o)
+             (design ?o)
              [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?sch]
              (names-kind ?sch ?k)
              (op-twin ?o ?e)
@@ -79,7 +79,7 @@
    Most are parse-edge input parsers; some are internal invariant assertions."
   [db]
   (set (cq/q '[:find [?on ...]
-              :where (extracted-op ?o) [?o :entity/name ?on]
+              :where (fact ?o) [?o :entity/name ?on]
                      [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e]
                      [?e :val/name "throws"]]
             db)))
@@ -91,7 +91,7 @@
   [db]
   (let [direct   (direct-throwers db)
         reachers (set (cq/q '[:find [?on ...]
-                              :where (extracted-op ?o) [?o :entity/name ?on]
+                              :where (fact ?o) [?o :entity/name ?on]
                                      (path ?o [:calls* :performs] ?e)
                                      [?e :val/name "throws"]]
                            db))]
