@@ -56,8 +56,9 @@
   (corresponds :by-name (bridge module-corresponds?))
   {:exposes [:* {:contains true} Operation]   ; the public API surface — Operations callers depend on
    :owns    [:* {:contains true} Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
-   :child   [:* {:contains true} Any]         ; internal members + grain no other module consumes
-   :extracted [:? :boolean]})        ; provenance: true ⇒ from code extraction; absent/false ⇒ authored (symmetric with Operation)
+   :child   [:* {:contains true} Any]}        ; internal members + grain no other module consumes
+  ;; :extracted [:? :boolean] is IMPLIED by (corresponds …) — the kernel mints the provenance slot.
+  )
 
 ;; ── derived module-dependency relations ───────────────────────────────
 ;; `module-owns` / `module-depends` are DEFRELATIONS — injected into every law and query by

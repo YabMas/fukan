@@ -863,6 +863,15 @@
                                                " — it has no instances to twin")
                                           {:structure sname})))
                         (parse-corresponds sname (rest c))))
+        ;; correspondence IMPLIES the provenance slot: a corresponded structure has an authored
+        ;; stratum and an extracted (fact) stratum, discriminated by `:val/extracted` (stamped by
+        ;; the build at merge). That boolean is a consequence of declaring `(corresponds …)`, not a
+        ;; per-structure choice — the demand laws already inline `:val/extracted` — so the declaration
+        ;; mints its `:extracted [:? :boolean]` slot rather than every corresponded structure re-typing
+        ;; it. Guarded (skip if hand-declared) so it is net-zero for structures that still carry it.
+        slots  (cond-> slots
+                 (and corresponds (not (some #(= :extracted (:rel %)) slots)))
+                 (conj (parse-slot-entry :extracted [:? :boolean])))
         sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
                 :includes includes :realized-as realized :corresponds corresponds}]
     `(do
