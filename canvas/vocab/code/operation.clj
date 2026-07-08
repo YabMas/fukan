@@ -80,7 +80,7 @@
     ;; ex-TypeCoverage — positive twin (a missing twin is `realized`'s offence); public surface only
     (realized {:key :type-coverage
                :desc "every public modelled operation's realizing code carries a type signature (:malli/schema)"
-               :when '[[?xr :rel/kind :exposes] [?xr :rel/to ?x]]
+               :when '[(exposed ?x)]
                :require '[[?t :val/sig ?_s]]})
     ;; ex-Encapsulation — the exemption flags are VOCAB's (the kernel never names them)
     (covered  {:desc "every public extracted operation is covered by the model or deliberately exempt"
@@ -108,8 +108,7 @@
   ;; Rides Operation itself (the law is about its `:out` slot) — no separate holder. Self-scoped to
   ;; Operation; the datalog :when narrows to the public authored surface.
   (law "every public authored operation declares an output type"
-    (has :out :when '[(authored ?x)
-                      [?xr :rel/kind :exposes] [?xr :rel/to ?x]])
+    (has :out :when '[(authored ?x) (exposed ?x)])
     :key :signature-completeness))
 
 ;; `authored`/`extracted-op` — the paired "an Operation, {not,} extracted from code" guards the
@@ -126,6 +125,15 @@
   '[?o]
   '[[?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]])
 
+;; `exposed` — an Operation on SOME Module's public `:exposes` surface. The recurring
+;; "public surface" predicate the signature/type demands and the precision reading each
+;; quantify over; a named unary relation so the laws read at domain altitude instead of
+;; re-inlining the `:exposes`/`:rel/to` EAV pair. Injected into every law and `cq/q`.
+(s/defrelation :exposed
+  "an Operation ?x on some Module's public :exposes surface"
+  '[?x]
+  '[[?xr :rel/kind :exposes] [?xr :rel/to ?x]])
+
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
 ;; The three demands (realized / type-coverage / covered) are declared above as (corresponds …)
 ;; sub-forms on Operation; see the `corresponds` entry. No separate law-holder defstructures.
@@ -136,31 +144,12 @@
   [db]
   (cq/violation-names db :corresponds/Operation.realized))
 
-(defn uncovered-operations
-  "The DUAL of drifted-operations — EXTRACTED operations in `db` with no authored operation
-   of the same name in a corresponding module, as a set of names: code not covered by the
-   model. A query, not a law — unmodelled code is a coverage signal, not a violation (you
-   don't model every function). Twin lookup is the injected `op-twin` rule."
-  [db]
-  (->> (cq/q '[:find ?on :in $
-               :where (extracted-op ?o) [?o :entity/name ?on]
-                      (not-join [?o] (op-twin ?s ?o))]
-             db)
-       (map first) set))
-
 (defn uncovered-public-operations
   "The ENCAPSULATION worklist — PUBLIC extracted operations with no authored twin and no exemption flag.
    A public, non-exempt, unmodelled function is an UNDECLARED PUBLIC SURFACE: model it or make it private.
    Reads the generated covered demand (:corresponds/Operation.covered)."
   [db]
   (cq/violation-names db :corresponds/Operation.covered))
-
-(defn untyped-operations
-  "The SIGNATURE worklist — PUBLIC authored Operations (on a Module's `:exposes` surface) with no
-   declared output type (`:out`), as a set of names. Empty ⇔ every public surface op declares its
-   output. Reads the signature-completeness law (on Operation) by its stable :key."
-  [db]
-  (cq/violation-names db :signature-completeness))
 
 (defn operation-sig
   "Render the AUTHORED Operation at `op-eid` to a malli function-schema
@@ -198,13 +187,6 @@
                         (edn/read-string (:val/sig (cq/entity db o)))))))
        (map second) set))
 
-(defn type-uncovered-operations
-  "The TYPE-COVERAGE worklist — PUBLIC modelled Operations whose realizing code carries NO `:malli/schema`,
-   as a set of names. Empty ⇔ every public modelled op's realizing code declares its type. Reads the
-   generated type-coverage demand (:corresponds/Operation.type-coverage)."
-  [db]
-  (cq/violation-names db :corresponds/Operation.type-coverage))
-
 (defn undertyped-operations
   "The PRECISION worklist — PUBLIC modelled Operations whose declared signature still contains an `:any`
    (an under-typed parameter or result), as a set of names. Distinct from coverage (the signature is
@@ -213,7 +195,7 @@
    every public op's signature is fully precise. Reads the rendered signature, flagging any reachable `:any`."
   [db]
   (->> (cq/q '[:find ?o ?on :in $
-               :where (authored ?o) [?o :entity/name ?on] [?xr :rel/kind :exposes] [?xr :rel/to ?o]]
+               :where (authored ?o) [?o :entity/name ?on] (exposed ?o)]
              db)
        (filter (fn [[oeid _]] (some #{:any} (tree-seq coll? seq (operation-sig db oeid)))))
        (map second) set))

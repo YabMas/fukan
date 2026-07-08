@@ -142,8 +142,8 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
   (cq/violation-names db-arg :corresponds/Operation.delegates-realized))
 
 (defn uncovered-calls
-  "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law, like
-   `uncovered-operations`): actual cross-module module-calls (over `:calls`) with no corresponding
+  "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law): actual
+   cross-module module-calls (over `:calls`) with no corresponding
    intended cross-module delegation (over `:delegates`, bridged by `module-corresponds?`), as a set
    of [caller-module callee-module] code-module-name pairs. The couplings the design has not yet
    declared. A single on-graph query — actual cross-module calls MINUS those an authored cross-module

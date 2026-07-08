@@ -361,7 +361,7 @@
                                               db (s/vocab-rules) k)
                               checks    (cq/q '[:find ?o ?on :in $ % ?k
                                                 :where (authored ?o) [?o :entity/name ?on]
-                                                       [?xr :rel/kind :exposes] [?xr :rel/to ?o]
+                                                       (exposed ?o)
                                                        [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?isch]
                                                        [?isch :val/kind "ref"] [?nr :rel/from ?isch] [?nr :rel/kind :names] [?nr :rel/to ?k]
                                                        [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?osch]

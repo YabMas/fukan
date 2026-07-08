@@ -74,8 +74,12 @@
 ;; The frozen snapshot (captured 2026-07-06 against pre-refactor emission). Any drift in derived
 ;; Terms/Laws during the Stage-A re-plumb fails here; diff `(normalized-terms)`/`(normalized-laws)`
 ;; live against the failing set to localize the family whose handler drifted.
+;; Laws hash refreshed 2026-07-08: the Operation type-coverage + signature-completeness laws now
+;; read `(exposed ?x)` (a new defrelation) instead of the inline `:exposes` EAV — behavior-preserving
+;; (the rule expands to the same clauses; live check unchanged at 0 violations), so only the emitted
+;; `:where` form moved. Terms unaffected (a defrelation is not a declaration Term).
 (def ^:private golden-terms {:count 52 :hash 1756057039})
-(def ^:private golden-laws  {:count 82 :hash -100840526})
+(def ^:private golden-laws  {:count 82 :hash 150712395})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
