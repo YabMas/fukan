@@ -124,7 +124,7 @@
    the held model carries the extracted code.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [d (operation/drifted-operations m)]
+    (let [d (cq/violation-names m :corresponds/Operation.realized)]
       (if (empty? d)
         (println "No drift — every modelled Operation is realized in code.")
         (println "Drift —" (count d) "modelled Operation(s) with no realizing function:" (sort d))))
@@ -137,7 +137,7 @@
    code module. (The private half of the coverage gap is settled by definition.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (operation/uncovered-public-operations m)]
+    (let [w (cq/violation-names m :corresponds/Operation.covered)]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
         (let [by-mod (->> (cq/q '[:find ?on ?kmn

@@ -168,12 +168,12 @@
                    {:rel/id "m|child|hidden"   :rel/from -1 :rel/kind :child :rel/to -3}
                    {:rel/id "m|child|exported" :rel/from -1 :rel/kind :child :rel/to -4}
                    {:rel/id "m|child|for-test" :rel/from -1 :rel/kind :child :rel/to -5}])]
-      (is (= #{"leaked"} (operation/uncovered-public-operations db))
+      (is (= #{"leaked"} (cq/violation-names db :corresponds/Operation.covered))
           "only the public, non-exempt, unmodelled op is flagged by the covered demand"))))
 
 (deftest encapsulation-green-on-the-self-model
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
-    (is (empty? (operation/uncovered-public-operations (pipeline/build-model "src")))
+    (is (empty? (cq/violation-names (pipeline/build-model "src") :corresponds/Operation.covered))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
 
 (deftest defmultis-are-extracted-and-modelled
@@ -181,7 +181,7 @@
     (let [m         (pipeline/build-model "src")
           extracted (set (cq/q '[:find [?n ...]
                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
-          worklist  (operation/uncovered-public-operations m)]
+          worklist  (cq/violation-names m :corresponds/Operation.covered)]
       (is (contains? extracted "render-base")    "render-base (defmulti) is extracted as an Operation")
       (is (contains? extracted "render-finding") "render-finding (defmulti) is extracted as an Operation")
       (is (not (contains? worklist "render-base"))    "render-base is covered, not an undeclared public surface")

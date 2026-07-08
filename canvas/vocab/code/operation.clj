@@ -118,20 +118,11 @@
 
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
 ;; The three demands (realized / type-coverage / covered) are declared above as (corresponds …)
-;; sub-forms on Operation; see the `corresponds` entry. No separate law-holder defstructures.
-
-(defn drifted-operations
-  "The AUTHORED operations with no extracted twin, as a set of names. Empty ⇔ the model is fully
-   realized in code. Reads the generated realized demand (:corresponds/Operation.realized)."
-  [db]
-  (cq/violation-names db :corresponds/Operation.realized))
-
-(defn uncovered-public-operations
-  "The ENCAPSULATION worklist — PUBLIC extracted operations with no authored twin and no exemption flag.
-   A public, non-exempt, unmodelled function is an UNDECLARED PUBLIC SURFACE: model it or make it private.
-   Reads the generated covered demand (:corresponds/Operation.covered)."
-  [db]
-  (cq/violation-names db :corresponds/Operation.covered))
+;; sub-forms on Operation; see the `corresponds` entry. No separate law-holder defstructures — and
+;; no per-demand reader wrapper: a demand's worklist is just `(cq/violation-names db <demand-key>)` at
+;; its stable key, read directly by the consumer (`:corresponds/Operation.realized` = drift,
+;; `.covered` = the encapsulation worklist). The readings below are the NON-law TYPE signals — no
+;; backing demand, so they carry real logic that `violation-names` can't express.
 
 (defn operation-sig
   "Render the AUTHORED Operation at `op-eid` to a malli function-schema

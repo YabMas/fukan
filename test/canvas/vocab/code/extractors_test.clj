@@ -7,8 +7,7 @@
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
             [canvas.vocab.code.extractors :as tc]
-            [canvas.vocab.code.extractors.clojure.effect :as clj-effect]
-            [canvas.vocab.code.operation :as corr]))
+            [canvas.vocab.code.extractors.clojure.effect :as clj-effect]))
 
 ;; Register fukan's FACT extractor so build-model's unified build runs it (the proof).
 (extraction/register-fact-extractor! (fn [root] (tc/extract-roots [root])))
@@ -94,7 +93,7 @@
             op-layer Operation is backed by a real function — the cross-layer
             correspondence is assertable only because both layers share that graph"
     (let [model      (pipeline/build-model "src")        ; design + extracted code, unified
-          unrealized (corr/drifted-operations model)]
+          unrealized (cq/violation-names model :corresponds/Operation.realized)]
       ;; sanity: build-model actually brought both layers together
       (is (seq (cq/q '[:find ?s :where [?s :structure/of :canvas.vocab.code.operation/Operation]] model)) "model has Operations")
       (is (seq (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation]] model)) "build-model extracted code into Operations")
