@@ -156,7 +156,7 @@
                   (sort-by (fn [[ord _]] (long ord)))
                   (mapv (fn [[_ to]] (typing/render-type db to))))
         out  (ffirst (cq/q '[:find ?to :in $ ?from
-                             :where [?r :rel/from ?from] [?r :rel/kind :out] [?r :rel/to ?to]]
+                             :where (out ?from ?to)]
                            db op-eid))]
     [:=> (into [:cat] ins) (if out (typing/render-type db out) :nil)]))
 

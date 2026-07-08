@@ -35,7 +35,7 @@
   (law "every cross-subsystem module dependency follows a declared :may-depend edge"
     :scope :global
     :offenders '[?m]
-    :rules '[[(declared-dep ?s ?t) [?s :structure/of :canvas.vocab.code.subsystem/Subsystem] [?mr :rel/from ?s] [?mr :rel/kind :may-depend] [?mr :rel/to ?t]]]
+    :rules '[[(declared-dep ?s ?t) [?s :structure/of :canvas.vocab.code.subsystem/Subsystem] (may-depend ?s ?t)]]
     :where '[(module-depends ?m ?n)
              (in-subsystem ?m ?s) (in-subsystem ?n ?t) [(not= ?s ?t)]
              (not (declared-dep ?s ?t))])
@@ -44,6 +44,6 @@
   ;; edges directly and is PURELY self-recursive.
   (law "the :may-depend graph is acyclic — no subsystem transitively depends on itself"
     :offenders '[?s]
-    :rules '[[(sub-reaches ?s ?t) [?r :rel/from ?s] [?r :rel/kind :may-depend] [?r :rel/to ?t]]
-             [(sub-reaches ?s ?t) [?r :rel/from ?s] [?r :rel/kind :may-depend] [?r :rel/to ?mid] (sub-reaches ?mid ?t)]]
+    :rules '[[(sub-reaches ?s ?t) (may-depend ?s ?t)]
+             [(sub-reaches ?s ?t) (may-depend ?s ?mid) (sub-reaches ?mid ?t)]]
     :where '[(sub-reaches ?s ?s)]))

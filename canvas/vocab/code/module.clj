@@ -81,12 +81,9 @@
   '[?m ?n]
   '[(module-owns ?m ?op)
     (or-join [?op ?n]
-      (and [?dr :rel/from ?op] [?dr :rel/kind :delegates] [?dr :rel/to ?op2]
-           (module-owns ?n ?op2))
-      (and [?ir :rel/from ?op] [?ir :rel/kind :in]  [?ir :rel/to ?sch]
-           (names-kind ?sch ?k) (module-owns ?n ?k))
-      (and [?o2 :rel/from ?op] [?o2 :rel/kind :out] [?o2 :rel/to ?sch]
-           (names-kind ?sch ?k) (module-owns ?n ?k)))
+      (and (delegates ?op ?op2) (module-owns ?n ?op2))
+      (and (in ?op ?sch)  (names-kind ?sch ?k) (module-owns ?n ?k))
+      (and (out ?op ?sch) (names-kind ?sch ?k) (module-owns ?n ?k)))
     [(not= ?m ?n)]])
 
 (defn module-dependencies
@@ -134,9 +131,9 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
      (Operation ?a) (design ?a) [?a :entity/name ?n] (in-module ?a ?am)
      (Operation ?e) (fact ?e) [?e :entity/name ?n] (in-module ?e ?em)
      [(canvas.vocab.code.module/module-corresponds? ?am ?em)]]
-    [(ext-edge ?from ?to) [?c :rel/kind :calls] [?c :rel/from ?from] [?c :rel/to ?to]]
+    [(ext-edge ?from ?to) (calls ?from ?to)]
     [(ext-edge ?e1 ?e2)
-     [?dr :rel/kind :dispatches-to] [?dr :rel/from ?a1] [?dr :rel/to ?a2]
+     (dispatches-to ?a1 ?a2)
      (op-ext-twin ?a1 ?e1) (op-ext-twin ?a2 ?e2)]
     [(ext-reaches ?a ?b) (ext-edge ?a ?b)]
     [(ext-reaches ?a ?b) (ext-edge ?a ?mid) (ext-reaches ?mid ?b)]])
@@ -156,7 +153,7 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
    source or target has no extracted twin is out of scope. Asserted empty by the regression suite."
   [db]
   (->> (cq/q '[:find ?on1 :in $ %
-               :where [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+               :where (delegates ?o1 ?o2)
                       (design ?o1)
                       [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
                       (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]

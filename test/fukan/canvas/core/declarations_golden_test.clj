@@ -82,8 +82,12 @@
 ;; kernel's universal `design`/`fact` substrate rules) were dissolved, so the signature-completeness +
 ;; totality laws now read `(design …)` — behavior-preserving (live check still 0 violations, count
 ;; still 82). Terms unaffected: those defrelations had unqualified tags, already outside this snapshot.
+;; Laws hash refreshed once more 2026-07-08: hand-inlined reified-edge triples in law bodies (subsystem
+;; :may-depend conformance/acyclicity, TrustBoundary parser-cross-check + totality, layering membership)
+;; now read the auto-derived slot rules (`may-depend`/`kind`/`in`/`performs`/`fact`) — behavior-preserving
+;; (live check still 0 violations, count still 82), only the emitted `:where` altitude changed.
 (def ^:private golden-terms {:count 52 :hash 1756057039})
-(def ^:private golden-laws  {:count 82 :hash -692722681})
+(def ^:private golden-laws  {:count 82 :hash 672362760})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

@@ -53,13 +53,13 @@
   ;; coverage. Guarded by [?_s :structure/of :canvas.vocab.code.subsystem/Subsystem] (a direct datom) →
   ;; vacuous for subsystem-free models. Negation routes through the injected `in-subsystem` defrelation
   ;; so the zero-member case dodges datascript's empty-relation not-join gotcha. Extracted code-fact
-  ;; modules (`:val/extracted true`) are out of scope for design-membership — (not [?mod :val/extracted true]).
+  ;; modules (`:val/extracted true`) are out of scope for design-membership — (not (fact ?mod)).
   (law "every Module belongs to a Subsystem"
     :scope :global
     :offenders '[?mod]
     :where '[[?_s :structure/of :canvas.vocab.code.subsystem/Subsystem]
              [?mod :structure/of :canvas.vocab.code.module/Module]
-             (not [?mod :val/extracted true])
+             (not (fact ?mod))
              (not-join [?mod] (in-subsystem ?mod ?_sub))]))
 
 ;; ── latent-boundary discovery (interface segregation, bottom-up) ──────────────
@@ -153,11 +153,11 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
    set-difference is gone. A signal, not a violation: you do not model every call."
   [db-arg]
   (set (cq/q '[:find ?km1 ?km2 :in $
-               :where [?cr :rel/kind :calls] [?cr :rel/from ?e1] [?cr :rel/to ?e2]
-                      [?e1 :val/extracted true] [?e2 :val/extracted true]
+               :where (calls ?e1 ?e2)
+                      (fact ?e1) (fact ?e2)
                       (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
                       (not-join [?km1 ?km2]
-                        [?dr :rel/kind :delegates] [?dr :rel/from ?o1] [?dr :rel/to ?o2]
+                        (delegates ?o1 ?o2)
                         (design ?o1)
                         (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
                         [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]

@@ -95,8 +95,7 @@
       "ref"  (render-base db base (rel-target db eid :names))
       ("vector" "set" "sequential") (str "[" (render-base db base (rel-target db eid :of)) "]")
       "map"  (str "{" (str/join ", "
-                       (for [feid (map first (cq/q '[:find ?f :in $ ?m :where
-                                                     [?r :rel/from ?m] [?r :rel/kind :field] [?r :rel/to ?f]]
+                       (for [feid (map first (cq/q '[:find ?f :in $ ?m :where (field ?m ?f)]
                                                    db eid))
                              :let [f (cq/entity db feid)]]
                          (str (:val/key f) ": " (render-base db base (rel-target db feid :schema))))) "}")
@@ -314,8 +313,7 @@
                  (into {} (filter (comp in? first))
                        (cq/q (into '[:find ?m ?k :in $ % :where] where) db (s/vocab-rules))))
         iface  (counts '[(Module ?m)
-                         (measure ?k (count ?op)
-                           [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?op])])
+                         (measure ?k (count ?op) (exposes ?m ?op))])
         impl   (counts '[(Module ?m)
                          (measure ?k (count ?x) (contains ?m ?x))])
         rows   (for [m     focus
@@ -342,18 +340,16 @@
   (let [in?      (set focus)
         rows     (cq/q '[:find ?tb ?k ?kn :in $ %
                          :where (TrustBoundary ?tb)
-                                [?kr :rel/from ?tb] [?kr :rel/kind :kind] [?kr :rel/to ?k]
+                                (kind ?tb ?k)
                                 [?k :entity/name ?kn]]
                        db (s/vocab-rules))
         throws?  (fn [op] (seq (cq/q '[:find ?eff :in $ ?op
-                                       :where [?pr :rel/from ?op] [?pr :rel/kind :performs]
-                                              [?pr :rel/to ?eff] [?eff :val/name "throws"]]
+                                       :where (performs ?op ?eff) [?eff :val/name "throws"]]
                                      db op)))
         obs      (for [[tb k kn] rows
                        :when (in? tb)
                        :let  [parsers   (cq/q '[:find ?o ?on :in $ ?tb
-                                                :where [?pr :rel/from ?tb] [?pr :rel/kind :parsed-by]
-                                                       [?pr :rel/to ?o] [?o :entity/name ?on]]
+                                                :where (parsed-by ?tb ?o) [?o :entity/name ?on]]
                                               db tb)
                               declared? (set (map first parsers))
                               producers (cq/q '[:find ?o ?on :in $ % ?k
@@ -362,10 +358,8 @@
                               checks    (cq/q '[:find ?o ?on :in $ % ?k
                                                 :where (design ?o) [?o :entity/name ?on]
                                                        (exposed ?o)
-                                                       [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?isch]
-                                                       [?isch :val/kind "ref"] [?nr :rel/from ?isch] [?nr :rel/kind :names] [?nr :rel/to ?k]
-                                                       [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?osch]
-                                                       [?osch :val/kind "boolean"]]
+                                                       (in ?o ?isch) (names-kind ?isch ?k)
+                                                       (out ?o ?osch) [?osch :val/kind "boolean"]]
                                               db (s/vocab-rules) k)]
                        ob    (concat
                               (for [[o on] (sort-by second parsers)]

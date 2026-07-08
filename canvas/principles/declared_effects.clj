@@ -33,8 +33,7 @@
                         :where (op-twin ?o ?e) [?o :entity/name ?on]]
                        db)
         declared (fn [oeid] (set (cq/q '[:find [?en ...] :in $ ?o
-                                         :where [?pr :rel/from ?o] [?pr :rel/kind :performs]
-                                                [?pr :rel/to ?e] [?e :val/name ?en]]
+                                         :where (performs ?o ?e) [?e :val/name ?en]]
                                        db oeid)))
         reached  (fn [teid] (set (cq/q '[:find [?en ...] :in $ ?op
                                          :where (path ?op [:calls* :performs] ?e)

@@ -29,7 +29,7 @@
   "an authored Operation ?o whose :out schema is a ref naming Kind ?k"
   '[?o ?k]
   '[(design ?o)
-    [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
+    (out ?o ?sch)
     (names-kind ?sch ?k)])
 
 (defstructure TrustBoundary
@@ -53,19 +53,19 @@
    :parsed-by [:+ Operation]}
   (law "every declared parser produces the boundary kind (its :out names it)"
     :offenders '[?tb ?o]
-    :where '[[?pr :rel/from ?tb] [?pr :rel/kind :parsed-by] [?pr :rel/to ?o]
-             [?kr :rel/from ?tb] [?kr :rel/kind :kind] [?kr :rel/to ?k]
+    :where '[(parsed-by ?tb ?o)
+             (kind ?tb ?k)
              (not-join [?o ?k] (produces ?o ?k))])
   (law "every trusted-core reader (its :in is a declared TrustBoundary) is total — its code performs no :throws"
     :key   :totality
     :scope :global
     :offenders '[?o]
-    :where '[[?tb :structure/of ::TrustBoundary] [?tbr :rel/from ?tb] [?tbr :rel/kind :kind] [?tbr :rel/to ?k]
+    :where '[[?tb :structure/of ::TrustBoundary] (kind ?tb ?k)
              (design ?o)
-             [?ir :rel/from ?o] [?ir :rel/kind :in] [?ir :rel/to ?sch]
+             (in ?o ?sch)
              (names-kind ?sch ?k)
              (op-twin ?o ?e)
-             [?pr :rel/from ?e] [?pr :rel/kind :performs] [?pr :rel/to ?eff] [?eff :val/name "throws"]]))
+             (performs ?e ?eff) [?eff :val/name "throws"]]))
 
 (defn totality-violations
   "The ENFORCED TOTALITY offenders — trusted-core reader Operations (their :in references a declared
@@ -80,7 +80,7 @@
   [db]
   (set (cq/q '[:find [?on ...]
               :where (fact ?o) [?o :entity/name ?on]
-                     [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e]
+                     (performs ?o ?e)
                      [?e :val/name "throws"]]
             db)))
 
