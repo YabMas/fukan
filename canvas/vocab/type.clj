@@ -165,6 +165,17 @@
               [])
       (throw (ex-info (str "function input must be [:catn …] or [:cat]: " (pr-str input)) {:form input})))))
 
+(defn ^:export arrow->in-out
+  "Decompose a malli function schema `[:=> INPUT OUTPUT]` into `{:in [[param-name type] …]
+   :out OUTPUT}` — the SHARED arrow representation both Operation's `:signature` sugar and the
+   `:=>` Schema combinator build on. INPUT is parsed by `catn->pairs` (named params → ordered,
+   labelled pairs; `[:cat]` → no `:in`). Rejects a non-`[:=> …]` form."
+  [form]
+  (when-not (and (vector? form) (= :=> (first form)) (= 3 (count form)))
+    (throw (ex-info (str "signature must be a malli function schema [:=> INPUT OUTPUT]: " (pr-str form)) {:form form})))
+  (let [[_ input output] form]
+    {:in (catn->pairs input) :out output}))
+
 (defn ^:export read-choice
   "An enum member (a keyword, string, or symbol — passed RAW) -> SchemaChoice
    clauses. The member's TYPE is preserved as :kind, so `[:enum :a]` and
@@ -258,10 +269,9 @@
           :=>
           ;; a function type — the arrow's :in is LABELLED (param name) + ordered, :out is one
           ;; schema, exactly as code/operation stores a signature (the shared representation).
-          (let [[input output] args]
-            (into [(list 'kind "=>") (list 'out output)]
-                  (map (fn [[pname ptype]] (list 'in [pname ptype]))
-                       (catn->pairs input))))
+          (let [{:keys [in out]} (arrow->in-out (into [:=>] args))]
+            (into [(list 'kind "=>") (list 'out out)]
+                  (map (fn [[pname ptype]] (list 'in [pname ptype])) in)))
           :map-of
           ;; two ordered :of children — the key schema then the value schema
           [(list 'kind "map-of") (cons 'of args)]

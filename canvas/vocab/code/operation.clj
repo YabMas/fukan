@@ -22,10 +22,8 @@
    The concise form makes the signature the primary body:
    `(Operation f [:=> INPUT OUTPUT] {:performs [...]})`.
 
-   The signature is rewritten into the ordered+labelled `:in` vector and the `:out` entry.
-   INPUT is `[:catn [:name Type] …]` (named params → ordered + labelled `[name Type]`
-   pairs) or `[:cat]` (nullary). A `[:cat Type …]` (positional, unnamed) is REJECTED —
-   name your parameters. The Types are ordinary malli, expanded by the Schema reader."
+   The `:=> [:=> INPUT OUTPUT]` schema is decomposed by the type dialect (`ct/arrow->in-out`):
+   INPUT's named params become the ordered+labelled `:in` vector, OUTPUT becomes `:out`."
   [body]
   (let [m (cond
             (map? body) body
@@ -47,16 +45,9 @@
                             {:body body})))]
     (if-not (contains? m :signature)
       m
-      (let [form (:signature m)]
-      (when-not (and (vector? form) (= :=> (first form)) (= 3 (count form)))
-        (throw (ex-info (str "signature must be a malli function schema [:=> INPUT OUTPUT]: " (pr-str form)) {:form form})))
-      (let [[_ input output] form]
-        ;; keep this guard ahead of catn->pairs: it reports against the whole [:=> …] form
-        (when-not (vector? input)
-          (throw (ex-info (str "signature input must be [:catn …] or [:cat]: " (pr-str input)) {:form form})))
-        (let [in (ct/catn->pairs input)]
-          (cond-> (-> m (dissoc :signature) (assoc :out output))
-            (seq in) (assoc :in in))))))))
+      (let [{:keys [in out]} (ct/arrow->in-out (:signature m))]
+        (cond-> (-> m (dissoc :signature) (assoc :out out))
+          (seq in) (assoc :in in))))))
 
 (defstructure Operation
   "A named unit of computation — the UNIFIED computational unit. An `Operation` is either
