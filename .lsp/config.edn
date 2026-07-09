@@ -34,6 +34,8 @@
    ;; rest, whose exemptions vary, stay enumerated.
    :exclude #{"canvas\\.architecture\\..*"
               canvas.vocab.grammar
+              canvas.principles.operation-surface   ; a pure law-holder, never instantiated
+
               fukan.canvas.projection.grammar-test
               lib.lens
               canvas.instruments.lenses

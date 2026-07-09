@@ -23,7 +23,8 @@
             [canvas.principles.parse-dont-validate]
             [canvas.principles.declared-effects]
             [canvas.principles.layered-architecture]
-            [canvas.principles.deep-modules]))
+            [canvas.principles.deep-modules]
+            [canvas.principles.operation-surface]))
 
 (defn self-model-structures
   "The registered structures defined in the self-model vocabulary — stable regardless of which test
@@ -89,8 +90,13 @@
 ;; Laws +1 on 2026-07-09: Operation gained the GATED signature-adherence demand
 ;; `:corresponds/Operation.adheres` (an `(agrees {:by :signature})` pair-hybrid) — count 82→83; the
 ;; self-model is green (all realizing signatures reconciled to exactly adhere). Terms unaffected.
-(def ^:private golden-terms {:count 52 :hash 1756057039})
-(def ^:private golden-laws  {:count 83 :hash 1068765103})
+;; 2026-07-09: the misfiled demands (`signature-completeness` + `no-isolated`) moved OFF Operation's
+;; identity into `canvas.principles.operation-surface` (a pure law-holder); `Connected` + the `includes`
+;; usage were retired. Terms 52→51 (−Connected kind-rule, −the dead `includes` term, +the holder's
+;; kind-rule); laws stay 83 (both demands relocated, re-expressed with explicit `(Operation …)` scope);
+;; live `(check)` still 0. Operation's defstructure is now pure slots.
+(def ^:private golden-terms {:count 51 :hash 1990126320})
+(def ^:private golden-laws  {:count 83 :hash -1191328896})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

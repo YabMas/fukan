@@ -9,8 +9,7 @@
             [fukan.canvas.core.typing :as typing]
             [fukan.cozo.query :as cq]
             [canvas.vocab.type :as ct :refer [Schema]]
-            [canvas.vocab.code.effect :refer [Effect]]
-            [canvas.vocab.grouping :refer [Connected]]))
+            [canvas.vocab.code.effect :refer [Effect]]))
 
 (defn ^:export signature->slots
   "Operation's authoring syntax. Existing map form remains valid:
@@ -61,26 +60,16 @@
    internal wiring is extraction's job. `:calls` is therefore the EXTRACTED actual-call graph.
 
    Corresponds NESTED (:by-name): a design Operation twins the same-named extracted one within twinned Modules."
-  (includes Connected)
-  ;; PURE IDENTITY — the authored intent of an Operation. Correspondence (the fact-side slots
-  ;; :calls/:sig/…, the twin, and all demands) is NOT here: it hooks in from OUTSIDE via
-  ;; `(correspond Operation …)` in `canvas.vocab.code.module` (the correspondence extension).
+  ;; PURE IDENTITY — the authored intent of an Operation, and nothing else. Correspondence (the fact-side
+  ;; slots, twin, demands) hooks in via `(correspond Operation …)` in `canvas.vocab.code.module`; the
+  ;; authoring sugar via `register-syntax!` below; the DEMANDS on the operation surface (declare an output
+  ;; type; no isolated op) live in `canvas.principles.operation-surface`. None of that is on the concept.
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one)
    :performs  [:* Effect]            ; side effects it performs
    :delegates [:* {:transitive true} Operation]  ; designed dependencies; :transitive ⇒ delegates+
    :dispatches-to [:* Operation]     ; indirection: handler Operations this dispatch point routes to
-   :guidance  [:? :string]}          ; implementer-directed design intent (algorithm/perf/library)
-  ;; AUTHORED-SIDE typing discipline — every PUBLIC authored Operation (on a Module's `:exposes`
-  ;; surface) declares an OUTPUT TYPE. ABSOLUTE, no opt-out: every op returns SOMETHING with a type,
-  ;; down to `:nil` (side-effecting) or `:any` (genuinely dynamic) — a missing `:out` is an undeclared
-  ;; contract, never a legitimate abstention. OUTPUT, not full signature: a nullary op legitimately has
-  ;; no `:in`, so the output type is the part every op has and the part the public contract turns on.
-  ;; Rides Operation itself (the law is about its `:out` slot) — no separate holder. Self-scoped to
-  ;; Operation; the datalog :when narrows to the public authored surface.
-  (law "every public authored operation declares an output type"
-    (has :out :when '[(design ?x) (exposed ?x)])
-    :key :signature-completeness))
+   :guidance  [:? :string]})         ; implementer-directed design intent (algorithm/perf/library)
 
 ;; Operation's authoring SUGAR — off the identity defstructure (it's machinery, not identity):
 ;; `(Operation f [:=> IN OUT] {…})` rewrites the malli signature into the `:in`/`:out` slots. Registered

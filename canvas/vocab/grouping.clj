@@ -1,9 +1,8 @@
 (ns canvas.vocab.grouping
-  "Structural primitives — the domain-agnostic building blocks the code vocab builds on:
-   `Grouping` (a named grouping) and `Connected` (the facet for a node that participates in
-   the directed graph over its own kind). These are LANGUAGE, not specific design concepts:
-   any model groups things and any flow node is connected. Part of fukan's modelling
-   vocabulary (`canvas/vocab/`); `code/module` is a `Grouping` that adds API + ownership."
+  "Structural primitives — the domain-agnostic building blocks the code vocab builds on: `Grouping`
+   (the most abstract membership primitive). LANGUAGE, not a specific design concept: any model groups
+   things. Part of fukan's modelling vocabulary (`canvas/vocab/`); `code/module` is a `Grouping` that
+   adds API + ownership."
   (:require [fukan.canvas.core.structure :refer [defstructure]]))
 
 (defstructure Grouping
@@ -14,10 +13,3 @@
    over these `:child` relations (no privileged `:Grouping` tag in the kernel — a grouping is
    ordinary vocab)."
   {:child [:* {:contains true} Any]})
-
-(defstructure Connected
-  "Facet: a node that participates in the directed graph over its own kind — it is not
-   isolated (has some incoming or outgoing relation)."
-  (law "no isolated node"
-    :offenders '[?n]
-    :where '[(not [?o :rel/from ?n]) (not [?i :rel/to ?n])]))

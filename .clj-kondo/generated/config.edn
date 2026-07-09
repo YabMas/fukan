@@ -4,6 +4,7 @@
 {:hooks
  {:analyze-call
   {canvas.principles.layered-architecture/ModuleArchitecture hooks.fukan.structure/instance
+   canvas.principles.operation-surface/OperationSurface hooks.fukan.structure/instance
    canvas.principles.parse-dont-validate/TrustBoundary hooks.fukan.structure/instance
    canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
    canvas.vocab.code.kind/Kind hooks.fukan.structure/instance
@@ -16,7 +17,6 @@
    canvas.vocab.grammar/Vocabulary hooks.fukan.structure/instance
    canvas.vocab.grammar-test/Leaf hooks.fukan.structure/instance
    canvas.vocab.grammar-test/Node hooks.fukan.structure/instance
-   canvas.vocab.grouping/Connected hooks.fukan.structure/instance
    canvas.vocab.grouping/Grouping hooks.fukan.structure/instance
    canvas.vocab.type/Schema hooks.fukan.structure/instance
    canvas.vocab.type/SchemaChoice hooks.fukan.structure/instance
@@ -53,6 +53,8 @@
    fukan.canvas.core.laws-test/LRef hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LReviewer hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LSrc hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/LTwin hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/TCExt hooks.fukan.structure/instance
    fukan.canvas.core.lens/Check hooks.fukan.structure/instance
    fukan.canvas.core.lens/Lens hooks.fukan.structure/instance
    fukan.canvas.core.lens/Projection hooks.fukan.structure/instance

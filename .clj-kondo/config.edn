@@ -50,6 +50,11 @@
   canvas.principles.deep-modules
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  ;; a PURE law-holder (OperationSurface) — its constructor macro is never called (no instances)
+  canvas.principles.operation-surface
+  {:linters {:unused-public-var {:level :off}
+             :unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   canvas.vocab.code.kind
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
