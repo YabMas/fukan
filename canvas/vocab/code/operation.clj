@@ -93,12 +93,12 @@
   '[[?xr :rel/kind :exposes] [?xr :rel/to ?x]])
 
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
-;; The three demands (realized / type-coverage / covered) are declared above as (corresponds …)
-;; sub-forms on Operation; see the `corresponds` entry. No separate law-holder defstructures — and
-;; no per-demand reader wrapper: a demand's worklist is just `(cq/violation-names db <demand-key>)` at
-;; its stable key, read directly by the consumer (`:corresponds/Operation.realized` = drift,
-;; `.covered` = the encapsulation worklist). The readings below are the NON-law TYPE signals — no
-;; backing demand, so they carry real logic that `violation-names` can't express.
+;; The demands (realized / type-coverage / covered / adheres) are NOT on Operation's identity: they
+;; hook in from outside via `(correspond Operation …)` in `canvas.vocab.code.module`. No separate
+;; law-holder defstructures — and no per-demand reader wrapper: a demand's worklist is just
+;; `(cq/violation-names db <demand-key>)` at its stable key, read directly by the consumer
+;; (`:corresponds/Operation.realized` = drift, `.covered` = the encapsulation worklist). `operation-sig`
+;; below renders the modelled signature the `:signature` comparator (the `adheres` demand) reads.
 
 (defn operation-sig
   "Render the AUTHORED Operation at `op-eid` to a malli function-schema
