@@ -7,11 +7,19 @@
    code is a projection of the model 1-on-1. The NODE substrate it sits on — `Node`/`Relation`/
    `InstanceValue`/`StructureDb` + node identity — lives one layer down in `core-substrate`."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+            [canvas.vocab.code.contract :refer [Contract]]
             [canvas.architecture.kernel.substrate :as substrate]))
 
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────
 (Kind Violation [:map [:structure :keyword] [:law :string] [:offenders [:vector [:vector :any]]]])
 (Kind Rule)
+
+;; the CHECK-ENGINE plug-point: `core-structure` OWNS this contract (a `check` backend claimed by db
+;; type) but does not implement it — `register-check-engine!` is the attach hook; `cozo-law` satisfies it.
+(Contract CheckEngine
+  "The `check` backend contract others register via `register-check-engine!`: a claims?/check pair the
+   kernel dispatches to without naming the backend (the dependency inverts — the engine names the kernel)."
+  {:shape [:map [:claims? [:=> [:catn [:db :any]] :boolean]] [:check [:=> [:catn [:db :any]] :any]]]})
 
 (Operation vocab-rules
   "The datalog rules derived from the live vocabulary, injected into laws/lenses — dispatched
@@ -73,4 +81,5 @@
              laws-of direct-scope-tags register-check-engine! violations-of
              correspondence* correspondence]
    :owns    [Violation]                          ; the check output shape (others adopt by name)
+   :offers  [CheckEngine]                         ; the check-engine plug-point contract (cozo-law satisfies it)
    :child   [Rule]})                              ; internal grain: the rules-output type

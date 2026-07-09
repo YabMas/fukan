@@ -98,8 +98,12 @@
 ;; 2026-07-09 (cont.): the `includes` mechanism retired — the meta-grammar `Structure` lost its
 ;; `:includes [:* Structure]` slot, dropping that relation's target-type LAW (83→82) and re-shaping the
 ;; terms. `(check)` still 0.
-(def ^:private golden-terms {:count 50 :hash -382623764})
-(def ^:private golden-laws  {:count 82 :hash -1737856569})
+;; 2026-07-09: `Contract` introduced (canvas.vocab.code.contract) — a Module `:offers` contracts, an
+;; Operation `:satisfies` them (the coarse plug-point vocabulary). Terms 50→54 (Contract kind-rule +
+;; `offers`/`satisfies` relation rules + contains contribution), laws 82→86 (the new slots' target-type
+;; + the `:shape` type-check laws). Live `(check)` still 0.
+(def ^:private golden-terms {:count 54 :hash 1679439778})
+(def ^:private golden-laws  {:count 86 :hash -1276368863})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

@@ -6,6 +6,7 @@
   {canvas.principles.layered-architecture/ModuleArchitecture hooks.fukan.structure/instance
    canvas.principles.operation-surface/OperationSurface hooks.fukan.structure/instance
    canvas.principles.parse-dont-validate/TrustBoundary hooks.fukan.structure/instance
+   canvas.vocab.code.contract/Contract hooks.fukan.structure/instance
    canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
    canvas.vocab.code.kind/Kind hooks.fukan.structure/instance
    canvas.vocab.code.module/Module hooks.fukan.structure/instance
@@ -32,13 +33,10 @@
    fukan.canvas.core.assemble-test/Tag2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Thing hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Holder hooks.fukan.structure/instance
-   fukan.canvas.core.composition-test/Hub hooks.fukan.structure/instance
-   fukan.canvas.core.composition-test/Linked hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Note hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/PathAudit hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/PathMark hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/PathNode hooks.fukan.structure/instance
-   fukan.canvas.core.composition-test/Spoke hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Sum hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LBot hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LDoc hooks.fukan.structure/instance

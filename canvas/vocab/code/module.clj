@@ -12,7 +12,8 @@
             [fukan.canvas.core.typing :as typing]
             [fukan.canvas.core.substrate :as sub]
             [canvas.vocab.code.operation :as operation :refer [Operation]]
-            [canvas.vocab.code.kind :refer [Kind]]))
+            [canvas.vocab.code.kind :refer [Kind]]
+            [canvas.vocab.code.contract :refer [Contract]]))
 
 ;; ── the cross-element correspondence bridge ───────────────────────────────────
 ;; MUST be defined before Module's defstructure: the (corresponds …) body-form
@@ -57,6 +58,7 @@
    `:extracted` fact-slot) hooks in from OUTSIDE via `(correspond Module …)` below, not here."
   {:exposes [:* {:contains true} Operation]   ; the public API surface — Operations callers depend on
    :owns    [:* {:contains true} Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
+   :offers  [:* {:contains true} Contract]    ; contracts it owns for OTHERS to implement (plug-points / SPIs)
    :child   [:* {:contains true} Any]})       ; internal members + grain no other module consumes
 
 ;; ── the correspondence EXTENSION: hooks Operation + Module from OUTSIDE (inverted dependency) ──
