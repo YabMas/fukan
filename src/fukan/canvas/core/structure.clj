@@ -53,7 +53,7 @@
 
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
-(declare correspondence-of)
+(declare correspondence-of syntax-for)
 (defn- slot-for
   "The slot descriptor for `rel` on `sdef`'s EFFECTIVE structure — its own defstructure slots plus any
    fact-slots an external `(correspond …)` contributes to its tag. So an extracted instance can carry a
@@ -61,6 +61,12 @@
   [sdef rel]
   (first (filter #(= rel (:rel %))
                  (concat (:slots sdef) (:fact-slots (correspondence-of (:tag sdef)))))))
+
+(defn- sdef-syntax
+  "The authoring-syntax hook for `sdef` — its inline `(syntax …)` OR one registered externally against
+   its tag (`register-syntax!`). Authoring sugar is MACHINERY, so a concept may keep its identity
+   defstructure clean and register the hook from outside."
+  [sdef] (or (:syntax sdef) (syntax-for (:tag sdef))))
 
 
 ;; ── value-authoring: instance-form / value-form ──────────────────────────────
@@ -263,7 +269,7 @@
    map — f : map → map (e.g. Operation rewrites :signature into :in/:out). The
    transform lives in the vocab; core just invokes it."
   [sdef m]
-  (if-let [syn (:syntax sdef)] (syn m) m))
+  (if-let [syn (sdef-syntax sdef)] (syn m) m))
 
 (defn- syntax-input
   "The non-nested instance body handed to a `(syntax f)` hook. With no syntax hook,
@@ -273,7 +279,7 @@
   [sdef body]
   (cond
     (empty? body) {}
-    (and (:syntax sdef) (next body)) (vec body)
+    (and (sdef-syntax sdef) (next body)) (vec body)
     :else (first body)))
 
 (defn- build-instance-form
@@ -333,8 +339,8 @@
     ;; (a non-map arg-tail) — the hook normalizes it to the slots map; without a hook
     ;; the body must still be empty or a single slots map.
     (when-not (or (empty? body)
-                  (and (empty? (rest body)) (or (map? one) (:syntax sdef)))
-                  (and (:syntax sdef) (seq body)))
+                  (and (empty? (rest body)) (or (map? one) (sdef-syntax sdef)))
+                  (and (sdef-syntax sdef) (seq body)))
       (throw (ex-info (str (clojure.core/name tag) ": an instance is `("
                            (clojure.core/name tag) " \"doc\"? {slot → value}?)` — got "
                            (pr-str (vec body)))
@@ -419,8 +425,8 @@
         cls   (remove nested-instance? body)
         one   (first cls)
         _     (when-not (or (empty? cls)
-                            (and (empty? (rest cls)) (or (map? one) (:syntax sdef)))
-                            (and (:syntax sdef) (seq cls)))
+                            (and (empty? (rest cls)) (or (map? one) (sdef-syntax sdef)))
+                            (and (sdef-syntax sdef) (seq cls)))
                 (throw (ex-info (str (clojure.core/name tag) " " sym ": an instance is `("
                                      (clojure.core/name tag)
                                      " name \"doc\"? {slot → value}? nested…)` — got "
@@ -648,6 +654,21 @@
 (defn ^:export correspondence-of
   "The registered external correspondence config for `tag`, or nil."
   [tag] (@correspondences tag))
+
+;; ── external authoring-syntax registry ────────────────────────────────────────
+;; A `(syntax f)` hook (body map→map, applied before slot parsing) is authoring MACHINERY, not
+;; identity, so a concept can register it from OUTSIDE its `defstructure` — `(register-syntax! tag f)`.
+;; `sdef-syntax` reads inline-or-registered; instance construction is unchanged otherwise.
+(defonce ^:private syntaxes (atom {}))
+
+(defn ^:export register-syntax!
+  "Register an authoring-syntax hook `f` (body-map → body-map) against `tag`, off the concept's
+   `defstructure`. Re-registering a tag replaces it."
+  [tag f] (swap! syntaxes assoc tag f) tag)
+
+(defn ^:export syntax-for
+  "The externally-registered authoring-syntax hook for `tag`, or nil."
+  [tag] (@syntaxes tag))
 
 (defn ^:export sdef->declarations
   "Adapt an sdef (built by the unchanged parser) into typed declaration maps for the registry — a

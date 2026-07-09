@@ -62,7 +62,6 @@
 
    Corresponds NESTED (:by-name): a design Operation twins the same-named extracted one within twinned Modules."
   (includes Connected)
-  (syntax signature->slots)          ; {:signature [:=> [:catn …] Out]} authoring entry (vocab-owned)
   ;; PURE IDENTITY — the authored intent of an Operation. Correspondence (the fact-side slots
   ;; :calls/:sig/…, the twin, and all demands) is NOT here: it hooks in from OUTSIDE via
   ;; `(correspond Operation …)` in `canvas.vocab.code.module` (the correspondence extension).
@@ -82,6 +81,11 @@
   (law "every public authored operation declares an output type"
     (has :out :when '[(design ?x) (exposed ?x)])
     :key :signature-completeness))
+
+;; Operation's authoring SUGAR — off the identity defstructure (it's machinery, not identity):
+;; `(Operation f [:=> IN OUT] {…})` rewrites the malli signature into the `:in`/`:out` slots. Registered
+;; against the tag from outside; the kernel reads it at instance-expansion (`sdef-syntax`).
+(s/register-syntax! ::Operation signature->slots)
 
 ;; The provenance split an Operation quantifies over is NOT vocab: `(design ?o)` (authored, not
 ;; extracted) and `(fact ?o)` (extracted from code) are the kernel's universal substrate rules
