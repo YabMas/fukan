@@ -732,11 +732,11 @@
 (deftest corresponds-demands-register
   (testing "(realized …)/(covered …) sub-forms land as :demands with derived keys"
     ;; TCorrDemand is a fresh nested-corresponding test structure declaring all three shapes
-    (is (= [{:demand :realized :key nil :desc nil :when nil :require nil :unless nil}
+    (is (= [{:demand :realized :key nil :desc nil :when nil :require nil :unless nil :by nil}
             {:demand :realized :key :req-check :desc "twin carries p"
-             :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]] :unless nil}
+             :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]] :unless nil :by nil}
             {:demand :covered :key nil :desc nil :when nil :require nil
-             :unless '[[?x :val/private true]]}]
+             :unless '[[?x :val/private true]] :by nil}]
            (:demands (:corresponds (s/structure-by-tag ::TCorrDemand)))))))
 
 (deftest corresponds-demands-validate
@@ -746,7 +746,11 @@
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD2 "d"
                                            (corresponds :by-name (covered {:require [[?t :val/p ?_v]]}))))))  ; :require is realized-only
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD3 "d"
-                                           (corresponds :by-name (realized) (realized))))))))  ; duplicate default key
+                                           (corresponds :by-name (realized) (realized))))))  ; duplicate default key
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD4 "d"
+                                           (corresponds :by-name (agrees {}))))))            ; agrees needs :by
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD5 "d"
+                                           (corresponds :by-name (agrees {:require [[?t :val/p ?_v]]}))))))))  ; :require not an agrees key  ; duplicate default key
 
 (deftest relation-demand-options-validate
   (testing "malformed relation-demand slot options throw at expansion"

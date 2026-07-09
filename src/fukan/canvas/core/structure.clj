@@ -645,20 +645,26 @@
    (for [law laws] {:kind :free-law :law law})))
 
 (defn- parse-demand
-  "Parse a `(realized …)`/`(covered …)` corresponds sub-form → a demand map. Allowed option keys:
-   realized → :key :desc :when :require ; covered → :key :desc :when :unless. Datalog vectors
+  "Parse a `(realized …)`/`(covered …)`/`(agrees …)` corresponds sub-form → a demand map. Allowed
+   option keys: realized → :key :desc :when :require ; covered → :key :desc :when :unless ; agrees →
+   :key :desc :when :by (`:by` = a registered comparator key, required). Datalog vectors
    (:when/:require/:unless) pass through unquote-lit. Anything else throws, naming the form."
   [sname f]
   (let [[dk opts] [(keyword (first f)) (second f)]
-        allowed   (case dk :realized #{:key :desc :when :require} :covered #{:key :desc :when :unless})]
+        allowed   (case dk
+                    :realized #{:key :desc :when :require}
+                    :covered  #{:key :desc :when :unless}
+                    :agrees   #{:key :desc :when :by})]
     (when (and opts (not (map? opts)))
       (throw (ex-info (str "defstructure " sname ": " (first f) " options must be a map") {:form f})))
     (doseq [k (keys opts)]
       (when-not (allowed k)
         (throw (ex-info (str "defstructure " sname ": " (first f) " does not take " k
                              " — allowed: " allowed) {:form f :key k}))))
+    (when (and (= dk :agrees) (not (:by opts)))
+      (throw (ex-info (str "defstructure " sname ": (agrees …) needs :by <comparator-key>") {:form f})))
     {:demand dk
-     :key    (:key opts)  :desc (:desc opts)
+     :key    (:key opts)  :desc (:desc opts)  :by (:by opts)
      :when   (unquote-lit (:when opts)) :require (unquote-lit (:require opts))
      :unless (unquote-lit (:unless opts))}))
 
@@ -671,10 +677,10 @@
    also carry a registered Cozo predicate port (`cq/register-predicate-port!`); an unported
    bridge fails every vocab-rules query loudly at compile (\"unsupported predicate: …\") — far
    from the defstructure, so declare-and-port together.
-   Demand sub-forms `(realized …)`/`(covered …)` declare node-level design↔fact demands and are
-   collected as `:demands` (vector, may be empty). Each demand's local key is `(or :key :demand)`;
+   Demand sub-forms `(realized …)`/`(covered …)`/`(agrees …)` declare node-level design↔fact demands
+   and are collected as `:demands` (vector, may be empty). Each demand's local key is `(or :key :demand)`;
    duplicate local keys within the same structure throw at expansion. Option keys:
-   realized → :key :desc :when :require ; covered → :key :desc :when :unless."
+   realized → :key :desc :when :require ; covered → :key :desc :when :unless ; agrees → :key :desc :when :by."
   [sname forms]
   (let [[basis & subs] forms]
     (when-not (= :by-name basis)
@@ -682,12 +688,12 @@
                            " — only :by-name is supported")
                       {:structure sname :basis basis})))
     (let [bridge-subs  (filter #(and (seq? %) (= 'bridge (first %))) subs)
-          demand-subs  (filter #(and (seq? %) ('#{realized covered} (first %))) subs)
+          demand-subs  (filter #(and (seq? %) ('#{realized covered agrees} (first %))) subs)
           unknown-subs (remove #(or (and (seq? %) (= 'bridge (first %)))
-                                    (and (seq? %) ('#{realized covered} (first %)))) subs)]
+                                    (and (seq? %) ('#{realized covered agrees} (first %)))) subs)]
       (doseq [f unknown-subs]
         (throw (ex-info (str "defstructure " sname ": unknown corresponds sub-form " (pr-str f)
-                             " — expected (bridge f), (realized …), or (covered …)")
+                             " — expected (bridge f), (realized …), (covered …), or (agrees …)")
                         {:structure sname :form f})))
       (when (> (count bridge-subs) 1)
         (throw (ex-info (str "defstructure " sname ": multiple (bridge …) forms")
@@ -1068,7 +1074,7 @@
 
 (defn- node-demand-law
   "One generated law map for a node-level demand on structure `tag`."
-  [tag {:keys [demand key desc when require unless]}]
+  [tag {:keys [demand key desc when require unless by]}]
   (let [k (demand-key tag (or key demand))]
     (case demand
       :realized
@@ -1091,7 +1097,16 @@
        :where (vec (concat [['?x :structure/of tag] '[?x :val/extracted true]]
                            when
                            (map (fn [c] (list 'not c)) unless)
-                           ['(not-join [?x] (twin ?s ?x))]))})))
+                           ['(not-join [?x] (twin ?s ?x))]))}
+      :agrees
+      ;; a PAIR-HYBRID law: :where enumerates the design instance + its fact twin (+ any :when guard);
+      ;; the check engine runs the registered `:by` comparator over each pair and offends where false.
+      {:key k :offenders '[?x]
+       :desc (or desc (str (name tag) " (" (clojure.core/name (or key demand))
+                           "): every design instance's fact twin agrees via " by))
+       :comparator {:by by :on '[?x ?t]}
+       :where (vec (concat [['?x :structure/of tag] '(not [?x :val/extracted true]) '(twin ?x ?t)]
+                           when))})))
 
 (defn- covered-from-law
   "Generated law for {:covered-from [R* S]} on slot `rel` of `tag`: every target the fact
@@ -1317,3 +1332,24 @@
    set of eid strings; callers name them through their query layer."
   [db k]
   (->> (check db) (filter #(= k (:key %))) (mapcat :offenders) (map first) set))
+
+;; ── correspondence comparator SPI ─────────────────────────────────────────────
+;; A `(corresponds … (agrees {:by <key>}))` demand gates a per-twin-pair AGREEMENT whose comparison
+;; is not datalog-expressible (e.g. type-signature adherence). The comparator is a registered
+;; `(fn [db design-eid fact-eid] → bool)` — it owns BOTH extracting each side's comparable value AND
+;; comparing them, so the kernel's correspondence machinery stays agnostic to what is compared (the
+;; law engine just runs the registered comparator over the twin pairs the demand enumerates). Fourth
+;; instance of the kernel's delegation pattern (typing plug-point, predicate-port, value-valid? hybrid).
+(defonce ^:private comparators (atom {}))
+
+(defn ^:export ^{:malli/schema [:=> [:cat :keyword :any] :nil]}
+  register-comparator!
+  "Register a correspondence COMPARATOR: `key → (fn [db design-eid fact-eid] → boolean)`. An
+   `(agrees {:by key})` demand runs it over each twin pair; a false result is a violation.
+   Re-registering a key replaces it."
+  [key f] (swap! comparators assoc key f) nil)
+
+(defn ^:export ^{:malli/schema [:=> [:cat :keyword] :any]}
+  comparator-for
+  "The registered comparator fn for `key`, or nil."
+  [key] (@comparators key))

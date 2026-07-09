@@ -87,6 +87,21 @@
          (filter (fn [[_ v]] (false? (typing/value-valid? target (validate-value v)))))
          (mapv (fn [[x _]] [(str x)])))))
 
+;; ── the comparator hybrid: Cozo finds twin PAIRS, Clojure runs a registered comparator ──
+(defn- comparator-offenders
+  "Run an `agrees` demand law as a PAIR hybrid: compile its `:where` to enumerate the comparator's
+   columns (`:on`, the design + fact eids), run the registered `:by` comparator per row, keep the
+   rows where it returns false, projected to the law's `:offenders`."
+  [cdb law {:keys [by on]} direct-tags index]
+  (let [program (compile-law (assoc law :offenders on) direct-tags index)
+        rows    (db/q cdb (str query/preamble "\n" program))
+        f       (or (structure/comparator-for by)
+                    (throw (ex-info (str "no registered correspondence comparator: " by) {:by by})))
+        off-ix  (mapv #(.indexOf ^java.util.List (vec on) %) (:offenders law))]
+    (->> rows
+         (remove (fn [row] (boolean (f cdb (nth row 0) (nth row 1)))))
+         (mapv (fn [row] (mapv #(nth row %) off-ix))))))
+
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check-structural
   "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
@@ -97,11 +112,20 @@
   (let [index       (query/vocab-index)
         direct-tags (structure/direct-scope-tags (structure/all-structures))]
     (vec (for [[tag law] (all-laws)]
-           (if-let [vc (value-check-law law)]
-             (let [offs (value-offenders cdb vc)]
+           (cond
+             (:comparator law)
+             (let [offs (comparator-offenders cdb law (:comparator law) direct-tags index)]
                (cond-> {:structure tag :law (:desc law)}
                  (:key law) (assoc :key (:key law))
                  (seq offs) (assoc :offenders offs)))
+
+             (value-check-law law)
+             (let [offs (value-offenders cdb (value-check-law law))]
+               (cond-> {:structure tag :law (:desc law)}
+                 (:key law) (assoc :key (:key law))
+                 (seq offs) (assoc :offenders offs)))
+
+             :else
              (let [program (try (compile-law law direct-tags index)
                                 (catch clojure.lang.ExceptionInfo _ ::unsupported))]
                (if (= program ::unsupported)
