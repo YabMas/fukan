@@ -56,8 +56,9 @@
    — the `(syntax signature->slots)` hook rewrites `:signature` to the `:in`/`:out` entries.
 
    A boundary sketch authors `:delegates` (the cross-module surfaces it relies on — designed
-   dependencies) and `:guidance` (implementer-directed intent); it does NOT author `:calls` —
-   internal wiring is extraction's job. `:calls` is therefore the EXTRACTED actual-call graph.
+   dependencies); it does NOT author `:calls` — internal wiring is extraction's job. `:calls` is
+   therefore the EXTRACTED actual-call graph. (Implementer intent rides the kernel `:guidance`
+   annotation — available on any instance, not an Operation slot.)
 
    Corresponds NESTED (:by-name): a design Operation twins the same-named extracted one within twinned Modules."
   ;; PURE IDENTITY — the authored intent of an Operation, and nothing else. Correspondence (the fact-side
@@ -67,8 +68,10 @@
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one)
    :performs  [:* Effect]            ; side effects it performs
-   :delegates [:* {:transitive true} Operation]  ; designed dependencies (known, direct callees); :transitive ⇒ delegates+
-   :guidance  [:? :string]})         ; implementer-directed design intent (algorithm/perf/library)
+   :delegates [:* {:transitive true} Operation]})  ; designed dependencies (known, direct callees); :transitive ⇒ delegates+
+;; `:guidance` (implementer-directed design intent) is NOT an Operation slot — it's a kernel-level
+;; per-instance annotation (the read dual of the docstring) available on ANY instance; see
+;; `reserved-annotation-keys` in the kernel. Authored inline in the slots map, stored as `:val/guidance`.
 
 ;; Operation's authoring SUGAR — off the identity defstructure (it's machinery, not identity):
 ;; `(Operation f [:=> IN OUT] {…})` rewrites the malli signature into the `:in`/`:out` slots. Registered

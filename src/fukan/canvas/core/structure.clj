@@ -226,20 +226,34 @@
          parsed     (mapv parse-elem args)]
      [(mapv :label parsed) (mapv :target parsed)])))
 
+(def ^:private reserved-annotation-keys
+  "Kernel-level per-instance ANNOTATION keys — free-text notes an author may attach to ANY instance,
+   not vocab slots. Stored as `:val/<key>` leaves (like a scalar slot's value, but with no declared
+   slot and no law); consumed by projections, never by laws. `:guidance` is implementer-directed
+   design intent — the read dual of the docstring (doc = prose-for-the-reader; guidance =
+   prose-for-the-implementer). Available on every structure without being defined in any of them."
+  #{:guidance})
+
+(defn- reserved-annotation-key? [k] (contains? reserved-annotation-keys k))
+
 (defn- map-entry->clause
   "One slots-map entry `slot → value` → the internal clause form. The encoding is
    schema-driven — the slot's declared quantifier/payload disambiguates the value:
 
      :one/:optional    bare value         (k v)         a `[label target]` pair stays one element
      :many/:some/:set  vector of targets  (k v1 v2 …)   the bracket mirrors the quantifier
-     payload slot      [value payload]    (k value payload)"
+     payload slot      [value payload]    (k value payload)
+
+   A reserved annotation key (`:guidance`) needs no slot — it emits a bare leaf clause `(k v)`."
   [tag sdef [k v]]
   (let [slot (slot-for sdef k)
         head (symbol (clojure.core/name k))]
-    (when-not slot
+    (when (and (not slot) (not (reserved-annotation-key? k)))
       (throw (ex-info (str (clojure.core/name tag) ": `" (clojure.core/name k) "` is not a slot")
                       {:tag tag :rel k})))
     (cond
+      (reserved-annotation-key? k) (list head v)
+
       (and (scalar-slot? slot) (:payload slot) (vector? v))
       (do (when-not (= 2 (count v))
             (throw (ex-info (str (clojure.core/name tag) "." (clojure.core/name k)
@@ -296,7 +310,8 @@
   (let [sdef    (structure-by-tag tag)
         _       (when-not sdef
                   (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
-        scalar? (fn [c] (let [s (slot-for sdef (keyword (first c)))] (and s (scalar-slot? s))))
+        scalar? (fn [c] (or (reserved-annotation-key? (keyword (first c)))
+                            (let [s (slot-for sdef (keyword (first c)))] (and s (scalar-slot? s)))))
         scalars (into {} (for [c clauses :when (scalar? c)
                                :let [slot (slot-for sdef (keyword (first c)))]
                                pair (cond-> [[(keyword "val" (clojure.core/name (first c))) (second c)]]

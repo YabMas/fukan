@@ -214,6 +214,10 @@
 (Tree ^{:name "mid"}  at-mid  {:child [at-leaf]})
 (Tree ^{:name "root"} at-root {:child [at-mid]})
 
+;; the reserved `:guidance` annotation on a NON-slot-bearing structure (Type has no slots) —
+;; proves it rides ANY instance without being declared and lands as a `:val/guidance` leaf.
+(Type ^{:name "guided"} gd-Type {:guidance "hand-roll this; the generic path is too slow"})
+
 (declare frc-b)
 (Tree ^{:name "a"} frc-a {:child [frc-b]})   ; forward reference — frc-b declared below
 (Tree ^{:name "b"} frc-b {:child [frc-a]})   ; back reference — together an a→b→a cycle
@@ -339,6 +343,15 @@
              (ffirst (cq/q '[:find ?d :where [?e :entity/name "f"] [?e :entity/doc ?d]] db))))
       (is (empty? (laws-firing db :Function))
           "the docstring does not register as a slot or trip any law"))))
+
+(deftest guidance-annotation-rides-any-instance
+  (testing "the reserved :guidance key lands as a :val/guidance leaf on a structure that declares no slot, tripping no law"
+    (let [db (build/vars->cozo [#'gd-Type])]
+      (is (= "hand-roll this; the generic path is too slow"
+             (ffirst (cq/q '[:find ?g :where [?e :entity/name "guided"] [?e :val/guidance ?g]] db)))
+          ":guidance is stored as a :val/guidance leaf, no slot required")
+      (is (empty? (laws-firing db :Type))
+          "an annotation registers no slot and generates no law"))))
 
 (deftest cardinality-one-catches-zero-and-several
   (testing "gives (one Type): zero and several are both violations"

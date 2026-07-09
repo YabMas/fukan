@@ -107,10 +107,14 @@
 ;; `:dispatches-to` slot (zero authored instances — the inversion it fumbled is now the offer/satisfy
 ;; seam) was dropped from Operation. Terms 54→53 (−the `dispatches-to` relation rule; `satisfies` rule
 ;; persists on Module), laws 86→85 (−Operation's `:dispatches-to` target-type law; `:satisfies`
-;; net-zero, relocated). Live `(check)` still 0. Operation is now pure computation {:in :out :performs
-;; :delegates :guidance}; both contract seams live on Module.
+;; net-zero, relocated). Live `(check)` still 0. Both contract seams live on Module.
+;; 2026-07-09 (cont.): `:guidance` moved off Operation into a kernel-level per-instance ANNOTATION
+;; (`reserved-annotation-keys`) authorable on ANY instance and stored as the `:val/guidance` leaf it
+;; already was — the read dual of the docstring, not vocab. Terms unchanged (a scalar slot emits no
+;; relation rule), laws 85→84 (−Operation's `:guidance` type-check law). Operation is now pure
+;; computation {:in :out :performs :delegates}. Live `(check)` still 0.
 (def ^:private golden-terms {:count 53 :hash 367526147})
-(def ^:private golden-laws  {:count 85 :hash -634684133})
+(def ^:private golden-laws  {:count 84 :hash -1856683030})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
