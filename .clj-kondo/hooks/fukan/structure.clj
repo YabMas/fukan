@@ -24,6 +24,14 @@
   (let [name-node (second (:children node))]
     {:node (api/list-node [(api/token-node 'declare) name-node])}))
 
+(defn correspond
+  "(correspond Target :by-name … body) → (do Target): keep the target var referenced (so it isn't
+   flagged unused) and drop the correspondence DSL body — the fact-slots map, (bridge …), and the
+   (agrees …)/(realized …)/(covered …)/(relname {…}) sub-forms are data, not code."
+  [{:keys [node]}]
+  (let [target (second (:children node))]
+    {:node (api/list-node [(api/token-node 'do) target])}))
+
 (defn- instance-syms
   "The name symbols a def-emitting instance form interns: its own (the second
    child) plus, recursively, every nested `(Tag sym …)` member's."

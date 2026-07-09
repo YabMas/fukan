@@ -436,3 +436,28 @@
           "a disagreeing fact twin is an offender")
       (is (empty? (s/violations-of match :corresponds/LTwin.agrees))
           "an agreeing fact twin is green"))))
+
+;; ── external (correspond …): the inverted-dependency hook reproduces inline emission ──
+(defstructure TCExt "external-correspondence subject: pure identity; correspondence hooks in from outside."
+  {:n [:? :int]})
+
+(s/correspond TCExt :by-name (agrees {:by :tcext-eq}))
+(s/register-comparator! :tcext-eq
+  (fn [db a b] (= (:val/n (cq/entity db a)) (:val/n (cq/entity db b)))))
+
+(deftest correspond-external-hook-reproduces-inline-firing
+  (testing "an EXTERNAL (correspond TCExt …) contributes the agrees demand to TCExt's tag from outside —
+            TCExt's defstructure never mentions correspondence — and a disagreeing fact twin is a
+            :corresponds/TCExt.agrees offender, exactly as the inline LTwin above produces."
+    (let [mk (fn [dn xn]
+               (build/tx-maps->cozo
+                [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                 {:db/id -2 :structure/of ::TCExt :entity/name "x" :val/n dn}
+                 {:rel/id "m|child|x" :rel/from -1 :rel/kind :child :rel/to -2}
+                 {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                 {:db/id -4 :structure/of ::TCExt :entity/name "x" :val/n xn :val/extracted true}
+                 {:rel/id "fm|child|x" :rel/from -3 :rel/kind :child :rel/to -4}]))]
+      (is (= #{"x"} (names (mk 1 2) (s/violations-of (mk 1 2) :corresponds/TCExt.agrees)))
+          "external correspondence: a disagreeing twin offends")
+      (is (empty? (s/violations-of (mk 1 1) :corresponds/TCExt.agrees))
+          "external correspondence: an agreeing twin is green"))))

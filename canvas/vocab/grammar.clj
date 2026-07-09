@@ -106,12 +106,13 @@
    includes edges, and any Schema value targets."
   [{:keys [tag doc slots laws includes value? realized-as corresponds]}]
   (let [sid  (structure-id tag)
+        corr (or corresponds (s/correspondence-of tag))   ; inline (defstructure) or external (correspond)
         node (cond-> {:entity/id sid :structure/of ::Structure
                       :entity/name (name tag) :val/tag (str tag)}
                doc         (assoc :entity/doc doc)
                value?      (assoc :val/value true)
                realized-as (assoc :val/realizes (pr-str realized-as) :val/form realized-as)
-               corresponds (assoc :val/corresponds (pr-str (into {} (remove (comp nil? val)) corresponds))))
+               corr        (assoc :val/corresponds (pr-str (into {} (remove (comp nil? val)) corr))))
         slot-bits
         (map-indexed
          (fn [i sl]

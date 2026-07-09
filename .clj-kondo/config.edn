@@ -149,4 +149,5 @@
  ;; teaches clj-kondo the defining macro) is hand-written here.
  :hooks
  {:analyze-call
-  {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure}}}
+  {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
+   fukan.canvas.core.structure/correspond   hooks.fukan.structure/correspond}}}

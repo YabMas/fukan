@@ -775,9 +775,9 @@
       (is (= 'canvas.vocab.code.module/module-corresponds?
              (get-in seam [:kinds :canvas.vocab.code.module/Module :bridge]))
           "Module is the bridged root")
-      (is (= 3 (count (get-in seam [:kinds op :demands]))) "Operation's three node demands")
+      (is (= 4 (count (get-in seam [:kinds op :demands]))) "Operation's four node demands")
       (is (= #{:corresponds/Operation.realized :corresponds/Operation.type-coverage
-               :corresponds/Operation.covered}
+               :corresponds/Operation.covered :corresponds/Operation.adheres}
              (into #{} (map :key) (get-in seam [:kinds op :demands])))
           "node demands carry their FULL derived keys")
       (is (= #{[:delegates #{:corresponds/Operation.delegates-realized
