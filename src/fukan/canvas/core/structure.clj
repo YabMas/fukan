@@ -1325,7 +1325,7 @@
   [db]
   ((:check @check-engine) db))
 
-(defn ^{:malli/schema [:=> [:cat :any :keyword] :any]}
+(defn ^{:malli/schema [:=> [:cat :StructureDb :keyword] :any]}
   violations-of
   "The offender eids of the law keyed `k` — the generic reader behind every law-specific
    worklist fn (filter `check` by the law's stable `:key`, first offender var). Returns a

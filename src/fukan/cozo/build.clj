@@ -166,7 +166,7 @@ alle[e] := *t_bool[e, _, _]
      (concat (for [id new-ids, [a v] (by-id id) :when (some? v)] [(new-eid id) a v])
              (for [[id r] rel-by-id, [a v] r] [(rel-eid id) a (ref->eid v)])))))
 
-(defn ^{:malli/schema [:=> [:cat [:vector :symbol] [:map]] :CozoDb]}
+(defn ^{:malli/schema [:=> [:cat [:vector :symbol] :map] :CozoDb]}
   model->cozo
   "Native FULL build: the instance-vars of canvas `ns-syms` + the
    extraction `{:roots :ground}` facts → one native Cozo substrate, with the extractor's

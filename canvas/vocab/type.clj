@@ -68,15 +68,21 @@
       ;; `:field` is an UNORDERED slot (a map has no field order), so the relations carry no
       ;; :rel/order and the db's natural row order differs between engines. Canonicalize by field
       ;; key so the rendered form is deterministic and engine-independent (fields compare as a set).
-      (into [:map]
-            (sort-by first
-              (map (fn [feid]
-                     (let [f   (cq/entity db feid)
-                           sk  (first (children db feid :schema))
-                           kw  (keyword (:val/key f))
-                           sub (render db sk)]
-                       (if (:val/optional f) [kw {:optional true} sub] [kw sub])))
-                   (children db eid :field))))
+      ;; A FIELDLESS map renders as the bare `:map` keyword — round-tripping how it is authored
+      ;; (`:map` and `[:map]` store identically) and matching the bare-scalar convention above,
+      ;; so a `:map`-annotated function signature adheres to its `:map`-modelled type.
+      (let [fields (children db eid :field)]
+        (if (empty? fields)
+          :map
+          (into [:map]
+                (sort-by first
+                  (map (fn [feid]
+                         (let [f   (cq/entity db feid)
+                               sk  (first (children db feid :schema))
+                               kw  (keyword (:val/key f))
+                               sub (render db sk)]
+                           (if (:val/optional f) [kw {:optional true} sub] [kw sub])))
+                       fields)))))
       "enum"
       (into [:enum]
             (map (fn [ceid]
