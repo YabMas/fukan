@@ -75,7 +75,13 @@
                :require '[[?t :val/sig ?_s]]})
     ;; ex-Encapsulation — the exemption flags are VOCAB's (the kernel never names them)
     (covered  {:desc "every public extracted operation is covered by the model or deliberately exempt"
-               :unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]}))
+               :unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]})
+    ;; ex-type-drift, now GATED (exact adherence, Position A): wherever the extracted twin declares a
+    ;; type (`:val/sig`), the design op's modelled signature must EXACTLY adhere to it. A MISSING sig is
+    ;; type-coverage's offence, not this one — hence the `:when` guard. Run by the `:signature` comparator.
+    (agrees   {:key :adheres :by :signature
+               :desc "every modelled operation's realizing code signature exactly adheres to its modelled type"
+               :when '[[?t :val/sig ?_s]]}))
   (syntax signature->slots)          ; {:signature [:=> [:catn …] Out]} authoring entry (vocab-owned)
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
@@ -141,6 +147,15 @@
                              :where (out ?from ?to)]
                            db op-eid))]
     [:=> (into [:cat] ins) (if out (typing/render-type db out) :nil)]))
+
+;; The `:signature` correspondence comparator (the `(agrees {:by :signature})` demand on Operation
+;; runs it per twin pair): the design op's rendered signature must EXACTLY adhere to the extracted
+;; twin's realized `:val/sig`. Owns both extraction sides + the dialect adherence call, so the kernel
+;; stays type-agnostic. Only meaningful where the twin carries a sig (the demand's `:when` guards that).
+(s/register-comparator! :signature
+  (fn [db a b]
+    (typing/type-adheres? (operation-sig db a)
+                          (edn/read-string (:val/sig (cq/entity db b))))))
 
 (defn type-drifted-operations
   "AUTHORED operations whose modelled type disagrees with the realizing function's declared

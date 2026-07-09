@@ -86,8 +86,11 @@
 ;; :may-depend conformance/acyclicity, TrustBoundary parser-cross-check + totality, layering membership)
 ;; now read the auto-derived slot rules (`may-depend`/`kind`/`in`/`performs`/`fact`) — behavior-preserving
 ;; (live check still 0 violations, count still 82), only the emitted `:where` altitude changed.
+;; Laws +1 on 2026-07-09: Operation gained the GATED signature-adherence demand
+;; `:corresponds/Operation.adheres` (an `(agrees {:by :signature})` pair-hybrid) — count 82→83; the
+;; self-model is green (all realizing signatures reconciled to exactly adhere). Terms unaffected.
 (def ^:private golden-terms {:count 52 :hash 1756057039})
-(def ^:private golden-laws  {:count 82 :hash 672362760})
+(def ^:private golden-laws  {:count 83 :hash 1068765103})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
