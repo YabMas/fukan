@@ -56,10 +56,11 @@
 
    PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but that (the bridge, the
    `:extracted` fact-slot) hooks in from OUTSIDE via `(correspond Module …)` below, not here."
-  {:exposes [:* {:contains true} Operation]   ; the public API surface — Operations callers depend on
-   :owns    [:* {:contains true} Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
-   :offers  [:* {:contains true} Contract]    ; contracts it owns for OTHERS to implement (plug-points / SPIs)
-   :child   [:* {:contains true} Any]})       ; internal members + grain no other module consumes
+  {:exposes   [:* {:contains true} Operation]  ; the public API surface — Operations callers depend on
+   :owns      [:* {:contains true} Kind]       ; data-shapes that cross the boundary (other modules adopt by name)
+   :offers    [:* {:contains true} Contract]   ; contracts it OWNS for others to implement (plug-points / SPIs)
+   :satisfies [:* Contract]                    ; contracts it IMPLEMENTS (owned elsewhere) — the inverted plug-point edge; NOT containment
+   :child     [:* {:contains true} Any]})      ; internal members + grain no other module consumes
 
 ;; ── the correspondence EXTENSION: hooks Operation + Module from OUTSIDE (inverted dependency) ──
 ;; The concepts' defstructures mention no correspondence; these declarations contribute the fact-side
@@ -162,10 +163,9 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
 
 (def ^:private unrealized-dispatch-rules
   "Reachability over the EXTRACTED graph, on-graph. `op-ext-twin` pairs an authored op with its
-   extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is the call graph
-   extended by modelled dispatch: a `:calls` edge, OR a `:dispatches-to` edge lifted onto the twins
-   of its authored endpoints. `ext-reaches` is its transitive closure — a rule-calls-rule recursion
-   the kernel now allows; the query negates it under stratified negation. The injected rules
+   extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is a `:calls` edge;
+   `ext-reaches` is its transitive closure — a rule-calls-rule recursion the kernel now allows; the
+   query negates it under stratified negation. The injected rules
    (`Operation`/`design`/`fact`/`in-module`) are ambient in any `cq/q` — only these on-graph
    reachability rules need be supplied. `in-module` binds Kinds too, so op-ness is guarded here
    explicitly with `(Operation …)` (the design/fact stratum rules are kind-agnostic)."
@@ -174,23 +174,16 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
      (Operation ?e) (fact ?e) [?e :entity/name ?n] (in-module ?e ?em)
      [(canvas.vocab.code.module/module-corresponds? ?am ?em)]]
     [(ext-edge ?from ?to) (calls ?from ?to)]
-    [(ext-edge ?e1 ?e2)
-     (dispatches-to ?a1 ?a2)
-     (op-ext-twin ?a1 ?e1) (op-ext-twin ?a2 ?e2)]
     [(ext-reaches ?a ?b) (ext-edge ?a ?b)]
     [(ext-reaches ?a ?b) (ext-edge ?a ?mid) (ext-reaches ?mid ?b)]])
 
 (defn unrealized-dispatch
-  "Authored cross-module delegations NOT realized op-level by the actual code — neither by a direct
-   call nor by reaching the target THROUGH the code's call graph extended by modelled dispatch points
-   (`:dispatches-to`). A set of authored source-op names; empty ⇔ every intended dependency is backed
-   by a real (possibly dispatch-mediated, possibly multi-hop) call path.
+  "Authored cross-module delegations NOT realized op-level by the actual code — the target is reached
+   neither by a direct call nor multi-hop THROUGH the code's call graph. A set of authored source-op
+   names; empty ⇔ every intended dependency is backed by a real (possibly multi-hop) call path.
 
    A QUERY, not a law (like `uncovered-calls`): reachability is on-graph datalog (`ext-reaches`, the
-   transitive closure of `:calls` ∪ lifted `:dispatches-to`, negated under stratification) — no Clojure
-   walk. It is nonetheless a genuine CONSUMER of `:dispatches-to`: a modelled dispatch point's fan-out is
-   lifted onto the extracted call graph (by name + `module-corresponds?`), so removing a seam's
-   `:dispatches-to` makes its consumers' delegations unreachable and surfaces them here. An offender's
+   transitive closure of `:calls`, negated under stratification) — no Clojure walk. An offender's
    delegation has BOTH endpoints twinned in code yet no realized path between them; a delegation whose
    source or target has no extracted twin is out of scope. Asserted empty by the regression suite."
   [db]

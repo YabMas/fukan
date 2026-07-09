@@ -9,8 +9,7 @@
             [fukan.canvas.core.typing :as typing]
             [fukan.cozo.query :as cq]
             [canvas.vocab.type :as ct :refer [Schema]]
-            [canvas.vocab.code.effect :refer [Effect]]
-            [canvas.vocab.code.contract :refer [Contract]]))
+            [canvas.vocab.code.effect :refer [Effect]]))
 
 (defn ^:export signature->slots
   "Operation's authoring syntax. Existing map form remains valid:
@@ -68,9 +67,7 @@
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
    :out       [:? Schema]            ; output schema (authored ops declare one)
    :performs  [:* Effect]            ; side effects it performs
-   :delegates [:* {:transitive true} Operation]  ; designed dependencies; :transitive ⇒ delegates+
-   :dispatches-to [:* Operation]     ; indirection: handler Operations this dispatch point routes to
-   :satisfies [:* Contract]          ; contracts this op IMPLEMENTS (the inverted plug-point edge — coarse; teeth deferred)
+   :delegates [:* {:transitive true} Operation]  ; designed dependencies (known, direct callees); :transitive ⇒ delegates+
    :guidance  [:? :string]})         ; implementer-directed design intent (algorithm/perf/library)
 
 ;; Operation's authoring SUGAR — off the identity defstructure (it's machinery, not identity):

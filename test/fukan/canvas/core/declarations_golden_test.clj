@@ -102,8 +102,15 @@
 ;; Operation `:satisfies` them (the coarse plug-point vocabulary). Terms 50→54 (Contract kind-rule +
 ;; `offers`/`satisfies` relation rules + contains contribution), laws 82→86 (the new slots' target-type
 ;; + the `:shape` type-check laws). Live `(check)` still 0.
-(def ^:private golden-terms {:count 54 :hash 1679439778})
-(def ^:private golden-laws  {:count 86 :hash -1276368863})
+;; 2026-07-09 (cont.): the contract seam settled at MODULE altitude — `:satisfies` moved off Operation
+;; onto Module (a Contract is a bundle a MODULE provides; mirror of `:offers`), and the vestigial
+;; `:dispatches-to` slot (zero authored instances — the inversion it fumbled is now the offer/satisfy
+;; seam) was dropped from Operation. Terms 54→53 (−the `dispatches-to` relation rule; `satisfies` rule
+;; persists on Module), laws 86→85 (−Operation's `:dispatches-to` target-type law; `:satisfies`
+;; net-zero, relocated). Live `(check)` still 0. Operation is now pure computation {:in :out :performs
+;; :delegates :guidance}; both contract seams live on Module.
+(def ^:private golden-terms {:count 53 :hash 367526147})
+(def ^:private golden-laws  {:count 85 :hash -634684133})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

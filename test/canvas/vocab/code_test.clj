@@ -6,6 +6,7 @@
             [canvas.vocab.code.kind :as kind]
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as module]
+            [canvas.vocab.code.contract :as contract]
             [canvas.vocab.code.subsystem :as subsystem]))
 
 (module/Module ^{:name "fx-impl"}  t-fx-impl  "a fixture module")
@@ -80,17 +81,23 @@
                        db a)))
           ":may-depend is a self-reference to another Subsystem (mirrors Operation :delegates)"))))
 
-;; ── :dispatches-to: a dispatch point routes to handler Operations (authored indirection) ──
-(operation/Operation t-dp-h1 "handler 1")
-(operation/Operation t-dp-h2 "handler 2")
-(operation/Operation t-dp "a dispatch point" {:dispatches-to [t-dp-h1 t-dp-h2]})
+;; ── the contract seam: a Module :offers a Contract it owns; another Module :satisfies it (inverted) ──
+(contract/Contract ^{:name "Backend"} t-contract "a plug-point contract")
+(module/Module ^{:name "Owner"} t-mod-owner   {:offers [t-contract]})
+(module/Module ^{:name "Impl"}  t-mod-impl    {:satisfies [t-contract]})
 
-(deftest operation-dispatches-to-handlers
-  (testing "an Operation authored with :dispatches-to records ordered edges to its handler Operations"
-    (let [db (build/vars->cozo [#'t-dp-h1 #'t-dp-h2 #'t-dp])
-          dp (ffirst (cq/q '[:find ?o :where [?o :entity/name "t-dp"]] db))]
-      (is (= #{"t-dp-h1" "t-dp-h2"}
-             (set (cq/q '[:find [?hn ...] :in $ ?dp
-                         :where [?r :rel/from ?dp] [?r :rel/kind :dispatches-to] [?r :rel/to ?h] [?h :entity/name ?hn]]
-                       db dp)))
-          ":dispatches-to reaches each handler Operation"))))
+(deftest module-offers-and-satisfies-a-contract
+  (testing "an owner Module :offers a Contract and an implementer Module :satisfies it — the inverted plug-point seam"
+    (let [db (build/vars->cozo [#'t-contract #'t-mod-owner #'t-mod-impl])]
+      (is (= #{["Owner" "Backend"]}
+             (set (cq/q '[:find ?mn ?cn
+                          :where [?r :rel/kind :offers] [?r :rel/from ?m] [?m :entity/name ?mn]
+                                 [?r :rel/to ?c] [?c :entity/name ?cn]]
+                        db)))
+          ":offers edge runs owner Module → owned Contract")
+      (is (= #{["Impl" "Backend"]}
+             (set (cq/q '[:find ?mn ?cn
+                          :where [?r :rel/kind :satisfies] [?r :rel/from ?m] [?m :entity/name ?mn]
+                                 [?r :rel/to ?c] [?c :entity/name ?cn]]
+                        db)))
+          ":satisfies edge runs implementer Module → the Contract it implements (owned elsewhere)"))))

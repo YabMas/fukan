@@ -13,6 +13,7 @@
 (Module cozo-law
   "Compile defstructure laws' datalog → CozoScript (via the cozo-query compiler) over the
    Cozo substrate and run them — the Cozo analog of structure/check."
+  {:satisfies [kstructure/CheckEngine]}          ; this module implements the kernel's check-engine plug-point
   (Operation compile-law
     "Compile a law's offender query (offenders + its :rules + where, scope-clause prepended for a direct/facet tag) → a CozoScript program via the query compiler (compile-body emits the rules in its closure), then the `?` entry. Throws on an unsupported form."
     {:signature [:=> [:catn [:law :any] [:direct-tags :any] [:index :any]] :string]
@@ -28,5 +29,4 @@
     "Run every law over the Cozo db and return its VIOLATIONS — the structure/check-shaped drift list (the violation-only view of check-structural). A law whose form isn't compilable contributes nothing (the law-engine tests guarantee fukan's own laws all compile). The drop-in Cozo replacement for structure/check."
     {:signature  [:=> [:catn [:cdb db/CozoDb]] :any]
      :performs   [:state :throws]                    ; reaches :state/:throws through check-structural → compile-law's atoms
-     :satisfies  [kstructure/CheckEngine]            ; the Cozo backend registered into the kernel's check-engine plug-point
      :delegates  [check-structural]}))

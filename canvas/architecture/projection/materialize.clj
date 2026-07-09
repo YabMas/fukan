@@ -51,13 +51,13 @@
      :delegates [kstructure/vocab-rules query/q]})
   (Operation ^:private render-base
     "The per-(projection, kind) render dispatch point. Its defmethods have inline bodies (no named
-     handler ops), so it carries no :dispatches-to fan-out — modelled for coverage."
+     handler ops), so it declares no fan-out — modelled for coverage."
     {})
   ;; ── the readings: a Projection whose target artifact is a Finding (the read dual of Blueprint) ──
   (Operation ^:private render-finding
     "The per-projection reading-render dispatch point — the read dual of render-base. Its defmethods
-     route to named finding helpers in inline bodies (not extracted), so it carries no :dispatches-to
-     fan-out — modelled for coverage."
+     route to named finding helpers in inline bodies (not extracted), so it declares no fan-out —
+     modelled for coverage."
     {})
   ;; the reading renderers — each aggregates its lens focus into observations, delegating to the
   ;; finding constructors (this is the materialize→finding coupling the readings introduce, declared here)
