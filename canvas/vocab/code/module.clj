@@ -1,14 +1,17 @@
 (ns canvas.vocab.code.module
   "Code vocab — `Module`: a code boundary (one namespace), its derived module-dependency reading,
-   AND the CROSS-ELEMENT correspondence: the `module-corresponds?` name bridge + the `op-twin`
-   alias of the kernel twin (the (corresponds …) declarations carry the pairing).
-   The call-graph correspondence laws are GENERATED from Operation's `:delegates` slot options;
-   their readers live in `canvas.principles.layered-architecture`."
+   AND THE CORRESPONDENCE EXTENSION HOME: the `module-corresponds?` name bridge, the `op-twin` alias,
+   and the external `(correspond Operation …)`/`(correspond Module …)` hooks that contribute the
+   fact-side (`:calls`/`:sig`/… slots), the twin, and every model↔code demand to Operation/Module
+   FROM OUTSIDE (inverted dependency — the concepts' own defstructures mention no correspondence).
+   The call-graph demand readers live in `canvas.principles.layered-architecture`."
   (:require [clojure.string :as str]
+            [clojure.edn :as edn]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.typing :as typing]
             [fukan.canvas.core.substrate :as sub]
-            [canvas.vocab.code.operation :refer [Operation]]
+            [canvas.vocab.code.operation :as operation :refer [Operation]]
             [canvas.vocab.code.kind :refer [Kind]]))
 
 ;; ── the cross-element correspondence bridge ───────────────────────────────────
@@ -50,15 +53,52 @@
    the home for grain a module is source-of-truth-for but no one else consumes. The discriminant is
    adoption: a data-shape no other module names is internal grain (`:child`), not a boundary (`:owns`).
 
-   Corresponds as the ROOT of the twin ladder: a design Module twins an extracted one via the
-   `module-corresponds?` name bridge (the `(corresponds …)` declaration — nested kinds twin within
-   these pairs)."
-  (corresponds :by-name (bridge module-corresponds?))
+   PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but that (the bridge, the
+   `:extracted` fact-slot) hooks in from OUTSIDE via `(correspond Module …)` below, not here."
   {:exposes [:* {:contains true} Operation]   ; the public API surface — Operations callers depend on
    :owns    [:* {:contains true} Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
-   :child   [:* {:contains true} Any]}        ; internal members + grain no other module consumes
-  ;; :extracted [:? :boolean] is IMPLIED by (corresponds …) — the kernel mints the provenance slot.
-  )
+   :child   [:* {:contains true} Any]})       ; internal members + grain no other module consumes
+
+;; ── the correspondence EXTENSION: hooks Operation + Module from OUTSIDE (inverted dependency) ──
+;; The concepts' defstructures mention no correspondence; these declarations contribute the fact-side
+;; slots, the twin, and every model↔code demand to their tags — faithful to the old inline (corresponds …).
+
+(s/correspond Module :by-name (bridge module-corresponds?)
+  {:extracted [:? :boolean]})        ; provenance: true ⇒ from code extraction (stamped by the build)
+
+(s/correspond Operation :by-name
+  {:calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
+   :sig       [:? :string]           ; the code's REALIZED malli signature (stamped from :malli/schema)
+   :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
+   :export    [:? :boolean]          ; intentionally public for MECHANISM (^:export)
+   :test-support [:? :boolean]       ; intentionally public for TEST-SUPPORT (^:test-support)
+   :extracted [:? :boolean]}         ; provenance: true ⇒ from code
+  ;; ex-Realization — vacuity-guarded: ∃ extracted Operation
+  (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
+  ;; ex-TypeCoverage — public modelled op's realizing code carries a :malli/schema
+  (realized {:key :type-coverage
+             :desc "every public modelled operation's realizing code carries a type signature (:malli/schema)"
+             :when '[(exposed ?x)]
+             :require '[[?t :val/sig ?_s]]})
+  ;; ex-Encapsulation — the exemption flags are VOCAB's (the kernel never names them)
+  (covered  {:desc "every public extracted operation is covered by the model or deliberately exempt"
+             :unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]})
+  ;; GATED signature adherence (exact match): wherever the twin declares a :val/sig, the modelled
+  ;; signature must EXACTLY adhere. A missing sig is type-coverage's offence — hence the :when guard.
+  (agrees   {:key :adheres :by :signature
+             :desc "every modelled operation's realizing code signature exactly adheres to its modelled type"
+             :when '[[?t :val/sig ?_s]]})
+  ;; relation demands ABOUT Operation's own identity relations (:delegates / :performs):
+  (delegates {:realized-by :calls :faithful true :altitude :container})  ; cross-module :delegates realized by a :calls path (+ faithful reverse)
+  (performs  {:covered-from [:calls* :performs]}))                       ; every effect the twin REACHES over :calls*·:performs is declared
+
+;; the `:signature` comparator the `(agrees {:by :signature})` demand runs per twin pair: the design
+;; op's rendered signature must EXACTLY adhere to the extracted twin's realized `:val/sig`. Owns both
+;; extraction sides + the dialect adherence call, so the kernel stays type-agnostic.
+(s/register-comparator! :signature
+  (fn [db a b]
+    (typing/type-adheres? (operation/operation-sig db a)
+                          (edn/read-string (:val/sig (cq/entity db b))))))
 
 ;; ── derived module-dependency relations ───────────────────────────────
 ;; `module-owns` / `module-depends` are DEFRELATIONS — injected into every law and query by

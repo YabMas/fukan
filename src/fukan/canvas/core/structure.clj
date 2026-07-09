@@ -53,7 +53,14 @@
 
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
-(defn- slot-for [sdef rel] (first (filter #(= rel (:rel %)) (:slots sdef))))
+(declare correspondence-of)
+(defn- slot-for
+  "The slot descriptor for `rel` on `sdef`'s EFFECTIVE structure — its own defstructure slots plus any
+   fact-slots an external `(correspond …)` contributes to its tag. So an extracted instance can carry a
+   correspondence-contributed slot (`:calls`/`:extracted`/…) even though the concept's identity omits it."
+  [sdef rel]
+  (first (filter #(= rel (:rel %))
+                 (concat (:slots sdef) (:fact-slots (correspondence-of (:tag sdef)))))))
 
 
 ;; ── value-authoring: instance-form / value-form ──────────────────────────────
@@ -942,15 +949,6 @@
                                                " — it has no instances to twin")
                                           {:structure sname})))
                         (parse-corresponds sname (rest c))))
-        ;; correspondence IMPLIES the provenance slot: a corresponded structure has an authored
-        ;; stratum and an extracted (fact) stratum, discriminated by `:val/extracted` (stamped by
-        ;; the build at merge). That boolean is a consequence of declaring `(corresponds …)`, not a
-        ;; per-structure choice — the demand laws already inline `:val/extracted` — so the declaration
-        ;; mints its `:extracted [:? :boolean]` slot rather than every corresponded structure re-typing
-        ;; it. Guarded (skip if hand-declared) so it is net-zero for structures that still carry it.
-        slots  (cond-> slots
-                 (and corresponds (not (some #(= :extracted (:rel %)) slots)))
-                 (conj (parse-slot-entry :extracted [:? :boolean])))
         sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
                 :includes includes :realized-as realized :corresponds corresponds}]
     `(do

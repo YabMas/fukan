@@ -1,19 +1,16 @@
 (ns canvas.vocab.code.operation
-  "Code vocab — `Operation`: the unified computational unit, AUTHORED (a self-model's intent)
-   or EXTRACTED from code (fact-stratum, stamped by the build), plus its model↔code correspondence.
-   The three node-level demands (realized / type-coverage / covered) ride the `(corresponds …)`
-   declaration on Operation — no separate law-holder defstructures. The drift/coverage/type-drift
-   readers name the generated law keys directly. (The op pairing `op-twin` itself lives in `module`
-   — it is built on the Module name bridge — and is referenced here via datalog injection; the
-   `defn→Operation`+`:calls` extraction is added with the extractor.)"
-  (:require [clojure.edn :as edn]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]
+  "Code vocab — `Operation`: the unified computational unit, the AUTHORED intent (a self-model's
+   input/output Shapes, Effects, designed dependencies). PURE IDENTITY — model↔code correspondence
+   (the fact-side slots :calls/:sig/…, the twin, and the realized/covered/adheres demands) is NOT
+   here: it hooks in from OUTSIDE via `(correspond Operation …)` in `canvas.vocab.code.module`.
+   `operation-sig` renders an Operation's modelled signature (used by that correspondence hook's
+   `:signature` comparator and by the Blueprint projection)."
+  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]
             [fukan.cozo.query :as cq]
             [canvas.vocab.type :as ct :refer [Schema]]
             [canvas.vocab.code.effect :refer [Effect]]
-            [canvas.vocab.grouping :refer [Connected]]
-            [canvas.vocab.code.kind :refer [Kind]]))
+            [canvas.vocab.grouping :refer [Connected]]))
 
 (defn ^:export signature->slots
   "Operation's authoring syntax. Existing map form remains valid:
@@ -65,38 +62,16 @@
 
    Corresponds NESTED (:by-name): a design Operation twins the same-named extracted one within twinned Modules."
   (includes Connected)
-  (corresponds :by-name
-    ;; ex-Realization — vacuity guard: ∃ extracted Operation (fires only when code is extracted)
-    (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
-    ;; ex-TypeCoverage — positive twin (a missing twin is `realized`'s offence); public surface only
-    (realized {:key :type-coverage
-               :desc "every public modelled operation's realizing code carries a type signature (:malli/schema)"
-               :when '[(exposed ?x)]
-               :require '[[?t :val/sig ?_s]]})
-    ;; ex-Encapsulation — the exemption flags are VOCAB's (the kernel never names them)
-    (covered  {:desc "every public extracted operation is covered by the model or deliberately exempt"
-               :unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]})
-    ;; ex-type-drift, now GATED (exact adherence, Position A): wherever the extracted twin declares a
-    ;; type (`:val/sig`), the design op's modelled signature must EXACTLY adhere to it. A MISSING sig is
-    ;; type-coverage's offence, not this one — hence the `:when` guard. Run by the `:signature` comparator.
-    (agrees   {:key :adheres :by :signature
-               :desc "every modelled operation's realizing code signature exactly adheres to its modelled type"
-               :when '[[?t :val/sig ?_s]]}))
   (syntax signature->slots)          ; {:signature [:=> [:catn …] Out]} authoring entry (vocab-owned)
+  ;; PURE IDENTITY — the authored intent of an Operation. Correspondence (the fact-side slots
+  ;; :calls/:sig/…, the twin, and all demands) is NOT here: it hooks in from OUTSIDE via
+  ;; `(correspond Operation …)` in `canvas.vocab.code.module` (the correspondence extension).
   {:in        [:* Schema]            ; input shapes — positional, each labelled with its param name
-   :out       [:? Schema]            ; output schema (authored ops declare one; extracted may not)
-   :performs  [:* {:covered-from [:calls* :performs]} Effect]  ; side effects; :covered-from ⇒ every effect the twin REACHES is declared (ex-EffectCorrespondence; over-declaration is soft — effect-drift)
-   :delegates [:* {:transitive true :realized-by :calls :altitude :container :faithful true} Operation]  ; designed dependencies; :transitive ⇒ delegates+; :realized-by/:faithful ⇒ generated CallRealization/Fidelity pair at module altitude
-   :dispatches-to [:* Operation]     ; indirection: handler Operations this dispatch point routes to (authored intent — a design statement, not an extracted fact)
-   :guidance  [:? :string]           ; implementer-directed design intent (algorithm/perf/library) — rendered by the projection
-   :calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals; not authored); :transitive ⇒ calls+ (reach-through-calls)
-   :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
-   :export    [:? :boolean]          ; intentionally public for MECHANISM (macro emission / dynamic dispatch); settled, not a coverage gap (from ^:export)
-   :test-support [:? :boolean]       ; intentionally public for TEST-SUPPORT (test isolation / setup, never called from production); settled (from ^:test-support)
-   ;; :extracted [:? :boolean] is IMPLIED by (corresponds …) — the kernel mints the provenance slot.
-   ;; the code's REALIZED malli signature (a pr-str'd `[:=> …]` form), stamped by extraction
-   ;; from `:malli/schema` metadata; authored Operations leave it empty and use :in/:out.
-   :sig       [:? :string]}
+   :out       [:? Schema]            ; output schema (authored ops declare one)
+   :performs  [:* Effect]            ; side effects it performs
+   :delegates [:* {:transitive true} Operation]  ; designed dependencies; :transitive ⇒ delegates+
+   :dispatches-to [:* Operation]     ; indirection: handler Operations this dispatch point routes to
+   :guidance  [:? :string]}          ; implementer-directed design intent (algorithm/perf/library)
   ;; AUTHORED-SIDE typing discipline — every PUBLIC authored Operation (on a Module's `:exposes`
   ;; surface) declares an OUTPUT TYPE. ABSOLUTE, no opt-out: every op returns SOMETHING with a type,
   ;; down to `:nil` (side-effecting) or `:any` (genuinely dynamic) — a missing `:out` is an undeclared
@@ -147,15 +122,6 @@
                              :where (out ?from ?to)]
                            db op-eid))]
     [:=> (into [:cat] ins) (if out (typing/render-type db out) :nil)]))
-
-;; The `:signature` correspondence comparator (the `(agrees {:by :signature})` demand on Operation
-;; runs it per twin pair): the design op's rendered signature must EXACTLY adhere to the extracted
-;; twin's realized `:val/sig`. Owns both extraction sides + the dialect adherence call, so the kernel
-;; stays type-agnostic. Only meaningful where the twin carries a sig (the demand's `:when` guards that).
-(s/register-comparator! :signature
-  (fn [db a b]
-    (typing/type-adheres? (operation-sig db a)
-                          (edn/read-string (:val/sig (cq/entity db b))))))
 
 ;; Type-drift is no longer a reader: it is the GATED `:corresponds/Operation.adheres` demand (run by
 ;; the `:signature` comparator above), surfacing in `(check)` / `(cq/violation-names db
