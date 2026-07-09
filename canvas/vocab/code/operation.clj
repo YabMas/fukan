@@ -157,33 +157,7 @@
     (typing/type-adheres? (operation-sig db a)
                           (edn/read-string (:val/sig (cq/entity db b))))))
 
-(defn type-drifted-operations
-  "AUTHORED operations whose modelled type disagrees with the realizing function's declared
-   `:malli/schema` — a type-drift signal (only checked where the code carries an annotation).
-   Pairs each authored op with its extracted twin through the shared `op-twin` rule (same name,
-   corresponding module via `in-module` — the SAME membership the laws use, so public ops attached
-   via `:exposes` are seen, not just `:child`-attached ones), additionally requiring the twin
-   carries a `:val/sig`; collects the authored Operation's name when its rendered type does NOT
-   adhere to the twin's realized signature."
-  [db]
-  (->> (cq/q '[:find ?s ?sn ?o :in $
-               :where (op-twin ?s ?o) [?s :entity/name ?sn] [?o :val/sig ?sig]]
-             db)
-       (filter (fn [[s _ o]]
-                 (not (typing/type-adheres?
-                        (operation-sig db s)
-                        (edn/read-string (:val/sig (cq/entity db o)))))))
-       (map second) set))
-
-(defn undertyped-operations
-  "The PRECISION worklist — PUBLIC modelled Operations whose declared signature still contains an `:any`
-   (an under-typed parameter or result), as a set of names. Distinct from coverage (the signature is
-   PRESENT but imprecise — `:any` is an honest-but-weak type); the NEXT layer of the type story. A READING,
-   not a law: `:any` is a legitimate declaration, so under-typing is a worklist, not a violation. Empty ⇔
-   every public op's signature is fully precise. Reads the rendered signature, flagging any reachable `:any`."
-  [db]
-  (->> (cq/q '[:find ?o ?on :in $
-               :where (design ?o) [?o :entity/name ?on] (exposed ?o)]
-             db)
-       (filter (fn [[oeid _]] (some #{:any} (tree-seq coll? seq (operation-sig db oeid)))))
-       (map second) set))
+;; Type-drift is no longer a reader: it is the GATED `:corresponds/Operation.adheres` demand (run by
+;; the `:signature` comparator above), surfacing in `(check)` / `(cq/violation-names db
+;; :corresponds/Operation.adheres)`. The `undertyped` precision reading is likewise retired — under
+;; exact adherence a modelled `:any` must match the code exactly, so imprecision is not a separate signal.

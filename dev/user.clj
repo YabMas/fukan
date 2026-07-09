@@ -16,9 +16,6 @@
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
             [fukan.model.materialize :as mat]
-            ;; loads the model↔code correspondence laws into the dev session so a
-            ;; `check`/`(drift)` over the unified held model surfaces drift
-            [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as code-module]
             [canvas.principles.layered-architecture :as la]
             [canvas.principles.parse-dont-validate :as pdv]
@@ -249,22 +246,17 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn type-drift
-  "TYPE correspondence (model↔code) readings. Coverage is enforced by the generated type-coverage
-   demand — it surfaces in (check); this shows the two non-gating readings: ADHERENCE (modelled
-   signature vs the code's :malli/schema) and PRECISION (public ops whose signature is still
-   :any — under-typed, the next layer to precise)."
+  "TYPE correspondence (model↔code): the ADHERENCE offenders — modelled Operations whose realizing
+   code signature does NOT exactly match the modelled type. Now a GATED demand, so this also fires in
+   (check); shown here as a focused worklist. (Coverage — the twin carries a sig at all — is a separate
+   demand, also in (check).)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [drifted (operation/type-drifted-operations m)
-          under   (operation/undertyped-operations m)]
+    (let [drifted (cq/violation-names m :corresponds/Operation.adheres)]
       (println "ADHERENCE — modelled signature disagrees with the code's :malli/schema:")
       (if (empty? drifted)
-        (println "  (none — every code signature adheres to its modelled type)")
-        (doseq [on (sort drifted)] (println "  " on)))
-      (println (format "%nPRECISION — %d public op(s) whose signature is still :any (under-typed):" (count under)))
-      (if (empty? under)
-        (println "  (none — every public signature is fully precise)")
-        (doseq [on (sort under)] (println "  " on))))
+        (println "  (none — every code signature exactly adheres to its modelled type)")
+        (doseq [on (sort drifted)] (println "  " on))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn throw-spread

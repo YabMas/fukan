@@ -57,7 +57,7 @@
             assert these three specifically rather than global emptiness, which is fragile as
             more functions get annotated. The false-cases above prove DETECTION fires.)"
     (let [model   (pipeline/build-model "src")
-          drifted (operation/type-drifted-operations model)]
+          drifted (cq/violation-names model :corresponds/Operation.adheres)]
       (is (not (contains? drifted "load-model"))
           (str "load-model's :malli/schema should adhere to its model; drifted: " drifted))
       (is (not (contains? drifted "get-model"))
@@ -76,7 +76,7 @@
                              model))
           sig   (operation/operation-sig model op)]
       ;; integration: multi-arg, in order → adheres → absent from type-drift
-      (is (not (contains? (operation/type-drifted-operations model) "materialize-over"))
+      (is (not (contains? (cq/violation-names model :corresponds/Operation.adheres) "materialize-over"))
           "materialize-over's annotation matches its modelled ordered signature")
       ;; the model renders :in positionally, in order
       (is (= [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Instruction] sig)
@@ -87,6 +87,26 @@
       ;; detection: a DROPPED-arg code-sig does NOT adhere (arity fires)
       (is (false? (typing/type-adheres? sig '[:=> [:cat :StructureDb :ProjectionName] :Instruction]))
           "dropped argument does not adhere"))))
+
+(deftest adheres-demand-gates-a-real-signature-mismatch
+  (testing "the GATED :corresponds/Operation.adheres demand (the :signature comparator over twin
+            pairs): a modelled op `f` (no :in/:out → renders [:=> [:cat] :nil]) whose extracted twin
+            declares a DIFFERENT :val/sig is an offender; a twin whose sig exactly adheres is green."
+    (let [mk (fn [sig]
+               (build/tx-maps->cozo
+                [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                 {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
+                 {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                 {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                 {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"
+                  :val/extracted true :val/sig sig}
+                 {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]))
+          mismatch (mk "[:=> [:cat] :any]")   ; design renders [:=> [:cat] :nil] → out mismatch
+          match    (mk "[:=> [:cat] :nil]")]
+      (is (= #{"f"} (cq/violation-names mismatch :corresponds/Operation.adheres))
+          "a twin whose realized signature differs from the modelled one is an offender")
+      (is (empty? (cq/violation-names match :corresponds/Operation.adheres))
+          "a twin whose realized signature exactly adheres is green"))))
 
 (deftest call-realization-fires-on-an-unrealized-delegation
   (testing "an authored cross-module :delegates with NO actual cross-module :calls is an offender"
