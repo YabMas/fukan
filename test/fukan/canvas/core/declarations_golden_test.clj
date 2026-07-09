@@ -95,8 +95,11 @@
 ;; usage were retired. Terms 52→51 (−Connected kind-rule, −the dead `includes` term, +the holder's
 ;; kind-rule); laws stay 83 (both demands relocated, re-expressed with explicit `(Operation …)` scope);
 ;; live `(check)` still 0. Operation's defstructure is now pure slots.
-(def ^:private golden-terms {:count 51 :hash 1990126320})
-(def ^:private golden-laws  {:count 83 :hash -1191328896})
+;; 2026-07-09 (cont.): the `includes` mechanism retired — the meta-grammar `Structure` lost its
+;; `:includes [:* Structure]` slot, dropping that relation's target-type LAW (83→82) and re-shaping the
+;; terms. `(check)` still 0.
+(def ^:private golden-terms {:count 50 :hash -382623764})
+(def ^:private golden-laws  {:count 82 :hash -1737856569})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

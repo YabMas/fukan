@@ -151,7 +151,7 @@
             the hand-modelled remainder is the substrate (Node, Relation)"
     (let [db (pipeline/build-model nil)]
       (is (contains? (names-of db :Module) "core-structure"))
-      (is (= #{"tag" "value" "includes" "law" "realizes"}
+      (is (= #{"tag" "value" "law" "realizes"}
              (set (cq/q '[:find [?l ...]
                          :where [?st :structure/of :canvas.vocab.grammar/Structure]
                                 [?st :val/tag ":canvas.vocab.grammar/Structure"]

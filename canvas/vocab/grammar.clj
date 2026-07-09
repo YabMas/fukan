@@ -17,7 +17,7 @@
      - a VOCABULARY is one grammar namespace: `:child` edges to its Structures.
 
    Scope: the namespace closure of the tags in use — every namespace that defines
-   a tag instantiated in the db, expanded through slot targets and includes, plus
+   a tag instantiated in the db, expanded through slot targets, plus
    this namespace itself (the reflection self-reifies: `Structure` gets a
    Structure node). Reflection is PURE (`with-grammar`: db → db′) and re-runs on
    every build, so the reified grammar can never drift from the registry.
@@ -58,7 +58,6 @@
    carries its membership datalog as the `:form` payload of `:realizes`."
   {:tag      :string
    :value    [:? :boolean]
-   :includes [:* Structure]
    :law      [:* Law]
    :realizes [:? {:payload :form} :string]}
   ;; TOTALITY — the reflector's self-check. A Structure's identity IS its defining namespace, so every
@@ -89,22 +88,22 @@
 (defn- target-ns [t] (when (and (keyword? t) (namespace t)) (namespace t)))
 
 (defn- ns-closure
-  "Expand seed namespaces through their structures' slot targets and includes,
-   to a fixpoint — so a reified slot's target Structure is always present."
+  "Expand seed namespaces through their structures' slot targets, to a fixpoint —
+   so a reified slot's target Structure is always present."
   [seed]
   (loop [nss (set seed)]
     (let [nxt (into nss
                     (for [sd (s/all-structures)
                           :when (contains? nss (some-> (:tag sd) namespace))
-                          t    (concat (map :target (:slots sd)) (:includes sd))
+                          t    (map :target (:slots sd))
                           :let [n (target-ns t)] :when n]
                       n))]
       (if (= nxt nss) nss (recur nxt)))))
 
 (defn- reflect-structure
-  "One sdef → {:nodes … :rels …} for its Structure node, Law children, slot and
-   includes edges, and any Schema value targets."
-  [{:keys [tag doc slots laws includes value? realized-as corresponds]}]
+  "One sdef → {:nodes … :rels …} for its Structure node, Law children, slot edges,
+   and any Schema value targets."
+  [{:keys [tag doc slots laws value? realized-as corresponds]}]
   (let [sid  (structure-id tag)
         corr (or corresponds (s/correspondence-of tag))   ; inline (defstructure) or external (correspond)
         node (cond-> {:entity/id sid :structure/of ::Structure
@@ -145,19 +144,13 @@
             :rel  {:rel/id   (str sid "|law|" i)
                    :rel/from [:entity/id sid] :rel/kind :law
                    :rel/to   [:entity/id (str sid "#law/" i)]}})
-         laws)
-        inc-rels
-        (for [itag includes]
-          {:rel/id   (str sid "|includes|" itag)
-           :rel/from [:entity/id sid] :rel/kind :includes
-           :rel/to   [:entity/id (structure-id itag)]})]
+         laws)]
     {:any? (boolean (some :any? slot-bits))
      :nodes (into [node] (concat (mapcat (comp :nodes :emitted) slot-bits)
                                  (map :node law-bits)))
      :rels  (vec (concat (mapcat (comp :rels :emitted) slot-bits)
                          (map :rel slot-bits)
-                         (map :rel law-bits)
-                         inc-rels))}))
+                         (map :rel law-bits)))}))
 
 (defn reflect
   "PURE, db-agnostic: the model's reified-grammar `{:nodes :rels}` for the structure `tags` in use
@@ -199,14 +192,14 @@
             (:contains chars)   (assoc :val/contains true)))
         nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes)
         rels   (concat (mapcat :rels bits) (mapcat :rels vocabs))
-        ;; a slot/includes referencing a tag NOBODY registered is a dangling grammar ref (e.g. a
-        ;; misresolved (includes Foo)) — fail with the tag, not a cryptic missing-entity error.
+        ;; a slot referencing a tag NOBODY registered is a dangling grammar ref — fail with the tag,
+        ;; not a cryptic missing-entity error.
         known  (into #{} (map :entity/id) nodes)]
     (doseq [r rels
             :let [[_ tid] (:rel/to r)]
             :when (and (str/starts-with? tid ":") (not (contains? known tid)))]
-      (throw (ex-info (str "grammar reflection: " tid " is referenced by a slot or "
-                           "includes but no such structure is registered — dangling "
-                           "grammar reference (check the defining ns is required)")
+      (throw (ex-info (str "grammar reflection: " tid " is referenced by a slot but no such "
+                           "structure is registered — dangling grammar reference "
+                           "(check the defining ns is required)")
                       {:rel r})))
     {:nodes (vec nodes) :rels (vec rels)}))

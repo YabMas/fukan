@@ -675,7 +675,7 @@
    pure re-expression of the sdef's fields PLUS any external correspondence registered for its tag
    (`correspondence-of`); the parser is untouched. `:kind :kind` is the node-kind membership Term,
    emitted only for CONCRETE structures (not realized/coproduct/derived concepts)."
-  [{:keys [tag slots laws corresponds realized-as relation-coproduct derived-rule includes] :as _sdef}]
+  [{:keys [tag slots laws corresponds realized-as relation-coproduct derived-rule] :as _sdef}]
   (concat
    (when-not (or realized-as relation-coproduct derived-rule) [{:kind :kind}])
    (for [sl slots] {:kind :slot :slot sl})
@@ -683,7 +683,6 @@
    (for [sl slots :when (:contains sl)]     {:kind :contains :slot sl})
    (for [sl slots :when (:realized-by sl)]  {:kind :realized-by :slot sl})
    (for [sl slots :when (:covered-from sl)] {:kind :covered-from :slot sl})
-   (for [f includes] {:kind :includes :facet f})
    (when realized-as       [{:kind :realized-as :body realized-as}])
    (when relation-coproduct [{:kind :coproduct :members relation-coproduct}])
    (when derived-rule      [{:kind :defrelation :rule derived-rule}])
@@ -872,7 +871,7 @@
    values, def-wrapped instances): (Function \"doc\"? {slot → value}?)
 
    Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
-   (includes ...) / (realized-as ...) / (corresponds ...); anything else is rejected
+   (realized-as ...) / (corresponds ...); anything else is rejected
    at macro-expansion time (a silently-dropped form is a footgun).
 
    A law's :rules may be recursive, including rule-calls-rule (Cozo computes the
@@ -880,9 +879,9 @@
   [sname docstring & body]
   (doseq [form body]
     (when-not (or (map? form)
-                  (and (seq? form) (#{'law 'reader 'syntax 'includes 'realized-as 'corresponds} (first form))))
+                  (and (seq? form) (#{'law 'reader 'syntax 'realized-as 'corresponds} (first form))))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected a slots map, (law ...), (reader ...), (syntax ...), (includes ...), (realized-as ...) or (corresponds ...)")
+                           " — expected a slots map, (law ...), (reader ...), (syntax ...), (realized-as ...) or (corresponds ...)")
                       {:structure sname :form form}))))
   (when (> (count (filter map? body)) 1)
     (throw (ex-info (str "defstructure " sname ": multiple slots maps — declare all slots in one map")
@@ -943,15 +942,13 @@
         ;; parsing, so a structure owns its surface sugar (e.g. Operation's `->`) — NOT core.
         syntax-form (some (fn [f] (when (= 'syntax (first f)) (second f)))
                           (filter #(= 'syntax (first %)) body))
-        includes (->> body (filter #(= 'includes (first %)))
-                      (mapcat rest) (mapv resolve-struct-tag))
         realized (some (fn [f] (when (= 'realized-as (first f)) (unquote-lit (second f))))
                        (filter #(= 'realized-as (first %)) body))
         _      (when realized
-                 (when (or (seq slots) (seq laws) value? (seq includes) reader-form)
+                 (when (or (seq slots) (seq laws) value? reader-form)
                    (throw (ex-info (str "defstructure " sname
                                         ": a realized concept (realized-as) is pure derived membership —"
-                                        " it may not also declare slots, laws, includes, a reader, or ^:value")
+                                        " it may not also declare slots, laws, a reader, or ^:value")
                                    {:structure sname})))
                  (when (> (count (filter #(and (seq? %) (= 'realized-as (first %))) body)) 1)
                    (throw (ex-info (str "defstructure " sname ": multiple (realized-as …) forms")
@@ -971,7 +968,7 @@
                                           {:structure sname})))
                         (parse-corresponds sname (rest c))))
         sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
-                :includes includes :realized-as realized :corresponds corresponds}]
+                :realized-as realized :corresponds corresponds}]
     `(do
        (register-structure! (cond-> '~sdef
                               ~reader-form (assoc :reader ~reader-form)
@@ -1001,7 +998,7 @@
   [rtag docstring & members]
   (let [tag        (keyword (name rtag))
         member-kws (mapv (comp keyword name) members)]
-    `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws [] :includes []
+    `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws []
                            :relation-coproduct ~member-kws})))
 
 (defmacro defrelation
@@ -1032,7 +1029,7 @@
          [?sch :val/kind \"ref\"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]])"
   [rtag docstring head where]
   (let [tag (keyword (name rtag))]
-    `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws [] :includes []
+    `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws []
                            :derived-rule {:head '~(unquote-lit head) :where '~(unquote-lit where)}})))
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
@@ -1256,9 +1253,6 @@
   (fn [{:keys [slot]} _sdef]
     {:terms [[(list 'contains '?c '?m) (list (rule-sym (:rel slot)) '?c '?m)]] :laws []}))
 
-(register-declaration! :includes
-  (fn [{:keys [facet]} sdef]
-    {:terms [[(list (rule-sym facet) '?e) (list (rule-sym (:tag sdef)) '?e)]] :laws []}))
 
 (register-declaration! :realized-as
   (fn [{:keys [body]} sdef]
@@ -1383,16 +1377,13 @@
   direct-scope-tags
   "Qualified tags whose instances carry `:structure/of` DIRECTLY, so a law scoped to one can be
    pinned ns-precisely (`[?o :structure/of tag]`) instead of riding the short-name rule. Excludes
-   facets (`includes` targets — their members are reached via the inclusion rule, not a direct tag)
-   and realized/coproduct concepts (no instances). For these direct tags two same-short-named
+   realized/coproduct/derived concepts (no instances). For these direct tags two same-short-named
    structures from different namespaces never cross-scope."
   [structures]
-  (let [facets (into #{} (mapcat :includes) structures)]
-    (into #{}
-          (comp (remove #(or (:realized-as %) (:relation-coproduct %) (:derived-rule %)))
-                (map :tag)
-                (remove facets))
-          structures)))
+  (into #{}
+        (comp (remove #(or (:realized-as %) (:relation-coproduct %) (:derived-rule %)))
+              (map :tag))
+        structures))
 
 (defn ^{:malli/schema [:=> [:cat] [:vector :Rule]]}
   vocab-rules

@@ -117,10 +117,11 @@
       (is (str/includes? p "(defstructure Structure")))))
 
 (deftest primer-counts-operations-generated-laws
-  (testing "the primer's corresponds pointer agrees with the generator (3 node + 2 delegates + 1 performs)"
+  (testing "the primer's corresponds pointer agrees with the generator (4 node + 2 delegates + 1 performs
+            = 7; the demands + relation-demands now come from the EXTERNAL (correspond Operation …))"
     (let [db (pipeline/build-model nil)]
       (is (str/includes? (g/vocabulary-primer db "canvas.vocab.code.operation")
-                         "; ⇒ 6 generated laws")))))
+                         "; ⇒ 7 generated laws")))))
 
 (deftest correspondence-card-shows-the-seam-and-its-generated-laws
   (testing "the card renders the twin ladder and every demand with its stable key"
@@ -133,7 +134,8 @@
           "descs come from the generated laws — the six invisible laws become visible"))))
 
 (deftest print-dual-round-trips-the-correspondence-seam
-  (testing "the reflected Operation renders its corresponds form and demand slot options back"
+  (testing "the reflected Operation renders its (external) corresponds form; correspondence is NO LONGER
+            on the identity slots — `:delegates` carries only its identity option, `:performs` none"
     (let [db   (pipeline/build-model nil)
           eid  (ffirst (cq/q '[:find ?s :where [?s :structure/of :canvas.vocab.grammar/Structure]
                                [?s :val/tag ":canvas.vocab.code.operation/Operation"]] db))
@@ -141,11 +143,11 @@
           body (set (filter seq? form))
           corr (first (filter #(= 'corresponds (first %)) body))
           slots (first (filter map? form))]
-      (is (some? corr) "the corresponds body form renders")
+      (is (some? corr) "the corresponds body form renders (from the external correspondence config)")
       (is (= :by-name (second corr)))
       (is (= 3 (count (filter #(and (seq? %) (#{'realized 'covered} (first %))) corr)))
-          "all three node demands render as sub-forms")
-      (is (= {:transitive true :realized-by :calls :altitude :container :faithful true}
-             (second (:delegates slots)))
-          "characters AND demand options render in the slot props position")
-      (is (= {:covered-from [:calls* :performs]} (second (:performs slots)))))))
+          "the realized/covered node demands render as sub-forms")
+      (is (= {:transitive true} (second (:delegates slots)))
+          "identity slot carries only its identity option — correspondence moved external")
+      (is (not (map? (second (:performs slots))))
+          ":performs is a plain identity slot now — no correspondence options in its props position"))))

@@ -93,12 +93,6 @@
                          :scope (some-> (:val/scope e) edn/read-string)}
                         (payload-form (:val/form e))))))))
 
-(defn- includes-of [db s]
-  (->> (cq/q '[:find [?n ...] :in $ ?s
-               :where [?r :rel/from ?s] [?r :rel/kind :includes] [?r :rel/to ?t]
-                      [?t :entity/name ?n]] db s)
-       sort (mapv symbol)))
-
 (defn- parts [db s]
   (let [e (cq/entity db s)]
     {:name       (symbol (:entity/name e))
@@ -107,7 +101,6 @@
      :realizes   (when (:val/realizes e) (payload-form (:val/form e)))
      :corresponds (some-> (:val/corresponds e) payload-form)
      :slots      (slots-of db s)
-     :includes   (includes-of db s)
      :laws       (laws-of db s)}))
 
 ;; ── the data form (round-trip) ────────────────────────────────────────────────
@@ -132,15 +125,13 @@
   "The reified Structure at `eid` rendered back as its `defstructure` data form —
    the print-dual of the authoring surface. Laws carry their datalog unquoted
    (this is the PARSED form); `^:value` rides the name symbol's metadata.
-   A `(corresponds …)` declaration renders after `(includes …)`, restoring the
-   correspondence seam and its demand sub-forms; slot props (characters + demand
-   options) render in the slots map's props position."
+   A `(corresponds …)` declaration restores the correspondence seam and its demand
+   sub-forms; slot props (characters + demand options) render in the slots map's props position."
   [db eid]
-  (let [{:keys [name doc value? slots includes corresponds realizes laws]} (parts db eid)]
+  (let [{:keys [name doc value? slots corresponds realizes laws]} (parts db eid)]
     (concat ['defstructure (if value? (with-meta name {:value true}) name)]
             (when doc [doc])
             (when (seq slots) [(apply array-map (mapcat identity slots))])
-            (when (seq includes) [(cons 'includes includes)])
             (when corresponds
               [(concat ['corresponds (:basis corresponds)]
                        (when-let [b (:bridge corresponds)] [(list 'bridge b)])
@@ -175,29 +166,27 @@
         (map? s) s          ; [quantifier props target] — quantifier + props
         :else nil))))
 
-(defn- count-slot-generated
-  "The number of demand laws generated from a structure's slot props:
-   each `:realized-by` slot contributes 1 (+1 when `:faithful`); each `:covered-from` slot contributes 1."
-  [slots]
-  (->> slots
-       (map (fn [[_ sv]] (slot-props-map sv)))
-       (remove nil?)
-       (reduce (fn [n pm]
-                 (+ n
-                    (if (:covered-from pm) 1 0)
-                    (if (:realized-by pm) (+ 1 (if (:faithful pm) 1 0)) 0)))
-               0)))
+(defn- count-relation-demands
+  "The number of demand laws generated from relation-demand prop-maps (inline slot props OR the
+   external correspondence `:rel-demands`): each `:realized-by` contributes 1 (+1 when `:faithful`);
+   each `:covered-from` contributes 1."
+  [prop-maps]
+  (reduce (fn [n pm]
+            (+ n
+               (if (:covered-from pm) 1 0)
+               (if (:realized-by pm) (+ 1 (if (:faithful pm) 1 0)) 0)))
+          0 prop-maps))
 
 (defn- fmt-structure [db s]
-  (let [{:keys [name doc value? slots includes corresponds realizes laws]} (parts db s)
+  (let [{:keys [name doc value? slots corresponds realizes laws]} (parts db s)
         n-generated (when corresponds
                       (+ (count (:demands corresponds))
-                         (count-slot-generated slots)))]
+                         (count-relation-demands (keep (fn [[_ sv]] (slot-props-map sv)) slots))
+                         (count-relation-demands (:rel-demands corresponds))))]
     (->> (concat
           [(str "(defstructure " (when value? "^:value ") name)]
           (when doc [(str "  " (pr-str (first-line doc)))])
           (when (seq slots) [(fmt-slots slots)])
-          (when (seq includes) [(str "  (includes " (str/join " " includes) ")")])
           (when corresponds
             [(str "  (corresponds " (:basis corresponds) " …)  ; ⇒ " n-generated " generated laws")])
           (when realizes [(str "  (realized-as '" (pr-str realizes) ")")])
@@ -265,9 +254,8 @@
 (defn ^{:malli/schema [:=> [:cat :StructureDb] [:vector :string]]} unused-structures
   "The grammar-drift reading: reified Structures no instance inhabits — dead
    vocabulary. Excludes the Any wildcard and derivation-inhabited concepts:
-   realized-as, and facets reached via includes. Sorted structure names. (A
-   reading to reason with, not a gate — law-hosts and not-yet-spoken grammar are
-   legitimate; the human interprets.)"
+   realized-as. Sorted structure names. (A reading to reason with, not a gate — law-hosts and
+   not-yet-spoken grammar are legitimate; the human interprets.)"
   [db]
   ;; set-filtering in Clojure (this is a reader, not a law) — a plain membership test over
   ;; the in-use tags, no datalog negation needed for the no-realized-as case.
@@ -276,12 +264,10 @@
   (let [in-use   (into #{} (map (comp str keyword first))
                        (cq/q '[:find ?t :where [_ :structure/of ?t]] db))
         realized (into #{} (map first)
-                       (cq/q '[:find ?s :where [?s :val/realizes _]] db))
-        included (into #{} (map first)
-                       (cq/q '[:find ?t :where [?r :rel/kind :includes] [?r :rel/to ?t]] db))]
+                       (cq/q '[:find ?s :where [?s :val/realizes _]] db))]
     (->> (cq/q '[:find ?s ?n ?t
                  :where [?s :structure/of :canvas.vocab.grammar/Structure]
                         [?s :entity/name ?n] [?s :val/tag ?t]]
                db)
-         (remove (fn [[s _ t]] (or (realized s) (included s) (= ":Any" t) (in-use t))))
+         (remove (fn [[s _ t]] (or (realized s) (= ":Any" t) (in-use t))))
          (map second) sort vec)))
