@@ -75,17 +75,26 @@
                                               [?m :entity/name "sample"] [?m :val/extracted ?x]] db)))
           "the sample Module is provenance-stamped"))))
 
-(deftest extracts-defmulti-as-dispatch-operation
-  (testing "a defmulti is extracted as an Operation (a dispatch point) and callers' calls to it resolve"
+(deftest extracts-defmulti-as-plug-point
+  (testing "a defmulti is extracted as a PlugPoint (an open dispatch point), NOT an Operation; a call
+            THROUGH it is a :dispatches-through edge (op→plug-point), the marked boundary — not a :calls edge"
     (let [db (extract "src/fukan/model/materialize.clj")]
-      (is (true? (ffirst (cq/q '[:find ?x :where [?o :structure/of :canvas.vocab.code.operation/Operation]
-                                              [?o :entity/name "render-finding"] [?o :val/extracted ?x]] db)))
-          "render-finding (a defmulti) is an extracted Operation")
+      (is (true? (ffirst (cq/q '[:find ?x :where [?p :structure/of :canvas.vocab.code.plug-point/PlugPoint]
+                                              [?p :entity/name "render-finding"] [?p :val/extracted ?x]] db)))
+          "render-finding (a defmulti) is an extracted PlugPoint")
+      (is (empty? (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation]
+                                          [?o :entity/name "render-finding"] [?o :val/extracted true]] db))
+          "render-finding is NOT extracted as an Operation")
       (is (contains? (set (cq/q '[:find ?fromn ?ton
-                                 :where [?c :rel/kind :calls] [?c :rel/from ?f] [?c :rel/to ?t]
+                                 :where [?c :rel/kind :dispatches-through] [?c :rel/from ?f] [?c :rel/to ?t]
                                         [?f :entity/name ?fromn] [?t :entity/name ?ton]] db))
                      ["read-projection" "render-finding"])
-          "read-projection -> render-finding resolves as a :calls edge now that the point is a node"))))
+          "read-projection dispatches THROUGH render-finding — a :dispatches-through edge, not :calls")
+      (is (not (contains? (set (cq/q '[:find ?fromn ?ton
+                                 :where [?c :rel/kind :calls] [?c :rel/from ?f] [?c :rel/to ?t]
+                                        [?f :entity/name ?fromn] [?t :entity/name ?ton]] db))
+                          ["read-projection" "render-finding"]))
+          "... and it is NOT in the :calls function graph"))))
 
 (deftest every-modelled-stage-is-realized-in-src
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/)

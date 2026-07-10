@@ -17,6 +17,7 @@
   (:require [clj-kondo.core :as kondo]
             [canvas.vocab.code.extractors.clojure.effect :as clj-effect]
             [canvas.vocab.code.extractors.clojure.operation :as clj-operation]
+            [canvas.vocab.code.extractors.clojure.plug-point :as clj-plug-point]
             [canvas.vocab.code.module :as module]
             [fukan.cozo.db :as db]
             [fukan.cozo.rules :as rules]))
@@ -30,15 +31,19 @@
                                                        :var-usages true}}}})))
 
 (defn- add-calls
-  "Ground the actual call graph as `:calls` rels in `cdb` (the POST-BUILD grounding the native build's
-   `:ground` hook runs). Resolves each var-usage's caller/callee to the eid of the extracted Operation
-   named `fn` in module `ns` (a single cozo query `{[ns name] → eid}`), then inserts the `:calls` rels
-   above the current max eid. Returns `cdb`."
+  "Ground the actual invocation graph in `cdb` (the POST-BUILD grounding the native build's `:ground`
+   hook runs). Resolves each var-usage's caller/callee to the eid of the extracted Operation OR PlugPoint
+   named `fn` in module `ns`, then inserts an edge above the current max eid — `:calls` when the CALLEE is
+   an Operation (a function call), `:dispatches-through` when it is a PlugPoint (a consumer dispatching
+   through a plug-point). Both are extracted facts: the PlugPoint node is the marked boundary a query
+   stops at (opaque view) or crosses (see-through view). The rel/kind to emit is the callee's kind, read
+   straight off the resolution query. Returns `cdb`."
   [cdb var-usages]
-  (let [op-eid  (into {} (map (fn [[ns name eid]] [[ns name] eid]))
-                      (db/q cdb (str rules/eav module/in-module-cozo "
-?[ns, name, eid] := structof[eid, 'canvas.vocab.code.operation/Operation'], extracted[eid],
-                   ename[eid, name], in_module[eid, ns]")))
+  (let [rows    (db/q cdb (str rules/eav module/in-module-cozo "
+?[ns, name, eid, kind] := structof[eid, 'canvas.vocab.code.operation/Operation'],  extracted[eid], ename[eid, name], in_module[eid, ns], kind = 'calls'
+?[ns, name, eid, kind] := structof[eid, 'canvas.vocab.code.plug-point/PlugPoint'], extracted[eid], ename[eid, name], in_module[eid, ns], kind = 'dispatches-through'"))
+        eid-of  (into {} (map (fn [[ns name eid _]] [[ns name] eid])) rows)
+        kind-of (into {} (map (fn [[ns name _ kind]] [[ns name] kind])) rows)
         max-eid (ffirst (db/q cdb "alle[e] := *t_int[e, _, _]
 alle[e] := *t_str[e, _, _]
 alle[e] := *t_bool[e, _, _]
@@ -46,29 +51,31 @@ alle[e] := *t_bool[e, _, _]
         pairs   (->> var-usages
                      (keep (fn [{:keys [from from-var to name]}]
                              (when (and from-var to name)
-                               (let [c (op-eid [(str from) (str from-var)])
-                                     e (op-eid [(str to)   (str name)])]
-                                 (when (and c e (not= c e)) [c e])))))
+                               (let [ck [(str from) (str from-var)]
+                                     ek [(str to)   (str name)]
+                                     c  (eid-of ck) e (eid-of ek)]
+                                 (when (and c e (not= c e)) [c e (kind-of ek)])))))
                      distinct vec)
-        int-rows (vec (mapcat (fn [n [c e]]
+        int-rows (vec (mapcat (fn [n [c e _]]
                                 (let [rid (+ max-eid 1 n)]
                                   [[rid "rel/from" c] [rid "rel/to" e] [rid "rel/order" n]]))
                               (range) pairs))
-        str-rows (vec (map-indexed (fn [n _] [(+ max-eid 1 n) "rel/kind" "calls"]) pairs))]
+        str-rows (vec (map-indexed (fn [n [_ _ kind]] [(+ max-eid 1 n) "rel/kind" kind]) pairs))]
     (when (seq pairs)
       (db/q cdb "?[e, a, v] <- $rows :put t_int {e, a, v}" {:rows int-rows})
       (db/q cdb "?[e, a, v] <- $rows :put t_str {e, a, v}" {:rows str-rows}))
     cdb))
 
 (defn- attribute-defmethod-bodies
-  "clj-kondo attributes a call inside a `defmethod` body to `:from-var nil` — a defmethod is not
-   a named var, so its body calls have no enclosing var and `add-calls` drops them. Re-home each
-   such body call onto the enclosing defmethod's MULTIMETHOD (the caller becomes the dispatch-point
-   var), so a multimethod's reach — buried in inline method bodies — is visible in the `:calls`
-   graph. Rows are file-local, so this is per-file; a defmethod's body spans from its header row up
-   to the next top-level definition (a var-definition or the next defmethod header). Usages already
-   carrying a `:from-var`, the defmethod headers themselves, and files with no defmethods pass
-   through untouched."
+  "clj-kondo attributes a call inside a `defmethod` body to `:from-var nil` — a defmethod is not a named
+   var, so its body calls have no enclosing var and `add-calls` drops them. Re-home each such body call
+   onto the enclosing defmethod's MULTIMETHOD (which extracts as a PlugPoint): the caller becomes the
+   dispatch point, so the plug-point's REACH — its satisfiers' calls, buried in inline method bodies —
+   is captured (`render-base → operation-malli`). A coarse stand-in for the satisfy side (until satisfiers
+   are first-class), and the second half of what makes the see-through view whole. Rows are file-local,
+   so this is per-file; a defmethod's body spans from its header row to the next top-level definition.
+   Usages already carrying a `:from-var`, the defmethod headers themselves, and files with no defmethods
+   pass through untouched."
   [var-definitions var-usages]
   (let [defs-by-file    (group-by :filename var-definitions)
         markers-by-file (->> var-usages (filter :defmethod) (group-by :filename))
@@ -89,21 +96,25 @@ alle[e] := *t_bool[e, _, _]
 
 (defn extract-roots
   "The engine-agnostic extraction FACTS over the Clojure source under `paths`:
-   `{:roots [[id InstanceValue]…] :ground (fn [cdb] …)}` — the Module/Operation roots
-   (Operations stamped with DIRECT effects) plus a post-build `:ground` closure that grounds
-   the `:calls` graph from the clj-kondo var-usages (defmethod-body calls re-homed onto their
-   multimethod first). The native Cozo build assembles these facts onto the design graph, stamps
-   stratum provenance at the merge (`stamp-stratum`), and calls `:ground` generically."
+   `{:roots [[id InstanceValue]…] :ground (fn [cdb] …)}` — the Module/Operation/PlugPoint roots
+   (Operations stamped with DIRECT effects; defmultis as PlugPoints) plus a post-build `:ground`
+   closure that grounds the `:calls` graph from the clj-kondo var-usages. The native Cozo build
+   assembles these facts onto the design graph, stamps stratum provenance at the merge
+   (`stamp-stratum`), and calls `:ground` generically."
   [paths]
   (let [{:keys [namespace-definitions var-definitions var-usages]} (analyze paths)
         ops-by-ns    (group-by :ns (filter #(clj-operation/fn-defining (:defined-by %)) var-definitions))
+        pps-by-ns    (group-by :ns (filter #(clj-plug-point/plug-point-defining (:defined-by %)) var-definitions))
         module-names (distinct (concat (map :name namespace-definitions)
-                                       (keys ops-by-ns)))
+                                       (keys ops-by-ns) (keys pps-by-ns)))
         op-effs      (clj-effect/op-effects var-usages)
         attributed   (attribute-defmethod-bodies var-definitions var-usages)]
     {:roots      (vec (for [mname module-names
                             :let [ops (for [v (ops-by-ns mname)
                                             :let [effs (get op-effs [(str mname) (str (:name v))])]]
-                                        (clj-operation/extract-operation v effs))]]
-                        [(str mname) (module/extract-module mname ops)]))
+                                        (clj-operation/extract-operation v effs))
+                                  pps (map clj-plug-point/extract-plug-point (pps-by-ns mname))]]
+                        ;; extracted PlugPoints ride :child (like ops) so `in-module` resolves them; the
+                        ;; design side offers them, and the twin pairs the two by containment.
+                        [(str mname) (module/extract-module mname (concat ops pps))]))
      :ground     (fn [cdb] (add-calls cdb attributed))}))

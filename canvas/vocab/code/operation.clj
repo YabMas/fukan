@@ -83,15 +83,6 @@
 ;; (`fukan.canvas.core.rules`), ambient in every law and `cq/q`. Combine with the op-kind rule
 ;; `(Operation ?o)` — or lean on an op-specific edge already in the clause — where op-ness matters.
 
-;; `exposed` — an Operation on SOME Module's public `:exposes` surface. The recurring
-;; "public surface" predicate the signature/type demands and the precision reading each
-;; quantify over; a named unary relation so the laws read at domain altitude instead of
-;; re-inlining the `:exposes`/`:rel/to` EAV pair. Injected into every law and `cq/q`.
-(s/defrelation :exposed
-  "an Operation ?x on some Module's public :exposes surface"
-  '[?x]
-  '[[?xr :rel/kind :exposes] [?xr :rel/to ?x]])
-
 ;; ── model↔code correspondence (op altitude) ──────────────────────────────────
 ;; The demands (realized / type-coverage / covered / adheres) are NOT on Operation's identity: they
 ;; hook in from outside via `(correspond Operation …)` in `canvas.vocab.code.module`. No separate

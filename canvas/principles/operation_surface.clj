@@ -2,11 +2,12 @@
   "Adopted principle — fukan's DEMANDS on the authored Operation surface (what we require of it, not
    what it IS). Two disciplines, held here rather than on Operation's identity defstructure:
 
-   - COMPLETE OUTPUT TYPING (`types are absolute`): every PUBLIC authored Operation declares an output
-     type. Absolute, no opt-out — down to `:nil` (side-effecting) or `:any` (genuinely dynamic); a
-     missing `:out` is an undeclared contract, never a legitimate abstention. Output, not full signature:
-     a nullary op legitimately has no `:in`, so the output is the part every op has and the part the
-     public contract turns on.
+   - COMPLETE OUTPUT TYPING (`types are absolute`): every authored Operation declares an output type.
+     Absolute, no opt-out — down to `:nil` (side-effecting) or `:any` (genuinely dynamic); a missing
+     `:out` is an undeclared contract, never a legitimate abstention. Output, not full signature: a
+     nullary op legitimately has no `:in`, so the output is the part every op has and the part the
+     contract turns on. (No `exposed`/public qualifier: an Operation IS a surface — the things that
+     look like non-exposed operations are plug-points, a different kind; see `canvas.vocab.code.plug-point`.)
    - NO DEAD OPERATION (no isolated node): every Operation participates in the graph — it is reached or
      it reaches (has some incoming or outgoing relation). A wholly-isolated op is dead.
 
@@ -17,11 +18,11 @@
 
 (defstructure OperationSurface
   "Law-holder for the authored-operation-surface demands — carries no slots or instances of its own."
-  (law "every public authored operation declares an output type"
+  (law "every authored operation declares an output type"
     :key   :signature-completeness
     :scope :global
     :offenders '[?x]
-    :where '[(Operation ?x) (design ?x) (exposed ?x)
+    :where '[(Operation ?x) (design ?x)
              (not-join [?x] (out ?x ?_o))])
   (law "no isolated operation — every operation participates in the graph"
     :scope :global

@@ -7,6 +7,7 @@
    entry (`materialize-view` is a lens-eid convenience). `core.lens` lives in
    `canvas.architecture.kernel.lens`."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+            [canvas.vocab.code.plug-point :refer [PlugPoint]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.structure :as kstructure]
             [canvas.architecture.cozo.query :as query]
@@ -45,19 +46,17 @@
   (Operation materialize-finding "Compose a finding's observation foci into a projection — the reading→projection seam."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]
      :performs  [:throws :state]})                  ; via materialize-over
-  (Operation ^:private render-base
-    "The per-(projection, kind) render dispatch point. Its defmethod bodies are now traced — the
-     extractor attributes their calls to this multimethod — so the dispatch's reach surfaces on the
-     extracted twin. It declares the ambient effects that reach (db reads + parse throws); no
-     :delegates, since the fan-out lives in the inline method bodies."
-    {:performs [:throws :state]})
+  ;; the render dispatch points are OPEN PLUG-POINTS materialize offers (a defmulti IS one) — their
+  ;; defmethods satisfy them, and `render`/`read-projection` dispatch THROUGH them, stopping at the
+  ;; abstraction (the consumer never names the satisfiers). Not Operations: no call-surface, no signature.
+  (PlugPoint render-base
+    "The per-(projection, kind) render dispatch point — the open plug-point `render` dispatches through;
+     its `defmethod`s (Blueprint, Docs, …) satisfy it. The satisfiers' own reach (typing, …) is theirs,
+     not the consumer's — which is why `render` declares no dependency on it beyond dispatching through.")
   ;; ── the readings: a Projection whose target artifact is a Finding (the read dual of Blueprint) ──
-  (Operation ^:private render-finding
-    "The per-projection reading-render dispatch point — the read dual of render-base. Its defmethod
-     bodies route to named finding helpers and are traced (calls attributed to this multimethod), so
-     the reading pipeline's reach surfaces on the extracted twin. It declares the ambient effects it
-     reaches; no :delegates."
-    {:performs [:throws :state]})
+  (PlugPoint render-finding
+    "The per-projection reading-render dispatch point — the read dual of render-base; the open plug-point
+     `read-projection` dispatches through, its `defmethod`s (Patterns, Depth, …) satisfy it.")
   (Operation read-projection "Run a reading projection: resolve its focus, render it into a Finding."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] finding/Finding]
      :performs  [:throws :state]                   ; via projection-focus, then render-finding

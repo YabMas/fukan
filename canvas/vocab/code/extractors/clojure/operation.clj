@@ -9,10 +9,11 @@
             [canvas.vocab.code.operation :as operation]))
 
 (def fn-defining
-  "clj-kondo `:defined-by` values that denote a computation unit.
-   `defn`/`defn-` are functions; `defmulti` is a dispatch point and therefore
-   also an Operation. `def`, `defmacro`, `defmethod`, etc. stay excluded."
-  #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti})
+  "clj-kondo `:defined-by` values that denote a computation unit — `defn`/`defn-`.
+   `defmulti` is NOT here: it is an open dispatch point, extracted as a `PlugPoint`
+   (see `extractors.clojure.plug-point`), not an Operation. `def`, `defmacro`,
+   `defmethod`, etc. stay excluded."
+  #{'clojure.core/defn 'clojure.core/defn-})
 
 (defn extract-operation
   "Build an extracted Operation InstanceValue from a clj-kondo var-definition `v`

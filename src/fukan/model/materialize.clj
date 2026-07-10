@@ -357,7 +357,6 @@
                                               db (s/vocab-rules) k)
                               checks    (cq/q '[:find ?o ?on :in $ % ?k
                                                 :where (design ?o) [?o :entity/name ?on]
-                                                       (exposed ?o)
                                                        (in ?o ?isch) (names-kind ?isch ?k)
                                                        (out ?o ?osch) [?osch :val/kind "boolean"]]
                                               db (s/vocab-rules) k)]
