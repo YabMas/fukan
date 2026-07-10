@@ -113,8 +113,12 @@
 ;; already was — the read dual of the docstring, not vocab. Terms unchanged (a scalar slot emits no
 ;; relation rule), laws 85→84 (−Operation's `:guidance` type-check law). Operation is now pure
 ;; computation {:in :out :performs :delegates}. Live `(check)` still 0.
-(def ^:private golden-terms {:count 53 :hash 367526147})
-(def ^:private golden-laws  {:count 84 :hash -1856683030})
+;; 2026-07-10: `Contract` renamed to `PlugPoint` (canvas.vocab.code.plug-point) — the concept was
+;; always a plug-point/SPI/dependency-inversion point (its own docstring said so); the neutral name
+;; obscured the directionality. Pure rename: counts unchanged (terms 53, laws 84), only the tag in the
+;; emitted kind-rule + `:shape` type-check law moved (`Contract`→`PlugPoint`). Live `(check)` still 0.
+(def ^:private golden-terms {:count 53 :hash 1979366480})
+(def ^:private golden-laws  {:count 84 :hash -513110322})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

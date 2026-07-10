@@ -13,7 +13,7 @@
             [fukan.canvas.core.substrate :as sub]
             [canvas.vocab.code.operation :as operation :refer [Operation]]
             [canvas.vocab.code.kind :refer [Kind]]
-            [canvas.vocab.code.contract :refer [Contract]]))
+            [canvas.vocab.code.plug-point :refer [PlugPoint]]))
 
 ;; ── the cross-element correspondence bridge ───────────────────────────────────
 ;; MUST be defined before Module's defstructure: the (corresponds …) body-form
@@ -58,8 +58,8 @@
    `:extracted` fact-slot) hooks in from OUTSIDE via `(correspond Module …)` below, not here."
   {:exposes   [:* {:contains true} Operation]  ; the public API surface — Operations callers depend on
    :owns      [:* {:contains true} Kind]       ; data-shapes that cross the boundary (other modules adopt by name)
-   :offers    [:* {:contains true} Contract]   ; contracts it OWNS for others to implement (plug-points / SPIs)
-   :satisfies [:* Contract]                    ; contracts it IMPLEMENTS (owned elsewhere) — the inverted plug-point edge; NOT containment
+   :offers    [:* {:contains true} PlugPoint]  ; plug-points it OWNS for others to satisfy (SPIs / dependency-inversion points)
+   :satisfies [:* PlugPoint]                   ; plug-points it SATISFIES (owned elsewhere) — the inverted edge; NOT containment
    :child     [:* {:contains true} Any]})      ; internal members + grain no other module consumes
 
 ;; ── the correspondence EXTENSION: hooks Operation + Module from OUTSIDE (inverted dependency) ──

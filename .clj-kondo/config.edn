@@ -58,7 +58,7 @@
   canvas.vocab.code.kind
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.code.contract
+  canvas.vocab.code.plug-point
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   canvas.vocab.code.effect

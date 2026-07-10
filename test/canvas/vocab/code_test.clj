@@ -6,7 +6,7 @@
             [canvas.vocab.code.kind :as kind]
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as module]
-            [canvas.vocab.code.contract :as contract]
+            [canvas.vocab.code.plug-point :as plug-point]
             [canvas.vocab.code.subsystem :as subsystem]))
 
 (module/Module ^{:name "fx-impl"}  t-fx-impl  "a fixture module")
@@ -81,23 +81,23 @@
                        db a)))
           ":may-depend is a self-reference to another Subsystem (mirrors Operation :delegates)"))))
 
-;; ── the contract seam: a Module :offers a Contract it owns; another Module :satisfies it (inverted) ──
-(contract/Contract ^{:name "Backend"} t-contract "a plug-point contract")
-(module/Module ^{:name "Owner"} t-mod-owner   {:offers [t-contract]})
-(module/Module ^{:name "Impl"}  t-mod-impl    {:satisfies [t-contract]})
+;; ── the plug-point seam: a Module :offers a PlugPoint it owns; another Module :satisfies it (inverted) ──
+(plug-point/PlugPoint ^{:name "Backend"} t-plug-point "a plug-point")
+(module/Module ^{:name "Owner"} t-mod-owner   {:offers [t-plug-point]})
+(module/Module ^{:name "Impl"}  t-mod-impl    {:satisfies [t-plug-point]})
 
-(deftest module-offers-and-satisfies-a-contract
-  (testing "an owner Module :offers a Contract and an implementer Module :satisfies it — the inverted plug-point seam"
-    (let [db (build/vars->cozo [#'t-contract #'t-mod-owner #'t-mod-impl])]
+(deftest module-offers-and-satisfies-a-plug-point
+  (testing "an owner Module :offers a PlugPoint and an implementer Module :satisfies it — the inverted plug-point seam"
+    (let [db (build/vars->cozo [#'t-plug-point #'t-mod-owner #'t-mod-impl])]
       (is (= #{["Owner" "Backend"]}
              (set (cq/q '[:find ?mn ?cn
                           :where [?r :rel/kind :offers] [?r :rel/from ?m] [?m :entity/name ?mn]
                                  [?r :rel/to ?c] [?c :entity/name ?cn]]
                         db)))
-          ":offers edge runs owner Module → owned Contract")
+          ":offers edge runs owner Module → owned PlugPoint")
       (is (= #{["Impl" "Backend"]}
              (set (cq/q '[:find ?mn ?cn
                           :where [?r :rel/kind :satisfies] [?r :rel/from ?m] [?m :entity/name ?mn]
                                  [?r :rel/to ?c] [?c :entity/name ?cn]]
                         db)))
-          ":satisfies edge runs implementer Module → the Contract it implements (owned elsewhere)"))))
+          ":satisfies edge runs implementer Module → the PlugPoint it satisfies (owned elsewhere)"))))
