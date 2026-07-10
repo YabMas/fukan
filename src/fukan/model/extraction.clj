@@ -14,7 +14,7 @@
 
 (defonce ^:private fact-extractor (atom nil))
 
-(defn ^{:malli/schema [:=> [:cat :FactExtractor] :Unit]}
+(defn ^{:malli/schema [:=> [:cat :any] :Unit]}
   register-fact-extractor!
   "Register the project's FACT extractor: a fn `code-root -> {:roots :ground}` (the
    engine-agnostic extraction facts the native Cozo build consumes). `:ground` is a

@@ -37,4 +37,5 @@
   (PlugPoint TypeDialect
     "The type-dialect plug-point (`register-type-dialect!`): a project's type language as a bridge-fn map
      (render / parse / adheres? / valid? / reflect-tag). The kernel dispatches type render/check/adherence
-     to the registered dialect and interprets no type form itself — it ships no dialect."))
+     to the registered dialect and interprets no type form itself — it ships no dialect."
+    {:shape [:map [:render :any] [:parse :any] [:adheres? :any] [:valid? :any] [:reflect-tag :any]]}))

@@ -29,15 +29,18 @@
 (PlugPoint Syntax
   "The authoring-syntax plug-point (`register-syntax!`): a per-structure hook rewriting an instance's
    slots map before parsing (map → map). Vocab registers one per structure that needs sugar; the kernel
-   applies whatever is registered at instance-expansion, naming none.")
+   applies whatever is registered at instance-expansion, naming none."
+  {:shape [:=> [:catn [:slots :map]] :map]})
 (PlugPoint Comparator
   "The adherence-comparator plug-point (`register-comparator!`): a `(fn [db design fact] → boolean)` an
    `(agrees {:by …})` demand runs per twin pair. Vocab registers the comparators (e.g. `:signature`); the
-   kernel dispatches to the named one, staying type-agnostic.")
+   kernel dispatches to the named one, staying type-agnostic."
+  {:shape [:=> [:catn [:db :any] [:design-eid :any] [:fact-eid :any]] :boolean]})
 (PlugPoint Correspondence
   "The correspondence plug-point (`register-correspondence!`): a per-tag config for how a design concept
    corresponds to extracted code. Vocab declares them via `(correspond …)`; the kernel generates the twin
-   + demand laws from whatever is registered, naming no project's correspondences.")
+   + demand laws from whatever is registered, naming no project's correspondences."
+  {:shape [:map [:by :keyword]]})
 
 (Operation vocab-rules
   "The datalog rules derived from the live vocabulary, injected into laws/lenses — dispatched

@@ -40,4 +40,5 @@
   (PlugPoint PredicatePort
     "The fn-predicate CozoScript-port plug-point (`register-predicate-port!`): a vocab fn-predicate's
      port (builder + synthetic rule defs) so the GENERIC compiler lowers a domain predicate to CozoScript
-     without naming it. Vocab registers ports at load; the compiler consults whatever is registered."))
+     without naming it. Vocab registers ports at load; the compiler consults whatever is registered."
+    {:shape [:map [:builder :any] [:synthetic :map]]}))

@@ -3,7 +3,8 @@
    registers its one custom code FACT extractor (a fn `Path → Facts`). `build-model` runs it via
    `extract-facts` WITHOUT naming it (keeps the pipeline generic); the composition root supplies it
    with `register-fact-extractor!`. Both operations mutate/read the registry slot (`:state`)."
-  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]))
+  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+            [canvas.vocab.code.plug-point :refer [PlugPoint]]))
 
 (Module extraction
   "The extraction plug-point — register and run the project's code FACT extractor."
@@ -13,14 +14,16 @@
      flows in from the CLI → build-model → extract-facts)."
     :string)
   (Kind Unit)
-  (Kind FactExtractor [:=> [:catn [:code-root Path]] Facts])
   (Kind Facts
     "The extraction facts {:roots :ground} — the Module/Operation roots plus a post-build :ground
      closure ((db)→db) the extractor supplies to ground engine-specific derived edges (the :calls
      graph). What the native Cozo build consumes, produced by the registered fact extractor."
     :map)
+  ;; the extraction plug-point — a project's per-LANGUAGE code extractor plugs in (external-by-design;
+  ;; fukan's is the Clojure extractor). The build consults the registry, naming no specific extractor.
+  (PlugPoint FactExtractor {:shape [:=> [:catn [:code-root Path]] Facts]})
   (Operation register-fact-extractor! "Register the project's FACT extractor (a fn Path → Facts)."
-    {:signature [:=> [:catn [:f FactExtractor]] Unit]
+    {:signature [:=> [:catn [:f :any]] Unit]
      :performs  [:state]})
   (Operation extract-facts
     "Run the registered fact extractor over a code-root → its {:roots :ground} facts (or empty
