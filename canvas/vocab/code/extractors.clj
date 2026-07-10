@@ -60,22 +60,50 @@ alle[e] := *t_bool[e, _, _]
       (db/q cdb "?[e, a, v] <- $rows :put t_str {e, a, v}" {:rows str-rows}))
     cdb))
 
+(defn- attribute-defmethod-bodies
+  "clj-kondo attributes a call inside a `defmethod` body to `:from-var nil` — a defmethod is not
+   a named var, so its body calls have no enclosing var and `add-calls` drops them. Re-home each
+   such body call onto the enclosing defmethod's MULTIMETHOD (the caller becomes the dispatch-point
+   var), so a multimethod's reach — buried in inline method bodies — is visible in the `:calls`
+   graph. Rows are file-local, so this is per-file; a defmethod's body spans from its header row up
+   to the next top-level definition (a var-definition or the next defmethod header). Usages already
+   carrying a `:from-var`, the defmethod headers themselves, and files with no defmethods pass
+   through untouched."
+  [var-definitions var-usages]
+  (let [defs-by-file    (group-by :filename var-definitions)
+        markers-by-file (->> var-usages (filter :defmethod) (group-by :filename))
+        per-file        (into {}
+                              (for [[file markers] markers-by-file
+                                    :let [defrows (map :row (get defs-by-file file))
+                                          bounds  (vec (sort (concat defrows (map :row markers))))
+                                          m-at    (into {} (map (juxt :row identity)) markers)]]
+                                [file {:bounds bounds :m-at m-at}]))]
+    (mapv (fn [u]
+            (if (or (:from-var u) (:defmethod u) (not (contains? per-file (:filename u))))
+              u
+              (let [{:keys [bounds m-at]} (per-file (:filename u))
+                    enclosing (last (filter #(<= % (:row u)) bounds))
+                    m         (get m-at enclosing)]
+                (if m (assoc u :from-var (:name m) :from (:to m)) u))))
+          var-usages)))
+
 (defn extract-roots
   "The engine-agnostic extraction FACTS over the Clojure source under `paths`:
    `{:roots [[id InstanceValue]…] :ground (fn [cdb] …)}` — the Module/Operation roots
    (Operations stamped with DIRECT effects) plus a post-build `:ground` closure that grounds
-   the `:calls` graph from the clj-kondo var-usages. The native Cozo build assembles these
-   facts onto the design graph, stamps stratum provenance at the merge (`stamp-stratum`), and
-   calls `:ground` generically."
+   the `:calls` graph from the clj-kondo var-usages (defmethod-body calls re-homed onto their
+   multimethod first). The native Cozo build assembles these facts onto the design graph, stamps
+   stratum provenance at the merge (`stamp-stratum`), and calls `:ground` generically."
   [paths]
   (let [{:keys [namespace-definitions var-definitions var-usages]} (analyze paths)
         ops-by-ns    (group-by :ns (filter #(clj-operation/fn-defining (:defined-by %)) var-definitions))
         module-names (distinct (concat (map :name namespace-definitions)
                                        (keys ops-by-ns)))
-        op-effs      (clj-effect/op-effects var-usages)]
+        op-effs      (clj-effect/op-effects var-usages)
+        attributed   (attribute-defmethod-bodies var-definitions var-usages)]
     {:roots      (vec (for [mname module-names
                             :let [ops (for [v (ops-by-ns mname)
                                             :let [effs (get op-effs [(str mname) (str (:name v))])]]
                                         (clj-operation/extract-operation v effs))]]
                         [(str mname) (module/extract-module mname ops)]))
-     :ground     (fn [cdb] (add-calls cdb var-usages))}))
+     :ground     (fn [cdb] (add-calls cdb attributed))}))

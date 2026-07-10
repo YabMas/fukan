@@ -50,15 +50,18 @@
     {:performs  [:throws :state]                   ; via query/q (the compiler can throw/read state)
      :delegates [kstructure/vocab-rules query/q]})
   (Operation ^:private render-base
-    "The per-(projection, kind) render dispatch point. Its defmethods have inline bodies (no named
-     handler ops), so it declares no fan-out — modelled for coverage."
-    {})
+    "The per-(projection, kind) render dispatch point. Its defmethod bodies are now traced — the
+     extractor attributes their calls to this multimethod — so the dispatch's reach surfaces on the
+     extracted twin. It declares the ambient effects that reach (db reads + parse throws); no
+     :delegates, since the fan-out lives in the inline method bodies."
+    {:performs [:throws :state]})
   ;; ── the readings: a Projection whose target artifact is a Finding (the read dual of Blueprint) ──
   (Operation ^:private render-finding
-    "The per-projection reading-render dispatch point — the read dual of render-base. Its defmethods
-     route to named finding helpers in inline bodies (not extracted), so it declares no fan-out —
-     modelled for coverage."
-    {})
+    "The per-projection reading-render dispatch point — the read dual of render-base. Its defmethod
+     bodies route to named finding helpers and are traced (calls attributed to this multimethod), so
+     the reading pipeline's reach surfaces on the extracted twin. It declares the ambient effects it
+     reaches; no :delegates."
+    {:performs [:throws :state]})
   ;; the reading renderers — each aggregates its lens focus into observations, delegating to the
   ;; finding constructors (this is the materialize→finding coupling the readings introduce, declared here)
   (Operation ^:private patterns-finding "Group the focus's relations by structural triplet (the recurring ones)."
