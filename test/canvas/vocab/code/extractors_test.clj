@@ -2,8 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
-            [fukan.cozo.law]
+            [fukan.cozo.law :as law]                 ; check + its worklist readers (violation-names) live here
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
             [canvas.vocab.code.extractors :as tc]
@@ -93,7 +92,7 @@
             op-layer Operation is backed by a real function — the cross-layer
             correspondence is assertable only because both layers share that graph"
     (let [model      (pipeline/build-model "src")        ; design + extracted code, unified
-          unrealized (cq/violation-names model :corresponds/Operation.realized)]
+          unrealized (law/violation-names model :corresponds/Operation.realized)]
       ;; sanity: build-model actually brought both layers together
       (is (seq (cq/q '[:find ?s :where [?s :structure/of :canvas.vocab.code.operation/Operation]] model)) "model has Operations")
       (is (seq (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation]] model)) "build-model extracted code into Operations")

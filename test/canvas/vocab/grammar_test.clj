@@ -8,8 +8,8 @@
             [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
-            [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── fixture vocab: every cardinality, scalar + refined targets, a law ────────
@@ -131,4 +131,4 @@
 (deftest reflected-model-satisfies-every-law
   (testing "meta-integrity: reflection adds no violations (the meta-grammar's own
             slot laws run over the reified nodes)"
-    (is (empty? (s/check (reflected))))))
+    (is (empty? (law/check (reflected))))))

@@ -7,8 +7,8 @@
             [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
-            [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [canvas.vocab.type :as dialect]
             [fukan.model.pipeline :as pipeline]
@@ -72,7 +72,7 @@
       ;; the (evicted) base Function/Type vocab; subset since other specs add more
       (is (set/subset? #{"load-model" "get-model" "refresh-model"} (names-of db :Operation)))
       (is (set/subset? #{"StructureDb" "Path"} (names-of db :Kind)))
-      (is (empty? (s/check db))
+      (is (empty? (law/check db))
           "the whole self-model satisfies every structure's laws"))))
 
 (deftest pipeline-links-across-to-canvas-source
@@ -174,7 +174,7 @@
 (deftest refined-enum-slot-catches-out-of-set-value
   (testing "a refined [:enum …] scalar slot rejects an out-of-enum value via its generated law"
     (let [bad (build/vars->cozo [#'ec-bad])]
-      (is (contains? (set (map :law (s/check bad)))
+      (is (contains? (set (map :law (law/check bad)))
                      "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
 
 (deftest principled-readings-are-the-shipped-projections

@@ -15,7 +15,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
-            [fukan.cozo.law]
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── two-view fixtures ────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@
   (testing "the traces law is accepted and runs: sb (its concept fb has no realizing Mod) is flagged"
     (let [db (build/vars->cozo [#'m1 #'fb #'fa #'sb #'sa])]
       (is (= #{"sb"}
-             (->> (s/check db)
+             (->> (law/check db)
                   (filter #(= "every step traces to an impl module" (:law %)))
                   (mapcat :offenders) (map first)
                   (map #(:entity/name (cq/entity db %))) set))))))
@@ -98,7 +98,7 @@
 (Step sc {:next sd :via fc})
 
 (defn- flow-offenders [db]
-  (->> (s/check db)
+  (->> (law/check db)
        (filter #(= "view-map preserves flow" (:law %)))
        (mapcat :offenders)
        (map (fn [row] (set (map #(:entity/name (cq/entity db %)) row))))

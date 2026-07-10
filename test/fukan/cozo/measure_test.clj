@@ -4,7 +4,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
-            [fukan.cozo.law]
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; module/operation vocab: the Module/Operation kind rules + the
             ;; :contains-derived `contains` rule the fixtures query at
@@ -171,7 +171,7 @@
 (deftest measure-in-a-law-body
   (testing "a self-scoped law using an inline measure fires on the over-full crate only"
     (let [db   (build/vars->cozo [#'mt-t1 #'mt-t2 #'mt-t3 #'mt-big #'mt-small])
-          offs (->> (s/check db)
+          offs (->> (law/check db)
                     (filter #(= "an MtCrate holds at most 2 things" (:law %)))
                     (mapcat :offenders) (map first)
                     (map #(:entity/name (cq/entity db %))) set)]

@@ -14,7 +14,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
-            [fukan.cozo.law]
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [canvas.vocab.code.kind :as code]))
 
@@ -45,7 +45,7 @@
 (deftest law-scope-is-ns-precise
   (testing "a free law self-scoped to the local Kind flags only ::Kind instances — not canvas.vocab.code.kind/Kind"
     (let [db      (build/vars->cozo [#'local-kind #'lib-kind])
-          flagged (->> (s/check db)
+          flagged (->> (law/check db)
                        (filter #(= "local-kind-flag" (:law %)))
                        (mapcat :offenders)
                        (map (comp :entity/name #(cq/entity db %) first))

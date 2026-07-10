@@ -2,14 +2,14 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
-            [fukan.cozo.law]
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [canvas.vocab.code.module]
             [canvas.vocab.code.operation :refer [Operation]]))
 
 (defn- offenders-of [db law-desc]
-  (->> (s/check db)
+  (->> (law/check db)
        (filter #(= law-desc (:law %)))
        (mapcat :offenders) (map first)
        (map #(:entity/name (cq/entity db %)))
@@ -226,7 +226,7 @@
 (deftest laws-expand-path-clauses
   (testing "laws use the same path composition authoring layer as readings"
     (let [db (build/vars->cozo [#'pmark-io #'pnode-a #'pnode-b #'pnode-c])
-          offenders (->> (s/check db)
+          offenders (->> (law/check db)
                          (filter #(= "operation reaches io" (:law %)))
                          (mapcat :offenders)
                          (map first)

@@ -7,8 +7,8 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so (s/check cozo-db) dispatches to it
-            [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Cozo check engine so (law/check cozo-db) dispatches to it
+            [fukan.cozo.law :as law]
             [fukan.canvas.projection.instance :as inst]
             ;; Schema: the INode :shape slot target (reader-expanded malli literals)
             [canvas.vocab.type :refer [Schema]]))
@@ -113,7 +113,7 @@
 (deftest violations-quote-the-offending-form
   (let [d*  (db)
         out (inst/violations-text d* (filter #(= "no node may be titled \"bad\"" (:law %))
-                                             (s/check d*)))]
+                                             (law/check d*)))]
     (is (str/includes? out "✗ no node may be titled \"bad\""))
     (is (str/includes? out "(INode ^{:name \"bad\"} offender")
         "the offender appears as its authored form, fix-adjacent")

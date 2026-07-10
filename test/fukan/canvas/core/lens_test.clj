@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
-            [fukan.cozo.law]
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.lens :as lens :refer [Lens Check Projection]]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
@@ -117,7 +117,7 @@
 (deftest a-projection-cannot-carry-both-focus-sources
   (testing "the never-both law fires on a projection with :select AND :through"
     (let [db   (build/vars->cozo [#'lns-in-m #'pf-both])
-          offs (->> (s/check db)
+          offs (->> (law/check db)
                     (filter #(re-find #"never both" (:law %)))
                     (mapcat :offenders) (map first)
                     (map #(:entity/name (cq/entity db %))) set)]

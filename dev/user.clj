@@ -9,8 +9,8 @@
   (:require [clojure.string :as str]
             [clj-reload.core :as reload]
             [fukan.cozo.query :as cq]
+            [fukan.cozo.law :as law]
             [fukan.infra.model :as infra-model]
-            [fukan.canvas.core.structure :as structure]
             [fukan.canvas.projection.finding :as pf]
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
@@ -111,7 +111,7 @@
    it, side by side."
   []
   (if-let [m (infra-model/get-model)]
-    (println (inst/violations-text m (structure/check m)))
+    (println (inst/violations-text m (law/check m)))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn drift
@@ -121,7 +121,7 @@
    the held model carries the extracted code.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [d (cq/violation-names m :corresponds/Operation.realized)]
+    (let [d (law/violation-names m :corresponds/Operation.realized)]
       (if (empty? d)
         (println "No drift — every modelled Operation is realized in code.")
         (println "Drift —" (count d) "modelled Operation(s) with no realizing function:" (sort d))))
@@ -134,7 +134,7 @@
    code module. (The private half of the coverage gap is settled by definition.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (cq/violation-names m :corresponds/Operation.covered)]
+    (let [w (law/violation-names m :corresponds/Operation.covered)]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
         (let [by-mod (->> (cq/q '[:find ?on ?kmn
@@ -252,7 +252,7 @@
    demand, also in (check).)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [drifted (cq/violation-names m :corresponds/Operation.adheres)]
+    (let [drifted (law/violation-names m :corresponds/Operation.adheres)]
       (println "ADHERENCE — modelled signature disagrees with the code's :malli/schema:")
       (if (empty? drifted)
         (println "  (none — every code signature exactly adheres to its modelled type)")

@@ -2,8 +2,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so s/check dispatches to it
-            [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Cozo check engine so law/check dispatches to it
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.rules :as rules]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
@@ -66,7 +66,7 @@
 (deftest law-reads-via-injected-rules
   (testing "a law whose :where uses domain predicates fires correctly — check injects the rules"
     (let [db        (build/vars->cozo [#'rt2-ok #'rt2-forbidden])
-          offenders (->> (s/check db)
+          offenders (->> (law/check db)
                          (filter #(= "no rule-thing may be named \"forbidden\"" (:law %)))
                          (mapcat :offenders) (map first)
                          (map #(:entity/name (cq/entity db %)))

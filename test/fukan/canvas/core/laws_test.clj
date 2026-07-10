@@ -5,14 +5,14 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so s/check dispatches to it
-            [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Cozo check engine so law/check dispatches to it
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; loaded for side-effects: registers TrustBoundary (+ totality law) and op-twin
             [canvas.vocab.code.module]
             [canvas.principles.parse-dont-validate]))
 
-(defn- laws [db] (set (map :law (s/check db))))
+(defn- laws [db] (set (map :law (law/check db))))
 
 ;; ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -187,7 +187,7 @@
 (deftest combinator-key-rides-a-combinator-law
   (testing "a trailing :key on a combinator law flows into violations-of"
     (let [db (build/vars->cozo [#'qg-held-bare #'qg-h1])]
-      (is (seq (s/violations-of db :held-gate))))))
+      (is (seq (law/violations-of db :held-gate))))))
 
 ;; ── surface errors ────────────────────────────────────────────────────────────
 
@@ -226,10 +226,10 @@
                {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader" :val/extracted true}
                {:rel/id "km|child|reader" :rel/from -3 :rel/kind :child :rel/to -4}
                {:rel/id "twin|performs|throws" :rel/from -4 :rel/kind :performs :rel/to -10}])
-          vio (->> (s/check db) (filter #(= :totality (:key %))) first)]
+          vio (->> (law/check db) (filter #(= :totality (:key %))) first)]
       (is (some? vio) "the keyed law fired and its violation carries the :key")
       (is (= (set (map first (:offenders vio)))
-             (s/violations-of db :totality))
+             (law/violations-of db :totality))
           "violations-of returns exactly the first-offender eids of the keyed law"))))
 
 ;; ── generated correspondence demand laws ─────────────────────────────────────
@@ -245,9 +245,9 @@
                                     :entity/name "other" :val/extracted true}))))
           guarded (mk true)]
       (is (contains? (set (map #(:entity/name (cq/entity guarded %))
-                               (s/violations-of guarded :corresponds/Operation.realized)))
+                               (law/violations-of guarded :corresponds/Operation.realized)))
                      "lonely"))
-      (is (empty? (s/violations-of (mk false) :corresponds/Operation.realized))
+      (is (empty? (law/violations-of (mk false) :corresponds/Operation.realized))
           "no code extracted → the realized demand is vacuous (the guard)"))))
 
 ;; ── container-altitude relation demands (delegates-realized / delegates-faithful) ──
@@ -315,19 +315,19 @@
 
 (deftest delegates-realized-fires-without-a-backing-call
   (testing "a cross-container design delegation with twinned containers but no fact call between them"
-    (is (= #{"s-op"} (names no-call-db (s/violations-of no-call-db :corresponds/Operation.delegates-realized))))
-    (is (empty? (s/violations-of with-call-db :corresponds/Operation.delegates-realized)))))
+    (is (= #{"s-op"} (names no-call-db (law/violations-of no-call-db :corresponds/Operation.delegates-realized))))
+    (is (empty? (law/violations-of with-call-db :corresponds/Operation.delegates-realized)))))
 
 (deftest delegates-realized-fires-when-the-container-has-no-twin-at-all
   (testing "OLD CallRealization semantics preserved: a delegation from a module with NO extracted
             twin is an offender once ANY root-kind fact exists (the not-join is vacuously false)"
-    (is (= #{"s-op"} (names untwinned-module-db (s/violations-of untwinned-module-db :corresponds/Operation.delegates-realized))))))
+    (is (= #{"s-op"} (names untwinned-module-db (law/violations-of untwinned-module-db :corresponds/Operation.delegates-realized))))))
 
 (deftest delegates-faithful-fires-on-an-undeclared-call-between-claimed-containers
   (testing "a fact call between twinned containers with no design delegation covering it"
-    (is (= #{"ext-s-op"} (names undeclared-call-db (s/violations-of undeclared-call-db :corresponds/Operation.delegates-faithful))))
-    (is (empty? (s/violations-of declared-call-db :corresponds/Operation.delegates-faithful)))
-    (is (empty? (s/violations-of unclaimed-container-db :corresponds/Operation.delegates-faithful))
+    (is (= #{"ext-s-op"} (names undeclared-call-db (law/violations-of undeclared-call-db :corresponds/Operation.delegates-faithful))))
+    (is (empty? (law/violations-of declared-call-db :corresponds/Operation.delegates-faithful)))
+    (is (empty? (law/violations-of unclaimed-container-db :corresponds/Operation.delegates-faithful))
         "a call into an UNMODELLED container is a coverage signal (uncovered-calls), not a fidelity violation")))
 
 ;; ── :covered-from path demand (ex-EffectCorrespondence) ──────────────────────
@@ -370,12 +370,12 @@
 (deftest performs-covered-fires-on-a-transitively-reached-undeclared-effect
   (testing "the twin reaches io via a call chain; the design op declares nothing → offender;
             declaring io (same value node) → green"
-    (is (= #{"f"} (names undeclared-db (s/violations-of undeclared-db :corresponds/Operation.performs-covered))))
-    (is (empty? (s/violations-of declared-db :corresponds/Operation.performs-covered)))))
+    (is (= #{"f"} (names undeclared-db (law/violations-of undeclared-db :corresponds/Operation.performs-covered))))
+    (is (empty? (law/violations-of declared-db :corresponds/Operation.performs-covered)))))
 
 (deftest performs-covered-includes-the-twin-s-DIRECT-effects
   (testing "the reflexive base: an effect the twin performs directly (zero call hops) must be declared"
-    (is (= #{"d"} (names direct-effect-db (s/violations-of direct-effect-db :corresponds/Operation.performs-covered))))))
+    (is (= #{"d"} (names direct-effect-db (law/violations-of direct-effect-db :corresponds/Operation.performs-covered))))))
 
 ;; ── seam↔generator key invariant ─────────────────────────────────────────────
 
@@ -403,9 +403,9 @@
                  {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]))
           no-sig   (mk {})
           with-sig (mk {:val/sig "[:=> [:cat :any] :any]"})]
-      (is (= #{"f"} (names no-sig (s/violations-of no-sig :corresponds/Operation.type-coverage)))
+      (is (= #{"f"} (names no-sig (law/violations-of no-sig :corresponds/Operation.type-coverage)))
           "twin exists but carries no signature → offender")
-      (is (empty? (s/violations-of with-sig :corresponds/Operation.type-coverage))
+      (is (empty? (law/violations-of with-sig :corresponds/Operation.type-coverage))
           "the same twin with a :val/sig → green"))))
 
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
@@ -432,9 +432,9 @@
                  {:rel/id "fm|child|x" :rel/from -3 :rel/kind :child :rel/to -4}]))
           drift (mk 1 2)
           match (mk 1 1)]
-      (is (= #{"x"} (names drift (s/violations-of drift :corresponds/LTwin.agrees)))
+      (is (= #{"x"} (names drift (law/violations-of drift :corresponds/LTwin.agrees)))
           "a disagreeing fact twin is an offender")
-      (is (empty? (s/violations-of match :corresponds/LTwin.agrees))
+      (is (empty? (law/violations-of match :corresponds/LTwin.agrees))
           "an agreeing fact twin is green"))))
 
 ;; ── external (correspond …): the inverted-dependency hook reproduces inline emission ──
@@ -457,7 +457,7 @@
                  {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
                  {:db/id -4 :structure/of ::TCExt :entity/name "x" :val/n xn :val/extracted true}
                  {:rel/id "fm|child|x" :rel/from -3 :rel/kind :child :rel/to -4}]))]
-      (is (= #{"x"} (names (mk 1 2) (s/violations-of (mk 1 2) :corresponds/TCExt.agrees)))
+      (is (= #{"x"} (names (mk 1 2) (law/violations-of (mk 1 2) :corresponds/TCExt.agrees)))
           "external correspondence: a disagreeing twin offends")
-      (is (empty? (s/violations-of (mk 1 1) :corresponds/TCExt.agrees))
+      (is (empty? (law/violations-of (mk 1 1) :corresponds/TCExt.agrees))
           "external correspondence: an agreeing twin is green"))))

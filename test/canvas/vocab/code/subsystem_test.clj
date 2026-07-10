@@ -4,6 +4,7 @@
             [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s]
             ;; the composition root — registers fukan's Clojure FACT extractor (so `build-model "src"`
             ;; merges extracted code onto the design graph) AND loads the Cozo check engine for s/check
@@ -25,7 +26,7 @@
 
 (defn- offenders [db substr]
   (let [desc (law-desc substr)]
-    (->> (s/check db) (filter #(= desc (:law %)))
+    (->> (law/check db) (filter #(= desc (:law %)))
          (mapcat :offenders) (map first) (map #(:entity/name (cq/entity db %))) set)))
 
 ;; a synthetic mutual pair: A's op delegates to B's op and B's op delegates to A's op

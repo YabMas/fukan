@@ -9,8 +9,8 @@
             [clojure.test :refer [deftest is testing use-fixtures]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
-            [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
@@ -178,7 +178,7 @@
     (set (map (fn [[r to-name]] [to-name (get labels r "")]) base))))
 
 (defn- laws-firing [db tag]
-  (set (map :law (filter #(= (name tag) (some-> (:structure %) name)) (s/check db)))))
+  (set (map :law (filter #(= (name tag) (some-> (:structure %) name)) (law/check db)))))
 
 (defn- count-of [db tag]
   (->> (cq/q '[:find ?e ?t :where [?e :structure/of ?t]] db)
@@ -441,7 +441,7 @@
 (deftest free-law-is-scoped-to-its-owning-structure
   (testing "a free law on Tagged flags only Tagged instances, not a Plain with the same data"
     (let [db (build/vars->cozo [#'fl-Str #'fl-p #'fl-t])
-          secret (filter #(= "no field labelled secret" (:law %)) (s/check db))]
+          secret (filter #(= "no field labelled secret" (:law %)) (law/check db))]
       (is (= [::Tagged] (vec (distinct (map :structure secret)))))
       (is (= 1 (reduce + (map (comp count :offenders) secret)))
           "auto-scoping excludes the Plain; only the Tagged instance is flagged"))))
@@ -449,7 +449,7 @@
 (deftest law-scope-can-target-another-structure
   (testing ":scope <tag> aims a free law's subject at a different structure"
     (let [db (build/vars->cozo [#'ls-Str #'ls-guard #'ls-p])]
-      (is (some #(= "no Plain has a secret field" (:law %)) (s/check db))
+      (is (some #(= "no Plain has a secret field" (:law %)) (law/check db))
           "the Auditor law, scoped to :Plain, flags the Plain instance"))))
 
 (deftest divergent-recursive-law-terminates-natively-on-cozo
@@ -627,8 +627,8 @@
   (testing "slot laws fire on deduped value nodes (type-check + relation target-type)"
     (let [bad-scalar (build/vars->cozo [#'lr-bad-scalar-h])
           bad-target (build/vars->cozo [#'lr-p #'lr-bad-target-h])]
-      (is (contains? (set (map :law (s/check bad-scalar))) "Pair.fst value must satisfy :int"))
-      (is (contains? (set (map :law (s/check bad-target))) "Boxed.ty target must be a Type")))))
+      (is (contains? (set (map :law (law/check bad-scalar))) "Pair.fst value must satisfy :int"))
+      (is (contains? (set (map :law (law/check bad-target))) "Boxed.ty target must be a Type")))))
 
 (deftest programmatic-emission-builds-a-db
   (testing "assemble-instances lets code emit instances from runtime data"
@@ -696,7 +696,7 @@
 (deftest scalar-checked-through-dialect-not-kernel
   (testing "a value-slot is checked via the dialect even though the kernel knows no scalar predicates"
     (let [bad (build/vars->cozo [#'sc-bad])]
-      (is (contains? (set (map :law (s/check bad)))
+      (is (contains? (set (map :law (law/check bad)))
                      "SyntClass.n value must satisfy :int")
           "the generated law routes :int through value-valid?, not a kernel predicate"))))
 

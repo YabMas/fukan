@@ -3,8 +3,8 @@
             [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
-            [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.substrate :as sub]))
 
@@ -235,7 +235,7 @@
 
 (deftest wildcard-slot-accepts-any-type
   (let [db (build/vars->cozo [#'wa #'wb #'grp])]
-    (is (empty? (s/check db))
+    (is (empty? (law/check db))
         "no target-type violation when child members are of heterogeneous structures")
     (is (= 2 (count (cq/q '[:find ?e
                             :where [?r :rel/kind :child]

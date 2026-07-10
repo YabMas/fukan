@@ -3,8 +3,9 @@
             [clojure.test :refer [deftest is testing use-fixtures]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
+            [fukan.cozo.law :as law]
             ;; loading infra.model is the composition root — it registers fukan's malli dialect AND its
-            ;; Clojure (fact) extractor + the Cozo check engine, so build-model "src" runs the build
+            ;; Clojure (fact) extractor, so build-model "src" runs the build
             [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.structure :as s]
@@ -57,7 +58,7 @@
             assert these three specifically rather than global emptiness, which is fragile as
             more functions get annotated. The false-cases above prove DETECTION fires.)"
     (let [model   (pipeline/build-model "src")
-          drifted (cq/violation-names model :corresponds/Operation.adheres)]
+          drifted (law/violation-names model :corresponds/Operation.adheres)]
       (is (not (contains? drifted "load-model"))
           (str "load-model's :malli/schema should adhere to its model; drifted: " drifted))
       (is (not (contains? drifted "get-model"))
@@ -76,7 +77,7 @@
                              model))
           sig   (operation/operation-sig model op)]
       ;; integration: multi-arg, in order → adheres → absent from type-drift
-      (is (not (contains? (cq/violation-names model :corresponds/Operation.adheres) "materialize-over"))
+      (is (not (contains? (law/violation-names model :corresponds/Operation.adheres) "materialize-over"))
           "materialize-over's annotation matches its modelled ordered signature")
       ;; the model renders :in positionally, in order
       (is (= [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Instruction] sig)
@@ -103,9 +104,9 @@
                  {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]))
           mismatch (mk "[:=> [:cat] :any]")   ; design renders [:=> [:cat] :nil] → out mismatch
           match    (mk "[:=> [:cat] :nil]")]
-      (is (= #{"f"} (cq/violation-names mismatch :corresponds/Operation.adheres))
+      (is (= #{"f"} (law/violation-names mismatch :corresponds/Operation.adheres))
           "a twin whose realized signature differs from the modelled one is an offender")
-      (is (empty? (cq/violation-names match :corresponds/Operation.adheres))
+      (is (empty? (law/violation-names match :corresponds/Operation.adheres))
           "a twin whose realized signature exactly adheres is green"))))
 
 (deftest call-realization-fires-on-an-unrealized-delegation
@@ -173,9 +174,9 @@
       (is (empty? (layered/unrealized-delegates model)) "realization is green")
       (is (empty? (layered/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
       (is (empty? (layered/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
-      (is (empty? (s/check model))
+      (is (empty? (law/check model))
           (str "no law violations on the merged self-model; got: "
-               (mapv :law (s/check model)))))))
+               (mapv :law (law/check model)))))))
 
 (deftest encapsulation-fires-on-an-undeclared-public-operation
   (testing "a PUBLIC extracted op with no model twin is an offender; private/export/test-support are exempt"
@@ -188,12 +189,12 @@
                    {:rel/id "m|child|hidden"   :rel/from -1 :rel/kind :child :rel/to -3}
                    {:rel/id "m|child|exported" :rel/from -1 :rel/kind :child :rel/to -4}
                    {:rel/id "m|child|for-test" :rel/from -1 :rel/kind :child :rel/to -5}])]
-      (is (= #{"leaked"} (cq/violation-names db :corresponds/Operation.covered))
+      (is (= #{"leaked"} (law/violation-names db :corresponds/Operation.covered))
           "only the public, non-exempt, unmodelled op is flagged by the covered demand"))))
 
 (deftest encapsulation-green-on-the-self-model
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
-    (is (empty? (cq/violation-names (pipeline/build-model "src") :corresponds/Operation.covered))
+    (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.covered))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
 
 (deftest defmultis-are-extracted-and-modelled
@@ -201,7 +202,7 @@
     (let [m         (pipeline/build-model "src")
           extracted (set (cq/q '[:find [?n ...]
                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
-          worklist  (cq/violation-names m :corresponds/Operation.covered)]
+          worklist  (law/violation-names m :corresponds/Operation.covered)]
       (is (contains? extracted "render-base")    "render-base (defmulti) is extracted as an Operation")
       (is (contains? extracted "render-finding") "render-finding (defmulti) is extracted as an Operation")
       (is (not (contains? worklist "render-base"))    "render-base is covered, not an undeclared public surface")
@@ -368,7 +369,7 @@
 (defn- law-violations
   "check results whose :law description contains `substr`."
   [db substr]
-  (filter #(clojure.string/includes? (:law %) substr) (s/check db)))
+  (filter #(clojure.string/includes? (:law %) substr) (law/check db)))
 
 (deftest parser-declaration-cross-checked-against-produces
   (testing "a declared parser that does not produce the boundary kind is an offender pair"

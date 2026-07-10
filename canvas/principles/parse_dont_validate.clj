@@ -18,6 +18,7 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.lens :refer [Projection]]
             [fukan.cozo.query :as cq]
+            [fukan.cozo.law :as law]
             [canvas.vocab.code.kind :refer [Kind]]
             [canvas.vocab.code.operation :refer [Operation]]))
 
@@ -72,7 +73,7 @@
    TrustBoundary) whose realizing code is PARTIAL, as a set of op names. Empty ⇔ the modelled trusted
    core is total. Reads the totality law on `TrustBoundary` by its stable :key."
   [db]
-  (cq/violation-names db :totality))
+  (law/violation-names db :totality))
 
 (defn direct-throwers
   "Extracted ops that directly perform `:throws` — the partiality leaves.

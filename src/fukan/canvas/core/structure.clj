@@ -1410,36 +1410,12 @@
   []
   (terms-of (all-structures)))
 
-;; ── The check-engine plug-point ───────────────────────────────────────────────
-;; `check` runs the laws through a registered backend (the Cozo law engine). The kernel never
-;; names the backend (mirrors the typing plug-point), which avoids a structure→backend require
-;; cycle — `fukan.cozo.law` registers itself.
-(defonce ^:private check-engine (atom nil))
-
-(defn ^{:malli/schema [:=> [:cat :any] :nil]}
-  register-check-engine!
-  "Register the `check` backend: `{:claims? (fn [db]→bool) :check (fn [db]→results)}`. When
-   `:claims?` holds for the db passed to `check`, `:check` serves it, returning the
-   `[{:structure :law :offenders}]` shape. The plug-point that backs `check` with the Cozo law
-   engine without the kernel depending on it."
-  [engine]
-  (reset! check-engine engine)
-  nil)
-
-(defn ^{:malli/schema [:=> [:cat :StructureDb] [:vector :Violation]]}
-  check
-  "Run every registered structure's laws over the Cozo db `db` → `[{:structure :law :offenders}]`,
-   through the registered check engine (the Cozo law engine, wired at load by `fukan.cozo.law`)."
-  [db]
-  ((:check @check-engine) db))
-
-(defn ^{:malli/schema [:=> [:cat :StructureDb :keyword] :any]}
-  violations-of
-  "The offender eids of the law keyed `k` — the generic reader behind every law-specific
-   worklist fn (filter `check` by the law's stable `:key`, first offender var). Returns a
-   set of eid strings; callers name them through their query layer."
-  [db k]
-  (->> (check db) (filter #(= k (:key %))) (mapcat :offenders) (map first) set))
+;; ── evaluation lives in the ENGINE, not here ─────────────────────────────────
+;; `check` (run every law → violations) + its worklist readers (`violations-of`/`violation-names`)
+;; live in `fukan.cozo.law`. The kernel DEFINES laws (`laws-of`/`all-structures`); the engine
+;; EVALUATES them and depends on the kernel one way — so there is no `structure ↔ law` cycle and no
+;; registry. (This was a hollow kernel `check` shell dispatching to a registered backend; that
+;; indirection papered over the cycle and is gone.)
 
 ;; ── correspondence comparator SPI ─────────────────────────────────────────────
 ;; A `(corresponds … (agrees {:by <key>}))` demand gates a per-twin-pair AGREEMENT whose comparison

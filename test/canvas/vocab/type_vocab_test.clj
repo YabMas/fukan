@@ -2,8 +2,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
-            ;; loaded for its side-effect: registers the Cozo check engine so (s/check db) dispatches to it
-            [fukan.cozo.law]
+            ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; SchemaField/SchemaChoice are referred (though only Schema is called
             ;; directly) so clj-kondo resolves their instance-macro hooks.
@@ -45,7 +45,7 @@
 (SchemaHolder bad {:schema (Schema {:kind "ref"})})
 
 (deftest schemas-are-valid
-  (is (empty? (s/check (build))) "no law violations"))
+  (is (empty? (law/check (build))) "no law violations"))
 
 (deftest scalar-constraints-are-datoms
   (let [db (build)]
@@ -166,7 +166,7 @@
   ;; An inline (Schema (kind "ref")) bypasses the reader, so no :to is produced;
   ;; the "ref must name a target" law must fire.
   (let [db (build/vars->cozo [#'bad])]
-    (is (seq (s/check db)) "ref schema lacking :to is caught by check")))
+    (is (seq (law/check db)) "ref schema lacking :to is caught by check")))
 
 (deftest non-malli-shorthands-are-rejected
   ;; The dialect accepts only valid malli structural syntax — the old [X] / {} sugar throws.

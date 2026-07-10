@@ -20,6 +20,7 @@
    Judgment readers: `uncovered-calls`, `unfaithful-calls`, `unrealized-delegates`."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.query :as cq]
+            [fukan.cozo.law :as law]
             [fukan.cozo.db :as db]
             [fukan.cozo.rules :refer [eav]]
             [canvas.vocab.code.module :as module]))
@@ -132,14 +133,14 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
 ;; {:realized-by :calls :altitude :container :faithful true} — see canvas.vocab.code.operation.
 ;; The generated keys are :corresponds/Operation.delegates-realized and
 ;; :corresponds/Operation.delegates-faithful. The readers below are thin wrappers over
-;; s/violations-of (the generic worklist reader).
+;; law/violations-of (the generic worklist reader).
 
 (defn unrealized-delegates
   "The authored source Operations whose cross-module delegation is NOT realized by any actual call
    between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
    is backed by real code. Reads the generated demand (:corresponds/Operation.delegates-realized)."
   [db-arg]
-  (cq/violation-names db-arg :corresponds/Operation.delegates-realized))
+  (law/violation-names db-arg :corresponds/Operation.delegates-realized))
 
 (defn uncovered-calls
   "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law): actual
@@ -171,4 +172,4 @@ flagged[mod, cid] := csize[mod, cid, sz], sz >= 2, total[mod, t], sz < t
    `:may-depend` DAG). The modelled-both-ends subset of `uncovered-calls`; reads the generated demand
    (:corresponds/Operation.delegates-faithful)."
   [db-arg]
-  (cq/violation-names db-arg :corresponds/Operation.delegates-faithful))
+  (law/violation-names db-arg :corresponds/Operation.delegates-faithful))

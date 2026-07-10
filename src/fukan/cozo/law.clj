@@ -1,22 +1,23 @@
 (ns fukan.cozo.law
-  "The law engine on Cozo — compile a defstructure law's datalog (offenders + where, plus
-   the rules it reads at) → CozoScript via the general query compiler (`fukan.cozo.query`),
-   run it, and return offenders: the Cozo analog of `structure/check`, the keystone that
-   replaces it at cut-over.
+  "The law engine on Cozo — compile a defstructure law's datalog (offenders + where, plus the
+   rules it reads at) → CozoScript via the general query compiler (`fukan.cozo.query`), run it, and
+   return offenders. THIS is `check`: it evaluates the laws the kernel DEFINES (`structure/laws-of`).
+   Evaluation lives here (the engine) rather than as a hollow shell in the kernel — the kernel owns
+   definition, the engine owns evaluation, and the dependency runs one way (engine → kernel), so
+   there is no cycle and no registry to break one.
 
-   HYBRID: the auto-generated scalar TYPE-CHECK laws don't compile — they validate a leaf
-   value through the malli dialect (`typing/value-valid?`), which has no CozoScript form. So
-   `check-structural` runs them split: Cozo finds each instance's leaf value (in its typed
-   bucket), Clojure runs the malli check. Everything else compiles to pure CozoScript.
+   HYBRID: the auto-generated scalar TYPE-CHECK laws don't compile — they validate a leaf value
+   through the malli dialect (`typing/value-valid?`), which has no CozoScript form. So
+   `check-structural` runs them split: Cozo finds each instance's leaf value (in its typed bucket),
+   Clojure runs the malli check. Everything else compiles to pure CozoScript.
 
-   `check` is the violation-only drop-in for `structure/check`; `check-structural` is the
-   full per-law roll-call (incl. coverage/`:unsupported`)."
+   `check` is the violation-only view; `check-structural` is the full per-law roll-call (incl.
+   coverage/`:unsupported`). `violations-of`/`violation-names` are the worklist readers over `check`."
   (:require [clojure.string :as str]
             [fukan.canvas.core.structure :as structure]
             [fukan.canvas.core.typing :as typing]
             [fukan.cozo.db :as db]
-            [fukan.cozo.query :as query])
-  (:import [org.cozodb CozoJavaBridge]))
+            [fukan.cozo.query :as query]))
 
 (defn- scope-tag
   "The structure tag a free law's first offender var is scoped to (nil for :global
@@ -141,17 +142,27 @@
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check
   "Run every law over the Cozo db `cdb` and return its VIOLATIONS — `[{:structure :law
-   :offenders}]`, the same shape as `structure/check` (offenders are eid-string tuples).
-   The Cozo replacement for `structure/check`. A law whose form isn't compilable yet
-   contributes nothing (it is skipped, not silently miscounted — `check-structural` still
-   reports it `:unsupported`); the law-engine tests assert every law of fukan's own
-   vocabulary compiles, so on a fukan-only registry this is a complete check."
+   :offenders}]` (offenders are eid-string tuples). THE check: it runs the same laws the kernel
+   DEFINES (`structure/laws-of`/`all-structures`), which is why check lives here in the engine and
+   not as a hollow shell in the kernel — evaluation is the engine's job, the kernel's is definition.
+   A law whose form isn't compilable yet contributes nothing (it is skipped, not silently
+   miscounted — `check-structural` still reports it `:unsupported`); the law-engine tests assert
+   every law of fukan's own vocabulary compiles, so on a fukan-only registry this is a complete check."
   [cdb]
   (vec (for [r (check-structural cdb) :when (:offenders r)]
          (select-keys r [:structure :law :key :offenders]))))
 
-;; Register this engine as `structure/check`'s Cozo backend: it claims any Cozo db, so
-;; `(structure/check cozo-db)` routes here (the kernel never names Cozo — the plug-point does).
-(structure/register-check-engine!
- {:claims? (fn [db] (instance? CozoJavaBridge db))
-  :check   check})
+(defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] :any]}
+  violations-of
+  "The offender eids of the law keyed `k` — the generic reader behind every law-specific worklist
+   fn (filter `check` by the law's stable `:key`, first offender var). Returns a set of eid strings;
+   callers name them through `violation-names`."
+  [cdb k]
+  (->> (check cdb) (filter #(= k (:key %))) (mapcat :offenders) (map first) set))
+
+(defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] [:set :string]]}
+  violation-names
+  "The `:entity/name` of every offender of the law keyed `k` — `violations-of` (offender eids)
+   resolved through `query/entity`. The one home for the recurring worklist-reader shape."
+  [cdb k]
+  (set (map #(:entity/name (query/entity cdb %)) (violations-of cdb k))))

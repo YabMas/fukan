@@ -401,11 +401,5 @@
           m    (reduce (fn [acc [a v]] (assoc acc (keyword a) v)) {} rows)]
       (when (seq m) (assoc m :db/id eid)))))
 
-(defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] [:set :string]]}
-  violation-names
-  "The `:entity/name`s of every offender of the law keyed `k` — the read-side pairing of the
-   kernel's `structure/violations-of` (which returns offender eids), resolving each through
-   `entity`. The one home for the recurring worklist-reader shape
-   `(set (map #(:entity/name (entity db %)) (violations-of db k)))`."
-  [db k]
-  (set (map #(:entity/name (entity db %)) (structure/violations-of db k))))
+;; `violation-names` (the worklist reader) lives in `fukan.cozo.law` alongside `check`/`violations-of`
+;; — it reads check results, so it belongs with evaluation, not in the compiler.

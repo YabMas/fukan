@@ -43,10 +43,8 @@
   "The datalog rules derived from the live vocabulary, injected into laws/lenses — dispatched
    through the declaration registry (`terms-of`, same module), so no cross-module delegate."
   {:signature [:=> [:cat] [:vector Rule]]})
-(Operation check
-  "Run every structure's laws over the model db; yield the violations."
-  {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector Violation]]
-   :guidance  "Inject vocab-rules into each law's :where so laws read at domain altitude; route negation through rules to dodge datascript's empty-relation not-join gotcha."})
+;; `check` (+ its readers `violations-of`/`violation-names`) is EVALUATION — it lives in the engine
+;; (`cozo-law`), not here. The kernel DEFINES laws (`laws-of`/`all-structures`); the engine evaluates.
 (Operation structure-by-tag
   "Look up a registered structure definition (slots + laws) by its tag."
   {:signature [:=> [:catn [:tag :keyword]] :any]})
@@ -83,21 +81,11 @@
   "Qualified tags whose instances carry :structure/of DIRECTLY, so a scoped law can pin ns-precisely
    instead of riding the short-name rule. Excludes facets + realized/coproduct/derived concepts."
   {:signature [:=> [:catn [:structures [:vector :any]]] :any]})
-(Operation register-check-engine!
-  "Register an alternative `check` backend (the Cozo law engine), claimed by db type — so `check`
-   dispatches to it without the kernel naming the backend (mirrors the typing plug-point)."
-  {:signature [:=> [:catn [:engine :any]] :nil]
-   :performs  [:state]})
-(Operation violations-of
-  "The offender eids of the law keyed k — the generic reader behind every law-specific worklist (filters check by the law's stable :key)."
-  {:signature [:=> [:catn [:db substrate/StructureDb] [:k :keyword]] :any]
-   :delegates [check]})
 
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
-  {:exposes [check vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
-             laws-of direct-scope-tags register-check-engine! violations-of
-             correspondence* correspondence]
-   :owns    [Violation]                          ; the check output shape (others adopt by name)
+  {:exposes [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
+             laws-of direct-scope-tags correspondence* correspondence]
+   :owns    [Violation]                          ; the check-output SHAPE the kernel defines (cozo-law's check produces it)
    :offers  [Syntax Comparator Correspondence]    ; the kernel's vocab-facing plug-points (the vocab satisfies them)
    :child   [Rule]})                              ; internal grain: the rules-output type
