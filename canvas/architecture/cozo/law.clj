@@ -2,7 +2,9 @@
   "Self-spec: `fukan.cozo.law` — the general law engine on Cozo. Compiles a defstructure
    law's datalog (offenders + where, the same laws `structure/check` runs, read via the
    kernel) into CozoScript over the unified `triple` view and runs it — the engine
-   `structure/check` dispatches to (registered through the kernel's check plug-point)."
+   `structure/check` dispatches to. It registers via `register-check-engine!` — NOT a genuine
+   plug-point but a registry breaking the `core-structure ↔ cozo-law` cycle (this module reads the
+   kernel's laws; the kernel's `check` needs this engine); see the note in `kernel/structure`."
   (:require [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.module :refer [Module]]
             [canvas.architecture.cozo.db :as db]
@@ -13,7 +15,6 @@
 (Module cozo-law
   "Compile defstructure laws' datalog → CozoScript (via the cozo-query compiler) over the
    Cozo substrate and run them — the Cozo analog of structure/check."
-  {:satisfies [kstructure/CheckEngine]}          ; this module implements the kernel's check-engine plug-point
   (Operation compile-law
     "Compile a law's offender query (offenders + its :rules + where, scope-clause prepended for a direct/facet tag) → a CozoScript program via the query compiler (compile-body emits the rules in its closure), then the `?` entry. Throws on an unsupported form."
     {:signature [:=> [:catn [:law :any] [:direct-tags :any] [:index :any]] :string]

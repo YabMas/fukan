@@ -14,12 +14,13 @@
 (Kind Violation [:map [:structure :keyword] [:law :string] [:offenders [:vector [:vector :any]]]])
 (Kind Rule)
 
-;; the CHECK-ENGINE plug-point: `core-structure` OWNS this plug-point (a `check` backend claimed by db
-;; type) but does not implement it — `register-check-engine!` is the attach hook; `cozo-law` satisfies it.
-(PlugPoint CheckEngine
-  "The `check` backend plug-point others register via `register-check-engine!`: a claims?/check pair the
-   kernel dispatches to without naming the backend (the dependency inverts — the engine names the kernel)."
-  {:shape [:map [:claims? [:=> [:catn [:db :any]] :boolean]] [:check [:=> [:catn [:db :any]] :any]]]})
+;; NOTE — `register-check-engine!` is deliberately NOT modelled as a PlugPoint. `check` dispatches to a
+;; registered engine, but the sole engine is `cozo-law`, a CO-OWNED module that itself READS the kernel's
+;; laws (`laws-of`/`all-structures`). So the registry exists to break a `core-structure ↔ cozo-law`
+;; dependency CYCLE, not to invert toward an external provider the kernel can't name. It papers over a
+;; layering knot — evaluation belongs WITH the engine, not as a hollow kernel `check` shell — that wants
+;; tackling directly (a separate arc), rather than dressing up as an SPI. A genuine plug-point's provider
+;; is external-by-design (see the vocab-facing ones below); a cycle-break between co-owned modules is not.
 
 ;; the kernel's VOCAB-FACING plug-points — a project's vocab plugs its grammar into the kernel through
 ;; these, and the kernel names none of them (it ships no vocab, so the inversion is inherent, not a
@@ -98,5 +99,5 @@
              laws-of direct-scope-tags register-check-engine! violations-of
              correspondence* correspondence]
    :owns    [Violation]                          ; the check output shape (others adopt by name)
-   :offers  [CheckEngine Syntax Comparator Correspondence]  ; the kernel's plug-points (cozo-law + the vocab satisfy them)
+   :offers  [Syntax Comparator Correspondence]    ; the kernel's vocab-facing plug-points (the vocab satisfies them)
    :child   [Rule]})                              ; internal grain: the rules-output type
