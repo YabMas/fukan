@@ -40,15 +40,11 @@
      :delegates [lens-engine/projection-focus]})
   (Operation render "Render a single node under a projection (composes the per-primitive render-base multimethod)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:eid Eid]] Instruction]
-     :performs  [:throws :state]})                  ; the renderers read the graph through the query compiler
+     :performs  [:throws :state]                    ; the renderers read the graph through the query compiler
+     :delegates [typing/render-type kstructure/vocab-rules]})  ; Blueprint schema-emit reaches typing; the renderers' queries inject the kernel rules
   (Operation materialize-finding "Compose a finding's observation foci into a projection — the reading→projection seam."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]
      :performs  [:throws :state]})                  ; via materialize-over
-  (Operation ^:private owning-module
-    "Resolve the module name that directly owns a node — via the vocab-declared `member` relation
-     (not hardcoded relation kinds), so the kernel names no code-vocab relation."
-    {:performs  [:throws :state]                   ; via query/q (the compiler can throw/read state)
-     :delegates [kstructure/vocab-rules query/q]})
   (Operation ^:private render-base
     "The per-(projection, kind) render dispatch point. Its defmethod bodies are now traced — the
      extractor attributes their calls to this multimethod — so the dispatch's reach surfaces on the
@@ -62,27 +58,10 @@
      the reading pipeline's reach surfaces on the extracted twin. It declares the ambient effects it
      reaches; no :delegates."
     {:performs [:throws :state]})
-  ;; the reading renderers — each aggregates its lens focus into observations, delegating to the
-  ;; finding constructors (this is the materialize→finding coupling the readings introduce, declared here)
-  (Operation ^:private patterns-finding "Group the focus's relations by structural triplet (the recurring ones)."
-    {:performs [:throws :state] :delegates [finding/finding finding/observation]})
-  (Operation ^:private consistency-finding "Group the focus's Operations by name (ambiguous across modules)."
-    {:performs [:throws :state] :delegates [finding/finding finding/observation]})
-  (Operation ^:private depth-finding
-    "Module depth: per focused module, interface size (:exposes count) against implementation size (contains-members count), shallowest first — inline measures, ratio computed at render."
-    {:performs [:throws :state] :delegates [finding/finding finding/observation]})
-  (Operation ^:private boundary-finding
-    "The trust story per focused TrustBoundary: declared parsers + failure channels, undeclared producers, validator-shaped ops — inline queries over produces/parsed-by, judgment surface."
-    {:performs [:throws :state] :delegates [finding/finding finding/observation]})
   (Operation read-projection "Run a reading projection: resolve its focus, render it into a Finding."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] finding/Finding]
-     :performs  [:throws :state]                   ; via projection-focus
-     :delegates [lens-engine/projection-focus]})
+     :performs  [:throws :state]                   ; via projection-focus, then render-finding
+     :delegates [lens-engine/projection-focus finding/finding finding/observation]})  ; the reading render reaches the finding constructors
   (Operation read-all "Run every reading projection present in the db → a map of findings."
     {:signature [:=> [:catn [:db substrate/StructureDb]] FindingMap]
-     :performs  [:throws :state]})                  ; via read-projection / the query compiler
-  (Operation ^:private operation-malli
-    "The Blueprint method's schema-emitter: an Operation's faithful `:malli/schema` form, each shape
-     rendered through the type dialect. A named top-level helper (not inline in the defmethod) so the
-     materialize→typing dependency is a real, extractable call — the inline defmethod body is not."
-    {:delegates [typing/render-type]}))
+     :performs  [:throws :state]}))                 ; via read-projection / the query compiler
