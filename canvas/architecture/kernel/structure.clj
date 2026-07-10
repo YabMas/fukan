@@ -21,6 +21,23 @@
    kernel dispatches to without naming the backend (the dependency inverts — the engine names the kernel)."
   {:shape [:map [:claims? [:=> [:catn [:db :any]] :boolean]] [:check [:=> [:catn [:db :any]] :any]]]})
 
+;; the kernel's VOCAB-FACING plug-points — a project's vocab plugs its grammar into the kernel through
+;; these, and the kernel names none of them (it ships no vocab, so the inversion is inherent, not a
+;; workaround). Coarse first cycle: the named seams + who OWNS them; shapes and the satisfy side (the
+;; vocab lives outside this built-system model) are deferred.
+(PlugPoint Syntax
+  "The authoring-syntax plug-point (`register-syntax!`): a per-structure hook rewriting an instance's
+   slots map before parsing (map → map). Vocab registers one per structure that needs sugar; the kernel
+   applies whatever is registered at instance-expansion, naming none.")
+(PlugPoint Comparator
+  "The adherence-comparator plug-point (`register-comparator!`): a `(fn [db design fact] → boolean)` an
+   `(agrees {:by …})` demand runs per twin pair. Vocab registers the comparators (e.g. `:signature`); the
+   kernel dispatches to the named one, staying type-agnostic.")
+(PlugPoint Correspondence
+  "The correspondence plug-point (`register-correspondence!`): a per-tag config for how a design concept
+   corresponds to extracted code. Vocab declares them via `(correspond …)`; the kernel generates the twin
+   + demand laws from whatever is registered, naming no project's correspondences.")
+
 (Operation vocab-rules
   "The datalog rules derived from the live vocabulary, injected into laws/lenses — dispatched
    through the declaration registry (`terms-of`, same module), so no cross-module delegate."
@@ -81,5 +98,5 @@
              laws-of direct-scope-tags register-check-engine! violations-of
              correspondence* correspondence]
    :owns    [Violation]                          ; the check output shape (others adopt by name)
-   :offers  [CheckEngine]                         ; the check-engine plug-point (cozo-law satisfies it)
+   :offers  [CheckEngine Syntax Comparator Correspondence]  ; the kernel's plug-points (cozo-law + the vocab satisfy them)
    :child   [Rule]})                              ; internal grain: the rules-output type

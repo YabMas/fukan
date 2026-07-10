@@ -8,6 +8,7 @@
    its typed attribute map from the typed buckets."
   (:require [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.module :refer [Module]]
+            [canvas.vocab.code.plug-point :refer [PlugPoint]]
             [canvas.architecture.cozo.db :as db]
             [canvas.architecture.kernel.structure :as kstructure]))
 
@@ -35,4 +36,9 @@
      :delegates [db/q]})
   (Operation violation-names "The :entity/name of every offender of the law keyed k — the read-side pairing of the kernel's violations-of (which returns eids), resolving each through entity. The one home for the recurring worklist-reader shape."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:k :keyword]] [:set :string]]
-     :delegates [entity kstructure/violations-of]}))
+     :delegates [entity kstructure/violations-of]})
+  ;; the compiler's plug-point — vocab plugs domain fn-predicates in, the generic compiler names none.
+  (PlugPoint PredicatePort
+    "The fn-predicate CozoScript-port plug-point (`register-predicate-port!`): a vocab fn-predicate's
+     port (builder + synthetic rule defs) so the GENERIC compiler lowers a domain predicate to CozoScript
+     without naming it. Vocab registers ports at load; the compiler consults whatever is registered."))

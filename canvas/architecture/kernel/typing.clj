@@ -8,6 +8,7 @@
    REFLECTION it does the building itself on the kernel value machinery (driven by the dialect's
    `:reflect-tag`), so a dialect bridge never reaches back into the kernel — the deliberate SPI."
   (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+            [canvas.vocab.code.plug-point :refer [PlugPoint]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.assemble :as assemble]))
@@ -31,4 +32,9 @@
     {:signature [:=> [:catn [:form :any]] :any]})
   (Operation value-valid? "Whether a scalar value satisfies a refined-slot type form, via the dialect's :valid? bridge — the bridge a refined-scalar slot's auto-generated type-check law calls. Throws when no :valid? is registered."
     {:signature [:=> [:catn [:type-form :any] [:value :any]] :boolean]
-     :performs  [:throws]}))
+     :performs  [:throws]})
+  ;; the type-dialect plug-point itself — a project plugs its type language in; the kernel names none.
+  (PlugPoint TypeDialect
+    "The type-dialect plug-point (`register-type-dialect!`): a project's type language as a bridge-fn map
+     (render / parse / adheres? / valid? / reflect-tag). The kernel dispatches type render/check/adherence
+     to the registered dialect and interprets no type form itself — it ships no dialect."))
