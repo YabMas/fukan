@@ -196,16 +196,16 @@
     (is (empty? (cq/violation-names (pipeline/build-model "src") :corresponds/Operation.covered))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
 
-(deftest defmultis-are-extracted-as-plug-points-and-covered
-  (testing "both defmultis are extracted as PlugPoints AND covered by the model (the module offers them)"
+(deftest defmultis-are-extracted-and-modelled
+  (testing "both defmultis are extracted as Operations AND covered by the model (not undeclared public surface)"
     (let [m         (pipeline/build-model "src")
-          plug-pts  (set (cq/q '[:find [?n ...]
-                                :where [?p :structure/of :canvas.vocab.code.plug-point/PlugPoint] [?p :val/extracted true] [?p :entity/name ?n]] m))
-          worklist  (cq/violation-names m :corresponds/PlugPoint.covered)]
-      (is (contains? plug-pts "render-base")    "render-base (defmulti) is extracted as a PlugPoint")
-      (is (contains? plug-pts "render-finding") "render-finding (defmulti) is extracted as a PlugPoint")
-      (is (not (contains? worklist "render-base"))    "render-base is covered by the plug-point the module offers")
-      (is (not (contains? worklist "render-finding")) "render-finding is covered by the plug-point the module offers"))))
+          extracted (set (cq/q '[:find [?n ...]
+                                :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
+          worklist  (cq/violation-names m :corresponds/Operation.covered)]
+      (is (contains? extracted "render-base")    "render-base (defmulti) is extracted as an Operation")
+      (is (contains? extracted "render-finding") "render-finding (defmulti) is extracted as an Operation")
+      (is (not (contains? worklist "render-base"))    "render-base is covered, not an undeclared public surface")
+      (is (not (contains? worklist "render-finding")) "render-finding is covered, not an undeclared public surface"))))
 
 ;; Tiny model: authored A.op-a :delegates B.op-b. "Same module name" authored/extracted pairs make
 ;; module-corresponds? trivial (segs "A" is a suffix of segs "A").

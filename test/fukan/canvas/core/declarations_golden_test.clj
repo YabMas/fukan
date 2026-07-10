@@ -117,22 +117,17 @@
 ;; always a plug-point/SPI/dependency-inversion point (its own docstring said so); the neutral name
 ;; obscured the directionality. Pure rename: counts unchanged (terms 53, laws 84), only the tag in the
 ;; emitted kind-rule + `:shape` type-check law moved (`Contract`→`PlugPoint`). Live `(check)` still 0.
-;; 2026-07-10: the plug-point arc's reclassification cycle. A `defmulti` now extracts as a PlugPoint
-;; (not an Operation); `PlugPoint` gained a `(correspond PlugPoint :by-name {:extracted} (covered …))`
-;; so each twins the design plug-point the module offers and coverage is guarded (+1 term: the
-;; `:extracted` fact-slot rule; +2 laws: its type-check + the covered demand). Operation gained the
-;; extracted `:dispatches-through [:* PlugPoint]` fact-slot — an op dispatching THROUGH a plug-point,
-;; the marked boundary the see-through invocation view crosses (+1 term: the relation rule; +1 law:
-;; its PlugPoint target-type). Net terms 53→55, laws 84→87. Live `(check)` still 0; no non-exposed
-;; Operations remain (render-base/render-finding are PlugPoints), so `exposed` is vacuous and next to go.
-;; 2026-07-10: `exposed` retired. With defmultis reclassified as PlugPoints there are NO non-exposed
-;; Operations left, so the `(exposed ?x)` filter on signature-completeness + type-coverage was vacuous
-;; (every designed Operation IS a surface op). Dropped the filter from both laws (and the defrelation +
-;; its use in the boundary reader). Laws count unchanged (87), only two `:where` bodies simplified, so
-;; only the laws hash moves; terms unchanged (the defrelation'"'"'s tag was unqualified, outside this
-;; snapshot). Live `(check)` still 0. "An Operation is a surface" is now structural, not a filtered law.
-(def ^:private golden-terms {:count 55 :hash -59155834})
-(def ^:private golden-laws  {:count 87 :hash -34065370})
+;; 2026-07-10: `exposed` RETIRED, and a `defmulti` is a POLYMORPHIC OPERATION (not a plug-point). A
+;; re-triage settled that PlugPoint means split-ownership inversion (external SPI); render-base/
+;; render-finding are united-ownership internal dispatch, so they stay Operations and declare their
+;; uniform signature (db,base,eid)->Instruction / (db,proj,focus)->Finding. With every op declaring an
+;; `:out`, no non-exposed op lacks one, so the `(exposed ?x)` filter on signature-completeness +
+;; type-coverage is vacuous: dropped it from both laws, retired the defrelation, removed its boundary-
+;; reader use. Laws count 84 (two `:where` bodies simplified -> only the laws hash moves); terms 53 (the
+;; defrelation tag was unqualified, outside this snapshot). "An Operation IS a surface" is now
+;; structural, not a filtered law. Live `(check)` still 0.
+(def ^:private golden-terms {:count 53 :hash 1979366480})
+(def ^:private golden-laws  {:count 84 :hash -1541084889})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

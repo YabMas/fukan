@@ -72,7 +72,8 @@
 
 ;; ── render-base: each [base projection, kind] renders itself ─────────────────
 
-(defmulti render-base
+(defmulti ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName :Eid] :Instruction]}
+  render-base
   "Render node `eid` under BASE projection `base` (e.g. \"Blueprint\" / \"Docs\") to a
    fragment of that base's target form. Dispatches on `[base (:structure/of node)]`.
    Project-owned defmethods supply the per-(base, kind) production and compose referenced
@@ -375,7 +376,8 @@
                    ob)]
     (f/finding "Boundary" (vec obs))))
 
-(defmulti render-finding
+(defmulti ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Finding]}
+  render-finding
   "Render reading projection `proj`'s lens focus `nodes` into a Finding — the read dual of
    render-base. Project-owned defmethods supply the per-projection aggregation; each routes to a
    named helper so the finding/query calls stay extractable (defmethod bodies are not)."

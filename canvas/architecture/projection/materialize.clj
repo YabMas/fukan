@@ -7,7 +7,6 @@
    entry (`materialize-view` is a lens-eid convenience). `core.lens` lives in
    `canvas.architecture.kernel.lens`."
   (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
-            [canvas.vocab.code.plug-point :refer [PlugPoint]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.structure :as kstructure]
             [canvas.architecture.cozo.query :as query]
@@ -46,17 +45,21 @@
   (Operation materialize-finding "Compose a finding's observation foci into a projection — the reading→projection seam."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:finding :any]] Instruction]
      :performs  [:throws :state]})                  ; via materialize-over
-  ;; the render dispatch points are OPEN PLUG-POINTS materialize offers (a defmulti IS one) — their
-  ;; defmethods satisfy them, and `render`/`read-projection` dispatch THROUGH them, stopping at the
-  ;; abstraction (the consumer never names the satisfiers). Not Operations: no call-surface, no signature.
-  (PlugPoint render-base
-    "The per-(projection, kind) render dispatch point — the open plug-point `render` dispatches through;
-     its `defmethod`s (Blueprint, Docs, …) satisfy it. The satisfiers' own reach (typing, …) is theirs,
-     not the consumer's — which is why `render` declares no dependency on it beyond dispatching through.")
+  ;; the render dispatch points are POLYMORPHIC OPERATIONS — a defmulti with a uniform signature its
+  ;; co-owned defmethods implement (internal dispatch, united ownership; NOT a split-ownership plug-point).
+  ;; `render`/`read-projection` call them like any op; their reach is captured over ordinary :calls.
+  (Operation render-base
+    "The per-(projection, kind) render dispatch point — dispatches on [base kind] to a co-owned
+     per-target defmethod (Blueprint, Docs, …), each producing a fragment of that base's target form."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:base ProjectionName] [:eid Eid]] Instruction]
+     :performs  [:throws :state]})
   ;; ── the readings: a Projection whose target artifact is a Finding (the read dual of Blueprint) ──
-  (PlugPoint render-finding
-    "The per-projection reading-render dispatch point — the read dual of render-base; the open plug-point
-     `read-projection` dispatches through, its `defmethod`s (Patterns, Depth, …) satisfy it.")
+  (Operation render-finding
+    "The per-projection reading-render dispatch point — the read dual of render-base; dispatches on
+     projection to a co-owned per-projection defmethod (Patterns, Depth, …), each aggregating its focus
+     into a Finding."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:proj ProjectionName] [:focus [:vector Eid]]] finding/Finding]
+     :performs  [:throws :state]})
   (Operation read-projection "Run a reading projection: resolve its focus, render it into a Finding."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] finding/Finding]
      :performs  [:throws :state]                   ; via projection-focus, then render-finding

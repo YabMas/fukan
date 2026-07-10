@@ -71,7 +71,6 @@
 
 (s/correspond Operation :by-name
   {:calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
-   :dispatches-through [:* PlugPoint]  ; extracted: an op DISPATCHES THROUGH a plug-point (the marked boundary; see-through crosses it, opaque stops)
    :sig       [:? :string]           ; the code's REALIZED malli signature (stamped from :malli/schema)
    :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
    :export    [:? :boolean]          ; intentionally public for MECHANISM (^:export)
@@ -94,13 +93,6 @@
   ;; relation demands ABOUT Operation's own identity relations (:delegates / :performs):
   (delegates {:realized-by :calls :faithful true :altitude :container})  ; cross-module :delegates realized by a :calls path (+ faithful reverse)
   (performs  {:covered-from [:calls* :performs]}))                       ; every effect the twin REACHES over :calls*·:performs is declared
-
-;; PlugPoint correspondence — a `defmulti` extracts as a PlugPoint (an open dispatch point); each pairs
-;; by name with the design plug-point the module offers. Coarse: provenance + coverage only (the satisfy
-;; side — matching defmethods to the plug-point — is the deferred refinement).
-(s/correspond PlugPoint :by-name
-  {:extracted [:? :boolean]}          ; provenance: true ⇒ from code (a defmulti)
-  (covered {:desc "every extracted plug-point is covered by a design plug-point the module offers"}))
 
 ;; the `:signature` comparator the `(agrees {:by :signature})` demand runs per twin pair: the design
 ;; op's rendered signature must EXACTLY adhere to the extracted twin's realized `:val/sig`. Owns both
@@ -169,19 +161,18 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
   '[[?a :structure/of :canvas.vocab.code.operation/Operation] (twin ?a ?b)])
 
 (def ^:private unrealized-dispatch-rules
-  "Reachability over the EXTRACTED graph, on-graph — the SEE-THROUGH view. `op-ext-twin` pairs an
-   authored op with its extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is
-   the invocation graph UNION — a `:calls` edge (op→op) OR a `:dispatches-through` edge (op→plug-point) —
-   so reachability crosses the plug-point boundary (an opaque view would use `:calls` alone and stop at
-   it); `ext-reaches` is its transitive closure — a rule-calls-rule recursion the kernel now allows,
-   negated under stratification. The injected rules (`Operation`/`design`/`fact`/`in-module`) are ambient
-   in any `cq/q`. `in-module` binds Kinds too, so op-ness is guarded here explicitly with `(Operation …)`."
+  "Reachability over the EXTRACTED graph, on-graph. `op-ext-twin` pairs an authored op with its
+   extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is a `:calls` edge;
+   `ext-reaches` is its transitive closure — a rule-calls-rule recursion the kernel now allows, negated
+   under stratification. A `defmulti` is an ordinary Operation, so calls through it (`render → render-base`)
+   and its method-body calls are all `:calls`, and reachability needs no separate dispatch edge. The
+   injected rules (`Operation`/`design`/`fact`/`in-module`) are ambient in any `cq/q`. `in-module` binds
+   Kinds too, so op-ness is guarded here explicitly with `(Operation …)`."
   '[[(op-ext-twin ?a ?e)
      (Operation ?a) (design ?a) [?a :entity/name ?n] (in-module ?a ?am)
      (Operation ?e) (fact ?e) [?e :entity/name ?n] (in-module ?e ?em)
      [(canvas.vocab.code.module/module-corresponds? ?am ?em)]]
     [(ext-edge ?from ?to) (calls ?from ?to)]
-    [(ext-edge ?from ?to) (dispatches-through ?from ?to)]
     [(ext-reaches ?a ?b) (ext-edge ?a ?b)]
     [(ext-reaches ?a ?b) (ext-edge ?a ?mid) (ext-reaches ?mid ?b)]])
 
