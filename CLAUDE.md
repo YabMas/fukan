@@ -60,7 +60,7 @@ structure substrate **is** the model (no separate model-map).
 fukan's own **vocabulary** — the code grammar (Kind/Effect/Operation/Module/Subsystem) + its
 model↔code correspondence — plus its Clojure extractor, its malli type dialect, and grammar
 reflection — is NOT in `src/`. It lives in auto-discovered `canvas/` areas: `canvas/vocab/` (the
-grammar), `canvas/typing.clj` + `canvas/extraction/` (the dialect/extraction plugins), and
+grammar), `canvas/typing/` + `canvas/extraction/` (the dialect/extraction plugins), and
 `canvas/reflect/` (reflection) — see "Vocabulary lives in canvas/vocab" below. `src/fukan/` is
 kernel mechanics + the build pipeline + the three plug-points (extraction, typing, render) only.
 
@@ -93,7 +93,7 @@ vocabulary — the grammar it models *itself* with — lives in `canvas/vocab/` 
 `canvas.vocab.*`, on the `.` classpath root), **auto-discovered** like the rest of
 `canvas/**`. Organized **by element**: each file is the complete story of one element —
 its `defstructure` + the laws/correspondence about it. (The Clojure extraction that *populates*
-the code grammar is a separate seam, `canvas/extraction/`; the type dialect is `canvas/typing.clj`.)
+the code grammar is a separate seam, `canvas/extraction/`; the type dialect is `canvas/typing/malli.clj`.)
 
 - `canvas/vocab/grouping.clj` — `Grouping` (the most abstract membership primitive) +
   `Connected` (a flow-node facet). The structural primitives the rest builds on.
@@ -115,12 +115,13 @@ the code grammar is a separate seam, `canvas/extraction/`; the type dialect is `
 The type dialect and the extraction seam are NOT part of the code vocabulary — each is a
 self-contained **plugin** in its own area (both realize a kernel plug-point; a plugin owns a
 SPECIALIZED vocabulary + its mechanism together, not scattered into general vocab):
-- `canvas/typing.clj` (ns `canvas.typing`) — the malli type DIALECT, split vocab-vs-mechanism:
-  `canvas.typing` holds the shape VOCABULARY (`Schema`/`SchemaChoice`/`SchemaField` — malli modelled
-  as content-deduped `^:value` structures — plus the authoring readers) and the dialect wiring;
-  `canvas/typing/malli.clj` (ns `canvas.typing.malli`) holds the runtime BRIDGES (`render`/`valid?`).
-  The HOOK side of the `typing` SPI; requiring `canvas.typing` loads the bridges and self-registers
-  the full dialect at load.
+- `canvas/typing/malli.clj` (ns `canvas.typing.malli`) — the malli type DIALECT, one honest file:
+  the whole dialect is malli top-to-bottom, so it lives under the malli name (not a generic `typing`
+  layer — the neutral SPI is the kernel's `fukan.canvas.core.typing`). Three sections: the shape
+  VOCABULARY (`Schema`/`SchemaChoice`/`SchemaField` — malli modelled as content-deduped `^:value`
+  structures — + the authoring readers), the runtime BRIDGES (`render`/`valid?`), and the dialect
+  wiring. The HOOK side of the `typing` SPI; requiring it self-registers the full dialect at load.
+  `canvas/typing/` is the dialect AREA (room for a sibling realization if one ever appears).
 - `canvas/extraction/` (ns `canvas.extraction.*`) — the Clojure EXTRACTION SEAM: `core.clj`
   (orchestration: clj-kondo `analyze` + `op-eid`, calling each element's builder) +
   `clojure/{effect,operation}.clj` (the PL-specific readers). Mints no structures; the HOOK for the
@@ -167,7 +168,7 @@ A `defstructure` is a composition of **slots** plus **laws**:
   vector (`[:enum "a" "b"]`, `[:int {:min 1}]`) is a REFINED scalar: the core stores
   the type form verbatim and the generated law checks values through the registered
   type dialect (`fukan.canvas.core.typing`, the kernel's third plug-point;
-  `canvas.typing` registers `:valid?` at load). Never hand-write a membership/range law.
+  `canvas.typing.malli` registers `:valid?` at load). Never hand-write a membership/range law.
 - Slot options ride the props position: `[:? {:payload :q} :string]` (`:payload` =
   a companion code-form stored as a sibling `:val/` datom); for cardinality one,
   lead with the props map: `[{:payload :q} :string]`. `(reader f)` expands authoring
@@ -216,10 +217,10 @@ The self-model is laid out by **altitude**, not by pipeline role:
 - `canvas/vocab/**` — fukan's own VOCABULARY (the grammar it models itself with): the
   structural primitives (`grouping`) and the code grammar by element
   (`code/{kind,effect,operation,module,subsystem}`). Auto-discovered.
-- `canvas/typing.clj` — the malli type DIALECT plugin (its own area, not general vocab; realizes
-  the `typing` SPI). `canvas/extraction/**` — the Clojure EXTRACTION SEAM plugin (realizes the
-  extraction SPI). `canvas/reflect/grammar.clj` — grammar REFLECTION (a tool: registry → model
-  db). All auto-discovered.
+- `canvas/typing/malli.clj` (ns `canvas.typing.malli`) — the malli type DIALECT plugin (its own area,
+  not general vocab; realizes the `typing` SPI). `canvas/extraction/**` — the Clojure EXTRACTION SEAM
+  plugin (realizes the extraction SPI). `canvas/reflect/grammar.clj` — grammar REFLECTION (a tool:
+  registry → model db). All auto-discovered.
 - `canvas/principles/` — **CUT (2026-07-13).** The adopted-principles layer was removed to focus
   scope on vocab-building + verifiable models; its two module-graph enforcement laws rehomed onto
   `Subsystem`, its correspondence readers onto `module.clj`/`effect.clj`. (git history preserves it.)
@@ -337,8 +338,8 @@ mixing them corrupts history.
   call-graph readers (`module-corresponds?`/`op-twin`/`unrealized-delegates`/`uncovered-calls`/
   `unfaithful-calls`) are in `code/module.clj`
 - `canvas/reflect/grammar.clj` (ns `canvas.reflect.grammar`) — grammar REFLECTION tool (registry → model db)
-- `canvas/typing.clj` (ns `canvas.typing`) — the malli type DIALECT plugin (realizes the `typing` SPI):
-  shape vocab + wiring here, runtime bridges in `canvas/typing/malli.clj`
+- `canvas/typing/malli.clj` (ns `canvas.typing.malli`) — the malli type DIALECT plugin, one file
+  (shape vocab + bridges + wiring); realizes the `typing` SPI
 - `canvas/extraction/` (ns `canvas.extraction.*`) — the Clojure EXTRACTION SEAM plugin: `core.clj`
   orchestration + `clojure/{effect,operation}.clj` (realizes the extraction SPI)
 - `canvas/architecture/` — fukan-on-fukan's built-system self-specs (modules + subsystems +

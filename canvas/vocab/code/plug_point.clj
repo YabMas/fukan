@@ -15,7 +15,7 @@
    `defmethod` / convention, a correspondence-recognized realization, NOT baked into the concept) — and
    whether the plug-points are all equal or split into sub-patterns."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.typing :refer [Schema]]))
+            [canvas.typing.malli :refer [Schema]]))
 
 (defstructure PlugPoint
   "A designed point of variation a Module owns for others to satisfy — its `:shape` is the Schema (the

@@ -379,7 +379,7 @@
                  twin-datoms)))
           ;; :out kind "nil" matches design f's default render ([:=> [:cat] :nil]) so adherence stays green too
           no-sig   (mk [])
-          with-sig (mk [{:db/id -5 :structure/of :canvas.typing/Schema :val/kind "nil"}
+          with-sig (mk [{:db/id -5 :structure/of :canvas.typing.malli/Schema :val/kind "nil"}
                         {:rel/id "f|out|s" :rel/from -4 :rel/kind :out :rel/to -5}])]
       (is (= #{"f"} (names no-sig (law/violations-of no-sig :corresponds/Operation.type-coverage)))
           "twin exists but declares no signature → offender")

@@ -127,7 +127,7 @@
                   db))
           "core.substrate is its sole owner (the db it constructs)")
       (is (= 1 (count (cq/q '[:find ?s
-                             :where [?s :structure/of :canvas.typing/Schema] [?s :val/kind "ref"]
+                             :where [?s :structure/of :canvas.typing.malli/Schema] [?s :val/kind "ref"]
                                     [?s :val/ref "StructureDb"]]
                            db)))
           "the ref-schema naming it is one value-identified node, reused across every subsystem"))))

@@ -6,10 +6,10 @@
 
    This is also fukan-on-itself's composition root: it registers fukan's custom code FACT
    extractor (the Clojure extractor over fukan's `src/`) at the `fukan.model.extraction`
-   plug-point. The type dialect needs no wiring here — `canvas.typing` self-registers the
+   plug-point. The type dialect needs no wiring here — `canvas.typing.malli` self-registers the
    full malli dialect when it loads (required below to guarantee it is). `check` is not wired: it
    lives in `fukan.cozo.law` (the engine) and callers require it directly — no registry."
-  (:require [canvas.typing]
+  (:require [canvas.typing.malli]
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
             [fukan.cozo.db :as cozo-db]

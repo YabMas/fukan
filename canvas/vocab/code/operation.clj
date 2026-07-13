@@ -7,7 +7,7 @@
    demands) lives in `canvas.vocab.code.module`; implementer-directed prose in the kernel
    `:guidance` annotation. This namespace holds only the identity `defstructure` and its authoring sugar."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [canvas.typing :as ct :refer [Schema]]
+            [canvas.typing.malli :as ct :refer [Schema]]
             [canvas.vocab.code.effect :refer [Effect]]))
 
 (defstructure Operation

@@ -110,7 +110,7 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.typing
+  canvas.typing.malli
   {:linters {:unused-public-var {:level :off}}}
   canvas.typing.vocab-test
   {:linters {:unused-namespace {:level :off}

@@ -9,9 +9,9 @@
    canvas.reflect.grammar/Vocabulary hooks.fukan.structure/instance
    canvas.reflect.grammar-test/Leaf hooks.fukan.structure/instance
    canvas.reflect.grammar-test/Node hooks.fukan.structure/instance
-   canvas.typing/Schema hooks.fukan.structure/instance
-   canvas.typing/SchemaChoice hooks.fukan.structure/instance
-   canvas.typing/SchemaField hooks.fukan.structure/instance
+   canvas.typing.malli/Schema hooks.fukan.structure/instance
+   canvas.typing.malli/SchemaChoice hooks.fukan.structure/instance
+   canvas.typing.malli/SchemaField hooks.fukan.structure/instance
    canvas.typing.render-test/RenderHolder hooks.fukan.structure/instance
    canvas.typing.vocab-test/SchemaHolder hooks.fukan.structure/instance
    canvas.vocab.code.effect/Effect hooks.fukan.structure/instance

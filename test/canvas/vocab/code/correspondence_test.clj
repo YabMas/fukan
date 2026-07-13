@@ -55,7 +55,7 @@
                  [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
                   {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                  {:db/id -5 :structure/of :canvas.typing/Schema :val/kind "nil"}   ; the MODELLED :out type node
+                  {:db/id -5 :structure/of :canvas.typing.malli/Schema :val/kind "nil"}   ; the MODELLED :out type node
                   {:rel/id "f|out|s5" :rel/from -2 :rel/kind :out :rel/to -5}
                   {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
                   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
@@ -63,7 +63,7 @@
                   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
                  extra)))
           match    (mk -5 [])                                                              ; twin :out → the SAME node
-          mismatch (mk -6 [{:db/id -6 :structure/of :canvas.typing/Schema :val/kind "any"}])]  ; twin :out → a DIFFERENT node
+          mismatch (mk -6 [{:db/id -6 :structure/of :canvas.typing.malli/Schema :val/kind "any"}])]  ; twin :out → a DIFFERENT node
       (is (= #{"f"} (law/violation-names mismatch :corresponds/Operation.adheres))
           "a twin whose :out is a different type node is an offender")
       (is (empty? (law/violation-names match :corresponds/Operation.adheres))
@@ -79,9 +79,9 @@
                    [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
                     {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
                     {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                    {:db/id -10 :structure/of :canvas.typing/Schema :val/kind "nil"}      ; type A
-                    {:db/id -11 :structure/of :canvas.typing/Schema :val/kind "any"}      ; type B
-                    {:db/id -12 :structure/of :canvas.typing/Schema :val/kind "boolean"}  ; type C (shared :out)
+                    {:db/id -10 :structure/of :canvas.typing.malli/Schema :val/kind "nil"}      ; type A
+                    {:db/id -11 :structure/of :canvas.typing.malli/Schema :val/kind "any"}      ; type B
+                    {:db/id -12 :structure/of :canvas.typing.malli/Schema :val/kind "boolean"}  ; type C (shared :out)
                     {:rel/id "f|in0" :rel/from -2 :rel/kind :in :rel/order 0 :rel/to -10}     ; design :in = [A B]
                     {:rel/id "f|in1" :rel/from -2 :rel/kind :in :rel/order 1 :rel/to -11}
                     {:rel/id "f|out"  :rel/from -2 :rel/kind :out :rel/to -12}

@@ -115,7 +115,7 @@
 
 ;; ── base: Blueprint — the model projected to implementation specs ────────────
 
-(defmethod render-base ["Blueprint" :canvas.typing/Schema] [db b eid] (schema-str db b eid))
+(defmethod render-base ["Blueprint" :canvas.typing.malli/Schema] [db b eid] (schema-str db b eid))
 
 (defmethod render-base ["Blueprint" :canvas.vocab.code.operation/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects delegates guidance]} (stage-facts db eid)
@@ -135,7 +135,7 @@
 
 ;; ── base: Docs — the model projected to reference documentation ──────────────
 
-(defmethod render-base ["Docs" :canvas.typing/Schema] [db b eid] (schema-str db b eid))
+(defmethod render-base ["Docs" :canvas.typing.malli/Schema] [db b eid] (schema-str db b eid))
 
 (defmethod render-base ["Docs" :canvas.vocab.code.operation/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects delegates]} (stage-facts db eid)]

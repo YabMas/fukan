@@ -53,7 +53,7 @@
               fukan.canvas.projection.instance-test
               fukan.model.materialize-test
               fukan.model.pipeline-test
-              canvas.vocab.type
+              canvas.typing.malli
               canvas.vocab.code.kind
               canvas.vocab.code.effect
               canvas.vocab.code.operation

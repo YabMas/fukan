@@ -4,7 +4,7 @@
    must not CHANGE silently. Not a spec of WHAT the rules are — a snapshot gate on the sole rule
    emitter (both seams dispatch the declaration handlers).
 
-   Scoped to the `canvas.vocab.*`/`canvas.typing`/`canvas.reflect` structures (required below so they are all
+   Scoped to the `canvas.vocab.*`/`canvas.typing.malli`/`canvas.reflect` structures (required below so they are all
    registered), NOT `all-structures` — the global registry also accumulates test fixtures during a
    full run, which would make the snapshot unstable."
   (:require [clojure.test :refer [deftest is]]
@@ -13,7 +13,7 @@
             [fukan.canvas.core.structure :as s]
             ;; force the full self-model vocabulary to register
             [canvas.vocab.grouping]
-            [canvas.typing]
+            [canvas.typing.malli]
             [canvas.reflect.grammar]
             [canvas.vocab.code.kind]
             [canvas.vocab.code.effect]
@@ -137,7 +137,7 @@
 ;; → `canvas.typing` (a self-contained plugin: shape-vocab + bridges). Pure relocation: Schema/
 ;; SchemaChoice/SchemaField still register (the golden filter now also matches `canvas.typing`), so counts
 ;; are unchanged (terms 52, laws 83); only the tag qualifier in the emitted kind/relation rules moved
-;; (`canvas.vocab.type/*` → `canvas.typing/*`), shifting both hashes. Live `(check)` still 0.
+;; (`canvas.vocab.type/*` → `canvas.typing.malli/*`), shifting both hashes. Live `(check)` still 0.
 ;; 2026-07-13: the `canvas/principles/` layer was cut to focus scope on vocab + verification. The three
 ;; law-holder structures (TrustBoundary, OperationSurface, ModuleArchitecture) and their laws leave the
 ;; snapshot (terms 52→47, laws 83→74); ModuleArchitecture's two module-graph laws (acyclicity +
@@ -149,8 +149,12 @@
 ;; (Structure/Law/Vocabulary/Relation) still registers (the golden filter now also matches
 ;; `canvas.reflect`), so counts hold (terms 47, laws 74); only the tag qualifier in the emitted
 ;; rules moved (`canvas.vocab.grammar/*` → `canvas.reflect.grammar/*`), shifting both hashes.
-(def ^:private golden-terms {:count 47 :hash 787679098})
-(def ^:private golden-laws  {:count 74 :hash 1342316730})
+;; 2026-07-13: `canvas.typing` collapsed into `canvas.typing.malli` (one honest malli-named file — the
+;; root `typing.clj` holding malli vocab under a generic name was a churn-avoidance wart). Schema/
+;; SchemaChoice/SchemaField still register (the filter matches `canvas.typing` as a prefix), counts
+;; hold (terms 47, laws 74); only the tag qualifier moved (`canvas.typing/*` → `canvas.typing.malli/*`).
+(def ^:private golden-terms {:count 47 :hash 1469380326})
+(def ^:private golden-laws  {:count 74 :hash 1574781535})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

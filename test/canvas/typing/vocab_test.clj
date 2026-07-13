@@ -7,7 +7,7 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; SchemaField/SchemaChoice are referred (though only Schema is called
             ;; directly) so clj-kondo resolves their instance-macro hooks.
-            [canvas.typing :as malli :refer [Schema SchemaField SchemaChoice]]
+            [canvas.typing.malli :as malli :refer [Schema SchemaField SchemaChoice]]
             ;; Kind — the named type a `ref`/`[:vector …]`/`[:map …]` schema points
             ;; at via :names.
             [canvas.vocab.code.kind :refer [Kind]]))

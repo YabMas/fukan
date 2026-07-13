@@ -51,7 +51,7 @@
     (testing "live vocab constructors are found"
       (is (contains? names 'canvas.vocab.code.module/Module))
       (is (contains? names 'canvas.vocab.code.operation/Operation))
-      (is (contains? names 'canvas.typing/Schema))
+      (is (contains? names 'canvas.typing.malli/Schema))
       (is (contains? names 'canvas.vocab.grouping/Grouping))
       (is (contains? names 'fukan.canvas.core.structure-test/Function)))
     (testing "realized-as concepts intern no constructor → excluded"

@@ -12,7 +12,7 @@
 (def ^:private schema-tag
   "The type dialect's ^:value structure tag — the fact-side signature builds its :in/:out
    Schema subgraphs through it (via `s/value-literal->iv`, the one value-construction path)."
-  :canvas.typing/Schema)
+  :canvas.typing.malli/Schema)
 
 (defn- code-arrow->in-out
   "Decompose an EXTRACTED code function-schema `[:=> INPUT OUTPUT]` into `{:in [type…] :out type}`.

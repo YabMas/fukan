@@ -19,7 +19,7 @@
    reflected type value read `dialect-type-tag` rather than hard-coding the dialect's tag.
 
    Registration MERGES per key, so capabilities compose across registrars: a grammar
-   (e.g. `canvas.typing`) contributes `:valid?` + `:reflect-tag` when it loads — opting a
+   (e.g. `canvas.typing.malli`) contributes `:valid?` + `:reflect-tag` when it loads — opting a
    model into the dialect wires the checking and reflection — while a composition root
    contributes `:render`. Re-registering a key replaces that key."
   (:require [fukan.canvas.core.assemble :as a]
@@ -93,5 +93,5 @@
     (f form value)
     (throw (ex-info (str "a refined slot target (" (pr-str form) ") needs a registered "
                          "type dialect with :valid? — require the type grammar (e.g. "
-                         "canvas.typing) or register one at the composition root")
+                         "canvas.typing.malli) or register one at the composition root")
                     {:form form :value value}))))
