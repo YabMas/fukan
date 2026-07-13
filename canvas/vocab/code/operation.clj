@@ -11,40 +11,6 @@
             [canvas.vocab.type :as ct :refer [Schema]]
             [canvas.vocab.code.effect :refer [Effect]]))
 
-(defn ^:export signature->slots
-  "Operation's authoring syntax. Existing map form remains valid:
-   `{:signature [:=> INPUT OUTPUT] :performs [...]}`.
-
-   The concise form makes the signature the primary body:
-   `(Operation f [:=> INPUT OUTPUT] {:performs [...]})`.
-
-   The `:=> [:=> INPUT OUTPUT]` schema is decomposed by the type dialect (`ct/arrow->in-out`):
-   INPUT's named params become the ordered+labelled `:in` vector, OUTPUT becomes `:out`."
-  [body]
-  (let [m (cond
-            (map? body) body
-
-            (and (vector? body) (= :=> (first body)))
-            {:signature body}
-
-            (and (vector? body) (vector? (first body)) (= :=> (ffirst body)))
-            (let [[signature opts] body]
-              (when-not (or (nil? opts) (map? opts))
-                (throw (ex-info (str "operation options after a positional signature must be a map: "
-                                     (pr-str opts))
-                                {:body body})))
-              (assoc (or opts {}) :signature signature))
-
-            :else
-            (throw (ex-info (str "operation body must be a slots map or a signature form: "
-                                 (pr-str body))
-                            {:body body})))]
-    (if-not (contains? m :signature)
-      m
-      (let [{:keys [in out]} (ct/arrow->in-out (:signature m))]
-        (cond-> (-> m (dissoc :signature) (assoc :out out))
-          (seq in) (assoc :in in))))))
-
 (defstructure Operation
   "A named unit of computation — the UNIFIED computational unit. An `Operation` is either
    AUTHORED (a self-model's intent: input/output Shapes, Effects, intended calls) or
@@ -73,9 +39,21 @@
 ;; per-instance annotation (the read dual of the docstring) available on ANY instance; see
 ;; `reserved-annotation-keys` in the kernel. Authored inline in the slots map, stored as `:val/guidance`.
 
-;; Operation's authoring SUGAR — off the identity defstructure (it's machinery, not identity):
-;; `(Operation f [:=> IN OUT] {…})` rewrites the malli signature into the `:in`/`:out` slots. Registered
-;; against the tag from outside; the kernel reads it at instance-expansion (`sdef-syntax`).
+;; Operation's authoring SUGAR — off the identity defstructure (it's machinery, not identity).
+;; Registered against the tag from outside; the kernel applies it (map → map) at instance-expansion
+;; (`sdef-syntax`), honoring the Syntax plug-point's contract.
+(defn ^:export signature->slots
+  "Operation's authoring syntax: decompose the `:signature` malli function-schema in a slots map
+   into the `:in`/`:out` slots (via the type dialect's `ct/arrow->in-out` — INPUT's named params
+   become the ordered+labelled `:in` vector, OUTPUT becomes `:out`). Slots without a `:signature`
+   pass through untouched."
+  [m]
+  (if-not (contains? m :signature)
+    m
+    (let [{:keys [in out]} (ct/arrow->in-out (:signature m))]
+      (cond-> (-> m (dissoc :signature) (assoc :out out))
+        (seq in) (assoc :in in)))))
+
 (s/register-syntax! ::Operation signature->slots)
 
 ;; The provenance split an Operation quantifies over is NOT vocab: `(design ?o)` (authored, not
