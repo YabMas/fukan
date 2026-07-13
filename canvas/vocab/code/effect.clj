@@ -4,7 +4,7 @@
    The effect-drift readers live in `canvas.principles.declared-effects` (the adopted-principle
    home); the law is generated from Operation's `:performs {:covered-from …}` slot option.
    Clojure-specific effect classification lives in
-   `canvas.vocab.code.extractors.clojure.effect`; partiality readings live with
+   `canvas.extraction.clojure.effect`; partiality readings live with
    parse-don't-validate."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]))
 

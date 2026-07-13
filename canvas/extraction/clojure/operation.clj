@@ -1,4 +1,4 @@
-(ns canvas.vocab.code.extractors.clojure.operation
+(ns canvas.extraction.clojure.operation
   "Clojure grounding for the generic code `Operation` vocabulary.
 
    Given clj-kondo var-definitions, this namespace decides which Clojure vars are

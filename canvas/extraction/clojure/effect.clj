@@ -1,4 +1,4 @@
-(ns canvas.vocab.code.extractors.clojure.effect
+(ns canvas.extraction.clojure.effect
   "Clojure grounding for the generic code `Effect` vocabulary.
 
    This namespace is the PL-specific classifier: given clj-kondo var-usages, it

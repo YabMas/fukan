@@ -14,11 +14,11 @@
             [fukan.model.pipeline :as pipeline]
             [fukan.cozo.db :as cozo-db]
             [fukan.cozo.query :as cq]
-            [canvas.vocab.code.extractors :as target]))
+            [canvas.extraction.core :as target]))
 
 ;; Register fukan's project FACT extractor — its own Clojure source, as the engine-agnostic
 ;; `{:roots :ground}` facts the native Cozo build consumes (`:ground` is the post-build :calls grounding).
-(extraction/register-fact-extractor! (fn [root] (target/extract-roots [root])))  ; target -> canvas.vocab.code.extractors
+(extraction/register-fact-extractor! (fn [root] (target/extract-roots [root])))  ; target -> canvas.extraction.core
 
 (defonce ^:private state (atom {:cozo nil :src nil}))
 

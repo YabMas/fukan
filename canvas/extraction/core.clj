@@ -1,4 +1,4 @@
-(ns canvas.vocab.code.extractors
+(ns canvas.extraction.core
   "The Clojure code-structure extractor — fukan parsing its OWN `src/`. The PL-specific half of the
    extraction seam: the only place that knows Clojure. It reads clj-kondo's `:analysis` output and
    maps Clojure constructs onto the code vocab:
@@ -6,8 +6,10 @@
      ns                      → Module      (a cohesion boundary)
      defn / defn- / defmulti → Operation   (a unit of computation — defmulti is a dispatch point)
 
-   The Clojure-specific Operation mapping and effect classification live under
-   `extractors.clojure.*`; Module assembly is still the generic extracted root wrapper. This namespace is
+   The extraction seam is its OWN area (`canvas/extraction/`), NOT part of the code vocabulary it
+   populates: it mints no structures, it realizes the `fukan.model.extraction` plug-point. The
+   Clojure-specific Operation mapping and effect classification live under `canvas.extraction.clojure.*`;
+   Module assembly is still the generic extracted root wrapper. This namespace is
    the shared orchestration — run clj-kondo, group, call the
    element builders → the engine-agnostic FACTS `{:roots :ground}`. The extractor OWNS no
    vocabulary — it EMITS instances by tag (the BUILD stamps provenance at the merge). It is the HOOK for the
@@ -15,8 +17,8 @@
    extractor (the native Cozo build assembles the facts + calls the :ground closure). clj-kondo is
    the wheel we don't reinvent."
   (:require [clj-kondo.core :as kondo]
-            [canvas.vocab.code.extractors.clojure.effect :as clj-effect]
-            [canvas.vocab.code.extractors.clojure.operation :as clj-operation]
+            [canvas.extraction.clojure.effect :as clj-effect]
+            [canvas.extraction.clojure.operation :as clj-operation]
             [canvas.vocab.code.module :as module]
             [fukan.cozo.db :as db]
             [fukan.cozo.rules :as rules]))

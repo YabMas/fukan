@@ -1,12 +1,12 @@
-(ns canvas.vocab.code.extractors-test
+(ns canvas.extraction.core-test
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
             [fukan.cozo.law :as law]                 ; check + its worklist readers (violation-names) live here
             [fukan.model.extraction :as extraction]
             [fukan.model.pipeline :as pipeline]
-            [canvas.vocab.code.extractors :as tc]
-            [canvas.vocab.code.extractors.clojure.effect :as clj-effect]))
+            [canvas.extraction.core :as tc]
+            [canvas.extraction.clojure.effect :as clj-effect]))
 
 ;; Register fukan's FACT extractor so build-model's unified build runs it (the proof).
 (extraction/register-fact-extractor! (fn [root] (tc/extract-roots [root])))
