@@ -482,13 +482,25 @@
            (scalar-slot? sl)
            (assoc-in iv [:scalars (keyword "val" (name head))] (first args))
            :else
-           (let [ttag (:target sl)]
+           ;; relation slot: each arg is a plain target form OR a `[label target]` pair — a vector
+           ;; with a SYMBOL head (e.g. an arrow Schema's `[param-name type]` :in entry). Mirror the
+           ;; macro's labelled-target handling (parse-clause-arg-forms) so reflection matches
+           ;; authoring; malli forms are keyword-headed and bare refs are keywords, so a symbol-headed
+           ;; vector unambiguously denotes a label.
+           (let [ttag   (:target sl)
+                 parsed (mapv (fn [a]
+                                (if (and (vector? a) (symbol? (first a)))
+                                  {:label (str (first a)) :target (second a)}
+                                  {:label nil :target a}))
+                              args)]
              (when-not (:reader (structure-by-tag ttag))
                (throw (ex-info (str "cannot reify type form " (pr-str literal) " — slot target "
-                                    ttag " has no reader (named-Kind refs are not reflectable)")
+                                    ttag " has no reader")
                                {:tag tag :literal literal})))
-             (update iv :clauses conj {:rk (:rel sl) :card (:card sl)
-                                       :targets (mapv #(value-literal->iv ttag %) args)})))))
+             (update iv :clauses conj
+                     (cond-> {:rk (:rel sl) :card (:card sl)
+                              :targets (mapv #(value-literal->iv ttag (:target %)) parsed)}
+                       (some :label parsed) (assoc :labels (mapv :label parsed))))))))
      (->InstanceValue tag nil nil {} [] true)
      clauses)))
 
