@@ -7,7 +7,7 @@
 
 (defn- relation [db nm]
   (some->> (cq/q '[:find ?e :in $ ?n
-                   :where [?e :structure/of :canvas.vocab.grammar/Relation] [?e :entity/name ?n]] db nm)
+                   :where [?e :structure/of :canvas.reflect.grammar/Relation] [?e :entity/name ?n]] db nm)
            ffirst (cq/entity db)))
 
 (deftest relation-kinds-are-reflected-with-their-characters

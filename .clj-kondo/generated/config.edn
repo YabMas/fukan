@@ -3,7 +3,13 @@
 ;; the defstructure forms in: src lib canvas test.
 {:hooks
  {:analyze-call
-  {canvas.typing/Schema hooks.fukan.structure/instance
+  {canvas.reflect.grammar/Law hooks.fukan.structure/instance
+   canvas.reflect.grammar/Relation hooks.fukan.structure/instance
+   canvas.reflect.grammar/Structure hooks.fukan.structure/instance
+   canvas.reflect.grammar/Vocabulary hooks.fukan.structure/instance
+   canvas.reflect.grammar-test/Leaf hooks.fukan.structure/instance
+   canvas.reflect.grammar-test/Node hooks.fukan.structure/instance
+   canvas.typing/Schema hooks.fukan.structure/instance
    canvas.typing/SchemaChoice hooks.fukan.structure/instance
    canvas.typing/SchemaField hooks.fukan.structure/instance
    canvas.typing.render-test/RenderHolder hooks.fukan.structure/instance
@@ -14,12 +20,6 @@
    canvas.vocab.code.operation/Operation hooks.fukan.structure/instance
    canvas.vocab.code.plug-point/PlugPoint hooks.fukan.structure/instance
    canvas.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
-   canvas.vocab.grammar/Law hooks.fukan.structure/instance
-   canvas.vocab.grammar/Relation hooks.fukan.structure/instance
-   canvas.vocab.grammar/Structure hooks.fukan.structure/instance
-   canvas.vocab.grammar/Vocabulary hooks.fukan.structure/instance
-   canvas.vocab.grammar-test/Leaf hooks.fukan.structure/instance
-   canvas.vocab.grammar-test/Node hooks.fukan.structure/instance
    canvas.vocab.grouping/Grouping hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance

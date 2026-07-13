@@ -1,4 +1,4 @@
-(ns canvas.vocab.grammar
+(ns canvas.reflect.grammar
   "GRAMMAR REFLECTION — the registry projected into the model. The structure
    registry is the one piece of fukan that lives OFF the graph; opting in here
    reifies it: every defstructure in the model's namespace closure becomes a
@@ -46,7 +46,7 @@
   ;; OWNERSHIP — the reflector's self-check. A Law has no independent existence: it is asserted BY a
   ;; Structure (ownership-on-owner), so every reified Law must be the target of some `:law` edge. An
   ;; orphan Law is a defect of THIS reflection, not a modelling mistake — which is why it lives here on
-  ;; the reified type (self-scoped to `:canvas.vocab.grammar/Law`), not as a design law on a portrait.
+  ;; the reified type (self-scoped to `:canvas.reflect.grammar/Law`), not as a design law on a portrait.
   (law "every reified Law is owned by an asserting Structure"
     (matched-by :law)))
 
@@ -63,7 +63,7 @@
   ;; TOTALITY — the reflector's self-check. A Structure's identity IS its defining namespace, so every
   ;; reified Structure is the target of a `:child` edge from its `Vocabulary`. The synthetic `:Any`
   ;; wildcard is not an authored Structure, so it is exempt (:unless its tag is ":Any"). A missing
-  ;; Vocabulary is a defect of THIS reflection — hence here, self-scoped to `:canvas.vocab.grammar/Structure`.
+  ;; Vocabulary is a defect of THIS reflection — hence here, self-scoped to `:canvas.reflect.grammar/Structure`.
   (law "every reified Structure is defined in a Vocabulary"
     (matched-by :child :from Vocabulary :unless {:tag ":Any"})))
 

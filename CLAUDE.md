@@ -57,11 +57,12 @@ structure substrate **is** the model (no separate model-map).
   render to Findings (`render-finding`) — both are Projection-through-Lens
 - `infra/model.clj` (composition root — registers the project extractor + loads the dialect), `core.clj`
 
-fukan's own **vocabulary** — the code grammar (Kind/Effect/Operation/Module/Subsystem),
-its model↔code correspondence and its Clojure extractor, the malli type dialect, and grammar
-reflection — is NOT in `src/`. It lives in the auto-discovered `canvas/vocab/` self-model (see
-"Vocabulary lives in canvas/vocab" below). `src/fukan/` is kernel mechanics + the build pipeline
-+ the three plug-points (extraction, typing, render) only.
+fukan's own **vocabulary** — the code grammar (Kind/Effect/Operation/Module/Subsystem) + its
+model↔code correspondence — plus its Clojure extractor, its malli type dialect, and grammar
+reflection — is NOT in `src/`. It lives in auto-discovered `canvas/` areas: `canvas/vocab/` (the
+grammar), `canvas/typing.clj` + `canvas/extraction/` (the dialect/extraction plugins), and
+`canvas/reflect/` (reflection) — see "Vocabulary lives in canvas/vocab" below. `src/fukan/` is
+kernel mechanics + the build pipeline + the three plug-points (extraction, typing, render) only.
 
 **Parked under `.paused/`** (off-classpath): only the **browser explorer / viewer**
 (`web/`, top-level `projection/`, `infra/server`). The other once-parked subsystems
@@ -96,12 +97,6 @@ the code grammar is a separate seam, `canvas/extraction/`; the type dialect is `
 
 - `canvas/vocab/grouping.clj` — `Grouping` (the most abstract membership primitive) +
   `Connected` (a flow-node facet). The structural primitives the rest builds on.
-- `canvas/vocab/grammar.clj` — GRAMMAR REFLECTION (`with-grammar`: registry → model db,
-  every defstructure → a `Structure` node, slots as `:slot/<card>` edges, laws as `:val/form`
-  payload nodes, one `Vocabulary` per ns; the join rule `(of-structure ?i ?s)` is in
-  `…grammar/rules`). A TOOL, not core: the runtime never consults the reflected nodes — they
-  exist only so the grammar is viewable as data (the print-dual, `unused-structures`). The
-  build always reflects. (Still in `vocab/` for now; a `reflect/` move is a deferred cleanup.)
 - `canvas/vocab/code/{kind,effect,operation,module,subsystem}.clj` — the code grammar
   (Kind / Effect / Operation / Module / Subsystem). Each element file carries its structure +
   *its* model↔code correspondence laws/readers. The cross-element correspondence —
@@ -128,6 +123,14 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   (orchestration: clj-kondo `analyze` + `op-eid`, calling each element's builder) +
   `clojure/{effect,operation}.clj` (the PL-specific readers). Mints no structures; the HOOK for the
   extraction plug-point; the composition root registers `extract-roots`.
+
+`canvas/reflect/grammar.clj` (ns `canvas.reflect.grammar`) — GRAMMAR REFLECTION, its own area (a
+TOOL, not a plug-point): `with-grammar` reifies the registry → model db (every defstructure → a
+`Structure` node, slots as `:slot/<card>` edges, laws as `:val/form` payload nodes, one `Vocabulary`
+per ns). The runtime never consults the reflected nodes — they exist only so the grammar is viewable
+as data (the print-dual, `unused-structures`). The build always reflects. (The meta-grammar it mints —
+`Structure`/`Law`/`Vocabulary`/`Relation` — is a specialized vocabulary bound to the tool, so it
+travels with it, out of general `vocab/`.)
 
 (The Lens-act `Coverage` law that a projection's focus once needed was DISSOLVED 2026-06-29: a
 projection now carries its focus ITSELF — an inline `:select`, a named `Lens` only when a focus is
@@ -209,11 +212,12 @@ can: the rule pays the fixpoint on every check.
 The self-model is laid out by **altitude**, not by pipeline role:
 
 - `canvas/vocab/**` — fukan's own VOCABULARY (the grammar it models itself with): the
-  structural primitives (`grouping`), grammar reflection (`grammar`), and the code grammar by
-  element (`code/{kind,effect,operation,module,subsystem}`). Auto-discovered.
+  structural primitives (`grouping`) and the code grammar by element
+  (`code/{kind,effect,operation,module,subsystem}`). Auto-discovered.
 - `canvas/typing.clj` — the malli type DIALECT plugin (its own area, not general vocab; realizes
   the `typing` SPI). `canvas/extraction/**` — the Clojure EXTRACTION SEAM plugin (realizes the
-  extraction SPI). Both auto-discovered.
+  extraction SPI). `canvas/reflect/grammar.clj` — grammar REFLECTION (a tool: registry → model
+  db). All auto-discovered.
 - `canvas/principles/` — **CUT (2026-07-13).** The adopted-principles layer was removed to focus
   scope on vocab-building + verifiable models; its two module-graph enforcement laws rehomed onto
   `Subsystem`, its correspondence readers onto `module.clj`/`effect.clj`. (git history preserves it.)
@@ -327,9 +331,10 @@ mixing them corrupts history.
 - `src/fukan/canvas/projection/canvas_source.clj` — canvas discovery, merge, cross-refs
 - `src/fukan/model/materialize.clj` — model→implementation-spec projection
 - `canvas/vocab/` (ns `canvas.vocab.*`) — fukan's vocabulary: the code grammar by element
-  (each file = structure + correspondence), grammar reflection (`grammar`), grouping; the
-  cross-element correspondence + call-graph readers (`module-corresponds?`/`op-twin`/
-  `unrealized-delegates`/`uncovered-calls`/`unfaithful-calls`) are in `code/module.clj`
+  (each file = structure + correspondence) + grouping; the cross-element correspondence +
+  call-graph readers (`module-corresponds?`/`op-twin`/`unrealized-delegates`/`uncovered-calls`/
+  `unfaithful-calls`) are in `code/module.clj`
+- `canvas/reflect/grammar.clj` (ns `canvas.reflect.grammar`) — grammar REFLECTION tool (registry → model db)
 - `canvas/typing.clj` (ns `canvas.typing`) — the malli type DIALECT plugin (realizes the `typing` SPI)
 - `canvas/extraction/` (ns `canvas.extraction.*`) — the Clojure EXTRACTION SEAM plugin: `core.clj`
   orchestration + `clojure/{effect,operation}.clj` (realizes the extraction SPI)

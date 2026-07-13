@@ -20,10 +20,10 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  ;; canvas.vocab.grammar's generated constructors are never CALLED — the reflector emits
+  ;; canvas.reflect.grammar's generated constructors are never CALLED — the reflector emits
   ;; raw node/rel maps by mechanism (like the extractor); the structures exist to
   ;; register the meta-grammar.
-  canvas.vocab.grammar
+  canvas.reflect.grammar
   {:linters {:unused-public-var {:level :off}}}
   lib.lens
   {:linters {:unused-public-var {:level :off}

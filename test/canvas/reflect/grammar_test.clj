@@ -1,4 +1,4 @@
-(ns canvas.vocab.grammar-test
+(ns canvas.reflect.grammar-test
   "Grammar reflection: the registry projected into the model. A fixture vocab
    exercises every slot shape; `with-grammar` must reify it as Structure nodes,
    `:slot/<card>` edges, Schema value targets (content-deduped with each other),
@@ -36,19 +36,19 @@
 
 (defn- struct-node [db tag-str]
   (ffirst (cq/q '[:find ?s :in $ ?t
-                 :where [?s :structure/of :canvas.vocab.grammar/Structure] [?s :val/tag ?t]]
+                 :where [?s :structure/of :canvas.reflect.grammar/Structure] [?s :val/tag ?t]]
                db tag-str)))
 
 (deftest structures-reify-as-nodes
   (let [db (reflected)
-        n  (struct-node db ":canvas.vocab.grammar-test/Node")]
+        n  (struct-node db ":canvas.reflect.grammar-test/Node")]
     (is (some? n) "Node gets a Structure node keyed by its tag")
     (is (= "Node" (:entity/name (cq/entity db n))))
     (is (= "Fixture: one slot of every shape." (:entity/doc (cq/entity db n))))))
 
 (deftest slots-reify-as-card-kinded-labeled-edges
   (let [db (reflected)
-        n  (struct-node db ":canvas.vocab.grammar-test/Node")]
+        n  (struct-node db ":canvas.reflect.grammar-test/Node")]
     (is (= {"one-ref" :slot/one, "opt-ref" :slot/optional, "seq-ref" :slot/many,
             "set-ref" :slot/set, "title" :slot/one, "mode" :slot/one}
            ;; the Cozo mirror stringifies :rel/kind → re-keywordize the cell
@@ -63,7 +63,7 @@
                      db n)
                 (map second) sort))
         "declaration order rides :rel/order")
-    (is (= (struct-node db ":canvas.vocab.grammar-test/Leaf")
+    (is (= (struct-node db ":canvas.reflect.grammar-test/Leaf")
            (ffirst (cq/q '[:find ?t :in $ ?n
                           :where [?r :rel/from ?n] [?r :rel/label "one-ref"] [?r :rel/to ?t]]
                         db n)))
@@ -71,7 +71,7 @@
 
 (deftest scalar-and-refined-targets-are-schema-values
   (let [db (reflected)
-        n  (struct-node db ":canvas.vocab.grammar-test/Node")
+        n  (struct-node db ":canvas.reflect.grammar-test/Node")
         target-kind (fn [label]
                       (ffirst (cq/q '[:find ?k :in $ ?n ?l
                                      :where [?r :rel/from ?n] [?r :rel/label ?l] [?r :rel/to ?t]
@@ -92,7 +92,7 @@
 
 (deftest laws-reify-with-their-datalog-payload
   (let [db (reflected)
-        n  (struct-node db ":canvas.vocab.grammar-test/Node")
+        n  (struct-node db ":canvas.reflect.grammar-test/Node")
         [law] (first (cq/q '[:find ?l :in $ ?n
                             :where [?r :rel/from ?n] [?r :rel/kind :law] [?r :rel/to ?l]] db n))
         e  (cq/entity db law)]
@@ -104,17 +104,17 @@
   (let [db (reflected)]
     (is (= #{"Leaf" "Node"}
            (set (cq/q '[:find [?n ...]
-                       :where [?v :structure/of :canvas.vocab.grammar/Vocabulary]
-                              [?v :entity/name "canvas.vocab.grammar-test"]
+                       :where [?v :structure/of :canvas.reflect.grammar/Vocabulary]
+                              [?v :entity/name "canvas.reflect.grammar-test"]
                               [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
                               [?c :entity/name ?n]]
                      db))))))
 
 (deftest the-reflection-self-reifies
-  (testing "the strange loop: canvas.vocab.grammar's own Structure gets a Structure node"
+  (testing "the strange loop: canvas.reflect.grammar's own Structure gets a Structure node"
     (let [db (reflected)]
-      (is (some? (struct-node db ":canvas.vocab.grammar/Structure")))
-      (is (some? (struct-node db ":canvas.vocab.grammar/Law"))))))
+      (is (some? (struct-node db ":canvas.reflect.grammar/Structure")))
+      (is (some? (struct-node db ":canvas.reflect.grammar/Law"))))))
 
 (deftest instances-join-their-structure
   (testing "an instance joins its reified grammar Structure by tag"
@@ -124,7 +124,7 @@
           itag (ffirst (cq/q '[:find ?t :where [?i :entity/name "n"] [?i :structure/of ?t]] db))]
       (is (= "Node"
              (ffirst (cq/q '[:find ?sn :in $ ?vt
-                             :where [?s :structure/of :canvas.vocab.grammar/Structure]
+                             :where [?s :structure/of :canvas.reflect.grammar/Structure]
                                     [?s :val/tag ?vt] [?s :entity/name ?sn]]
                            db (str ":" itag))))))))
 

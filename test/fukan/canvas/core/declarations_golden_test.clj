@@ -4,7 +4,7 @@
    must not CHANGE silently. Not a spec of WHAT the rules are — a snapshot gate on the sole rule
    emitter (both seams dispatch the declaration handlers).
 
-   Scoped to the `canvas.vocab.*`/`canvas.typing` structures (required below so they are all
+   Scoped to the `canvas.vocab.*`/`canvas.typing`/`canvas.reflect` structures (required below so they are all
    registered), NOT `all-structures` — the global registry also accumulates test fixtures during a
    full run, which would make the snapshot unstable."
   (:require [clojure.test :refer [deftest is]]
@@ -14,7 +14,7 @@
             ;; force the full self-model vocabulary to register
             [canvas.vocab.grouping]
             [canvas.typing]
-            [canvas.vocab.grammar]
+            [canvas.reflect.grammar]
             [canvas.vocab.code.kind]
             [canvas.vocab.code.effect]
             [canvas.vocab.code.operation]
@@ -28,7 +28,8 @@
   (filter #(when-let [ns (namespace (:tag %))]
              (and (not (str/ends-with? ns "-test"))
                   (or (str/starts-with? ns "canvas.vocab")
-                      (str/starts-with? ns "canvas.typing"))))
+                      (str/starts-with? ns "canvas.typing")
+                      (str/starts-with? ns "canvas.reflect"))))
           (s/all-structures)))
 
 (defn normalized-terms
@@ -143,8 +144,13 @@
 ;; membership) were REHOMED onto `Subsystem` (so they still fire — the net −9 laws is the genuine
 ;; principle demands: TrustBoundary totality/parser/cardinality + OperationSurface signature-completeness/
 ;; no-isolated). Live `(check)` still 0 on the self-model.
-(def ^:private golden-terms {:count 47 :hash -109737938})
-(def ^:private golden-laws  {:count 74 :hash 2083328343})
+;; 2026-07-13: grammar reflection moved out of vocab into its own area — `canvas.vocab.grammar` →
+;; `canvas.reflect.grammar` (a tool, not general vocab). Pure relocation: the meta-grammar
+;; (Structure/Law/Vocabulary/Relation) still registers (the golden filter now also matches
+;; `canvas.reflect`), so counts hold (terms 47, laws 74); only the tag qualifier in the emitted
+;; rules moved (`canvas.vocab.grammar/*` → `canvas.reflect.grammar/*`), shifting both hashes.
+(def ^:private golden-terms {:count 47 :hash 787679098})
+(def ^:private golden-laws  {:count 74 :hash 1342316730})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
