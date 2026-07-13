@@ -34,7 +34,6 @@
    ;; rest, whose exemptions vary, stay enumerated.
    :exclude #{"canvas\\.architecture\\..*"
               canvas.vocab.grammar
-              canvas.principles.operation-surface   ; a pure law-holder, never instantiated
 
               fukan.canvas.projection.grammar-test
               lib.lens
@@ -60,8 +59,5 @@
               canvas.vocab.code.operation
               canvas.vocab.code.module
               canvas.vocab.code.subsystem
-              canvas.vocab.type-vocab-test
-              canvas.vocab.type-render-test
-              canvas.principles.parse-dont-validate
-              canvas.principles.layered-architecture
-              canvas.principles.deep-modules}}}}
+              canvas.typing.vocab-test
+              canvas.typing.render-test}}}}

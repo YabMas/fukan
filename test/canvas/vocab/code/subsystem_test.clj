@@ -12,16 +12,13 @@
             [fukan.model.pipeline :as pipeline]
             [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.module :as module]
-            [canvas.vocab.code.subsystem :as subsystem]
-            [canvas.principles.layered-architecture :as layered]))
+            [canvas.vocab.code.subsystem :as subsystem]))
 
 (defn- law-desc
-  "The matching law desc across the two homes: the adopted demands (`ModuleArchitecture`) and
-   `Subsystem`'s own :may-depend slot-semantics laws."
+  "The matching law desc — every module/subsystem law now rides `Subsystem`: its own :may-depend
+   slot-semantics laws plus the rehomed module-graph acyclicity + membership-totality demands."
   [substr]
-  (->> [:canvas.principles.layered-architecture/ModuleArchitecture
-        :canvas.vocab.code.subsystem/Subsystem]
-       (mapcat (comp :laws s/structure-by-tag))
+  (->> (:laws (s/structure-by-tag :canvas.vocab.code.subsystem/Subsystem))
        (map :desc) (filter #(str/includes? % substr)) first))
 
 (defn- offenders [db substr]
@@ -121,73 +118,5 @@
   (testing "every fukan Module belongs to a subsystem"
     (is (empty? (offenders (pipeline/build-model nil) "belongs to a Subsystem")))))
 
-;; ── latent-boundaries (interface-segregation discovery) ──
-;; Synthetic EXTRACTED graphs: HOST exposes public ops; consumer modules :call them. The reading
-;; partitions HOST's public surface by shared-clientele and reports ≥2-op consumer-disjoint bundles.
-
-;; HOST: a1,a2 captured by CX; b1,b2 captured by CY — two disjoint clienteles.
-(operation/Operation ^{:name "a1"} t-a1 {:extracted true})
-(operation/Operation ^{:name "a2"} t-a2 {:extracted true})
-(operation/Operation ^{:name "b1"} t-b1 {:extracted true})
-(operation/Operation ^{:name "b2"} t-b2 {:extracted true})
-(module/Module ^{:name "HOST"} t-host {:exposes [t-a1 t-a2 t-b1 t-b2]})
-(operation/Operation ^{:name "cx-op"} t-cx-op {:extracted true :calls [t-a1 t-a2]})
-(module/Module ^{:name "CX"} t-cx {:exposes [t-cx-op]})
-(operation/Operation ^{:name "cy-op"} t-cy-op {:extracted true :calls [t-b1 t-b2]})
-(module/Module ^{:name "CY"} t-cy {:exposes [t-cy-op]})
-
-(deftest latent-boundary-fires-on-disjoint-clienteles
-  (testing "a module whose public ops split into two consumer-disjoint bundles is surfaced"
-    (let [db (build/vars->cozo [#'t-a1 #'t-a2 #'t-b1 #'t-b2 #'t-host
-                               #'t-cx-op #'t-cx #'t-cy-op #'t-cy])
-          lb (layered/latent-boundaries db)
-          bundles (->> (get lb "HOST") (map (comp set :ops)) set)]
-      (is (= #{"HOST"} (set (keys lb))) "only HOST has a split surface (consumers have no clientele)")
-      (is (= #{#{"a1" "a2"} #{"b1" "b2"}} bundles)
-          "the two disjoint clienteles are recovered as the sub-interfaces"))))
-
-;; COH: c1,c2 BOTH captured by CZ — one shared clientele, no internal seam.
-(operation/Operation ^{:name "c1"} t-c1 {:extracted true})
-(operation/Operation ^{:name "c2"} t-c2 {:extracted true})
-(module/Module ^{:name "COH"} t-coh {:exposes [t-c1 t-c2]})
-(operation/Operation ^{:name "cz-op"} t-cz-op {:extracted true :calls [t-c1 t-c2]})
-(module/Module ^{:name "CZ"} t-cz {:exposes [t-cz-op]})
-
-(deftest latent-boundary-silent-on-cohesive-surface
-  (testing "a module whose whole public surface shares one clientele is NOT flagged"
-    (let [db (build/vars->cozo [#'t-c1 #'t-c2 #'t-coh #'t-cz-op #'t-cz])]
-      (is (empty? (layered/latent-boundaries db))
-          "one clientele = the whole surface = no proper sub-interface"))))
-
-;; LONE: d1 captured by CW, d2 by CV — two disjoint clienteles but each a LONE op (no cohesion).
-(operation/Operation ^{:name "d1"} t-d1 {:extracted true})
-(operation/Operation ^{:name "d2"} t-d2 {:extracted true})
-(module/Module ^{:name "LONE"} t-lone {:exposes [t-d1 t-d2]})
-(operation/Operation ^{:name "cw-op"} t-cw-op {:extracted true :calls [t-d1]})
-(module/Module ^{:name "CW"} t-cw {:exposes [t-cw-op]})
-(operation/Operation ^{:name "cv-op"} t-cv-op {:extracted true :calls [t-d2]})
-(module/Module ^{:name "CV"} t-cv {:exposes [t-cv-op]})
-
-(deftest latent-boundary-cohesion-gate-rejects-lone-captives
-  (testing "disjoint clienteles of LONE ops (no ≥2-op bundle) are below the cohesion gate"
-    (let [db (build/vars->cozo [#'t-d1 #'t-d2 #'t-lone #'t-cw-op #'t-cw #'t-cv-op #'t-cv])]
-      (is (empty? (layered/latent-boundaries db))
-          "a latent sub-interface is a bundle, not a lone captive op"))))
-
-(deftest fukan-latent-boundaries-post-substrate-extraction
-  (testing "the substrate is a clean leaf (not flagged); core-structure keeps a print-dual reader residue"
-    (let [lb (layered/latent-boundaries (pipeline/build-model "src"))
-          cs (get lb "fukan.canvas.core.structure")
-          in-a-bundle? (fn [op] (some (fn [b] (some #{op} (:ops b))) cs))]
-      ;; The node substrate was extracted DOWNWARD: its surface is one clientele (the builders), so it
-      ;; never flags — the cleanest possible boundary. The construction toolkit left core-structure with it.
-      (is (not (contains? lb "fukan.canvas.core.substrate"))
-          "core-substrate is a self-contained base layer — one clientele, no consumer-disjoint split")
-      ;; core-structure still flags, but with the introspection residue: `scalar-slot?` + `structure-by-tag`,
-      ;; both consumed only by the print-dual (projection.instance), consumer-disjoint from the rest of the
-      ;; grammar surface. (The check/introspect reader bundle no longer surfaces here — correspondence, its
-      ;; chief consumer, moved to the code-vocab correspondence, off the extraction root.)
-      (is (some? cs) "core-structure flags with the print-dual introspection residue")
-      (is (in-a-bundle? "structure-by-tag") "the surfaced bundle is the print-dual's introspection surface")
-      (is (not (in-a-bundle? "value-literal->iv"))
-          "value-literal->iv is the registry-bound builder, not part of the introspection bundle"))))
+;; (The latent-boundaries interface-segregation discovery reading was retired with the
+;; canvas/principles/ layer; only its two module-graph enforcement laws were rehomed onto Subsystem.)

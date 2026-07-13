@@ -176,11 +176,11 @@
       (is (contains? (set (map :law (law/check bad)))
                      "ECard.card value must satisfy [:enum \"one\" \"many\"]")))))
 
-(deftest principled-readings-are-the-shipped-projections
-  (testing "fukan's Projection instances are exactly the principled readings; still no Lens instances"
+(deftest a-plain-build-ships-no-reading-projections
+  (testing "with the principles layer cut, fukan ships no reading Projections; still no Lens instances"
     (let [db (pipeline/build-model nil)]
-      (is (= #{"Depth" "Boundary"} (names-of db :Projection))
-          "the principle files ship exactly the principled readings")
+      (is (empty? (names-of db :Projection))
+          "no shipped readings on a plain build (the principled readings were cut)")
       (is (empty? (names-of db :Lens))
           "foci stay inline — no standalone Lens nodes"))))
 

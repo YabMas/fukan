@@ -8,9 +8,8 @@
             ;; loaded for its side-effect: registers the Cozo check engine so law/check dispatches to it
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            ;; loaded for side-effects: registers TrustBoundary (+ totality law) and op-twin
-            [canvas.vocab.code.module]
-            [canvas.principles.parse-dont-validate]))
+            ;; loaded for its side-effect: registers op-twin + the correspondence demand laws
+            [canvas.vocab.code.module]))
 
 (defn- laws [db] (set (map :law (law/check db))))
 
@@ -205,31 +204,9 @@
     (let [law (first (:laws (s/structure-by-tag ::LDoc)))]
       (is (= '(matched-by :approves :from LReviewer :when {:flag true}) (:src law))))))
 
-;; ── law :key + violations-of ─────────────────────────────────────────────────
-
-(deftest law-keys-flow-into-violations-and-violations-of
-  (testing "a law's stable :key rides its violations; violations-of filters by it"
-    ;; the totality law (on TrustBoundary) carries :key :totality after this task — this is
-    ;; correspondence_test's totality offender fixture (trusted reader whose twin throws), inlined.
-    (let [db (build/tx-maps->cozo
-              [{:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "throws"}
-               {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "TrustDb"}
-               {:db/id -21 :structure/of :canvas.principles.parse-dont-validate/TrustBoundary}
-               {:rel/id "tb|kind|k" :rel/from -21 :rel/kind :kind :rel/to -20}
-               {:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
-               {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader"}
-               {:rel/id "m|exposes|reader" :rel/from -1 :rel/kind :exposes :rel/to -2}
-               {:db/id -22 :structure/of :canvas.typing/Schema :val/kind "ref" :val/ref "TrustDb"}
-               {:rel/id "reader|in|sch" :rel/from -2 :rel/kind :in :rel/to -22}
-               {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-               {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader" :val/extracted true}
-               {:rel/id "km|child|reader" :rel/from -3 :rel/kind :child :rel/to -4}
-               {:rel/id "twin|performs|throws" :rel/from -4 :rel/kind :performs :rel/to -10}])
-          vio (->> (law/check db) (filter #(= :totality (:key %))) first)]
-      (is (some? vio) "the keyed law fired and its violation carries the :key")
-      (is (= (set (map first (:offenders vio)))
-             (law/violations-of db :totality))
-          "violations-of returns exactly the first-offender eids of the keyed law"))))
+;; (The law :key + violations-of coverage rode the TrustBoundary `:totality` law, retired with the
+;; principles layer. The generated correspondence demand laws below carry stable `:corresponds/*`
+;; keys and exercise the same keyed-law path.)
 
 ;; ── generated correspondence demand laws ─────────────────────────────────────
 

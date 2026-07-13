@@ -1,6 +1,5 @@
 (ns canvas.vocab.code.correspondence-test
-  (:require [clojure.string]
-            [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
             [fukan.cozo.law :as law]
@@ -13,10 +12,7 @@
             [fukan.canvas.core.typing :as typing]
             ;; correspondence is now distributed across the code elements
             [canvas.vocab.code.module :as module]
-            [canvas.vocab.code.effect]
-            [canvas.principles.parse-dont-validate :as pdv]
-            [canvas.principles.declared-effects :as declared-effects]
-            [canvas.principles.layered-architecture :as layered]))
+            [canvas.vocab.code.effect :as effect]))
 
 ;; register the project dialect's :render for the operation-sig / render-type path used below
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
@@ -119,19 +115,19 @@
                    {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                    {:rel/id "X|child|ex" :rel/from -5 :rel/kind :child :rel/to -6}
                    {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}])]
-      (is (seq (layered/unrealized-delegates db))
+      (is (seq (module/unrealized-delegates db))
           "A->B delegation has no realizing call between corresponding modules → offender"))))
 
 (deftest call-realization-green-on-the-self-model
   (testing "module-level realization is green on the live build-model \"src\""
-    (is (empty? (layered/unrealized-delegates (pipeline/build-model "src")))
+    (is (empty? (module/unrealized-delegates (pipeline/build-model "src")))
         "0 unrealized — verified by the design prototype")))
 
 (deftest uncovered-calls-backbone-complete
   (testing "slice 2: every actual cross-module call is now covered by an authored :delegates —
             the backbone is complete (detection of an UNdeclared coupling is proven on a synthetic
             db in fidelity-fires-on-an-undeclared-modelled-coupling)"
-    (let [worklist (layered/uncovered-calls (pipeline/build-model "src"))]
+    (let [worklist (module/uncovered-calls (pipeline/build-model "src"))]
       (is (empty? worklist)
           (str "the :delegates backbone is complete; undeclared couplings remain: " worklist)))))
 
@@ -154,23 +150,23 @@
                    {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
                    {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
                    {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}])]
-      (is (= #{"fa"} (layered/unfaithful-calls db))
+      (is (= #{"fa"} (module/unfaithful-calls db))
           "an undeclared coupling between modelled faculties is a fidelity offender")
-      (is (= #{["fukan.a" "fukan.b"]} (layered/uncovered-calls db))
+      (is (= #{["fukan.a" "fukan.b"]} (module/uncovered-calls db))
           "the same coupling appears in the broader query"))))
 
 (deftest fidelity-green-on-the-self-model
   (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
-    (is (empty? (layered/unfaithful-calls (pipeline/build-model "src")))
+    (is (empty? (module/unfaithful-calls (pipeline/build-model "src")))
         "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
 
 (deftest slice-1-self-model-is-clean
   (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
             design+code self-model has zero law violations"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (layered/unrealized-delegates model)) "realization is green")
-      (is (empty? (layered/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
-      (is (empty? (layered/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
+      (is (empty? (module/unrealized-delegates model)) "realization is green")
+      (is (empty? (module/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
+      (is (empty? (module/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
       (is (empty? (law/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (law/check model)))))))
@@ -281,118 +277,18 @@
                   {:rel/id "g|performs|io" :rel/from -5 :rel/kind :performs :rel/to -10}]                  ; g performs :io
           undeclared-db (build/tx-maps->cozo common)
           declared-db   (build/tx-maps->cozo (conj common {:rel/id "af|performs|io" :rel/from -2 :rel/kind :performs :rel/to -10}))]
-      (is (= #{"f"} (declared-effects/undeclared-effects undeclared-db))
+      (is (= #{"f"} (effect/undeclared-effects undeclared-db))
           "f's twin transitively reaches :io (via g), but f declares nothing → under-declaration")
-      (is (empty? (declared-effects/undeclared-effects declared-db))
+      (is (empty? (effect/undeclared-effects declared-db))
           "declaring :io on the authored f satisfies the generated performs-covered demand"))))
 
 (deftest effect-vocab-does-not-name-transitive-reachability
   (testing "effect reachability is expressed by composing :calls* and :performs at the consuming layer"
     (is (not (contains? (ns-publics 'canvas.vocab.code.effect) 'reached-effects)))))
 
-(deftest effect-and-totality-green-on-the-self-model
-  (testing "the merged self-model declares every effect its code reaches, and its trusted core is total"
+(deftest effect-correspondence-green-on-the-self-model
+  (testing "the merged self-model declares every effect its code reaches"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (declared-effects/undeclared-effects model))
-          "0 undeclared effects — design and extraction speak one effect language, to call-graph depth")
-      (is (empty? (pdv/totality-violations model))
-          "0 totality violations — every trusted-core reader (its :in is a declared TrustBoundary) is total"))))
+      (is (empty? (effect/undeclared-effects model))
+          "0 undeclared effects — design and extraction speak one effect language, to call-graph depth"))))
 
-(deftest totality-fires-on-a-partial-trusted-reader
-  (testing "an authored reader whose :in references a declared TrustBoundary Kind, and whose extracted
-            twin performs :throws, is flagged; with NO TrustBoundary declared the law is vacuous —
-            proving the trust boundary is read from config, not the hardcoded StructureDb"
-    (let [throws {:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "throws"}
-          k      {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "TrustDb"}
-          tb     [{:db/id -21 :structure/of :canvas.principles.parse-dont-validate/TrustBoundary}
-                  {:rel/id "tb|kind|k" :rel/from -21 :rel/kind :kind :rel/to -20}]
-          ;; authored reader (module m), :in references TrustDb ; extracted twin (fukan.m) throws
-          common [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
-                  {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader"}        ; authored
-                  {:rel/id "m|exposes|reader" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                  {:db/id -22 :structure/of :canvas.typing/Schema :val/kind "ref" :val/ref "TrustDb"}        ; the :in ref schema, names TrustDb
-                  {:rel/id "reader|in|sch" :rel/from -2 :rel/kind :in :rel/to -22}                              ; reader :in → the ref
-                  {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true} ; corresponds to "m"
-                  {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader" :val/extracted true} ; twin
-                  {:rel/id "km|child|reader" :rel/from -3 :rel/kind :child :rel/to -4}
-                  {:rel/id "twin|performs|throws" :rel/from -4 :rel/kind :performs :rel/to -10}                 ; twin throws
-                  throws k]
-          with-tb    (build/tx-maps->cozo (concat common tb))
-          without-tb (build/tx-maps->cozo common)]
-      (is (= #{"reader"} (pdv/totality-violations with-tb))
-          "the trusted reader's twin throws → a totality violation")
-      (is (empty? (pdv/totality-violations without-tb))
-          "no TrustBoundary declared → vacuous; the law reads the designation, not a hardcoded name"))))
-
-(deftest partiality-spread-lives-with-parse-dont-validate
-  (testing "partiality spread is a principle reading, not generic Effect vocabulary"
-    (let [db (build/tx-maps->cozo
-              [{:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "throws"}
-               {:db/id -1 :structure/of :canvas.vocab.code.operation/Operation :entity/name "caller" :val/extracted true}
-               {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "thrower" :val/extracted true}
-               {:rel/id "caller|calls|thrower" :rel/from -1 :rel/kind :calls :rel/to -2}
-               {:rel/id "thrower|performs|throws" :rel/from -2 :rel/kind :performs :rel/to -10}])]
-      (is (= {:direct #{"thrower"} :transitive-only #{"caller"}}
-             (pdv/throw-spread db))))))
-
-;; The Lens-act Coverage law (probe-reader → Lens) was DISSOLVED on 2026-06-29: readings became
-;; Projections with a mandatory :through Lens slot, so the guarantee is now structural, not a law.
-
-;; ── produces: the derived op→Kind output relation (the :out mirror of Totality's :in navigation) ──
-
-(deftest produces-derives-authored-output-kinds
-  (testing "(produces ?o ?k) pairs an authored op with the Kind its :out ref names; boolean outs derive nothing"
-    (let [k      {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
-          parser [{:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it"}
-                  {:db/id -22 :structure/of :canvas.typing/Schema :val/kind "ref" :val/ref "Artifact"}
-                  {:rel/id "p|out|sch" :rel/from -2 :rel/kind :out :rel/to -22}]
-          check* [{:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "check-it"}
-                  {:db/id -23 :structure/of :canvas.typing/Schema :val/kind "boolean"}
-                  {:rel/id "c|out|bool" :rel/from -3 :rel/kind :out :rel/to -23}]
-          ;; an EXTRACTED op with the same :out shape must NOT derive (produces is authored-side)
-          extr   [{:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it" :val/extracted true}
-                  {:rel/id "e|out|sch" :rel/from -4 :rel/kind :out :rel/to -22}]
-          db     (build/tx-maps->cozo (concat [k] parser check* extr))
-          pairs  (set (cq/q '[:find ?on ?kn :in $ %
-                              :where (produces ?o ?k) [?o :entity/name ?on] [?k :entity/name ?kn]]
-                            db (s/vocab-rules)))]
-      (is (= #{["parse-it" "Artifact"]} pairs)
-          "only the authored ref-out op derives; boolean-out and extracted ops do not"))))
-
-;; ── TrustBoundary :parsed-by — declaration cross-checked against structure ──────────────────────
-
-(defn- law-violations
-  "check results whose :law description contains `substr`."
-  [db substr]
-  (filter #(clojure.string/includes? (:law %) substr) (law/check db)))
-
-(deftest parser-declaration-cross-checked-against-produces
-  (testing "a declared parser that does not produce the boundary kind is an offender pair"
-    (let [k       {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
-          ;; honest parser: :out ref names Artifact
-          parser  [{:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it"}
-                   {:db/id -22 :structure/of :canvas.typing/Schema :val/kind "ref" :val/ref "Artifact"}
-                   {:rel/id "p|out|sch" :rel/from -2 :rel/kind :out :rel/to -22}]
-          ;; imposter: boolean :out — declared as parser but produces nothing
-          imposter [{:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "check-it"}
-                    {:db/id -23 :structure/of :canvas.typing/Schema :val/kind "boolean"}
-                    {:rel/id "c|out|bool" :rel/from -3 :rel/kind :out :rel/to -23}]
-          tb      (fn [op-id suffix]
-                    [{:db/id -21 :structure/of :canvas.principles.parse-dont-validate/TrustBoundary}
-                     {:rel/id (str "tb|kind|k" suffix) :rel/from -21 :rel/kind :kind :rel/to -20}
-                     {:rel/id (str "tb|parsed-by|" suffix) :rel/from -21 :rel/kind :parsed-by :rel/to op-id}])
-          honest   (build/tx-maps->cozo (concat [k] parser imposter (tb -2 "honest")))
-          lying    (build/tx-maps->cozo (concat [k] parser imposter (tb -3 "lying")))]
-      (is (empty? (law-violations honest "every declared parser produces"))
-          "a parser whose :out names the boundary kind satisfies the cross-check")
-      (is (= 1 (count (mapcat :offenders (law-violations lying "every declared parser produces"))))
-          "declaring the boolean-out op as parser fires the cross-check"))))
-
-(deftest trust-boundary-requires-a-parser
-  (testing "the [:+ :parsed-by] cardinality makes an undeclared parser a structural violation"
-    (let [k  {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
-          tb [{:db/id -21 :structure/of :canvas.principles.parse-dont-validate/TrustBoundary}
-              {:rel/id "tb|kind|k" :rel/from -21 :rel/kind :kind :rel/to -20}]
-          db (build/tx-maps->cozo (concat [k] tb))]
-      (is (seq (law-violations db "parsed-by"))
-          "a TrustBoundary declaring no parser violates the generated cardinality law"))))

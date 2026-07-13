@@ -16,10 +16,7 @@
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
             [fukan.model.materialize :as mat]
-            [canvas.vocab.code.module :as code-module]
-            [canvas.principles.layered-architecture :as la]
-            [canvas.principles.parse-dont-validate :as pdv]
-            [canvas.principles.declared-effects :as declared-effects]))
+            [canvas.vocab.code.module :as code-module]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -172,25 +169,6 @@
       (println (format "%-16s ⟶ %s" dpn (str/join ", " (sort (map second hs))))))
     (println "No model loaded yet. Use (go) first.")))
 
-(defn boundaries
-  "Bottom-up latent-boundary DISCOVERY (interface segregation, Parnas/ISP made mechanical): code modules
-   whose PUBLIC surface has split into ≥2 consumer-DISJOINT clienteles — a sub-interface that has
-   crystallized with its own external clientele but that no formal contract names. For each, the
-   discovered sub-interface(s) and the clientele each is captured by. A SIGNAL for judgment (it detects
-   the crystallized seam; you decide whether it deserves a formal split), count-invariant — a clientele
-   can grow (a 2nd dialect) and the seam stays visible. Empty ⇔ no module's public surface has split."
-  []
-  (if-let [m (infra-model/get-model)]
-    (let [lb (la/latent-boundaries m)]
-      (if (empty? lb)
-        (println "No latent boundaries — no module's public surface splits into disjoint clienteles.")
-        (doseq [[km bundles] lb]
-          (println km)
-          (doseq [b bundles]
-            (println (format "  ⊣ sub-interface: %s" (str/join ", " (:ops b))))
-            (println (format "    clientele:     %s" (str/join ", " (:clientele b))))))))
-    (println "No model loaded yet. Use (go) first.")))
-
 (defn purity
   "The EFFECT SURFACE: extracted operations that DIRECTLY perform a consequential effect
    (:io/:state/:require — logging excluded), grouped by code module. Cross-reference (architecture)
@@ -216,35 +194,6 @@
               (println (format "    %-30s %s" on (str/join " " (sort (set (map #(nth % 2) ers)))))))))))
     (println "No model loaded yet. Use (go) first.")))
 
-(defn totality
-  "The TOTALITY worklist — trusted-core READER operations (their modelled `:in` is the Model /
-   StructureDb) whose realizing code is PARTIAL (performs :throws). Parse-don't-validate says the
-   trusted core must be total. Empty ⇔ the trusted core is total — the property the enforced
-   totality law (on `TrustBoundary`) asserts."
-  []
-  (if-let [m (infra-model/get-model)]
-    (let [w (pdv/totality-violations m)]
-      (if (empty? w)
-        (println "Trusted core is total — no modelled reader's code throws.")
-        (do (println "Totality worklist —" (count w) "trusted-core reader(s) whose code throws:")
-            (doseq [on (sort w)] (println "  " on)))))
-    (println "No model loaded yet. Use (go) first.")))
-
-(defn effect-drift
-  "EFFECT-LANGUAGE DRIFT: per modelled op, where authored :performs disagrees with the extracted twin's
-   TRANSITIVE effect profile. :undeclared (code reaches it, design silent — the enforced law direction)
-   is listed first; then :phantom (declared, not reached — soft: taxonomy gap or stale intent)."
-  []
-  (if-let [m (infra-model/get-model)]
-    (let [drift (declared-effects/effect-drift m)
-          u (filter (fn [[_ d]] (seq (:undeclared d))) drift)
-          p (filter (fn [[_ d]] (seq (:phantom d))) drift)]
-      (println "UNDECLARED — code reaches an effect the design never declared (the law worklist):")
-      (doseq [[on d] (sort-by key u)] (println (format "  %-26s %s" on (sort (:undeclared d)))))
-      (println "\nPHANTOM — design declares an effect the code doesn't reach (taxonomy gap or stale):")
-      (doseq [[on d] (sort-by key p)] (println (format "  %-26s %s" on (sort (:phantom d))))))
-    (println "No model loaded yet. Use (go) first.")))
-
 (defn type-drift
   "TYPE correspondence (model↔code): the ADHERENCE offenders — modelled Operations whose realizing
    code signature does NOT exactly match the modelled type. Now a GATED demand, so this also fires in
@@ -257,16 +206,6 @@
       (if (empty? drifted)
         (println "  (none — every code signature exactly adheres to its modelled type)")
         (doseq [on (sort drifted)] (println "  " on))))
-    (println "No model loaded yet. Use (go) first.")))
-
-(defn throw-spread
-  "Partiality spread: ops that THROW directly (mostly ① parse-edge validators) vs ops that reach :throws
-   only TRANSITIVELY via a call (the ② propagation surface that containment would collapse)."
-  []
-  (if-let [m (infra-model/get-model)]
-    (let [{:keys [direct transitive-only]} (pdv/throw-spread m)]
-      (println "DIRECT throwers (" (count direct) "):" (str/join " " (sort direct)))
-      (println "\nTRANSITIVE-only (" (count transitive-only) "):" (str/join " " (sort transitive-only))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn readings

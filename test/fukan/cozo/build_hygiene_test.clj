@@ -19,9 +19,7 @@
     (let [src (slurp "src/fukan/cozo/rules.clj")]
       (is (not (re-find #"'child'|'exposes'|'owns'" src))
           "no code-vocab membership relation kinds in the generic cozo substrate")))
-  (testing "membership still resolves from vocab (latent-boundaries + :calls grounding both depend on it)"
+  (testing "membership still resolves from vocab (:calls grounding depends on it)"
     (let [db (p/build-model "src")]
-      (is (map? ((requiring-resolve 'canvas.principles.layered-architecture/latent-boundaries) db))
-          "latent-boundaries composes in_module from vocab without error")
       (is (pos? (count (cq/q '[:find ?r :where [?r :rel/kind :calls]] db)))
           ":calls grounding (which resolves ops by in_module) still works"))))

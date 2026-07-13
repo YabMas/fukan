@@ -4,9 +4,8 @@
    a reading renders ONLY its resolved focus — it never re-selects, so the focus cannot drift from
    the reading.
 
-   fukan's Boundary and Depth readings ship via canvas/principles/ (parse_dont_validate and
-   deep_modules respectively). Patterns/Consistency are exercised through ad-hoc instances carrying
-   the same names the render-finding methods dispatch on — folded onto the model for these tests."
+   Patterns/Consistency are the shipped readings, exercised through ad-hoc instances carrying the
+   same names the render-finding methods dispatch on — folded onto the model for these tests."
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
@@ -25,7 +24,7 @@
   {:select '[(Operation ?n)]})
 
 (defn- model+readings
-  "The design model with the two ad-hoc reading instances folded on (Boundary + Depth ship with the model)."
+  "The design model with the two ad-hoc reading instances folded on."
   []
   (build/fold-vars->cozo (pipeline/build-model nil)
                          [#'rt-patterns #'rt-consistency]))
@@ -38,16 +37,16 @@
   (testing "read-all renders every reading projection present in the db into a Finding, keyed by name"
     (let [db  (model+readings)
           all (m/read-all db)]
-      (is (= #{"Patterns" "Consistency" "Depth" "Boundary"} (set (keys all)))
+      (is (= #{"Patterns" "Consistency"} (set (keys all)))
           "the reading projections")
       (is (seq (:observations (all "Patterns"))) "patterns: recurring structural triplets")
       (is (every? (fn [o] (and (set? (:focus o)) (keyword? (:as o)) (string? (:note o))))
                   (mapcat :observations (vals all)))
           "every observation is {focus tag note}"))))
 
-(deftest principled-readings-ship-with-the-model
-  (testing "the principle files mint the shipped readings — a plain build carries them"
-    (is (= #{"Depth" "Boundary"} (set (keys (m/read-all (pipeline/build-model nil))))))))
+(deftest a-plain-build-ships-no-readings
+  (testing "with the principles layer cut, a plain build carries no reading projections"
+    (is (empty? (m/read-all (pipeline/build-model nil))))))
 
 (deftest a-reading-renders-only-its-focus
   (testing "Patterns renders the relation nodes its inline :select focuses — and ONLY them"
@@ -69,60 +68,3 @@
     (is (thrown? clojure.lang.ExceptionInfo
                  (m/render-finding (pipeline/build-model nil) "Nonesuch" #{})))))
 
-(deftest depth-reading-surfaces-interface-vs-implementation
-  (testing "Depth renders per-module interface/implementation counts, shallowest first"
-    (let [db     (pipeline/build-model nil)
-          result (m/read-projection db (proj db "Depth"))]
-      (is (= "Depth" (:lens result)))
-      (is (seq (:observations result)) "the self-model has modules")
-      (is (every? (fn [o] (and (= :depth (:as o))
-                               (re-find #"interface \d+ ops / implementation \d+ members" (:note o))))
-                  (:observations result)))
-      ;; anti-drift: the render reads ONLY its focus
-      (is (empty? (:observations (m/render-finding db "Depth" #{})))))))
-
-(deftest boundary-reading-tells-the-trust-story
-  (testing "Boundary renders per-trust-boundary: declared parsers, undeclared producers, validator shapes"
-    (let [db     (pipeline/build-model nil)
-          result (m/read-projection db (proj db "Boundary"))
-          notes  (mapv :note (:observations result))
-          tagged (fn [as] (filter #(= as (:as %)) (:observations result)))]
-      (is (= "Boundary" (:lens result)))
-      (is (= 2 (count (tagged :parser)))
-          "load-model and refresh-model are the declared parsers")
-      (is (every? #(re-find #"fails by throw" (:note %)) (tagged :parser))
-          "both declared parsers perform :throws — their failure channel is visible")
-      (is (some #(re-find #"get-model" %) (map :note (tagged :producer)))
-          "get-model outputs StructureDb without being declared — surfaced for judgment")
-      (is (empty? (tagged :validator-shaped))
-          "no public boolean op takes StructureDb — no validate-smell today")
-      (is (every? #(re-find #"StructureDb" %) notes)
-          "every observation names the trusted kind")
-      ;; anti-drift: the render reads ONLY its focus
-      (is (empty? (:observations (m/render-finding db "Boundary" #{})))))))
-
-(deftest depth-orders-shallowest-first
-  (testing "on a synthetic pair: mod.two (1 op / 1 member, depth 1.0) reads shallower than
-            mod.one (2 ops / 4 members, depth 2.0); a no-surface module sorts last"
-    (let [db  (build/maps->cozo
-               [{:entity/id "m1" :structure/of :canvas.vocab.code.module/Module :entity/name "mod.one"}
-                {:entity/id "m2" :structure/of :canvas.vocab.code.module/Module :entity/name "mod.two"}
-                {:entity/id "m3" :structure/of :canvas.vocab.code.module/Module :entity/name "mod.three"}
-                {:entity/id "o1" :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-1"}
-                {:entity/id "o2" :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-2"}
-                {:entity/id "o3" :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-3"}
-                {:entity/id "c1" :structure/of :canvas.vocab.code.operation/Operation :entity/name "helper-1"}
-                {:entity/id "c2" :structure/of :canvas.vocab.code.operation/Operation :entity/name "helper-2"}
-                {:entity/id "c3" :structure/of :canvas.vocab.code.operation/Operation :entity/name "helper-3"}]
-               [{:rel/id "r1" :rel/from [:entity/id "m1"] :rel/kind :exposes :rel/to [:entity/id "o1"]}
-                {:rel/id "r2" :rel/from [:entity/id "m1"] :rel/kind :exposes :rel/to [:entity/id "o2"]}
-                {:rel/id "r3" :rel/from [:entity/id "m1"] :rel/kind :child   :rel/to [:entity/id "c1"]}
-                {:rel/id "r4" :rel/from [:entity/id "m1"] :rel/kind :child   :rel/to [:entity/id "c2"]}
-                {:rel/id "r5" :rel/from [:entity/id "m2"] :rel/kind :exposes :rel/to [:entity/id "o3"]}
-                {:rel/id "r6" :rel/from [:entity/id "m3"] :rel/kind :child   :rel/to [:entity/id "c3"]}])
-          all (set (map first (cq/q '[:find ?m :where [?m :structure/of :canvas.vocab.code.module/Module]] db)))
-          fdg (m/render-finding db "Depth" all)]
-      (is (= ["mod.two: interface 1 ops / implementation 1 members (depth 1.0)"
-              "mod.one: interface 2 ops / implementation 4 members (depth 2.0)"
-              "mod.three: interface 0 ops / implementation 1 members (no public surface)"]
-             (mapv :note (:observations fdg)))))))

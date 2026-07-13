@@ -1,12 +1,11 @@
 (ns canvas.vocab.code.effect
   "Code vocab — `Effect`: a named side effect an Operation performs, plus the generic
-   operation predicate for direct effects.
-   The effect-drift readers live in `canvas.principles.declared-effects` (the adopted-principle
-   home); the law is generated from Operation's `:performs {:covered-from …}` slot option.
-   Clojure-specific effect classification lives in
-   `canvas.extraction.clojure.effect`; partiality readings live with
-   parse-don't-validate."
-  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]))
+   operation predicate for direct effects and the effect-correspondence reader `undeclared-effects`
+   (a thin worklist over the generated `:performs {:covered-from …}` demand, rehomed here when the
+   principles layer was cut). Clojure-specific effect classification lives in
+   `canvas.extraction.clojure.effect`."
+  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.cozo.law :as law]))
 
 (defstructure ^:value Effect
   "A named side effect an Operation performs (e.g. :io, :require, :stderr, :throws).
@@ -21,3 +20,11 @@
    operator transports along a transitive relation, e.g. (via :delegates Operation effectful)."
   '[?o]
   '[(Operation ?o) (performs ?o ?e)])
+
+(defn undeclared-effects
+  "The EFFECT-CORRESPONDENCE offenders — modelled ops whose extracted twin TRANSITIVELY reaches an
+   effect the op does not declare in its `:performs`, as a set of op names (the under-declaration
+   direction). Empty ⇔ design declares every effect the code reaches, to call-graph depth. Reads the
+   generated `:corresponds/Operation.performs-covered` demand."
+  [db]
+  (law/violation-names db :corresponds/Operation.performs-covered))

@@ -3,10 +3,7 @@
 ;; the defstructure forms in: src lib canvas test.
 {:hooks
  {:analyze-call
-  {canvas.principles.layered-architecture/ModuleArchitecture hooks.fukan.structure/instance
-   canvas.principles.operation-surface/OperationSurface hooks.fukan.structure/instance
-   canvas.principles.parse-dont-validate/TrustBoundary hooks.fukan.structure/instance
-   canvas.typing/Schema hooks.fukan.structure/instance
+  {canvas.typing/Schema hooks.fukan.structure/instance
    canvas.typing/SchemaChoice hooks.fukan.structure/instance
    canvas.typing/SchemaField hooks.fukan.structure/instance
    canvas.typing.render-test/RenderHolder hooks.fukan.structure/instance

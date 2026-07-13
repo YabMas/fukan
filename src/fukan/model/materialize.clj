@@ -301,81 +301,6 @@
                    (f/observation nodes :ambiguity
                      (str sn " in " (count mods) " modules: " (str/join ", " (sort mods))))))))))
 
-(defn- depth-finding
-  "Module depth (APoSD): interface size (the :exposes count) against implementation size (the
-   direct contains-members count) per focused module, SHALLOWEST first — a large interface over
-   a small implementation reads shallow; the verdict is a judgment call, so this is a reading,
-   not a Check. Counts come from inline `(measure …)` clauses; aggregate rows are inner joins,
-   so absent groups default to 0 at the merge here, and the depth ratio (members per exposed op)
-   is computed render-side (datalog has no arithmetic expression position)."
-  [db focus]
-  (let [in?    (set focus)
-        counts (fn [where]
-                 (into {} (filter (comp in? first))
-                       (cq/q (into '[:find ?m ?k :in $ % :where] where) db (s/vocab-rules))))
-        iface  (counts '[(Module ?m)
-                         (measure ?k (count ?op) (exposes ?m ?op))])
-        impl   (counts '[(Module ?m)
-                         (measure ?k (count ?x) (contains ?m ?x))])
-        rows   (for [m     focus
-                     :let  [i (get iface m 0), n (get impl m 0)]
-                     :when (pos? (max i n))]
-                 {:m m :nm (:entity/name (cq/entity db m)) :iface i :impl n
-                  :depth (when (pos? i) (/ (double n) i))})]
-    (f/finding "Depth"
-      (->> rows
-           (sort-by (fn [{:keys [depth nm]}] [(or depth Double/MAX_VALUE) nm]))
-           (mapv (fn [{:keys [m nm iface impl depth]}]
-                   (f/observation #{m} :depth
-                     (str nm ": interface " iface " ops / implementation " impl " members"
-                          (if depth (String/format java.util.Locale/ROOT " (depth %.1f)" (to-array [depth])) " (no public surface)")))))))))
-
-(defn- boundary-finding
-  "The trust story per focused TrustBoundary (parse-don't-validate): its DECLARED parsers with
-   their failure channel (:throws declared, or none — a parser claiming to totally parse raw
-   input is the judgment flag); UNDECLARED producers (ops whose :out names the trusted Kind
-   without being declared — a reader handing held state along is fine, a second parse point is
-   not); VALIDATOR-SHAPED ops (public, take the Kind, return boolean — the validate-smell).
-   A judgment surface, not a gate: the categories are surfaced, the verdicts are human."
-  [db focus]
-  (let [in?      (set focus)
-        rows     (cq/q '[:find ?tb ?k ?kn :in $ %
-                         :where (TrustBoundary ?tb)
-                                (kind ?tb ?k)
-                                [?k :entity/name ?kn]]
-                       db (s/vocab-rules))
-        throws?  (fn [op] (seq (cq/q '[:find ?eff :in $ ?op
-                                       :where (performs ?op ?eff) [?eff :val/name "throws"]]
-                                     db op)))
-        obs      (for [[tb k kn] rows
-                       :when (in? tb)
-                       :let  [parsers   (cq/q '[:find ?o ?on :in $ ?tb
-                                                :where (parsed-by ?tb ?o) [?o :entity/name ?on]]
-                                              db tb)
-                              declared? (set (map first parsers))
-                              producers (cq/q '[:find ?o ?on :in $ % ?k
-                                                :where (produces ?o ?k) [?o :entity/name ?on]]
-                                              db (s/vocab-rules) k)
-                              checks    (cq/q '[:find ?o ?on :in $ % ?k
-                                                :where (design ?o) [?o :entity/name ?on]
-                                                       (in ?o ?isch) (names-kind ?isch ?k)
-                                                       (out ?o ?osch) [?osch :val/kind "boolean"]]
-                                              db (s/vocab-rules) k)]
-                       ob    (concat
-                              (for [[o on] (sort-by second parsers)]
-                                (f/observation #{tb o} :parser
-                                  (str kn " ← parsed by " on
-                                       (if (throws? o) " (fails by throw)" " (declares no failure channel)"))))
-                              (for [[o on] (sort-by second producers)
-                                    :when (not (declared? o))]
-                                (f/observation #{tb o} :producer
-                                  (str on " outputs " kn " but is not a declared parser — reader or second parse point?")))
-                              (for [[o on] (sort-by second checks)]
-                                (f/observation #{tb o} :validator-shaped
-                                  (str on " takes " kn " and returns boolean — validate-shaped (parse, don't validate?)"))))]
-                   ob)]
-    (f/finding "Boundary" (vec obs))))
-
 (defmulti ^{:malli/schema [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Finding]}
   render-finding
   "Render reading projection `proj`'s lens focus `nodes` into a Finding — the read dual of
@@ -388,8 +313,6 @@
 
 (defmethod render-finding "Patterns"    [db _ focus] (patterns-finding db focus))
 (defmethod render-finding "Consistency" [db _ focus] (consistency-finding db focus))
-(defmethod render-finding "Depth"       [db _ focus] (depth-finding db focus))
-(defmethod render-finding "Boundary"    [db _ focus] (boundary-finding db focus))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Finding]}
   read-projection

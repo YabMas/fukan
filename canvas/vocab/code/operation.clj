@@ -4,8 +4,7 @@
    An Operation is PURE IDENTITY: the authored intent alone — its input/output types, the effects it
    performs, and its designed dependencies. Everything else ABOUT an Operation is hooked in from OUTSIDE
    so the concept stays clean: model↔code correspondence (the fact-side slots, the twin, the drift
-   demands) lives in `canvas.vocab.code.module`; the demands on the operation surface (declare an output,
-   no isolated op) in `canvas.principles.operation-surface`; implementer-directed prose in the kernel
+   demands) lives in `canvas.vocab.code.module`; implementer-directed prose in the kernel
    `:guidance` annotation. This namespace holds only the identity `defstructure` and its authoring sugar."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [canvas.typing :as ct :refer [Schema]]

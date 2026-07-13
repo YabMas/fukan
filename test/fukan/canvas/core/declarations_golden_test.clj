@@ -4,7 +4,7 @@
    must not CHANGE silently. Not a spec of WHAT the rules are — a snapshot gate on the sole rule
    emitter (both seams dispatch the declaration handlers).
 
-   Scoped to the `canvas.vocab.*`/`canvas.principles.*` structures (required below so they are all
+   Scoped to the `canvas.vocab.*`/`canvas.typing` structures (required below so they are all
    registered), NOT `all-structures` — the global registry also accumulates test fixtures during a
    full run, which would make the snapshot unstable."
   (:require [clojure.test :refer [deftest is]]
@@ -19,12 +19,7 @@
             [canvas.vocab.code.effect]
             [canvas.vocab.code.operation]
             [canvas.vocab.code.module]
-            [canvas.vocab.code.subsystem]
-            [canvas.principles.parse-dont-validate]
-            [canvas.principles.declared-effects]
-            [canvas.principles.layered-architecture]
-            [canvas.principles.deep-modules]
-            [canvas.principles.operation-surface]))
+            [canvas.vocab.code.subsystem]))
 
 (defn self-model-structures
   "The registered structures defined in the self-model vocabulary — stable regardless of which test
@@ -33,8 +28,7 @@
   (filter #(when-let [ns (namespace (:tag %))]
              (and (not (str/ends-with? ns "-test"))
                   (or (str/starts-with? ns "canvas.vocab")
-                      (str/starts-with? ns "canvas.typing")
-                      (str/starts-with? ns "canvas.principles"))))
+                      (str/starts-with? ns "canvas.typing"))))
           (s/all-structures)))
 
 (defn normalized-terms
@@ -143,8 +137,14 @@
 ;; SchemaChoice/SchemaField still register (the golden filter now also matches `canvas.typing`), so counts
 ;; are unchanged (terms 52, laws 83); only the tag qualifier in the emitted kind/relation rules moved
 ;; (`canvas.vocab.type/*` → `canvas.typing/*`), shifting both hashes. Live `(check)` still 0.
-(def ^:private golden-terms {:count 52 :hash -1513625953})
-(def ^:private golden-laws  {:count 83 :hash -732154022})
+;; 2026-07-13: the `canvas/principles/` layer was cut to focus scope on vocab + verification. The three
+;; law-holder structures (TrustBoundary, OperationSurface, ModuleArchitecture) and their laws leave the
+;; snapshot (terms 52→47, laws 83→74); ModuleArchitecture's two module-graph laws (acyclicity +
+;; membership) were REHOMED onto `Subsystem` (so they still fire — the net −9 laws is the genuine
+;; principle demands: TrustBoundary totality/parser/cardinality + OperationSurface signature-completeness/
+;; no-isolated). Live `(check)` still 0 on the self-model.
+(def ^:private golden-terms {:count 47 :hash -109737938})
+(def ^:private golden-laws  {:count 74 :hash 2083328343})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

@@ -4,9 +4,12 @@
    and the external `(correspond Operation …)`/`(correspond Module …)` hooks that contribute the
    fact-side (`:calls`/`:private`/… slots), the twin, and every model↔code demand to Operation/Module
    FROM OUTSIDE (inverted dependency — the concepts' own defstructures mention no correspondence).
-   The call-graph demand readers live in `canvas.principles.layered-architecture`."
+   The call-graph demand READERS — `unrealized-delegates` / `uncovered-calls` / `unfaithful-calls`,
+   thin worklist readers over the generated `:corresponds/Operation.delegates-*` demands — live here
+   (rehomed when the `canvas.principles.layered-architecture` layer was cut)."
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
+            [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [canvas.vocab.code.operation :as operation :refer [Operation]]
@@ -123,8 +126,8 @@
 
 ;; ── derived module-dependency relations ───────────────────────────────
 ;; `module-owns` / `module-depends` are DEFRELATIONS — injected into every law and query by
-;; `check`/`vocab-rules`, so the laws that need them (Subsystem `:may-depend` conformance,
-;; ModuleArchitecture acyclicity) and the reader below reference them BY NAME instead of each
+;; `check`/`vocab-rules`, so the laws that need them (Subsystem's `:may-depend` conformance + its
+;; rehomed module-graph acyclicity) and the reader below reference them BY NAME instead of each
 ;; re-inlining a copy. The compiler emits only the rules a query actually reaches, so laws that
 ;; never mention module-depends pay nothing. `module-owns` is Module ownership expressed as the
 ;; generic `contains` union (the `:contains` handler) restricted to a Module container — Module's
@@ -159,7 +162,7 @@
 
 ;; The module-membership CozoScript fragment (op→owning-module-name over child/exposes/owns) — it names
 ;; code-vocab relations, so it lives in VOCAB, prepended (after the generic `rules/eav`) by the cozo
-;; consumers that need raw-CozoScript membership: `latent-boundaries` and the extractor's :calls grounding.
+;; consumers that need raw-CozoScript membership: the extractor's :calls grounding.
 (def in-module-cozo
   "
 in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[m, mname]
@@ -214,6 +217,45 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
                       (not (ext-reaches ?e1 ?e2))]
              db unrealized-dispatch-rules)
        (map first) set))
+
+;; ── model↔code CALL realization readers ──────────────────────────────────────
+;; The laws are GENERATED from Operation's :delegates slot options
+;; {:realized-by :calls :altitude :container :faithful true} (see canvas.vocab.code.operation); the
+;; generated keys are :corresponds/Operation.delegates-realized and .delegates-faithful. These are thin
+;; worklist wrappers over law/violations-of, plus the `uncovered-calls` coverage query.
+
+(defn unrealized-delegates
+  "The authored source Operations whose cross-module delegation is NOT realized by any actual call
+   between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
+   is backed by real code. Reads the generated demand (:corresponds/Operation.delegates-realized)."
+  [db-arg]
+  (law/violation-names db-arg :corresponds/Operation.delegates-realized))
+
+(defn uncovered-calls
+  "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law): actual cross-module
+   module-calls (over `:calls`) with no corresponding intended cross-module delegation (over
+   `:delegates`, bridged by `module-corresponds?`), as a set of [caller-module callee-module] code-
+   module-name pairs. The couplings the design has not yet declared — a signal, not a violation."
+  [db-arg]
+  (set (cq/q '[:find ?km1 ?km2 :in $
+               :where (calls ?e1 ?e2)
+                      (fact ?e1) (fact ?e2)
+                      (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
+                      (not-join [?km1 ?km2]
+                        (delegates ?o1 ?o2)
+                        (design ?o1)
+                        (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
+                        [(canvas.vocab.code.module/module-corresponds? ?cm1 ?km1)]
+                        [(canvas.vocab.code.module/module-corresponds? ?cm2 ?km2)])]
+             db-arg)))
+
+(defn unfaithful-calls
+  "The ENFORCED fidelity offenders — extracted caller Operations making an undeclared cross-module
+   call between MODELLED faculties, as a set of op names. Empty ⇔ every modelled-faculty coupling in
+   the code is declared as intent. The modelled-both-ends subset of `uncovered-calls`; reads the
+   generated demand (:corresponds/Operation.delegates-faithful)."
+  [db-arg]
+  (law/violation-names db-arg :corresponds/Operation.delegates-faithful))
 
 ;; ── Clojure extraction (ns → Module) ─────────────────────────────────────────
 

@@ -185,5 +185,5 @@ alle[e] := *t_bool[e, _, _]
       ;; calls it generically, naming no code-vocab
       (cond-> ground ground)
       ;; seed reflection with EVERY canvas ns (as build-model does) so a zero-instance law-holder
-      ;; stratum (e.g. ModuleArchitecture) still reflects
+      ;; stratum still reflects
       (with-grammar ns-syms)))
