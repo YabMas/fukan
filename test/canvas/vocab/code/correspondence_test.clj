@@ -19,37 +19,12 @@
             [canvas.principles.declared-effects :as declared-effects]
             [canvas.principles.layered-architecture :as layered]))
 
-;; register the project dialect (malli render + sigs-adhere?) for the `type-adheres?` path
+;; register the project dialect's :render for the operation-sig / render-type path used below
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
+;; (There is no :adheres? bridge — adherence is STRUCTURAL, the :signature comparator over
+;; decomposed :in/:out node identities; the demand tests below exercise it end-to-end.)
 (use-fixtures :each
-  (fn [t] (typing/register-type-dialect! {:render malli/render :adheres? malli/sigs-adhere?}) (t)))
-
-(deftest sigs-adhere-out-and-in-sequence
-  (testing "adherence is OUT-equality AND IN-SEQUENCE-equality (order + arity) on malli function-schemas"
-    (is (malli/sigs-adhere? '[:=> [:cat :Path] :StructureDb]
-                            '[:=> [:cat :Path] :StructureDb])
-        "identical schemas adhere")
-    (is (not (malli/sigs-adhere? '[:=> [:cat :Path] :StructureDb]
-                                 '[:=> [:cat :Str] :StructureDb]))
-        "an input mismatch breaks adherence")
-    (is (not (malli/sigs-adhere? '[:=> [:cat :Path] :StructureDb]
-                                 '[:=> [:cat :Path] :Other]))
-        "an output mismatch breaks adherence")
-    (testing "inputs compared as a SEQUENCE — order IS checked"
-      (is (not (malli/sigs-adhere? '[:=> [:cat :A :B] :R]
-                                   '[:=> [:cat :B :A] :R]))
-          "reordered inputs do NOT adhere (order matters)"))
-    (testing "inputs compared as a SEQUENCE — arity IS checked"
-      (is (not (malli/sigs-adhere? '[:=> [:cat :A :B] :R]
-                                   '[:=> [:cat :A] :R]))
-          "a dropped argument does NOT adhere (arity matters)"))))
-
-(deftest type-adheres-dispatches-through-the-dialect
-  (testing "type-adheres? routes both forms through the registered :adheres? bridge"
-    (is (true?  (typing/type-adheres? '[:=> [:cat :Path] :StructureDb]
-                                      '[:=> [:cat :Path] :StructureDb])))
-    (is (false? (typing/type-adheres? '[:=> [:cat :Path] :StructureDb]
-                                      '[:=> [:cat :Str] :StructureDb])))))
+  (fn [t] (typing/register-type-dialect! {:render malli/render}) (t)))
 
 (deftest annotated-infra-functions-adhere
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/) with the
@@ -68,8 +43,9 @@
 
 (deftest multi-arg-order-and-arity-adheres-end-to-end
   (testing "materialize-over is a real MULTI-ARG function whose :malli/schema matches its
-            modelled ordered :in — same types, SAME ORDER, SAME ARITY — so it is NOT type-drifted,
-            and the comparison fires on a reordered / dropped-arg code signature."
+            modelled ordered :in — same types, SAME ORDER, SAME ARITY — so it is NOT type-drifted.
+            (Detection of a reordered / dropped-arg mismatch is covered structurally by
+            adheres-demand-gates-a-real-signature-mismatch below.)"
     (let [model (pipeline/build-model "src")
           op    (ffirst (cq/q '[:find ?e
                                :where [?e :structure/of :canvas.vocab.code.operation/Operation] (not [?e :val/extracted true])
@@ -81,13 +57,7 @@
           "materialize-over's annotation matches its modelled ordered signature")
       ;; the model renders :in positionally, in order
       (is (= [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Instruction] sig)
-          "modelled :in renders in :rel/order order")
-      ;; detection: a REORDERED code-sig does NOT adhere (order fires)
-      (is (false? (typing/type-adheres? sig '[:=> [:cat :ProjectionName :StructureDb [:vector :Eid]] :Instruction]))
-          "reordered inputs do not adhere")
-      ;; detection: a DROPPED-arg code-sig does NOT adhere (arity fires)
-      (is (false? (typing/type-adheres? sig '[:=> [:cat :StructureDb :ProjectionName] :Instruction]))
-          "dropped argument does not adhere"))))
+          "modelled :in renders in :rel/order order"))))
 
 (deftest adheres-demand-gates-a-real-signature-mismatch
   (testing "the GATED :corresponds/Operation.adheres demand (the :signature comparator over twin pairs):

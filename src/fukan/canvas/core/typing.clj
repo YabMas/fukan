@@ -9,7 +9,6 @@
    tag at the edges:
      :render      (fn [db eid] → code-form)            type subgraph → code
      :parse       (fn [form]   → entity-maps)          code-form → datoms (later)
-     :adheres?    (fn [model-form code-form] → bool)   model type ↔ realized code type
      :valid?      (fn [type-form value] → bool)        scalar value ⊨ refined slot type
      :reflect-tag <value-structure tag>                the dialect's `^:value` type tag
 
@@ -22,7 +21,7 @@
    Registration MERGES per key, so capabilities compose across registrars: a grammar
    (e.g. `canvas.vocab.type`) contributes `:valid?` + `:reflect-tag` when it loads — opting a
    model into the dialect wires the checking and reflection — while a composition root
-   contributes `:render`/`:adheres?`. Re-registering a key replaces that key."
+   contributes `:render`. Re-registering a key replaces that key."
   (:require [fukan.canvas.core.assemble :as a]
             [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.substrate :as sub]))
@@ -59,12 +58,6 @@
   "Parse a code-form type into entity-maps via the dialect, or nil."
   [form]
   (when-let [f (:parse @dialect)] (f form)))
-
-(defn ^{:malli/schema [:=> [:cat :any :any] :boolean]}
-  type-adheres?
-  "Check a modelled type code-form against a realized code type-form via the dialect, or nil."
-  [model-form code-form]
-  (when-let [f (:adheres? @dialect)] (f model-form code-form)))
 
 (defn ^{:malli/schema [:=> [:cat] :any]}
   dialect-type-tag

@@ -8,7 +8,7 @@
 
    A richer Shape: malli's grammar modelled as content-deduped `^:value` structures, so a schema is a
    queryable subgraph (plain `d/q`), never a `pr-str` blob. The core stays blind — it sees an opaque
-   schema reference; this dialect owns ALL interpretation (`render`/`valid?`/`sigs-adhere?`)."
+   schema reference; this dialect owns ALL interpretation (`render`/`valid?`)."
   (:require [malli.core :as m]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
@@ -117,37 +117,14 @@
   [type-form value]
   ((validator type-form) value))
 
-(defn- normalize-fn-schema
-  "Normalize a malli function-schema `[:=> [:cat IN…] OUT]` to `{:in [IN…] :out OUT}`
-   (the empty `[:cat]` yields `:in []`), or `nil` when `form` is not a well-formed
-   `[:=> [:cat …] OUT]`. The `:in` is a VECTOR (a sequence) so order and arity are
-   preserved. Returning `nil` for malformed input means two malformed forms never
-   compare equal — a malformed signature adheres to nothing."
-  [form]
-  (when (and (vector? form) (= :=> (first form)) (>= (count form) 3)
-             (vector? (second form)) (= :cat (first (second form))))
-    {:in (vec (rest (second form))) :out (nth form 2)}))
-
-(defn sigs-adhere?
-  "Whether a code function-schema ADHERES to a modelled Operation's type. Both are
-   malli `[:=> [:cat IN…] OUT]` forms; they adhere iff both are well-formed AND their
-   OUT types are equal AND their input type SEQUENCES (order + arity) are equal.
-   `:in` is an ordered slot on the modelled Operation, so argument ORDER and ARITY are
-   both fidelity-checked: `[:=> [:cat :A :B] :R]` does NOT adhere to `[:=> [:cat :B :A] :R]`,
-   and a 2-arg `[:cat :int :int]` does NOT adhere to a 1-arg `[:cat :int]`."
-  [model-form code-form]
-  (let [m (normalize-fn-schema model-form)
-        c (normalize-fn-schema code-form)]
-    (boolean (and m c (= m c)))))
-
-;; Opting into this grammar wires the FULL dialect: requiring this ns self-registers all four
-;; bridges + its value-structure tag `:reflect-tag` (the kernel's `reflect-type` builds Schema
-;; subgraphs through it — no reflect bridge needed). Merge-per-key, so a composition root could
-;; still override any single bridge.
+;; Opting into this grammar wires the dialect: requiring this ns self-registers its bridges +
+;; its value-structure tag `:reflect-tag` (the kernel's `reflect-type` builds Schema subgraphs
+;; through it — no reflect bridge needed). Merge-per-key, so a composition root could still
+;; override any single bridge. (There is no `:adheres?` bridge — signature adherence is STRUCTURAL,
+;; the `:signature` comparator comparing decomposed :in/:out node identities; see canvas.vocab.code.module.)
 (typing/register-type-dialect! {:valid?      valid?
                                 :reflect-tag ::Schema
-                                :render      render
-                                :adheres?    sigs-adhere?})
+                                :render      render})
 
 ;; ── the authoring grammar (Schema as queryable ^:value structures) ─────────────
 

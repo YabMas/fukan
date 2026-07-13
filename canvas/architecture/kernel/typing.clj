@@ -1,10 +1,10 @@
 (ns canvas.architecture.kernel.typing
   "Self-spec: the TYPE-DIALECT PLUG-POINT (`fukan.canvas.core.typing`) — a boundary sketch. The third
    kernel plug-point (alongside the extractor and the render multimethod): a slot for a project's TYPE
-   dialect, a map of bridge fns + the dialect's value-structure tag (render / parse / adheres? / valid?
+   dialect, a map of bridge fns + the dialect's value-structure tag (render / parse / valid?
    / reflect-tag). The kernel itself consumes it — a refined slot target compiles to a law that checks
    values through the dialect — so it is kernel-owned, but the registry is language-NEUTRAL: the kernel
-   never interprets a type form. It dispatches to the registered dialect for render/check/adherence; for
+   never interprets a type form. It dispatches to the registered dialect for render/check; for
    REFLECTION it does the building itself on the kernel value machinery (driven by the dialect's
    `:reflect-tag`), so a dialect bridge never reaches back into the kernel — the deliberate SPI."
   (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
@@ -20,8 +20,6 @@
      :performs  [:state]})
   (Operation render-type "Render a type subgraph at an eid to a code-form, via the dialect."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid :any]] :any]})
-  (Operation type-adheres? "Whether a model type-form adheres to a realized code type-form, via the dialect."
-    {:signature [:=> [:catn [:model-form :any] [:code-form :any]] :boolean]})
   (Operation dialect-type-tag "The registered dialect's value-structure tag — how consumers recognize a reflected type value."
     {:signature [:=> [:cat] :any]})
   (Operation reflect-type "A type form → its content-deduped subgraph: the kernel builds via the dialect's :reflect-tag."
@@ -36,6 +34,6 @@
   ;; the type-dialect plug-point itself — a project plugs its type language in; the kernel names none.
   (PlugPoint TypeDialect
     "The type-dialect plug-point (`register-type-dialect!`): a project's type language as a bridge-fn map
-     (render / parse / adheres? / valid? / reflect-tag). The kernel dispatches type render/check/adherence
-     to the registered dialect and interprets no type form itself — it ships no dialect."
-    {:shape [:map [:render :any] [:parse :any] [:adheres? :any] [:valid? :any] [:reflect-tag :any]]}))
+     (render / parse / valid? / reflect-tag). The kernel dispatches type render/check to the registered
+     dialect and interprets no type form itself — it ships no dialect."
+    {:shape [:map [:render :any] [:parse :any] [:valid? :any] [:reflect-tag :any]]}))
