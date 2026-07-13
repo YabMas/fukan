@@ -2,12 +2,8 @@
   "Code vocab — `Operation`: the unified computational unit, the AUTHORED intent (a self-model's
    input/output Shapes, Effects, designed dependencies). PURE IDENTITY — model↔code correspondence
    (the fact-side slots :calls/:private/…, the twin, and the realized/covered/adheres demands) is NOT
-   here: it hooks in from OUTSIDE via `(correspond Operation …)` in `canvas.vocab.code.module`.
-   `operation-sig` renders an Operation's modelled signature (used by that correspondence hook's
-   `:signature` comparator and by the Blueprint projection)."
+   here: it hooks in from OUTSIDE via `(correspond Operation …)` in `canvas.vocab.code.module`."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.typing :as typing]
-            [fukan.cozo.query :as cq]
             [canvas.vocab.type :as ct :refer [Schema]]
             [canvas.vocab.code.effect :refer [Effect]]))
 
@@ -66,28 +62,11 @@
 ;; hook in from outside via `(correspond Operation …)` in `canvas.vocab.code.module`. No separate
 ;; law-holder defstructures — and no per-demand reader wrapper: a demand's worklist is just
 ;; `(cq/violation-names db <demand-key>)` at its stable key, read directly by the consumer
-;; (`:corresponds/Operation.realized` = drift, `.covered` = the encapsulation worklist). `operation-sig`
-;; below renders the modelled signature the `:signature` comparator (the `adheres` demand) reads.
-
-(defn operation-sig
-  "Render the AUTHORED Operation at `op-eid` to a malli function-schema
-   `[:=> [:cat <each :in schema>] <:out schema, or :nil if none>]`, each `:in`/`:out`
-   Schema rendered via the type dialect (`typing/render-type`). The `:in` targets are
-   ordered/positional — rendered in `:rel/order` order — so the adherence comparison
-   checks argument order and arity."
-  [db op-eid]
-  (let [ins  (->> (cq/q '[:find ?ord ?to :in $ ?from
-                          :where [?r :rel/from ?from] [?r :rel/kind :in] [?r :rel/to ?to] [?r :rel/order ?ord]]
-                        db op-eid)
-                  ;; ?ord arrives a native number (typed-q) — sort by true numeric order
-                  (sort-by (fn [[ord _]] (long ord)))
-                  (mapv (fn [[_ to]] (typing/render-type db to))))
-        out  (ffirst (cq/q '[:find ?to :in $ ?from
-                             :where (out ?from ?to)]
-                           db op-eid))]
-    [:=> (into [:cat] ins) (if out (typing/render-type db out) :nil)]))
-
-;; Type-drift is no longer a reader: it is the GATED `:corresponds/Operation.adheres` demand (run by
-;; the `:signature` comparator above), surfacing in `(check)` / `(cq/violation-names db
-;; :corresponds/Operation.adheres)`. The `undertyped` precision reading is likewise retired — under
-;; exact adherence a modelled `:any` must match the code exactly, so imprecision is not a separate signal.
+;; (`:corresponds/Operation.realized` = drift, `.covered` = the encapsulation worklist).
+;;
+;; Type-drift is the GATED `:corresponds/Operation.adheres` demand — STRUCTURAL: the `:signature`
+;; comparator (in `canvas.vocab.code.module`) compares the design op's and its twin's decomposed
+;; :in/:out node identities (both strata store types as content-deduped Schema nodes), so argument
+;; ORDER and ARITY are checked by sequence identity. Surfaces in `(check)` / `(cq/violation-names db
+;; :corresponds/Operation.adheres)`. (The `undertyped` precision reading is retired — under exact
+;; adherence a modelled `:any` must match the code exactly, so imprecision is not a separate signal.)

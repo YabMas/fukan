@@ -13,7 +13,6 @@
             [fukan.canvas.core.typing :as typing]
             ;; correspondence is now distributed across the code elements
             [canvas.vocab.code.module :as module]
-            [canvas.vocab.code.operation :as operation]
             [canvas.vocab.code.effect]
             [canvas.principles.parse-dont-validate :as pdv]
             [canvas.principles.declared-effects :as declared-effects]
@@ -42,22 +41,12 @@
           (str "refresh-model's :malli/schema should adhere to its model; drifted: " drifted)))))
 
 (deftest multi-arg-order-and-arity-adheres-end-to-end
-  (testing "materialize-over is a real MULTI-ARG function whose :malli/schema matches its
-            modelled ordered :in — same types, SAME ORDER, SAME ARITY — so it is NOT type-drifted.
-            (Detection of a reordered / dropped-arg mismatch is covered structurally by
-            adheres-demand-gates-a-real-signature-mismatch below.)"
-    (let [model (pipeline/build-model "src")
-          op    (ffirst (cq/q '[:find ?e
-                               :where [?e :structure/of :canvas.vocab.code.operation/Operation] (not [?e :val/extracted true])
-                                      [?e :entity/name "materialize-over"]]
-                             model))
-          sig   (operation/operation-sig model op)]
-      ;; integration: multi-arg, in order → adheres → absent from type-drift
+  (testing "materialize-over is a real MULTI-ARG function whose :malli/schema matches its modelled
+            ordered :in (same types, SAME ORDER, SAME ARITY) → NOT type-drifted. The positive end-to-end
+            case; mismatch DETECTION (reorder / dropped arg) is covered by adheres-checks-in-order-and-arity."
+    (let [model (pipeline/build-model "src")]
       (is (not (contains? (law/violation-names model :corresponds/Operation.adheres) "materialize-over"))
-          "materialize-over's annotation matches its modelled ordered signature")
-      ;; the model renders :in positionally, in order
-      (is (= [:=> [:cat :StructureDb :ProjectionName [:vector :Eid]] :Instruction] sig)
-          "modelled :in renders in :rel/order order"))))
+          "materialize-over's 3-arg annotation matches its modelled ordered signature"))))
 
 (deftest adheres-demand-gates-a-real-signature-mismatch
   (testing "the GATED :corresponds/Operation.adheres demand (the :signature comparator over twin pairs):
@@ -83,6 +72,39 @@
           "a twin whose :out is a different type node is an offender")
       (is (empty? (law/violation-names match :corresponds/Operation.adheres))
           "a twin whose :out is the identical node adheres → green"))))
+
+(deftest adheres-checks-in-order-and-arity
+  (testing "structural adherence over :in is SEQUENCE identity — a twin whose :in REORDERS the modelled
+            args, or DROPS one, is an offender (the comparator sorts :in by :rel/order and compares eids)."
+    (let [;; design f :in = [A B] (types nil, any; shared nodes) → :out C (shared). twin varies only its :in.
+          base (fn [twin-in]   ; twin-in: seq of [order type-eid]
+                 (build/tx-maps->cozo
+                  (concat
+                   [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                    {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
+                    {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                    {:db/id -10 :structure/of :canvas.vocab.type/Schema :val/kind "nil"}      ; type A
+                    {:db/id -11 :structure/of :canvas.vocab.type/Schema :val/kind "any"}      ; type B
+                    {:db/id -12 :structure/of :canvas.vocab.type/Schema :val/kind "boolean"}  ; type C (shared :out)
+                    {:rel/id "f|in0" :rel/from -2 :rel/kind :in :rel/order 0 :rel/to -10}     ; design :in = [A B]
+                    {:rel/id "f|in1" :rel/from -2 :rel/kind :in :rel/order 1 :rel/to -11}
+                    {:rel/id "f|out"  :rel/from -2 :rel/kind :out :rel/to -12}
+                    {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                    {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+                    {:rel/id "tf|out" :rel/from -4 :rel/kind :out :rel/to -12}                ; twin :out = C (adheres) → gates the demand in
+                    {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
+                   (map-indexed (fn [i [ord eid]]
+                                  {:rel/id (str "tf|in" i) :rel/from -4 :rel/kind :in :rel/order ord :rel/to eid})
+                                twin-in))))
+          match     (base [[0 -10] [1 -11]])   ; twin :in = [A B] — identical
+          reordered (base [[0 -11] [1 -10]])   ; twin :in = [B A] — order fires
+          short     (base [[0 -10]])]          ; twin :in = [A]   — arity fires
+      (is (empty? (law/violation-names match :corresponds/Operation.adheres))
+          "an identical :in sequence adheres → green")
+      (is (= #{"f"} (law/violation-names reordered :corresponds/Operation.adheres))
+          "a reordered :in is an offender (order is checked)")
+      (is (= #{"f"} (law/violation-names short :corresponds/Operation.adheres))
+          "a dropped :in arg is an offender (arity is checked)"))))
 
 (deftest call-realization-fires-on-an-unrealized-delegation
   (testing "an authored cross-module :delegates with NO actual cross-module :calls is an offender"
