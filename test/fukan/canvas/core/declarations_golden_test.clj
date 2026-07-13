@@ -131,8 +131,14 @@
 ;; derived relation rule is gone (terms 53 -> 52). The Schema "a ref must name a target" presence law
 ;; was replaced by the "every type-reference resolves to a modelled Kind" no-dangling-ref law (laws
 ;; count unchanged at 84; only the laws hash moves). Live `(check)` still 0.
+;; 2026-07-13: signature decomposition steps 4-5 — the fact-side `:val/sig` BLOB is retired. The `:sig
+;; [:? :string]` correspondence slot is dropped (its auto-generated scalar type-check law goes with it:
+;; laws 84 -> 83), and the two coverage/adherence gates retarget from `[[?t :val/sig ?_s]]` to the twin
+;; declaring an :out (`[[?tr :rel/from ?t] [?tr :rel/kind :out]]`), moving the laws hash. Adherence is
+;; now STRUCTURAL — the `:signature` comparator compares decomposed :in/:out node identities. terms
+;; unchanged (52). Live `(check)` still 0.
 (def ^:private golden-terms {:count 52 :hash 1206619082})
-(def ^:private golden-laws  {:count 84 :hash -1253851240})
+(def ^:private golden-laws  {:count 83 :hash 1561157645})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

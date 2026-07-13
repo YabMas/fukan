@@ -833,7 +833,7 @@
    moves here from the concept's own fields.
 
      (correspond Target :by-name
-       {:calls [:* {:transitive true} Op] :sig [:? :string] …}   ; fact-side grafted onto Target's tag
+       {:calls [:* {:transitive true} Op] :private [:? :boolean] …}   ; fact-side grafted onto Target's tag
        (bridge f)?                                                ; roots pair by a name-bridge predicate
        (realized …)* (covered …)* (agrees {:by …})*              ; node demands
        (relname {:realized-by R …})* (relname {:covered-from …})*) ; demands ABOUT Target's own relations"

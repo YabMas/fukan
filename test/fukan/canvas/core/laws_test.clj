@@ -388,24 +388,26 @@
 ;; ── type-coverage generated law (ledgered dedicated offender test) ────────────
 
 (deftest generated-type-coverage-fires-on-a-signatureless-twin
-  (testing "a public modelled op whose twin carries no :val/sig is an offender; with a sig, green
+  (testing "a public modelled op whose twin declares no signature (no :out) is an offender; with an :out, green
             (the ledgered dedicated offender test for :corresponds/Operation.type-coverage)"
-    (let [mk (fn [twin-extras]
+    (let [mk (fn [twin-datoms]
                (build/tx-maps->cozo
-                [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
-                 {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
-                 {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                 {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-                 (merge {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation
-                         :entity/name "f" :val/extracted true}
-                        twin-extras)
-                 {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]))
-          no-sig   (mk {})
-          with-sig (mk {:val/sig "[:=> [:cat :any] :any]"})]
+                (concat
+                 [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                  {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
+                  {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                  {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                  {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+                  {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
+                 twin-datoms)))
+          ;; :out kind "nil" matches design f's default render ([:=> [:cat] :nil]) so adherence stays green too
+          no-sig   (mk [])
+          with-sig (mk [{:db/id -5 :structure/of :canvas.vocab.type/Schema :val/kind "nil"}
+                        {:rel/id "f|out|s" :rel/from -4 :rel/kind :out :rel/to -5}])]
       (is (= #{"f"} (names no-sig (law/violations-of no-sig :corresponds/Operation.type-coverage)))
-          "twin exists but carries no signature → offender")
+          "twin exists but declares no signature → offender")
       (is (empty? (law/violations-of with-sig :corresponds/Operation.type-coverage))
-          "the same twin with a :val/sig → green"))))
+          "the same twin with an :out signature → green"))))
 
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
 (defstructure LTwin

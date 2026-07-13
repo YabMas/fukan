@@ -90,24 +90,29 @@
           "dropped argument does not adhere"))))
 
 (deftest adheres-demand-gates-a-real-signature-mismatch
-  (testing "the GATED :corresponds/Operation.adheres demand (the :signature comparator over twin
-            pairs): a modelled op `f` (no :in/:out → renders [:=> [:cat] :nil]) whose extracted twin
-            declares a DIFFERENT :val/sig is an offender; a twin whose sig exactly adheres is green."
-    (let [mk (fn [sig]
+  (testing "the GATED :corresponds/Operation.adheres demand (the :signature comparator over twin pairs):
+            adherence is STRUCTURAL — a modelled op `f` and its extracted twin adhere iff their :in/:out
+            Schema nodes are IDENTICAL (types content-dedup across strata). A twin whose :out is a
+            DIFFERENT type node is an offender; the SAME node is green."
+    (let [mk (fn [twin-out-eid extra]
                (build/tx-maps->cozo
-                [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
-                 {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
-                 {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                 {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-                 {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"
-                  :val/extracted true :val/sig sig}
-                 {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]))
-          mismatch (mk "[:=> [:cat] :any]")   ; design renders [:=> [:cat] :nil] → out mismatch
-          match    (mk "[:=> [:cat] :nil]")]
+                (concat
+                 [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                  {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
+                  {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                  {:db/id -5 :structure/of :canvas.vocab.type/Schema :val/kind "nil"}   ; the MODELLED :out type node
+                  {:rel/id "f|out|s5" :rel/from -2 :rel/kind :out :rel/to -5}
+                  {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                  {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+                  {:rel/id "tf|out" :rel/from -4 :rel/kind :out :rel/to twin-out-eid}
+                  {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
+                 extra)))
+          match    (mk -5 [])                                                              ; twin :out → the SAME node
+          mismatch (mk -6 [{:db/id -6 :structure/of :canvas.vocab.type/Schema :val/kind "any"}])]  ; twin :out → a DIFFERENT node
       (is (= #{"f"} (law/violation-names mismatch :corresponds/Operation.adheres))
-          "a twin whose realized signature differs from the modelled one is an offender")
+          "a twin whose :out is a different type node is an offender")
       (is (empty? (law/violation-names match :corresponds/Operation.adheres))
-          "a twin whose realized signature exactly adheres is green"))))
+          "a twin whose :out is the identical node adheres → green"))))
 
 (deftest call-realization-fires-on-an-unrealized-delegation
   (testing "an authored cross-module :delegates with NO actual cross-module :calls is an offender"

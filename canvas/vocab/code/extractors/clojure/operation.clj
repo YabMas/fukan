@@ -39,8 +39,8 @@
    and the set of effect keywords `effs` directly attributed to it. When `v` carries a
    `:malli/schema` function-type, the signature is DECOMPOSED into `:in`/`:out` Schema
    subgraphs (the fact-side symmetric with the design side), built through the type dialect
-   via `s/value-literal->iv`. The `:val/sig` blob is retained alongside for now (removed once
-   adherence reads the decomposed form)."
+   via `s/value-literal->iv` — the queryable form the adherence comparator reads (there is no
+   `:val/sig` blob; both strata render through `operation-sig`)."
   [v effs]
   (let [sig    (:malli/schema (:meta v))
         arrow? (and (vector? sig) (= :=> (first sig)) (= 3 (count sig)))
@@ -48,8 +48,7 @@
     (sub/->InstanceValue ::operation/Operation (str (:name v)) nil
                          (cond-> {:val/private (boolean (:private v))}
                            (:export (:meta v))       (assoc :val/export true)
-                           (:test-support (:meta v)) (assoc :val/test-support true)
-                           sig                       (assoc :val/sig (pr-str sig)))
+                           (:test-support (:meta v)) (assoc :val/test-support true))
                          (cond-> []
                            (seq effs) (conj {:rk :performs :card :many
                                              :targets (mapv (fn [eff] (Effect eff)) (sort effs))})

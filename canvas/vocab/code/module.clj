@@ -2,14 +2,12 @@
   "Code vocab — `Module`: a code boundary (one namespace), its derived module-dependency reading,
    AND THE CORRESPONDENCE EXTENSION HOME: the `module-corresponds?` name bridge, the `op-twin` alias,
    and the external `(correspond Operation …)`/`(correspond Module …)` hooks that contribute the
-   fact-side (`:calls`/`:sig`/… slots), the twin, and every model↔code demand to Operation/Module
+   fact-side (`:calls`/`:private`/… slots), the twin, and every model↔code demand to Operation/Module
    FROM OUTSIDE (inverted dependency — the concepts' own defstructures mention no correspondence).
    The call-graph demand readers live in `canvas.principles.layered-architecture`."
   (:require [clojure.string :as str]
-            [clojure.edn :as edn]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.typing :as typing]
             [fukan.canvas.core.substrate :as sub]
             [canvas.vocab.code.operation :as operation :refer [Operation]]
             [canvas.vocab.code.kind :refer [Kind]]
@@ -71,7 +69,6 @@
 
 (s/correspond Operation :by-name
   {:calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
-   :sig       [:? :string]           ; the code's REALIZED malli signature (stamped from :malli/schema)
    :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
    :export    [:? :boolean]          ; intentionally public for MECHANISM (^:export)
    :test-support [:? :boolean]       ; intentionally public for TEST-SUPPORT (^:test-support)
@@ -81,26 +78,48 @@
   ;; ex-TypeCoverage — a modelled op's realizing code carries a :malli/schema
   (realized {:key :type-coverage
              :desc "every modelled operation's realizing code carries a type signature (:malli/schema)"
-             :require '[[?t :val/sig ?_s]]})
+             :require '[[?tr :rel/from ?t] [?tr :rel/kind :out]]})   ; the twin declares an :out ⇔ it carries a fn-schema
   ;; ex-Encapsulation — the exemption flags are VOCAB's (the kernel never names them)
   (covered  {:desc "every public extracted operation is covered by the model or deliberately exempt"
              :unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]})
-  ;; GATED signature adherence (exact match): wherever the twin declares a :val/sig, the modelled
-  ;; signature must EXACTLY adhere. A missing sig is type-coverage's offence — hence the :when guard.
+  ;; GATED signature adherence (exact match): wherever the twin declares a signature (an :out), the
+  ;; modelled signature must EXACTLY adhere. A missing sig is type-coverage's offence — hence the :when guard.
   (agrees   {:key :adheres :by :signature
              :desc "every modelled operation's realizing code signature exactly adheres to its modelled type"
-             :when '[[?t :val/sig ?_s]]})
+             :when '[[?tr :rel/from ?t] [?tr :rel/kind :out]]})
   ;; relation demands ABOUT Operation's own identity relations (:delegates / :performs):
   (delegates {:realized-by :calls :faithful true :altitude :container})  ; cross-module :delegates realized by a :calls path (+ faithful reverse)
   (performs  {:covered-from [:calls* :performs]}))                       ; every effect the twin REACHES over :calls*·:performs is declared
 
-;; the `:signature` comparator the `(agrees {:by :signature})` demand runs per twin pair: the design
-;; op's rendered signature must EXACTLY adhere to the extracted twin's realized `:val/sig`. Owns both
-;; extraction sides + the dialect adherence call, so the kernel stays type-agnostic.
+;; the `:signature` comparator the `(agrees {:by :signature})` demand runs per twin pair: SYMMETRIC
+;; STRUCTURAL adherence over the decomposed signatures. Both strata store :in/:out as Schema nodes
+;; that content-DEDUP across the merge (a shared type is ONE node), so a design op and its twin adhere
+;; iff their ordered :in target eids and :out target eid are IDENTICAL — node identity, no per-pair
+;; render. The whole sig index is built in two queries and cached on db identity (the demand runs the
+;; comparator over every twin pair, so rendering each was the check's single dominant cost).
+(defonce ^:private sig-index-cache (atom nil))          ; [db {op-eid [ordered-in-eids out-eid]}]
+
+(defn- signature-index
+  "op-eid → [ordered-:in-target-eids :out-target-eid] for every Operation, in TWO queries, memoized
+   on db identity so the per-twin-pair comparator is a map lookup."
+  [db]
+  (let [[cdb idx] @sig-index-cache]
+    (if (identical? cdb db)
+      idx
+      (let [ins  (reduce (fn [m [op ord to]] (update m op (fnil conj []) [(long ord) to]))
+                         {} (cq/q '[:find ?op ?ord ?to :where
+                                    [?op :structure/of :canvas.vocab.code.operation/Operation]
+                                    [?r :rel/from ?op] [?r :rel/kind :in] [?r :rel/order ?ord] [?r :rel/to ?to]] db))
+            outs (into {} (cq/q '[:find ?op ?to :where
+                                  [?op :structure/of :canvas.vocab.code.operation/Operation]
+                                  [?r :rel/from ?op] [?r :rel/kind :out] [?r :rel/to ?to]] db))
+            idx  (into {} (for [op (into (set (keys ins)) (keys outs))]
+                            [op [(mapv second (sort-by first (get ins op []))) (get outs op)]]))]
+        (reset! sig-index-cache [db idx])
+        idx))))
+
 (s/register-comparator! :signature
-  (fn [db a b]
-    (typing/type-adheres? (operation/operation-sig db a)
-                          (edn/read-string (:val/sig (cq/entity db b))))))
+  (fn [db a b] (= (get (signature-index db) a) (get (signature-index db) b))))
 
 ;; ── derived module-dependency relations ───────────────────────────────
 ;; `module-owns` / `module-depends` are DEFRELATIONS — injected into every law and query by

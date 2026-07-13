@@ -35,15 +35,19 @@
       (is (= {"alpha" false "beta" false "delta" true} ops)
           "every defn/defn- becomes an Operation; the def (gamma) is ignored; defn- is private"))))
 
-(deftest lifts-malli-schema-into-sig
-  (testing "an annotated defn's :malli/schema metadata is stamped as the Operation's :val/sig"
+(deftest decomposes-malli-schema-into-in-out
+  (testing "an annotated defn's :malli/schema is DECOMPOSED into :in/:out Schema nodes (no blob)"
     (let [db  (extract "test/fixtures/target/sample.clj")
-          sig (ffirst (cq/q '[:find ?s
+          out (ffirst (cq/q '[:find ?k
                              :where [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :entity/name "alpha"]
-                                    [?e :val/sig ?s]]
-                           db))]
-      (is (= "[:=> [:cat :int] :int]" sig)
-          "alpha's malli/schema metadata is lifted, pr-str'd, onto :val/sig"))))
+                                    [?r :rel/from ?e] [?r :rel/kind :out] [?r :rel/to ?s] [?s :val/kind ?k]]
+                           db))
+          ins (cq/q '[:find [?k ...]
+                     :where [?e :structure/of :canvas.vocab.code.operation/Operation] [?e :entity/name "alpha"]
+                            [?r :rel/from ?e] [?r :rel/kind :in] [?r :rel/to ?s] [?s :val/kind ?k]]
+                   db)]
+      (is (= "int" out) "alpha's [:=> [:cat :int] :int] :out is a Schema of kind int")
+      (is (= ["int"] ins) "alpha's :in is [int]"))))
 
 (deftest operations-are-owned-by-their-subsystem
   (testing "each namespace becomes a Module that owns its Operations (via :child relations)"

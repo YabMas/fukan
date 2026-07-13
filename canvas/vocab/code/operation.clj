@@ -1,7 +1,7 @@
 (ns canvas.vocab.code.operation
   "Code vocab — `Operation`: the unified computational unit, the AUTHORED intent (a self-model's
    input/output Shapes, Effects, designed dependencies). PURE IDENTITY — model↔code correspondence
-   (the fact-side slots :calls/:sig/…, the twin, and the realized/covered/adheres demands) is NOT
+   (the fact-side slots :calls/:private/…, the twin, and the realized/covered/adheres demands) is NOT
    here: it hooks in from OUTSIDE via `(correspond Operation …)` in `canvas.vocab.code.module`.
    `operation-sig` renders an Operation's modelled signature (used by that correspondence hook's
    `:signature` comparator and by the Blueprint projection)."
