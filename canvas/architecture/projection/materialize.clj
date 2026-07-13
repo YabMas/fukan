@@ -18,17 +18,16 @@
   "Project the model down into an implementation spec through a resolved focus + a Projection."
   (Kind Lens) (Kind Instruction) (Kind Projection)
   (Kind ProjectionName :string) (Kind ModuleName :string)
-  (Kind Clause) (Kind Eid :int)
   (Kind FindingMap [:map-of ProjectionName finding/Finding])   ; read-all's return: {projection-name → Finding}
   (Operation materialize-view "Render a lens focus under Blueprint (the default projection)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:lens Lens]] Instruction]
      :performs  [:throws :state]})                 ; reaches the lens engine's query-compiler throw/state
   (Operation materialize-over "Render a refined focus (node-set) under a projection."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:focus [:vector Eid]]] Instruction]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:focus [:vector substrate/Eid]]] Instruction]
      :performs  [:throws :state]                   ; the renderers read the graph through the query compiler
      :delegates [query/q query/entity]})           ; the module reads node facts via the kernel query layer
   (Operation materialize-focus "Render the nodes an ad-hoc :where clause selects, under a projection."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:clauses [:vector Clause]]] Instruction]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:clauses [:vector query/Clause]]] Instruction]
      :performs  [:throws :state]                   ; via focus-nodes
      :delegates [lens-engine/focus-nodes]})
   (Operation materialize-module "Render a module's Operations under a projection."
@@ -39,7 +38,7 @@
      :performs  [:throws :state]                   ; via projection-focus
      :delegates [lens-engine/projection-focus]})
   (Operation render "Render a single node under a projection (composes the per-primitive render-base multimethod)."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:eid Eid]] Instruction]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:projection ProjectionName] [:eid substrate/Eid]] Instruction]
      :performs  [:throws :state]                    ; the renderers read the graph through the query compiler
      :delegates [typing/render-type kstructure/vocab-rules]})  ; Blueprint schema-emit reaches typing; the renderers' queries inject the kernel rules
   (Operation materialize-finding "Compose a finding's observation foci into a projection — the reading→projection seam."
@@ -51,17 +50,17 @@
   (Operation render-base
     "The per-(projection, kind) render dispatch point — dispatches on [base kind] to a co-owned
      per-target defmethod (Blueprint, Docs, …), each producing a fragment of that base's target form."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:base ProjectionName] [:eid Eid]] Instruction]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:base ProjectionName] [:eid substrate/Eid]] Instruction]
      :performs  [:throws :state]})
   ;; ── the readings: a Projection whose target artifact is a Finding (the read dual of Blueprint) ──
   (Operation render-finding
     "The per-projection reading-render dispatch point — the read dual of render-base; dispatches on
      projection to a co-owned per-projection defmethod (Patterns, Depth, …), each aggregating its focus
      into a Finding."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:proj ProjectionName] [:focus [:vector Eid]]] finding/Finding]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:proj ProjectionName] [:focus [:vector substrate/Eid]]] finding/Finding]
      :performs  [:throws :state]})
   (Operation read-projection "Run a reading projection: resolve its focus, render it into a Finding."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] finding/Finding]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid substrate/Eid]] finding/Finding]
      :performs  [:throws :state]                   ; via projection-focus, then render-finding
      :delegates [lens-engine/projection-focus finding/finding finding/observation]})  ; the reading render reaches the finding constructors
   (Operation read-all "Run every reading projection present in the db → a map of findings."

@@ -25,23 +25,23 @@
 (SchemaHolder tags  {:schema [:vector :keyword]})
 (SchemaHolder addr  {:schema [:map [:street :string] [:zip {:optional true} :string]]})
 (SchemaHolder color {:schema [:enum :red :green :blue]})
-;; A real named Kind — a ref schema names it via a :names edge (var-captured here).
-(Kind ^{:name "Socket"} sock)
-(SchemaHolder ref-k {:schema sock})  ; bare symbol -> :ref schema naming the Socket Kind
+;; A real named Kind — a ref schema names it by name (its :val/ref leaf).
+(Kind Socket)
+(SchemaHolder ref-k {:schema Socket})  ; bare symbol -> :ref schema naming the Socket Kind
 (SchemaHolder combo {:schema [:or :int :string]})
 (SchemaHolder tup   {:schema [:tuple :int :int :string]})
 
 ;; ── collection / map schemas over a named Kind ──
-(Kind ^{:name "File"} file-k)
-(SchemaHolder lst {:schema [:vector file-k]})            ; vector of ref(File)
-(SchemaHolder rec {:schema [:map [:a [:vector file-k]]]}) ; map of field a: vector-of-ref(File)
+(Kind File)
+(SchemaHolder lst {:schema [:vector File]})            ; vector of ref(File)
+(SchemaHolder rec {:schema [:map [:a [:vector File]]]}) ; map of field a: vector-of-ref(File)
 
 (defn- build []
-  (build/vars->cozo [#'port #'email #'tags #'addr #'color #'sock #'ref-k #'combo #'tup
-                    #'file-k #'lst #'rec]))
+  (build/vars->cozo [#'port #'email #'tags #'addr #'color #'Socket #'ref-k #'combo #'tup
+                    #'File #'lst #'rec]))
 
-;; A ref Schema built INLINE (an `(Schema …)` seq bypasses the reader, so no :to
-;; is produced) — exercises the "ref must name a target" law.
+;; A ref Schema built INLINE (an `(Schema …)` seq bypasses the reader, so no :ref
+;; name is produced) — exercises the no-dangling-ref resolution law.
 (SchemaHolder bad {:schema (Schema {:kind "ref"})})
 
 (deftest schemas-are-valid
@@ -103,13 +103,11 @@
                      db))))))
 
 (deftest bare-symbol-is-a-ref
-  ;; a bare symbol → a ref schema whose :names edge resolves to the named Kind
+  ;; a bare symbol → a ref schema whose :ref name leaf carries the named Kind's name
   (let [db (build)]
     (is (contains?
           (set (cq/q '[:find ?n :where
-                      [?s :val/kind "ref"]
-                      [?r :rel/from ?s] [?r :rel/kind :names] [?r :rel/to ?k]
-                      [?k :entity/name ?n]]
+                      [?s :val/kind "ref"] [?s :val/ref ?n]]
                     db))
           ["Socket"]))))
 
@@ -120,9 +118,7 @@
            (set (cq/q '[:find ?n :where
                        [?v :val/kind "vector"]
                        [?r :rel/from ?v] [?r :rel/kind :of] [?r :rel/to ?e]
-                       [?e :val/kind "ref"]
-                       [?nr :rel/from ?e] [?nr :rel/kind :names] [?nr :rel/to ?k]
-                       [?k :entity/name ?n]]
+                       [?e :val/kind "ref"] [?e :val/ref ?n]]
                      db))))))
 
 (deftest map-with-a-required-vector-field
@@ -136,9 +132,7 @@
                        [?sr :rel/from ?f] [?sr :rel/kind :schema] [?sr :rel/to ?v]
                        [?v :val/kind "vector"]
                        [?vr :rel/from ?v] [?vr :rel/kind :of] [?vr :rel/to ?e]
-                       [?e :val/kind "ref"]
-                       [?nr :rel/from ?e] [?nr :rel/kind :names] [?nr :rel/to ?k]
-                       [?k :entity/name ?n]]
+                       [?e :val/kind "ref"] [?e :val/ref ?n]]
                      db))))))
 
 (deftest or-alternatives-are-ordered-children
@@ -163,10 +157,10 @@
     (is (= ["int" "int" "string"] (map second (sort-by first rows))))))
 
 (deftest ref-without-target-violates-law
-  ;; An inline (Schema (kind "ref")) bypasses the reader, so no :to is produced;
-  ;; the "ref must name a target" law must fire.
+  ;; An inline (Schema (kind "ref")) bypasses the reader, so no :ref name is produced;
+  ;; the no-dangling-ref resolution law must fire (a ref that resolves to no Kind).
   (let [db (build/vars->cozo [#'bad])]
-    (is (seq (law/check db)) "ref schema lacking :to is caught by check")))
+    (is (seq (law/check db)) "ref schema lacking a :ref name is caught by check")))
 
 (deftest non-malli-shorthands-are-rejected
   ;; The dialect accepts only valid malli structural syntax — the old [X] / {} sugar throws.

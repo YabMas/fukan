@@ -1041,7 +1041,7 @@
        '[?o ?k]
        '[(design ?o)
          [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
-         [?sch :val/kind \"ref\"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]])"
+         [?sch :val/kind \"ref\"] [?sch :val/ref ?nm] [?k :entity/name ?nm]])"
   [rtag docstring head where]
   (let [tag (keyword (name rtag))]
     `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws []

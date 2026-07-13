@@ -24,6 +24,10 @@
 (Kind StructureDb
   "The unified structure db — the data realization of the model: a Cozo
    db of structure instances + their reified relations. Owned here; every subsystem adopts this one Kind.")
+(Kind Eid
+  "An entity id — the identity a query yields for a node. Owned here (a substrate primitive);
+   every module that navigates the db adopts this one Kind."
+  :int)
 
 ;; ── node construction + identity ──────────────────────────────────────────────
 (Operation value-content-key
@@ -46,4 +50,4 @@
   "The node substrate the grammar sits on — node identity + value-node construction + the empty db.
    A leaf: depends on nothing; everything above adopts its `StructureDb` and builds on its primitives."
   {:exposes [value-content-key var-id var-simple-name instance-value? stamp-stratum]
-   :owns    [Node Relation InstanceValue StructureDb]})
+   :owns    [Node Relation InstanceValue StructureDb Eid]})

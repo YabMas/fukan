@@ -118,8 +118,8 @@
 
 (s/defrelation :module-depends
   "the COMPLETE module→module dependency graph: a call dependency (?m owns an op that :delegates to
-   an op ?n owns) UNIONed with data-adoption (?m owns an op whose :in/:out ref-Schema :names a Kind
-   ?n owns). The reader `module-dependencies` and the layering laws read this by name."
+   an op ?n owns) UNIONed with data-adoption (?m owns an op whose :in/:out ref-Schema references a Kind
+   ?n owns, by name). The reader `module-dependencies` and the layering laws read this by name."
   '[?m ?n]
   '[(module-owns ?m ?op)
     (or-join [?op ?n]

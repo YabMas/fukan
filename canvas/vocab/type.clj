@@ -94,7 +94,7 @@
                        (keyword v))))
                  (children db eid :choice)))
       "ref"
-      (keyword (:entity/name (cq/entity db (first (children db eid :names)))))
+      (keyword (:val/ref ent))
       "map-of"
       (let [[k v] (children db eid :of)] [:map-of (render db k) (render db v)])
       "=>"
@@ -215,6 +215,13 @@
    :optional :boolean}
   (reader read-field))
 
+(def ^:private builtin-scalar-kinds
+  "Bare malli keywords the dialect interprets as scalar/opaque kinds — the single source of
+   truth for read-malli's keyword partition. A bare keyword IN this set is a scalar leaf; any
+   OTHER bare keyword is a name-ref to a Kind (matching malli's model: a keyword is a registry
+   lookup, builtin here vs a domain name). `map` is included — a bare `:map` is a fieldless map."
+  #{"int" "string" "boolean" "keyword" "double" "symbol" "any" "nil" "map"})
+
 (defn ^:export read-malli
   "Expand a native malli data-literal into Schema construction clauses (one level).
    Accepts only valid malli structural syntax:
@@ -229,18 +236,22 @@
                                                same datoms as [:string {:re \"pat\"}])
      [:=> [:catn [:name T] …] Out]             function type — labelled :in params + :out
      [:map-of K V]                             homogeneous map — key schema + value schema
-     Foo  (a bare symbol)                      a var-ref naming a Kind: a `ref`
-                                               schema that NAMES the type `Foo` via a
-                                               `:names` edge (var-captured at the
-                                               authoring site)
+     Foo  (a bare symbol)                      a `ref` schema NAMING the type `Foo` —
+     :Foo (a non-builtin bare keyword)         the referenced type name in a `:ref`
+                                               leaf (no edge; resolution to the Kind
+                                               is the by-name `names-kind` relation)
 
-   A bare keyword is a scalar; a bare symbol is a var-ref naming a Kind (a named
-   schema). Enum members must be keywords, strings, or symbols — passed raw; the
+   A builtin bare keyword (int/string/…, see `builtin-scalar-kinds`) is a scalar; ANY
+   other bare keyword, or a bare symbol, is a name-ref to a Kind — both reduce to the
+   same `{:kind \"ref\", :ref \"<Name>\"}` (malli's model: a keyword is a registry lookup,
+   builtin vs a domain name). Enum members must be keywords, strings, or symbols — passed raw; the
    SchemaChoice reader preserves the member type, so forms round-trip exactly."
   [data]
   (cond
-    (keyword? data) [(list 'kind (name data))]
-    (symbol?  data) [(list 'kind "ref") (list 'names data)]
+    (keyword? data) (if (contains? builtin-scalar-kinds (name data))
+                      [(list 'kind (name data))]
+                      [(list 'kind "ref") (list 'ref (name data))])
+    (symbol?  data) [(list 'kind "ref") (list 'ref (name data))]
     (vector?  data)
     (let [[op & more] data]
       (when-not (keyword? op)
@@ -291,29 +302,41 @@
    collection (vector/set/sequential — one element in :of), tuple/or/and
    (children in :of), map (labelled :field entries), map-of (two ordered :of
    children — key then value), enum (:choice members),
-   ref (names another type via the :names edge), or arrow (=> — labelled :in
-   params + :out). Author as native malli; read-malli expands it. The ref edge
-   targets the wildcard `Any` (the named type's var is captured at the authoring
-   site) to avoid a require cycle on the vocab that owns the named Kind."
+   ref (NAMES another type via the :ref name leaf), or arrow (=> — labelled :in
+   params + :out). Author as native malli; read-malli expands it. A ref stores the
+   referenced type NAME as a leaf (not an edge), so design symbols and code keywords
+   share one representation and a ref is reflectable via value-literal->iv; resolution
+   to the named Kind is the by-name `names-kind` relation, and the coming
+   no-dangling-ref law demands every :ref name resolve to a modelled Kind."
   {:kind   :string
    :min    [:? :int]
    :max    [:? :int]
    :regex  [:? :string]
-   :names  [:? Any]
+   :ref    [:? :string]          ; a ref schema's referenced type NAME (resolves by-name to a Kind)
    :of     [:* Schema]           ; ordered children (tuple/or/and/map-of are form-faithful)
    :field  [:set SchemaField]    ; map entries — unordered, like the map they describe
    :choice [:* SchemaChoice]     ; enum members in form order (round-trip faithful)
    :in     [:* Schema]           ; arrow params — ordered, each :rel/label-ed with its name
    :out    [:? Schema]}          ; arrow result
   (reader read-malli)
-  (law "a ref schema must name a target"
-    (has :names :when {:kind "ref"})))
+  ;; NO DANGLING REFS: a type-reference must resolve to a modelled Kind (by name). A ref with no
+  ;; :ref name, or a name no Kind carries, is a violation — the design pressure that forces every
+  ;; referenced type (external/library types included) to be modelled explicitly. Subsumes the old
+  ;; "a ref must name a target" presence law.
+  (law "every type-reference resolves to a modelled Kind"
+    :offenders '[?sch]
+    :where '[[?sch :val/kind "ref"]
+             (not-join [?sch]
+               [?sch :val/ref ?nm]
+               [?k :entity/name ?nm]
+               (Kind ?k))]))
 
 ;; names-kind — the type-ref → named-Kind navigation as a DEFRELATION (injected into every law/query
 ;; by check/vocab-rules), so the consumers that chase a ref Schema to the type it names — `produces`
 ;; and the TrustBoundary totality law (canvas.principles.parse-dont-validate), and `module-depends`
 ;; data-adoption (canvas.vocab.code.module) — read it by name instead of each inlining the 3-clause chain.
 (s/defrelation :names-kind
-  "a ref Schema ?sch whose :names edge reaches the type ?k it names — the ref-Schema→named-type navigation."
+  "a ref Schema ?sch whose :ref name leaf resolves BY NAME to the Kind ?k it references — the
+   ref-Schema→named-type navigation (name-based, mirroring how the twin correlates strata)."
   '[?sch ?k]
-  '[[?sch :val/kind "ref"] [?nr :rel/from ?sch] [?nr :rel/kind :names] [?nr :rel/to ?k]])
+  '[[?sch :val/kind "ref"] [?sch :val/ref ?nm] [?k :entity/name ?nm] (Kind ?k)])

@@ -23,7 +23,7 @@
             [canvas.vocab.code.operation :refer [Operation]]))
 
 ;; `produces` — the :out mirror of the totality law's :in navigation: an authored Operation and the Kind
-;; its output type NAMES. Direct refs only (a `ref` schema's `:names` edge); descent into wrapped
+;; its output type NAMES. Direct refs only (a `ref` schema's `:ref` name leaf); descent into wrapped
 ;; shapes ([:or K :nil]) grows under pressure. Consumers: the TrustBoundary parser cross-check law
 ;; and the Boundary reading.
 (s/defrelation :produces

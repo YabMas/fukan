@@ -13,6 +13,9 @@
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────
 (Kind Violation [:map [:structure :keyword] [:law :string] [:offenders [:vector [:vector :any]]]])
 (Kind Rule)
+(Kind Form
+  "A rendered Clojure code form — a defstructure form or an authored instance form (the print-duals'
+   faithful render). Owned here as the code-form OF the grammar; the print-dual projections produce it.")
 
 ;; NOTE — `register-check-engine!` is deliberately NOT modelled as a PlugPoint. `check` dispatches to a
 ;; registered engine, but the sole engine is `cozo-law`, a CO-OWNED module that itself READS the kernel's
@@ -89,6 +92,6 @@
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:exposes [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
              laws-of direct-scope-tags correspondence* correspondence]
-   :owns    [Violation]                          ; the check-output SHAPE the kernel defines (cozo-law's check produces it)
+   :owns    [Violation Form]                      ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)
    :offers  [Syntax Comparator Correspondence]    ; the kernel's vocab-facing plug-points (the vocab satisfies them)
    :child   [Rule]})                              ; internal grain: the rules-output type

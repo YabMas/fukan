@@ -126,8 +126,13 @@
 ;; reader use. Laws count 84 (two `:where` bodies simplified -> only the laws hash moves); terms 53 (the
 ;; defrelation tag was unqualified, outside this snapshot). "An Operation IS a surface" is now
 ;; structural, not a filtered law. Live `(check)` still 0.
-(def ^:private golden-terms {:count 53 :hash 1979366480})
-(def ^:private golden-laws  {:count 84 :hash -1541084889})
+;; 2026-07-13: signature decomposition step 1 — a type-REFERENCE is now a name leaf (`:ref`), not a
+;; var-captured `:names` edge. Schema's `:names` RELATION slot became the `:ref` SCALAR slot, so its
+;; derived relation rule is gone (terms 53 -> 52). The Schema "a ref must name a target" presence law
+;; was replaced by the "every type-reference resolves to a modelled Kind" no-dangling-ref law (laws
+;; count unchanged at 84; only the laws hash moves). Live `(check)` still 0.
+(def ^:private golden-terms {:count 52 :hash 1206619082})
+(def ^:private golden-laws  {:count 84 :hash -1253851240})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

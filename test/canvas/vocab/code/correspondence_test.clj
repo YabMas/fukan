@@ -313,8 +313,7 @@
           common [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader"}        ; authored
                   {:rel/id "m|exposes|reader" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                  {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref"}                          ; the :in ref schema
-                  {:rel/id "sch|names|k" :rel/from -22 :rel/kind :names :rel/to -20}                            ; … names TrustDb
+                  {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref" :val/ref "TrustDb"}        ; the :in ref schema, names TrustDb
                   {:rel/id "reader|in|sch" :rel/from -2 :rel/kind :in :rel/to -22}                              ; reader :in → the ref
                   {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true} ; corresponds to "m"
                   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader" :val/extracted true} ; twin
@@ -348,8 +347,7 @@
   (testing "(produces ?o ?k) pairs an authored op with the Kind its :out ref names; boolean outs derive nothing"
     (let [k      {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
           parser [{:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it"}
-                  {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref"}
-                  {:rel/id "sch|names|k" :rel/from -22 :rel/kind :names :rel/to -20}
+                  {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref" :val/ref "Artifact"}
                   {:rel/id "p|out|sch" :rel/from -2 :rel/kind :out :rel/to -22}]
           check* [{:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "check-it"}
                   {:db/id -23 :structure/of :canvas.vocab.type/Schema :val/kind "boolean"}
@@ -376,8 +374,7 @@
     (let [k       {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
           ;; honest parser: :out ref names Artifact
           parser  [{:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it"}
-                   {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref"}
-                   {:rel/id "sch|names|k" :rel/from -22 :rel/kind :names :rel/to -20}
+                   {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref" :val/ref "Artifact"}
                    {:rel/id "p|out|sch" :rel/from -2 :rel/kind :out :rel/to -22}]
           ;; imposter: boolean :out — declared as parser but produces nothing
           imposter [{:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "check-it"}

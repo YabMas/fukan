@@ -65,8 +65,8 @@
 ;; Operation `extract` (paths: [Path] → StructureDb, performs :io). It reproduces what the retired
 ;; extractor self-spec gave the materialize/render tests, without coupling to any one self-model
 ;; module. `model*` unions it onto the design-only model.
-(Kind ^{:name "Path"} fx-path :string)
-(Kind ^{:name "StructureDb"} fx-sdb)
+(Kind fx-path :string)
+(Kind fx-sdb)
 (Operation ^{:name "extract"} fx-extract
   {:signature [:=> [:catn [:paths [:vector fx-path]]] fx-sdb]
    :performs  [:io]})
@@ -85,9 +85,9 @@
     (let [db   (model*)
           text (m/render db "Blueprint" (by-kind-name db :Operation "extract"))]
       (is (str/includes? text "Implement `extract` in module `target-clojure`"))
-      (is (str/includes? text "paths: [Path]") "the :in Schema rendered via render :Schema (vector → [Kind])")
-      (is (str/includes? text "→ StructureDb"))
-      (is (str/includes? text (pr-str [:=> [:cat [:vector :Path]] :StructureDb]))
+      (is (str/includes? text "paths: [fx-path]") "the :in Schema rendered via render :Schema (vector → [Kind])")
+      (is (str/includes? text "→ fx-sdb"))
+      (is (str/includes? text (pr-str [:=> [:cat [:vector :fx-path]] :fx-sdb]))
           "the faithful machine :malli/schema form is emitted (via the dialect, not the prose signature)")
       (is (str/includes? text "Effects: io")))))
 
@@ -108,7 +108,7 @@
     (let [db   (build/fold-vars->cozo (model*) [#'mvl-target])
           view (m/materialize-view db (by-name db "target"))]
       (is (str/includes? view "Implement `extract`"))
-      (is (str/includes? view "paths: [Path]")))))
+      (is (str/includes? view "paths: [fx-path]")))))
 
 (deftest empty-focus-materializes-to-empty-string
   (testing "a lens whose focus is empty composes to nothing"

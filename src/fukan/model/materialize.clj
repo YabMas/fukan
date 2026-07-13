@@ -85,15 +85,15 @@
 (defmethod render-base :default [db _ eid]
   (:entity/name (cq/entity db eid)))
 
-;; shared structural schema rendering (target-agnostic): ref → its named Kind
-;; (recurses to the base's :Kind/:default), vector/set/sequential → [child],
+;; shared structural schema rendering (target-agnostic): ref → the referenced type
+;; NAME (its :ref leaf), vector/set/sequential → [child],
 ;; map → {key: child}; other kinds (scalars/enum) → the kind name. NOTE tuple/or/and
 ;; fall through to the bare combinator name and LOSE their children here — signature-only,
 ;; not round-trippable (use the dialect's `render` for a faithful form).
 (defn- schema-str [db base eid]
   (let [e (cq/entity db eid)]
     (case (:val/kind e)
-      "ref"  (render-base db base (rel-target db eid :names))
+      "ref"  (:val/ref e)
       ("vector" "set" "sequential") (str "[" (render-base db base (rel-target db eid :of)) "]")
       "map"  (str "{" (str/join ", "
                        (for [feid (map first (cq/q '[:find ?f :in $ ?m :where (field ?m ?f)]

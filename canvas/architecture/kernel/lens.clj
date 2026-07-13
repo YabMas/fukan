@@ -14,22 +14,20 @@
   "The lens engine — evaluate a focus query (with vocab rules) and refine it. Selections run through
    the kernel Cozo query layer (`query/q`), so the reads inherit its :throws partiality (a malformed
    selection is an uncompilable query)."
-  (Kind Clause)
-  (Kind Eid :int)
   (Operation focus-nodes "Run :where clauses (binding ?n) with the vocab rules → focus node-set."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:clauses [:vector Clause]]] [:vector Eid]]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:clauses [:vector query/Clause]]] [:vector substrate/Eid]]
      :performs  [:throws :state]                   ; the query compiler throws on an unsupported clause / reads state
      :delegates [kernel/vocab-rules query/q]})
   (Operation evaluate-lens "Read a stored lens's query, then resolve it to a focus node-set (a prose-only lens yields nil)."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:lens-eid Eid]] [:vector Eid]]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:lens-eid substrate/Eid]] [:vector substrate/Eid]]
      :performs  [:throws :state]                   ; reaches focus-nodes' query-compiler throw/state
      :delegates [query/entity]})
   (Operation projection-focus "Resolve a Projection node's focus: inline :select → focus-nodes; :through lens → evaluate-lens; none → the whole model."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid Eid]] [:vector Eid]]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:proj-eid substrate/Eid]] [:vector substrate/Eid]]
      :performs  [:throws :state]                   ; reaches focus-nodes' query-compiler throw/state
      :delegates [query/entity query/q]})
   (Operation refine "Narrow a focus to members also matching further clauses (lens-within-lens)."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:focus [:vector Eid]] [:clauses [:vector Clause]]] [:vector Eid]]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:focus [:vector substrate/Eid]] [:clauses [:vector query/Clause]]] [:vector substrate/Eid]]
      :performs  [:throws :state]})                 ; reaches focus-nodes' query-compiler throw/state
   (Operation run-checks "Evaluate every Check — a non-empty gated lens focus is a violation (the use-side dual of structure/check)."
     {:signature [:=> [:catn [:db substrate/StructureDb]] :any]

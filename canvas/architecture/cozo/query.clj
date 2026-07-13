@@ -6,7 +6,8 @@
    and the ported readers build on it. `q` compiles a datalog query over the unified
    all-string `triple` view (eids/values come back as strings); `entity` resolves an eid to
    its typed attribute map from the typed buckets."
-  (:require [canvas.vocab.code.operation :refer [Operation]]
+  (:require [canvas.vocab.code.kind :refer [Kind]]
+            [canvas.vocab.code.operation :refer [Operation]]
             [canvas.vocab.code.module :refer [Module]]
             [canvas.vocab.code.plug-point :refer [PlugPoint]]
             [canvas.architecture.cozo.db :as db]
@@ -15,6 +16,7 @@
 (Module cozo-query
   "The Cozo query primitive — compile a datalog query/where to CozoScript and run it; resolve
    an eid to its attributes. The clause/rule compiler the law engine and readers share."
+  (Kind Clause "A datalog clause — a where/rule fragment the compiler lowers. Owned here (the datalog primitive); consumers adopt this one Kind.")
   (Operation register-predicate-port! "Register a vocab fn-predicate's CozoScript port (sym, builder, synthetic rule defs) into the compiler's atom-backed registry. Vocab calls this at load (the typing-plug-point pattern)."
     {:signature [:=> [:catn [:sym :symbol] [:builder :any] [:synthetic :map]] :nil]
      :performs  [:state]})

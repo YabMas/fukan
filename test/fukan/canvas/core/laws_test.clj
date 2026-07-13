@@ -219,8 +219,7 @@
                {:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
                {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader"}
                {:rel/id "m|exposes|reader" :rel/from -1 :rel/kind :exposes :rel/to -2}
-               {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref"}
-               {:rel/id "sch|names|k" :rel/from -22 :rel/kind :names :rel/to -20}
+               {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref" :val/ref "TrustDb"}
                {:rel/id "reader|in|sch" :rel/from -2 :rel/kind :in :rel/to -22}
                {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
                {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader" :val/extracted true}

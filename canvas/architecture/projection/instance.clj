@@ -11,22 +11,20 @@
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.lens :as lens-engine]
             [canvas.architecture.kernel.typing :as typing]
-            [canvas.architecture.cozo.query :as query]
-            [canvas.architecture.projection.materialize :as mat]))
+            [canvas.architecture.cozo.query :as query]))
 
 (Module projection-instance
   "Render model nodes back as their authored instance forms."
-  (Kind Form)                                       ; an instance data form (the print-dual's faithful render) — opaque
   (Kind Text :string)                               ; a formatted render
   (Kind Focus [:or [:vector :int] [:vector :any]])  ; an eid set or datalog clauses (most-specific branch first)
   (Operation instance-form
     "A model node rendered back as its authored instance form (the data dual)."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Form]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] kernel/Form]
      :performs  [:throws :state]                   ; render-type → the query compiler
      :delegates [kernel/structure-by-tag typing/render-type query/q query/entity]})   ; resolve the structure + render refined targets + read the graph
   (Operation instance-text
     "instance-form, formatted like the authored source (aligned slot map)."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid mat/Eid]] Text]
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] Text]
      :performs  [:throws :state]})                 ; via instance-form
   (Operation focus-text
     "A focus (clauses or eids) rendered as its authored forms — the textual model explorer."
