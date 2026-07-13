@@ -124,12 +124,12 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.type
+  canvas.typing
   {:linters {:unused-public-var {:level :off}}}
-  canvas.vocab.type-vocab-test
+  canvas.typing.vocab-test
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.type-render-test
+  canvas.typing.render-test
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   fukan.canvas.projection.instance-test

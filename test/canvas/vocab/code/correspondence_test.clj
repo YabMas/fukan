@@ -9,7 +9,7 @@
             [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.structure :as s]
-            [canvas.vocab.type :as malli]
+            [canvas.typing :as malli]
             [fukan.canvas.core.typing :as typing]
             ;; correspondence is now distributed across the code elements
             [canvas.vocab.code.module :as module]
@@ -59,7 +59,7 @@
                  [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
                   {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                  {:db/id -5 :structure/of :canvas.vocab.type/Schema :val/kind "nil"}   ; the MODELLED :out type node
+                  {:db/id -5 :structure/of :canvas.typing/Schema :val/kind "nil"}   ; the MODELLED :out type node
                   {:rel/id "f|out|s5" :rel/from -2 :rel/kind :out :rel/to -5}
                   {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
                   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
@@ -67,7 +67,7 @@
                   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
                  extra)))
           match    (mk -5 [])                                                              ; twin :out → the SAME node
-          mismatch (mk -6 [{:db/id -6 :structure/of :canvas.vocab.type/Schema :val/kind "any"}])]  ; twin :out → a DIFFERENT node
+          mismatch (mk -6 [{:db/id -6 :structure/of :canvas.typing/Schema :val/kind "any"}])]  ; twin :out → a DIFFERENT node
       (is (= #{"f"} (law/violation-names mismatch :corresponds/Operation.adheres))
           "a twin whose :out is a different type node is an offender")
       (is (empty? (law/violation-names match :corresponds/Operation.adheres))
@@ -83,9 +83,9 @@
                    [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
                     {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
                     {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                    {:db/id -10 :structure/of :canvas.vocab.type/Schema :val/kind "nil"}      ; type A
-                    {:db/id -11 :structure/of :canvas.vocab.type/Schema :val/kind "any"}      ; type B
-                    {:db/id -12 :structure/of :canvas.vocab.type/Schema :val/kind "boolean"}  ; type C (shared :out)
+                    {:db/id -10 :structure/of :canvas.typing/Schema :val/kind "nil"}      ; type A
+                    {:db/id -11 :structure/of :canvas.typing/Schema :val/kind "any"}      ; type B
+                    {:db/id -12 :structure/of :canvas.typing/Schema :val/kind "boolean"}  ; type C (shared :out)
                     {:rel/id "f|in0" :rel/from -2 :rel/kind :in :rel/order 0 :rel/to -10}     ; design :in = [A B]
                     {:rel/id "f|in1" :rel/from -2 :rel/kind :in :rel/order 1 :rel/to -11}
                     {:rel/id "f|out"  :rel/from -2 :rel/kind :out :rel/to -12}
@@ -310,7 +310,7 @@
           common [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader"}        ; authored
                   {:rel/id "m|exposes|reader" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                  {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref" :val/ref "TrustDb"}        ; the :in ref schema, names TrustDb
+                  {:db/id -22 :structure/of :canvas.typing/Schema :val/kind "ref" :val/ref "TrustDb"}        ; the :in ref schema, names TrustDb
                   {:rel/id "reader|in|sch" :rel/from -2 :rel/kind :in :rel/to -22}                              ; reader :in → the ref
                   {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true} ; corresponds to "m"
                   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader" :val/extracted true} ; twin
@@ -344,10 +344,10 @@
   (testing "(produces ?o ?k) pairs an authored op with the Kind its :out ref names; boolean outs derive nothing"
     (let [k      {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
           parser [{:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it"}
-                  {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref" :val/ref "Artifact"}
+                  {:db/id -22 :structure/of :canvas.typing/Schema :val/kind "ref" :val/ref "Artifact"}
                   {:rel/id "p|out|sch" :rel/from -2 :rel/kind :out :rel/to -22}]
           check* [{:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "check-it"}
-                  {:db/id -23 :structure/of :canvas.vocab.type/Schema :val/kind "boolean"}
+                  {:db/id -23 :structure/of :canvas.typing/Schema :val/kind "boolean"}
                   {:rel/id "c|out|bool" :rel/from -3 :rel/kind :out :rel/to -23}]
           ;; an EXTRACTED op with the same :out shape must NOT derive (produces is authored-side)
           extr   [{:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it" :val/extracted true}
@@ -371,11 +371,11 @@
     (let [k       {:db/id -20 :structure/of :canvas.vocab.code.kind/Kind :entity/name "Artifact"}
           ;; honest parser: :out ref names Artifact
           parser  [{:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "parse-it"}
-                   {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref" :val/ref "Artifact"}
+                   {:db/id -22 :structure/of :canvas.typing/Schema :val/kind "ref" :val/ref "Artifact"}
                    {:rel/id "p|out|sch" :rel/from -2 :rel/kind :out :rel/to -22}]
           ;; imposter: boolean :out — declared as parser but produces nothing
           imposter [{:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "check-it"}
-                    {:db/id -23 :structure/of :canvas.vocab.type/Schema :val/kind "boolean"}
+                    {:db/id -23 :structure/of :canvas.typing/Schema :val/kind "boolean"}
                     {:rel/id "c|out|bool" :rel/from -3 :rel/kind :out :rel/to -23}]
           tb      (fn [op-id suffix]
                     [{:db/id -21 :structure/of :canvas.principles.parse-dont-validate/TrustBoundary}

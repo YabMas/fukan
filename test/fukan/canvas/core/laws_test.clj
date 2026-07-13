@@ -219,7 +219,7 @@
                {:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
                {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader"}
                {:rel/id "m|exposes|reader" :rel/from -1 :rel/kind :exposes :rel/to -2}
-               {:db/id -22 :structure/of :canvas.vocab.type/Schema :val/kind "ref" :val/ref "TrustDb"}
+               {:db/id -22 :structure/of :canvas.typing/Schema :val/kind "ref" :val/ref "TrustDb"}
                {:rel/id "reader|in|sch" :rel/from -2 :rel/kind :in :rel/to -22}
                {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
                {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "reader" :val/extracted true}
@@ -402,7 +402,7 @@
                  twin-datoms)))
           ;; :out kind "nil" matches design f's default render ([:=> [:cat] :nil]) so adherence stays green too
           no-sig   (mk [])
-          with-sig (mk [{:db/id -5 :structure/of :canvas.vocab.type/Schema :val/kind "nil"}
+          with-sig (mk [{:db/id -5 :structure/of :canvas.typing/Schema :val/kind "nil"}
                         {:rel/id "f|out|s" :rel/from -4 :rel/kind :out :rel/to -5}])]
       (is (= #{"f"} (names no-sig (law/violations-of no-sig :corresponds/Operation.type-coverage)))
           "twin exists but declares no signature → offender")

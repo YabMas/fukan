@@ -13,7 +13,7 @@
             [fukan.canvas.core.structure :as s]
             ;; force the full self-model vocabulary to register
             [canvas.vocab.grouping]
-            [canvas.vocab.type]
+            [canvas.typing]
             [canvas.vocab.grammar]
             [canvas.vocab.code.kind]
             [canvas.vocab.code.effect]
@@ -33,6 +33,7 @@
   (filter #(when-let [ns (namespace (:tag %))]
              (and (not (str/ends-with? ns "-test"))
                   (or (str/starts-with? ns "canvas.vocab")
+                      (str/starts-with? ns "canvas.typing")
                       (str/starts-with? ns "canvas.principles"))))
           (s/all-structures)))
 
@@ -137,8 +138,13 @@
 ;; declaring an :out (`[[?tr :rel/from ?t] [?tr :rel/kind :out]]`), moving the laws hash. Adherence is
 ;; now STRUCTURAL — the `:signature` comparator compares decomposed :in/:out node identities. terms
 ;; unchanged (52). Live `(check)` still 0.
-(def ^:private golden-terms {:count 52 :hash 1206619082})
-(def ^:private golden-laws  {:count 83 :hash 1561157645})
+;; 2026-07-13: the malli type dialect moved out of general vocab into its OWN area — `canvas.vocab.type`
+;; → `canvas.typing` (a self-contained plugin: shape-vocab + bridges). Pure relocation: Schema/
+;; SchemaChoice/SchemaField still register (the golden filter now also matches `canvas.typing`), so counts
+;; are unchanged (terms 52, laws 83); only the tag qualifier in the emitted kind/relation rules moved
+;; (`canvas.vocab.type/*` → `canvas.typing/*`), shifting both hashes. Live `(check)` still 0.
+(def ^:private golden-terms {:count 52 :hash -1513625953})
+(def ^:private golden-laws  {:count 83 :hash -732154022})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

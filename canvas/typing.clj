@@ -1,10 +1,12 @@
-(ns canvas.vocab.type
-  "The malli type DIALECT — fukan's realization of the kernel's `typing` plug-point. A foundational
-   vocab primitive: the code vocab (Kind shapes, Operation signatures) and grammar reflection both
-   build on it. This is the HOOK side of the typing SPI — the plug-point + bridge SHAPE stay in
-   `fukan.canvas.core.typing`; requiring this namespace self-registers the full dialect (all four
-   bridges + its value-structure tag), so a model carries its type checking, reflection, rendering,
-   and adherence by opting in.
+(ns canvas.typing
+  "The malli type DIALECT — fukan's realization of the kernel's `typing` plug-point. A self-contained
+   PLUGIN in its OWN area (`canvas/typing`), NOT a general-vocab primitive: it owns a SPECIALIZED
+   vocabulary (malli modelled as data — `Schema`/`SchemaChoice`/`SchemaField`) plus the bridges that
+   interpret it, together, because both are specific to malli. The code vocab (Kind shapes, Operation
+   signatures) and grammar reflection consume it. This is the HOOK side of the typing SPI — the
+   plug-point + bridge SHAPE stay in `fukan.canvas.core.typing`; requiring this namespace self-registers
+   the full dialect (all four bridges + its value-structure tag), so a model carries its type checking,
+   reflection, rendering, and adherence by opting in.
 
    A richer Shape: malli's grammar modelled as content-deduped `^:value` structures, so a schema is a
    queryable subgraph (plain `d/q`), never a `pr-str` blob. The core stays blind — it sees an opaque

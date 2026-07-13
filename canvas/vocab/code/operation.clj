@@ -8,7 +8,7 @@
    no isolated op) in `canvas.principles.operation-surface`; implementer-directed prose in the kernel
    `:guidance` annotation. This namespace holds only the identity `defstructure` and its authoring sugar."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [canvas.vocab.type :as ct :refer [Schema]]
+            [canvas.typing :as ct :refer [Schema]]
             [canvas.vocab.code.effect :refer [Effect]]))
 
 (defstructure Operation

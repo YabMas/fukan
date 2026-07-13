@@ -1,12 +1,12 @@
-(ns canvas.vocab.type-render-test
+(ns canvas.typing.render-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
             [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]
-            ;; canvas.vocab.type: its render fn (registered per-test below) + Schema (the clj-kondo hook)
-            [canvas.vocab.type :as malli :refer [Schema]]
+            ;; canvas.typing: its render fn (registered per-test below) + Schema (the clj-kondo hook)
+            [canvas.typing :as malli :refer [Schema]]
             ;; Kind — the named type a `ref` schema points at via :names.
             [canvas.vocab.code.kind :refer [Kind]]))
 

@@ -10,7 +10,7 @@
             ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [canvas.vocab.type :as dialect]
+            [canvas.typing :as dialect]
             [fukan.model.pipeline :as pipeline]
             [canvas.vocab.code.kind :refer [Kind]]
             [fukan.canvas.core.lens :refer [Projection]]))
@@ -127,7 +127,7 @@
                   db))
           "core.substrate is its sole owner (the db it constructs)")
       (is (= 1 (count (cq/q '[:find ?s
-                             :where [?s :structure/of :canvas.vocab.type/Schema] [?s :val/kind "ref"]
+                             :where [?s :structure/of :canvas.typing/Schema] [?s :val/kind "ref"]
                                     [?s :val/ref "StructureDb"]]
                            db)))
           "the ref-schema naming it is one value-identified node, reused across every subsystem"))))

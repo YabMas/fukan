@@ -11,7 +11,7 @@
             [fukan.cozo.law :as law]
             [fukan.canvas.projection.instance :as inst]
             ;; Schema: the INode :shape slot target (reader-expanded malli literals)
-            [canvas.vocab.type :refer [Schema]]))
+            [canvas.typing :refer [Schema]]))
 
 ;; ── fixture vocab: every instance-surface feature ─────────────────────────────
 

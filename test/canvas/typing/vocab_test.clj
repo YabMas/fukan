@@ -1,4 +1,4 @@
-(ns canvas.vocab.type-vocab-test
+(ns canvas.typing.vocab-test
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
@@ -7,7 +7,7 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; SchemaField/SchemaChoice are referred (though only Schema is called
             ;; directly) so clj-kondo resolves their instance-macro hooks.
-            [canvas.vocab.type :as malli :refer [Schema SchemaField SchemaChoice]]
+            [canvas.typing :as malli :refer [Schema SchemaField SchemaChoice]]
             ;; Kind — the named type a `ref`/`[:vector …]`/`[:map …]` schema points
             ;; at via :names.
             [canvas.vocab.code.kind :refer [Kind]]))

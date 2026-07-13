@@ -6,6 +6,11 @@
   {canvas.principles.layered-architecture/ModuleArchitecture hooks.fukan.structure/instance
    canvas.principles.operation-surface/OperationSurface hooks.fukan.structure/instance
    canvas.principles.parse-dont-validate/TrustBoundary hooks.fukan.structure/instance
+   canvas.typing/Schema hooks.fukan.structure/instance
+   canvas.typing/SchemaChoice hooks.fukan.structure/instance
+   canvas.typing/SchemaField hooks.fukan.structure/instance
+   canvas.typing.render-test/RenderHolder hooks.fukan.structure/instance
+   canvas.typing.vocab-test/SchemaHolder hooks.fukan.structure/instance
    canvas.vocab.code.effect/Effect hooks.fukan.structure/instance
    canvas.vocab.code.kind/Kind hooks.fukan.structure/instance
    canvas.vocab.code.module/Module hooks.fukan.structure/instance
@@ -19,11 +24,6 @@
    canvas.vocab.grammar-test/Leaf hooks.fukan.structure/instance
    canvas.vocab.grammar-test/Node hooks.fukan.structure/instance
    canvas.vocab.grouping/Grouping hooks.fukan.structure/instance
-   canvas.vocab.type/Schema hooks.fukan.structure/instance
-   canvas.vocab.type/SchemaChoice hooks.fukan.structure/instance
-   canvas.vocab.type/SchemaField hooks.fukan.structure/instance
-   canvas.vocab.type-render-test/RenderHolder hooks.fukan.structure/instance
-   canvas.vocab.type-vocab-test/SchemaHolder hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Box hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Edge2 hooks.fukan.structure/instance
    fukan.canvas.core.assemble-test/Holder hooks.fukan.structure/instance

@@ -2,7 +2,7 @@
   "Code vocab — `Kind`: a named data-shape, the nominal handle for a value type a Module owns.
    (Definition only; Kinds carry no model↔code correspondence and are not extracted.)"
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [canvas.vocab.type :refer [Schema]]))
+            [canvas.typing :refer [Schema]]))
 
 (defn ^:export shape->slots
   "Kind's authoring syntax (the `(syntax …)` hook, map → map): a positional malli body is
