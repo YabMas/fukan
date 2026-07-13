@@ -10,7 +10,7 @@
             ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [canvas.typing :as dialect]
+            [canvas.typing.malli :as dialect]
             [fukan.model.pipeline :as pipeline]
             [canvas.vocab.code.kind :refer [Kind]]
             [fukan.canvas.core.lens :refer [Projection]]))

@@ -5,8 +5,9 @@
             [fukan.cozo.law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.typing :as typing]
-            ;; canvas.typing: its render fn (registered per-test below) + Schema (the clj-kondo hook)
-            [canvas.typing :as malli :refer [Schema]]
+            ;; canvas.typing: Schema (the clj-kondo hook); its render bridge is in canvas.typing.malli
+            [canvas.typing :refer [Schema]]
+            [canvas.typing.malli :as malli]
             ;; Kind — the named type a `ref` schema points at via :names.
             [canvas.vocab.code.kind :refer [Kind]]))
 

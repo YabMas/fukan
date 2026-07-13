@@ -115,10 +115,12 @@ the code grammar is a separate seam, `canvas/extraction/`; the type dialect is `
 The type dialect and the extraction seam are NOT part of the code vocabulary — each is a
 self-contained **plugin** in its own area (both realize a kernel plug-point; a plugin owns a
 SPECIALIZED vocabulary + its mechanism together, not scattered into general vocab):
-- `canvas/typing.clj` (ns `canvas.typing`) — the malli type DIALECT: `Schema`/`SchemaChoice`/
-  `SchemaField` (malli modelled as content-deduped `^:value` structures) + the runtime bridges
-  (`render`/`valid?`/`parse`). The HOOK side of the `typing` SPI; requiring it self-registers the
-  full dialect at load. (An internal `schema.clj`/`malli.clj` split is a deferred cleanup.)
+- `canvas/typing.clj` (ns `canvas.typing`) — the malli type DIALECT, split vocab-vs-mechanism:
+  `canvas.typing` holds the shape VOCABULARY (`Schema`/`SchemaChoice`/`SchemaField` — malli modelled
+  as content-deduped `^:value` structures — plus the authoring readers) and the dialect wiring;
+  `canvas/typing/malli.clj` (ns `canvas.typing.malli`) holds the runtime BRIDGES (`render`/`valid?`).
+  The HOOK side of the `typing` SPI; requiring `canvas.typing` loads the bridges and self-registers
+  the full dialect at load.
 - `canvas/extraction/` (ns `canvas.extraction.*`) — the Clojure EXTRACTION SEAM: `core.clj`
   (orchestration: clj-kondo `analyze` + `op-eid`, calling each element's builder) +
   `clojure/{effect,operation}.clj` (the PL-specific readers). Mints no structures; the HOOK for the
@@ -335,7 +337,8 @@ mixing them corrupts history.
   call-graph readers (`module-corresponds?`/`op-twin`/`unrealized-delegates`/`uncovered-calls`/
   `unfaithful-calls`) are in `code/module.clj`
 - `canvas/reflect/grammar.clj` (ns `canvas.reflect.grammar`) — grammar REFLECTION tool (registry → model db)
-- `canvas/typing.clj` (ns `canvas.typing`) — the malli type DIALECT plugin (realizes the `typing` SPI)
+- `canvas/typing.clj` (ns `canvas.typing`) — the malli type DIALECT plugin (realizes the `typing` SPI):
+  shape vocab + wiring here, runtime bridges in `canvas/typing/malli.clj`
 - `canvas/extraction/` (ns `canvas.extraction.*`) — the Clojure EXTRACTION SEAM plugin: `core.clj`
   orchestration + `clojure/{effect,operation}.clj` (realizes the extraction SPI)
 - `canvas/architecture/` — fukan-on-fukan's built-system self-specs (modules + subsystems +

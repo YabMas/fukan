@@ -8,7 +8,7 @@
             [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.structure :as s]
-            [canvas.typing :as malli]
+            [canvas.typing.malli :as malli]
             [fukan.canvas.core.typing :as typing]
             ;; correspondence is now distributed across the code elements
             [canvas.vocab.code.module :as module]
