@@ -25,27 +25,34 @@
   [seg]
   (-> seg (str/replace #"\.clj$" "") (str/replace #"_" "-")))
 
-(defn- file->ns-symbol
-  "Convert a canvas-root-relative file path into a namespace symbol, e.g.
-   \"infra/model.clj\" → 'canvas.infra.model."
-  [^String rel-path]
-  (symbol (str "canvas." (str/join "." (mapv file->ns-segment (str/split rel-path #"/"))))))
+(def ^:dynamic *spec-dirs*
+  "Classpath dir names scanned for instance-bearing specs. Each name is BOTH the
+   resource path scanned AND the leading namespace segment: `<dir>/a/b.clj` → ns
+   `<dir>.a.b`. fukan-on-itself keeps the default `[\"canvas\"]` (its self-model);
+   a consuming project binds this to its own spec dir(s)."
+  ["canvas"])
 
-(defn- canvas-root-dirs
-  "Every `canvas/` directory on the classpath as a File (via the context
-   ClassLoader's getResources), falling back to a relative `canvas/` lookup.
-   nil when no canvas/ directory is locatable."
-  []
+(defn- file->ns-symbol
+  "A spec dir NAME + a dir-relative file path → the namespace symbol,
+   e.g. \"canvas\" + \"architecture/kernel/structure.clj\" → 'canvas.architecture.kernel.structure."
+  [dir ^String rel-path]
+  (symbol (str dir "." (str/join "." (mapv file->ns-segment (str/split rel-path #"/"))))))
+
+(defn- spec-root-dirs
+  "For one spec dir NAME, every such directory on the classpath (via the context
+   ClassLoader's getResources), falling back to a relative lookup. Yields
+   [{:dir dir :root File} …]; empty when none is locatable."
+  [dir]
   (let [cl       (.getContextClassLoader (Thread/currentThread))
-        urls     (when cl (enumeration-seq (.getResources cl "canvas")))
+        urls     (when cl (enumeration-seq (.getResources cl dir)))
         from-cp  (->> urls
                       (keep (fn [^java.net.URL u] (try (io/as-file u) (catch Exception _ nil))))
                       (filter #(and (some? %) (.isDirectory ^java.io.File %)))
                       vec)
-        from-cwd (io/file "canvas")
+        from-cwd (io/file dir)
         roots    (cond-> from-cp
                    (and (empty? from-cp) (.isDirectory from-cwd)) (conj from-cwd))]
-    (when (seq roots) roots)))
+    (map (fn [r] {:dir dir :root r}) roots)))
 
 (defn- discover-canvas-files-in
   "Yield {:root :rel-path} for every non-test `*.clj` under one canvas root."
@@ -60,20 +67,20 @@
                 {:root root :rel-path (subs (.getCanonicalPath f) (inc (count root-path)))})))))
 
 (defn- discover-canvas-namespaces
-  "Sorted, distinct canvas namespace symbols across every canvas/ root. During
-   the lean-kernel rebuild there may be no canvas/ root (specs pruned, new ones
-   not yet authored) — then this returns [] with a one-line stderr note, so an
-   empty model is never silent."
+  "Sorted, distinct spec namespace symbols across every `*spec-dirs*` root. When no
+   spec root is locatable (a fresh consumer with no specs yet, or fukan mid-rebuild)
+   returns [] with a one-line stderr note, so an empty model is never silent."
   []
-  (if-let [roots (canvas-root-dirs)]
-    (->> roots
-         (mapcat discover-canvas-files-in)
-         (map (fn [{:keys [rel-path]}] (file->ns-symbol rel-path)))
-         distinct sort vec)
-    (do (binding [*out* *err*]
-          (println "canvas-source: no canvas/ root found — building an empty model"
-                   "(lean-kernel rebuild phase)."))
-        [])))
+  (let [roots (mapcat spec-root-dirs *spec-dirs*)]
+    (if (seq roots)
+      (->> roots
+           (mapcat (fn [{:keys [dir root]}]
+                     (map (fn [{:keys [rel-path]}] (file->ns-symbol dir rel-path))
+                          (discover-canvas-files-in root))))
+           distinct sort vec)
+      (do (binding [*out* *err*]
+            (println "canvas-source: no spec root found — building an empty model."))
+          []))))
 
 (defn- require-canvas-namespace
   "Require a canvas namespace (throwing on a load failure). Loading it registers its
