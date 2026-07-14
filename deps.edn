@@ -26,6 +26,11 @@
   ;; removing a structure; the `generated-config-file-is-current` test guards drift.
   :kondo {:main-opts ["-m" "tasks.kondo"]
           :extra-paths ["."]}
+  ;; Full-classpath lint (ground truth): `clojure -M:lint --lint src common canvas test`.
+  ;; Needs the `.` root so the defstructure `hooks.fukan.structure` hook resolves; a bare
+  ;; `-M` (base :paths only) would miss it and flag false positives on defstructure bodies.
+  :lint {:extra-paths ["."]
+         :main-opts ["-m" "clj-kondo.main"]}
   :nrepl {:extra-paths ["." "dev"]
           :extra-deps {nrepl/nrepl       {:mvn/version "1.3.0"}
                        cider/cider-nrepl {:mvn/version "0.50.3"}}
