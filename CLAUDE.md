@@ -42,8 +42,9 @@ structure substrate **is** the model (no separate model-map).
   check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
   the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom
   loaders, and the shared CozoScript rule substrate
-- `canvas/projection/canvas_source.clj` — ingestion: discover `canvas/**/*.clj`
-  defstructure specs and assemble their instance vars into one structure db;
+- `canvas/projection/canvas_source.clj` — ingestion: discover the instance specs under the
+  configured spec-dirs (`*spec-dirs*`, default `["canvas"]`) and assemble their instance vars into
+  one structure db (the `fukan.common` grammar itself loads by *require*, not discovery);
   `canvas/projection/{grammar,instance,architecture}.clj` — the two print-duals
   (grammar → defstructure forms; model nodes → authored instance forms) + the
   system map
@@ -59,10 +60,11 @@ structure substrate **is** the model (no separate model-map).
 
 fukan's own **vocabulary** — the code grammar (Kind/Effect/Operation/Module/Subsystem) + its
 model↔code correspondence — plus its Clojure extractor, its malli type dialect, and grammar
-reflection — is NOT in `src/`. It lives in auto-discovered `canvas/` areas: `canvas/vocab/` (the
-grammar), `canvas/typing/` + `canvas/extraction/` (the dialect/extraction plugins), and
-`canvas/reflect/` (reflection) — see "Vocabulary lives in canvas/vocab" below. `src/fukan/` is
-kernel mechanics + the build pipeline + the three plug-points (extraction, typing, render) only.
+reflection — is NOT in `src/`. It is the **`fukan.common.*` library tier** at `common/fukan/common/**`
+(its own shipped classpath root): `vocab/` (the grammar), `typing/` + `extraction/` (the
+dialect/extraction plugins), and `reflect/` (reflection) — see "The fukan.common grammar tier" below.
+It loads via the `fukan.common` index ns (a *require*), not by discovery. `src/fukan/` is kernel
+mechanics + the build pipeline + the three plug-points (extraction, typing, render) only.
 
 **Parked under `.paused/`** (off-classpath): only the **browser explorer / viewer**
 (`web/`, top-level `projection/`, `infra/server`). The other once-parked subsystems
@@ -76,28 +78,34 @@ vision, but it is *not on the near roadmap and should not be proposed as a next
 step* — the core is being exercised extensively first. Do not re-suggest reviving it.
 
 **Direction — exercise the core by modelling fukan ON itself, organized by element.** The
-work now is authoring fukan's own structure directly on `defstructure` in `canvas/vocab/`,
-pressure-testing the core in every way. There is deliberately **no reusable `lib/` stdlib**:
-the old `lib.*` layer was dissolved into `canvas/vocab/` (2026-06-23) because it had exactly
-one consumer — fukan itself — so the opt-in "reuse" ceremony was pure overhead. If a second
-project ever shares this vocab, extracting a real stdlib from a *nicely-layered* `canvas/vocab/`
-will be easy; until then, don't pre-build for reuse. The standing discipline holds: do *not*
-spend time abstractly designing reusable/methodology layers (DDD/hexagonal/C4) ahead of a
-concrete case — grow vocab opportunistically *from* modelling, never ahead of it.
+work now is authoring fukan's own structure directly on `defstructure` in `common/fukan/common/vocab/`,
+pressure-testing the core in every way. The grammar was extracted into the reusable **`fukan.common`
+tier** (2026-07-14) because a second project is about to consume it — fukan-modelling-fukan is now
+just the *first consumer* (its self-model lives in `canvas/architecture/`, off the shipped surface).
+The standing discipline still holds: do *not* spend time abstractly designing reusable/methodology
+layers (DDD/hexagonal/C4) ahead of a concrete case — grow the vocab opportunistically *from*
+modelling, never ahead of it. The tier extraction was pulled by a concrete second-project need, not
+speculation.
 
-## Vocabulary lives in canvas/vocab (the kernel ships none)
+## The fukan.common grammar tier (the kernel ships none)
 
 The core (`src/fukan/canvas/`) ships only the `defstructure` primitive and the
 ingestion/projection machinery. It ships **no domain vocabulary**. fukan's own
-vocabulary — the grammar it models *itself* with — lives in `canvas/vocab/` (namespaces
-`canvas.vocab.*`, on the `.` classpath root), **auto-discovered** like the rest of
-`canvas/**`. Organized **by element**: each file is the complete story of one element —
-its `defstructure` + the laws/correspondence about it. (The Clojure extraction that *populates*
-the code grammar is a separate seam, `canvas/extraction/`; the type dialect is `canvas/typing/malli.clj`.)
+vocabulary — the grammar it models *itself* with — is the **`fukan.common.*` library tier** at
+`common/fukan/common/**` (root `common/` + the `fukan/common/…` namespace tree), a **shipped**
+classpath root (base `:paths`) *outside* the `src/` code-root, so fukan's own extractor never reads
+the grammar as if it were modelled code. The tier loads via the `fukan.common` **index ns** (a
+`require` that pulls in every element) — NOT by discovery; discovery (`*spec-dirs*`, default
+`["canvas"]`) is reserved for a project's *instance* specs. A consuming project depends on fukan,
+`(:require [fukan.common])`, and authors its own model against `fukan.common.vocab.*`. Organized
+**by element**: each file is the complete story of one element — its `defstructure` + the
+laws/correspondence about it. (The Clojure extraction that *populates* the code grammar is a
+separate seam, `common/fukan/common/extraction/`; the type dialect is
+`common/fukan/common/typing/malli.clj`.)
 
-- `canvas/vocab/grouping.clj` — `Grouping` (the most abstract membership primitive) +
+- `common/fukan/common/vocab/grouping.clj` — `Grouping` (the most abstract membership primitive) +
   `Connected` (a flow-node facet). The structural primitives the rest builds on.
-- `canvas/vocab/code/{kind,effect,operation,module,subsystem}.clj` — the code grammar
+- `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem}.clj` — the code grammar
   (Kind / Effect / Operation / Module / Subsystem). Each element file carries its structure +
   *its* model↔code correspondence laws/readers. The cross-element correspondence —
   `module-corresponds?` (the canvas-module↔code-ns name bridge) and `op-twin` (an alias of the
@@ -106,7 +114,7 @@ the code grammar is a separate seam, `canvas/extraction/`; the type dialect is `
   generated `:corresponds/Operation.delegates-*` demands) live in `module.clj`; `undeclared-effects`
   (the effect-correspondence reader over the generated `performs-covered` demand) lives in
   `effect.clj`. The operation/effect/`fukan` laws reach them via datalog injection (no compile
-  cycle, since the build auto-loads every element). The correspondence demands ride Operation's
+  cycle, since the `fukan.common` index requires every element). The correspondence demands ride Operation's
   `(corresponds …)` declaration and slot options, their laws GENERATED. A law that is a
   declaration's SLOT SEMANTICS rides the declaring structure itself: `Subsystem` carries the
   `:may-depend` conformance/acyclicity teeth **plus** the rehomed module-graph acyclicity +
@@ -115,19 +123,19 @@ the code grammar is a separate seam, `canvas/extraction/`; the type dialect is `
 The type dialect and the extraction seam are NOT part of the code vocabulary — each is a
 self-contained **plugin** in its own area (both realize a kernel plug-point; a plugin owns a
 SPECIALIZED vocabulary + its mechanism together, not scattered into general vocab):
-- `canvas/typing/malli.clj` (ns `canvas.typing.malli`) — the malli type DIALECT, one honest file:
-  the whole dialect is malli top-to-bottom, so it lives under the malli name (not a generic `typing`
-  layer — the neutral SPI is the kernel's `fukan.canvas.core.typing`). Three sections: the shape
-  VOCABULARY (`Schema`/`SchemaChoice`/`SchemaField` — malli modelled as content-deduped `^:value`
-  structures — + the authoring readers), the runtime BRIDGES (`render`/`valid?`), and the dialect
-  wiring. The HOOK side of the `typing` SPI; requiring it self-registers the full dialect at load.
-  `canvas/typing/` is the dialect AREA (room for a sibling realization if one ever appears).
-- `canvas/extraction/` (ns `canvas.extraction.*`) — the Clojure EXTRACTION SEAM: `core.clj`
+- `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT,
+  one honest file: the whole dialect is malli top-to-bottom, so it lives under the malli name (not a
+  generic `typing` layer — the neutral SPI is the kernel's `fukan.canvas.core.typing`). Three sections:
+  the shape VOCABULARY (`Schema`/`SchemaChoice`/`SchemaField` — malli modelled as content-deduped
+  `^:value` structures — + the authoring readers), the runtime BRIDGES (`render`/`valid?`), and the
+  dialect wiring. The HOOK side of the `typing` SPI; requiring it self-registers the full dialect at load.
+  `common/fukan/common/typing/` is the dialect AREA (room for a sibling realization if one ever appears).
+- `common/fukan/common/extraction/` (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM: `core.clj`
   (orchestration: clj-kondo `analyze` + `op-eid`, calling each element's builder) +
   `clojure/{effect,operation}.clj` (the PL-specific readers). Mints no structures; the HOOK for the
   extraction plug-point; the composition root registers `extract-roots`.
 
-`canvas/reflect/grammar.clj` (ns `canvas.reflect.grammar`) — GRAMMAR REFLECTION, its own area (a
+`common/fukan/common/reflect/grammar.clj` (ns `fukan.common.reflect.grammar`) — GRAMMAR REFLECTION, its own area (a
 TOOL, not a plug-point): `with-grammar` reifies the registry → model db (every defstructure → a
 `Structure` node, slots as `:slot/<card>` edges, laws as `:val/form` payload nodes, one `Vocabulary`
 per ns). The runtime never consults the reflected nodes — they exist only so the grammar is viewable
@@ -152,7 +160,7 @@ an API surface + owned types) ⊂ `Subsystem` (a cluster of modules realizing a 
 a declared `:may-depend` DAG it enforces ITSELF — conformance + acyclicity are its slot-semantics
 laws — against the extracted code graph). There is **no convenience umbrella** — Clojure can't re-export the generated
 instance-constructor macros, so consumers `require` the specific elements they use; structure
-tags are verbose (`:canvas.vocab.code.operation/Operation`). Grow this vocab **only under
+tags are verbose (`:fukan.common.vocab.code.operation/Operation`). Grow this vocab **only under
 concrete design pressure** — never a methodology/middle layer designed abstractly ahead of real
 cases. Methodology-shaped vocab (DDD/Wlaschin/APoSD idioms) is welcome once a concrete case
 presses it out.
@@ -168,7 +176,7 @@ A `defstructure` is a composition of **slots** plus **laws**:
   vector (`[:enum "a" "b"]`, `[:int {:min 1}]`) is a REFINED scalar: the core stores
   the type form verbatim and the generated law checks values through the registered
   type dialect (`fukan.canvas.core.typing`, the kernel's third plug-point;
-  `canvas.typing.malli` registers `:valid?` at load). Never hand-write a membership/range law.
+  `fukan.common.typing.malli` registers `:valid?` at load). Never hand-write a membership/range law.
 - Slot options ride the props position: `[:? {:payload :q} :string]` (`:payload` =
   a companion code-form stored as a sibling `:val/` datom); for cardinality one,
   lead with the props map: `[{:payload :q} :string]`. `(reader f)` expands authoring
@@ -201,7 +209,7 @@ A `defstructure` is a composition of **slots** plus **laws**:
   `fidelity` / `covered-from` shapes by hand.
 
 The current catalog is the source — or just run `(grammar)` in the REPL: the
-print-dual renders every vocabulary live. The files are under `canvas/vocab/**`.
+print-dual renders every vocabulary live. The files are under `common/fukan/common/vocab/**`.
 
 A `defrelation` (in `core/structure.clj`, sibling of `defstructure`) declares a named
 custom-bodied datalog rule that `check` auto-injects into every law/query (like the
@@ -212,15 +220,17 @@ can: the rule pays the fixpoint on every check.
 
 ## Spec locations
 
-The self-model is laid out by **altitude**, not by pipeline role:
+Laid out by **tier** (shipped library vs fukan's own use) and, within a tier, by **altitude**:
 
-- `canvas/vocab/**` — fukan's own VOCABULARY (the grammar it models itself with): the
-  structural primitives (`grouping`) and the code grammar by element
-  (`code/{kind,effect,operation,module,subsystem}`). Auto-discovered.
-- `canvas/typing/malli.clj` (ns `canvas.typing.malli`) — the malli type DIALECT plugin (its own area,
-  not general vocab; realizes the `typing` SPI). `canvas/extraction/**` — the Clojure EXTRACTION SEAM
-  plugin (realizes the extraction SPI). `canvas/reflect/grammar.clj` — grammar REFLECTION (a tool:
-  registry → model db). All auto-discovered.
+- `common/fukan/common/vocab/**` (ns `fukan.common.vocab.*`) — the shared VOCABULARY (the grammar):
+  the structural primitives (`grouping`) and the code grammar by element
+  (`code/{kind,effect,operation,module,subsystem}`). Loaded via the `fukan.common` index (require), NOT discovered.
+- `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin
+  (its own area, not general vocab; realizes the `typing` SPI). `common/fukan/common/extraction/**`
+  (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM plugin (realizes the extraction SPI).
+  `common/fukan/common/reflect/grammar.clj` (ns `fukan.common.reflect.grammar`) — grammar REFLECTION (a tool:
+  registry → model db). All in the `fukan.common` index; the whole tier is a shipped classpath root
+  (`common/`), so a second project reuses it as a dependency.
 - `canvas/principles/` — **CUT (2026-07-13).** The adopted-principles layer was removed to focus
   scope on vocab-building + verifiable models; its two module-graph enforcement laws rehomed onto
   `Subsystem`, its correspondence readers onto `module.clj`/`effect.clj`. (git history preserves it.)
@@ -238,8 +248,9 @@ The self-model is laid out by **altitude**, not by pipeline role:
 - `.legacy-allium/` — pre-canvas Allium/Boundary specs (read-only archive; not on
   the classpath; not loaded).
 
-Canvas files under `canvas/**/*.clj` are **auto-discovered** — adding a spec is a
-single file drop (no registry edit).
+Instance-bearing spec files under the configured spec-dirs (`*spec-dirs*`, default `["canvas"]` →
+`canvas/**/*.clj`, fukan's self-model) are **auto-discovered** — adding a spec is a single file drop
+(no registry edit). The `fukan.common` grammar tier is not discovered; it loads by *require*.
 
 ## Cross-spec references
 
@@ -276,7 +287,9 @@ instance-constructor macro routes to. Those per-structure `:analyze-call` entrie
 regenerate; the `tasks.kondo-test/generated-config-file-is-current` test guards drift.
 Editor `not-a-function` / `unused-public-var` flashes on defstructure bodies are false
 positives without the hook cache; the canonical full-classpath
-`clojure -M -m clj-kondo.main --lint src test canvas` is authoritative.
+`clojure -M:lint --lint src common canvas test` is authoritative (the `:lint` alias carries the
+`.` root so `hooks.fukan.structure` resolves — a bare `-M` misses it now that `.` is off the base
+`:paths`).
 
 ## REPL workflow
 
@@ -304,12 +317,22 @@ nREPL runs on port 7889 (`clj -M:nrepl`).
 
 ## Build pipeline
 
-`build-model code-root` (`model/pipeline.clj`): ingest the `canvas/` design specs
-(`canvas-source/build`); when a `code-root` exists AND an extractor is registered,
-merge the extracted code structures onto the same graph and re-resolve cross-refs.
+`build-model code-root` (`model/pipeline.clj`): discover + ingest the project's instance specs
+(`*spec-dirs*`, default `["canvas"]` → fukan's self-model; the `fukan.common` grammar tier is loaded
+by *require* at the composition root, not discovered); when a `code-root` exists AND an extractor is
+registered, merge the extracted code structures onto the same graph and re-resolve cross-refs.
 `(structure/check db)` then runs all laws — including the correspondence laws — so
 model↔code drift surfaces as violations. The legacy Allium/Boundary parse phases
 and the old Phase 4–6 analyzer are retired.
+
+**Classpath tiers (`deps.edn`).** Base `:paths ["src" "common" "resources"]` is the *shipped* surface —
+`fukan.*` (core) + `fukan.common.*` (grammar). The `.` root (fukan's self-model `canvas/`, `tasks/`,
+`hooks/`) lives on the fukan-local aliases (`:dev`/`:test`/`:kondo`/`:lint`/`:nrepl`/`:run`), so a
+consuming project inherits only core + grammar. **Consuming fukan from another project:** depend on
+fukan, `(:require [fukan.common])` (or the specific `fukan.common.vocab.*` elements), bind
+`fukan.canvas.projection.canvas-source/*spec-dirs*` to your own spec dir, and call `build-model` with
+your own code-root (the default composition in `fukan.infra.model` registers the Clojure extractor +
+malli dialect; write your own composition to vary either).
 
 ## Jujutsu workflow conventions
 
@@ -333,14 +356,16 @@ mixing them corrupts history.
 - `src/fukan/canvas/core/structure.clj` — the `defstructure` primitive + `check`
 - `src/fukan/canvas/projection/canvas_source.clj` — canvas discovery, merge, cross-refs
 - `src/fukan/model/materialize.clj` — model→implementation-spec projection
-- `canvas/vocab/` (ns `canvas.vocab.*`) — fukan's vocabulary: the code grammar by element
+- `common/fukan/common.clj` (ns `fukan.common`) — the grammar INDEX: one require that registers the
+  whole `fukan.common.*` tier (vocab + typing + extraction + reflect)
+- `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by element
   (each file = structure + correspondence) + grouping; the cross-element correspondence +
   call-graph readers (`module-corresponds?`/`op-twin`/`unrealized-delegates`/`uncovered-calls`/
   `unfaithful-calls`) are in `code/module.clj`
-- `canvas/reflect/grammar.clj` (ns `canvas.reflect.grammar`) — grammar REFLECTION tool (registry → model db)
-- `canvas/typing/malli.clj` (ns `canvas.typing.malli`) — the malli type DIALECT plugin, one file
+- `common/fukan/common/reflect/grammar.clj` (ns `fukan.common.reflect.grammar`) — grammar REFLECTION tool (registry → model db)
+- `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI
-- `canvas/extraction/` (ns `canvas.extraction.*`) — the Clojure EXTRACTION SEAM plugin: `core.clj`
+- `common/fukan/common/extraction/` (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM plugin: `core.clj`
   orchestration + `clojure/{effect,operation}.clj` (realizes the extraction SPI)
 - `canvas/architecture/` — fukan-on-fukan's built-system self-specs (modules + subsystems +
   `:may-depend` DAG); the use-side instruments area (`canvas/instruments/`) is currently PARKED
