@@ -4,7 +4,7 @@
    model from a source path. Realizes no subject faculty (orchestration). Lives in the
    `orchestration` subsystem with `infra-model`, so the `core → infra-model` coupling is
    intra-subsystem — the declared `:delegates` that closes that uncovered call."
-  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+  (:require [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.orchestration.infra :as infra]))
 
 (Module core

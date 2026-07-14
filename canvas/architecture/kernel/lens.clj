@@ -5,7 +5,7 @@
    lens-engine → kernel → query-engine. This module now ALSO owns the act grammar — the
    `Lens`/`Projection`/`Check` structures — fukan-native apparatus, not domain vocab,
    alongside the machinery that runs it (incl. `run-checks`, the use-side dual of `check`)."
-  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+  (:require [fukan.common.vocab.code.kind :refer [Kind]] [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.cozo.query :as query]
             [canvas.architecture.kernel.substrate :as substrate]))

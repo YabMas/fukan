@@ -45,7 +45,7 @@
 
 (defn- struct-node [db tag-str]
   (ffirst (cq/q '[:find ?s :in $ ?t
-                  :where [?s :structure/of :canvas.reflect.grammar/Structure] [?s :val/tag ?t]]
+                  :where [?s :structure/of :fukan.common.reflect.grammar/Structure] [?s :val/tag ?t]]
                 db tag-str)))
 
 (deftest structure-form-round-trips-the-authoring
@@ -113,14 +113,14 @@
   (testing "the full primer includes the meta-grammar describing itself"
     (let [db (reflected)
           p  (g/grammar-primer db)]
-      (is (str/includes? p "━━ canvas.reflect.grammar — "))
+      (is (str/includes? p "━━ fukan.common.reflect.grammar — "))
       (is (str/includes? p "(defstructure Structure")))))
 
 (deftest primer-counts-operations-generated-laws
   (testing "the primer's corresponds pointer agrees with the generator (4 node + 2 delegates + 1 performs
             = 7; the demands + relation-demands now come from the EXTERNAL (correspond Operation …))"
     (let [db (pipeline/build-model nil)]
-      (is (str/includes? (g/vocabulary-primer db "canvas.vocab.code.operation")
+      (is (str/includes? (g/vocabulary-primer db "fukan.common.vocab.code.operation")
                          "; ⇒ 7 generated laws")))))
 
 (deftest correspondence-card-shows-the-seam-and-its-generated-laws
@@ -137,8 +137,8 @@
   (testing "the reflected Operation renders its (external) corresponds form; correspondence is NO LONGER
             on the identity slots — `:delegates` carries only its identity option, `:performs` none"
     (let [db   (pipeline/build-model nil)
-          eid  (ffirst (cq/q '[:find ?s :where [?s :structure/of :canvas.reflect.grammar/Structure]
-                               [?s :val/tag ":canvas.vocab.code.operation/Operation"]] db))
+          eid  (ffirst (cq/q '[:find ?s :where [?s :structure/of :fukan.common.reflect.grammar/Structure]
+                               [?s :val/tag ":fukan.common.vocab.code.operation/Operation"]] db))
           form (g/structure-form db eid)
           body (set (filter seq? form))
           corr (first (filter #(= 'corresponds (first %)) body))

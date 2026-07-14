@@ -9,7 +9,7 @@
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; loaded for its side-effect: registers op-twin + the correspondence demand laws
-            [canvas.vocab.code.module]))
+            [fukan.common.vocab.code.module]))
 
 (defn- laws [db] (set (map :law (law/check db))))
 
@@ -214,10 +214,10 @@
   (testing "an authored op with no twin is an offender iff any code is extracted (the guard)"
     (let [mk (fn [with-code?]
                (build/tx-maps->cozo
-                (cond-> [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/id "m" :entity/name "m"}
-                         {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "lonely"}
+                (cond-> [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/id "m" :entity/name "m"}
+                         {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "lonely"}
                          {:rel/id "m|exposes|lonely" :rel/from -1 :rel/kind :exposes :rel/to -2}]
-                  with-code? (conj {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation
+                  with-code? (conj {:db/id -3 :structure/of :fukan.common.vocab.code.operation/Operation
                                     :entity/name "other" :val/extracted true}))))
           guarded (mk true)]
       (is (contains? (set (map #(:entity/name (cq/entity guarded %))
@@ -236,17 +236,17 @@
 ;; The COMMON BASE (raw tx-maps): design modules s,t with s-op→(delegates)→t-op, code modules
 ;; fukan.s/fukan.t with twins s-op/t-op. The five dbs derive from it by stated deltas.
 (def ^:private container-base
-  [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "s"}
-   {:db/id -2 :structure/of :canvas.vocab.code.module/Module :entity/name "t"}
-   {:db/id -3 :structure/of :canvas.vocab.code.operation/Operation :entity/name "s-op"}
-   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "t-op"}
+  [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "s"}
+   {:db/id -2 :structure/of :fukan.common.vocab.code.module/Module :entity/name "t"}
+   {:db/id -3 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "s-op"}
+   {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "t-op"}
    {:rel/id "s|exposes|s-op" :rel/from -1 :rel/kind :exposes :rel/to -3}
    {:rel/id "t|exposes|t-op" :rel/from -2 :rel/kind :exposes :rel/to -4}
    {:rel/id "s-op|delegates|t-op" :rel/from -3 :rel/kind :delegates :rel/to -4}
-   {:db/id -5 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.s" :val/extracted true}
-   {:db/id -6 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.t" :val/extracted true}
-   {:db/id -7 :structure/of :canvas.vocab.code.operation/Operation :entity/name "s-op" :val/extracted true}
-   {:db/id -8 :structure/of :canvas.vocab.code.operation/Operation :entity/name "t-op" :val/extracted true}
+   {:db/id -5 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.s" :val/extracted true}
+   {:db/id -6 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.t" :val/extracted true}
+   {:db/id -7 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "s-op" :val/extracted true}
+   {:db/id -8 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "t-op" :val/extracted true}
    {:rel/id "ks|child|s" :rel/from -5 :rel/kind :child :rel/to -7}
    {:rel/id "kt|child|t" :rel/from -6 :rel/kind :child :rel/to -8}])
 
@@ -271,7 +271,7 @@
   (-> (filterv #(and (not= "s-op|delegates|t-op" (:rel/id %))
                      (not= -7 (:db/id %)))
                container-base)
-      (conj {:db/id -7 :structure/of :canvas.vocab.code.operation/Operation :entity/name "ext-s-op" :val/extracted true})
+      (conj {:db/id -7 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "ext-s-op" :val/extracted true})
       (conj {:rel/id "call" :rel/from -7 :rel/kind :calls :rel/to -8})))
 
 ;; undeclared-call-db: undeclared-call-base as a db (faithful offender: ext-s-op)
@@ -313,13 +313,13 @@
 ;; calls extracted g (-5), g performs io (-10). Both strata share the SAME Effect node
 ;; (content-deduped ^:value) — identity semantics.
 (def ^:private effect-base
-  [{:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}
-   {:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
-   {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
+  [{:db/id -10 :structure/of :fukan.common.vocab.code.effect/Effect :val/name "io"}
+   {:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
+   {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}
    {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-   {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-   {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
-   {:db/id -5 :structure/of :canvas.vocab.code.operation/Operation :entity/name "g" :val/extracted true}
+   {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+   {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+   {:db/id -5 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "g" :val/extracted true}
    {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}
    {:rel/id "km|child|g" :rel/from -3 :rel/kind :child :rel/to -5}
    {:rel/id "f|calls|g"  :rel/from -4 :rel/kind :calls :rel/to -5}
@@ -334,12 +334,12 @@
 ;; performs io DIRECTLY (no call hops), no design :performs → offender d (the reflexive base)
 (def ^:private direct-effect-db
   (build/tx-maps->cozo
-   [{:db/id -10 :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}
-    {:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m2"}
-    {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "d"}
+   [{:db/id -10 :structure/of :fukan.common.vocab.code.effect/Effect :val/name "io"}
+    {:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m2"}
+    {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "d"}
     {:rel/id "m2|exposes|d" :rel/from -1 :rel/kind :exposes :rel/to -2}
-    {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m2" :val/extracted true}
-    {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "d" :val/extracted true}
+    {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m2" :val/extracted true}
+    {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "d" :val/extracted true}
     {:rel/id "km2|child|d" :rel/from -3 :rel/kind :child :rel/to -4}
     {:rel/id "d|performs|io" :rel/from -4 :rel/kind :performs :rel/to -10}]))
 
@@ -370,16 +370,16 @@
     (let [mk (fn [twin-datoms]
                (build/tx-maps->cozo
                 (concat
-                 [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
-                  {:db/id -2 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f"}
+                 [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
+                  {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}
                   {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                  {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-                  {:db/id -4 :structure/of :canvas.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+                  {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                  {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
                   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
                  twin-datoms)))
           ;; :out kind "nil" matches design f's default render ([:=> [:cat] :nil]) so adherence stays green too
           no-sig   (mk [])
-          with-sig (mk [{:db/id -5 :structure/of :canvas.typing.malli/Schema :val/kind "nil"}
+          with-sig (mk [{:db/id -5 :structure/of :fukan.common.typing.malli/Schema :val/kind "nil"}
                         {:rel/id "f|out|s" :rel/from -4 :rel/kind :out :rel/to -5}])]
       (is (= #{"f"} (names no-sig (law/violations-of no-sig :corresponds/Operation.type-coverage)))
           "twin exists but declares no signature → offender")
@@ -402,10 +402,10 @@
             `fukan.m` (module-corresponds?), so the two twin — and the :ltwin-eq comparator decides."
     (let [mk (fn [design-n fact-n]
                (build/tx-maps->cozo
-                [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                  {:db/id -2 :structure/of ::LTwin :entity/name "x" :val/n design-n}
                  {:rel/id "m|child|x" :rel/from -1 :rel/kind :child :rel/to -2}
-                 {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                 {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
                  {:db/id -4 :structure/of ::LTwin :entity/name "x" :val/n fact-n :val/extracted true}
                  {:rel/id "fm|child|x" :rel/from -3 :rel/kind :child :rel/to -4}]))
           drift (mk 1 2)
@@ -429,10 +429,10 @@
             :corresponds/TCExt.agrees offender, exactly as the inline LTwin above produces."
     (let [mk (fn [dn xn]
                (build/tx-maps->cozo
-                [{:db/id -1 :structure/of :canvas.vocab.code.module/Module :entity/name "m"}
+                [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                  {:db/id -2 :structure/of ::TCExt :entity/name "x" :val/n dn}
                  {:rel/id "m|child|x" :rel/from -1 :rel/kind :child :rel/to -2}
-                 {:db/id -3 :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                 {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
                  {:db/id -4 :structure/of ::TCExt :entity/name "x" :val/n xn :val/extracted true}
                  {:rel/id "fm|child|x" :rel/from -3 :rel/kind :child :rel/to -4}]))]
       (is (= #{"x"} (names (mk 1 2) (law/violations-of (mk 1 2) :corresponds/TCExt.agrees)))

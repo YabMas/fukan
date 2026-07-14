@@ -8,8 +8,8 @@
    readings delegate here to build their findings — keeping that coupling intra-subsystem. It OWNS the
    `Observation`/`Finding` data-shapes (materialize adopts `Finding` by name) and types its public
    surface, which lets `materialize` declare the `:delegates [finding/finding …]` the generated delegates-realized demand requires."
-  (:require [canvas.vocab.code.kind :refer [Kind]]
-            [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]))
+  (:require [fukan.common.vocab.code.kind :refer [Kind]]
+            [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]))
 
 (Module ^{:name "finding"} finding-faculty
   "The Finding data type — a reading's output: a list of Observations, plus the trivial text projection."

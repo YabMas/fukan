@@ -7,7 +7,7 @@
    substrate (cozo-build/model->cozo) — design + implementation unified (fukan's thesis). It names
    no specific extractor — it runs whatever the project registered. Collaborators are cross-module
    var-refs (the seams)."
-  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+  (:require [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.cozo.build :as cozo-build]
             [canvas.architecture.cozo.db :as cozo-db]
             [canvas.architecture.ingestion.source :as canvas-source]

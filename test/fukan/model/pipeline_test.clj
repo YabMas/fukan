@@ -10,9 +10,9 @@
             ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [canvas.typing.malli :as dialect]
+            [fukan.common.typing.malli :as dialect]
             [fukan.model.pipeline :as pipeline]
-            [canvas.vocab.code.kind :refer [Kind]]
+            [fukan.common.vocab.code.kind :refer [Kind]]
             [fukan.canvas.core.lens :refer [Projection]]))
 
 ;; tags are ns-qualified; tests pass a short handle and match by its name (the Cozo mirror
@@ -86,7 +86,7 @@
              (cq/q '[:find [?n ...]
                      :where [?m :entity/name "model-pipeline"]
                             [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
-                            [?c :structure/of :canvas.vocab.code.operation/Operation] [?c :entity/name ?n]]
+                            [?c :structure/of :fukan.common.vocab.code.operation/Operation] [?c :entity/name ?n]]
                    db))
           "model.pipeline exposes exactly one operation — no stale duplicate ingest")
       ;; the seams: build-model's cross-module :delegates resolve to canvas-source's namespace-load
@@ -118,16 +118,16 @@
   (testing "the StructureDb Kind is a single node owned by core.substrate (its node home);
             subsystems reference it (no per-subsystem Model/Db redeclaration)"
     (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (cq/q '[:find ?k :where [?k :structure/of :canvas.vocab.code.kind/Kind] [?k :entity/name "StructureDb"]] db)))
+      (is (= 1 (count (cq/q '[:find ?k :where [?k :structure/of :fukan.common.vocab.code.kind/Kind] [?k :entity/name "StructureDb"]] db)))
           "exactly one StructureDb Kind node")
       (is (= ["core-substrate"]
              (cq/q '[:find [?mn ...]
-                    :where [?k :entity/name "StructureDb"] [?k :structure/of :canvas.vocab.code.kind/Kind]
+                    :where [?k :entity/name "StructureDb"] [?k :structure/of :fukan.common.vocab.code.kind/Kind]
                            [?r :rel/kind :owns] [?r :rel/from ?m] [?r :rel/to ?k] [?m :entity/name ?mn]]
                   db))
           "core.substrate is its sole owner (the db it constructs)")
       (is (= 1 (count (cq/q '[:find ?s
-                             :where [?s :structure/of :canvas.typing.malli/Schema] [?s :val/kind "ref"]
+                             :where [?s :structure/of :fukan.common.typing.malli/Schema] [?s :val/kind "ref"]
                                     [?s :val/ref "StructureDb"]]
                            db)))
           "the ref-schema naming it is one value-identified node, reused across every subsystem"))))
@@ -135,12 +135,12 @@
 (deftest canvas-source-effects-are-captured-and-value-identified
   (testing "Operation effects are recorded; :io (performed by several stages) is one shared node"
     (let [db (pipeline/build-model nil)]
-      (is (= 1 (count (cq/q '[:find ?e :where [?e :structure/of :canvas.vocab.code.effect/Effect] [?e :val/name "io"]] db)))
+      (is (= 1 (count (cq/q '[:find ?e :where [?e :structure/of :fukan.common.vocab.code.effect/Effect] [?e :val/name "io"]] db)))
           "the :io effect is value-identified across every stage that performs it")
       (is (seq (cq/q '[:find ?r
-                      :where [?b :structure/of :canvas.vocab.code.operation/Operation] [?b :entity/name "require-canvas-namespaces!"]
+                      :where [?b :structure/of :fukan.common.vocab.code.operation/Operation] [?b :entity/name "require-canvas-namespaces!"]
                              [?r :rel/from ?b] [?r :rel/kind :performs] [?r :rel/to ?e]
-                             [?e :structure/of :canvas.vocab.code.effect/Effect] [?e :val/name "io"]]
+                             [?e :structure/of :fukan.common.vocab.code.effect/Effect] [?e :val/name "io"]]
                     db))
           "require-canvas-namespaces! performs :io"))))
 
@@ -152,19 +152,19 @@
       (is (contains? (names-of db :Module) "core-structure"))
       (is (= #{"tag" "value" "law" "realizes"}
              (set (cq/q '[:find [?l ...]
-                         :where [?st :structure/of :canvas.reflect.grammar/Structure]
-                                [?st :val/tag ":canvas.reflect.grammar/Structure"]
+                         :where [?st :structure/of :fukan.common.reflect.grammar/Structure]
+                                [?st :val/tag ":fukan.common.reflect.grammar/Structure"]
                                 [?r :rel/from ?st] [?r :rel/label ?l]] db)))
           "the Structure meta-structure's own reified slots — the strange loop")
-      (is (= ":canvas.reflect.grammar/Law"
+      (is (= ":fukan.common.reflect.grammar/Law"
              (ffirst (cq/q '[:find ?lt
-                            :where [?st :val/tag ":canvas.reflect.grammar/Structure"]
+                            :where [?st :val/tag ":fukan.common.reflect.grammar/Structure"]
                                    [?r :rel/from ?st] [?r :rel/label "law"] [?r :rel/to ?t]
                                    [?t :val/tag ?lt]] db)))
           "Structure.law targets the reified Law structure (composition)")
       (is (= #{"from" "to" "kind" "label" "order"}
              (set (cq/q '[:find [?k ...]
-                         :where [?kind :structure/of :canvas.vocab.code.kind/Kind] [?kind :entity/name "Relation"]
+                         :where [?kind :structure/of :fukan.common.vocab.code.kind/Kind] [?kind :entity/name "Relation"]
                                 [?sr :rel/from ?kind] [?sr :rel/kind :shape] [?sr :rel/to ?schema]
                                 [?fr :rel/from ?schema] [?fr :rel/kind :field] [?fr :rel/to ?f]
                                 [?f :val/key ?k]] db)))
@@ -187,12 +187,12 @@
 (deftest extraction-provenance-is-kernel-stamped
   (testing "the BUILD stamps fact-stratum at the merge — extracted modules/ops carry it, values never do"
     (let [db (pipeline/build-model "src")]
-      (is (seq (cq/q '[:find ?m :where [?m :structure/of :canvas.vocab.code.module/Module]
+      (is (seq (cq/q '[:find ?m :where [?m :structure/of :fukan.common.vocab.code.module/Module]
                        [?m :val/extracted true]] db))
           "extracted modules carry the provenance attribute (kernel-stamped)")
-      (is (seq (cq/q '[:find ?o :where [?o :structure/of :canvas.vocab.code.operation/Operation]
+      (is (seq (cq/q '[:find ?o :where [?o :structure/of :fukan.common.vocab.code.operation/Operation]
                        [?o :val/extracted true]] db))
           "extracted operations carry it too")
-      (is (empty? (cq/q '[:find ?e :where [?e :structure/of :canvas.vocab.code.effect/Effect]
+      (is (empty? (cq/q '[:find ?e :where [?e :structure/of :fukan.common.vocab.code.effect/Effect]
                           [?e :val/extracted true]] db))
           "^:value Effect nodes are stratum-free — never stamped"))))

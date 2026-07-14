@@ -5,8 +5,8 @@
    `violation-names`) lives HERE, in the engine, because it is EVALUATION — the kernel owns DEFINITION.
    The dependency runs one way (engine → kernel), so there is no `structure ↔ law` cycle and no registry
    (the old hollow-kernel-`check` + `register-check-engine!` indirection is retired)."
-  (:require [canvas.vocab.code.operation :refer [Operation]]
-            [canvas.vocab.code.module :refer [Module]]
+  (:require [fukan.common.vocab.code.operation :refer [Operation]]
+            [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.cozo.db :as db]
             [canvas.architecture.cozo.query :as cquery]
             [canvas.architecture.kernel.structure :as kstructure]

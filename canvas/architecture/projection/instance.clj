@@ -6,7 +6,7 @@
    as authored forms (the textual model explorer), and `check` output with each
    offender quoted as its form. With this, the model — not just the grammar —
    talks back in the language it was written in."
-  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+  (:require [fukan.common.vocab.code.kind :refer [Kind]] [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.structure :as kernel]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.lens :as lens-engine]

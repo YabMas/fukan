@@ -1,13 +1,13 @@
 (ns canvas.architecture.kernel.structure
   "Self-spec: fukan's defstructure GRAMMAR (`fukan.canvas.core.structure`) — a boundary sketch. The
    defstructure layer (Structure = slots + laws) is NOT hand-modelled: grammar reflection
-   (`canvas.reflect.grammar/with-grammar`) derives it from the live registry, where it can never drift. What
+   (`fukan.common.reflect.grammar/with-grammar`) derives it from the live registry, where it can never drift. What
    remains hand-modelled here is the registry surface, value-construction (`value-literal->iv`), and
    the one capability `check` (laws → violations): the canonical integrity inspect, modelled because
    code is a projection of the model 1-on-1. The NODE substrate it sits on — `Node`/`Relation`/
    `InstanceValue`/`StructureDb` + node identity — lives one layer down in `core-substrate`."
-  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
-            [canvas.vocab.code.plug-point :refer [PlugPoint]]
+  (:require [fukan.common.vocab.code.kind :refer [Kind]] [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
+            [fukan.common.vocab.code.plug-point :refer [PlugPoint]]
             [canvas.architecture.kernel.substrate :as substrate]))
 
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────

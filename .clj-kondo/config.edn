@@ -20,10 +20,10 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  ;; canvas.reflect.grammar's generated constructors are never CALLED — the reflector emits
+  ;; fukan.common.reflect.grammar's generated constructors are never CALLED — the reflector emits
   ;; raw node/rel maps by mechanism (like the extractor); the structures exist to
   ;; register the meta-grammar.
-  canvas.reflect.grammar
+  fukan.common.reflect.grammar
   {:linters {:unused-public-var {:level :off}}}
   lib.lens
   {:linters {:unused-public-var {:level :off}
@@ -41,22 +41,22 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.code.kind
+  fukan.common.vocab.code.kind
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.code.plug-point
+  fukan.common.vocab.code.plug-point
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.code.effect
+  fukan.common.vocab.code.effect
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.code.operation
+  fukan.common.vocab.code.operation
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.code.module
+  fukan.common.vocab.code.module
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.vocab.code.subsystem
+  fukan.common.vocab.code.subsystem
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   fukan.canvas.core.assemble-test
@@ -110,12 +110,12 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.typing.malli
+  fukan.common.typing.malli
   {:linters {:unused-public-var {:level :off}}}
-  canvas.typing.vocab-test
+  fukan.common.typing.vocab-test
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  canvas.typing.render-test
+  fukan.common.typing.render-test
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
   fukan.canvas.projection.instance-test

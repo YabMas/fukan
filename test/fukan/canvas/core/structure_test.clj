@@ -14,7 +14,7 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
-            [canvas.typing.malli]))
+            [fukan.common.typing.malli]))
 
 ;; The core is dialect-BLIND: slot targets (both plain scalar keywords and refined
 ;; vector forms) are checked through whatever :valid? the project registered. This
@@ -674,11 +674,11 @@
 
 (deftest value-literal-expands-to-deduped-instancevalue
   (testing "the kernel value-literal primitive builds a ^:value InstanceValue from a reader literal"
-    (let [iv (s/value-literal->iv :canvas.typing.malli/Schema [:map [:a :string] [:b :int]])]
+    (let [iv (s/value-literal->iv :fukan.common.typing.malli/Schema [:map [:a :string] [:b :int]])]
       (is (sub/instance-value? iv) "returns an InstanceValue")
-      (is (= :canvas.typing.malli/Schema (:tag iv)))
+      (is (= :fukan.common.typing.malli/Schema (:tag iv)))
       (is (= (sub/value-content-key iv)
-             (sub/value-content-key (s/value-literal->iv :canvas.typing.malli/Schema [:map [:a :string] [:b :int]])))
+             (sub/value-content-key (s/value-literal->iv :fukan.common.typing.malli/Schema [:map [:a :string] [:b :int]])))
           "structurally-equal literals get equal content keys (dedup)"))))
 
 ;; ── syntactic type-form classification (Phase 3 / Task 3.1) ─────────────────
@@ -784,9 +784,9 @@
 (deftest correspondence-reshapes-the-seam
   (testing "(s/correspondence) collects kinds, relation demands, and the key index from the registry"
     (let [seam (s/correspondence)
-          op   :canvas.vocab.code.operation/Operation]
-      (is (= 'canvas.vocab.code.module/module-corresponds?
-             (get-in seam [:kinds :canvas.vocab.code.module/Module :bridge]))
+          op   :fukan.common.vocab.code.operation/Operation]
+      (is (= 'fukan.common.vocab.code.module/module-corresponds?
+             (get-in seam [:kinds :fukan.common.vocab.code.module/Module :bridge]))
           "Module is the bridged root")
       (is (= 4 (count (get-in seam [:kinds op :demands]))) "Operation's four node demands")
       (is (= #{:corresponds/Operation.realized :corresponds/Operation.type-coverage

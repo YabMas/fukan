@@ -33,7 +33,7 @@
    ;; it's matched by the regex string (mirrors clj-kondo's `:ns-groups`); the
    ;; rest, whose exemptions vary, stay enumerated.
    :exclude #{"canvas\\.architecture\\..*"
-              canvas.reflect.grammar
+              fukan.common.reflect.grammar
 
               fukan.canvas.projection.grammar-test
               lib.lens
@@ -53,11 +53,11 @@
               fukan.canvas.projection.instance-test
               fukan.model.materialize-test
               fukan.model.pipeline-test
-              canvas.typing.malli
-              canvas.vocab.code.kind
-              canvas.vocab.code.effect
-              canvas.vocab.code.operation
-              canvas.vocab.code.module
-              canvas.vocab.code.subsystem
-              canvas.typing.vocab-test
-              canvas.typing.render-test}}}}
+              fukan.common.typing.malli
+              fukan.common.vocab.code.kind
+              fukan.common.vocab.code.effect
+              fukan.common.vocab.code.operation
+              fukan.common.vocab.code.module
+              fukan.common.vocab.code.subsystem
+              fukan.common.typing.vocab-test
+              fukan.common.typing.render-test}}}}

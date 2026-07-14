@@ -8,20 +8,20 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; module/operation vocab: the Module/Operation kind rules + the
             ;; :contains-derived `contains` rule the fixtures query at
-            [canvas.vocab.code.module]
-            [canvas.vocab.code.operation]))
+            [fukan.common.vocab.code.module]
+            [fukan.common.vocab.code.operation]))
 
 ;; ── fixture: two synthetic modules with :exposes/:owns/:child members ────────
 ;; m1 exposes o1,o2 + owns k1 + child c1 (iface 2, contains 4); m2 exposes o3 (iface 1, contains 1)
 (defn- fixture []
   (build/maps->cozo
-   [{:entity/id "m1" :structure/of :canvas.vocab.code.module/Module :entity/name "mod.one"}
-    {:entity/id "m2" :structure/of :canvas.vocab.code.module/Module :entity/name "mod.two"}
-    {:entity/id "o1" :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-1"}
-    {:entity/id "o2" :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-2"}
-    {:entity/id "o3" :structure/of :canvas.vocab.code.operation/Operation :entity/name "op-3"}
-    {:entity/id "k1" :structure/of :canvas.vocab.code.kind/Kind :entity/name "kind-1"}
-    {:entity/id "c1" :structure/of :canvas.vocab.code.operation/Operation :entity/name "helper-1"}]
+   [{:entity/id "m1" :structure/of :fukan.common.vocab.code.module/Module :entity/name "mod.one"}
+    {:entity/id "m2" :structure/of :fukan.common.vocab.code.module/Module :entity/name "mod.two"}
+    {:entity/id "o1" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-1"}
+    {:entity/id "o2" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-2"}
+    {:entity/id "o3" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-3"}
+    {:entity/id "k1" :structure/of :fukan.common.vocab.code.kind/Kind :entity/name "kind-1"}
+    {:entity/id "c1" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "helper-1"}]
    [{:rel/id "r1" :rel/from [:entity/id "m1"] :rel/kind :exposes :rel/to [:entity/id "o1"]}
     {:rel/id "r2" :rel/from [:entity/id "m1"] :rel/kind :exposes :rel/to [:entity/id "o2"]}
     {:rel/id "r3" :rel/from [:entity/id "m1"] :rel/kind :owns    :rel/to [:entity/id "k1"]}

@@ -6,7 +6,7 @@
    the model into an implementation specification. `materialize-projection` is the model-driven
    entry (`materialize-view` is a lens-eid convenience). `core.lens` lives in
    `canvas.architecture.kernel.lens`."
-  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
+  (:require [fukan.common.vocab.code.kind :refer [Kind]] [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.structure :as kstructure]
             [canvas.architecture.cozo.query :as query]

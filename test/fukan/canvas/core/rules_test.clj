@@ -94,11 +94,11 @@
 (deftest twin-pairs-design-and-fact-across-the-containment-ladder
   (testing "root kinds twin by bridge; nested kinds twin by name within twinned containers"
     (let [db (build/maps->cozo
-              [{:entity/id "cm" :structure/of :canvas.vocab.code.module/Module :entity/name "infra-model"}
-               {:entity/id "km" :structure/of :canvas.vocab.code.module/Module :entity/name "fukan.infra.model" :val/extracted true}
-               {:entity/id "co" :structure/of :canvas.vocab.code.operation/Operation :entity/name "load-model"}
-               {:entity/id "ko" :structure/of :canvas.vocab.code.operation/Operation :entity/name "load-model" :val/extracted true}
-               {:entity/id "stray" :structure/of :canvas.vocab.code.operation/Operation :entity/name "load-model" :val/extracted true}]
+              [{:entity/id "cm" :structure/of :fukan.common.vocab.code.module/Module :entity/name "infra-model"}
+               {:entity/id "km" :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.infra.model" :val/extracted true}
+               {:entity/id "co" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "load-model"}
+               {:entity/id "ko" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "load-model" :val/extracted true}
+               {:entity/id "stray" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "load-model" :val/extracted true}]
               [{:rel/id "r1" :rel/from [:entity/id "cm"] :rel/kind :exposes :rel/to [:entity/id "co"]}
                {:rel/id "r2" :rel/from [:entity/id "km"] :rel/kind :child   :rel/to [:entity/id "ko"]}])
           twins (set (cq/q '[:find ?an ?bn :in $ %
@@ -111,8 +111,8 @@
 (deftest strata-rules-classify-provenance
   (testing "(fact ?n) / (design ?n) split nodes by the kernel provenance attribute"
     (let [db (build/maps->cozo
-              [{:entity/id "d" :structure/of :canvas.vocab.code.operation/Operation :entity/name "d-op"}
-               {:entity/id "f" :structure/of :canvas.vocab.code.operation/Operation :entity/name "f-op"
+              [{:entity/id "d" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "d-op"}
+               {:entity/id "f" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f-op"
                 :val/extracted true}]
               [])]
       (is (= #{"f-op"}

@@ -16,12 +16,12 @@
             [fukan.cozo.build :as build]
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [canvas.vocab.code.kind :as code]))
+            [fukan.common.vocab.code.kind :as code]))
 
-;; a LOCAL structure named `Kind` — same short name as `canvas.vocab.code.kind/Kind`, different namespace —
+;; a LOCAL structure named `Kind` — same short name as `fukan.common.vocab.code.kind/Kind`, different namespace —
 ;; carrying a free law that flags ALL its instances (to probe scope precision)
 (defstructure Kind
-  "Test fixture sharing the short name `Kind` with canvas.vocab.code.kind/Kind."
+  "Test fixture sharing the short name `Kind` with fukan.common.vocab.code.kind/Kind."
   {:note [:? :string]}
   (law "local-kind-flag" :offenders '[?k] :where '[]))
 
@@ -32,18 +32,18 @@
   (testing "two `Kind`s from different namespaces keep distinct identities and instances"
     ;; the registry keeps BOTH defs under their qualified tags — neither overwrites the other
     (is (= ::Kind          (:tag (s/structure-by-tag ::Kind))))
-    (is (= :canvas.vocab.code.kind/Kind  (:tag (s/structure-by-tag :canvas.vocab.code.kind/Kind))))
-    (is (not= (s/structure-by-tag ::Kind) (s/structure-by-tag :canvas.vocab.code.kind/Kind))
-        "distinct definitions (the local Kind has a :note slot; canvas.vocab.code.kind/Kind has none)")
+    (is (= :fukan.common.vocab.code.kind/Kind  (:tag (s/structure-by-tag :fukan.common.vocab.code.kind/Kind))))
+    (is (not= (s/structure-by-tag ::Kind) (s/structure-by-tag :fukan.common.vocab.code.kind/Kind))
+        "distinct definitions (the local Kind has a :note slot; fukan.common.vocab.code.kind/Kind has none)")
     ;; co-loaded in ONE db, instances carry distinct :structure/of and are separately queryable
     (let [db (build/vars->cozo [#'local-kind #'lib-kind])]
       (is (= #{"local"}
              (set (map first (cq/q '[:find ?n :where [?e :structure/of ::Kind] [?e :entity/name ?n]] db)))))
       (is (= #{"fromlib"}
-             (set (map first (cq/q '[:find ?n :where [?e :structure/of :canvas.vocab.code.kind/Kind] [?e :entity/name ?n]] db)))))))
+             (set (map first (cq/q '[:find ?n :where [?e :structure/of :fukan.common.vocab.code.kind/Kind] [?e :entity/name ?n]] db)))))))
 
 (deftest law-scope-is-ns-precise
-  (testing "a free law self-scoped to the local Kind flags only ::Kind instances — not canvas.vocab.code.kind/Kind"
+  (testing "a free law self-scoped to the local Kind flags only ::Kind instances — not fukan.common.vocab.code.kind/Kind"
     (let [db      (build/vars->cozo [#'local-kind #'lib-kind])
           flagged (->> (law/check db)
                        (filter #(= "local-kind-flag" (:law %)))
@@ -52,4 +52,4 @@
                        set)]
       (is (contains? flagged "local") "the local law fires on its own ::Kind instance")
       (is (not (contains? flagged "fromlib"))
-          "and NOT on canvas.vocab.code.kind/Kind — ns-precise scoping (pre-fix the shared short name cross-scoped)")))))
+          "and NOT on fukan.common.vocab.code.kind/Kind — ns-precise scoping (pre-fix the shared short name cross-scoped)")))))

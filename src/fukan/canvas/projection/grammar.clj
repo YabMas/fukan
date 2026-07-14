@@ -199,7 +199,7 @@
   "One vocabulary (a grammar namespace) rendered as its defstructure forms."
   [db vocab-name]
   (let [members (->> (cq/q '[:find ?c ?n :in $ ?vn
-                             :where [?v :structure/of :canvas.reflect.grammar/Vocabulary]
+                             :where [?v :structure/of :fukan.common.reflect.grammar/Vocabulary]
                                     [?v :entity/name ?vn]
                                     [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
                                     [?c :entity/name ?n]]
@@ -216,7 +216,7 @@
    reified grammar — the canvas's language reference, derived not maintained."
   [db]
   (let [vocabs (sort (cq/q '[:find [?n ...]
-                             :where [?v :structure/of :canvas.reflect.grammar/Vocabulary]
+                             :where [?v :structure/of :fukan.common.reflect.grammar/Vocabulary]
                                     [?v :entity/name ?n]] db))]
     (str/join "\n\n" (map #(vocabulary-primer db %) vocabs))))
 
@@ -266,7 +266,7 @@
         realized (into #{} (map first)
                        (cq/q '[:find ?s :where [?s :val/realizes _]] db))]
     (->> (cq/q '[:find ?s ?n ?t
-                 :where [?s :structure/of :canvas.reflect.grammar/Structure]
+                 :where [?s :structure/of :fukan.common.reflect.grammar/Structure]
                         [?s :entity/name ?n] [?s :val/tag ?t]]
                db)
          (remove (fn [[s _ t]] (or (realized s) (= ":Any" t) (in-use t))))

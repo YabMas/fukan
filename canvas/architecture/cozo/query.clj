@@ -6,10 +6,10 @@
    and the ported readers build on it. `q` compiles a datalog query over the unified
    all-string `triple` view (eids/values come back as strings); `entity` resolves an eid to
    its typed attribute map from the typed buckets."
-  (:require [canvas.vocab.code.kind :refer [Kind]]
-            [canvas.vocab.code.operation :refer [Operation]]
-            [canvas.vocab.code.module :refer [Module]]
-            [canvas.vocab.code.plug-point :refer [PlugPoint]]
+  (:require [fukan.common.vocab.code.kind :refer [Kind]]
+            [fukan.common.vocab.code.operation :refer [Operation]]
+            [fukan.common.vocab.code.module :refer [Module]]
+            [fukan.common.vocab.code.plug-point :refer [PlugPoint]]
             [canvas.architecture.cozo.db :as db]
             [canvas.architecture.kernel.structure :as kstructure]))
 

@@ -3,8 +3,8 @@
    registers its one custom code FACT extractor (a fn `Path → Facts`). `build-model` runs it via
    `extract-facts` WITHOUT naming it (keeps the pipeline generic); the composition root supplies it
    with `register-fact-extractor!`. Both operations mutate/read the registry slot (`:state`)."
-  (:require [canvas.vocab.code.kind :refer [Kind]] [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]
-            [canvas.vocab.code.plug-point :refer [PlugPoint]]))
+  (:require [fukan.common.vocab.code.kind :refer [Kind]] [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
+            [fukan.common.vocab.code.plug-point :refer [PlugPoint]]))
 
 (Module extraction
   "The extraction plug-point — register and run the project's code FACT extractor."
@@ -27,7 +27,7 @@
      :performs  [:state]})
   (Operation extract-facts
     "Run the registered fact extractor over a code-root → its {:roots :ground} facts (or empty
-     facts when none is registered). Routes to the registered project extractor, a `canvas/vocab`
+     facts when none is registered). Routes to the registered project extractor, a `fukan.common.vocab`
      tool (the Clojure extractor) outside this built-system self-model — the dispatch seam points
      beyond what `architecture/` models."
     {:signature [:=> [:catn [:code-root Path]] Facts]

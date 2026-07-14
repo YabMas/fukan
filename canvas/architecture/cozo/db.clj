@@ -3,9 +3,9 @@
    database, run a CozoScript script to its rows, close it. The only module that
    knows the external `cozo-clj` exists. The db handle is an opaque external
    (`Kind CozoDb`, bodyless — honestly shapeless)."
-  (:require [canvas.vocab.code.kind :refer [Kind]]
-            [canvas.vocab.code.operation :refer [Operation]]
-            [canvas.vocab.code.module :refer [Module]]))
+  (:require [fukan.common.vocab.code.kind :refer [Kind]]
+            [fukan.common.vocab.code.operation :refer [Operation]]
+            [fukan.common.vocab.code.module :refer [Module]]))
 
 (Module cozo-db
   "Open/query/close over cozo-clj — the engine seam everything else speaks

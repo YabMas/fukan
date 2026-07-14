@@ -2,8 +2,8 @@
   "Self-spec: `fukan.cozo.mirror` — the Cozo substrate WRITE layer: `[e a v]` triples → typed EAV
    stored relations (t_int / t_str / t_bool), partitioned by value type. (Named `mirror` from when it
    reflected a datascript db; now simply the substrate's only write path.)"
-  (:require [canvas.vocab.code.operation :refer [Operation]]
-            [canvas.vocab.code.module :refer [Module]]
+  (:require [fukan.common.vocab.code.operation :refer [Operation]]
+            [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.cozo.db :as db]))
 
 (Module cozo-mirror

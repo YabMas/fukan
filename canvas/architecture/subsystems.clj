@@ -1,11 +1,11 @@
 (ns canvas.architecture.subsystems
   "fukan's code-side SUBSYSTEMS — the five capability clusters its Modules form, and the intended
-   architecture DAG (`:may-depend`). The architecture-quality laws (in `canvas.vocab.code.subsystem`,
+   architecture DAG (`:may-depend`). The architecture-quality laws (in `fukan.common.vocab.code.subsystem`,
    auto-active with the vocab) enforce that fukan's actual `module-depends` graph conforms to this
    declared DAG and that the DAG stays acyclic. This is the modelled reorganization of the flat module
    list — the architecture's shape, stated and checked. (Filesystem layout still mirrors src/; a
    directory move can follow later. Capability ≠ faculty: orchestration realizes no subject faculty.)"
-  (:require [canvas.vocab.code.subsystem :refer [Subsystem]]
+  (:require [fukan.common.vocab.code.subsystem :refer [Subsystem]]
             [canvas.architecture.kernel.substrate :refer [core-substrate]]
             [canvas.architecture.kernel.structure :refer [core-structure]]
             [canvas.architecture.kernel.rules :refer [core-rules]]

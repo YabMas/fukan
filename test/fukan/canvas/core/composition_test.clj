@@ -5,8 +5,8 @@
             [fukan.cozo.law :as law]
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [canvas.vocab.code.module]
-            [canvas.vocab.code.operation :refer [Operation]]))
+            [fukan.common.vocab.code.module]
+            [fukan.common.vocab.code.operation :refer [Operation]]))
 
 (defn- offenders-of [db law-desc]
   (->> (law/check db)
@@ -146,9 +146,9 @@
 (deftest the-extracted-calls-relation-marked-transitive-earns-its-closure
   (testing "the :calls slot (extracted-actuals, never authored) marked :transitive gives `terms-of` a calls+ closure"
     (let [db (build/maps->cozo
-              [{:entity/id "ca" :structure/of :canvas.vocab.code.operation/Operation :entity/name "ca"}
-               {:entity/id "cb" :structure/of :canvas.vocab.code.operation/Operation :entity/name "cb"}
-               {:entity/id "cc" :structure/of :canvas.vocab.code.operation/Operation :entity/name "cc"}]
+              [{:entity/id "ca" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "ca"}
+               {:entity/id "cb" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "cb"}
+               {:entity/id "cc" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "cc"}]
               [{:rel/id "r-ab" :rel/from [:entity/id "ca"] :rel/kind :calls :rel/to [:entity/id "cb"]}
                {:rel/id "r-bc" :rel/from [:entity/id "cb"] :rel/kind :calls :rel/to [:entity/id "cc"]}])
           reach (fn [n] (set (map first (cq/q '[:find ?bn :in $ % ?an
@@ -161,10 +161,10 @@
 (deftest path-clause-composes-relations-with-star-closure
   (testing "(path ?op [:calls* :performs] ?effect) composes zero-or-more calls with performs"
     (let [db (build/maps->cozo
-              [{:entity/id "pa" :structure/of :canvas.vocab.code.operation/Operation :entity/name "pa"}
-               {:entity/id "pb" :structure/of :canvas.vocab.code.operation/Operation :entity/name "pb"}
-               {:entity/id "pc" :structure/of :canvas.vocab.code.operation/Operation :entity/name "pc"}
-               {:entity/id "io" :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}]
+              [{:entity/id "pa" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "pa"}
+               {:entity/id "pb" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "pb"}
+               {:entity/id "pc" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "pc"}
+               {:entity/id "io" :structure/of :fukan.common.vocab.code.effect/Effect :val/name "io"}]
               [{:rel/id "p-ab" :rel/from [:entity/id "pa"] :rel/kind :calls :rel/to [:entity/id "pb"]}
                {:rel/id "p-bc" :rel/from [:entity/id "pb"] :rel/kind :calls :rel/to [:entity/id "pc"]}
                {:rel/id "p-cio" :rel/from [:entity/id "pc"] :rel/kind :performs :rel/to [:entity/id "io"]}])
@@ -179,9 +179,9 @@
 (deftest query-expands-path-after-parameter-substitution
   (testing "a path endpoint can be supplied through :in without corrupting the or-join helper"
     (let [db (build/maps->cozo
-              [{:entity/id "qa" :structure/of :canvas.vocab.code.operation/Operation :entity/name "qa"}
-               {:entity/id "qb" :structure/of :canvas.vocab.code.operation/Operation :entity/name "qb"}
-               {:entity/id "qio" :structure/of :canvas.vocab.code.effect/Effect :val/name "io"}]
+              [{:entity/id "qa" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "qa"}
+               {:entity/id "qb" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "qb"}
+               {:entity/id "qio" :structure/of :fukan.common.vocab.code.effect/Effect :val/name "io"}]
               [{:rel/id "q-ab" :rel/from [:entity/id "qa"] :rel/kind :calls :rel/to [:entity/id "qb"]}
                {:rel/id "q-bio" :rel/from [:entity/id "qb"] :rel/kind :performs :rel/to [:entity/id "qio"]}])
           qa (ffirst (cq/q '[:find ?o :where [?o :entity/name "qa"]] db))]

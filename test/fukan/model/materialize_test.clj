@@ -15,9 +15,9 @@
             ;; the code vocab — the macros for the self-contained
             ;; worked-example fixture (a Module with a rich-signature Operation), which replaces the
             ;; retired extractor self-spec the tests once read
-            [canvas.vocab.code.kind :refer [Kind]]
-            [canvas.vocab.code.operation :refer [Operation]]
-            [canvas.vocab.code.module :refer [Module]]))
+            [fukan.common.vocab.code.kind :refer [Kind]]
+            [fukan.common.vocab.code.operation :refer [Operation]]
+            [fukan.common.vocab.code.module :refer [Module]]))
 
 ;; materialize is the pure LOWER direction — it projects the design model alone
 ;; (build-model nil = design-only, no extraction). Ad-hoc lenses/projections are
@@ -112,7 +112,7 @@
 
 (deftest empty-focus-materializes-to-empty-string
   (testing "a lens whose focus is empty composes to nothing"
-    (let [db (build/fold-vars->cozo (model*) [#'ef-none])]   ; model* loads the canvas vocab (the (Operation …) rule)
+    (let [db (build/fold-vars->cozo (model*) [#'ef-none])]   ; model* loads the fukan.common.vocab (the (Operation …) rule)
       (is (= "" (m/materialize-view db (by-name db "none")))))))
 
 (deftest materialize-module-composes-a-modules-stages

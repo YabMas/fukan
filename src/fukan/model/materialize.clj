@@ -115,9 +115,9 @@
 
 ;; ── base: Blueprint — the model projected to implementation specs ────────────
 
-(defmethod render-base ["Blueprint" :canvas.typing.malli/Schema] [db b eid] (schema-str db b eid))
+(defmethod render-base ["Blueprint" :fukan.common.typing.malli/Schema] [db b eid] (schema-str db b eid))
 
-(defmethod render-base ["Blueprint" :canvas.vocab.code.operation/Operation] [db b eid]
+(defmethod render-base ["Blueprint" :fukan.common.vocab.code.operation/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects delegates guidance]} (stage-facts db eid)
         sig    (str "(" nm (apply str (map #(str " " (:label %)) params)) ")")
         ptypes (str/join ", " (map #(str (:label %) ": " (render-base db b (:shape %))) params))
@@ -135,9 +135,9 @@
 
 ;; ── base: Docs — the model projected to reference documentation ──────────────
 
-(defmethod render-base ["Docs" :canvas.typing.malli/Schema] [db b eid] (schema-str db b eid))
+(defmethod render-base ["Docs" :fukan.common.typing.malli/Schema] [db b eid] (schema-str db b eid))
 
-(defmethod render-base ["Docs" :canvas.vocab.code.operation/Operation] [db b eid]
+(defmethod render-base ["Docs" :fukan.common.vocab.code.operation/Operation] [db b eid]
   (let [{:keys [nm doc module params out effects delegates]} (stage-facts db eid)]
     (str "### " nm "\n"
          (or doc "_No description._") "\n\n"
@@ -286,7 +286,7 @@
   [db focus]
   (let [in?     (set focus)
         rows    (->> (cq/q '[:find ?s ?sn ?mn :in $ %
-                             :where [?s :structure/of :canvas.vocab.code.operation/Operation] [?s :entity/name ?sn]
+                             :where [?s :structure/of :fukan.common.vocab.code.operation/Operation] [?s :entity/name ?sn]
                                     (in-module ?s ?mn)] db (s/vocab-rules))
                      (filter (fn [[s _ _]] (in? s))))
         by-name (reduce (fn [acc [s sn mn]]

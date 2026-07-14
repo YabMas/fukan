@@ -4,8 +4,8 @@
    then write the datoms through the shared `cozo-mirror/load-datoms`. The bridge that makes
    Cozo the substrate of record — so it depends on the kernel (assembly + identity) and on
    cozo-mirror's write."
-  (:require [canvas.vocab.code.operation :refer [Operation]]
-            [canvas.vocab.code.module :refer [Module]]
+  (:require [fukan.common.vocab.code.operation :refer [Operation]]
+            [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.cozo.db :as db]
             [canvas.architecture.cozo.mirror :as cmirror]
             [canvas.architecture.kernel.assemble :as kassemble]

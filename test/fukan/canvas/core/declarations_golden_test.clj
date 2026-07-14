@@ -4,7 +4,7 @@
    must not CHANGE silently. Not a spec of WHAT the rules are — a snapshot gate on the sole rule
    emitter (both seams dispatch the declaration handlers).
 
-   Scoped to the `canvas.vocab.*`/`canvas.typing.malli`/`canvas.reflect` structures (required below so they are all
+   Scoped to the `fukan.common.vocab.*`/`fukan.common.typing.malli`/`fukan.common.reflect` structures (required below so they are all
    registered), NOT `all-structures` — the global registry also accumulates test fixtures during a
    full run, which would make the snapshot unstable."
   (:require [clojure.test :refer [deftest is]]
@@ -12,14 +12,14 @@
             [fukan.cozo.law]                        ; registers the check engine (load side-effect)
             [fukan.canvas.core.structure :as s]
             ;; force the full self-model vocabulary to register
-            [canvas.vocab.grouping]
-            [canvas.typing.malli]
-            [canvas.reflect.grammar]
-            [canvas.vocab.code.kind]
-            [canvas.vocab.code.effect]
-            [canvas.vocab.code.operation]
-            [canvas.vocab.code.module]
-            [canvas.vocab.code.subsystem]))
+            [fukan.common.vocab.grouping]
+            [fukan.common.typing.malli]
+            [fukan.common.reflect.grammar]
+            [fukan.common.vocab.code.kind]
+            [fukan.common.vocab.code.effect]
+            [fukan.common.vocab.code.operation]
+            [fukan.common.vocab.code.module]
+            [fukan.common.vocab.code.subsystem]))
 
 (defn self-model-structures
   "The registered structures defined in the self-model vocabulary — stable regardless of which test
@@ -27,9 +27,7 @@
   []
   (filter #(when-let [ns (namespace (:tag %))]
              (and (not (str/ends-with? ns "-test"))
-                  (or (str/starts-with? ns "canvas.vocab")
-                      (str/starts-with? ns "canvas.typing")
-                      (str/starts-with? ns "canvas.reflect"))))
+                  (str/starts-with? ns "fukan.common")))
           (s/all-structures)))
 
 (defn normalized-terms
@@ -94,7 +92,7 @@
 ;; 2026-07-09 (cont.): the `includes` mechanism retired — the meta-grammar `Structure` lost its
 ;; `:includes [:* Structure]` slot, dropping that relation's target-type LAW (83→82) and re-shaping the
 ;; terms. `(check)` still 0.
-;; 2026-07-09: `Contract` introduced (canvas.vocab.code.contract) — a Module `:offers` contracts, an
+;; 2026-07-09: `Contract` introduced (fukan.common.vocab.code.contract) — a Module `:offers` contracts, an
 ;; Operation `:satisfies` them (the coarse plug-point vocabulary). Terms 50→54 (Contract kind-rule +
 ;; `offers`/`satisfies` relation rules + contains contribution), laws 82→86 (the new slots' target-type
 ;; + the `:shape` type-check laws). Live `(check)` still 0.
@@ -109,7 +107,7 @@
 ;; already was — the read dual of the docstring, not vocab. Terms unchanged (a scalar slot emits no
 ;; relation rule), laws 85→84 (−Operation's `:guidance` type-check law). Operation is now pure
 ;; computation {:in :out :performs :delegates}. Live `(check)` still 0.
-;; 2026-07-10: `Contract` renamed to `PlugPoint` (canvas.vocab.code.plug-point) — the concept was
+;; 2026-07-10: `Contract` renamed to `PlugPoint` (fukan.common.vocab.code.plug-point) — the concept was
 ;; always a plug-point/SPI/dependency-inversion point (its own docstring said so); the neutral name
 ;; obscured the directionality. Pure rename: counts unchanged (terms 53, laws 84), only the tag in the
 ;; emitted kind-rule + `:shape` type-check law moved (`Contract`→`PlugPoint`). Live `(check)` still 0.
@@ -133,28 +131,32 @@
 ;; declaring an :out (`[[?tr :rel/from ?t] [?tr :rel/kind :out]]`), moving the laws hash. Adherence is
 ;; now STRUCTURAL — the `:signature` comparator compares decomposed :in/:out node identities. terms
 ;; unchanged (52). Live `(check)` still 0.
-;; 2026-07-13: the malli type dialect moved out of general vocab into its OWN area — `canvas.vocab.type`
-;; → `canvas.typing` (a self-contained plugin: shape-vocab + bridges). Pure relocation: Schema/
-;; SchemaChoice/SchemaField still register (the golden filter now also matches `canvas.typing`), so counts
+;; 2026-07-13: the malli type dialect moved out of general vocab into its OWN area — `fukan.common.vocab.type`
+;; → `fukan.common.typing` (a self-contained plugin: shape-vocab + bridges). Pure relocation: Schema/
+;; SchemaChoice/SchemaField still register (the golden filter now also matches `fukan.common.typing`), so counts
 ;; are unchanged (terms 52, laws 83); only the tag qualifier in the emitted kind/relation rules moved
-;; (`canvas.vocab.type/*` → `canvas.typing.malli/*`), shifting both hashes. Live `(check)` still 0.
+;; (`fukan.common.vocab.type/*` → `fukan.common.typing.malli/*`), shifting both hashes. Live `(check)` still 0.
 ;; 2026-07-13: the `canvas/principles/` layer was cut to focus scope on vocab + verification. The three
 ;; law-holder structures (TrustBoundary, OperationSurface, ModuleArchitecture) and their laws leave the
 ;; snapshot (terms 52→47, laws 83→74); ModuleArchitecture's two module-graph laws (acyclicity +
 ;; membership) were REHOMED onto `Subsystem` (so they still fire — the net −9 laws is the genuine
 ;; principle demands: TrustBoundary totality/parser/cardinality + OperationSurface signature-completeness/
 ;; no-isolated). Live `(check)` still 0 on the self-model.
-;; 2026-07-13: grammar reflection moved out of vocab into its own area — `canvas.vocab.grammar` →
-;; `canvas.reflect.grammar` (a tool, not general vocab). Pure relocation: the meta-grammar
+;; 2026-07-13: grammar reflection moved out of vocab into its own area — `fukan.common.vocab.grammar` →
+;; `fukan.common.reflect.grammar` (a tool, not general vocab). Pure relocation: the meta-grammar
 ;; (Structure/Law/Vocabulary/Relation) still registers (the golden filter now also matches
-;; `canvas.reflect`), so counts hold (terms 47, laws 74); only the tag qualifier in the emitted
-;; rules moved (`canvas.vocab.grammar/*` → `canvas.reflect.grammar/*`), shifting both hashes.
-;; 2026-07-13: `canvas.typing` collapsed into `canvas.typing.malli` (one honest malli-named file — the
+;; `fukan.common.reflect`), so counts hold (terms 47, laws 74); only the tag qualifier in the emitted
+;; rules moved (`fukan.common.vocab.grammar/*` → `fukan.common.reflect.grammar/*`), shifting both hashes.
+;; 2026-07-13: `fukan.common.typing` collapsed into `fukan.common.typing.malli` (one honest malli-named file — the
 ;; root `typing.clj` holding malli vocab under a generic name was a churn-avoidance wart). Schema/
-;; SchemaChoice/SchemaField still register (the filter matches `canvas.typing` as a prefix), counts
-;; hold (terms 47, laws 74); only the tag qualifier moved (`canvas.typing/*` → `canvas.typing.malli/*`).
-(def ^:private golden-terms {:count 47 :hash 1469380326})
-(def ^:private golden-laws  {:count 74 :hash 1574781535})
+;; SchemaChoice/SchemaField still register (the filter matches `fukan.common.typing` as a prefix), counts
+;; hold (terms 47, laws 74); only the tag qualifier moved (`fukan.common.typing/*` → `fukan.common.typing.malli/*`).
+;; 2026-07-14: grammar relocated to the fukan.common.* library tier (canvas.{vocab,typing,
+;; extraction,reflect} → fukan.common.\1). Pure relocation: counts hold (47 terms / 74 laws);
+;; only the tag qualifier in the emitted rules moved, so both hashes shift. Filter now matches
+;; the single `fukan.common` prefix.
+(def ^:private golden-terms {:count 47 :hash -1720407876})
+(def ^:private golden-laws  {:count 74 :hash 961294089})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

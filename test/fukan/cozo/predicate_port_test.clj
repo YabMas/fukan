@@ -3,12 +3,12 @@
             [fukan.cozo.query :as cq]
             [fukan.cozo.build :as build]
             ;; loading the vocab module runs its self-registration of the module-corresponds? port
-            [canvas.vocab.code.module]))
+            [fukan.common.vocab.code.module]))
 
 (deftest module-corresponds-port-is-vocab-registered-not-kernel-hardcoded
   (testing "the module-corresponds? Cozo port lives in vocab, not the generic kernel compiler"
     ;; vocab self-registered the port + its synthetic CozoScript rules (present at runtime)
-    (is (contains? (deref @#'cq/predicate-registry) 'canvas.vocab.code.module/module-corresponds?)
+    (is (contains? (deref @#'cq/predicate-registry) 'fukan.common.vocab.code.module/module-corresponds?)
         "module.clj registered the predicate port")
     (is (contains? (deref @#'cq/synthetic-rules) "r_module_corresponds")
         "and its synthetic CozoScript rules came in with the registration")

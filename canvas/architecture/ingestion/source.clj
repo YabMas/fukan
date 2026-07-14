@@ -6,7 +6,7 @@
    instance-vars), so the native Cozo build's var-scan can read them; references between instances
    are ordinary var-refs the assembler resolves, so there is no merge/cross-ref pass.
    `canvas-namespaces` is the discovery half exposed on its own. (Require remains an internal.)"
-  (:require [canvas.vocab.code.operation :refer [Operation]] [canvas.vocab.code.module :refer [Module]]))
+  (:require [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]))
 
 (Module canvas-source
   "Discover the canvas specs + require them (intern their instance-vars) for the native build."

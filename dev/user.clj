@@ -16,7 +16,7 @@
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
             [fukan.model.materialize :as mat]
-            [canvas.vocab.code.module :as code-module]))
+            [fukan.common.vocab.code.module :as code-module]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -135,7 +135,7 @@
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
         (let [by-mod (->> (cq/q '[:find ?on ?kmn
-                                 :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true]
+                                 :where [?o :structure/of :fukan.common.vocab.code.operation/Operation] [?o :val/extracted true]
                                         [?o :entity/name ?on] (not [?o :val/private true])
                                         [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o] [?km :entity/name ?kmn]]
                                m)
@@ -178,7 +178,7 @@
   []
   (if-let [m (infra-model/get-model)]
     (let [rows (cq/q '[:find ?mn ?on ?en
-                      :where [?o :structure/of :canvas.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
+                      :where [?o :structure/of :fukan.common.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
                              [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]
                              [(not= ?en "throws")]
                              [?cr :rel/kind :child] [?cr :rel/from ?md] [?cr :rel/to ?o] [?md :entity/name ?mn]]

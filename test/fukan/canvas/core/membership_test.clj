@@ -6,9 +6,9 @@
             [fukan.canvas.core.lens :as lens]
             [fukan.canvas.core.rules]
             [fukan.canvas.core.structure :as s]
-            [canvas.vocab.code.operation :refer [Operation]]
-            [canvas.vocab.code.module :refer [Module]]
-            [canvas.vocab.code.subsystem :refer [Subsystem]]))
+            [fukan.common.vocab.code.operation :refer [Operation]]
+            [fukan.common.vocab.code.module :refer [Module]]
+            [fukan.common.vocab.code.subsystem :refer [Subsystem]]))
 
 ;; a containment ladder: subsystem m-sub ─child→ module m-mod ─exposes→ op m-op (m-op performs :io)
 (declare mc-mod)
