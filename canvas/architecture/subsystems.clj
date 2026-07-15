@@ -42,7 +42,7 @@
 
 (Subsystem ingestion
   "The in-fold: discover/assemble design specs + extract code, folded onto the model."
-  {:child [canvas-source extraction] :may-depend [kernel]})
+  {:child [canvas-source extraction] :may-depend []})
 
 (Subsystem cozo
   "The Cozo cluster — the EAV mirror (`cozo-mirror`, the datom→stored-relation insert), the native build
