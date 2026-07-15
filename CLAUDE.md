@@ -135,13 +135,16 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   `clojure/{effect,operation}.clj` (the PL-specific readers). Mints no structures; the HOOK for the
   extraction plug-point; the composition root registers `extract-roots`.
 
-`common/fukan/common/reflect/grammar.clj` (ns `fukan.common.reflect.grammar`) — GRAMMAR REFLECTION, its own area (a
-TOOL, not a plug-point): `with-grammar` reifies the registry → model db (every defstructure → a
-`Structure` node, slots as `:slot/<card>` edges, laws as `:val/form` payload nodes, one `Vocabulary`
-per ns). The runtime never consults the reflected nodes — they exist only so the grammar is viewable
-as data (the print-dual, `unused-structures`). The build always reflects. (The meta-grammar it mints —
-`Structure`/`Law`/`Vocabulary`/`Relation` — is a specialized vocabulary bound to the tool, so it
-travels with it, out of general `vocab/`.)
+`src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — GRAMMAR REFLECTION, kernel-native
+**CORE machinery** (NOT the reusable `fukan.common` vocab): `reflect`/`with-grammar` reifies the registry
+→ model db (every defstructure → a `Structure` node, slots as `:slot/<card>` edges, laws as `:val/form`
+payload nodes, one `Vocabulary` per ns). It is grammar-AGNOSTIC (reifies whatever registry exists) and
+the build ALWAYS runs it, so it belongs with the machinery, beside the act grammar in `core/lens.clj`.
+The runtime never consults the reflected nodes — they exist only so the grammar is viewable as data (the
+print-dual, `unused-structures`). The meta-grammar it mints — `Structure`/`Law`/`Vocabulary`/`Relation`
+— is the tool's own vocabulary for describing grammars (same category as the act grammar), hence core.
+It reaches the type dialect only through the neutral SPI (`core/typing`), so it depends on no concrete
+dialect (the composition root wires that).
 
 (The Lens-act `Coverage` law that a projection's focus once needed was DISSOLVED 2026-06-29: a
 projection now carries its focus ITSELF — an inline `:select`, a named `Lens` only when a focus is
@@ -228,9 +231,11 @@ Laid out by **tier** (shipped library vs fukan's own use) and, within a tier, by
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin
   (its own area, not general vocab; realizes the `typing` SPI). `common/fukan/common/extraction/**`
   (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM plugin (realizes the extraction SPI).
-  `common/fukan/common/reflect/grammar.clj` (ns `fukan.common.reflect.grammar`) — grammar REFLECTION (a tool:
-  registry → model db). All in the `fukan.common` index; the whole tier is a shipped classpath root
-  (`common/`), so a second project reuses it as a dependency.
+  Both in the `fukan.common` index; the whole tier is a shipped classpath root (`common/`), so a second
+  project reuses it as a dependency.
+- `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry →
+  model db). Kernel-native **CORE** machinery, NOT the reusable vocab: grammar-agnostic, the build always
+  runs it, beside the act grammar in `core/lens.clj`.
 - `canvas/principles/` — **CUT (2026-07-13).** The adopted-principles layer was removed to focus
   scope on vocab-building + verifiable models; its two module-graph enforcement laws rehomed onto
   `Subsystem`, its correspondence readers onto `module.clj`/`effect.clj`. (git history preserves it.)
@@ -357,12 +362,12 @@ mixing them corrupts history.
 - `src/fukan/canvas/projection/canvas_source.clj` — canvas discovery, merge, cross-refs
 - `src/fukan/model/materialize.clj` — model→implementation-spec projection
 - `common/fukan/common.clj` (ns `fukan.common`) — the grammar INDEX: one require that registers the
-  whole `fukan.common.*` tier (vocab + typing + extraction + reflect)
+  whole `fukan.common.*` tier (vocab + typing + extraction)
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by element
   (each file = structure + correspondence) + grouping; the cross-element correspondence +
   call-graph readers (`module-corresponds?`/`op-twin`/`unrealized-delegates`/`uncovered-calls`/
   `unfaithful-calls`) are in `code/module.clj`
-- `common/fukan/common/reflect/grammar.clj` (ns `fukan.common.reflect.grammar`) — grammar REFLECTION tool (registry → model db)
+- `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI
 - `common/fukan/common/extraction/` (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM plugin: `core.clj`

@@ -152,13 +152,13 @@
       (is (contains? (names-of db :Module) "core-structure"))
       (is (= #{"tag" "value" "law" "realizes"}
              (set (cq/q '[:find [?l ...]
-                         :where [?st :structure/of :fukan.common.reflect.grammar/Structure]
-                                [?st :val/tag ":fukan.common.reflect.grammar/Structure"]
+                         :where [?st :structure/of :fukan.canvas.core.reflect/Structure]
+                                [?st :val/tag ":fukan.canvas.core.reflect/Structure"]
                                 [?r :rel/from ?st] [?r :rel/label ?l]] db)))
           "the Structure meta-structure's own reified slots — the strange loop")
-      (is (= ":fukan.common.reflect.grammar/Law"
+      (is (= ":fukan.canvas.core.reflect/Law"
              (ffirst (cq/q '[:find ?lt
-                            :where [?st :val/tag ":fukan.common.reflect.grammar/Structure"]
+                            :where [?st :val/tag ":fukan.canvas.core.reflect/Structure"]
                                    [?r :rel/from ?st] [?r :rel/label "law"] [?r :rel/to ?t]
                                    [?t :val/tag ?lt]] db)))
           "Structure.law targets the reified Law structure (composition)")

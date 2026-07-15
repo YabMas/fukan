@@ -38,6 +38,12 @@
    fukan.canvas.core.lens-test/Grp hooks.fukan.structure/instance
    fukan.canvas.core.lens-test/Widget hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/Kind hooks.fukan.structure/instance
+   fukan.canvas.core.reflect/Law hooks.fukan.structure/instance
+   fukan.canvas.core.reflect/Relation hooks.fukan.structure/instance
+   fukan.canvas.core.reflect/Structure hooks.fukan.structure/instance
+   fukan.canvas.core.reflect/Vocabulary hooks.fukan.structure/instance
+   fukan.canvas.core.reflect-test/Leaf hooks.fukan.structure/instance
+   fukan.canvas.core.reflect-test/Node hooks.fukan.structure/instance
    fukan.canvas.core.rules-test/Mod hooks.fukan.structure/instance
    fukan.canvas.core.rules-test/RuleThing hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Auditor hooks.fukan.structure/instance
@@ -95,12 +101,6 @@
    fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
-   fukan.common.reflect.grammar/Law hooks.fukan.structure/instance
-   fukan.common.reflect.grammar/Relation hooks.fukan.structure/instance
-   fukan.common.reflect.grammar/Structure hooks.fukan.structure/instance
-   fukan.common.reflect.grammar/Vocabulary hooks.fukan.structure/instance
-   fukan.common.reflect.grammar-test/Leaf hooks.fukan.structure/instance
-   fukan.common.reflect.grammar-test/Node hooks.fukan.structure/instance
    fukan.common.typing.malli/Schema hooks.fukan.structure/instance
    fukan.common.typing.malli/SchemaChoice hooks.fukan.structure/instance
    fukan.common.typing.malli/SchemaField hooks.fukan.structure/instance

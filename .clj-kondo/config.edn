@@ -20,10 +20,10 @@
   ;; to prove the extractor surfaces a module's private surface
   sample
   {:linters {:unused-private-var {:level :off}}}
-  ;; fukan.common.reflect.grammar's generated constructors are never CALLED — the reflector emits
+  ;; fukan.canvas.core.reflect's generated constructors are never CALLED — the reflector emits
   ;; raw node/rel maps by mechanism (like the extractor); the structures exist to
   ;; register the meta-grammar.
-  fukan.common.reflect.grammar
+  fukan.canvas.core.reflect
   {:linters {:unused-public-var {:level :off}}}
   lib.lens
   {:linters {:unused-public-var {:level :off}

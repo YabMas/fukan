@@ -4,9 +4,11 @@
    must not CHANGE silently. Not a spec of WHAT the rules are — a snapshot gate on the sole rule
    emitter (both seams dispatch the declaration handlers).
 
-   Scoped to the `fukan.common.vocab.*`/`fukan.common.typing.malli`/`fukan.common.reflect` structures (required below so they are all
-   registered), NOT `all-structures` — the global registry also accumulates test fixtures during a
-   full run, which would make the snapshot unstable."
+   Scoped to the `fukan.common.vocab.*`/`fukan.common.typing.malli` structures (required below so they
+   are all registered), NOT `all-structures` — the global registry also accumulates test fixtures during
+   a full run, which would make the snapshot unstable. The kernel-native grammars (the act grammar in
+   `fukan.canvas.core.lens`, the reflection meta-grammar in `fukan.canvas.core.reflect`) are NOT in
+   scope — this golden locks the reusable `fukan.common` vocab, not the tool's own core grammars."
   (:require [clojure.test :refer [deftest is]]
             [clojure.string :as str]
             [fukan.cozo.law]                        ; registers the check engine (load side-effect)
@@ -14,7 +16,6 @@
             ;; force the full self-model vocabulary to register
             [fukan.common.vocab.grouping]
             [fukan.common.typing.malli]
-            [fukan.common.reflect.grammar]
             [fukan.common.vocab.code.kind]
             [fukan.common.vocab.code.effect]
             [fukan.common.vocab.code.operation]
@@ -143,10 +144,10 @@
 ;; principle demands: TrustBoundary totality/parser/cardinality + OperationSurface signature-completeness/
 ;; no-isolated). Live `(check)` still 0 on the self-model.
 ;; 2026-07-13: grammar reflection moved out of vocab into its own area — `fukan.common.vocab.grammar` →
-;; `fukan.common.reflect.grammar` (a tool, not general vocab). Pure relocation: the meta-grammar
+;; `fukan.canvas.core.reflect` (a tool, not general vocab). Pure relocation: the meta-grammar
 ;; (Structure/Law/Vocabulary/Relation) still registers (the golden filter now also matches
 ;; `fukan.common.reflect`), so counts hold (terms 47, laws 74); only the tag qualifier in the emitted
-;; rules moved (`fukan.common.vocab.grammar/*` → `fukan.common.reflect.grammar/*`), shifting both hashes.
+;; rules moved (`fukan.common.vocab.grammar/*` → `fukan.canvas.core.reflect/*`), shifting both hashes.
 ;; 2026-07-13: `fukan.common.typing` collapsed into `fukan.common.typing.malli` (one honest malli-named file — the
 ;; root `typing.clj` holding malli vocab under a generic name was a churn-avoidance wart). Schema/
 ;; SchemaChoice/SchemaField still register (the filter matches `fukan.common.typing` as a prefix), counts
@@ -155,8 +156,14 @@
 ;; extraction,reflect} → fukan.common.\1). Pure relocation: counts hold (47 terms / 74 laws);
 ;; only the tag qualifier in the emitted rules moved, so both hashes shift. Filter now matches
 ;; the single `fukan.common` prefix.
-(def ^:private golden-terms {:count 47 :hash -1720407876})
-(def ^:private golden-laws  {:count 74 :hash 961294089})
+;; 2026-07-15: grammar REFLECTION moved out of the fukan.common tier into CORE
+;; (`fukan.common.reflect.grammar` → `fukan.canvas.core.reflect`) — it is kernel-native, grammar-agnostic
+;; machinery (like the act grammar in core.lens), not the reusable vocab. So its meta-grammar
+;; (Structure/Law/Vocabulary/Relation) LEAVES this `fukan.common`-scoped snapshot: terms 47→42
+;; (−5 kind/relation rules), laws 74→59 (−15 generated type-check/target-type + 2 self-check laws).
+;; The reusable vocab's own emission is unchanged; the golden now locks exactly the fukan.common vocab.
+(def ^:private golden-terms {:count 42 :hash 157564513})
+(def ^:private golden-laws  {:count 59 :hash 1199625466})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

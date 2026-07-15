@@ -9,6 +9,7 @@
             [canvas.architecture.cozo.db :as db]
             [canvas.architecture.cozo.mirror :as cmirror]
             [canvas.architecture.kernel.assemble :as kassemble]
+            [canvas.architecture.kernel.reflect :as reflect]
             [canvas.architecture.kernel.substrate :as substrate]))
 
 (Module cozo-build
@@ -38,7 +39,7 @@
     "Reflect the model's grammar into an already-built Cozo db: query the structure tags, reflect → node/rel maps, UPSERT by :entity/id (reuse the eid of a ^:value Schema shared with the model), and insert the datoms. Returns the db."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:extra-seeds :any]] db/CozoDb]
      :performs  [:throws]                          ; grammar/reflect throws on a dangling grammar ref
-     :delegates [db/q cmirror/insert-datoms]})
+     :delegates [db/q cmirror/insert-datoms reflect/reflect]})
   (Operation model->cozo
     "Native FULL build: canvas instance-vars + extraction {:roots :ground} facts → one native Cozo substrate with the extractor's post-build :ground hook run (it grounds the :calls graph) and the grammar reflected. Assembling all roots in one pass resolves cross-refs without a merge."
     {:signature [:=> [:catn [:ns-syms [:vector :symbol]] [:facts :map]] db/CozoDb]

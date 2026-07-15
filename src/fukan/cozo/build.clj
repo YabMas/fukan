@@ -5,7 +5,7 @@
    `mirror/load-datoms`. Eids are opaque (assigned here); every query is name-based."
   (:require [fukan.canvas.core.assemble :as assemble]
             [fukan.canvas.core.substrate :as sub]
-            [fukan.common.reflect.grammar :as grammar]
+            [fukan.canvas.core.reflect :as grammar]
             [fukan.cozo.db :as db]
             [fukan.cozo.mirror :as mirror]))
 

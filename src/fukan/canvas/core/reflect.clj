@@ -1,4 +1,4 @@
-(ns fukan.common.reflect.grammar
+(ns fukan.canvas.core.reflect
   "GRAMMAR REFLECTION — the registry projected into the model. The structure
    registry is the one piece of fukan that lives OFF the graph; opting in here
    reifies it: every defstructure in the model's namespace closure becomes a
@@ -22,16 +22,21 @@
    Structure node). Reflection is PURE (`with-grammar`: db → db′) and re-runs on
    every build, so the reified grammar can never drift from the registry.
 
-   A modelling TOOL, not core: the runtime (`check`/`assemble`/`evaluate-lens`) never
-   consults the reflected nodes — they exist only so the grammar is viewable as data (the
-   print-dual primer, the `unused-structures` grammar-drift reading). So it lives in
-   fukan.common.vocab, and the native build runs `reflect` (via `build/with-grammar`) on every build."
+   Kernel-native MACHINERY — this is CORE, not the reusable `fukan.common` vocab: reflection is
+   grammar-AGNOSTIC (it reifies whatever registry exists, knowing no specific vocabulary), and the
+   native build ALWAYS runs it (via `build/with-grammar`). Its meta-grammar (`Structure`/`Law`/
+   `Vocabulary`/`Relation`) is the tool's vocabulary for describing grammars — the same category as
+   the act grammar in `fukan.canvas.core.lens`, so it sits beside it in core. The runtime
+   (`check`/`assemble`/`evaluate-lens`) never consults the reflected nodes — they exist only so the
+   grammar is viewable as data (the print-dual primer, the `unused-structures` grammar-drift reading).
+   The type dialect is reached only through the neutral SPI (`fukan.canvas.core.typing/reflect-type`,
+   which returns nil when no dialect is registered), so reflection depends on NO concrete dialect; the
+   composition root wires the dialect. Schema's grammar is seeded into the reflection closure by NAME
+   (the `fukan.common.typing.malli` string below) so its `^:value` structures reflect even with zero
+   Schema instances — a data reference, not a code dependency."
   (:require [clojure.string :as str]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.typing :as typing]
-            ;; Schema must be registered (and its :valid?/:reflect bridges wired) before
-            ;; reflection can build Schema value targets from slot type forms.
-            [fukan.common.typing.malli]))
+            [fukan.canvas.core.typing :as typing]))
 
 (def ^:private this-ns (str (ns-name *ns*)))
 
@@ -46,7 +51,7 @@
   ;; OWNERSHIP — the reflector's self-check. A Law has no independent existence: it is asserted BY a
   ;; Structure (ownership-on-owner), so every reified Law must be the target of some `:law` edge. An
   ;; orphan Law is a defect of THIS reflection, not a modelling mistake — which is why it lives here on
-  ;; the reified type (self-scoped to `:fukan.common.reflect.grammar/Law`), not as a design law on a portrait.
+  ;; the reified type (self-scoped to `:fukan.canvas.core.reflect/Law`), not as a design law on a portrait.
   (law "every reified Law is owned by an asserting Structure"
     (matched-by :law)))
 
@@ -63,7 +68,7 @@
   ;; TOTALITY — the reflector's self-check. A Structure's identity IS its defining namespace, so every
   ;; reified Structure is the target of a `:child` edge from its `Vocabulary`. The synthetic `:Any`
   ;; wildcard is not an authored Structure, so it is exempt (:unless its tag is ":Any"). A missing
-  ;; Vocabulary is a defect of THIS reflection — hence here, self-scoped to `:fukan.common.reflect.grammar/Structure`.
+  ;; Vocabulary is a defect of THIS reflection — hence here, self-scoped to `:fukan.canvas.core.reflect/Structure`.
   (law "every reified Structure is defined in a Vocabulary"
     (matched-by :child :from Vocabulary :unless {:tag ":Any"})))
 
@@ -152,7 +157,8 @@
                          (map :rel slot-bits)
                          (map :rel law-bits)))}))
 
-(defn reflect
+(defn ^{:malli/schema [:=> [:catn [:tags [:vector :any]] [:extra-seeds [:vector :any]]] :map]}
+  reflect
   "PURE, db-agnostic: the model's reified-grammar `{:nodes :rels}` for the structure `tags` in use
    (the `:structure/of` values, as keywords) + `extra-seeds` (ns-name strings added to the reflection
    closure, so a zero-instance grammar stratum still reflects). The caller inserts the datoms onto

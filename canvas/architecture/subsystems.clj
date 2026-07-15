@@ -12,6 +12,7 @@
             [canvas.architecture.kernel.lens :refer [core-lens]]
             [canvas.architecture.kernel.assemble :refer [assemble-faculty]]
             [canvas.architecture.kernel.typing :refer [typing]]
+            [canvas.architecture.kernel.reflect :refer [core-reflect]]
             [canvas.architecture.ingestion.source :refer [canvas-source]]
             [canvas.architecture.ingestion.extraction :refer [extraction]]
             [canvas.architecture.projection.finding :refer [finding-faculty]]
@@ -37,7 +38,7 @@
    kernel itself queries (the lens engine, the law engine), so it is infrastructure, not a peripheral
    subsystem: the query primitive lives in the kernel here, while the wider `cozo` cluster above holds
    the model assembly (mirror + native build) and the registered check engine."
-  {:child [core-substrate core-structure core-rules core-lens assemble-faculty typing cozo-db cozo-query]
+  {:child [core-substrate core-structure core-rules core-lens core-reflect assemble-faculty typing cozo-db cozo-query]
    :may-depend []})
 
 (Subsystem ingestion
