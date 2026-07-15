@@ -9,7 +9,7 @@
 
 (def ^:private effect-by-callee
   "Fully-qualified callee var -> the effect it performs.
-   CONSEQUENTIAL effects: :io/:state/:require. PARTIALITY: :throws.
+   CONSEQUENTIAL effects: :io/:state. CODE-LOADING: :require. REFLECTION: :reflect. PARTIALITY: :throws.
    Logging/monitoring (println/print/prn/pr/printf/flush, clojure.tools.logging,
    tap>) is deliberately absent: observational, not a hazard."
   (merge
@@ -20,10 +20,13 @@
              clojure.core/alter clojure.core/alter-var-root clojure.core/ref-set clojure.core/vreset!
              clojure.core/commute clojure.core/send clojure.core/send-off]
            (repeat :state))
+   ;; CODE-LOADING — runs the loaded namespace's top-level forms (requiring-resolve loads too).
    (zipmap '[clojure.core/require clojure.core/use clojure.core/load clojure.core/load-file
-             clojure.core/load-string clojure.core/requiring-resolve clojure.core/resolve
-             clojure.core/ns-resolve clojure.core/find-ns clojure.core/the-ns]
+             clojure.core/load-string clojure.core/requiring-resolve]
            (repeat :require))
+   ;; REFLECTION — looks a var/namespace up by symbol; loads no code, so distinct from :require.
+   (zipmap '[clojure.core/resolve clojure.core/ns-resolve clojure.core/find-ns clojure.core/the-ns]
+           (repeat :reflect))
    (zipmap '[clojure.core/throw] (repeat :throws))))
 
 (def ^:private effect-by-ns

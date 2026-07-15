@@ -8,7 +8,7 @@
             [fukan.cozo.law :as law]))
 
 (defstructure ^:value Effect
-  "A named side effect an Operation performs (e.g. :io, :require, :state, :throws).
+  "A named side effect an Operation performs (e.g. :io, :state, :require, :reflect, :throws).
    Value-identified — `:io` is one node shared across every Operation that performs it.
    A single-scalar `^:value` atom: the kernel derives its literal reader, so effects
    author as `:performs [:io :require]` and `:val/name` holds the keyword verbatim."
