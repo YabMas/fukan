@@ -25,6 +25,7 @@
             [canvas.architecture.cozo.mirror :refer [cozo-mirror]]
             [canvas.architecture.cozo.build :refer [cozo-build]]
             [canvas.architecture.cozo.query :refer [cozo-query]]
+            [canvas.architecture.cozo.rules :refer [cozo-rules]]
             [canvas.architecture.cozo.law :refer [cozo-law]]))
 
 (declare ingestion)
@@ -36,7 +37,7 @@
    kernel itself queries (the lens engine, the law engine), so it is infrastructure, not a peripheral
    subsystem: the query primitive lives in the kernel here, while the wider `cozo` cluster above holds
    the model assembly (mirror + native build) and the registered check engine."
-  {:child [core-substrate core-structure core-rules core-lens core-reflect assemble-faculty typing cozo-db cozo-query]
+  {:child [core-substrate core-structure core-rules core-lens core-reflect assemble-faculty typing cozo-db cozo-query cozo-rules]
    :may-depend []})
 
 (Subsystem ingestion
