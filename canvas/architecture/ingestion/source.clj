@@ -1,5 +1,5 @@
 (ns canvas.architecture.ingestion.source
-  "Self-spec: fukan's canvas-ingestion subsystem (`fukan.canvas.projection.canvas-source`) — a
+  "Self-spec: fukan's canvas-ingestion subsystem (`fukan.canvas.ingestion.canvas-source`) — a
    boundary sketch.
 
    `require-canvas-namespaces!` discovers the canvas namespaces and requires them (interning their

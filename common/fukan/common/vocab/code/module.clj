@@ -24,7 +24,7 @@
   "True when code namespace `km` realizes canvas module `cm`. Deterministic, separator-agnostic:
    split both on `[-.]` into segments; the canvas name's segments must be a SUFFIX of the code
    namespace's. So `infra-model` ← `fukan.infra.model`, `canvas-source` ←
-   `fukan.canvas.projection.canvas-source`, `core-structure` ← `fukan.canvas.core.structure`.
+   `fukan.canvas.ingestion.canvas-source`, `core-structure` ← `fukan.canvas.core.structure`.
    (Canvas module names are hyphenated and equal their vars; the code path is dotted — this rule
    bridges the two without the model authoring a second name string.)"
   [cm km]

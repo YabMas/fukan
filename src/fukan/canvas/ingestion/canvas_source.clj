@@ -1,4 +1,4 @@
-(ns fukan.canvas.projection.canvas-source
+(ns fukan.canvas.ingestion.canvas-source
   "Canvas ingestion: discover the defstructure-based canvas specs on the
    classpath, require them (registering their vocabulary and interning their
    instance `def`s), and assemble all those instance-vars into one structure db —

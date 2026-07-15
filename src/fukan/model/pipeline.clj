@@ -12,7 +12,7 @@
    `fukan.model.extraction` plug-point (fukan-on-itself registers its Clojure extractor over
    `src/` in `fukan.infra.model`)."
   (:require [clojure.java.io :as io]
-            [fukan.canvas.projection.canvas-source :as canvas-source]
+            [fukan.canvas.ingestion.canvas-source :as canvas-source]
             [fukan.model.extraction :as extraction]
             [fukan.cozo.build :as cozo-build]))
 
