@@ -51,7 +51,6 @@
               fukan.canvas.projection.probe-code-test
               fukan.canvas.projection.probes-test
               fukan.canvas.projection.instance-test
-              fukan.model.materialize-test
               fukan.model.pipeline-test
               fukan.common.typing.malli
               fukan.common.vocab.code.kind

@@ -15,8 +15,6 @@
             [canvas.architecture.kernel.reflect :refer [core-reflect]]
             [canvas.architecture.ingestion.source :refer [canvas-source]]
             [canvas.architecture.ingestion.extraction :refer [extraction]]
-            [canvas.architecture.projection.finding :refer [finding-faculty]]
-            [canvas.architecture.projection.materialize :refer [materialize]]
             [canvas.architecture.projection.instance :refer [projection-instance]]
             [canvas.architecture.projection.grammar :refer [projection-grammar]]
             [canvas.architecture.projection.architecture :refer [architecture]]
@@ -53,11 +51,10 @@
   {:child [cozo-mirror cozo-build cozo-law] :may-depend [kernel]})
 
 (Subsystem projection
-  "Graph → artifacts: materialization (implementation specs, docs, AND the reading Findings) + the
-   Finding output type + the instance/grammar print-duals + the system-map overview. The readings —
-   patterns/consistency — are Projections whose target artifact is a Finding, rendered through their
-   lens by materialize/render-finding; there is no separate probe/reading faculty."
-  {:child [materialize finding-faculty projection-instance projection-grammar architecture] :may-depend [kernel]})
+  "The outbound render surface — the inspection print-duals that re-present the model
+   as authored forms (instance/grammar) plus the system map (architecture). The act
+   grammar (Lens/Projection/Check) and its engine live in the kernel (core-lens)."
+  {:child [projection-instance projection-grammar architecture] :may-depend [kernel]})
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject

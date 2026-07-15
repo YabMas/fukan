@@ -37,12 +37,12 @@
           (str "refresh-model's :malli/schema should adhere to its model; drifted: " drifted)))))
 
 (deftest multi-arg-order-and-arity-adheres-end-to-end
-  (testing "materialize-over is a real MULTI-ARG function whose :malli/schema matches its modelled
-            ordered :in (same types, SAME ORDER, SAME ARITY) → NOT type-drifted. The positive end-to-end
+  (testing "focus-nodes is a real MULTI-ARG function whose :malli/schema matches its modelled
+            ordered :in (distinct types, SAME ORDER, SAME ARITY) → NOT type-drifted. The positive end-to-end
             case; mismatch DETECTION (reorder / dropped arg) is covered by adheres-checks-in-order-and-arity."
     (let [model (pipeline/build-model "src")]
-      (is (not (contains? (law/violation-names model :corresponds/Operation.adheres) "materialize-over"))
-          "materialize-over's 3-arg annotation matches its modelled ordered signature"))))
+      (is (not (contains? (law/violation-names model :corresponds/Operation.adheres) "focus-nodes"))
+          "focus-nodes's 2-arg annotation (StructureDb, [vector Clause]) matches its modelled ordered signature"))))
 
 (deftest adheres-demand-gates-a-real-signature-mismatch
   (testing "the GATED :corresponds/Operation.adheres demand (the :signature comparator over twin pairs):
@@ -189,17 +189,6 @@
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
     (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.covered))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
-
-(deftest defmultis-are-extracted-and-modelled
-  (testing "both defmultis are extracted as Operations AND covered by the model (not undeclared public surface)"
-    (let [m         (pipeline/build-model "src")
-          extracted (set (cq/q '[:find [?n ...]
-                                :where [?o :structure/of :fukan.common.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?n]] m))
-          worklist  (law/violation-names m :corresponds/Operation.covered)]
-      (is (contains? extracted "render-base")    "render-base (defmulti) is extracted as an Operation")
-      (is (contains? extracted "render-finding") "render-finding (defmulti) is extracted as an Operation")
-      (is (not (contains? worklist "render-base"))    "render-base is covered, not an undeclared public surface")
-      (is (not (contains? worklist "render-finding")) "render-finding is covered, not an undeclared public surface"))))
 
 ;; Tiny model: authored A.op-a :delegates B.op-b. "Same module name" authored/extracted pairs make
 ;; module-corresponds? trivial (segs "A" is a suffix of segs "A").

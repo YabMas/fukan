@@ -11,11 +11,9 @@
             [fukan.cozo.query :as cq]
             [fukan.cozo.law :as law]
             [fukan.infra.model :as infra-model]
-            [fukan.canvas.projection.finding :as pf]
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
-            [fukan.model.materialize :as mat]
             [fukan.common.vocab.code.module :as code-module]))
 
 (defonce ^:private _reload-init
@@ -95,7 +93,7 @@
 (defn focus
   "Evaluate datalog `clauses` (binding ?n, with the vocab rules) over the held
    model and print the focused nodes as their authored forms — the textual model
-   explorer: (focus '[(Operation ?n) (in-module ?n \"materialize\")])."
+   explorer: (focus '[(Operation ?n) (in-module ?n \"core-structure\")])."
   [clauses]
   (if-let [m (infra-model/get-model)]
     (let [out (inst/focus-text m clauses)]
@@ -208,35 +206,6 @@
         (doseq [on (sort drifted)] (println "  " on))))
     (println "No model loaded yet. Use (go) first.")))
 
-(defn readings
-  "Run the reading projections present in the held model, printing each Finding — each renders
-   its focus into observations via materialize/render-finding. NOTE: fukan's own instrument
-   instances are PARKED (no shipped Projections), so this prints nothing on a plain build;
-   the reading machinery is exercised through ad-hoc instances (see readings_test)."
-  []
-  (if-let [m (infra-model/get-model)]
-    (doseq [[nm finding] (mat/read-all m)]
-      (println (str "── reading " nm " ──"))
-      (let [lines (pf/finding->text finding)]
-        (if (empty? lines)
-          (println "  (nothing)")
-          (doseq [l lines] (println "  " l)))))
-    (println "No model loaded yet. Use (go) first.")))
-
-(defn materialize
-  "Project module `module-name` from the held model under `projection` (default
-   \"Blueprint\" — implementation specs; \"Docs\" — reference documentation): compose
-   the render of every Stage that module owns. E.g. (materialize \"target.clojure\")
-   or (materialize \"target.clojure\" \"Docs\")."
-  ([module-name] (materialize module-name "Blueprint"))
-  ([module-name projection]
-   (if-let [m (infra-model/get-model)]
-     (let [spec (mat/materialize-module m projection module-name)]
-       (if (str/blank? spec)
-         (println "No Stages found in module" (pr-str module-name))
-         (println spec)))
-     (println "No model loaded yet. Use (go) first."))))
-
 (defn status []
   (if-let [m (infra-model/get-model)]
     (println "Model:"
@@ -252,10 +221,7 @@
   (grammar)
   (grammar "lib.code")
   (show 'probe)
-  (focus '[(Operation ?n) (in-module ?n "materialize")])
   (check)
   (drift)
-  (readings)
   (dispatch)
-  (materialize "target.clojure")
   (status))

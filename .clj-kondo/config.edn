@@ -102,10 +102,6 @@
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
-  fukan.model.materialize-test
-  {:linters {:unused-public-var {:level :off}
-             :unused-namespace {:level :off}
-             :unused-referred-var {:level :off}}}
   fukan.model.pipeline-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}
