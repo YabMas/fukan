@@ -9,7 +9,6 @@
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.canvas.core.substrate :as sub]
             [fukan.common.vocab.code.operation :refer [Operation]]
             [fukan.common.vocab.code.kind :refer [Kind]]
             [fukan.common.vocab.code.plug-point :refer [PlugPoint]]))
@@ -114,13 +113,3 @@ in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[
 in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[m, mname]
 in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
 ")
-
-;; ── Clojure extraction (ns → Module) ─────────────────────────────────────────
-
-(defn extract-module
-  "Build an extracted Module InstanceValue named `mname` owning the given extracted Operation
-   InstanceValues (`op-ivs`) via `:child`. Provenance (`:val/extracted`) is stamped by the BUILD
-   at the merge (`substrate/stamp-stratum`), not here."
-  [mname op-ivs]
-  (sub/->InstanceValue ::Module (str mname) nil nil
-                       [{:rk :child :card :many :targets (vec op-ivs)}] false))

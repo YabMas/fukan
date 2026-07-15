@@ -8,8 +8,8 @@
 
    The extraction seam is its OWN area (`fukan.common.extraction/`), NOT part of the code vocabulary it
    populates: it mints no structures, it realizes the `fukan.model.extraction` plug-point. The
-   Clojure-specific Operation mapping and effect classification live under `fukan.common.extraction.clojure.*`;
-   Module assembly is still the generic extracted root wrapper. This namespace is
+   Clojure-specific Operation mapping, effect classification, and Module assembly (the generic
+   extracted-root wrapper) all live under `fukan.common.extraction.clojure.*`. This namespace is
    the shared orchestration — run clj-kondo, group, call the
    element builders → the engine-agnostic FACTS `{:roots :ground}`. The extractor OWNS no
    vocabulary — it EMITS instances by tag (the BUILD stamps provenance at the merge). It is the HOOK for the
@@ -18,6 +18,7 @@
    the wheel we don't reinvent."
   (:require [clj-kondo.core :as kondo]
             [fukan.common.extraction.clojure.effect :as clj-effect]
+            [fukan.common.extraction.clojure.module :as clj-module]
             [fukan.common.extraction.clojure.operation :as clj-operation]
             [fukan.common.vocab.code.module :as module]
             [fukan.cozo.db :as db]
@@ -109,5 +110,5 @@ alle[e] := *t_bool[e, _, _]
                             :let [ops (for [v (ops-by-ns mname)
                                             :let [effs (get op-effs [(str mname) (str (:name v))])]]
                                         (clj-operation/extract-operation v effs))]]
-                        [(str mname) (module/extract-module mname ops)]))
+                        [(str mname) (clj-module/extract-module mname ops)]))
      :ground     (fn [cdb] (add-calls cdb attributed))}))

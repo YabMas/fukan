@@ -319,7 +319,7 @@
 ;; value-structure tag `:reflect-tag` (the kernel's `reflect-type` builds Schema subgraphs through it —
 ;; no reflect bridge needed). Merge-per-key, so a composition root could still override any single
 ;; bridge. (There is no `:adheres?` bridge — signature adherence is STRUCTURAL, the `:signature`
-;; comparator comparing decomposed :in/:out node identities; see fukan.common.vocab.code.module.)
+;; comparator comparing decomposed :in/:out node identities; see fukan.common.vocab.code.operation.)
 (typing/register-type-dialect! {:valid?      valid?
                                 :reflect-tag ::Schema
                                 :render      render})

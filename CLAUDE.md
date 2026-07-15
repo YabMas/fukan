@@ -132,8 +132,8 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
   `common/fukan/common/typing/` is the dialect AREA (room for a sibling realization if one ever appears).
 - `common/fukan/common/extraction/` (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM: `core.clj`
   (orchestration: clj-kondo `analyze` + `op-eid`, calling each element's builder) +
-  `clojure/{effect,operation}.clj` (the PL-specific readers). Mints no structures; the HOOK for the
-  extraction plug-point; the composition root registers `extract-roots`.
+  `clojure/{effect,module,operation}.clj` (the per-element extraction builders). Mints no structures;
+  the HOOK for the extraction plug-point; the composition root registers `extract-roots`.
 
 `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — GRAMMAR REFLECTION, kernel-native
 **CORE machinery** (NOT the reusable `fukan.common` vocab): `reflect`/`with-grammar` reifies the registry
@@ -373,6 +373,6 @@ mixing them corrupts history.
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI
 - `common/fukan/common/extraction/` (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM plugin: `core.clj`
-  orchestration + `clojure/{effect,operation}.clj` (realizes the extraction SPI)
+  orchestration + `clojure/{effect,module,operation}.clj` (realizes the extraction SPI)
 - `canvas/architecture/` — fukan-on-fukan's built-system self-specs (modules + subsystems +
   `:may-depend` DAG); the use-side instruments area (`canvas/instruments/`) is currently PARKED
