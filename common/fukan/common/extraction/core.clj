@@ -36,8 +36,7 @@
    `:ground` hook runs). Resolves each var-usage's caller/callee to the eid of the extracted Operation
    named `fn` in module `ns` (a single cozo query `{[ns name] → eid}`), then inserts the `:calls` rels
    above the current max eid. Returns `cdb`. A `defmulti` extracts as an Operation, so calls through it
-   (`render → render-base`) and its method-body calls (re-homed by `attribute-defmethod-bodies`) resolve
-   as ordinary `:calls`."
+   and its method-body calls (re-homed by `attribute-defmethod-bodies`) resolve as ordinary `:calls`."
   [cdb var-usages]
   (let [op-eid  (into {} (map (fn [[ns name eid]] [[ns name] eid]))
                       (db/q cdb (str rules/eav module/in-module-cozo "
@@ -69,7 +68,7 @@ alle[e] := *t_bool[e, _, _]
    var, so its body calls have no enclosing var and `add-calls` drops them. Re-home each such body call
    onto the enclosing defmethod's MULTIMETHOD (which extracts as a PlugPoint): the caller becomes the
    dispatch point, so the plug-point's REACH — its satisfiers' calls, buried in inline method bodies —
-   is captured (`render-base → operation-malli`). A coarse stand-in for the satisfy side (until satisfiers
+   is captured (a body call re-homed onto its multimethod). A coarse stand-in for the satisfy side (until satisfiers
    are first-class), and the second half of what makes the see-through view whole. Rows are file-local,
    so this is per-file; a defmethod's body spans from its header row to the next top-level definition.
    Usages already carrying a `:from-var`, the defmethod headers themselves, and files with no defmethods

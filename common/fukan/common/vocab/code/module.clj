@@ -186,8 +186,8 @@ in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[
   "Reachability over the EXTRACTED graph, on-graph. `op-ext-twin` pairs an authored op with its
    extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is a `:calls` edge;
    `ext-reaches` is its transitive closure — a rule-calls-rule recursion the kernel now allows, negated
-   under stratification. A `defmulti` is an ordinary Operation, so calls through it (`render → render-base`)
-   and its method-body calls are all `:calls`, and reachability needs no separate dispatch edge. The
+   under stratification. A `defmulti` is an ordinary Operation, so calls through it and its
+   method-body calls are all `:calls`, and reachability needs no separate dispatch edge. The
    injected rules (`Operation`/`design`/`fact`/`in-module`) are ambient in any `cq/q`. `in-module` binds
    Kinds too, so op-ness is guarded here explicitly with `(Operation …)`."
   '[[(op-ext-twin ?a ?e)

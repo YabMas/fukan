@@ -42,20 +42,16 @@ structure substrate **is** the model (no separate model-map).
   check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
   the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom
   loaders, and the shared CozoScript rule substrate
-- `canvas/projection/canvas_source.clj` — ingestion: discover the instance specs under the
+- `canvas/ingestion/canvas_source.clj` — ingestion: discover the instance specs under the
   configured spec-dirs (`*spec-dirs*`, default `["canvas"]`) and assemble their instance vars into
   one structure db (the `fukan.common` grammar itself loads by *require*, not discovery);
-  `canvas/projection/{grammar,instance,architecture}.clj` — the two print-duals
-  (grammar → defstructure forms; model nodes → authored instance forms) + the
-  system map
-- `canvas/projection/finding.clj` — the runtime Finding/reading output type (a list of
-  Observations). There is no separate "probe" surface: the readings (survey/patterns/
-  consistency/callers) are Projections rendered through their lens by `model/materialize.clj`'s
-  `render-finding` — the read dual of Blueprint (see "the act grammar" below).
+  `canvas/projection/{grammar,instance,architecture}.clj` — the inspection print-duals
+  (grammar → defstructure forms; model nodes → authored instance forms) + the system map.
+  (The DOWNWARD projection — model→artifact materialization + the readings/Findings — was CUT
+  2026-07-15 to focus scope on verified modelling; the act grammar `Lens`/`Projection`/`Check`
+  stays in `core/lens.clj` as the dormant seam for when the projection side is re-expanded.)
 - `model/pipeline.clj` → `build-model`; `model/extraction.clj` — the code→model
-  extractor plug-point (a registry slot, blind to the language); `model/materialize.clj`
-  — model→artifact projection: Blueprint/Docs render to text (`render-base`), the readings
-  render to Findings (`render-finding`) — both are Projection-through-Lens
+  extractor plug-point (a registry slot, blind to the language)
 - `infra/model.clj` (composition root — registers the project extractor + loads the dialect), `core.clj`
 
 fukan's own **vocabulary** — the code grammar (Kind/Effect/Operation/Module/Subsystem) + its
@@ -241,10 +237,10 @@ Laid out by **tier** (shipped library vs fukan's own use) and, within a tier, by
   `Subsystem`, its correspondence readers onto `module.clj`/`effect.clj`. (git history preserves it.)
 - `canvas/instruments/` — fukan as a *user of itself*: its use-side INSTANCES (Lens/Projection
   tool-definitions authored against the act grammar in `core/lens.clj`). Currently **PARKED —
-  fukan ships none** (the dir is empty/absent): the act grammar and the renderers
-  (`model/materialize.clj`) stay exercised. With the principles layer cut, a plain build now ships
-  **no** reading Projections — `read-all` is empty; the reading machinery is exercised via ad-hoc
-  test instances (`readings_test`) and the generic `Patterns`/`Consistency` renderers.
+  fukan ships none** (the dir is empty/absent). The DOWNWARD projection (materialization + the
+  readings) was CUT 2026-07-15; the act grammar (`Lens`/`Projection`/`Check` + the selection
+  engine) stays as the dormant seam, kept live only for inspection — the print-duals resolve
+  their focus through `core/lens.clj`'s `focus-nodes`.
 - `canvas/architecture/<area>/…` — fukan as a *built* system: one self-spec per `src/`
   module, grouped by area (`kernel`/`ingestion`/`cozo`/`projection`/`orchestration`), plus
   `subsystems.clj` (the capability clusters + the declared `:may-depend` DAG the
@@ -335,7 +331,7 @@ and the old Phase 4–6 analyzer are retired.
 `hooks/`) lives on the fukan-local aliases (`:dev`/`:test`/`:kondo`/`:lint`/`:nrepl`/`:run`), so a
 consuming project inherits only core + grammar. **Consuming fukan from another project:** depend on
 fukan, `(:require [fukan.common])` (or the specific `fukan.common.vocab.*` elements), bind
-`fukan.canvas.projection.canvas-source/*spec-dirs*` to your own spec dir, and call `build-model` with
+`fukan.canvas.ingestion.canvas-source/*spec-dirs*` to your own spec dir, and call `build-model` with
 your own code-root (the default composition in `fukan.infra.model` registers the Clojure extractor +
 malli dialect; write your own composition to vary either).
 
@@ -359,8 +355,7 @@ mixing them corrupts history.
   the Clojure extractor)
 - `src/fukan/model/pipeline.clj` — `build-model` (canvas ingestion + extraction merge)
 - `src/fukan/canvas/core/structure.clj` — the `defstructure` primitive + `check`
-- `src/fukan/canvas/projection/canvas_source.clj` — canvas discovery, merge, cross-refs
-- `src/fukan/model/materialize.clj` — model→implementation-spec projection
+- `src/fukan/canvas/ingestion/canvas_source.clj` — canvas discovery, merge, cross-refs
 - `common/fukan/common.clj` (ns `fukan.common`) — the grammar INDEX: one require that registers the
   whole `fukan.common.*` tier (vocab + typing + extraction)
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by element

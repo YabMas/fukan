@@ -135,8 +135,8 @@
    an inline `:select` (its own `:val/select` form) → `focus-nodes`; else a `:through`
    Lens → `evaluate-lens` (a prose-only lens still yields nil = not evaluable, the
    caller's concern); else NO focus declared → the WHOLE MODEL (absence of narrowing is
-   the maximal focus). The one resolution `materialize-projection` and `read-projection`
-   share."
+   the maximal focus). The single focus-resolution a Projection renderer uses — dormant since
+   the downward projection was cut, kept for the deferred projection side."
   [db proj-eid]
   (let [clauses (:val/select (cq/entity db proj-eid))]
     (if clauses
@@ -152,7 +152,7 @@
   "Narrow a `focus` (a node-set) to its members that ALSO match `clauses` (binding `?n`,
    evaluated with the vocab-derived rules) — lens-within-lens. The composable step: a
    focus refined by a further query, so acts CHAIN by passing a refined focus forward
-   (e.g. focus-nodes → refine → materialize-over / a scoped probe)."
+   (e.g. focus-nodes → refine → a scoped reading or projection)."
   [db focus clauses]
   (set/intersection (set focus) (focus-nodes db clauses)))
 
