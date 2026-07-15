@@ -17,4 +17,4 @@
     "Discover + require the canvas namespaces (intern their instance-vars), returning the ns syms —
      the load step the native Cozo build runs (its var-scan needs the namespaces loaded)."
     {:signature [:=> [:cat] [:vector :any]]
-     :performs  [:io :stderr :require :throws]}))
+     :performs  [:io :require :throws]}))

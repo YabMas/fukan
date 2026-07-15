@@ -18,12 +18,12 @@
    the native Cozo build; `get-model` returns it."
   (Operation load-model    "Build (or reload) the held Model from a src path — the native Cozo build, closing the prior db."
     {:signature  [:=> [:catn [:src extraction/Path]] substrate/StructureDb]
-     :performs   [:io :stderr :require :state :throws]
+     :performs   [:io :require :state :throws]
      :delegates  [pipeline/build-model cozo-query/q cozo-db/close]})  ; build the cozo model; cq/q reads the count; close the prior
   (Operation get-model     "The current held Model (the Cozo substrate), or none."
     {:signature [:=> [:cat] substrate/StructureDb]})
   (Operation refresh-model "Rebuild the Model from the last src path."
     {:signature [:=> [:cat] substrate/StructureDb]
-     :performs  [:io :stderr :require :state :throws]})
+     :performs  [:io :require :state :throws]})
   (Operation get-src "The current source path the held Model was built from, or none."
     {:signature [:=> [:cat] extraction/Path]}))

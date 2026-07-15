@@ -20,5 +20,5 @@
      require the canvas namespaces, gather the extraction facts through the plug-point, and
      assemble canvas + code via model->cozo."
     {:signature [:=> [:catn [:source extraction/Path]] cozo-db/CozoDb]
-     :performs  [:io :stderr :require :throws :state]
+     :performs  [:io :require :throws :state]
      :delegates [canvas-source/require-canvas-namespaces! extraction/extract-facts cozo-build/model->cozo]}))
