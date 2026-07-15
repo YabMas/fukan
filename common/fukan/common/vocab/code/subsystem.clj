@@ -7,6 +7,7 @@
    rehomed from the retired `canvas.principles.layered-architecture` when the principles layer was
    cut to focus scope on vocab + verification.)"
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.cozo.query :as cq]
             [fukan.common.vocab.code.module :refer [Module]]))
 
 ;; in-subsystem — Subsystem membership as a DEFRELATION (the `contains` union restricted to a
@@ -71,3 +72,21 @@
              [?mod :structure/of :fukan.common.vocab.code.module/Module]
              (not (fact ?mod))
              (not-join [?mod] (in-subsystem ?mod ?_sub))]))
+
+(defn unrealized-dependencies
+  "The declared `:may-depend` edges the code does NOT realize — a Subsystem ?s that declares it may
+   depend on ?t, but NO Module in ?s actually depends (`module-depends`: calls ∪ data-adoption) on a
+   Module in ?t. As a set of [from-subsystem to-subsystem] name pairs.
+
+   The DUAL of the conformance law: conformance catches CODE that outruns the declared DAG
+   (an undeclared cross-subsystem dependency — a violation); this catches a declared DAG that outruns
+   the CODE (a declared edge with no realizing dependency — over-declaration: intentional headroom or
+   stale intent). A SIGNAL, not a violation (like `module/uncovered-calls`) — headroom is a legitimate
+   choice, so an unrealized declared dependency reports rather than fails a check."
+  [db-arg]
+  (set (cq/q '[:find ?sn ?tn :in $ %
+               :where [?s :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (may-depend ?s ?t)
+                      [?s :entity/name ?sn] [?t :entity/name ?tn]
+                      (not-join [?s ?t]
+                        (module-depends ?m ?n) (in-subsystem ?m ?s) (in-subsystem ?n ?t))]
+             db-arg (s/vocab-rules))))

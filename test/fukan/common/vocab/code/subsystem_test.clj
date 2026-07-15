@@ -78,6 +78,25 @@
     (let [db (build/vars->cozo [#'t-op-t #'t-op-s #'t-cm-s #'t-cm-t #'t-sub-S-bad #'t-sub-T])]
       (is (= #{"M-S"} (offenders db "cross-subsystem"))))))
 
+;; ── over-declaration fixtures: V declares :may-depend T but M-V realizes no dependency on M-T ──
+(operation/Operation ^{:name "op-v"} t-op-v "a V op that depends on nothing cross-subsystem")
+(module/Module ^{:name "M-V"} t-cm-v {:exposes [t-op-v]})
+(subsystem/Subsystem ^{:name "V"} t-sub-V {:child [t-cm-v] :may-depend [t-sub-T]})
+
+(deftest unrealized-dependency-fires-on-an-over-declared-edge
+  (testing "V declares :may-depend T but M-V depends on no module in T → [V T] is an unrealized dependency"
+    (let [db (build/vars->cozo [#'t-op-v #'t-cm-v #'t-sub-V #'t-op-t #'t-cm-t #'t-sub-T])]
+      (is (= #{["V" "T"]} (subsystem/unrealized-dependencies db))))))
+
+(deftest unrealized-dependency-green-when-the-declared-dep-is-realized
+  (testing "S-ok declares :may-depend T AND M-S depends on M-T → nothing is reported unrealized"
+    (let [db (build/vars->cozo [#'t-op-t #'t-op-s #'t-cm-s #'t-cm-t #'t-sub-S-ok #'t-sub-T])]
+      (is (empty? (subsystem/unrealized-dependencies db))))))
+
+(deftest fukan-has-no-unrealized-declared-dependencies
+  (testing "after tightening ingestion to :may-depend [], every declared :may-depend edge is realized by code"
+    (is (empty? (subsystem/unrealized-dependencies (pipeline/build-model "src"))))))
+
 ;; ── acyclicity fixtures: a 2-cycle in :may-depend ──
 (declare t-sub-cy-b)
 (subsystem/Subsystem ^{:name "CY-A"} t-sub-cy-a {:may-depend [t-sub-cy-b]})

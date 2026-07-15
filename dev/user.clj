@@ -14,7 +14,8 @@
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
-            [fukan.common.vocab.code.module :as code-module]))
+            [fukan.common.vocab.code.module :as code-module]
+            [fukan.common.vocab.code.subsystem :as code-subsystem]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -146,11 +147,17 @@
 
 (defn deps
   "Print fukan's complete module→module dependency graph (calls ∪ data-adoption), one edge per line —
-   the objective backbone to reason a clean organization against. (Reads the Cozo model — migrated.)"
+   the objective backbone to reason a clean organization against — then any DECLARED subsystem
+   :may-depend edges the code does NOT realize (over-declaration: intended headroom or stale intent)."
   []
   (if-let [c (infra-model/get-model)]
-    (doseq [[a b] (sort (code-module/module-dependencies c))]
-      (println (format "%-24s ⟶ %s" a b)))
+    (do (doseq [[a b] (sort (code-module/module-dependencies c))]
+          (println (format "%-24s ⟶ %s" a b)))
+        (let [unreal (code-subsystem/unrealized-dependencies c)]
+          (if (empty? unreal)
+            (println "\nEvery declared :may-depend edge is realized by code.")
+            (do (println "\nDECLARED :may-depend edges NOT realized by code (over-declared — headroom/stale):")
+                (doseq [[a b] (sort unreal)] (println (format "  %-16s ⇢ %s" a b)))))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn dispatch
