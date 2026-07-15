@@ -103,13 +103,17 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   `Connected` (a flow-node facet). The structural primitives the rest builds on.
 - `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem}.clj` — the code grammar
   (Kind / Effect / Operation / Module / Subsystem). Each element file carries its structure +
-  *its* model↔code correspondence laws/readers. The cross-element correspondence —
-  `module-corresponds?` (the canvas-module↔code-ns name bridge) and `op-twin` (an alias of the
-  kernel `twin`, derived from the `(corresponds …)` declarations) — plus the call-graph demand
-  readers (`unrealized-delegates`/`uncovered-calls`/`unfaithful-calls`, thin worklists over the
-  generated `:corresponds/Operation.delegates-*` demands) live in `module.clj`; `undeclared-effects`
-  (the effect-correspondence reader over the generated `performs-covered` demand) lives in
-  `effect.clj`. The operation/effect/`fukan` laws reach them via datalog injection (no compile
+  *its* model↔code correspondence — the complete story of the one element in one file.
+  `operation.clj` holds Operation's whole correspondence: the `(correspond Operation …)` fact-side +
+  demands, the `op-twin` alias of the kernel `twin`, the `:signature` comparator, and the call-graph
+  demand readers (`unrealized-delegates`/`uncovered-calls`/`unfaithful-calls`/`unrealized-dispatch`,
+  thin worklists over the generated `:corresponds/Operation.delegates-*` demands). `module.clj` holds
+  Module's own correspondence — the `module-corresponds?` canvas-module↔code-ns name bridge (+ its
+  Cozo predicate-port) and `(correspond Module …)`, the bridged twin ROOT that Operation's twins nest
+  within; Operation's readers reach that bridge only inside quoted rules (query-time port), so
+  Operation needs no compile-time dependency on Module (Module requires Operation, not the reverse).
+  `undeclared-effects` (the effect-correspondence reader over the generated `performs-covered` demand)
+  lives in `effect.clj`. The operation/effect/`fukan` laws reach them via datalog injection (no compile
   cycle, since the `fukan.common` index requires every element). The correspondence demands ride Operation's
   `(corresponds …)` declaration and slot options, their laws GENERATED. A law that is a
   declaration's SLOT SEMANTICS rides the declaring structure itself: `Subsystem` carries the
@@ -152,7 +156,8 @@ verifiable models before re-widening ambition. Its genuine principle content (pa
 TrustBoundary + totality, declared-effects/deep-modules/operation-surface demands and the
 Boundary/Depth/latent-boundaries readings) is gone (git history preserves it); the foundation it had
 bundled was kept — the two module-graph enforcement laws rehomed onto `Subsystem`, the correspondence
-call-readers onto `module.clj`, the effect-correspondence reader onto `effect.clj`.
+call-readers onto `operation.clj` (with the rest of Operation's correspondence), the
+effect-correspondence reader onto `effect.clj`.
 
 The grouping ladder is levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace:
 an API surface + owned types) ⊂ `Subsystem` (a cluster of modules realizing a capability, with
@@ -234,7 +239,7 @@ Laid out by **tier** (shipped library vs fukan's own use) and, within a tier, by
   runs it, beside the act grammar in `core/lens.clj`.
 - `canvas/principles/` — **CUT (2026-07-13).** The adopted-principles layer was removed to focus
   scope on vocab-building + verifiable models; its two module-graph enforcement laws rehomed onto
-  `Subsystem`, its correspondence readers onto `module.clj`/`effect.clj`. (git history preserves it.)
+  `Subsystem`, its correspondence readers onto `operation.clj`/`effect.clj`. (git history preserves it.)
 - `canvas/instruments/` — fukan as a *user of itself*: its use-side INSTANCES (Lens/Projection
   tool-definitions authored against the act grammar in `core/lens.clj`). Currently **PARKED —
   fukan ships none** (the dir is empty/absent). The DOWNWARD projection (materialization + the
@@ -359,9 +364,11 @@ mixing them corrupts history.
 - `common/fukan/common.clj` (ns `fukan.common`) — the grammar INDEX: one require that registers the
   whole `fukan.common.*` tier (vocab + typing + extraction)
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by element
-  (each file = structure + correspondence) + grouping; the cross-element correspondence +
-  call-graph readers (`module-corresponds?`/`op-twin`/`unrealized-delegates`/`uncovered-calls`/
-  `unfaithful-calls`) are in `code/module.clj`
+  (each file = structure + its own correspondence) + grouping. Operation's correspondence (`op-twin`,
+  the `:signature` comparator, the call-graph readers `unrealized-delegates`/`uncovered-calls`/
+  `unfaithful-calls`/`unrealized-dispatch`) lives in `code/operation.clj`; the `module-corresponds?`
+  canvas-module↔code-ns bridge + Module's module-graph derivations (`module-owns`/`module-depends`/
+  `module-dependencies`) live in `code/module.clj`
 - `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI

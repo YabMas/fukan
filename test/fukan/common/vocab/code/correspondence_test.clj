@@ -10,8 +10,11 @@
             [fukan.canvas.core.structure :as s]
             [fukan.common.typing.malli :as malli]
             [fukan.canvas.core.typing :as typing]
-            ;; correspondence is now distributed across the code elements
-            [fukan.common.vocab.code.module :as module]
+            ;; correspondence is now distributed across the code elements: Operation carries its own
+            ;; (the readers below), Module supplies the module↔code-ns bridge + Module structure (loaded
+            ;; for its side-effects + the fully-qualified :.../Module tags in the fixtures).
+            [fukan.common.vocab.code.module]
+            [fukan.common.vocab.code.operation :as operation]
             [fukan.common.vocab.code.effect :as effect]))
 
 ;; register the project dialect's :render for the operation-sig / render-type path used below
@@ -115,19 +118,19 @@
                    {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                    {:rel/id "X|child|ex" :rel/from -5 :rel/kind :child :rel/to -6}
                    {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}])]
-      (is (seq (module/unrealized-delegates db))
+      (is (seq (operation/unrealized-delegates db))
           "A->B delegation has no realizing call between corresponding modules → offender"))))
 
 (deftest call-realization-green-on-the-self-model
   (testing "module-level realization is green on the live build-model \"src\""
-    (is (empty? (module/unrealized-delegates (pipeline/build-model "src")))
+    (is (empty? (operation/unrealized-delegates (pipeline/build-model "src")))
         "0 unrealized — verified by the design prototype")))
 
 (deftest uncovered-calls-backbone-complete
   (testing "slice 2: every actual cross-module call is now covered by an authored :delegates —
             the backbone is complete (detection of an UNdeclared coupling is proven on a synthetic
             db in fidelity-fires-on-an-undeclared-modelled-coupling)"
-    (let [worklist (module/uncovered-calls (pipeline/build-model "src"))]
+    (let [worklist (operation/uncovered-calls (pipeline/build-model "src"))]
       (is (empty? worklist)
           (str "the :delegates backbone is complete; undeclared couplings remain: " worklist)))))
 
@@ -150,23 +153,23 @@
                    {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
                    {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
                    {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}])]
-      (is (= #{"fa"} (module/unfaithful-calls db))
+      (is (= #{"fa"} (operation/unfaithful-calls db))
           "an undeclared coupling between modelled faculties is a fidelity offender")
-      (is (= #{["fukan.a" "fukan.b"]} (module/uncovered-calls db))
+      (is (= #{["fukan.a" "fukan.b"]} (operation/uncovered-calls db))
           "the same coupling appears in the broader query"))))
 
 (deftest fidelity-green-on-the-self-model
   (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
-    (is (empty? (module/unfaithful-calls (pipeline/build-model "src")))
+    (is (empty? (operation/unfaithful-calls (pipeline/build-model "src")))
         "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
 
 (deftest slice-1-self-model-is-clean
   (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
             design+code self-model has zero law violations"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (module/unrealized-delegates model)) "realization is green")
-      (is (empty? (module/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
-      (is (empty? (module/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
+      (is (empty? (operation/unrealized-delegates model)) "realization is green")
+      (is (empty? (operation/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
+      (is (empty? (operation/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
       (is (empty? (law/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (law/check model)))))))
@@ -235,16 +238,16 @@
 
 (deftest unrealized-dispatch-fires-when-unrealized
   (testing "an authored cross-module delegation with no realizing code path is reported"
-    (is (contains? (module/unrealized-dispatch (delegation-fixture false)) "op-a"))))
+    (is (contains? (operation/unrealized-dispatch (delegation-fixture false)) "op-a"))))
 
 (deftest unrealized-dispatch-green-through-calls
   (testing "the delegation is realized once the code reaches the target through its (multi-hop) call graph"
-    (is (empty? (module/unrealized-dispatch (delegation-fixture true)))
+    (is (empty? (operation/unrealized-dispatch (delegation-fixture true)))
         "op-a -> op-b realized transitively via op-a -> mid -> op-b")))
 
 (deftest unrealized-dispatch-green-on-self-model
   (testing "every authored cross-module delegation is realized op-level (transitively) by the live model's call graph"
-    (is (empty? (module/unrealized-dispatch (pipeline/build-model "src")))
+    (is (empty? (operation/unrealized-dispatch (pipeline/build-model "src")))
         "0 unrealized — every authored :delegates is backed by a real (possibly multi-hop) call path")))
 
 (deftest effect-correspondence-fires-on-an-undeclared-transitive-effect
