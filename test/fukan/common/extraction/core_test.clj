@@ -79,16 +79,18 @@
           "the sample Module is provenance-stamped"))))
 
 (deftest extracts-defmulti-as-operation
-  (testing "a defmulti is extracted as a (polymorphic) Operation, and callers' calls to it resolve as :calls"
-    (let [db (extract "src/fukan/model/materialize.clj")]
+  (testing "a defmulti is extracted as a (polymorphic) Operation, its callers resolve as :calls, and a call inside a defmethod body re-homes onto the multimethod"
+    (let [db    (extract "test/fixtures/target/poly.clj")
+          calls (set (cq/q '[:find ?fromn ?ton
+                             :where [?c :rel/kind :calls] [?c :rel/from ?f] [?c :rel/to ?t]
+                                    [?f :entity/name ?fromn] [?t :entity/name ?ton]] db))]
       (is (true? (ffirst (cq/q '[:find ?x :where [?o :structure/of :fukan.common.vocab.code.operation/Operation]
-                                              [?o :entity/name "render-finding"] [?o :val/extracted ?x]] db)))
-          "render-finding (a defmulti) is an extracted Operation")
-      (is (contains? (set (cq/q '[:find ?fromn ?ton
-                                 :where [?c :rel/kind :calls] [?c :rel/from ?f] [?c :rel/to ?t]
-                                        [?f :entity/name ?fromn] [?t :entity/name ?ton]] db))
-                     ["read-projection" "render-finding"])
-          "read-projection -> render-finding resolves as a :calls edge (a defmulti is an ordinary op)"))))
+                                              [?o :entity/name "render-shape"] [?o :val/extracted ?x]] db)))
+          "render-shape (a defmulti) is an extracted Operation")
+      (is (contains? calls ["describe" "render-shape"])
+          "describe -> render-shape resolves as a :calls edge (a defmulti is an ordinary op)")
+      (is (contains? calls ["render-shape" "area"])
+          "a call inside a defmethod body (area) re-homes onto the multimethod render-shape (attribute-defmethod-bodies)"))))
 
 (deftest every-modelled-stage-is-realized-in-src
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/)
