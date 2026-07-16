@@ -176,8 +176,12 @@
 ;; retired; the hand-written `unrealized-dispatch` query it replaces is gone). Count holds (57 — still
 ;; one realized + one faithful law); only the realized law's `:where` body + `:desc` changed, moving the
 ;; laws hash. `delegates-faithful` (module-altitude) is unchanged. Live `(check)` still 0 on the self-model.
+;; 2026-07-16 (d): Operation's type-coverage `:require` + adheres `:when` guards moved from raw reified
+;; triples `[[?tr :rel/from ?t] [?tr :rel/kind :out]]` to the auto-generated `out` slot-rule
+;; `(out ?t ?_o)` — behavior-preserving (the rule expands to the same triples; live check still 0,
+;; type-coverage/adheres offenders still 0), only the two laws' `:where` altitude moved. Count holds (57).
 (def ^:private golden-terms {:count 42 :hash 912321169})
-(def ^:private golden-laws  {:count 57 :hash -1847611495})
+(def ^:private golden-laws  {:count 57 :hash -1382709262})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

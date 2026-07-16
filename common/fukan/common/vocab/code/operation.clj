@@ -54,40 +54,28 @@
 ;; kernel's universal substrate rules (`fukan.canvas.core.rules`), ambient in every law and query — pair
 ;; them with the op-kind rule `(Operation ?o)` where op-ness matters.
 
-;; ── the correspondence: the fact-side slots + the model↔code demands ──────────
-;; Declared from OUTSIDE the defstructure so the identity above stays clean, but IN this file — the one
-;; element, its whole story. `(s/correspond Operation …)` contributes the extracted fact-slots (:calls,
-;; :private, …), the twin (by name, nested within twinned Modules), and the drift demands (generated
-;; as laws at the stable keys :corresponds/Operation.*). The concept's defstructure mentions none of it.
+;; ── the correspondence: fact-side slots + the model↔code demands ──────────────
+;; Declared OUTSIDE the defstructure (identity stays clean), but IN this file — one element, its whole
+;; story. Contributes the extracted fact-slots + the twin (by name, nested within twinned Modules) +
+;; the drift demands, generated as laws at the stable keys :corresponds/Operation.*. Each demand's
+;; `:desc` is its human-facing name in check/drift output; a `:when`/`:require` guard reads at domain
+;; altitude through the auto-generated `out` slot-rule (`(out ?t ?_o)` ⇔ the twin declares an :out
+;; type — i.e. carries a fn-schema), not raw reified triples.
 
 (s/correspond Operation
-  {:calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
-   :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
-   :export    [:? :boolean]          ; intentionally public for MECHANISM (^:export)
-   :test-support [:? :boolean]}      ; intentionally public for TEST-SUPPORT (^:test-support)
-  ;; ex-Realization — vacuity-guarded: ∃ extracted Operation
+  {:calls        [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
+   :private      [:? :boolean]      ; public/internal — the module's surface (from extraction)
+   :export       [:? :boolean]      ; intentionally public for MECHANISM (^:export)
+   :test-support [:? :boolean]}     ; intentionally public for TEST-SUPPORT (^:test-support)
   (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
-  ;; ex-TypeCoverage — a modelled op's realizing code carries a :malli/schema
-  (realized {:key :type-coverage
-             :desc "every modelled operation's realizing code carries a type signature (:malli/schema)"
-             :require '[[?tr :rel/from ?t] [?tr :rel/kind :out]]})   ; the twin declares an :out ⇔ it carries a fn-schema
-  ;; ex-Encapsulation — the exemption flags are VOCAB's (the kernel never names them)
-  (covered  {:desc "every public extracted operation is covered by the model or deliberately exempt"
-             :unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]})
-  ;; GATED signature adherence (exact match): wherever the twin declares a signature (an :out), the
-  ;; modelled signature must EXACTLY adhere — the design op and its twin have IDENTICAL :in/:out targets
-  ;; (kernel `:structural` agreement: types content-dedup across strata, so eid identity = same types,
-  ;; order, and arity). A missing sig is type-coverage's offence — hence the :when guard.
-  (agrees   {:key :adheres :by :structural :over [:in :out]
-             :desc "every modelled operation's realizing code signature exactly adheres to its modelled type"
-             :when '[[?tr :rel/from ?t] [?tr :rel/kind :out]]})
-  ;; relation demands ABOUT Operation's own identity relations (:delegates / :performs):
-  ;; :delegates — every cross-module design delegation is REALIZED op-level: the design endpoints'
-  ;; twins reach each other through the actual `:calls+` graph (transitive; `:calls` is a :transitive
-  ;; fact-slot). :faithful adds the reverse at module altitude (a code coupling between twinned modules
-  ;; must be declared). :performs — every effect the twin reaches over :calls*·:performs is declared.
-  (delegates {:realized-by :calls :faithful true})
-  (performs  {:covered-from [:calls* :performs]}))
+  (realized {:key :type-coverage :require '[(out ?t ?_o)]
+             :desc "every modelled operation's realizing code carries a type signature (:malli/schema)"})
+  (covered  {:unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]
+             :desc "every public extracted operation is covered by the model or deliberately exempt"})
+  (agrees   {:key :adheres :by :structural :over [:in :out] :when '[(out ?t ?_o)]  ; only where the twin declares a sig (else type-coverage's offence)
+             :desc "every modelled operation's realizing code signature exactly adheres to its modelled type"})
+  (delegates {:realized-by :calls :faithful true})  ; cross-module :delegates realized by a :calls+ path; :faithful ⇒ the module-level reverse
+  (performs  {:covered-from [:calls* :performs]}))   ; every effect the twin reaches over :calls*·:performs is declared
 
 ;; Operation hand-writes NO correspondence code: the fact-slots, twin, and every drift check
 ;; (realized / type-coverage / covered / adheres / delegates-realized / delegates-faithful /
