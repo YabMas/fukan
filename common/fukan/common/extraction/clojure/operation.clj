@@ -35,13 +35,15 @@
   #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti})
 
 (defn extract-operation
-  "Build an extracted Operation InstanceValue from a clj-kondo var-definition `v`
-   and the set of effect keywords `effs` directly attributed to it. When `v` carries a
-   `:malli/schema` function-type, the signature is DECOMPOSED into `:in`/`:out` Schema
-   subgraphs (the fact-side symmetric with the design side), built through the type dialect
-   via `s/value-literal->iv` — the queryable form the adherence comparator reads (there is no
-   `:val/sig` blob; both strata render through `operation-sig`)."
-  [v effs]
+  "Build an extracted Operation InstanceValue from a clj-kondo var-definition `v`, the set of effect
+   keywords `effs` directly attributed to it, and `call-ids` — the natural-key ids of the Operations it
+   calls (a `:calls` clause of `substrate/Ref`s, resolved by the assembler like an authored ref). When
+   `v` carries a `:malli/schema` function-type, the signature is DECOMPOSED into `:in`/`:out` Schema
+   subgraphs (the fact-side symmetric with the design side), built through the type dialect via
+   `s/value-literal->iv` — the queryable form the adherence comparator reads (there is no `:val/sig`
+   blob; both strata render through `operation-sig`). The Operation's own natural-key id (`\"ns/op\"`) is
+   the root id the caller assigns."
+  [v effs call-ids]
   (let [sig    (:malli/schema (:meta v))
         arrow? (and (vector? sig) (= :=> (first sig)) (= 3 (count sig)))
         {:keys [in out]} (when arrow? (code-arrow->in-out sig))]
@@ -50,10 +52,12 @@
                            (:export (:meta v))       (assoc :val/export true)
                            (:test-support (:meta v)) (assoc :val/test-support true))
                          (cond-> []
-                           (seq effs) (conj {:rk :performs :card :many
-                                             :targets (mapv (fn [eff] (Effect eff)) (sort effs))})
-                           (seq in)   (conj {:rk :in :card :many
-                                             :targets (mapv #(s/value-literal->iv schema-tag %) in)})
-                           arrow?     (conj {:rk :out :card :optional
-                                             :targets [(s/value-literal->iv schema-tag out)]}))
+                           (seq effs)     (conj {:rk :performs :card :many
+                                                 :targets (mapv (fn [eff] (Effect eff)) (sort effs))})
+                           (seq in)       (conj {:rk :in :card :many
+                                                 :targets (mapv #(s/value-literal->iv schema-tag %) in)})
+                           arrow?         (conj {:rk :out :card :optional
+                                                 :targets [(s/value-literal->iv schema-tag out)]})
+                           (seq call-ids) (conj {:rk :calls :card :many
+                                                 :targets (mapv sub/->Ref call-ids)}))
                          false)))

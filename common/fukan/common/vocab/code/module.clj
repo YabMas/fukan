@@ -101,15 +101,3 @@
   (set (cq/q '[:find ?mn ?nn :in $
                :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
              db)))
-
-;; ── module membership (raw CozoScript) ────────────────────────────────────────
-
-;; The module-membership CozoScript fragment (op→owning-module-name over child/exposes/owns) — it names
-;; code-vocab relations, so it lives in VOCAB, prepended (after the generic `rules/eav`) by the cozo
-;; consumers that need raw-CozoScript membership: the extractor's :calls grounding.
-(def in-module-cozo
-  "
-in_module[e, mname] := relkind[r, 'child'],   relfrom[r, m], relto[r, e], ename[m, mname]
-in_module[e, mname] := relkind[r, 'exposes'], relfrom[r, m], relto[r, e], ename[m, mname]
-in_module[e, mname] := relkind[r, 'owns'],    relfrom[r, m], relto[r, e], ename[m, mname]
-")

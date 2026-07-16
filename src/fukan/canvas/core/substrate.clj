@@ -19,6 +19,16 @@
 (defn ^{:malli/schema [:=> [:cat :any] :boolean]}
   instance-value? [x] (instance? InstanceValue x))
 
+;; A reference to an already-emitted node by its natural-key `entity/id` — the assembler resolves it
+;; to that id and emits NO node (the node arrives via its own root). The generated analog of a var
+;; reference (a var resolves to `var-id`; a `Ref` resolves to a literal id): an EXTRACTED feeder wires
+;; cross-references (a fact op's `:calls`, a fact module's `:child`) by natural key, so the ONE
+;; assembler links them exactly as it links authored var-refs — no post-build eid-arithmetic pass.
+(defrecord Ref [id])
+
+(defn ^{:malli/schema [:=> [:cat :any] :boolean]}
+  ref? [x] (instance? Ref x))
+
 (def stratum-attr
   "The PROVENANCE attribute — the design/fact stratum marker. The BUILD stamps it on every
    non-value node arriving through the extraction plug-point (`fukan.cozo.build/model->cozo`

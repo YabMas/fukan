@@ -169,10 +169,11 @@ alle[e] := *t_bool[e, _, _]
 (defn ^{:malli/schema [:=> [:cat [:vector :symbol] :map] :CozoDb]}
   model->cozo
   "Native FULL build: the instance-vars of canvas `ns-syms` + the
-   extraction `{:roots :ground}` facts → one native Cozo substrate, with the extractor's
-   `:ground` closure called generically (e.g. to ground the `:calls` graph) and the grammar
-   reflected. Assembling canvas + extraction roots in one native pass resolves cross-refs
-   without a union/merge. Returns the open Cozo db."
+   extraction `{:roots :ground?}` facts → one native Cozo substrate, and the grammar reflected.
+   Assembling canvas + extraction roots in one native pass resolves ALL cross-refs — including the
+   extracted `:calls` graph, wired as natural-key `Ref`s — without a union/merge or a post-build
+   grounding pass. The optional `:ground` closure remains a generic post-build seam (a different
+   extractor may need one; the Clojure extractor no longer does). Returns the open Cozo db."
   [ns-syms {:keys [roots ground]}]
   (-> (mirror/load-datoms
        (instances->datoms

@@ -24,6 +24,7 @@
   [t owner-id rk idx nodes rels]
   (cond
     (var? t)              [(s/var-id t) nodes rels]
+    (s/ref? t)            [(:id t) nodes rels]   ; a natural-key reference — the node arrives via its own root
     (s/instance-value? t) (let [id (node-id t owner-id (str (name rk) "/" idx))
                                 [ns rs] (walk t id nodes rels)]
                             [id ns rs])

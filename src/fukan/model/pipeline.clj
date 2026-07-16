@@ -21,11 +21,12 @@
   "Build the model — the unified native Cozo structure substrate. Requires the canvas namespaces
    (interning their instance-vars), gathers the extraction FACTS through the plug-point (when
    `code-root` names an existing source tree AND a fact extractor is registered), and assembles
-   canvas + code into one Cozo db via `model->cozo` — the :calls graph grounded and the grammar
-   reflected. Pass nil (or build with no extractor registered) for the design model alone."
+   canvas + code into one Cozo db via `model->cozo` — the :calls graph wired as natural-key refs and
+   resolved in the one assembly pass, and the grammar reflected. Pass nil (or build with no extractor
+   registered) for the design model alone."
   [code-root]
   (let [nss   (canvas-source/require-canvas-namespaces!)
         facts (if (and code-root (.exists (io/file code-root)))
                 (extraction/extract-facts code-root)
-                {:roots [] :ground nil})]
+                {:roots []})]
     (cozo-build/model->cozo nss facts)))

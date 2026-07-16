@@ -14,8 +14,7 @@
 (def eav
   "Logical EAV decode — reified-edge, node, and leaf views over the mirror's typed
    relations. A purely generic, vocab-agnostic decode: the universal base prepended to
-   every cozo query. Code-surface CozoScript that names code-vocab (`in_module` over
-   child/exposes/owns) lives in vocab (`fukan.common.vocab.code.module/in-module-cozo`), not here."
+   every cozo query."
   "
 relfrom[r, e]    := *t_int[r, 'rel/from', e]
 relto[r, e]      := *t_int[r, 'rel/to', e]
