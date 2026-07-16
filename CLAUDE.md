@@ -598,11 +598,44 @@ and the old Phase 4–6 analyzer are retired.
 **Classpath tiers (`deps.edn`).** Base `:paths ["src" "common" "resources"]` is the *shipped* surface —
 `fukan.*` (core) + `fukan.common.*` (grammar). The `.` root (fukan's self-model `canvas/`, `tasks/`,
 `hooks/`) lives on the fukan-local aliases (`:dev`/`:test`/`:kondo`/`:lint`/`:nrepl`/`:run`), so a
-consuming project inherits only core + grammar. **Consuming fukan from another project:** depend on
-fukan, `(:require [fukan.common])` (or the specific `fukan.common.vocab.*` elements), bind
-`fukan.canvas.ingestion.canvas-source/*spec-dirs*` to your own spec dir, and call `build-model` with
-your own code-root (the default composition in `fukan.infra.model` registers the Clojure extractor +
-malli dialect; write your own composition to vary either).
+consuming project inherits only core + grammar.
+
+**Consuming fukan from another project.** A consuming project depends on fukan (a `:local/root`
+alias is enough — no publishing), puts its specs in `canvas/` at its root, and drives the shipped
+cockpit:
+
+    clj -M:fukan
+    (require '[fukan.repl :refer [go refresh status drift check architecture]])
+    (go {:src "path/to/the/core" :title "BRIAN"})  ; :spec-dirs and :reload-dirs default to ["canvas"]
+
+`:src` is the only thing a consumer must supply, and it may name a path that does not exist
+yet — the model-first workflow, where every authored Operation is drift until realised.
+`:title` names the project in `(architecture)`'s banner. `go` holds the config; every other
+command reads it, so they stay bare.
+
+The alias itself, in `~/.clojure/deps.edn` — one global alias works from any project root,
+because `:extra-paths ["."]` resolves against cwd:
+
+    :fukan {:extra-deps  {fukan/fukan {:local/root "/path/to/fukan"}}
+            :extra-paths ["."]
+            :jvm-opts    ["-Dclj-reload.auto-init=false"]}
+
+Both opts are load-bearing. `:extra-paths ["."]` puts the consumer's `canvas/` on the
+classpath — the spec dir name is both the resource path and the leading namespace segment, so
+`["canvas"]` cannot substitute. `-Dclj-reload.auto-init=false` is **required, not tuning**:
+clj-reload walks every classpath dir when its namespace loads, and `.` is on the classpath — so
+it would scan the consumer's entire tree (`node_modules`, `target`, `.git`) before any fukan
+code runs. On a real-sized repo that is an OOM, not a slowdown. The cockpit inits clj-reload
+itself, scoped to `:reload-dirs`, so the load-time scan buys nothing. (fukan's own `:dev`,
+`:test` and `:nrepl` aliases set the same opt for the same reason.)
+
+`fukan.infra.model` is the default composition root (Clojure extractor + malli dialect) and
+needs no wiring. A project targeting another language writes its own and registers its own
+extractor at the `fukan.model.extraction` plug-point.
+
+fukan-on-itself is the FIRST consumer, not a privileged one — `dev/user.clj` is a thin wrapper
+over `fukan.repl` supplying fukan's own defaults, so the consumer surface is exercised on every
+REPL start.
 
 ## Jujutsu workflow conventions
 

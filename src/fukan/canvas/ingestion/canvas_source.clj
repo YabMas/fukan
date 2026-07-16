@@ -40,8 +40,14 @@
 
 (defn- spec-root-dirs
   "For one spec dir NAME, every such directory on the classpath (via the context
-   ClassLoader's getResources), falling back to a relative lookup. Yields
-   [{:dir dir :root File} …]; empty when none is locatable."
+   ClassLoader's getResources), falling back to a relative lookup under the process cwd.
+
+   The fallback is a TRAP worth naming: discovery here is filesystem-based, but
+   `require-canvas-namespace` loads from the CLASSPATH. A dir found only by the fallback
+   yields files that cannot then be required, so we warn with the real cause rather than
+   let a downstream 'failed to load canvas namespace' misattribute it.
+
+   Yields [{:dir dir :root File} …]; empty when none is locatable."
   [dir]
   (let [cl       (.getContextClassLoader (Thread/currentThread))
         urls     (when cl (enumeration-seq (.getResources cl dir)))
@@ -50,8 +56,15 @@
                       (filter #(and (some? %) (.isDirectory ^java.io.File %)))
                       vec)
         from-cwd (io/file dir)
+        fallback? (and (empty? from-cp) (.isDirectory from-cwd))
         roots    (cond-> from-cp
-                   (and (empty? from-cp) (.isDirectory from-cwd)) (conj from-cwd))]
+                   fallback? (conj from-cwd))]
+    (when fallback?
+      (binding [*out* *err*]
+        (println (str "canvas-source: spec dir " (pr-str dir) " found on the filesystem but NOT on the"
+                      " classpath — its namespaces will fail to load. Add the dir's PARENT to your"
+                      " classpath (e.g. :extra-paths [\".\"]), since " (pr-str dir)
+                      " is both the resource path and the leading namespace segment."))))
     (map (fn [r] {:dir dir :root r}) roots)))
 
 (defn- discover-canvas-files-in

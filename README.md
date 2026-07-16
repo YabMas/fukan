@@ -186,6 +186,10 @@ In the REPL (`clj -M:dev`):
 (check)     ; every law's violations, offenders quoted as their authored forms
 ```
 
+The same commands are the surface an external project consumes — `dev/user.clj` is a thin
+wrapper over the shipped `fukan.repl`, supplying fukan's own defaults. See CLAUDE.md for the
+consumer recipe.
+
 ## Project structure
 
 ```
@@ -193,6 +197,7 @@ common/               the shipped fukan.common tier: the vocabulary (grouping, c
                       patterns/*), the malli type dialect, the Clojure extraction seam
 canvas/architecture/  fukan's self-model: per-module specs + subsystems + the :may-depend DAG
 src/fukan/
+  repl.clj            the shipped cockpit — the reader commands a project drives its model with
   canvas/core/        the defstructure primitive, derived rules, typing plug-point,
                       the act grammar + lens evaluation, grammar reflection
   canvas/ingestion/   spec discovery + assembly (*spec-dirs*)

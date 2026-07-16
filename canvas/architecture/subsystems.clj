@@ -22,6 +22,7 @@
             [canvas.architecture.projection.prose :refer [projection-prose]]
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
             [canvas.architecture.orchestration.infra :refer [infra-model]]
+            [canvas.architecture.orchestration.repl :refer [repl]]
             [canvas.architecture.orchestration.core :refer [core]]
             [canvas.architecture.orchestration.cli :refer [cli]]
             [canvas.architecture.cozo.db :refer [cozo-db]]
@@ -64,5 +65,7 @@
   "Lifecycle + composition root + CLI entries — coordinates ingestion onto the model. Realizes no subject
    faculty. Depends on cozo during the cut-over: the lifecycle holds a Cozo mirror of the model, and
    on projection because an entry point RENDERS: `check --format text` reports through the same
-   instance print-dual the REPL does, rather than growing a second way to quote an offender."
-  {:child [model-pipeline infra-model core cli] :may-depend [kernel ingestion cozo projection]})
+   instance print-dual the REPL does, rather than growing a second way to quote an offender. The
+   cockpit's read commands (`repl`) render the held model back out through those same print-duals
+   (architecture/grammar/instance)."
+  {:child [model-pipeline infra-model repl core cli] :may-depend [kernel ingestion cozo projection]})
