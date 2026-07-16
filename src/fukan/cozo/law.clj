@@ -88,19 +88,43 @@
          (filter (fn [[_ v]] (false? (typing/value-valid? target (validate-value v)))))
          (mapv (fn [[x _]] [(str x)])))))
 
-;; ── the comparator hybrid: Cozo finds twin PAIRS, Clojure runs a registered comparator ──
+;; ── the comparator hybrid: Cozo finds twin PAIRS, Clojure runs a comparator ──
+(defn- structural-agreement
+  "The built-in `:by :structural` comparator over the `over` slots: `(fn [a b] → agree?)`, where two
+   nodes agree iff their targets over EVERY `over` slot are IDENTICAL by eid. Since types content-dedup
+   across strata (a shared target is ONE node), eid identity IS structural equality — no per-pair
+   render. Builds `{eid {rel → target-eids sorted by (:rel/order, eid)}}` ONCE (ordered slots compare
+   by position, set/single by canonical eid order), so the per-pair test is a map lookup."
+  [cdb over]
+  (let [orders (into {} (query/q '[:find ?r ?ord :where [?r :rel/order ?ord]] cdb))
+        idx    (reduce
+                (fn [m rel]
+                  (reduce (fn [m [op r to]]
+                            (update-in m [op rel] (fnil conj []) [(get orders r 0) to]))
+                          m
+                          (query/q [:find '?op '?r '?to :where
+                                    ['?r :rel/kind rel] ['?r :rel/from '?op] ['?r :rel/to '?to]] cdb)))
+                {} over)
+        idx    (into {} (for [[op slots] idx]
+                          [op (into {} (for [[rel pairs] slots] [rel (mapv second (sort pairs))]))]))]
+    (fn [a b] (= (get idx a) (get idx b)))))
+
 (defn- comparator-offenders
   "Run an `agrees` demand law as a PAIR hybrid: compile its `:where` to enumerate the comparator's
-   columns (`:on`, the design + fact eids), run the registered `:by` comparator per row, keep the
-   rows where it returns false, projected to the law's `:offenders`."
-  [cdb law {:keys [by on]} direct-tags index]
+   columns (`:on`, the design + fact eids), run the `:by` comparator per row, keep the rows where it
+   returns false, projected to the law's `:offenders`. `:by :structural` is the kernel built-in over
+   the demand's `:over` slots; any other `:by` is a vocab-registered comparator (`register-comparator!`)."
+  [cdb law {:keys [by on over]} direct-tags index]
   (let [program (compile-law (assoc law :offenders on) direct-tags index)
         rows    (db/q cdb (str query/preamble "\n" program))
-        f       (or (structure/comparator-for by)
-                    (throw (ex-info (str "no registered correspondence comparator: " by) {:by by})))
+        agree?  (if (= by :structural)
+                  (structural-agreement cdb over)
+                  (let [f (or (structure/comparator-for by)
+                              (throw (ex-info (str "no registered correspondence comparator: " by) {:by by})))]
+                    (fn [a b] (f cdb a b))))
         off-ix  (mapv #(.indexOf ^java.util.List (vec on) %) (:offenders law))]
     (->> rows
-         (remove (fn [row] (boolean (f cdb (nth row 0) (nth row 1)))))
+         (remove (fn [row] (boolean (agree? (nth row 0) (nth row 1)))))
          (mapv (fn [row] (mapv #(nth row %) off-ix))))))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}

@@ -8,7 +8,7 @@
             ;; loaded for its side-effect: registers the Cozo check engine so law/check dispatches to it
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            ;; loaded for its side-effect: registers op-twin + the correspondence demand laws
+            ;; loaded for its side-effect: registers the correspondence demand laws
             [fukan.common.vocab.code.module]))
 
 (defn- laws [db] (set (map :law (law/check db))))

@@ -221,20 +221,23 @@
                        {:rel/id "op-a|calls|mid" :rel/from -7  :rel/kind :calls :rel/to -11}
                        {:rel/id "mid|calls|op-b" :rel/from -11 :rel/kind :calls :rel/to -8}]))))
 
-(deftest generic-twin-matches-the-legacy-op-twin-pairing
-  (testing "the kernel twin rules reproduce the retired hand-written op-twin pairs exactly (self-model)"
-    (let [db     (pipeline/build-model "src")
-          legacy '[[(legacy-twin ?a ?b)
-                    [?a :structure/of :fukan.common.vocab.code.operation/Operation] (not [?a :val/extracted true])
-                    [?a :entity/name ?n] (in-module ?a ?cm)
-                    [?b :structure/of :fukan.common.vocab.code.operation/Operation] [?b :val/extracted true]
-                    [?b :entity/name ?n] (in-module ?b ?km)
-                    [(name-match :qualified-suffix ?cm ?km)]]]
-          rules  (into (s/vocab-rules) legacy)
-          pairs  (fn [head] (set (cq/q (into [:find '?a '?b :in '$ '% :where] [(list head '?a '?b)]) db rules)))]
+(deftest generic-twin-matches-the-legacy-hand-written-pairing
+  (testing "the kernel twin rules reproduce the retired hand-written op pairing exactly (self-model)"
+    (let [db      (pipeline/build-model "src")
+          ;; the kernel `twin` restricted to Operation (what the retired `op-twin` defrelation aliased)
+          op-twin '[[(op-twin ?a ?b)
+                     [?a :structure/of :fukan.common.vocab.code.operation/Operation] (twin ?a ?b)]]
+          legacy  '[[(legacy-twin ?a ?b)
+                     [?a :structure/of :fukan.common.vocab.code.operation/Operation] (not [?a :val/extracted true])
+                     [?a :entity/name ?n] (in-module ?a ?cm)
+                     [?b :structure/of :fukan.common.vocab.code.operation/Operation] [?b :val/extracted true]
+                     [?b :entity/name ?n] (in-module ?b ?km)
+                     [(name-match :qualified-suffix ?cm ?km)]]]
+          rules   (into (into (s/vocab-rules) op-twin) legacy)
+          pairs   (fn [head] (set (cq/q (into [:find '?a '?b :in '$ '% :where] [(list head '?a '?b)]) db rules)))]
       (is (seq (pairs 'op-twin)) "the self-model has twins")
       (is (= (pairs 'legacy-twin) (pairs 'op-twin))
-          "alias(twin)-derived pairs == the legacy hand-written pairing, node for node"))))
+          "kernel-twin-derived Operation pairs == the legacy hand-written pairing, node for node"))))
 
 (deftest unrealized-dispatch-fires-when-unrealized
   (testing "an authored cross-module delegation with no realizing code path is reported"

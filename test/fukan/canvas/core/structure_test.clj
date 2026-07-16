@@ -745,11 +745,11 @@
 (deftest corresponds-demands-register
   (testing "(realized …)/(covered …) sub-forms land as :demands with derived keys"
     ;; TCorrDemand is a fresh nested-corresponding test structure declaring all three shapes
-    (is (= [{:demand :realized :key nil :desc nil :when nil :require nil :unless nil :by nil}
+    (is (= [{:demand :realized :key nil :desc nil :when nil :require nil :unless nil :by nil :over nil}
             {:demand :realized :key :req-check :desc "twin carries p"
-             :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]] :unless nil :by nil}
+             :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]] :unless nil :by nil :over nil}
             {:demand :covered :key nil :desc nil :when nil :require nil
-             :unless '[[?x :val/private true]] :by nil}]
+             :unless '[[?x :val/private true]] :by nil :over nil}]
            (:demands (:corresponds (s/structure-by-tag ::TCorrDemand)))))))
 
 (deftest corresponds-demands-validate

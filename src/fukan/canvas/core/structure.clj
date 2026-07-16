@@ -729,14 +729,17 @@
 (defn- parse-demand
   "Parse a `(realized …)`/`(covered …)`/`(agrees …)` corresponds sub-form → a demand map. Allowed
    option keys: realized → :key :desc :when :require ; covered → :key :desc :when :unless ; agrees →
-   :key :desc :when :by (`:by` = a registered comparator key, required). Datalog vectors
-   (:when/:require/:unless) pass through unquote-lit. Anything else throws, naming the form."
+   :key :desc :when :by :over. `:by` (required) selects the per-twin-pair comparator: the built-in
+   `:structural` (two twins agree iff their targets over the `:over` slots are IDENTICAL by eid — the
+   kernel builds the index, `:over` a vector of slot keywords, required with `:structural`) or a
+   registered comparator key (`register-comparator!`, the arbitrary escape hatch — no `:over`). Datalog
+   vectors (:when/:require/:unless) pass through unquote-lit. Anything else throws, naming the form."
   [sname f]
   (let [[dk opts] [(keyword (first f)) (second f)]
         allowed   (case dk
                     :realized #{:key :desc :when :require}
                     :covered  #{:key :desc :when :unless}
-                    :agrees   #{:key :desc :when :by})]
+                    :agrees   #{:key :desc :when :by :over})]
     (when (and opts (not (map? opts)))
       (throw (ex-info (str "defstructure " sname ": " (first f) " options must be a map") {:form f})))
     (doseq [k (keys opts)]
@@ -745,8 +748,10 @@
                              " — allowed: " allowed) {:form f :key k}))))
     (when (and (= dk :agrees) (not (:by opts)))
       (throw (ex-info (str "defstructure " sname ": (agrees …) needs :by <comparator-key>") {:form f})))
+    (when (and (= dk :agrees) (= :structural (:by opts)) (not (seq (:over opts))))
+      (throw (ex-info (str "defstructure " sname ": (agrees {:by :structural …}) needs :over [slot…]") {:form f})))
     {:demand dk
-     :key    (:key opts)  :desc (:desc opts)  :by (:by opts)
+     :key    (:key opts)  :desc (:desc opts)  :by (:by opts)  :over (:over opts)
      :when   (unquote-lit (:when opts)) :require (unquote-lit (:require opts))
      :unless (unquote-lit (:unless opts))}))
 
@@ -1040,8 +1045,8 @@
    relation rule and of `realized-as` (derived UNARY membership), and the open-bodied sibling
    of `defrelation-coproduct` (a relation that is a UNION of existing relation kinds): it has
    no slots, laws, constructor, or instances — only the rule. So a join several laws would
-   each re-inline (the model↔code op-twin, say) is expressed ONCE here, and the laws just
-   call it `(op-twin ?a ?b)` instead of repeating the clauses.
+   each re-inline (the module-dependency graph, say) is expressed ONCE here, and the laws just
+   call it by name (e.g. `(module-depends ?m ?n)`) instead of repeating the clauses.
 
    `head` is the rule's argument vector; `where` its body clauses, which may reference other
    injected rules (`in-module`, `named`, …) and call predicates. Prefer a non-recursive `where`:
@@ -1198,7 +1203,7 @@
 
 (defn- node-demand-law
   "One generated law map for a node-level demand on structure `tag`."
-  [tag {:keys [demand key desc when require unless by]}]
+  [tag {:keys [demand key desc when require unless by over]}]
   (let [k (demand-key tag (or key demand))]
     (case demand
       :realized
@@ -1228,7 +1233,7 @@
       {:key k :offenders '[?x]
        :desc (or desc (str (name tag) " (" (clojure.core/name (or key demand))
                            "): every design instance's fact twin agrees via " by))
-       :comparator {:by by :on '[?x ?t]}
+       :comparator (cond-> {:by by :on '[?x ?t]} over (assoc :over over))
        :where (vec (concat [['?x :structure/of tag] '(not [?x :val/extracted true]) '(twin ?x ?t)]
                            when))})))
 

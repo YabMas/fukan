@@ -29,7 +29,7 @@
 (RuleThing ^{:name "ok"} rt2-ok)
 (RuleThing ^{:name "forbidden"} rt2-forbidden)
 
-;; a DERIVED RELATION: a custom-bodied rule (the op-twin generalization) — registered
+;; a DERIVED RELATION: a custom-bodied rule (a named shared join) — registered
 ;; into the live vocab and injected into every law/vocab-rules query, like a kind/relation rule
 (s/defrelation :same-name
   "two distinct nodes that share a name"

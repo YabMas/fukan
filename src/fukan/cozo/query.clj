@@ -39,7 +39,7 @@
 (defn- attr "​:rel/from → rel/from" [kw] (subs (str kw) 1))
 (defn- rname
   "A datalog rule head/call symbol → a CozoScript rule name: `r_`-prefixed, every
-   non-alphanumeric char folded to `_` (op-twin → r_op_twin, Operation → r_Operation)."
+   non-alphanumeric char folded to `_` (module-depends → r_module_depends, Operation → r_Operation)."
   [sym]
   (str "r_" (str/replace (name sym) #"[^A-Za-z0-9]" "_")))
 

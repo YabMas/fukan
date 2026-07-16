@@ -105,7 +105,8 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   (Kind / Effect / Operation / Module / Subsystem). Each element file carries its structure +
   *its* model↔code correspondence — the complete story of the one element in one file.
   `operation.clj` holds Operation's whole correspondence: the `(correspond Operation …)` fact-side +
-  demands, the `op-twin` alias of the kernel `twin`, the `:signature` comparator, and the call-graph
+  demands (adherence declared as the kernel's generic `(agrees {:by :structural :over [:in :out]})` —
+  no hand-written comparator), and the call-graph
   demand readers (`unrealized-delegates`/`uncovered-calls`/`unfaithful-calls`/`unrealized-dispatch`,
   thin worklists over the generated `:corresponds/Operation.delegates-*` demands). `module.clj` holds
   Module's own correspondence — `(correspond Module … (bridge :qualified-suffix))`, the bridged twin
@@ -219,7 +220,7 @@ print-dual renders every vocabulary live. The files are under `common/fukan/comm
 
 A `defrelation` (in `core/structure.clj`, sibling of `defstructure`) declares a named
 custom-bodied datalog rule that `check` auto-injects into every law/query (like the
-vocab-derived rules) — the way several laws share one join (e.g. `op-twin`) without each
+vocab-derived rules) — the way several laws share one join (e.g. `module-depends`) without each
 re-inlining it. A recursive body is now allowed (Cozo's semi-naive fixpoint terminates where
 datascript diverged — the old non-recursion guard is gone), but prefer non-recursive where you
 can: the rule pays the fixpoint on every check.
@@ -366,8 +367,8 @@ mixing them corrupts history.
 - `common/fukan/common.clj` (ns `fukan.common`) — the grammar INDEX: one require that registers the
   whole `fukan.common.*` tier (vocab + typing + extraction)
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by element
-  (each file = structure + its own correspondence) + grouping. Operation's correspondence (`op-twin`,
-  the `:signature` comparator, the call-graph readers `unrealized-delegates`/`uncovered-calls`/
+  (each file = structure + its own correspondence) + grouping. Operation's correspondence (the
+  `(agrees {:by :structural})` adherence demand, the call-graph readers `unrealized-delegates`/`uncovered-calls`/
   `unfaithful-calls`/`unrealized-dispatch`) lives in `code/operation.clj`; Module's `(bridge
   :qualified-suffix)` correspondence lives in `code/module.clj`; the module-dependency-graph relations +
   readers (`module-owns`/`module-depends`/`module-dependencies`) live with the architecture laws that

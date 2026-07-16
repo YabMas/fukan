@@ -4,7 +4,7 @@
    extracted code twin by the `:qualified-suffix` name-match strategy (the kernel's generic bridge
    lowering — canvas short-name is a separator-agnostic dotted suffix of the code namespace, so
    `infra-model` ← `fukan.infra.model` — with no hand-written CozoScript or name-bridge fn here).
-   Operation's own correspondence (the fact-side slots, `op-twin`, the
+   Operation's own correspondence (the fact-side slots, the twin, the
    call-realization demands + readers) lives with the element itself in
    `fukan.common.vocab.code.operation`. The module-dependency graph
    (`module-owns`/`module-depends`/`module-dependencies`) — a cross-module analysis consumed entirely
