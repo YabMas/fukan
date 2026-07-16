@@ -170,8 +170,14 @@
 ;; — provenance is pipeline metadata (`stamp-stratum`), never an authoring slot. Two scalar fact-slots
 ;; gone ⇒ their two auto-generated boolean type-check laws leave (laws 59→57); terms unchanged (a
 ;; scalar slot emits no rule term).
+;; 2026-07-16 (c): the generated `delegates-realized` law moved from module-altitude/direct to
+;; op-altitude/transitive — every cross-module design delegation must be realized by a `:calls+` PATH
+;; between the endpoints' OWN twins (the `:altitude` option, a fiction with one legal value, was
+;; retired; the hand-written `unrealized-dispatch` query it replaces is gone). Count holds (57 — still
+;; one realized + one faithful law); only the realized law's `:where` body + `:desc` changed, moving the
+;; laws hash. `delegates-faithful` (module-altitude) is unchanged. Live `(check)` still 0 on the self-model.
 (def ^:private golden-terms {:count 42 :hash 912321169})
-(def ^:private golden-laws  {:count 57 :hash 814919964})
+(def ^:private golden-laws  {:count 57 :hash -1847611495})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

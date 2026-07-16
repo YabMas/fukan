@@ -10,12 +10,11 @@
             [fukan.canvas.core.structure :as s]
             [fukan.common.typing.malli :as malli]
             [fukan.canvas.core.typing :as typing]
-            ;; correspondence is now distributed across the code elements: Operation carries its own
-            ;; (the readers below), Module supplies the module↔code-ns bridge + Module structure (loaded
-            ;; for its side-effects + the fully-qualified :.../Module tags in the fixtures).
+            ;; correspondence is now distributed across the code elements, entirely GENERATED — each
+            ;; element ns is loaded for its side-effects (it registers its structure + correspondence)
+            ;; and for the fully-qualified :.../Operation | :.../Module | :.../Effect tags in the fixtures.
             [fukan.common.vocab.code.module]
-            [fukan.common.vocab.code.operation :as operation]
-            ;; loaded for its side-effects (registers Effect) + the fully-qualified tags in fixtures
+            [fukan.common.vocab.code.operation]
             [fukan.common.vocab.code.effect]))
 
 ;; register the project dialect's :render for the operation-sig / render-type path used below
@@ -106,34 +105,10 @@
       (is (= #{"f"} (law/violation-names short :corresponds/Operation.adheres))
           "a dropped :in arg is an offender (arity is checked)"))))
 
-(deftest call-realization-fires-on-an-unrealized-delegation
-  (testing "an authored cross-module :delegates with NO actual cross-module :calls is an offender"
-    (let [db (build/tx-maps->cozo [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/id "A" :entity/name "A"}
-                   {:db/id -2 :structure/of :fukan.common.vocab.code.module/Module :entity/id "B" :entity/name "B"}
-                   {:db/id -3 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-a"}
-                   {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-b"}
-                   {:db/id -5 :structure/of :fukan.common.vocab.code.module/Module :entity/id "X" :entity/name "X" :val/extracted true}
-                   {:db/id -6 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "ex" :val/extracted true}
-                   {:rel/id "A|exposes|op-a" :rel/from -1 :rel/kind :exposes :rel/to -3}
-                   {:rel/id "B|exposes|op-b" :rel/from -2 :rel/kind :exposes :rel/to -4}
-                   {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
-                   {:rel/id "X|child|ex" :rel/from -5 :rel/kind :child :rel/to -6}
-                   {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}])]
-      (is (seq (law/violation-names db :corresponds/Operation.delegates-realized))
-          "A->B delegation has no realizing call between corresponding modules → offender"))))
-
 (deftest call-realization-green-on-the-self-model
-  (testing "module-level realization is green on the live build-model \"src\""
+  (testing "op-level realization is green on the live build-model \"src\""
     (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.delegates-realized))
-        "0 unrealized — verified by the design prototype")))
-
-(deftest uncovered-calls-backbone-complete
-  (testing "slice 2: every actual cross-module call is now covered by an authored :delegates —
-            the backbone is complete (detection of an UNdeclared coupling is proven on a synthetic
-            db in fidelity-fires-on-an-undeclared-modelled-coupling)"
-    (let [worklist (operation/uncovered-calls (pipeline/build-model "src"))]
-      (is (empty? worklist)
-          (str "the :delegates backbone is complete; undeclared couplings remain: " worklist)))))
+        "0 unrealized — every authored :delegates is backed by a real (possibly multi-hop) call path")))
 
 (deftest fidelity-fires-on-an-undeclared-modelled-coupling
   (testing "an actual cross-module call between two MODELLED faculties with no covering :delegates fires"
@@ -155,9 +130,7 @@
                    {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
                    {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}])]
       (is (= #{"fa"} (law/violation-names db :corresponds/Operation.delegates-faithful))
-          "an undeclared coupling between modelled faculties is a fidelity offender")
-      (is (= #{["fukan.a" "fukan.b"]} (operation/uncovered-calls db))
-          "the same coupling appears in the broader query"))))
+          "an undeclared coupling between modelled faculties is a fidelity offender"))))
 
 (deftest fidelity-green-on-the-self-model
   (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
@@ -170,7 +143,6 @@
     (let [model (pipeline/build-model "src")]
       (is (empty? (law/violation-names model :corresponds/Operation.delegates-realized)) "realization is green")
       (is (empty? (law/violation-names model :corresponds/Operation.delegates-faithful)) "fidelity is green (modelled couplings all declared)")
-      (is (empty? (operation/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
       (is (empty? (law/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (law/check model)))))))
@@ -240,19 +212,15 @@
       (is (= (pairs 'legacy-twin) (pairs 'op-twin))
           "kernel-twin-derived Operation pairs == the legacy hand-written pairing, node for node"))))
 
-(deftest unrealized-dispatch-fires-when-unrealized
-  (testing "an authored cross-module delegation with no realizing code path is reported"
-    (is (contains? (operation/unrealized-dispatch (delegation-fixture false)) "op-a"))))
+(deftest delegates-realized-fires-on-an-unwired-delegation
+  (testing "op-level: an authored cross-module delegation whose endpoints are twinned but whose twins
+            never reach each other through the code's (transitive) call graph is a realized offender"
+    (is (contains? (law/violation-names (delegation-fixture false) :corresponds/Operation.delegates-realized) "op-a"))))
 
-(deftest unrealized-dispatch-green-through-calls
+(deftest delegates-realized-green-through-a-multi-hop-call-path
   (testing "the delegation is realized once the code reaches the target through its (multi-hop) call graph"
-    (is (empty? (operation/unrealized-dispatch (delegation-fixture true)))
-        "op-a -> op-b realized transitively via op-a -> mid -> op-b")))
-
-(deftest unrealized-dispatch-green-on-self-model
-  (testing "every authored cross-module delegation is realized op-level (transitively) by the live model's call graph"
-    (is (empty? (operation/unrealized-dispatch (pipeline/build-model "src")))
-        "0 unrealized — every authored :delegates is backed by a real (possibly multi-hop) call path")))
+    (is (empty? (law/violation-names (delegation-fixture true) :corresponds/Operation.delegates-realized))
+        "op-a -> op-b realized transitively via op-a -> mid -> op-b (the :calls+ closure)")))
 
 (deftest effect-correspondence-fires-on-an-undeclared-transitive-effect
   (testing "an authored op whose twin TRANSITIVELY reaches an effect it doesn't declare is flagged

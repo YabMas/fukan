@@ -36,7 +36,7 @@
    (`fukan.canvas.core.rules/substrate-rules`) read it — embedded LITERALLY in `substrate-rules`
    (rules are pure quoted data; keep in sync) AND, in `fukan.canvas.core.structure`, in the
    `:correspondence` declaration handler (the twin-rule generator) and the demand-law generators
-   (node-demand-law / container-demand-laws / root-guard-clause / covered-from-law) — update all in
+   (node-demand-law / realized-by-laws / covered-from-law) — update all in
    concert. Provenance has ONE writer — `stamp-stratum` (the pipeline); it is NOT an authoring concern,
    so no vocab slot exposes it. Tests synthesize a fact-side node the same way, via
    `fukan.cozo.build/fact-vars->cozo` (stamps the designated fixtures fact)."

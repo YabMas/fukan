@@ -768,7 +768,7 @@
 (deftest relation-demand-options-validate
   (testing "malformed relation-demand slot options throw at expansion"
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR1 "d"
-                                           {:r [:* {:realized-by :calls} TBadR1]}))))          ; no :altitude :container
+                                           {:r [:* {:realized-by :calls} TBadR1]}))))          ; :realized-by base :calls not declared :transitive here
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR2 "d"
                                            {:r [:* {:faithful true} TBadR2]}))))               ; :faithful without :realized-by
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR3 "d"
@@ -778,7 +778,7 @@
   (testing "a slot carrying both :realized-by and :covered-from throws at expansion"
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR4 "d"
                                            {:calls [:* {:transitive true} TBadR4]
-                                            :r [:* {:realized-by :calls :altitude :container
+                                            :r [:* {:realized-by :calls
                                                     :covered-from [:calls* :r]} TBadR4]})))))) ; both :realized-by and :covered-from on the same slot
 
 (deftest correspondence-reshapes-the-seam
@@ -810,6 +810,6 @@
                   :corresponds {:basis :by-name
                                 :demands [{:demand :realized :key :r-realized}]}
                   :slots [{:rel :r :card :many :target :x/T
-                           :realized-by :q :altitude :container}]}]]
+                           :realized-by :q}]}]]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"duplicate correspondence law key"
                             (s/correspondence* sdefs))))))

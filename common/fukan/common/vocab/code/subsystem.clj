@@ -117,7 +117,7 @@
    The DUAL of the conformance law: conformance catches CODE that outruns the declared DAG
    (an undeclared cross-subsystem dependency — a violation); this catches a declared DAG that outruns
    the CODE (a declared edge with no realizing dependency — over-declaration: intentional headroom or
-   stale intent). A SIGNAL, not a violation (like `operation/uncovered-calls`) — headroom is a
+   stale intent). A SIGNAL, not a violation — headroom is a
    legitimate choice, so an unrealized declared dependency reports rather than fails a check."
   [db-arg]
   (set (cq/q '[:find ?sn ?tn :in $ %

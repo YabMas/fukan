@@ -1,20 +1,19 @@
 (ns fukan.common.vocab.code.operation
   "Code vocab — the `Operation` element: a named unit of computation, AND its own model↔code
-   correspondence (the fact-side slots, the twin, the drift demands, the call-realization readers).
+   correspondence (the fact-side slots, the twin, and the drift demands — all generated).
 
    An Operation's IDENTITY is the authored intent alone — its input/output types, the effects it
    performs, and its designed dependencies. Its CORRESPONDENCE — how an authored Operation is paired
    with the extracted code twin, and what the code must realize/cover/adhere-to — is declared here
-   too (via `(s/correspond Operation …)`), the complete story of the one element in one file. The
-   only thing NOT here is implementer-directed prose, which rides the kernel `:guidance` annotation.
+   too (via `(s/correspond Operation …)`), the complete story of the one element in one file. Every
+   drift check is GENERATED — Operation hand-writes no correspondence mechanism. The only thing NOT
+   here is implementer-directed prose, which rides the kernel `:guidance` annotation.
 
-   The `:calls` readers correlate a canvas module and its code twin with the kernel `name-match`
-   bridge strategy (`:qualified-suffix`, the same one Module declares) — a generic builtin, used only
-   inside quoted datalog rules, so this namespace needs no dependency on Module (Module requires
-   Operation, not the reverse). The twin pairs an authored Operation with its extracted code twin by
-   name WITHIN twinned Modules."
+   The generated realization law reaches through the `:calls+` closure and the kernel `twin` rule
+   (which pairs an authored Operation with its extracted code twin by name WITHIN twinned Modules,
+   bridged by Module's `:qualified-suffix` name-match) — so this namespace needs no dependency on
+   Module (Module requires Operation, not the reverse)."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
-            [fukan.cozo.query :as cq]
             [fukan.common.typing.malli :as ct :refer [Schema]]
             [fukan.common.vocab.code.effect :refer [Effect]]))
 
@@ -83,74 +82,15 @@
              :desc "every modelled operation's realizing code signature exactly adheres to its modelled type"
              :when '[[?tr :rel/from ?t] [?tr :rel/kind :out]]})
   ;; relation demands ABOUT Operation's own identity relations (:delegates / :performs):
-  (delegates {:realized-by :calls :faithful true :altitude :container})  ; cross-module :delegates realized by a :calls path (+ faithful reverse)
-  (performs  {:covered-from [:calls* :performs]}))                       ; every effect the twin REACHES over :calls*·:performs is declared
+  ;; :delegates — every cross-module design delegation is REALIZED op-level: the design endpoints'
+  ;; twins reach each other through the actual `:calls+` graph (transitive; `:calls` is a :transitive
+  ;; fact-slot). :faithful adds the reverse at module altitude (a code coupling between twinned modules
+  ;; must be declared). :performs — every effect the twin reaches over :calls*·:performs is declared.
+  (delegates {:realized-by :calls :faithful true})
+  (performs  {:covered-from [:calls* :performs]}))
 
-;; ── model↔code CALL realization readers ──────────────────────────────────────
-;; The enforced laws are GENERATED from the :delegates slot options above
-;; {:realized-by :calls :altitude :container :faithful true} (generated keys
-;; :corresponds/Operation.delegates-realized / .delegates-faithful) — a caller wanting either
-;; worklist names the key through `law/violation-names` directly (as `dev/user.clj` does), so no
-;; per-demand wrapper is kept. What remains here are the two ON-GRAPH queries with no generated dual:
-;; `uncovered-calls` (a coverage SIGNAL, not a violation) and `unrealized-dispatch` (op-level transitive
-;; realization). Both correlate a canvas module and its code twin with the kernel `name-match` bridge
-;; strategy (`:qualified-suffix`, same as Module's `(bridge …)`), used only inside quoted rules.
-
-(def ^:private unrealized-dispatch-rules
-  "Reachability over the EXTRACTED graph, on-graph. `op-ext-twin` pairs an authored op with its
-   extracted code twin (same name + `:qualified-suffix`-matching modules). `ext-edge` is a `:calls` edge;
-   `ext-reaches` is its transitive closure — a rule-calls-rule recursion the kernel now allows, negated
-   under stratification. A `defmulti` is an ordinary Operation, so calls through it and its
-   method-body calls are all `:calls`, and reachability needs no separate dispatch edge. The
-   injected rules (`Operation`/`design`/`fact`/`in-module`) are ambient in any `cq/q`. `in-module` binds
-   Kinds too, so op-ness is guarded here explicitly with `(Operation …)`."
-  '[[(op-ext-twin ?a ?e)
-     (Operation ?a) (design ?a) [?a :entity/name ?n] (in-module ?a ?am)
-     (Operation ?e) (fact ?e) [?e :entity/name ?n] (in-module ?e ?em)
-     [(name-match :qualified-suffix ?am ?em)]]
-    [(ext-edge ?from ?to) (calls ?from ?to)]
-    [(ext-reaches ?a ?b) (ext-edge ?a ?b)]
-    [(ext-reaches ?a ?b) (ext-edge ?a ?mid) (ext-reaches ?mid ?b)]])
-
-(defn unrealized-dispatch
-  "Authored cross-module delegations NOT realized op-level by the actual code — the target is reached
-   neither by a direct call nor multi-hop THROUGH the code's call graph. A set of authored source-op
-   names; empty ⇔ every intended dependency is backed by a real (possibly multi-hop) call path.
-
-   A QUERY, not a law (like `uncovered-calls`): reachability is on-graph datalog (`ext-reaches`, the
-   transitive closure of `:calls`, negated under stratification) — no Clojure walk. An offender's
-   delegation has BOTH endpoints twinned in code yet no realized path between them; a delegation whose
-   source or target has no extracted twin is out of scope. Asserted empty by the regression suite."
-  [db]
-  (->> (cq/q '[:find ?on1 :in $ %
-               :where (delegates ?o1 ?o2)
-                      (design ?o1)
-                      [?o1 :entity/name ?on1] (in-module ?o1 ?cm1)
-                      (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
-                      (op-ext-twin ?o1 ?e1) (op-ext-twin ?o2 ?e2)
-                      (not (ext-reaches ?e1 ?e2))]
-             db unrealized-dispatch-rules)
-       (map first) set))
-
-(defn uncovered-calls
-  "Coverage SIGNAL (a QUERY, not a law) — the discovery dual of the generated fidelity demand: actual cross-module
-   module-calls (over `:calls`) with no corresponding intended cross-module delegation (over
-   `:delegates`, bridged by the `:qualified-suffix` name-match), as a set of [caller-module callee-module]
-   code-module-name pairs. The couplings the design has not yet declared — a signal, not a violation."
-  [db-arg]
-  ;; `name-match` is a FILTER (both names bound), not a generator, so the not-join binds ?km1/?km2 to
-  ;; the extracted (fact) code-module names itself before matching — the design→code correspondence is
-  ;; a test, not a source of km bindings (they arrive from the outer call's in-module).
-  (set (cq/q '[:find ?km1 ?km2 :in $
-               :where (calls ?e1 ?e2)
-                      (fact ?e1) (fact ?e2)
-                      (in-module ?e1 ?km1) (in-module ?e2 ?km2) [(not= ?km1 ?km2)]
-                      (not-join [?km1 ?km2]
-                        (delegates ?o1 ?o2)
-                        (design ?o1)
-                        (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
-                        [?fm1 :structure/of :fukan.common.vocab.code.module/Module] (fact ?fm1) [?fm1 :entity/name ?km1]
-                        [?fm2 :structure/of :fukan.common.vocab.code.module/Module] (fact ?fm2) [?fm2 :entity/name ?km2]
-                        [(name-match :qualified-suffix ?cm1 ?km1)]
-                        [(name-match :qualified-suffix ?cm2 ?km2)])]
-             db-arg)))
+;; Operation hand-writes NO correspondence code: the fact-slots, twin, and every drift check
+;; (realized / type-coverage / covered / adheres / delegates-realized / delegates-faithful /
+;; performs-covered) are GENERATED from the `(correspond Operation …)` declaration above. A caller
+;; wanting any of them as a worklist names the stable law key through `law/violation-names` (see
+;; `dev/user.clj`).

@@ -290,21 +290,22 @@
             undeclared-call-base)))
 
 (deftest delegates-realized-fires-without-a-backing-call
-  (testing "a cross-container design delegation with twinned containers but no fact call between them"
+  (testing "op-level: a cross-module design delegation whose endpoint twins never reach each other
+            through the fact call graph is an offender; adding the :calls edge clears it"
     (is (= #{"s-op"} (names no-call-db (law/violations-of no-call-db :corresponds/Operation.delegates-realized))))
     (is (empty? (law/violations-of with-call-db :corresponds/Operation.delegates-realized)))))
 
-(deftest delegates-realized-fires-when-the-container-has-no-twin-at-all
-  (testing "OLD CallRealization semantics preserved: a delegation from a module with NO extracted
-            twin is an offender once ANY root-kind fact exists (the not-join is vacuously false)"
-    (is (= #{"s-op"} (names untwinned-module-db (law/violations-of untwinned-module-db :corresponds/Operation.delegates-realized))))))
+(deftest delegates-realized-ignores-a-delegation-whose-endpoint-has-no-twin
+  (testing "op-altitude: a design endpoint with NO extracted twin is OUT OF SCOPE for realization —
+            its very existence is the plain `realized` demand's concern, not this one"
+    (is (empty? (law/violations-of untwinned-module-db :corresponds/Operation.delegates-realized)))))
 
 (deftest delegates-faithful-fires-on-an-undeclared-call-between-claimed-containers
   (testing "a fact call between twinned containers with no design delegation covering it"
     (is (= #{"ext-s-op"} (names undeclared-call-db (law/violations-of undeclared-call-db :corresponds/Operation.delegates-faithful))))
     (is (empty? (law/violations-of declared-call-db :corresponds/Operation.delegates-faithful)))
     (is (empty? (law/violations-of unclaimed-container-db :corresponds/Operation.delegates-faithful))
-        "a call into an UNMODELLED container is a coverage signal (uncovered-calls), not a fidelity violation")))
+        "a call into an UNMODELLED container is a coverage signal, not a fidelity violation")))
 
 ;; ── :covered-from path demand (ex-EffectCorrespondence) ──────────────────────
 

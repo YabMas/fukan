@@ -675,7 +675,7 @@
 
 (defn ^:export register-correspondence!
   "Register an external correspondence config against target `tag` (see the registry note). Re-registering
-   a tag replaces it. Emitted by the `correspond` macro; read by `sdef->declarations`/`bridged-root-tags`."
+   a tag replaces it. Emitted by the `correspond` macro; read by `sdef->declarations`."
   [tag config] (swap! correspondences assoc tag config) tag)
 
 (defn ^:export correspondence-of
@@ -958,10 +958,13 @@
                    (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
                                         " :faithful requires :realized-by")
                                    {:structure sname :slot (:rel s)})))
-                 (when (and (:realized-by s) (not= :container (:altitude s)))
-                   (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
-                                        " :altitude :node has no consumer yet — declare :container")
-                                   {:structure sname :slot (:rel s)}))))
+                 (when-let [rb (:realized-by s)]
+                   ;; the realized law reaches through the R'+ closure of the realized-by relation, so
+                   ;; that relation must be declared :transitive on this structure (mirrors :covered-from).
+                   (when-not (some #(and (= (:rel %) rb) (:transitive %)) slots)
+                     (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
+                                          " :realized-by " rb " requires " rb " declared :transitive on this structure")
+                                     {:structure sname :slot (:rel s) :realized-by rb})))))
         laws   (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
         explicit-reader (some (fn [f] (when (= 'reader (first f)) (second f)))
                               (filter #(= 'reader (first %)) body))
@@ -1135,58 +1138,30 @@
   [tag local]
   (keyword "corresponds" (str (name tag) "." (name local))))
 
-(defn- bridged-root-tags
-  "Tags of every corresponds kind declaring a bridge — the ROOT kinds. The container-demand
-   vacuity guard ranges over ALL of them (include-but-harmless: a test-registered root with no
-   fact instances contributes a never-matching disjunct, the same idiom as the generated twin
-   disjuncts). Deferral (extend under pressure): the principled guard kind for a container
-   demand is the slot's own CONTAINER type, not \"any root\" — derive it from containment once
-   a second real root kind exists."
-  []
-  (vec (for [s (all-structures)
-             :when (or (:bridge (:corresponds s))               ; inline (defstructure) …
-                       (:bridge (correspondence-of (:tag s))))] ; … or external (correspond)
-         (:tag s))))
+(defn- realized-by-laws
+  "Generated laws for a relation slot carrying {:realized-by R' :faithful bool} on structure `tag`,
+   where R' is a `:transitive` relation on the fact side (so its `R'+` closure exists):
 
-(defn- root-guard-clause
-  "The vacuity-guard clause(s) for a container-altitude realized law: ensures at least one
-   root-kind fact instance exists before the not-join fires (so the law is vacuously true when
-   no code has been extracted). With one root: a plain two-datom pair; with several: a single
-   or-join clause (include-but-harmless — a test-registered root with no fact instances
-   contributes a never-matching disjunct). Throws when no bridged root kind is registered."
-  []
-  (let [roots (bridged-root-tags)]
-    (when (empty? roots)
-      (throw (ex-info "container-altitude demand needs at least one bridged corresponds kind (none registered)"
-                      {:roots roots})))
-    (if (= 1 (count roots))
-      [['?_g :structure/of (first roots)] '[?_g :val/extracted true]]
-      [(apply list 'or-join '[?_g]
-              (for [r roots]
-                (list 'and ['?_g :structure/of r] '[?_g :val/extracted true])))])))
+   REALIZED (op-altitude, transitive): every cross-module design `rel` edge is realized by an `R'+`
+   PATH between the endpoints' OWN twins — the specific design endpoints must reach each other through
+   the actual R' call graph. Both endpoints bound POSITIVELY via `twin`, so a design endpoint with no
+   fact twin is OUT OF SCOPE (its very existence is the plain `realized` demand's concern, not this
+   one) — and vacuously green before any code is extracted (no twins ⇒ no rows), needing no guard.
 
-(defn- container-demand-laws
-  "Generated laws for a relation slot carrying {:realized-by R' :altitude :container
-   :faithful bool} on structure `tag`: the realized direction (design edge ⇒ some fact R'
-   edge between the twinned containers — twin INSIDE the not-join, bound-on-entry, so a
-   container with NO twin still offends, exactly the dissolved CallRealization's semantics)
-   and, when :faithful, the covered direction (fact R' edge between CLAIMED — positively
-   twinned — containers ⇒ some design edge; the dissolved Fidelity)."
+   FAITHFUL (module-altitude, direct — when :faithful): every direct R' edge between twinned
+   containers is covered by a design edge (the reverse; a fact coupling between CLAIMED — positively
+   twinned — containers must be declared as intent). Asymmetric altitude is intentional: realization
+   asks whether a specific delegation is wired; faithfulness asks whether module couplings are declared."
   [tag {:keys [rel realized-by faithful]}]
-  (let [guard (root-guard-clause)]
+  (let [r+ (symbol (str (name realized-by) "+"))]
     (cond-> [{:key  (demand-key tag (str (name rel) "-realized"))
-              :desc (str (name tag) "." (name rel) ": every cross-container design edge is realized by a "
-                         realized-by " edge between the twinned containers")
+              :desc (str (name tag) "." (name rel) ": every cross-module design edge is realized by a "
+                         realized-by "-path between the endpoints' twins")
               :offenders '[?a]
-              :where (into guard
-                           [['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
-                            '(not [?a :val/extracted true])
-                            '(contains ?ca ?a) '(contains ?cb ?b) '[(not= ?ca ?cb)]
-                            (list 'not-join '[?ca ?cb]
-                                  ['?cr :rel/from '?e1] ['?cr :rel/kind realized-by] ['?cr :rel/to '?e2]
-                                  '[?e1 :val/extracted true] '[?e2 :val/extracted true]
-                                  '(contains ?ka ?e1) '(contains ?kb ?e2)
-                                  '(twin ?ca ?ka) '(twin ?cb ?kb))])}]
+              :where [['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
+                      '(contains ?ca ?a) '(contains ?cb ?b) '[(not= ?ca ?cb)]
+                      '(twin ?a ?ea) '(twin ?b ?eb)
+                      (list 'not-join '[?ea ?eb] (list r+ '?ea '?eb))]}]
       faithful
       (conj {:key  (demand-key tag (str (name rel) "-faithful"))
              :desc (str (name tag) "." (name rel) ": every " realized-by
@@ -1306,7 +1281,7 @@
     {:terms [(into [(apply list (rule-sym (:tag sdef)) (:head rule))] (:where rule))] :laws []}))
 
 (register-declaration! :realized-by
-  (fn [{:keys [slot]} sdef] {:terms [] :laws (container-demand-laws (:tag sdef) slot)}))
+  (fn [{:keys [slot]} sdef] {:terms [] :laws (realized-by-laws (:tag sdef) slot)}))
 
 (register-declaration! :covered-from
   (fn [{:keys [slot]} sdef] {:terms [] :laws [(covered-from-law (:tag sdef) slot)]}))
@@ -1368,11 +1343,11 @@
                                            (fn [ds] (mapv #(assoc % :key (demand-key tag (or (:key %) (:demand %)))) ds))))]))
         relations (vec
                    (for [{:keys [tag slots]} sdefs
-                         {:keys [rel realized-by altitude faithful covered-from]}
+                         {:keys [rel realized-by faithful covered-from]}
                          (concat slots (:rel-demands (correspondence-of tag)))
                          :when (or realized-by covered-from)]
                      (cond-> {:owner tag :rel rel}
-                       realized-by  (assoc :realized-by realized-by :altitude altitude
+                       realized-by  (assoc :realized-by realized-by
                                            :keys (cond-> [(demand-key tag (str (name rel) "-realized"))]
                                                    faithful (conj (demand-key tag (str (name rel) "-faithful")))))
                        faithful     (assoc :faithful true)

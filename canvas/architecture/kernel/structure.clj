@@ -79,7 +79,7 @@
 (Operation laws-of
   "Every law of a structure — slot-derived cardinality/type laws, correspondence-demand laws
    (generated from (realized …)/(covered …) sub-forms and from relation slots carrying
-   :realized-by/:altitude/:faithful), plus its free laws, the same set check runs.
+   :realized-by/:faithful), plus its free laws, the same set check runs.
    Public so the Cozo law engine can evaluate the identical laws."
   {:signature [:=> [:catn [:sdef :any]] :any]
    :performs  [:throws]})
