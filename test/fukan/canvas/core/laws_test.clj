@@ -390,10 +390,11 @@
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
 (defstructure LTwin
   "agrees subject: a nested-corresponding kind whose fact twin must AGREE on its `:n` leaf via a
-   registered comparator — exercises `register-comparator!` + the pair-hybrid law path end-to-end."
-  {:n [:? :int]}
-  (corresponds :by-name (agrees {:by :ltwin-eq})))
+   registered comparator — exercises `register-comparator!` + the pair-hybrid law path end-to-end.
+   Pure identity; correspondence hooks in externally via `(correspond LTwin …)` below."
+  {:n [:? :int]})
 
+(s/correspond LTwin (agrees {:by :ltwin-eq}))
 (s/register-comparator! :ltwin-eq
   (fn [db a b] (= (:val/n (cq/entity db a)) (:val/n (cq/entity db b)))))
 
@@ -416,27 +417,3 @@
       (is (empty? (law/violations-of match :corresponds/LTwin.agrees))
           "an agreeing fact twin is green"))))
 
-;; ── external (correspond …): the inverted-dependency hook reproduces inline emission ──
-(defstructure TCExt "external-correspondence subject: pure identity; correspondence hooks in from outside."
-  {:n [:? :int]})
-
-(s/correspond TCExt :by-name (agrees {:by :tcext-eq}))
-(s/register-comparator! :tcext-eq
-  (fn [db a b] (= (:val/n (cq/entity db a)) (:val/n (cq/entity db b)))))
-
-(deftest correspond-external-hook-reproduces-inline-firing
-  (testing "an EXTERNAL (correspond TCExt …) contributes the agrees demand to TCExt's tag from outside —
-            TCExt's defstructure never mentions correspondence — and a disagreeing fact twin is a
-            :corresponds/TCExt.agrees offender, exactly as the inline LTwin above produces."
-    (let [mk (fn [dn xn]
-               (build/tx-maps->cozo
-                [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
-                 {:db/id -2 :structure/of ::TCExt :entity/name "x" :val/n dn}
-                 {:rel/id "m|child|x" :rel/from -1 :rel/kind :child :rel/to -2}
-                 {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-                 {:db/id -4 :structure/of ::TCExt :entity/name "x" :val/n xn :val/extracted true}
-                 {:rel/id "fm|child|x" :rel/from -3 :rel/kind :child :rel/to -4}]))]
-      (is (= #{"x"} (names (mk 1 2) (law/violations-of (mk 1 2) :corresponds/TCExt.agrees)))
-          "external correspondence: a disagreeing twin offends")
-      (is (empty? (law/violations-of (mk 1 1) :corresponds/TCExt.agrees))
-          "external correspondence: an agreeing twin is green"))))

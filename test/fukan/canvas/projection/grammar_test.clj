@@ -144,7 +144,7 @@
           corr (first (filter #(= 'corresponds (first %)) body))
           slots (first (filter map? form))]
       (is (some? corr) "the corresponds body form renders (from the external correspondence config)")
-      (is (= :by-name (second corr)))
+      (is (= 'corresponds (first corr)) "renders as a bare (corresponds …) — no basis token")
       (is (= 3 (count (filter #(and (seq? %) (#{'realized 'covered} (first %))) corr)))
           "the realized/covered node demands render as sub-forms")
       (is (= {:transitive true} (second (:delegates slots)))

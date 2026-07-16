@@ -20,7 +20,7 @@
 (defstructure Operation
   "A named unit of computation, either AUTHORED (a self-model's intent) or EXTRACTED from code (the fact
    stratum, stamped by the build at the merge). The two are DISTINCT nodes: a design Operation
-   corresponds 1-on-1 to its extracted twin by name within twinned Modules (`:by-name`, nested), so
+   corresponds 1-on-1 to its extracted twin by name within twinned Modules (nested), so
    intended and actual structure stay checkable against each other.
 
    Authored with a malli signature — `(Operation f \"doc\" {:signature [:=> [:catn [:name Type] …] Out]
@@ -57,10 +57,10 @@
 ;; ── the correspondence: the fact-side slots + the model↔code demands ──────────
 ;; Declared from OUTSIDE the defstructure so the identity above stays clean, but IN this file — the one
 ;; element, its whole story. `(s/correspond Operation …)` contributes the extracted fact-slots (:calls,
-;; :private, …), the twin (`:by-name`, nested within twinned Modules), and the drift demands (generated
+;; :private, …), the twin (by name, nested within twinned Modules), and the drift demands (generated
 ;; as laws at the stable keys :corresponds/Operation.*). The concept's defstructure mentions none of it.
 
-(s/correspond Operation :by-name
+(s/correspond Operation
   {:calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
    :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
    :export    [:? :boolean]          ; intentionally public for MECHANISM (^:export)

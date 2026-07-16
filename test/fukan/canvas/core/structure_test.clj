@@ -713,57 +713,55 @@
  (fn [[a b]] [(str a " == " b) #{}])
  {})
 
-(defstructure TCorrRoot "corresponds test: a ROOT kind (bridged)"
-  (corresponds :by-name (bridge tc-bridge)))
+(defstructure TCorrRoot "correspond test: a ROOT kind (bridged) — pure identity")
+(s/correspond TCorrRoot (bridge tc-bridge))
 
-(defstructure TCorrNested "corresponds test: a NESTED kind (same name within twinned containers)"
-  (corresponds :by-name))
+(defstructure TCorrNested "correspond test: a NESTED kind (same name within twinned containers)")
+(s/correspond TCorrNested)
 
-(deftest corresponds-registers-basis-and-bridge
-  (testing "the (corresponds …) body form lands in the registry, bridge fully qualified"
-    (is (= {:basis :by-name :bridge 'fukan.canvas.core.structure-test/tc-bridge}
-           (:corresponds (s/structure-by-tag ::TCorrRoot))))
-    (is (= {:basis :by-name :bridge nil}
-           (:corresponds (s/structure-by-tag ::TCorrNested))))
-    (is (nil? (:corresponds (s/structure-by-tag ::Plain)))
-        "an undeclared structure carries no :corresponds")))
+(deftest correspond-registers-bridge
+  (testing "the (correspond …) config lands in the registry, bridge fully qualified"
+    (is (= {:bridge 'fukan.canvas.core.structure-test/tc-bridge :demands [] :fact-slots [] :rel-demands []}
+           (s/correspondence-of ::TCorrRoot)))
+    (is (= {:bridge nil :demands [] :fact-slots [] :rel-demands []}
+           (s/correspondence-of ::TCorrNested)))
+    (is (nil? (s/correspondence-of ::Plain))
+        "an undeclared structure carries no correspondence")))
 
-(deftest corresponds-rejects-malformed-declarations
-  (testing "unknown basis / unresolvable bridge all throw at expansion"
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadBasis "d" (corresponds :by-vibes)))))
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadBridge "d" (corresponds :by-name (bridge nope-not-defined))))))))
+(deftest correspond-rejects-an-unresolvable-bridge
+  (testing "an unresolvable bridge symbol throws at expansion"
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested (bridge nope-not-defined)))))))
 
 ;; ── demand sub-forms: (realized …)/(covered …) ───────────────────────────────
 
-(defstructure TCorrDemand "corresponds test: node demands (parse-level only — no instances)"
-  (corresponds :by-name
-    (realized)
-    (realized {:key :req-check :desc "twin carries p"
-               :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]]})
-    (covered  {:unless '[[?x :val/private true]]})))
+(defstructure TCorrDemand "correspond test: node demands (parse-level only — no instances)")
+(s/correspond TCorrDemand
+  (realized)
+  (realized {:key :req-check :desc "twin carries p"
+             :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]]})
+  (covered  {:unless '[[?x :val/private true]]}))
 
-(deftest corresponds-demands-register
+(deftest correspond-demands-register
   (testing "(realized …)/(covered …) sub-forms land as :demands with derived keys"
-    ;; TCorrDemand is a fresh nested-corresponding test structure declaring all three shapes
     (is (= [{:demand :realized :key nil :desc nil :when nil :require nil :unless nil :by nil :over nil}
             {:demand :realized :key :req-check :desc "twin carries p"
              :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]] :unless nil :by nil :over nil}
             {:demand :covered :key nil :desc nil :when nil :require nil
              :unless '[[?x :val/private true]] :by nil :over nil}]
-           (:demands (:corresponds (s/structure-by-tag ::TCorrDemand)))))))
+           (:demands (s/correspondence-of ::TCorrDemand))))))
 
-(deftest corresponds-demands-validate
-  (testing "malformed demands throw at expansion"
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD1 "d"
-                                           (corresponds :by-name (realized {:unless [[?x :val/p true]]}))))))  ; :unless is covered-only
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD2 "d"
-                                           (corresponds :by-name (covered {:require [[?t :val/p ?_v]]}))))))  ; :require is realized-only
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD3 "d"
-                                           (corresponds :by-name (realized) (realized))))))  ; duplicate default key
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD4 "d"
-                                           (corresponds :by-name (agrees {}))))))            ; agrees needs :by
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadD5 "d"
-                                           (corresponds :by-name (agrees {:require [[?t :val/p ?_v]]}))))))))  ; :require not an agrees key  ; duplicate default key
+(deftest correspond-demands-validate
+  (testing "malformed demands throw at expansion (via the external correspond macro)"
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
+                                           (realized {:unless [[?x :val/p true]]})))))  ; :unless is covered-only
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
+                                           (covered {:require [[?t :val/p ?_v]]})))))  ; :require is realized-only
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
+                                           (realized) (realized)))))  ; duplicate default key
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
+                                           (agrees {})))))            ; agrees needs :by
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
+                                           (agrees {:require [[?t :val/p ?_v]]})))))))  ; :require not an agrees key
 
 (deftest relation-demand-options-validate
   (testing "malformed relation-demand slot options throw at expansion"
@@ -805,11 +803,12 @@
           "the key index points every key at its generating declaration"))))
 
 (deftest correspondence-guards-cross-family-key-collisions
-  (testing "a node-demand :key colliding with a relation-derived key throws, naming both sources"
-    (let [sdefs [{:tag :x/T
-                  :corresponds {:basis :by-name
-                                :demands [{:demand :realized :key :r-realized}]}
-                  :slots [{:rel :r :card :many :target :x/T
-                           :realized-by :q}]}]]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"duplicate correspondence law key"
-                            (s/correspondence* sdefs))))))
+  (testing "a node-demand :key colliding with a relation-derived key throws, naming both sources.
+            correspondence is external, so the node demand rides the registry (a fake tag, inert in the
+            live seam — never in all-structures); the relation demand rides the sdef's own slot."
+    (let [tag :x/collision-T]
+      (s/register-correspondence! tag {:bridge nil :demands [{:demand :realized :key :r-realized}]
+                                       :fact-slots [] :rel-demands []})
+      (let [sdefs [{:tag tag :slots [{:rel :r :card :many :target tag :realized-by :q}]}]]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"duplicate correspondence law key"
+                              (s/correspondence* sdefs)))))))

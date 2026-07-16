@@ -108,9 +108,9 @@
 (defn- reflect-structure
   "One sdef → {:nodes … :rels …} for its Structure node, Law children, slot edges,
    and any Schema value targets."
-  [{:keys [tag doc slots laws value? realized-as corresponds]}]
+  [{:keys [tag doc slots laws value? realized-as]}]
   (let [sid  (structure-id tag)
-        corr (or corresponds (s/correspondence-of tag))   ; inline (defstructure) or external (correspond)
+        corr (s/correspondence-of tag)   ; external `(correspond Tag …)` — the sole correspondence surface
         node (cond-> {:entity/id sid :structure/of ::Structure
                       :entity/name (name tag) :val/tag (str tag)}
                doc         (assoc :entity/doc doc)

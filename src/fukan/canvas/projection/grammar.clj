@@ -133,7 +133,7 @@
             (when doc [doc])
             (when (seq slots) [(apply array-map (mapcat identity slots))])
             (when corresponds
-              [(concat ['corresponds (:basis corresponds)]
+              [(concat ['corresponds]
                        (when-let [b (:bridge corresponds)] [(list 'bridge b)])
                        (map demand-form (:demands corresponds)))])
             (when realizes [(list 'realized-as realizes)])
@@ -188,7 +188,7 @@
           (when doc [(str "  " (pr-str (first-line doc)))])
           (when (seq slots) [(fmt-slots slots)])
           (when corresponds
-            [(str "  (corresponds " (:basis corresponds) " …)  ; ⇒ " n-generated " generated laws")])
+            [(str "  (corresponds …)  ; ⇒ " n-generated " generated laws")])
           (when realizes [(str "  (realized-as '" (pr-str realizes) ")")])
           (map #(str "  (law " (pr-str (:desc %)) " …)") laws))
          (str/join "\n")

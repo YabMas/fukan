@@ -39,5 +39,5 @@
 ;; separator-agnostic dotted suffix of the code namespace), and every Operation twin nests WITHIN a
 ;; twinned Module pair. Declared from outside the defstructure so the identity above stays pure.
 
-(s/correspond Module :by-name (bridge :qualified-suffix))
+(s/correspond Module (bridge :qualified-suffix))
 

@@ -670,7 +670,7 @@
 ;; knows nothing; the `(correspond Tag …)` declaration (in a correspondence module) registers its config
 ;; against the target's tag. `sdef->declarations` merges these in for the target sdef, so the SAME
 ;; handlers emit the SAME terms/laws — only the SOURCE moved from the sdef's own `:corresponds`/fact-slots
-;; to here. Config: `{:basis :bridge :demands [] :fact-slots [slot…] :rel-demands [slot-descriptor…]}`.
+;; to here. Config: `{:bridge :demands [] :fact-slots [slot…] :rel-demands [slot-descriptor…]}`.
 (defonce ^:private correspondences (atom {}))
 
 (defn ^:export register-correspondence!
@@ -702,7 +702,7 @@
    pure re-expression of the sdef's fields PLUS any external correspondence registered for its tag
    (`correspondence-of`); the parser is untouched. `:kind :kind` is the node-kind membership Term,
    emitted only for CONCRETE structures (not realized/coproduct/derived concepts)."
-  [{:keys [tag slots laws corresponds realized-as relation-coproduct derived-rule] :as _sdef}]
+  [{:keys [tag slots laws realized-as relation-coproduct derived-rule] :as _sdef}]
   (concat
    (when-not (or realized-as relation-coproduct derived-rule) [{:kind :kind}])
    (for [sl slots] {:kind :slot :slot sl})
@@ -713,15 +713,15 @@
    (when realized-as       [{:kind :realized-as :body realized-as}])
    (when relation-coproduct [{:kind :coproduct :members relation-coproduct}])
    (when derived-rule      [{:kind :defrelation :rule derived-rule}])
-   (when corresponds       [{:kind :correspondence :corresponds corresponds}])
-   ;; external correspondence (inverted-dependency hook): expand the registered config into the SAME
-   ;; declaration maps the inline form would — fact-slots as :slot(+:transitive) decls, the twin/demands
-   ;; as :correspondence, the relation demands as :realized-by/:covered-from — all scoped to this tag.
-   (when-let [{:keys [basis bridge demands fact-slots rel-demands]} (correspondence-of tag)]
+   ;; external correspondence (the sole correspondence surface, an inverted-dependency hook): expand the
+   ;; registered `(correspond Tag …)` config into declaration maps scoped to this tag — fact-slots as
+   ;; :slot(+:transitive) decls, the twin/demands as :correspondence, the relation demands as
+   ;; :realized-by/:covered-from — the SAME handlers a structure's own slots route through.
+   (when-let [{:keys [bridge demands fact-slots rel-demands]} (correspondence-of tag)]
      (concat
       (for [sl fact-slots] {:kind :slot :slot sl})
       (for [sl fact-slots :when (:transitive sl)] {:kind :transitive :slot sl})
-      [{:kind :correspondence :corresponds {:basis basis :bridge bridge :demands demands}}]
+      [{:kind :correspondence :corresponds {:bridge bridge :demands demands}}]
       (for [d rel-demands :when (:realized-by d)]  {:kind :realized-by :slot d})
       (for [d rel-demands :when (:covered-from d)] {:kind :covered-from :slot d})))
    (for [law laws] {:kind :free-law :law law})))
@@ -755,85 +755,44 @@
      :when   (unquote-lit (:when opts)) :require (unquote-lit (:require opts))
      :unless (unquote-lit (:unless opts))}))
 
-(defn- parse-corresponds
-  "Parse a `(corresponds …)` body-form tail into `{:basis :by-name, :bridge strategy-kw|qualified-sym|nil, :demands [...]}`.
-   `:by-name` is the only basis: a ROOT kind (with a `(bridge X)` sub-form) pairs design/fact
-   instances whose names satisfy the bridge; a NESTED kind (no bridge) pairs same-named design/fact
-   instances whose containers twin. The bridge `X` is EITHER a strategy KEYWORD (`:qualified-suffix`,
-   `:exact`) the kernel `name-match` builtin lowers — the declarative common case, stored verbatim,
-   validated at query compile — OR a SYMBOL naming a Clojure fn (the arbitrary escape hatch): it must
-   RESOLVE at expansion (define it above the defstructure), is stored fully qualified, and must carry a
-   registered Cozo predicate port (`cq/register-predicate-port!`) or every vocab-rules query fails loudly
-   at compile (\"unsupported predicate: …\").
-   Demand sub-forms `(realized …)`/`(covered …)`/`(agrees …)` declare node-level design↔fact demands
-   and are collected as `:demands` (vector, may be empty). Each demand's local key is `(or :key :demand)`;
-   duplicate local keys within the same structure throw at expansion. Option keys:
-   realized → :key :desc :when :require ; covered → :key :desc :when :unless ; agrees → :key :desc :when :by."
-  [sname forms]
-  (let [[basis & subs] forms]
-    (when-not (= :by-name basis)
-      (throw (ex-info (str "defstructure " sname ": unknown corresponds basis " (pr-str basis)
-                           " — only :by-name is supported")
-                      {:structure sname :basis basis})))
-    (let [bridge-subs  (filter #(and (seq? %) (= 'bridge (first %))) subs)
-          demand-subs  (filter #(and (seq? %) ('#{realized covered agrees} (first %))) subs)
-          unknown-subs (remove #(or (and (seq? %) (= 'bridge (first %)))
-                                    (and (seq? %) ('#{realized covered agrees} (first %)))) subs)]
-      (doseq [f unknown-subs]
-        (throw (ex-info (str "defstructure " sname ": unknown corresponds sub-form " (pr-str f)
-                             " — expected (bridge f), (realized …), (covered …), or (agrees …)")
-                        {:structure sname :form f})))
-      (when (> (count bridge-subs) 1)
-        (throw (ex-info (str "defstructure " sname ": multiple (bridge …) forms")
-                        {:structure sname})))
-      (let [barg    (second (first bridge-subs))
-            bridged (cond
-                      (nil? barg)     nil
-                      (keyword? barg) barg    ; a kernel name-match STRATEGY (declarative; validated at query compile)
-                      :else           (if-let [v (resolve barg)]   ; a SYMBOL → resolve + qualify (the registered-port escape hatch)
-                                        (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
-                                        (throw (ex-info (str "defstructure " sname ": corresponds bridge " barg
-                                                             " does not resolve — define it above the defstructure")
-                                                        {:structure sname :bridge barg}))))
-            demands  (mapv #(parse-demand sname %) demand-subs)
-            ;; key-derivation: (or :key :demand); throw on duplicates within the structure
-            _        (let [local-keys (map #(or (:key %) (:demand %)) demands)
-                           dupes (filter #(> (count (filter #{%} local-keys)) 1) (distinct local-keys))]
-                       (doseq [d dupes]
-                         (throw (ex-info (str "defstructure " sname ": duplicate demand key " (pr-str d))
-                                         {:structure sname :key d}))))]
-        (cond-> {:basis :by-name :bridge bridged}
-          (seq demands) (assoc :demands demands))))))
-
 (defn- parse-correspond-config
   "Parse a `(correspond Target …)` tail (the forms AFTER Target) → the external correspondence config
-   `{:basis :bridge :demands [] :fact-slots [slot…] :rel-demands [slot-descriptor…]}`. Reuses
-   `parse-slot-entry` (the fact-slots map), `parse-demand` (node demands), and the bridge resolution —
-   the same parsers the inline `(corresponds …)` + slot map use, so emission is faithful."
+   `{:bridge :demands [] :fact-slots [slot…] :rel-demands [slot-descriptor…]}`. Correspondence is
+   always by NAME — a ROOT kind (carrying a `(bridge …)` sub-form) pairs design/fact instances whose
+   names satisfy the bridge; a NESTED kind (no bridge) pairs same-named instances whose containers
+   twin — so there is no basis token: the forms are the fact-slots map + the `(bridge …)`/demand/
+   rel-demand sub-forms directly. The bridge is EITHER a strategy KEYWORD (`:qualified-suffix`,
+   `:exact`) the kernel `name-match` builtin lowers — the declarative common case, stored verbatim,
+   validated at query compile — OR a SYMBOL naming a Clojure fn (the arbitrary escape hatch): it must
+   RESOLVE at expansion and carry a registered Cozo predicate port (`cq/register-predicate-port!`).
+   Reuses `parse-slot-entry` (the fact-slots map) + `parse-demand` (node demands)."
   [cname forms]
-  (let [[basis & body-subs] forms]
-    (when-not (= :by-name basis)
-      (throw (ex-info (str "correspond " cname ": unknown basis " (pr-str basis) " — only :by-name") {:basis basis})))
-    (let [fact-slots (mapv (fn [[rel v]] (parse-slot-entry rel v)) (first (filter map? body-subs)))
-          seq-subs   (filter seq? body-subs)
-          bridge-sub (first (filter #(= 'bridge (first %)) seq-subs))
-          bridge     (when-let [barg (second bridge-sub)]
-                       (if (keyword? barg)
-                         barg    ; a kernel name-match STRATEGY (declarative)
-                         (if-let [v (resolve barg)]   ; a SYMBOL → resolve + qualify (registered-port escape hatch)
-                           (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
-                           (throw (ex-info (str "correspond " cname ": bridge " barg " does not resolve") {:bridge barg})))))
-          demand-subs (filter #('#{realized covered agrees} (first %)) seq-subs)
-          demands     (mapv #(parse-demand cname %) demand-subs)
-          rel-subs    (remove #(or (= 'bridge (first %)) ('#{realized covered agrees} (first %))) seq-subs)
-          rel-demands (mapv (fn [[rel opts]] (assoc opts :rel (keyword rel))) rel-subs)]
-      (doseq [d rel-demands :when (:covered-from d)]
-        (let [cn   (name (first (:covered-from d)))
-              base (keyword (clojure.core/subs cn 0 (dec (count cn))))]
-          (when-not (some #(and (= (:rel %) base) (:transitive %)) fact-slots)
-            (throw (ex-info (str "correspond " cname ": :covered-from closure " (:covered-from d)
-                                 " over a relation not declared :transitive in the fact-slots") {:rel-demand d})))))
-      {:basis :by-name :bridge bridge :demands demands :fact-slots fact-slots :rel-demands rel-demands})))
+  (let [fact-slots (mapv (fn [[rel v]] (parse-slot-entry rel v)) (first (filter map? forms)))
+        seq-subs   (filter seq? forms)
+        bridge-sub (first (filter #(= 'bridge (first %)) seq-subs))
+        bridge     (when-let [barg (second bridge-sub)]
+                     (if (keyword? barg)
+                       barg    ; a kernel name-match STRATEGY (declarative)
+                       (if-let [v (resolve barg)]   ; a SYMBOL → resolve + qualify (registered-port escape hatch)
+                         (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
+                         (throw (ex-info (str "correspond " cname ": bridge " barg " does not resolve") {:bridge barg})))))
+        demand-subs (filter #('#{realized covered agrees} (first %)) seq-subs)
+        demands     (mapv #(parse-demand cname %) demand-subs)
+        ;; local key = (or :key :demand); duplicates within one correspond throw early (the global
+        ;; cross-family guard in `correspondence*` would also catch it, but at seam-collection time).
+        _           (let [local-keys (map #(or (:key %) (:demand %)) demands)
+                          dupes (filter #(> (count (filter #{%} local-keys)) 1) (distinct local-keys))]
+                      (doseq [d dupes]
+                        (throw (ex-info (str "correspond " cname ": duplicate demand key " (pr-str d)) {:key d}))))
+        rel-subs    (remove #(or (= 'bridge (first %)) ('#{realized covered agrees} (first %))) seq-subs)
+        rel-demands (mapv (fn [[rel opts]] (assoc opts :rel (keyword rel))) rel-subs)]
+    (doseq [d rel-demands :when (:covered-from d)]
+      (let [cn   (name (first (:covered-from d)))
+            base (keyword (clojure.core/subs cn 0 (dec (count cn))))]
+        (when-not (some #(and (= (:rel %) base) (:transitive %)) fact-slots)
+          (throw (ex-info (str "correspond " cname ": :covered-from closure " (:covered-from d)
+                               " over a relation not declared :transitive in the fact-slots") {:rel-demand d})))))
+    {:bridge bridge :demands demands :fact-slots fact-slots :rel-demands rel-demands}))
 
 (defmacro correspond
   "Hook the correspondence EXTENSION onto a concept from OUTSIDE (inverted dependency): the concept's
@@ -842,7 +801,7 @@
    (twin, demand-law generation, the comparator hybrid) is unchanged; only the SOURCE of the declarations
    moves here from the concept's own fields.
 
-     (correspond Target :by-name
+     (correspond Target
        {:calls [:* {:transitive true} Op] :private [:? :boolean] …}   ; fact-side grafted onto Target's tag
        (bridge f)?                                                ; roots pair by a name-bridge predicate
        (realized …)* (covered …)* (agrees {:by …})*              ; node demands
@@ -908,17 +867,18 @@
    values, def-wrapped instances): (Function \"doc\"? {slot → value}?)
 
    Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
-   (realized-as ...) / (corresponds ...); anything else is rejected
-   at macro-expansion time (a silently-dropped form is a footgun).
+   (realized-as ...); anything else is rejected
+   at macro-expansion time (a silently-dropped form is a footgun). Correspondence is
+   declared EXTERNALLY via `(correspond Target …)`, never inside the defstructure.
 
    A law's :rules may be recursive, including rule-calls-rule (Cozo computes the
    fixpoint with semi-naive evaluation); keep them tight — they re-run on every check."
   [sname docstring & body]
   (doseq [form body]
     (when-not (or (map? form)
-                  (and (seq? form) (#{'law 'reader 'syntax 'realized-as 'corresponds} (first form))))
+                  (and (seq? form) (#{'law 'reader 'syntax 'realized-as} (first form))))
       (throw (ex-info (str "defstructure " sname ": unknown body form " (pr-str form)
-                           " — expected a slots map, (law ...), (reader ...), (syntax ...), (realized-as ...) or (corresponds ...)")
+                           " — expected a slots map, (law ...), (reader ...), (syntax ...) or (realized-as ...)")
                       {:structure sname :form form}))))
   (when (> (count (filter map? body)) 1)
     (throw (ex-info (str "defstructure " sname ": multiple slots maps — declare all slots in one map")
@@ -993,22 +953,8 @@
                  (when (> (count (filter #(and (seq? %) (= 'realized-as (first %))) body)) 1)
                    (throw (ex-info (str "defstructure " sname ": multiple (realized-as …) forms")
                                    {:structure sname}))))
-        corresponds (let [cs (filter #(and (seq? %) (= 'corresponds (first %))) body)]
-                      (when (> (count cs) 1)
-                        (throw (ex-info (str "defstructure " sname ": multiple (corresponds …) forms")
-                                        {:structure sname})))
-                      (when-let [c (first cs)]
-                        (when value?
-                          (throw (ex-info (str "defstructure " sname ": a ^:value structure cannot correspond"
-                                               " — values are stratum-free (content-deduped across strata)")
-                                          {:structure sname})))
-                        (when realized
-                          (throw (ex-info (str "defstructure " sname ": a realized concept cannot correspond"
-                                               " — it has no instances to twin")
-                                          {:structure sname})))
-                        (parse-corresponds sname (rest c))))
         sdef   {:tag tag :doc docstring :slots slots :laws laws :value? value?
-                :realized-as realized :corresponds corresponds}]
+                :realized-as realized}]
     `(do
        (register-structure! (cond-> '~sdef
                               ~reader-form (assoc :reader ~reader-form)
@@ -1324,21 +1270,21 @@
 (defn ^{:malli/schema [:=> [:cat [:sequential :any]] :map]}
   correspondence*
   "The correspondence SEAM of `sdefs` as one data structure — the collected morphism (pure;
-   `correspondence` applies it to the live registry). {:kinds tag→{:basis :bridge :demands},
+   `correspondence` applies it to the live registry). {:kinds tag→{:bridge :demands},
    :relations [{:owner :rel …demand options… :keys}], :keys full-key→source-pointer}. Assembling
    the `:keys` index GUARDS cross-family key collisions (two declarations deriving one law key
    would silently union their offender sets in `violations-of`) — it throws, naming both sources.
    The A↔B surface-neutral core: an alternative authoring surface (a `defcorrespondence` block)
    would WRITE what this READS."
   [sdefs]
-  ;; correspondence is INLINE (`:corresponds`/slot options on the sdef) OR EXTERNAL (registered by
-  ;; `(correspond …)` against the tag) — the seam folds both, so it stays in lockstep with the laws
-  ;; `sdef->declarations` emits. Relation demands come from inline slots ∪ the external `:rel-demands`.
+  ;; correspondence is EXTERNAL — registered by `(correspond Tag …)` against the tag — so the seam reads
+  ;; it from the registry (`correspondence-of`), in lockstep with the laws `sdef->declarations` emits.
+  ;; Relation demands come from a structure's own slots ∪ the external `:rel-demands`.
   (let [kinds     (into {}
-                        (for [{:keys [tag corresponds]} sdefs
-                              :let [c (or corresponds (correspondence-of tag))]
+                        (for [{:keys [tag]} sdefs
+                              :let [c (correspondence-of tag)]
                               :when c]
-                          [tag (-> (select-keys c [:basis :bridge :demands])
+                          [tag (-> (select-keys c [:bridge :demands])
                                    (update :demands
                                            (fn [ds] (mapv #(assoc % :key (demand-key tag (or (:key %) (:demand %)))) ds))))]))
         relations (vec

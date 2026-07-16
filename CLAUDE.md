@@ -122,7 +122,7 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   check is the generated `:corresponds/Operation.performs-covered` demand (from `(performs {:covered-from
   [:calls* :performs]})` on Operation). The operation/effect/`fukan` laws reach shared vocab via datalog
   injection (no compile cycle, since the `fukan.common` index requires every element). The correspondence demands ride Operation's
-  `(corresponds …)` declaration and slot options, their laws GENERATED. A law that is a
+  `(correspond …)` declaration and its slot options, their laws GENERATED. A law that is a
   declaration's SLOT SEMANTICS rides the declaring structure itself: `Subsystem` carries the
   `:may-depend` conformance/acyclicity teeth **plus** the rehomed module-graph acyclicity +
   membership-totality demands (module-graph laws ride the clustering concept).
@@ -212,9 +212,11 @@ A `defstructure` is a composition of **slots** plus **laws**:
   datalog emitting `not-join` directly (the Cozo query compiler lowers stratified
   negation correctly, so the combinators need no negation-routing dance; never
   hand-write these shapes). `(structure/check db)` runs every law → violations.
-- Correspondence demands are declared per-slot or per-structure — `(realized …)` /
-  `(covered …)` in `(corresponds …)`; `:realized-by` / `:faithful` on a relation slot
-  (container-altitude call demand); `:covered-from [R* S]` on a relation slot (path
+- Correspondence is declared EXTERNALLY, via `(correspond Tag …)` (the concept's own
+  `defstructure` stays pure identity — there is no inline correspondence form). Demands
+  are declared per-structure or per-relation — `(realized …)` / `(covered …)` /
+  `(agrees …)` node demands; `:realized-by` / `:faithful` on a relation slot (op-altitude
+  transitive call demand); `:covered-from [R* S]` on a relation slot (path
   demand: every target the twin reaches over R*·S must be declared) — and their laws
   are GENERATED. Never hand-write `realized` / `covered` / `call-realization` /
   `fidelity` / `covered-from` shapes by hand.
