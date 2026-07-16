@@ -104,20 +104,24 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
 - `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem}.clj` — the code grammar
   (Kind / Effect / Operation / Module / Subsystem). Each element file carries its structure +
   *its* model↔code correspondence — the complete story of the one element in one file.
-  `operation.clj` holds Operation's whole correspondence: the `(correspond Operation …)` fact-side +
-  demands (adherence declared as the kernel's generic `(agrees {:by :structural :over [:in :out]})` —
-  no hand-written comparator), and the call-graph
-  demand readers (`unrealized-delegates`/`uncovered-calls`/`unfaithful-calls`/`unrealized-dispatch`,
-  thin worklists over the generated `:corresponds/Operation.delegates-*` demands). `module.clj` holds
+  `operation.clj` holds Operation's whole correspondence and hand-writes NO mechanism: the
+  `(correspond Operation …)` fact-side + demands, every drift check GENERATED. Adherence is the kernel's
+  generic `(agrees {:by :structural :over [:in :out]})` (no hand-written comparator); call realization is
+  `(delegates {:realized-by :calls :faithful true})`, generating an OP-ALTITUDE TRANSITIVE
+  `:corresponds/Operation.delegates-realized` law (every cross-module design delegation must be realized
+  by a `:calls+` PATH between the endpoints' own twins — the kernel reuses the `calls+` closure the
+  `:transitive` fact-slot already emits) plus the module-altitude `delegates-faithful` reverse. A caller
+  wanting any demand as a worklist names its stable law key through `law/violation-names` directly (as
+  `dev/user.clj` does) — no per-demand reader wrapper is kept. `module.clj` holds
   Module's own correspondence — `(correspond Module … (bridge :qualified-suffix))`, the bridged twin
   ROOT that Operation's twins nest within. The bridge is a name-match STRATEGY KEYWORD the kernel's
   generic `name-match` builtin lowers (canvas short-name is a separator-agnostic dotted suffix of the
-  code ns) — no hand-written CozoScript, no name-bridge fn; Operation's readers correlate modules with
-  the same `(name-match :qualified-suffix …)` inside quoted rules, so Operation needs no dependency on
-  Module (Module requires Operation, not the reverse).
-  `undeclared-effects` (the effect-correspondence reader over the generated `performs-covered` demand)
-  lives in `effect.clj`. The operation/effect/`fukan` laws reach them via datalog injection (no compile
-  cycle, since the `fukan.common` index requires every element). The correspondence demands ride Operation's
+  code ns) — no hand-written CozoScript, no name-bridge fn; the generated Operation twin correlates
+  modules with the same `(name-match :qualified-suffix …)` inside the injected `twin` rule, so Operation
+  needs no dependency on Module (Module requires Operation, not the reverse). The effect-correspondence
+  check is the generated `:corresponds/Operation.performs-covered` demand (from `(performs {:covered-from
+  [:calls* :performs]})` on Operation). The operation/effect/`fukan` laws reach shared vocab via datalog
+  injection (no compile cycle, since the `fukan.common` index requires every element). The correspondence demands ride Operation's
   `(corresponds …)` declaration and slot options, their laws GENERATED. A law that is a
   declaration's SLOT SEMANTICS rides the declaring structure itself: `Subsystem` carries the
   `:may-depend` conformance/acyclicity teeth **plus** the rehomed module-graph acyclicity +
@@ -368,8 +372,9 @@ mixing them corrupts history.
   whole `fukan.common.*` tier (vocab + typing + extraction)
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by element
   (each file = structure + its own correspondence) + grouping. Operation's correspondence (the
-  `(agrees {:by :structural})` adherence demand, the call-graph readers `unrealized-delegates`/`uncovered-calls`/
-  `unfaithful-calls`/`unrealized-dispatch`) lives in `code/operation.clj`; Module's `(bridge
+  `(agrees {:by :structural})` adherence demand + the `(delegates {:realized-by :calls :faithful true})`
+  op-altitude transitive call-realization demand, all GENERATED — no hand-written readers) lives in
+  `code/operation.clj`; Module's `(bridge
   :qualified-suffix)` correspondence lives in `code/module.clj`; the module-dependency-graph relations +
   readers (`module-owns`/`module-depends`/`module-dependencies`) live with the architecture laws that
   consume them in `code/subsystem.clj`
