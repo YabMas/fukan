@@ -37,8 +37,9 @@
    (rules are pure quoted data; keep in sync) AND, in `fukan.canvas.core.structure`, in the
    `:correspondence` declaration handler (the twin-rule generator) and the demand-law generators
    (node-demand-law / container-demand-laws / root-guard-clause / covered-from-law) — update all in
-   concert. Vocab may additionally declare an authoring slot storing the same attribute (the
-   test-fabrication surface)."
+   concert. Provenance has ONE writer — `stamp-stratum` (the pipeline); it is NOT an authoring concern,
+   so no vocab slot exposes it. Tests synthesize a fact-side node the same way, via
+   `fukan.cozo.build/fact-vars->cozo` (stamps the designated fixtures fact)."
   :val/extracted)
 
 (defn ^{:malli/schema [:=> [:cat :any] :any]}

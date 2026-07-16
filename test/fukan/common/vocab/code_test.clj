@@ -32,15 +32,6 @@
       (is (contains? deps ["C" "D"]) "data-adoption: C's op adopts a Kind D owns")
       (is (not (contains? deps ["A" "A"])) "no self-dependency"))))
 
-;; ── Module :extracted provenance (symmetric with Operation) ──────────────────────
-(module/Module ^{:name "t-ext-mod"} t-ext-mod {:extracted true})
-
-(deftest module-carries-extracted-provenance
-  (testing "a Module authored with {:extracted true} stamps :val/extracted (symmetric with Operation)"
-    (let [db (build/vars->cozo [#'t-ext-mod])]
-      (is (true? (ffirst (cq/q '[:find ?x :where [?m :structure/of :fukan.common.vocab.code.module/Module] [?m :val/extracted ?x]] db)))
-          "Module :extracted is stored as :val/extracted"))))
-
 ;; ── Subsystem: clusters Modules + declares the :may-depend DAG (self-reference) ──
 (declare t-sub-b)
 (subsystem/Subsystem ^{:name "sub-a"} t-sub-a {:child [t-fx-impl] :may-depend [t-sub-b]})

@@ -114,12 +114,14 @@
 ;; ── membership fixtures: a module in no subsystem (with a subsystem present) ──
 (module/Module ^{:name "orphan"} t-orphan "a module in no subsystem")
 (module/Module ^{:name "homed"}  t-homed  "a module in a subsystem")
-(module/Module t-ext-orphan {:extracted true})   ; an extracted code-fact module, in no subsystem
+(module/Module ^{:name "ext-orphan"} t-ext-orphan "a code-fact module, in no subsystem (stamped fact at build)")
 (subsystem/Subsystem ^{:name "home"} t-sub-home {:child [t-homed]})
 
 (deftest membership-ignores-extracted-modules
   (testing "an extracted (code-fact) module in no subsystem is NOT a membership offender"
-    (let [db (build/vars->cozo [#'t-ext-orphan #'t-homed #'t-sub-home])]
+    ;; t-ext-orphan is stamped fact-stratum at BUILD time (fact-vars->cozo) — provenance is the
+    ;; pipeline's, not an authoring slot
+    (let [db (build/fact-vars->cozo [#'t-homed #'t-sub-home] [#'t-ext-orphan])]
       (is (empty? (offenders db "belongs to a Subsystem"))
           "design-membership is for authored modules; extracted modules are out of scope"))))
 

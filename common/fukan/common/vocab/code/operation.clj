@@ -66,8 +66,7 @@
   {:calls     [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
    :private   [:? :boolean]          ; public/internal — the module's surface (from extraction)
    :export    [:? :boolean]          ; intentionally public for MECHANISM (^:export)
-   :test-support [:? :boolean]       ; intentionally public for TEST-SUPPORT (^:test-support)
-   :extracted [:? :boolean]}         ; provenance: true ⇒ from code
+   :test-support [:? :boolean]}      ; intentionally public for TEST-SUPPORT (^:test-support)
   ;; ex-Realization — vacuity-guarded: ∃ extracted Operation
   (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
   ;; ex-TypeCoverage — a modelled op's realizing code carries a :malli/schema

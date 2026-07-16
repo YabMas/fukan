@@ -54,6 +54,17 @@
   [vars]
   (mirror/load-datoms (instances->datoms (roots-of vars))))
 
+(defn ^:test-support fact-vars->cozo
+  "Build a Cozo substrate from `design-vars` plus `fact-vars` STAMPED fact-stratum (via
+   `sub/stamp-stratum`, the build's own primitive) — the test analog of `model->cozo`'s canvas +
+   extraction merge, for synthesizing a fact-side node without running an extractor. Provenance is a
+   BUILD-time decision here (which vars are fact), never an authoring slot. Returns the open db."
+  [design-vars fact-vars]
+  (mirror/load-datoms
+   (instances->datoms
+    (concat (roots-of design-vars)
+            (map (fn [[id iv]] [id (sub/stamp-stratum iv)]) (roots-of fact-vars))))))
+
 (defn ^{:malli/schema [:=> [:cat [:vector :any]] :CozoDb]}
   instances->cozo
   "Build a Cozo substrate from explicit `[id InstanceValue]` roots (code-EMITTED instances,

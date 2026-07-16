@@ -166,8 +166,12 @@
 ;; twin term changed from `[(…/module-corresponds? ?an ?bn)]` to `[(name-match :qualified-suffix ?an ?bn)]`
 ;; (the kernel now lowers the match; vocab hand-writes no CozoScript/fn). Count holds (42 — one twin term),
 ;; only the twin term's predicate changed, so the terms hash shifts; laws unchanged.
+;; 2026-07-16 (b): the `:extracted` authoring slot was removed from Module's + Operation's correspondence
+;; — provenance is pipeline metadata (`stamp-stratum`), never an authoring slot. Two scalar fact-slots
+;; gone ⇒ their two auto-generated boolean type-check laws leave (laws 59→57); terms unchanged (a
+;; scalar slot emits no rule term).
 (def ^:private golden-terms {:count 42 :hash 912321169})
-(def ^:private golden-laws  {:count 59 :hash 1199625466})
+(def ^:private golden-laws  {:count 57 :hash 814919964})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

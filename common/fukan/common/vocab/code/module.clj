@@ -1,10 +1,10 @@
 (ns fukan.common.vocab.code.module
   "Code vocab — `Module`: a code boundary (one namespace) and its correspondence to a code namespace.
-   Module's own `(correspond Module …)` declares the `:extracted` fact-slot + the bridged twin root:
-   a canvas Module twins with its extracted code twin by the `:qualified-suffix` name-match strategy
-   (the kernel's generic bridge lowering — canvas short-name is a separator-agnostic dotted suffix of
-   the code namespace, so `infra-model` ← `fukan.infra.model` — with no hand-written CozoScript or
-   name-bridge fn here). Operation's own correspondence (the fact-side slots, `op-twin`, the
+   Module's own `(correspond Module …)` declares the bridged twin root: a canvas Module twins with its
+   extracted code twin by the `:qualified-suffix` name-match strategy (the kernel's generic bridge
+   lowering — canvas short-name is a separator-agnostic dotted suffix of the code namespace, so
+   `infra-model` ← `fukan.infra.model` — with no hand-written CozoScript or name-bridge fn here).
+   Operation's own correspondence (the fact-side slots, `op-twin`, the
    call-realization demands + readers) lives with the element itself in
    `fukan.common.vocab.code.operation`. The module-dependency graph
    (`module-owns`/`module-depends`/`module-dependencies`) — a cross-module analysis consumed entirely
@@ -25,8 +25,8 @@
    the home for grain a module is source-of-truth-for but no one else consumes. The discriminant is
    adoption: a data-shape no other module names is internal grain (`:child`), not a boundary (`:owns`).
 
-   PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but that (the bridge, the
-   `:extracted` fact-slot) hooks in from OUTSIDE via `(correspond Module …)` below, not here."
+   PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but that (the name bridge)
+   hooks in from OUTSIDE via `(correspond Module …)` below, not here."
   {:exposes   [:* {:contains true} Operation]  ; the public API surface — Operations callers depend on
    :owns      [:* {:contains true} Kind]       ; data-shapes that cross the boundary (other modules adopt by name)
    :offers    [:* {:contains true} PlugPoint]  ; plug-points it OWNS for others to satisfy (SPIs / dependency-inversion points)
@@ -39,6 +39,5 @@
 ;; separator-agnostic dotted suffix of the code namespace), and every Operation twin nests WITHIN a
 ;; twinned Module pair. Declared from outside the defstructure so the identity above stays pure.
 
-(s/correspond Module :by-name (bridge :qualified-suffix)
-  {:extracted [:? :boolean]})        ; provenance: true ⇒ from code extraction (stamped by the build)
+(s/correspond Module :by-name (bridge :qualified-suffix))
 
