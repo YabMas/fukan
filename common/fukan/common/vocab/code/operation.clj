@@ -15,7 +15,6 @@
    name WITHIN twinned Modules."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.query :as cq]
-            [fukan.cozo.law :as law]
             [fukan.common.typing.malli :as ct :refer [Schema]]
             [fukan.common.vocab.code.effect :refer [Effect]]))
 
@@ -89,11 +88,13 @@
 
 ;; ── model↔code CALL realization readers ──────────────────────────────────────
 ;; The enforced laws are GENERATED from the :delegates slot options above
-;; {:realized-by :calls :altitude :container :faithful true}; the generated keys are
-;; :corresponds/Operation.delegates-realized and .delegates-faithful. These are thin worklist wrappers
-;; over law/violations-of, plus the `uncovered-calls`/`unrealized-dispatch` on-graph queries. They
-;; correlate a canvas module and its code twin with the kernel `name-match` bridge strategy
-;; (`:qualified-suffix`, same as Module's `(bridge …)`), used only inside quoted rules.
+;; {:realized-by :calls :altitude :container :faithful true} (generated keys
+;; :corresponds/Operation.delegates-realized / .delegates-faithful) — a caller wanting either
+;; worklist names the key through `law/violation-names` directly (as `dev/user.clj` does), so no
+;; per-demand wrapper is kept. What remains here are the two ON-GRAPH queries with no generated dual:
+;; `uncovered-calls` (a coverage SIGNAL, not a violation) and `unrealized-dispatch` (op-level transitive
+;; realization). Both correlate a canvas module and its code twin with the kernel `name-match` bridge
+;; strategy (`:qualified-suffix`, same as Module's `(bridge …)`), used only inside quoted rules.
 
 (def ^:private unrealized-dispatch-rules
   "Reachability over the EXTRACTED graph, on-graph. `op-ext-twin` pairs an authored op with its
@@ -131,15 +132,8 @@
              db unrealized-dispatch-rules)
        (map first) set))
 
-(defn unrealized-delegates
-  "The authored source Operations whose cross-module delegation is NOT realized by any actual call
-   between the corresponding modules, as a set of op names. Empty ⇔ every intended module dependency
-   is backed by real code. Reads the generated demand (:corresponds/Operation.delegates-realized)."
-  [db-arg]
-  (law/violation-names db-arg :corresponds/Operation.delegates-realized))
-
 (defn uncovered-calls
-  "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law): actual cross-module
+  "Coverage SIGNAL (a QUERY, not a law) — the discovery dual of the generated fidelity demand: actual cross-module
    module-calls (over `:calls`) with no corresponding intended cross-module delegation (over
    `:delegates`, bridged by the `:qualified-suffix` name-match), as a set of [caller-module callee-module]
    code-module-name pairs. The couplings the design has not yet declared — a signal, not a violation."
@@ -160,11 +154,3 @@
                         [(name-match :qualified-suffix ?cm1 ?km1)]
                         [(name-match :qualified-suffix ?cm2 ?km2)])]
              db-arg)))
-
-(defn unfaithful-calls
-  "The ENFORCED fidelity offenders — extracted caller Operations making an undeclared cross-module
-   call between MODELLED faculties, as a set of op names. Empty ⇔ every modelled-faculty coupling in
-   the code is declared as intent. The modelled-both-ends subset of `uncovered-calls`; reads the
-   generated demand (:corresponds/Operation.delegates-faithful)."
-  [db-arg]
-  (law/violation-names db-arg :corresponds/Operation.delegates-faithful))

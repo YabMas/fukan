@@ -15,7 +15,8 @@
             ;; for its side-effects + the fully-qualified :.../Module tags in the fixtures).
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.operation :as operation]
-            [fukan.common.vocab.code.effect :as effect]))
+            ;; loaded for its side-effects (registers Effect) + the fully-qualified tags in fixtures
+            [fukan.common.vocab.code.effect]))
 
 ;; register the project dialect's :render for the operation-sig / render-type path used below
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
@@ -118,12 +119,12 @@
                    {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                    {:rel/id "X|child|ex" :rel/from -5 :rel/kind :child :rel/to -6}
                    {:rel/id "ex|calls|ex2" :rel/from -6 :rel/kind :calls :rel/to -6}])]
-      (is (seq (operation/unrealized-delegates db))
+      (is (seq (law/violation-names db :corresponds/Operation.delegates-realized))
           "A->B delegation has no realizing call between corresponding modules → offender"))))
 
 (deftest call-realization-green-on-the-self-model
   (testing "module-level realization is green on the live build-model \"src\""
-    (is (empty? (operation/unrealized-delegates (pipeline/build-model "src")))
+    (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.delegates-realized))
         "0 unrealized — verified by the design prototype")))
 
 (deftest uncovered-calls-backbone-complete
@@ -153,22 +154,22 @@
                    {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
                    {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
                    {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}])]
-      (is (= #{"fa"} (operation/unfaithful-calls db))
+      (is (= #{"fa"} (law/violation-names db :corresponds/Operation.delegates-faithful))
           "an undeclared coupling between modelled faculties is a fidelity offender")
       (is (= #{["fukan.a" "fukan.b"]} (operation/uncovered-calls db))
           "the same coupling appears in the broader query"))))
 
 (deftest fidelity-green-on-the-self-model
   (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
-    (is (empty? (operation/unfaithful-calls (pipeline/build-model "src")))
+    (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.delegates-faithful))
         "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
 
 (deftest slice-1-self-model-is-clean
   (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
             design+code self-model has zero law violations"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (operation/unrealized-delegates model)) "realization is green")
-      (is (empty? (operation/unfaithful-calls model)) "fidelity is green (modelled couplings all declared)")
+      (is (empty? (law/violation-names model :corresponds/Operation.delegates-realized)) "realization is green")
+      (is (empty? (law/violation-names model :corresponds/Operation.delegates-faithful)) "fidelity is green (modelled couplings all declared)")
       (is (empty? (operation/uncovered-calls model)) "coverage worklist is empty — the :delegates backbone is complete")
       (is (empty? (law/check model))
           (str "no law violations on the merged self-model; got: "
@@ -272,9 +273,9 @@
                   {:rel/id "g|performs|io" :rel/from -5 :rel/kind :performs :rel/to -10}]                  ; g performs :io
           undeclared-db (build/tx-maps->cozo common)
           declared-db   (build/tx-maps->cozo (conj common {:rel/id "af|performs|io" :rel/from -2 :rel/kind :performs :rel/to -10}))]
-      (is (= #{"f"} (effect/undeclared-effects undeclared-db))
+      (is (= #{"f"} (law/violation-names undeclared-db :corresponds/Operation.performs-covered))
           "f's twin transitively reaches :io (via g), but f declares nothing → under-declaration")
-      (is (empty? (effect/undeclared-effects declared-db))
+      (is (empty? (law/violation-names declared-db :corresponds/Operation.performs-covered))
           "declaring :io on the authored f satisfies the generated performs-covered demand"))))
 
 (deftest effect-vocab-does-not-name-transitive-reachability
@@ -284,6 +285,6 @@
 (deftest effect-correspondence-green-on-the-self-model
   (testing "the merged self-model declares every effect its code reaches"
     (let [model (pipeline/build-model "src")]
-      (is (empty? (effect/undeclared-effects model))
+      (is (empty? (law/violation-names model :corresponds/Operation.performs-covered))
           "0 undeclared effects — design and extraction speak one effect language, to call-graph depth"))))
 
