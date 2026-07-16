@@ -108,10 +108,12 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   demands, the `op-twin` alias of the kernel `twin`, the `:signature` comparator, and the call-graph
   demand readers (`unrealized-delegates`/`uncovered-calls`/`unfaithful-calls`/`unrealized-dispatch`,
   thin worklists over the generated `:corresponds/Operation.delegates-*` demands). `module.clj` holds
-  Module's own correspondence — the `module-corresponds?` canvas-module↔code-ns name bridge (+ its
-  Cozo predicate-port) and `(correspond Module …)`, the bridged twin ROOT that Operation's twins nest
-  within; Operation's readers reach that bridge only inside quoted rules (query-time port), so
-  Operation needs no compile-time dependency on Module (Module requires Operation, not the reverse).
+  Module's own correspondence — `(correspond Module … (bridge :qualified-suffix))`, the bridged twin
+  ROOT that Operation's twins nest within. The bridge is a name-match STRATEGY KEYWORD the kernel's
+  generic `name-match` builtin lowers (canvas short-name is a separator-agnostic dotted suffix of the
+  code ns) — no hand-written CozoScript, no name-bridge fn; Operation's readers correlate modules with
+  the same `(name-match :qualified-suffix …)` inside quoted rules, so Operation needs no dependency on
+  Module (Module requires Operation, not the reverse).
   `undeclared-effects` (the effect-correspondence reader over the generated `performs-covered` demand)
   lives in `effect.clj`. The operation/effect/`fukan` laws reach them via datalog injection (no compile
   cycle, since the `fukan.common` index requires every element). The correspondence demands ride Operation's
@@ -366,8 +368,8 @@ mixing them corrupts history.
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by element
   (each file = structure + its own correspondence) + grouping. Operation's correspondence (`op-twin`,
   the `:signature` comparator, the call-graph readers `unrealized-delegates`/`uncovered-calls`/
-  `unfaithful-calls`/`unrealized-dispatch`) lives in `code/operation.clj`; the `module-corresponds?`
-  canvas-module↔code-ns bridge lives in `code/module.clj`; the module-dependency-graph relations +
+  `unfaithful-calls`/`unrealized-dispatch`) lives in `code/operation.clj`; Module's `(bridge
+  :qualified-suffix)` correspondence lives in `code/module.clj`; the module-dependency-graph relations +
   readers (`module-owns`/`module-depends`/`module-dependencies`) live with the architecture laws that
   consume them in `code/subsystem.clj`
 - `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab

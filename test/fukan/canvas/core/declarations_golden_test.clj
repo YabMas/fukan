@@ -162,7 +162,11 @@
 ;; (Structure/Law/Vocabulary/Relation) LEAVES this `fukan.common`-scoped snapshot: terms 47→42
 ;; (−5 kind/relation rules), laws 74→59 (−15 generated type-check/target-type + 2 self-check laws).
 ;; The reusable vocab's own emission is unchanged; the golden now locks exactly the fukan.common vocab.
-(def ^:private golden-terms {:count 42 :hash 157564513})
+;; 2026-07-16: Module's correspondence bridge became a declarative name-match STRATEGY — the generated
+;; twin term changed from `[(…/module-corresponds? ?an ?bn)]` to `[(name-match :qualified-suffix ?an ?bn)]`
+;; (the kernel now lowers the match; vocab hand-writes no CozoScript/fn). Count holds (42 — one twin term),
+;; only the twin term's predicate changed, so the terms hash shifts; laws unchanged.
+(def ^:private golden-terms {:count 42 :hash 912321169})
 (def ^:private golden-laws  {:count 59 :hash 1199625466})
 
 (deftest terms-are-stable

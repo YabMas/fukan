@@ -751,14 +751,15 @@
      :unless (unquote-lit (:unless opts))}))
 
 (defn- parse-corresponds
-  "Parse a `(corresponds …)` body-form tail into `{:basis :by-name, :bridge qualified-sym|nil, :demands [...]}`.
-   `:by-name` is the only basis: a ROOT kind (with a `(bridge f)` sub-form) pairs design/fact
-   instances whose names satisfy the bridge predicate; a NESTED kind (no bridge) pairs
-   same-named design/fact instances whose containers twin. The bridge must RESOLVE at expansion
-   time (define it above the defstructure) and is stored fully qualified. A ROOT bridge must
-   also carry a registered Cozo predicate port (`cq/register-predicate-port!`); an unported
-   bridge fails every vocab-rules query loudly at compile (\"unsupported predicate: …\") — far
-   from the defstructure, so declare-and-port together.
+  "Parse a `(corresponds …)` body-form tail into `{:basis :by-name, :bridge strategy-kw|qualified-sym|nil, :demands [...]}`.
+   `:by-name` is the only basis: a ROOT kind (with a `(bridge X)` sub-form) pairs design/fact
+   instances whose names satisfy the bridge; a NESTED kind (no bridge) pairs same-named design/fact
+   instances whose containers twin. The bridge `X` is EITHER a strategy KEYWORD (`:qualified-suffix`,
+   `:exact`) the kernel `name-match` builtin lowers — the declarative common case, stored verbatim,
+   validated at query compile — OR a SYMBOL naming a Clojure fn (the arbitrary escape hatch): it must
+   RESOLVE at expansion (define it above the defstructure), is stored fully qualified, and must carry a
+   registered Cozo predicate port (`cq/register-predicate-port!`) or every vocab-rules query fails loudly
+   at compile (\"unsupported predicate: …\").
    Demand sub-forms `(realized …)`/`(covered …)`/`(agrees …)` declare node-level design↔fact demands
    and are collected as `:demands` (vector, may be empty). Each demand's local key is `(or :key :demand)`;
    duplicate local keys within the same structure throw at expansion. Option keys:
@@ -780,13 +781,15 @@
       (when (> (count bridge-subs) 1)
         (throw (ex-info (str "defstructure " sname ": multiple (bridge …) forms")
                         {:structure sname})))
-      (let [bsym    (second (first bridge-subs))
-            bridged (when bsym
-                      (if-let [v (resolve bsym)]
-                        (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
-                        (throw (ex-info (str "defstructure " sname ": corresponds bridge " bsym
-                                             " does not resolve — define it above the defstructure")
-                                        {:structure sname :bridge bsym}))))
+      (let [barg    (second (first bridge-subs))
+            bridged (cond
+                      (nil? barg)     nil
+                      (keyword? barg) barg    ; a kernel name-match STRATEGY (declarative; validated at query compile)
+                      :else           (if-let [v (resolve barg)]   ; a SYMBOL → resolve + qualify (the registered-port escape hatch)
+                                        (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
+                                        (throw (ex-info (str "defstructure " sname ": corresponds bridge " barg
+                                                             " does not resolve — define it above the defstructure")
+                                                        {:structure sname :bridge barg}))))
             demands  (mapv #(parse-demand sname %) demand-subs)
             ;; key-derivation: (or :key :demand); throw on duplicates within the structure
             _        (let [local-keys (map #(or (:key %) (:demand %)) demands)
@@ -809,10 +812,12 @@
     (let [fact-slots (mapv (fn [[rel v]] (parse-slot-entry rel v)) (first (filter map? body-subs)))
           seq-subs   (filter seq? body-subs)
           bridge-sub (first (filter #(= 'bridge (first %)) seq-subs))
-          bridge     (when-let [bsym (second bridge-sub)]
-                       (if-let [v (resolve bsym)]
-                         (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
-                         (throw (ex-info (str "correspond " cname ": bridge " bsym " does not resolve") {:bridge bsym}))))
+          bridge     (when-let [barg (second bridge-sub)]
+                       (if (keyword? barg)
+                         barg    ; a kernel name-match STRATEGY (declarative)
+                         (if-let [v (resolve barg)]   ; a SYMBOL → resolve + qualify (registered-port escape hatch)
+                           (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
+                           (throw (ex-info (str "correspond " cname ": bridge " barg " does not resolve") {:bridge barg})))))
           demand-subs (filter #('#{realized covered agrees} (first %)) seq-subs)
           demands     (mapv #(parse-demand cname %) demand-subs)
           rel-subs    (remove #(or (= 'bridge (first %)) ('#{realized covered agrees} (first %))) seq-subs)
@@ -1309,7 +1314,9 @@
                 ['?a :structure/of tag] (list 'not ['?a :val/extracted true])
                 ['?b :structure/of tag] ['?b :val/extracted true]
                 ['?a :entity/name '?an] ['?b :entity/name '?bn]
-                [(list bridge '?an '?bn)]]
+                ;; a strategy KEYWORD lowers through the generic `name-match` builtin; a SYMBOL is a
+                ;; vocab fn-predicate lowered through its registered port
+                [(if (keyword? bridge) (list 'name-match bridge '?an '?bn) (list bridge '?an '?bn))]]
                [(list 'twin '?a '?b)
                 ['?a :structure/of tag] (list 'not ['?a :val/extracted true])
                 ['?b :structure/of tag] ['?b :val/extracted true]

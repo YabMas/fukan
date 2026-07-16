@@ -126,7 +126,7 @@
 (deftest correspondence-card-shows-the-seam-and-its-generated-laws
   (testing "the card renders the twin ladder and every demand with its stable key"
     (let [card (g/correspondence-card)]
-      (is (str/includes? card "module-corresponds?") "the root bridge is named")
+      (is (str/includes? card ":qualified-suffix") "the root bridge strategy is named")
       (is (str/includes? card ":corresponds/Operation.realized"))
       (is (str/includes? card ":corresponds/Operation.delegates-faithful"))
       (is (str/includes? card ":corresponds/Operation.performs-covered"))

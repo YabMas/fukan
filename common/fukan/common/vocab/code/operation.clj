@@ -8,12 +8,11 @@
    too (via `(s/correspond Operation …)`), the complete story of the one element in one file. The
    only thing NOT here is implementer-directed prose, which rides the kernel `:guidance` annotation.
 
-   The one thing this element reaches OUTWARD for is the module↔code-ns name bridge
-   `module-corresponds?` (a `Module` concept, in `fukan.common.vocab.code.module`): the twin pairs an
-   authored Operation with its extracted code twin by name WITHIN twinned Modules. That bridge is
-   referenced only inside quoted datalog rules (resolved at query-time via the predicate-port), so
-   this namespace needs no compile-time dependency on Module — Module requires Operation, not the
-   reverse."
+   The `:calls` readers correlate a canvas module and its code twin with the kernel `name-match`
+   bridge strategy (`:qualified-suffix`, the same one Module declares) — a generic builtin, used only
+   inside quoted datalog rules, so this namespace needs no dependency on Module (Module requires
+   Operation, not the reverse). The twin pairs an authored Operation with its extracted code twin by
+   name WITHIN twinned Modules."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.query :as cq]
             [fukan.cozo.law :as law]
@@ -134,11 +133,12 @@
 ;; {:realized-by :calls :altitude :container :faithful true}; the generated keys are
 ;; :corresponds/Operation.delegates-realized and .delegates-faithful. These are thin worklist wrappers
 ;; over law/violations-of, plus the `uncovered-calls`/`unrealized-dispatch` on-graph queries. They
-;; reach the Module↔code-ns bridge `module-corresponds?` only inside quoted rules (query-time port).
+;; correlate a canvas module and its code twin with the kernel `name-match` bridge strategy
+;; (`:qualified-suffix`, same as Module's `(bridge …)`), used only inside quoted rules.
 
 (def ^:private unrealized-dispatch-rules
   "Reachability over the EXTRACTED graph, on-graph. `op-ext-twin` pairs an authored op with its
-   extracted code twin (same name + `module-corresponds?` modules). `ext-edge` is a `:calls` edge;
+   extracted code twin (same name + `:qualified-suffix`-matching modules). `ext-edge` is a `:calls` edge;
    `ext-reaches` is its transitive closure — a rule-calls-rule recursion the kernel now allows, negated
    under stratification. A `defmulti` is an ordinary Operation, so calls through it and its
    method-body calls are all `:calls`, and reachability needs no separate dispatch edge. The
@@ -147,7 +147,7 @@
   '[[(op-ext-twin ?a ?e)
      (Operation ?a) (design ?a) [?a :entity/name ?n] (in-module ?a ?am)
      (Operation ?e) (fact ?e) [?e :entity/name ?n] (in-module ?e ?em)
-     [(fukan.common.vocab.code.module/module-corresponds? ?am ?em)]]
+     [(name-match :qualified-suffix ?am ?em)]]
     [(ext-edge ?from ?to) (calls ?from ?to)]
     [(ext-reaches ?a ?b) (ext-edge ?a ?b)]
     [(ext-reaches ?a ?b) (ext-edge ?a ?mid) (ext-reaches ?mid ?b)]])
@@ -182,9 +182,12 @@
 (defn uncovered-calls
   "Fidelity worklist — the dual of `unrealized-delegates` (a QUERY, not a law): actual cross-module
    module-calls (over `:calls`) with no corresponding intended cross-module delegation (over
-   `:delegates`, bridged by `module-corresponds?`), as a set of [caller-module callee-module] code-
-   module-name pairs. The couplings the design has not yet declared — a signal, not a violation."
+   `:delegates`, bridged by the `:qualified-suffix` name-match), as a set of [caller-module callee-module]
+   code-module-name pairs. The couplings the design has not yet declared — a signal, not a violation."
   [db-arg]
+  ;; `name-match` is a FILTER (both names bound), not a generator, so the not-join binds ?km1/?km2 to
+  ;; the extracted (fact) code-module names itself before matching — the design→code correspondence is
+  ;; a test, not a source of km bindings (they arrive from the outer call's in-module).
   (set (cq/q '[:find ?km1 ?km2 :in $
                :where (calls ?e1 ?e2)
                       (fact ?e1) (fact ?e2)
@@ -193,8 +196,10 @@
                         (delegates ?o1 ?o2)
                         (design ?o1)
                         (in-module ?o1 ?cm1) (in-module ?o2 ?cm2) [(not= ?cm1 ?cm2)]
-                        [(fukan.common.vocab.code.module/module-corresponds? ?cm1 ?km1)]
-                        [(fukan.common.vocab.code.module/module-corresponds? ?cm2 ?km2)])]
+                        [?fm1 :structure/of :fukan.common.vocab.code.module/Module] (fact ?fm1) [?fm1 :entity/name ?km1]
+                        [?fm2 :structure/of :fukan.common.vocab.code.module/Module] (fact ?fm2) [?fm2 :entity/name ?km2]
+                        [(name-match :qualified-suffix ?cm1 ?km1)]
+                        [(name-match :qualified-suffix ?cm2 ?km2)])]
              db-arg)))
 
 (defn unfaithful-calls

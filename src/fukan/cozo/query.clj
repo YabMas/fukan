@@ -71,6 +71,23 @@
   (swap! synthetic-rules merge synthetic)
   nil)
 
+;; ── name-match: a generic bridge-lowering the kernel owns (no vocab named) ─────
+;; A `by-name` correspondence ROOT may declare `(bridge :strategy)` — a design↔fact name-match
+;; convention. The twin rule binds both names, then filters with `(name-match :strategy ?a ?b)`; the
+;; kernel lowers it to an INLINE CozoScript filter per this table (no synthetic rule, no re-partition —
+;; the twin rule already partitioned by stratum). `?a` is the DESIGN name, `?b` the FACT name. Vocab
+;; declares WHICH strategy (data); it names no strategy CozoScript. A bridge whose match is not one of
+;; these declares a Clojure fn + `register-predicate-port!` instead (the arbitrary escape hatch).
+(def ^:private name-match-strategies
+  "strategy keyword → (design-term fact-term) → CozoScript boolean filter."
+  {:exact            (fn [a b] (str a " == " b))
+   ;; the design (canvas) name is the fact (code) name, or a separator-delimited SUFFIX of it —
+   ;; separator-agnostic: canvas names use '-', code paths '.', so normalize both to '.' first.
+   :qualified-suffix (fn [a b]
+                       (let [an (str "regex_replace_all(" a ", '-', '.')")
+                             bn (str "regex_replace_all(" b ", '-', '.')")]
+                         (str "or(" bn " == " an ", ends_with(" bn ", concat('.', " an ")))")))})
+
 (declare compile-clause compile-clauses dewild)
 
 (def ^:private comparison-ops
@@ -97,6 +114,12 @@
     ;; (contains? #{a b …} ?v) — set membership → an or of equalities (the set is a LITERAL, not a term)
     (and (#{'contains? 'clojure.core/contains?} op) (set? (first args)))
     [(str "or(" (str/join ", " (map #(str (cterm (second args)) " == " (clit %)) (first args))) ")") #{}]
+    ;; (name-match :strategy ?a ?b) — a declarative correspondence bridge → an inline match filter on
+    ;; the two bound names (the strategy keyword is a LITERAL selector, not a term)
+    (= 'name-match op)
+    (if-let [f (name-match-strategies (first args))]
+      [(f (cterm (second args)) (cterm (nth args 2))) #{}]
+      (throw (ex-info (str "unknown name-match strategy: " (pr-str (first args))) {:strategy (first args)})))
     (contains? @predicate-registry op) ((@predicate-registry op) (mapv cterm args))
     :else (throw (ex-info (str "unsupported predicate: " (pr-str (cons op args))) {:pred op}))))
 

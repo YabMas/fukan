@@ -703,11 +703,11 @@
 ;; ── corresponds: the model↔code twin-hood declaration ──────────────────────
 (defn- tc-bridge "test root-bridge predicate" [a b] (= a b))
 
-;; tc-bridge's Cozo port — a corresponds bridge is compiled into the generated twin rule, so it
-;; needs a CozoScript translation like any law/query predicate (module-corresponds? sets the
-;; pattern). Equality, no aux rules. Without this, EVERY vocab-rules-consuming query would throw
-;; on the un-portable TCorrRoot disjunct — the kernel is deliberately LOUD there (a declared but
-;; unwired bridge is a programming error, not a config gap).
+;; tc-bridge's Cozo port — a SYMBOL bridge (the arbitrary escape hatch, vs a `(bridge :strategy)`
+;; keyword) is compiled into the generated twin rule, so it needs a CozoScript translation like any
+;; law/query predicate. Equality, no aux rules. Without this, EVERY vocab-rules-consuming query would
+;; throw on the un-portable TCorrRoot disjunct — the kernel is deliberately LOUD there (a declared but
+;; unwired symbol bridge is a programming error, not a config gap).
 (cq/register-predicate-port!
  'fukan.canvas.core.structure-test/tc-bridge
  (fn [[a b]] [(str a " == " b) #{}])
@@ -785,9 +785,9 @@
   (testing "(s/correspondence) collects kinds, relation demands, and the key index from the registry"
     (let [seam (s/correspondence)
           op   :fukan.common.vocab.code.operation/Operation]
-      (is (= 'fukan.common.vocab.code.module/module-corresponds?
+      (is (= :qualified-suffix
              (get-in seam [:kinds :fukan.common.vocab.code.module/Module :bridge]))
-          "Module is the bridged root")
+          "Module is the bridged root (a name-match strategy keyword)")
       (is (= 4 (count (get-in seam [:kinds op :demands]))) "Operation's four node demands")
       (is (= #{:corresponds/Operation.realized :corresponds/Operation.type-coverage
                :corresponds/Operation.covered :corresponds/Operation.adheres}

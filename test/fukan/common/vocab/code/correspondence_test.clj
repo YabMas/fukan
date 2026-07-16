@@ -194,7 +194,7 @@
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
 
 ;; Tiny model: authored A.op-a :delegates B.op-b. "Same module name" authored/extracted pairs make
-;; module-corresponds? trivial (segs "A" is a suffix of segs "A").
+;; the :qualified-suffix match trivial ("A" is a suffix of "A" — the exact case).
 (defn- delegation-fixture
   "Authored A.op-a :delegates B.op-b; when `wired?`, the extracted MULTI-HOP call path
    op-a -> mid -> op-b (exercising `ext-reaches`' transitive closure over `:calls`)."
@@ -208,7 +208,7 @@
                 {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                 ;; the extracted (code) modules are SEPARATE nodes from the design modules — distinct
                 ;; :entity/id so they don't merge — exactly as the real build keeps design ns and code ns
-                ;; apart, bridged by `module-corresponds?` (same name here). The merge would make a single
+                ;; apart, bridged by `:qualified-suffix` (same name here). The merge would make a single
                 ;; node both design+extracted, which never happens in reality.
                 {:db/id -5 :structure/of :fukan.common.vocab.code.module/Module :entity/id "Ax" :entity/name "A" :val/extracted true}
                 {:db/id -6 :structure/of :fukan.common.vocab.code.module/Module :entity/id "Bx" :entity/name "B" :val/extracted true}
@@ -229,7 +229,7 @@
                     [?a :entity/name ?n] (in-module ?a ?cm)
                     [?b :structure/of :fukan.common.vocab.code.operation/Operation] [?b :val/extracted true]
                     [?b :entity/name ?n] (in-module ?b ?km)
-                    [(fukan.common.vocab.code.module/module-corresponds? ?cm ?km)]]]
+                    [(name-match :qualified-suffix ?cm ?km)]]]
           rules  (into (s/vocab-rules) legacy)
           pairs  (fn [head] (set (cq/q (into [:find '?a '?b :in '$ '% :where] [(list head '?a '?b)]) db rules)))]
       (is (seq (pairs 'op-twin)) "the self-model has twins")

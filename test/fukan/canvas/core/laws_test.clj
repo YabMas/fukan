@@ -399,7 +399,7 @@
 (deftest agrees-demand-runs-the-registered-comparator-over-twin-pairs
   (testing "a fact twin whose :n DISAGREES with the design is an offender; an agreeing twin is green.
             The design LTwin `x` nests in module `m`, its fact twin in the corresponding code module
-            `fukan.m` (module-corresponds?), so the two twin — and the :ltwin-eq comparator decides."
+            `fukan.m` (:qualified-suffix), so the two twin — and the :ltwin-eq comparator decides."
     (let [mk (fn [design-n fact-n]
                (build/tx-maps->cozo
                 [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
