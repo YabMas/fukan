@@ -367,8 +367,9 @@ mixing them corrupts history.
   (each file = structure + its own correspondence) + grouping. Operation's correspondence (`op-twin`,
   the `:signature` comparator, the call-graph readers `unrealized-delegates`/`uncovered-calls`/
   `unfaithful-calls`/`unrealized-dispatch`) lives in `code/operation.clj`; the `module-corresponds?`
-  canvas-module↔code-ns bridge + Module's module-graph derivations (`module-owns`/`module-depends`/
-  `module-dependencies`) live in `code/module.clj`
+  canvas-module↔code-ns bridge lives in `code/module.clj`; the module-dependency-graph relations +
+  readers (`module-owns`/`module-depends`/`module-dependencies`) live with the architecture laws that
+  consume them in `code/subsystem.clj`
 - `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI

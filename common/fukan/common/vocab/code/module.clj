@@ -1,11 +1,12 @@
 (ns fukan.common.vocab.code.module
-  "Code vocab — `Module`: a code boundary (one namespace), its correspondence to a code namespace, and
-   the derived module-dependency graph. Holds the `module-corresponds?` name bridge (canvas-module ↔
-   code-ns), Module's own `(correspond Module …)` (the `:extracted` fact-slot + the bridged twin root),
-   and the `module-owns`/`module-depends` derivations that Subsystem's architecture laws read by name.
-   Operation's own correspondence (the fact-side slots, `op-twin`, the call-realization demands +
-   readers) lives with the element itself in `fukan.common.vocab.code.operation`; this file only
-   supplies the module↔code-ns bridge those readers reach via query-time port."
+  "Code vocab — `Module`: a code boundary (one namespace) and its correspondence to a code namespace.
+   Holds the `module-corresponds?` name bridge (canvas-module ↔ code-ns) and Module's own
+   `(correspond Module …)` (the `:extracted` fact-slot + the bridged twin root). Operation's own
+   correspondence (the fact-side slots, `op-twin`, the call-realization demands + readers) lives with
+   the element itself in `fukan.common.vocab.code.operation`; this file only supplies the
+   module↔code-ns bridge those readers reach via query-time port. The module-dependency graph
+   (`module-owns`/`module-depends`/`module-dependencies`) — a cross-module analysis consumed entirely
+   by Subsystem's architecture laws — lives with those laws in `fukan.common.vocab.code.subsystem`."
   (:require [clojure.string :as str]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
@@ -68,36 +69,3 @@
 (s/correspond Module :by-name (bridge module-corresponds?)
   {:extracted [:? :boolean]})        ; provenance: true ⇒ from code extraction (stamped by the build)
 
-;; ── derived module-dependency relations ───────────────────────────────
-;; `module-owns` / `module-depends` are DEFRELATIONS — injected into every law and query by
-;; `check`/`vocab-rules`, so the laws that need them (Subsystem's `:may-depend` conformance + its
-;; rehomed module-graph acyclicity) and the reader below reference them BY NAME instead of each
-;; re-inlining a copy. The compiler emits only the rules a query actually reaches, so laws that
-;; never mention module-depends pay nothing. `module-owns` is Module ownership expressed as the
-;; generic `contains` union (the `:contains` handler) restricted to a Module container — Module's
-;; :exposes/:owns/:child are all {:contains true}.
-
-(s/defrelation :module-owns
-  "Module ?m owns ?x — the `contains` union (:exposes/:owns/:child) restricted to a Module container."
-  '[?m ?x]
-  '[[?m :structure/of :fukan.common.vocab.code.module/Module] (contains ?m ?x)])
-
-(s/defrelation :module-depends
-  "the COMPLETE module→module dependency graph: a call dependency (?m owns an op that :delegates to
-   an op ?n owns) UNIONed with data-adoption (?m owns an op whose :in/:out ref-Schema references a Kind
-   ?n owns, by name). The reader `module-dependencies` and the layering laws read this by name."
-  '[?m ?n]
-  '[(module-owns ?m ?op)
-    (or-join [?op ?n]
-      (and (delegates ?op ?op2) (module-owns ?n ?op2))
-      (and (in ?op ?sch)  (names-kind ?sch ?k) (module-owns ?n ?k))
-      (and (out ?op ?sch) (names-kind ?sch ?k) (module-owns ?n ?k)))
-    [(not= ?m ?n)]])
-
-(defn module-dependencies
-  "The complete module→module dependency graph (calls ∪ data-adoption) as a set of
-   [caller-name callee-name] pairs. A pure read over the reified code graph."
-  [db]
-  (set (cq/q '[:find ?mn ?nn :in $
-               :where (module-depends ?m ?n) [?m :entity/name ?mn] [?n :entity/name ?nn]]
-             db)))

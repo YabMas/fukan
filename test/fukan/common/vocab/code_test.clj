@@ -27,7 +27,7 @@
   (testing "M depends on N via a delegate (call) OR via adopting a Kind N owns (data)"
     (let [db (build/vars->cozo [#'DShape #'t-b-op #'t-a-op #'t-c-op
                                #'t-mod-a #'t-mod-b #'t-mod-c #'t-mod-d])
-          deps (module/module-dependencies db)]
+          deps (subsystem/module-dependencies db)]
       (is (contains? deps ["A" "B"]) "call dependency: A's op delegates to B's op")
       (is (contains? deps ["C" "D"]) "data-adoption: C's op adopts a Kind D owns")
       (is (not (contains? deps ["A" "A"])) "no self-dependency"))))

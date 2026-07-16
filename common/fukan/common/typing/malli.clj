@@ -202,7 +202,7 @@
 
 ;; names-kind — the type-ref → named-Kind navigation as a DEFRELATION (injected into every law/query
 ;; by check/vocab-rules), so the consumers that chase a ref Schema to the type it names — e.g.
-;; `module-depends` data-adoption (fukan.common.vocab.code.module) — read it by name instead of each
+;; `module-depends` data-adoption (fukan.common.vocab.code.subsystem) — read it by name instead of each
 ;; inlining the 3-clause chain.
 (s/defrelation :names-kind
   "a ref Schema ?sch whose :ref name leaf resolves BY NAME to the Kind ?k it references — the

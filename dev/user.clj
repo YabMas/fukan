@@ -14,7 +14,6 @@
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
-            [fukan.common.vocab.code.module :as code-module]
             [fukan.common.vocab.code.subsystem :as code-subsystem]))
 
 (defonce ^:private _reload-init
@@ -151,7 +150,7 @@
    :may-depend edges the code does NOT realize (over-declaration: intended headroom or stale intent)."
   []
   (if-let [c (infra-model/get-model)]
-    (do (doseq [[a b] (sort (code-module/module-dependencies c))]
+    (do (doseq [[a b] (sort (code-subsystem/module-dependencies c))]
           (println (format "%-24s ⟶ %s" a b)))
         (let [unreal (code-subsystem/unrealized-dependencies c)]
           (if (empty? unreal)
