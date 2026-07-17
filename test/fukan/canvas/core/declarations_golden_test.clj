@@ -210,8 +210,14 @@
 ;; shared relation rule (`in`/`out`/`performs`/`calls`/`calls+`/`child`) dedups, so no other term moves.
 ;; Laws 57→62: +5 = `Fn`'s own structural laws (in/out/performs/calls target-types + the three boolean
 ;; type-checks ≈ 8) plus `Ns.child` (1), MINUS the 4 fact-slot laws that used to ride Operation's graft.
+;; 2026-07-17 (c): the correspondence IDENTITY map is now DERIVED, not authored. `Operation`'s
+;; `(agrees {:key :adheres :by :structural :over [:in :out] :when (out ?t ?_o)})` left the plugin block;
+;; the kernel derives the same structural agreement from the slots Operation and Fn share by name+sort
+;; (minus the charactered `:performs`), emitting it as `:corresponds/Operation.agrees`. One agree law
+;; before and after (count holds at 62), but its `:key` (adheres→agrees), `:desc` (authored prose →
+;; derived), and guard var (`?_o`→`?_out`) changed, so only the laws hash moves. Live `(check)` still 0.
 (def ^:private golden-terms {:count 49 :hash 532380915})
-(def ^:private golden-laws  {:count 62 :hash -970266870})
+(def ^:private golden-laws  {:count 62 :hash -1698144195})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

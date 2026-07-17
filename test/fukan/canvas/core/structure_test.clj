@@ -791,7 +791,7 @@
           "Module is the bridged root (a name-match strategy keyword)")
       (is (= 4 (count (get-in seam [:kinds op :demands]))) "Operation's four node demands")
       (is (= #{:corresponds/Operation.realized :corresponds/Operation.type-coverage
-               :corresponds/Operation.covered :corresponds/Operation.adheres}
+               :corresponds/Operation.covered :corresponds/Operation.agrees}
              (into #{} (map :key) (get-in seam [:kinds op :demands])))
           "node demands carry their FULL derived keys")
       (is (= #{[:delegates #{:corresponds/Operation.delegates-realized

@@ -33,7 +33,7 @@
             assert these three specifically rather than global emptiness, which is fragile as
             more functions get annotated. The false-cases above prove DETECTION fires.)"
     (let [model   (pipeline/build-model "src")
-          drifted (law/violation-names model :corresponds/Operation.adheres)]
+          drifted (law/violation-names model :corresponds/Operation.agrees)]
       (is (not (contains? drifted "load-model"))
           (str "load-model's :malli/schema should adhere to its model; drifted: " drifted))
       (is (not (contains? drifted "get-model"))
@@ -46,11 +46,11 @@
             ordered :in (distinct types, SAME ORDER, SAME ARITY) → NOT type-drifted. The positive end-to-end
             case; mismatch DETECTION (reorder / dropped arg) is covered by adheres-checks-in-order-and-arity."
     (let [model (pipeline/build-model "src")]
-      (is (not (contains? (law/violation-names model :corresponds/Operation.adheres) "focus-nodes"))
+      (is (not (contains? (law/violation-names model :corresponds/Operation.agrees) "focus-nodes"))
           "focus-nodes's 2-arg annotation (StructureDb, [vector Clause]) matches its modelled ordered signature"))))
 
 (deftest adheres-demand-gates-a-real-signature-mismatch
-  (testing "the GATED :corresponds/Operation.adheres demand (the :signature comparator over twin pairs):
+  (testing "the GATED :corresponds/Operation.agrees demand (the :signature comparator over twin pairs):
             adherence is STRUCTURAL — a modelled op `f` and its extracted twin adhere iff their :in/:out
             Schema nodes are IDENTICAL (types content-dedup across strata). A twin whose :out is a
             DIFFERENT type node is an offender; the SAME node is green."
@@ -69,9 +69,9 @@
                  extra)))
           match    (mk -5 [])                                                              ; twin :out → the SAME node
           mismatch (mk -6 [{:db/id -6 :structure/of :fukan.common.typing.malli/Schema :val/kind "any"}])]  ; twin :out → a DIFFERENT node
-      (is (= #{"f"} (law/violation-names mismatch :corresponds/Operation.adheres))
+      (is (= #{"f"} (law/violation-names mismatch :corresponds/Operation.agrees))
           "a twin whose :out is a different type node is an offender")
-      (is (empty? (law/violation-names match :corresponds/Operation.adheres))
+      (is (empty? (law/violation-names match :corresponds/Operation.agrees))
           "a twin whose :out is the identical node adheres → green"))))
 
 (deftest adheres-checks-in-order-and-arity
@@ -100,11 +100,11 @@
           match     (base [[0 -10] [1 -11]])   ; twin :in = [A B] — identical
           reordered (base [[0 -11] [1 -10]])   ; twin :in = [B A] — order fires
           short     (base [[0 -10]])]          ; twin :in = [A]   — arity fires
-      (is (empty? (law/violation-names match :corresponds/Operation.adheres))
+      (is (empty? (law/violation-names match :corresponds/Operation.agrees))
           "an identical :in sequence adheres → green")
-      (is (= #{"f"} (law/violation-names reordered :corresponds/Operation.adheres))
+      (is (= #{"f"} (law/violation-names reordered :corresponds/Operation.agrees))
           "a reordered :in is an offender (order is checked)")
-      (is (= #{"f"} (law/violation-names short :corresponds/Operation.adheres))
+      (is (= #{"f"} (law/violation-names short :corresponds/Operation.agrees))
           "a dropped :in arg is an offender (arity is checked)"))))
 
 (deftest call-realization-green-on-the-self-model

@@ -205,7 +205,7 @@
    demand, also in (check).)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [drifted (law/violation-names m :corresponds/Operation.adheres)]
+    (let [drifted (law/violation-names m :corresponds/Operation.agrees)]
       (println "ADHERENCE — modelled signature disagrees with the code's :malli/schema:")
       (if (empty? drifted)
         (println "  (none — every code signature exactly adheres to its modelled type)")

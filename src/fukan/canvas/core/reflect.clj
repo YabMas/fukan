@@ -114,7 +114,10 @@
    and any Schema value targets."
   [{:keys [tag doc slots laws value? realized-as]}]
   (let [sid  (structure-id tag)
-        corr (s/correspondence-of tag)   ; external `(correspond Tag …)` — the sole correspondence surface
+        ;; reify the EFFECTIVE demands (authored ∪ the derived identity map, tagged `:derived`) so the
+        ;; primer's generated-law count is the true total; the print-dual form renderer skips the derived one.
+        corr (some-> (s/correspondence-of tag)   ; external `(correspond Tag …)` — the sole correspondence surface
+                     (assoc :demands (s/effective-node-demands tag)))
         node (cond-> {:entity/id sid :structure/of ::Structure
                       :entity/name (name tag) :val/tag (str tag)}
                doc         (assoc :entity/doc doc)

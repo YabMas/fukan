@@ -696,6 +696,47 @@
   "The externally-registered authoring-syntax hook for `tag`, or nil."
   [tag] (@syntaxes tag))
 
+;; ── the identity component of a correspondence morphism (derived, not authored) ─
+;; A morphism's identity map = the slots BOTH theories declare under the same name AND target sort,
+;; MINUS those carrying their own relation map. Those targets are a SHARED sort (a `^:value`
+;; content-deduped structure — Schema/Effect — ONE node across strata), so `↦` is the identity,
+;; checkable by eid. It was authored as `(agrees {:by :structural :over […]})` until 2026-07-17; now
+;; it is derived from the two `defstructure`s, so the author states only the NON-identity maps.
+(defn- derive-identity-demand
+  "The identity component of `dtag ↦ ftag` as an `agrees` demand (nil if the two theories share no
+   un-charactered sort-slot). `:by :structural` over the shared-sort slots, PRESENCE-AWARE — an
+   optional fact slot is compared only where present (an absent fact value is a coverage concern, not
+   a disagreement), which is the `:when` guard the author used to write by hand. `charactered` is the
+   set of design relation names carrying their own relation map (the `:rel-demands`)."
+  [dtag ftag dslots charactered]
+  (when-let [fsdef (structure-by-tag ftag)]
+    (let [fidx   (into {} (for [s (:slots fsdef)] [(:rel s) s]))
+          shared (for [s dslots
+                       :let [f (fidx (:rel s))]
+                       :when (and f (not (scalar-slot? s))
+                                  (= (:target s) (:target f))
+                                  (not (charactered (:rel s))))]
+                   f)]                                      ; the FACT slot (its card gives the presence guard)
+      (when (seq shared)
+        {:demand :agrees :by :structural :derived true
+         :over   (mapv :rel shared)
+         :when   (vec (for [s shared :when (= :optional (:card s))]
+                        (list (symbol (name (:rel s))) '?t (symbol (str "?_" (name (:rel s)))))))
+         :desc   (str (name dtag) ": every design instance's fact twin agrees on "
+                      (str/join ", " (map (comp name :rel) shared)) " (identity map)")}))))
+
+(defn ^:export effective-node-demands
+  "The node demands of `dtag`'s correspondence: the AUTHORED demands ∪ the DERIVED identity map (tagged
+   `:derived`). Every reader of the demands — the law generator (`sdef->declarations`), the seam reader
+   (`correspondence*`), and grammar reflection — goes through here, so the identity map is visible
+   identically to `check`, to the `(correspondence)` card, and to the primer's law count. Nil when
+   `dtag` carries no correspondence."
+  [dtag]
+  (when-let [{:keys [fact-tag demands rel-demands]} (correspondence-of dtag)]
+    (let [identity (derive-identity-demand dtag fact-tag (:slots (structure-by-tag dtag))
+                                           (set (map :rel rel-demands)))]
+      (cond-> demands identity (conj identity)))))
+
 (defn ^:export sdef->declarations
   "Adapt an sdef (built by the unchanged parser) into typed declaration maps for the registry — a
    pure re-expression of the sdef's fields PLUS any external correspondence registered for its tag
@@ -717,9 +758,10 @@
    ;; the cross-tag twin/demands as :correspondence, the relation demands as :realized-by/:covered-from
    ;; (the SAME handlers a structure's own slots route through). The fact-side SLOTS are no longer here:
    ;; they belong to the codomain's own `defstructure`.
-   (when-let [{:keys [fact-tag bridge demands rel-demands]} (correspondence-of tag)]
+   (when-let [{:keys [fact-tag bridge rel-demands]} (correspondence-of tag)]
      (concat
-      [{:kind :correspondence :corresponds {:fact-tag fact-tag :bridge bridge :demands demands}}]
+      [{:kind :correspondence :corresponds {:fact-tag fact-tag :bridge bridge
+                                            :demands (effective-node-demands tag)}}]
       (for [d rel-demands :when (:realized-by d)]  {:kind :realized-by :slot d})
       (for [d rel-demands :when (:covered-from d)] {:kind :covered-from :slot d})))
    (for [law laws] {:kind :free-law :law law})))
@@ -1343,7 +1385,8 @@
                         (for [{:keys [tag]} sdefs
                               :let [c (correspondence-of tag)]
                               :when c]
-                          [tag (-> (select-keys c [:bridge :demands])
+                          [tag (-> (select-keys c [:bridge])
+                                   (assoc :demands (effective-node-demands tag))
                                    (update :demands
                                            (fn [ds] (mapv #(assoc % :key (demand-key tag (or (:key %) (:demand %)))) ds))))]))
         relations (vec

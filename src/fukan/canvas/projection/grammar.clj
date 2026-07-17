@@ -114,11 +114,14 @@
             [:offenders offenders :where where])))
 
 (defn- demand-form
-  "A corresponds demand map → its authored sub-form: `(realized {opts})` or `(realized)`.
-   Nil-valued option entries are pruned so the rendered form is minimal."
-  [{:keys [demand] :as d}]
-  (let [opts (not-empty (into {} (remove (comp nil? val)) (dissoc d :demand)))]
-    (if opts (list (symbol (name demand)) opts) (list (symbol (name demand))))))
+  "A corresponds demand map → its authored sub-form: `(realized {opts})` or `(realized)`. Nil for a
+   DERIVED demand (the identity map) — it is a kernel consequence, not an authored form, so the
+   print-dual omits it (it still counts toward the generated-law total). Nil-valued option entries
+   are pruned so the rendered form is minimal."
+  [{:keys [demand derived] :as d}]
+  (when-not derived
+    (let [opts (not-empty (into {} (remove (comp nil? val)) (dissoc d :demand)))]
+      (if opts (list (symbol (name demand)) opts) (list (symbol (name demand)))))))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Form]}
   structure-form
@@ -135,7 +138,7 @@
             (when corresponds
               [(concat ['corresponds]
                        (when-let [b (:bridge corresponds)] [(list 'bridge b)])
-                       (map demand-form (:demands corresponds)))])
+                       (keep demand-form (:demands corresponds)))])
             (when realizes [(list 'realized-as realizes)])
             (map law-form laws))))
 
