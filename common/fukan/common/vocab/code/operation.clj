@@ -1,18 +1,14 @@
 (ns fukan.common.vocab.code.operation
-  "Code vocab — the `Operation` element: a named unit of computation, AND its own model↔code
-   correspondence (the fact-side slots, the twin, and the drift demands — all generated).
+  "Code vocab — the `Operation` element: a named unit of computation. PURE DESIGN, language-neutral.
 
    An Operation's IDENTITY is the authored intent alone — its input/output types, the effects it
-   performs, and its designed dependencies. Its CORRESPONDENCE — how an authored Operation is paired
-   with the extracted code twin, and what the code must realize/cover/adhere-to — is declared here
-   too (via `(s/correspond Operation …)`), the complete story of the one element in one file. Every
-   drift check is GENERATED — Operation hand-writes no correspondence mechanism. The only thing NOT
-   here is implementer-directed prose, which rides the kernel `:guidance` annotation.
+   performs, and its designed dependencies. Nothing here knows what language the code is written in.
 
-   The generated realization law reaches through the `:calls+` closure and the kernel `twin` rule
-   (which pairs an authored Operation with its extracted code twin by name WITHIN twinned Modules,
-   bridged by Module's `:qualified-suffix` name-match) — so this namespace needs no dependency on
-   Module (Module requires Operation, not the reverse)."
+   Its CORRESPONDENCE — how an authored Operation pairs with an extracted code twin, and what the
+   code must realize/cover/adhere-to — is a map into a SPECIFIC language's constructs, so it is NOT
+   here: `fukan.common.extraction.clojure.operation` declares it from outside via the external
+   `(correspond Operation …)` hook, and every drift check is GENERATED from that declaration.
+   Implementer-directed prose likewise isn't a slot — it rides the kernel `:guidance` annotation."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.common.typing.malli :as ct :refer [Schema]]
             [fukan.common.vocab.code.effect :refer [Effect]]))
@@ -54,31 +50,14 @@
 ;; kernel's universal substrate rules (`fukan.canvas.core.rules`), ambient in every law and query — pair
 ;; them with the op-kind rule `(Operation ?o)` where op-ness matters.
 
-;; ── the correspondence: fact-side slots + the model↔code demands ──────────────
-;; Declared OUTSIDE the defstructure (identity stays clean), but IN this file — one element, its whole
-;; story. Contributes the extracted fact-slots + the twin (by name, nested within twinned Modules) +
-;; the drift demands, generated as laws at the stable keys :corresponds/Operation.*. Each demand's
-;; `:desc` is its human-facing name in check/drift output; a `:when`/`:require` guard reads at domain
-;; altitude through the auto-generated `out` slot-rule (`(out ?t ?_o)` ⇔ the twin declares an :out
-;; type — i.e. carries a fn-schema), not raw reified triples.
-
-(s/correspond Operation
-  {:calls        [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
-   :private      [:? :boolean]      ; public/internal — the module's surface (from extraction)
-   :export       [:? :boolean]      ; intentionally public for MECHANISM (^:export)
-   :test-support [:? :boolean]}     ; intentionally public for TEST-SUPPORT (^:test-support)
-  (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
-  (realized {:key :type-coverage :require '[(out ?t ?_o)]
-             :desc "every modelled operation's realizing code carries a type signature (:malli/schema)"})
-  (covered  {:unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]
-             :desc "every public extracted operation is covered by the model or deliberately exempt"})
-  (agrees   {:key :adheres :by :structural :over [:in :out] :when '[(out ?t ?_o)]  ; only where the twin declares a sig (else type-coverage's offence)
-             :desc "every modelled operation's realizing code signature exactly adheres to its modelled type"})
-  (delegates {:realized-by :calls :faithful true})  ; cross-module :delegates realized by a :calls+ path; :faithful ⇒ the module-level reverse
-  (performs  {:covered-from [:calls* :performs]}))   ; every effect the twin reaches over :calls*·:performs is declared
-
-;; Operation hand-writes NO correspondence code: the fact-slots, twin, and every drift check
-;; (realized / type-coverage / covered / adheres / delegates-realized / delegates-faithful /
-;; performs-covered) are GENERATED from the `(correspond Operation …)` declaration above. A caller
-;; wanting any of them as a worklist names the stable law key through `law/violation-names` (see
-;; `dev/user.clj`).
+;; ── correspondence: NOT here ─────────────────────────────────────────────────
+;; Operation is pure DESIGN — language-neutral, the same whatever the code is written in. Its
+;; correspondence to code is a map into a SPECIFIC language's constructs, so it belongs to whoever
+;; extracts that language: `fukan.common.extraction.clojure.operation` declares it, from outside, via
+;; the external `(correspond Operation …)` registry hook.
+;;
+;; It lived here until 2026-07-17, which meant this shipped, language-neutral vocabulary exported
+;; `:export`/`:test-support`/`:private` — i.e. `^:export`, `^:test-support` and `defn-`, Clojure
+;; METADATA CONVENTIONS — as though they were design vocabulary. A consuming project in another
+;; language inherited them. Correspondence is contributed by the extractor now, so a project loading
+;; this vocab with a different extractor correctly gets no `:calls` at all.

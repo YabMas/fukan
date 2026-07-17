@@ -1,10 +1,12 @@
 (ns fukan.common.vocab.code.effect
   "Code vocab — `Effect`: a named side effect an Operation performs, plus the generic
-   operation predicate for direct effects. The effect-correspondence check is the GENERATED
-   `:performs {:covered-from [:calls* :performs]}` demand declared on Operation
-   (:corresponds/Operation.performs-covered); a caller names that law key through
-   `law/violation-names` directly. Clojure-specific effect classification lives in
-   `fukan.common.extraction.clojure.effect`."
+   operation predicate for direct effects. PURE DESIGN, language-neutral.
+
+   The effect-correspondence check is the GENERATED `:performs {:covered-from [:calls* :performs]}`
+   demand (:corresponds/Operation.performs-covered) — declared, with the rest of the design↔Clojure
+   map, in `fukan.common.extraction.clojure.operation`, since `:calls` is a Clojure construct. A
+   caller names that law key through `law/violation-names` directly. Clojure-specific effect
+   classification lives in `fukan.common.extraction.clojure.effect`."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 (defstructure ^:value Effect

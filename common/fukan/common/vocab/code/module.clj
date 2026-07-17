@@ -1,14 +1,13 @@
 (ns fukan.common.vocab.code.module
-  "Code vocab — `Module`: a code boundary (one namespace) and its correspondence to a code namespace.
-   Module's own `(correspond Module …)` declares the bridged twin root: a canvas Module twins with its
-   extracted code twin by the `:qualified-suffix` name-match strategy (the kernel's generic bridge
-   lowering — canvas short-name is a separator-agnostic dotted suffix of the code namespace, so
-   `infra-model` ← `fukan.infra.model` — with no hand-written CozoScript or name-bridge fn here).
-   Operation's own correspondence (the fact-side slots, the twin, the
-   call-realization demands + readers) lives with the element itself in
-   `fukan.common.vocab.code.operation`. The module-dependency graph
-   (`module-owns`/`module-depends`/`module-dependencies`) — a cross-module analysis consumed entirely
-   by Subsystem's architecture laws — lives with those laws in `fukan.common.vocab.code.subsystem`."
+  "Code vocab — `Module`: a code boundary, its containment species, and the membership relation
+   derived from them. PURE DESIGN, language-neutral: nothing here knows what a namespace is.
+
+   The design↔code CORRESPONDENCE — how a Module finds its code twin, and Operation's fact-slots and
+   drift demands — maps into a specific language's constructs, so it rides that language's extractor
+   (`fukan.common.extraction.clojure.{module,operation}`), not this vocabulary. The
+   module-dependency graph (`module-owns`/`module-depends`/`module-dependencies`) — a cross-module
+   analysis consumed entirely by Subsystem's architecture laws — lives with those laws in
+   `fukan.common.vocab.code.subsystem`."
   (:require [fukan.canvas.core.structure :as s :refer [defstructure defrelation]]
             [fukan.common.vocab.grouping]
             [fukan.common.vocab.code.operation :refer [Operation]]
@@ -65,11 +64,8 @@
    :satisfies [:* PlugPoint]   ; plug-points it SATISFIES (owned elsewhere) — the inverted edge; NOT containment
    :child     [:* Any]})       ; internal members + grain no other module consumes
 
-;; ── Module's own correspondence: the bridged twin root ────────────────────────
-;; Module is the ROOT of the correspondence twin ladder — `(bridge :qualified-suffix)` pairs a canvas
-;; Module with its extracted code twin by the kernel's name-match strategy (canvas short-name is a
-;; separator-agnostic dotted suffix of the code namespace), and every Operation twin nests WITHIN a
-;; twinned Module pair. Declared from outside the defstructure so the identity above stays pure.
-
-(s/correspond Module (bridge :qualified-suffix))
+;; ── correspondence: NOT here ─────────────────────────────────────────────────
+;; Module is the ROOT of the correspondence twin ladder, but HOW a design Module finds its code twin
+;; is a realization decision about a specific language's module construct — so it rides the extractor
+;; for that language (`fukan.common.extraction.clojure.module`), not this vocabulary.
 

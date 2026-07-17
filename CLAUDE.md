@@ -102,27 +102,32 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
 - `common/fukan/common/vocab/grouping.clj` — `Grouping` (the most abstract membership primitive) +
   `Connected` (a flow-node facet). The structural primitives the rest builds on.
 - `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem}.clj` — the code grammar
-  (Kind / Effect / Operation / Module / Subsystem). Each element file carries its structure +
-  *its* model↔code correspondence — the complete story of the one element in one file.
-  `operation.clj` holds Operation's whole correspondence and hand-writes NO mechanism: the
-  `(correspond Operation …)` fact-side + demands, every drift check GENERATED. Adherence is the kernel's
+  (Kind / Effect / Operation / Module / Subsystem). **PURE DESIGN — language-neutral.** Each element
+  file carries its structure and the laws that are its own slot semantics, and knows nothing about
+  what language the code is written in.
+  **The design↔code correspondence is NOT here** (since 2026-07-17): it maps into a SPECIFIC
+  language's constructs — `:calls` is a call graph, `:private`/`:export`/`:test-support` are `defn-`,
+  `^:export`, `^:test-support` — so it rides that language's extractor
+  (`common/fukan/common/extraction/clojure/{operation,module}.clj`), declared from outside against
+  the tag via the external `(correspond Tag …)` hook. It lived in the vocab until then, which made
+  this shipped, language-neutral tier export Clojure metadata conventions to every consumer. A
+  project loading the vocab with a different extractor correctly gets no `:calls` at all.
+  Everything is still GENERATED — the plugin hand-writes no mechanism. Adherence is the kernel's
   generic `(agrees {:by :structural :over [:in :out]})` (no hand-written comparator); call realization is
   `(delegates {:realized-by :calls :faithful true})`, generating an OP-ALTITUDE TRANSITIVE
   `:corresponds/Operation.delegates-realized` law (every cross-module design delegation must be realized
   by a `:calls+` PATH between the endpoints' own twins — the kernel reuses the `calls+` closure the
   `:transitive` fact-slot already emits) plus the module-altitude `delegates-faithful` reverse. A caller
   wanting any demand as a worklist names its stable law key through `law/violation-names` directly (as
-  `dev/user.clj` does) — no per-demand reader wrapper is kept. `module.clj` holds
-  Module's own correspondence — `(correspond Module … (bridge :qualified-suffix))`, the bridged twin
-  ROOT that Operation's twins nest within. The bridge is a name-match STRATEGY KEYWORD the kernel's
-  generic `name-match` builtin lowers (canvas short-name is a separator-agnostic dotted suffix of the
-  code ns) — no hand-written CozoScript, no name-bridge fn; the generated Operation twin correlates
-  modules with the same `(name-match :qualified-suffix …)` inside the injected `twin` rule, so Operation
-  needs no dependency on Module (Module requires Operation, not the reverse). The effect-correspondence
-  check is the generated `:corresponds/Operation.performs-covered` demand (from `(performs {:covered-from
-  [:calls* :performs]})` on Operation). The operation/effect/`fukan` laws reach shared vocab via datalog
-  injection (no compile cycle, since the `fukan.common` index requires every element). The correspondence demands ride Operation's
-  `(correspond …)` declaration and its slot options, their laws GENERATED. A law that is a
+  `dev/user.clj` does) — no per-demand reader wrapper is kept.
+  `extraction/clojure/module.clj` holds the bridged twin ROOT that Operation's twins nest within —
+  `(correspond Module (bridge :qualified-suffix))`. The bridge is a name-match STRATEGY KEYWORD the
+  kernel's generic `name-match` builtin lowers (canvas short-name is a separator-agnostic dotted
+  suffix of the code ns) — no hand-written CozoScript, no name-bridge fn; the generated Operation twin
+  correlates modules with the same `(name-match :qualified-suffix …)` inside the injected `twin` rule.
+  The effect-correspondence check is the generated `:corresponds/Operation.performs-covered` demand
+  (from `(performs {:covered-from [:calls* :performs]})`). The vocab laws reach shared vocab via datalog
+  injection (no compile cycle, since the `fukan.common` index requires every element). A law that is a
   declaration's SLOT SEMANTICS rides the declaring structure itself: `Subsystem` carries the
   `:may-depend` conformance/acyclicity teeth **plus** the rehomed module-graph acyclicity +
   membership-totality demands (module-graph laws ride the clustering concept).
@@ -386,14 +391,17 @@ mixing them corrupts history.
 - `src/fukan/canvas/ingestion/canvas_source.clj` — canvas discovery, merge, cross-refs
 - `common/fukan/common.clj` (ns `fukan.common`) — the grammar INDEX: one require that registers the
   whole `fukan.common.*` tier (vocab + typing + extraction)
-- `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by element
-  (each file = structure + its own correspondence) + grouping. Operation's correspondence (the
-  `(agrees {:by :structural})` adherence demand + the `(delegates {:realized-by :calls :faithful true})`
-  op-altitude transitive call-realization demand, all GENERATED — no hand-written readers) lives in
-  `code/operation.clj`; Module's `(bridge
-  :qualified-suffix)` correspondence lives in `code/module.clj`; the module-dependency-graph relations +
-  readers (`module-owns`/`module-depends`/`module-dependencies`) live with the architecture laws that
-  consume them in `code/subsystem.clj`
+- `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by
+  element + grouping. **Pure design, language-neutral — carries NO correspondence.** The membership
+  relations are ELEMENTS here: the `contains` genus + `:child` in `grouping.clj`,
+  `:exposes`/`:owns`/`:offers` + the derived `in-module` in `code/module.clj`. The
+  module-dependency-graph relations + readers (`module-owns`/`module-depends`/`module-dependencies`)
+  live with the architecture laws that consume them in `code/subsystem.clj`
+- `common/fukan/common/extraction/clojure/` — the design↔Clojure map: `operation.clj` holds
+  Operation's whole correspondence (the fact-slots + the `(agrees {:by :structural})` adherence demand
+  + the `(delegates {:realized-by :calls :faithful true})` op-altitude transitive call-realization
+  demand, all GENERATED — no hand-written readers); `module.clj` holds `(bridge :qualified-suffix)`,
+  the twin root
 - `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI

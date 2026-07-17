@@ -20,7 +20,14 @@
             [fukan.common.vocab.code.effect]
             [fukan.common.vocab.code.operation]
             [fukan.common.vocab.code.module]
-            [fukan.common.vocab.code.subsystem]))
+            [fukan.common.vocab.code.subsystem]
+            ;; …and the Clojure extraction plugin, which since 2026-07-17 declares the design↔Clojure
+            ;; CORRESPONDENCE (the fact-slots + demands) against the Operation/Module tags. Without
+            ;; these the snapshot silently drops 5 terms + 11 laws — and passes anyway in a full run,
+            ;; because some other test's composition root registers them. Order-dependence is exactly
+            ;; what this namespace's explicit requires exist to prevent.
+            [fukan.common.extraction.clojure.module]
+            [fukan.common.extraction.clojure.operation]))
 
 (defn self-model-structures
   "The registered structures defined in the self-model vocabulary — stable regardless of which test

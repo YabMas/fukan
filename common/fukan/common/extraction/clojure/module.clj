@@ -8,7 +8,17 @@
    `Module`'s structure + correspondence). The generic `Module` structure lives in
    `fukan.common.vocab.code.module`."
   (:require [fukan.canvas.core.substrate :as sub]
-            [fukan.common.vocab.code.module :as module]))
+            [fukan.canvas.core.structure :as s]
+            [fukan.common.vocab.code.module :as module :refer [Module]]))
+
+;; ── the design↔Clojure correspondence: the bridged twin ROOT ─────────────────
+;; `(bridge :qualified-suffix)` pairs a canvas Module with its extracted code twin by the kernel's
+;; generic name-match strategy — a canvas short-name is a separator-agnostic dotted suffix of the code
+;; namespace (`infra-model` ← `fukan.infra.model`) — and every Operation twin nests WITHIN a twinned
+;; Module pair. The STRATEGY is the map from design to Clojure's module construct, so it belongs to
+;; this plugin rather than the language-neutral vocabulary (where it sat until 2026-07-17).
+
+(s/correspond Module (bridge :qualified-suffix))
 
 (defn extract-module
   "Build an extracted Module InstanceValue named `mname` owning the Operations named by `op-ids` (their
