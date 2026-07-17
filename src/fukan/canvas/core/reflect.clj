@@ -80,11 +80,15 @@
 (defstructure Relation
   "A reflected relation KIND (`:child`/`:calls`/`:delegates`/…), reified so the grammar's EDGE
    vocabulary is queryable like its node vocabulary (`Structure`). Carries its relation-CHARACTERS —
-   the slot-options that drive rule generation: `:transitive` (a transitive-closure relation) and
-   `:contains` (a containment-union relation — `from` contains `to`). A reflection TOOL, derived from
-   the slots that use the kind (not authored); the runtime never reads it."
+   what drives rule generation: `:transitive` (a transitive-closure relation) and `:isa` (the GENUS
+   this relation is a species of — e.g. `:child` isa `contains`, so a law over the genus sees its
+   edges). A reflection TOOL, not authored; the runtime never reads it.
+
+   Reflected from two sources, because relations are mid-migration to being elements: `:isa` from a
+   relation ELEMENT's declared character (`defrelation`), `:transitive` from either the element or —
+   for relations that are not yet elements (`:delegates`, `:calls`) — the slots that use the kind."
   {:transitive [:? :boolean]
-   :contains   [:? :boolean]})
+   :isa        [:? :string]})
 
 ;; ── the reflector ─────────────────────────────────────────────────────────────
 
@@ -187,15 +191,25 @@
                  [{:entity/id ":Any" :structure/of ::Structure
                    :entity/name "Any" :val/tag ":Any"
                    :entity/doc "The wildcard target — any node."}])
-        ;; reflect relation KINDS — one Relation node per distinct (non-scalar) slot kind, stamped with
-        ;; the relation-characters its slots DECLARE (aggregated across all slots of that kind). Completes
-        ;; grammar reflection: edge-kinds reified, not just node-types.
+        ;; reflect relation KINDS — one Relation node per relation ELEMENT (`defrelation`'s declared
+        ;; character) UNIONed with every distinct (non-scalar) slot kind. Completes grammar reflection:
+        ;; edge-kinds reified, not just node-types. A genus (`contains`) has no slot of its own and is
+        ;; reflected purely from its element; `:transitive` still aggregates over slots for the relations
+        ;; that are not elements yet.
+        rel-slots  (remove s/scalar-slot? (mapcat :slots sds))
+        ;; NB read from the FULL registry, not the ns-scoped `sds`: a relation element's tag is
+        ;; unqualified (`:contains`), so it belongs to no vocabulary namespace and the ns-filter above
+        ;; would drop it. That unqualified tag is also why two vocabs declaring the same relation name
+        ;; collide silently — a latent issue this change surfaces but does not fix.
+        rel-chars  (into {} (for [sd (s/all-structures) :when (:relation-character sd)]
+                              [(:tag sd) (:relation-character sd)]))
         relation-nodes
-        (for [[rk slots*] (group-by :rel (remove s/scalar-slot? (mapcat :slots sds)))
-              :let [chars (into #{} (mapcat #(filter % [:contains :transitive])) slots*)]]
+        (for [rk    (sort-by name (into (set (keys rel-chars)) (map :rel rel-slots)))
+              :let  [ch (get rel-chars rk)
+                     slot-transitive? (some :transitive (filter #(= rk (:rel %)) rel-slots))]]
           (cond-> {:entity/id (str "relation:" (name rk)) :structure/of ::Relation :entity/name (name rk)}
-            (:transitive chars) (assoc :val/transitive true)
-            (:contains chars)   (assoc :val/contains true)))
+            (or (:transitive ch) slot-transitive?) (assoc :val/transitive true)
+            (:isa ch)                              (assoc :val/isa (name (:isa ch)))))
         nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes)
         rels   (concat (mapcat :rels bits) (mapcat :rels vocabs))
         ;; a slot referencing a tag NOBODY registered is a dangling grammar ref — fail with the tag,

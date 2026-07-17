@@ -224,12 +224,26 @@ A `defstructure` is a composition of **slots** plus **laws**:
 The current catalog is the source — or just run `(grammar)` in the REPL: the
 print-dual renders every vocabulary live. The files are under `common/fukan/common/vocab/**`.
 
-A `defrelation` (in `core/structure.clj`, sibling of `defstructure`) declares a named
-custom-bodied datalog rule that `check` auto-injects into every law/query (like the
-vocab-derived rules) — the way several laws share one join (e.g. `module-depends`) without each
-re-inlining it. A recursive body is now allowed (Cozo's semi-naive fixpoint terminates where
-datascript diverged — the old non-recursion guard is gone), but prefer non-recursive where you
-can: the rule pays the fixpoint on every check.
+A `defrelation` (in `core/structure.clj`, sibling of `defstructure`) declares a RELATION as an
+ELEMENT — the relation itself, not a slot that happens to use it. Two forms:
+
+- **Character** — `(defrelation :child "doc" {:isa :contains})` — a PRIMITIVE relation (its edges
+  come from the `:rel/kind` of whatever structures declare a slot of that name) declaring how it
+  relates to OTHER relations: `:isa <genus>` emits the subsumption rule `(genus ?a ?b) ⇐ (rel ?a ?b)`
+  so every law over the genus sees the species' edges for free; `:transitive` emits the `rel+`
+  closure. Character is a property of the RELATION, so it is declared ONCE — never repeated on each
+  slot. **The kernel names no relation of its own:** the `contains` genus, its closure, and
+  `in-module` are vocab elements (`vocab/grouping`, `vocab/code/module`), not kernel emission.
+- **Derived** — `(defrelation :module-depends "doc" '[?m ?n] '[…])` — a named custom-bodied datalog
+  rule `check` auto-injects into every law/query (like the vocab-derived rules), the way several laws
+  share one join without each re-inlining it. A recursive body is allowed (Cozo's semi-naive fixpoint
+  terminates where datascript diverged — the old non-recursion guard is gone), but prefer
+  non-recursive: the rule pays the fixpoint on every check.
+
+A relation's tag is UNQUALIFIED (`:contains`) because its rule name is global — so two vocabularies
+declaring the same relation name collide silently, and anything scoping by tag namespace must fall
+back to the declaring `:ns` (as the declarations golden does). `:transitive` still rides the slot for
+relations that are not elements yet (`:delegates`, `:calls`).
 
 ## Spec locations
 

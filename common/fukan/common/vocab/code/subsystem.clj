@@ -27,10 +27,10 @@
   '[?mod ?sub]
   '[[?sub :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (contains ?sub ?mod)])
 
-;; module-owns — Module ownership: the `contains` union (:exposes/:owns/:child, all {:contains true})
+;; module-owns — Module ownership: the `contains` genus (every species — :exposes/:owns/:offers/:child)
 ;; restricted to a Module container. A helper for `module-depends`.
 (s/defrelation :module-owns
-  "Module ?m owns ?x — the `contains` union (:exposes/:owns/:child) restricted to a Module container."
+  "Module ?m owns ?x — the `contains` genus (:exposes/:owns/:offers/:child) restricted to a Module container."
   '[?m ?x]
   '[[?m :structure/of :fukan.common.vocab.code.module/Module] (contains ?m ?x)])
 
@@ -61,8 +61,8 @@
    a local `:rules` entry. DAG ACYCLICITY (self-scoped): no Subsystem `sub-reaches` itself over
    `:may-depend` — a cyclic declaration is incoherent intent. Both are naturally vacuous when no
    Subsystems / no cross-subsystem deps are modelled."
-  {:child      [:* {:contains true} Module]   ; the Modules this subsystem clusters
-   :may-depend [:* Subsystem]}   ; the subsystems it is allowed to depend on (declared intent)
+  {:child      [:* Module]      ; the Modules this subsystem clusters (`:child` is a `contains` species — see vocab/grouping)
+   :may-depend [:* Subsystem]}  ; the subsystems it is allowed to depend on (declared intent)
   (law "every cross-subsystem module dependency follows a declared :may-depend edge"
     :scope :global
     :offenders '[?m]

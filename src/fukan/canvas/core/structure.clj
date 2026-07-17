@@ -702,16 +702,16 @@
    pure re-expression of the sdef's fields PLUS any external correspondence registered for its tag
    (`correspondence-of`); the parser is untouched. `:kind :kind` is the node-kind membership Term,
    emitted only for CONCRETE structures (not realized/coproduct/derived concepts)."
-  [{:keys [tag slots laws realized-as relation-coproduct derived-rule] :as _sdef}]
+  [{:keys [tag slots laws realized-as relation-coproduct relation-character derived-rule] :as _sdef}]
   (concat
-   (when-not (or realized-as relation-coproduct derived-rule) [{:kind :kind}])
+   (when-not (or realized-as relation-coproduct relation-character derived-rule) [{:kind :kind}])
    (for [sl slots] {:kind :slot :slot sl})
    (for [sl slots :when (:transitive sl)]   {:kind :transitive :slot sl})
-   (for [sl slots :when (:contains sl)]     {:kind :contains :slot sl})
    (for [sl slots :when (:realized-by sl)]  {:kind :realized-by :slot sl})
    (for [sl slots :when (:covered-from sl)] {:kind :covered-from :slot sl})
    (when realized-as       [{:kind :realized-as :body realized-as}])
    (when relation-coproduct [{:kind :coproduct :members relation-coproduct}])
+   (when relation-character [{:kind :relation-character :opts relation-character}])
    (when derived-rule      [{:kind :defrelation :rule derived-rule}])
    ;; external correspondence (the sole correspondence surface, an inverted-dependency hook): expand the
    ;; registered `(correspond Tag …)` config into declaration maps scoped to this tag — fact-slots as
@@ -988,7 +988,25 @@
                            :relation-coproduct ~member-kws})))
 
 (defmacro defrelation
-  "Declare a DERIVED RELATION — a named datalog rule with a CUSTOM body, injected into
+  "Declare a RELATION as an ELEMENT — the relation itself, not a slot that happens to use it.
+   Two forms, one concept:
+
+   CHARACTER (a map) — a PRIMITIVE relation: its edges come from the `:rel/kind` of whatever
+   structures declare a slot of this name; this declaration owns its CHARACTER, i.e. how it
+   relates to OTHER relations. Options:
+     `:isa <genus>`     this relation is a SPECIES of `<genus>` — emits the subsumption rule
+                        `(genus ?a ?b) ⇐ (rel ?a ?b)`, so every law over the genus sees this
+                        relation's edges for free.
+     `:transitive true` emits the `rel+` closure.
+   Character is a property of the RELATION, not of any one slot — declare it ONCE here and
+   every structure using the relation inherits it. (Before relations were elements this rode
+   a slot's props map, so `:child`'s containment had to be repeated on every structure
+   declaring a `:child` slot — three times, for one rule.)
+
+     (defrelation :contains \"membership — the genus\" {:transitive true})
+     (defrelation :child    \"internal membership\"    {:isa :contains})
+
+   DERIVED (a head + a where) — a named datalog rule with a CUSTOM body, injected into
    every law and every `vocab-rules` query at domain altitude (by `check`, exactly as the
    vocab-derived kind/relation rules are). It is the custom-body generalization of a slot's
    relation rule and of `realized-as` (derived UNARY membership), and the open-bodied sibling
@@ -1013,10 +1031,18 @@
        '[(design ?o)
          [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
          [?sch :val/kind \"ref\"] [?sch :val/ref ?nm] [?k :entity/name ?nm]])"
-  [rtag docstring head where]
-  (let [tag (keyword (name rtag))]
-    `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws []
-                           :derived-rule {:head '~(unquote-lit head) :where '~(unquote-lit where)}})))
+  [rtag docstring & body]
+  (let [tag  (keyword (name rtag))
+        ;; `:ns` records the DECLARING namespace: a relation's tag is unqualified (its rule name is
+        ;; global), so the tag alone cannot say which vocabulary owns it — and anything scoping by tag
+        ;; namespace (the declarations golden) would silently skip every relation element.
+        base {:tag tag :doc docstring :ns (str *ns*) :slots [] :laws []}]
+    (if (map? (first body))
+      `(register-structure! ~(assoc base :relation-character (first body)))
+      (let [[head where] body]
+        `(register-structure! ~(assoc base :derived-rule
+                                      {:head (list 'quote (unquote-lit head))
+                                       :where (list 'quote (unquote-lit where))}))))))
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 
@@ -1072,6 +1098,19 @@
       (= card :one) (conj none-law))))
 
 ;; ── correspondence demand laws: generated from (corresponds …) declarations ──
+;;
+;; ⚠ KNOWN LEAK (2026-07-17, deliberate — do not "defend" it, fix it). The generated bodies below,
+;; and the nested `twin` rule further down, still NAME the vocabulary relation `contains`. Two
+;; separate design decisions are welded into this supposedly-generic generator:
+;;   1. the cross-container guard `(contains ?ca ?a) (contains ?cb ?b) [(not= ?ca ?cb)]` encodes what
+;;      `delegates` MEANS — that a delegation only carries intent ACROSS a boundary, because within a
+;;      container the wiring is implementation detail. That belongs on the `delegates` element.
+;;   2. the twin rule hardcodes the morphism's CARRIER ("same name within twinned containers").
+;; Both resolve when the carrier becomes an authored parameter rather than a name the kernel knows
+;; (the correspondence-as-morphism work: `:by (name-within Module Ns)`). Until then the kernel still
+;; ships this much vocabulary, and it only resolves because the vocab happens to declare a genus
+;; called `contains`. See docs/superpowers/specs/2026-07-17-correspondence-as-morphism-design.md.
+;;
 ;; The demand SHAPES (design↔fact, node level). Bodies inline the stratum literal
 ;; (:val/extracted — see substrate/stratum-attr's sync note) for range-boundedness and call
 ;; the injected twin rule. Guard discipline (the dissolved holders' hard-won lessons):
@@ -1207,9 +1246,17 @@
 (register-declaration! :transitive
   (fn [{:keys [slot]} _sdef] {:terms (closure-rules (rule-sym (:rel slot))) :laws []}))
 
-(register-declaration! :contains
-  (fn [{:keys [slot]} _sdef]
-    {:terms [[(list 'contains '?c '?m) (list (rule-sym (:rel slot)) '?c '?m)]] :laws []}))
+;; A relation ELEMENT's character — how it relates to OTHER relations. `:isa` emits the subsumption
+;; rule `(genus ?a ?b) ⇐ (rel ?a ?b)` (so every law over the genus sees the species' edges);
+;; `:transitive` emits the closure. The genus name comes from the DECLARATION — the kernel names no
+;; relation of its own.
+(register-declaration! :relation-character
+  (fn [{:keys [opts]} sdef]
+    (let [r (rule-sym (:tag sdef))]
+      {:terms (cond-> []
+                (:isa opts)        (conj [(list (rule-sym (:isa opts)) '?a '?b) (list r '?a '?b)])
+                (:transitive opts) (into (closure-rules r)))
+       :laws []})))
 
 
 (register-declaration! :realized-as
@@ -1254,18 +1301,19 @@
 (register-declaration! :free-law (fn [{:keys [law]} _sdef] {:terms [] :laws [law]}))
 
 (defn ^:export terms-of
-  "All derived Terms over `structures` via the declaration handlers + the global containment addendum
-   (contains+ closure + in-module, when any :contains slot exists) + the fixed substrate rules
+  "All derived Terms over `structures` via the declaration handlers + the fixed substrate rules
    (`rules/substrate-rules`) — the SOLE term emitter, dispatched by `vocab-rules`. The
-   declarations-golden test freezes its self-model output."
+   declarations-golden test freezes its self-model output.
+
+   The kernel names NO relation of its own: a containment genus, its closure, and any relation
+   derived from it (`in-module`) are declared by the VOCABULARY as relation elements
+   (`defrelation`), not emitted here. (Until 2026-07-17 this hardcoded the symbol `contains`, its
+   closure, and `in-module` — code vocabulary welded into the kernel.)"
   [structures]
-  (let [per   (mapcat (fn [sdef] (mapcat #(:terms (handle-declaration % sdef)) (sdef->declarations sdef)))
-                      structures)
-        conts (seq (filter :contains (remove scalar-slot? (mapcat :slots structures))))
-        globl (when conts
-                (concat (closure-rules 'contains)
-                        [[(list 'in-module '?e '?mname) (list 'contains '?m '?e) ['?m :entity/name '?mname]]]))]
-    (vec (distinct (concat per globl rules/substrate-rules)))))
+  (vec (distinct (concat (mapcat (fn [sdef]
+                                   (mapcat #(:terms (handle-declaration % sdef)) (sdef->declarations sdef)))
+                                 structures)
+                         rules/substrate-rules))))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :any]] :map]}
   correspondence*

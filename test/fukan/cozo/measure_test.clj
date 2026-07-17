@@ -7,7 +7,7 @@
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             ;; module/operation vocab: the Module/Operation kind rules + the
-            ;; :contains-derived `contains` rule the fixtures query at
+            ;; `contains` genus (its species' :isa) the fixtures query at
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.operation]))
 

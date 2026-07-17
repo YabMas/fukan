@@ -9,10 +9,42 @@
    `fukan.common.vocab.code.operation`. The module-dependency graph
    (`module-owns`/`module-depends`/`module-dependencies`) — a cross-module analysis consumed entirely
    by Subsystem's architecture laws — lives with those laws in `fukan.common.vocab.code.subsystem`."
-  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
+  (:require [fukan.canvas.core.structure :as s :refer [defstructure defrelation]]
+            [fukan.common.vocab.grouping]
             [fukan.common.vocab.code.operation :refer [Operation]]
             [fukan.common.vocab.code.kind :refer [Kind]]
             [fukan.common.vocab.code.plug-point :refer [PlugPoint]]))
+
+;; ── Module's containment species + the relation derived from them ─────────────
+;; Each is a SPECIES of the `contains` genus (`vocab/grouping`) — declared once, on the relation
+;; itself, so `in-module`/`contains+` and every law over the genus pick them up without any structure
+;; restating the character. `:satisfies` is deliberately NOT a species: it is the INVERTED edge (a
+;; plug-point owned elsewhere), not containment.
+
+(defrelation :exposes
+  "The public API surface — the Operations callers depend on."
+  {:isa :contains})
+
+(defrelation :owns
+  "Data-shapes that CROSS THE BOUNDARY — Kinds other modules adopt by name (and don't redefine)."
+  {:isa :contains})
+
+(defrelation :offers
+  "Plug-points this module OWNS for others to satisfy (SPIs / dependency-inversion points)."
+  {:isa :contains})
+
+(defrelation :in-module
+  "An entity `?e` is a member of the container named `?mname` — the containment genus read by name.
+   The membership convenience every law and lens selection uses at domain altitude
+   (`(Operation ?s) (in-module ?s \"…\")`).
+
+   It reads `contains`, so it resolves over EVERY species (`:child`/`:exposes`/`:owns`/`:offers`) for
+   free. Note it does not require `?m` to be a Module — any NAMED container resolves; the name is a
+   historical narrowing, and widening it would silently change every consumer's meaning. Lives here,
+   with the code vocabulary it names, rather than in the kernel (where it was hardcoded until
+   2026-07-17 — the kernel ships no vocabulary, and a module is vocabulary)."
+  '[?e ?mname]
+  '[(contains ?m ?e) [?m :entity/name ?mname]])
 
 (defstructure Module
   "A code module — one cohesion boundary (a namespace). Like a `Grouping` it collects members
@@ -27,11 +59,11 @@
 
    PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but that (the name bridge)
    hooks in from OUTSIDE via `(correspond Module …)` below, not here."
-  {:exposes   [:* {:contains true} Operation]  ; the public API surface — Operations callers depend on
-   :owns      [:* {:contains true} Kind]       ; data-shapes that cross the boundary (other modules adopt by name)
-   :offers    [:* {:contains true} PlugPoint]  ; plug-points it OWNS for others to satisfy (SPIs / dependency-inversion points)
-   :satisfies [:* PlugPoint]                   ; plug-points it SATISFIES (owned elsewhere) — the inverted edge; NOT containment
-   :child     [:* {:contains true} Any]})      ; internal members + grain no other module consumes
+  {:exposes   [:* Operation]   ; the public API surface — Operations callers depend on
+   :owns      [:* Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
+   :offers    [:* PlugPoint]   ; plug-points it OWNS for others to satisfy (SPIs / dependency-inversion points)
+   :satisfies [:* PlugPoint]   ; plug-points it SATISFIES (owned elsewhere) — the inverted edge; NOT containment
+   :child     [:* Any]})       ; internal members + grain no other module consumes
 
 ;; ── Module's own correspondence: the bridged twin root ────────────────────────
 ;; Module is the ROOT of the correspondence twin ladder — `(bridge :qualified-suffix)` pairs a canvas

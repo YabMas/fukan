@@ -12,7 +12,7 @@
 
 (defstructure Grp
   "A grouping fixture — :child relations place members in a module (in-module)."
-  {:child [:* {:contains true} Any]})
+  {:child [:* Any]})   ; `:child`'s containment is the relation's own character (vocab/grouping), not this slot's
 
 (defn- by-name [db n]
   (ffirst (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))

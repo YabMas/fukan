@@ -19,7 +19,7 @@
 (defn- names [db eids] (set (map #(:entity/name (cq/entity db %)) eids)))
 
 (deftest contains-unions-the-containment-relations-and-rolls-up
-  (testing "the :contains character generates `contains` (the child/exposes/owns union) + contains+ (closure)"
+  (testing "the species' :isa character generates `contains` (the child/exposes/owns union) + contains+ (closure)"
     (let [db (build/vars->cozo [#'mc-op #'mc-mod #'mc-sub])
           q  (fn [rule a] (set (cq/q (vec (concat '[:find [?m ...] :in $ % ?an :where [?a :entity/name ?an]]
                                                   [(list rule '?a '?m)]))
@@ -48,3 +48,16 @@
     (let [pr (pr-str fukan.canvas.core.rules/substrate-rules)]
       (is (not (or (re-find #":child" pr) (re-find #":exposes" pr) (re-find #":owns" pr)))
           "substrate-rules names no code-vocab relation kind"))))
+
+(deftest the-kernel-itself-names-no-containment-vocabulary
+  (testing "the strong claim (2026-07-17): with NO vocabulary loaded, terms-of emits no containment at
+            all — `contains`, `contains+` and `in-module` come from vocab relation ELEMENTS, not the
+            kernel. Before, terms-of hardcoded all three; the old defence ('the SUBSTRATE names no
+            code-vocab relation') held only because the hardcoding sat one file over."
+    (let [heads (set (map (comp first first) (s/terms-of [])))]
+      (is (not (contains? heads 'contains))  "no containment genus without a vocabulary to declare one")
+      (is (not (contains? heads 'contains+)) "no genus closure either")
+      (is (not (contains? heads 'in-module)) "in-module is code vocabulary — a module is not a kernel concept")))
+  (testing "and with the vocab loaded they are all present — emitted by the elements that declare them"
+    (let [heads (set (map (comp first first) (s/vocab-rules)))]
+      (is (every? heads '[contains contains+ in-module])))))

@@ -24,9 +24,14 @@
 
 (defn self-model-structures
   "The registered structures defined in the self-model vocabulary — stable regardless of which test
-   fixtures are also loaded into the global registry."
+   fixtures are also loaded into the global registry.
+
+   Scoped by the tag's namespace OR, for RELATION elements (whose tag is unqualified because the rule
+   name is global), the declaring `:ns`. Before 2026-07-17 this scoped on the tag alone, so every
+   relation element escaped the snapshot — the containment rules and the `defrelation`s
+   (`module-depends`/`module-owns`/`in-subsystem`) were emitted but never guarded."
   []
-  (filter #(when-let [ns (namespace (:tag %))]
+  (filter #(when-let [ns (or (namespace (:tag %)) (:ns %))]
              (and (not (str/ends-with? ns "-test"))
                   (str/starts-with? ns "fukan.common")))
           (s/all-structures)))
@@ -180,7 +185,18 @@
 ;; triples `[[?tr :rel/from ?t] [?tr :rel/kind :out]]` to the auto-generated `out` slot-rule
 ;; `(out ?t ?_o)` — behavior-preserving (the rule expands to the same triples; live check still 0,
 ;; type-coverage/adheres offenders still 0), only the two laws' `:where` altitude moved. Count holds (57).
-(def ^:private golden-terms {:count 42 :hash 912321169})
+;; 2026-07-17: `contains` became a vocab-declared relation ELEMENT. The kernel no longer hardcodes the
+;; containment genus, its closure, or `in-module` (code vocabulary in the kernel — `terms-of` emitted
+;; all three); a relation's CHARACTER (`:isa <genus>` / `:transitive`) now rides the relation via
+;; `defrelation`, not a slot's props, so `:child`'s containment is declared ONCE instead of on all three
+;; structures with a `:child` slot. Containment emission is a WASH (7 terms before, 7 after — 4
+;; subsumption + 2 closure + in-module), and the live rules are unchanged.
+;; The count moves 42→47 for a different reason: `self-model-structures` now scopes by the declaring
+;; `:ns` as well as the tag namespace, so the five `defrelation`s (unqualified tags — module-owns/
+;; module-depends/in-subsystem/…) enter the snapshot for the FIRST time. They were always emitted, never
+;; guarded; this change would otherwise have moved containment into that same blind spot. Laws hold (57 —
+;; a relation element declares none).
+(def ^:private golden-terms {:count 47 :hash -558807715})
 (def ^:private golden-laws  {:count 57 :hash -1382709262})
 
 (deftest terms-are-stable
