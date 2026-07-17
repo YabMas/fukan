@@ -713,6 +713,9 @@
  (fn [[a b]] [(str a " == " b) #{}])
  {})
 
+;; These are IDENTITY correspondences — no explicit codomain, so `:fact-tag` defaults to the design tag
+;; (the two strata share one structure, split by provenance). The cross-tag case (Operation ↦ Fn) is
+;; exercised in the extraction/correspondence tests.
 (defstructure TCorrRoot "correspond test: a ROOT kind (bridged) — pure identity")
 (s/correspond TCorrRoot (bridge tc-bridge))
 
@@ -720,10 +723,10 @@
 (s/correspond TCorrNested)
 
 (deftest correspond-registers-bridge
-  (testing "the (correspond …) config lands in the registry, bridge fully qualified"
-    (is (= {:bridge 'fukan.canvas.core.structure-test/tc-bridge :demands [] :fact-slots [] :rel-demands []}
+  (testing "the (correspond …) config lands in the registry, bridge fully qualified, fact-tag defaulting to design"
+    (is (= {:fact-tag ::TCorrRoot :bridge 'fukan.canvas.core.structure-test/tc-bridge :demands [] :rel-demands []}
            (s/correspondence-of ::TCorrRoot)))
-    (is (= {:bridge nil :demands [] :fact-slots [] :rel-demands []}
+    (is (= {:fact-tag ::TCorrNested :bridge nil :demands [] :rel-demands []}
            (s/correspondence-of ::TCorrNested)))
     (is (nil? (s/correspondence-of ::Plain))
         "an undeclared structure carries no correspondence")))

@@ -1,29 +1,31 @@
 (ns fukan.common.extraction.clojure.module
-  "Clojure grounding for the generic code `Module` vocabulary.
+  "Clojure grounding for the code `Module` vocabulary — the FACT theory (`Ns`), the extraction that
+   builds it, and the design↔Clojure CORRESPONDENCE (`Module ↦ Ns`, the twin ROOT).
 
-   Assembles an extracted Module fact from a namespace name and the natural-key ids of its extracted
-   Operations. Unlike the Operation/Effect groundings this reads no clj-kondo detail — a namespace maps
-   to a Module 1-on-1, so this is the generic extracted-root wrapper — but it is the Module half of the
-   extraction seam, sibling to `extract-operation`, kept out of the vocab file (which carries only
-   `Module`'s structure + correspondence). The generic `Module` structure lives in
-   `fukan.common.vocab.code.module`."
+   `Ns` is the codomain: the Clojure realization of a Module — an extracted namespace owning its
+   functions. A namespace maps to a Module 1-on-1, so `Ns` reads no clj-kondo detail beyond its name and
+   members. `(bridge :qualified-suffix)` pairs a canvas Module with its `Ns` twin by the kernel's generic
+   name-match strategy — a canvas short-name is a separator-agnostic dotted suffix of the code namespace
+   (`infra-model` ← `fukan.infra.model`) — and every `Operation ↦ Fn` twin nests WITHIN a twinned
+   Module/Ns pair. The generic `Module` structure lives in `fukan.common.vocab.code.module`."
   (:require [fukan.canvas.core.substrate :as sub]
-            [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.common.extraction.clojure.operation :refer [Fn]]
             [fukan.common.vocab.code.module :as module :refer [Module]]))
 
-;; ── the design↔Clojure correspondence: the bridged twin ROOT ─────────────────
-;; `(bridge :qualified-suffix)` pairs a canvas Module with its extracted code twin by the kernel's
-;; generic name-match strategy — a canvas short-name is a separator-agnostic dotted suffix of the code
-;; namespace (`infra-model` ← `fukan.infra.model`) — and every Operation twin nests WITHIN a twinned
-;; Module pair. The STRATEGY is the map from design to Clojure's module construct, so it belongs to
-;; this plugin rather than the language-neutral vocabulary (where it sat until 2026-07-17).
+;; ── the FACT theory: a Clojure namespace ─────────────────────────────────────
+(defstructure Ns
+  "The Clojure realization of a Module — an EXTRACTED namespace, owning its functions via `:child`
+   (a `contains` species). The fact-side root the design Module twins with by name."
+  {:child [:* Fn]})
 
-(s/correspond Module (bridge :qualified-suffix))
+;; ── the correspondence: Module ↦ Ns (the twin ROOT) ──────────────────────────
+(s/correspond Module Ns (bridge :qualified-suffix))
 
 (defn extract-module
-  "Build an extracted Module InstanceValue named `mname` owning the Operations named by `op-ids` (their
-   natural-key ids) via `:child` — `substrate/Ref`s the assembler resolves to the Operation roots.
+  "Build an extracted `Ns` InstanceValue named `mname` owning the functions named by `op-ids` (their
+   natural-key ids) via `:child` — `substrate/Ref`s the assembler resolves to the `Fn` roots.
    Provenance (`:val/extracted`) is stamped by the BUILD at the merge (`substrate/stamp-stratum`), not here."
   [mname op-ids]
-  (sub/->InstanceValue ::module/Module (str mname) nil nil
+  (sub/->InstanceValue ::Ns (str mname) nil nil
                        [{:rk :child :card :many :targets (mapv sub/->Ref op-ids)}] false))

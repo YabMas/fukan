@@ -58,5 +58,7 @@
               fukan.common.vocab.code.operation
               fukan.common.vocab.code.module
               fukan.common.vocab.code.subsystem
+              fukan.common.extraction.clojure.operation
+              fukan.common.extraction.clojure.module
               fukan.common.typing.vocab-test
               fukan.common.typing.render-test}}}}

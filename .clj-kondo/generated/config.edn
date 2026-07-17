@@ -100,6 +100,8 @@
    fukan.canvas.projection.instance-test/INode hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/ITarget hooks.fukan.structure/instance
    fukan.canvas.projection.instance-test/IVal hooks.fukan.structure/instance
+   fukan.common.extraction.clojure.module/Ns hooks.fukan.structure/instance
+   fukan.common.extraction.clojure.operation/Fn hooks.fukan.structure/instance
    fukan.common.typing.malli/Schema hooks.fukan.structure/instance
    fukan.common.typing.malli/SchemaChoice hooks.fukan.structure/instance
    fukan.common.typing.malli/SchemaField hooks.fukan.structure/instance

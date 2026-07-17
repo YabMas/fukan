@@ -10,12 +10,14 @@
             [fukan.canvas.core.structure :as s]
             [fukan.common.typing.malli :as malli]
             [fukan.canvas.core.typing :as typing]
-            ;; correspondence is now distributed across the code elements, entirely GENERATED — each
-            ;; element ns is loaded for its side-effects (it registers its structure + correspondence)
-            ;; and for the fully-qualified :.../Operation | :.../Module | :.../Effect tags in the fixtures.
+            ;; the vocab elements register the design structures + the tags in the fixtures; the Clojure
+            ;; extraction plugins register the Fn/Ns codomains AND the Operation↦Fn / Module↦Ns
+            ;; correspondence (every drift demand is GENERATED from those `(correspond …)` declarations).
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.operation]
-            [fukan.common.vocab.code.effect]))
+            [fukan.common.vocab.code.effect]
+            [fukan.common.extraction.clojure.operation]
+            [fukan.common.extraction.clojure.module]))
 
 ;; register the project dialect's :render for the operation-sig / render-type path used below
 ;; — per-test, since dialect registration is global mutable state other namespaces touch.
@@ -60,8 +62,8 @@
                   {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
                   {:db/id -5 :structure/of :fukan.common.typing.malli/Schema :val/kind "nil"}   ; the MODELLED :out type node
                   {:rel/id "f|out|s5" :rel/from -2 :rel/kind :out :rel/to -5}
-                  {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-                  {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+                  {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}
+                  {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "f" :val/extracted true}
                   {:rel/id "tf|out" :rel/from -4 :rel/kind :out :rel/to twin-out-eid}
                   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
                  extra)))
@@ -88,8 +90,8 @@
                     {:rel/id "f|in0" :rel/from -2 :rel/kind :in :rel/order 0 :rel/to -10}     ; design :in = [A B]
                     {:rel/id "f|in1" :rel/from -2 :rel/kind :in :rel/order 1 :rel/to -11}
                     {:rel/id "f|out"  :rel/from -2 :rel/kind :out :rel/to -12}
-                    {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-                    {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+                    {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}
+                    {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "f" :val/extracted true}
                     {:rel/id "tf|out" :rel/from -4 :rel/kind :out :rel/to -12}                ; twin :out = C (adheres) → gates the demand in
                     {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
                    (map-indexed (fn [i [ord eid]]
@@ -122,10 +124,10 @@
                    ;; a guard delegate (some intent authored) that does NOT cover a->b
                    {:rel/id "oa|delegates|oa" :rel/from -3 :rel/kind :delegates :rel/to -3}
                    ;; extracted side: fukan.a calls fukan.b, with no covering delegate
-                   {:db/id -5 :structure/of :fukan.common.vocab.code.module/Module :entity/id "fukan.a" :entity/name "fukan.a" :val/extracted true}
-                   {:db/id -6 :structure/of :fukan.common.vocab.code.module/Module :entity/id "fukan.b" :entity/name "fukan.b" :val/extracted true}
-                   {:db/id -7 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "fa" :val/extracted true}
-                   {:db/id -8 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "fb" :val/extracted true}
+                   {:db/id -5 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/id "fukan.a" :entity/name "fukan.a" :val/extracted true}
+                   {:db/id -6 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/id "fukan.b" :entity/name "fukan.b" :val/extracted true}
+                   {:db/id -7 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "fa" :val/extracted true}
+                   {:db/id -8 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "fb" :val/extracted true}
                    {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
                    {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
                    {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}])]
@@ -149,11 +151,11 @@
 
 (deftest encapsulation-fires-on-an-undeclared-public-operation
   (testing "a PUBLIC extracted op with no model twin is an offender; private/export/test-support are exempt"
-    (let [db (build/tx-maps->cozo [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/id "fukan.m" :entity/name "fukan.m" :val/extracted true}
-                   {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "leaked"   :val/extracted true}                      ; public, unmodelled → offender
-                   {:db/id -3 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "hidden"   :val/extracted true :val/private true}      ; exempt: internal
-                   {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "exported" :val/extracted true :val/export true}       ; exempt: mechanism
-                   {:db/id -5 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "for-test" :val/extracted true :val/test-support true} ; exempt: test-support
+    (let [db (build/tx-maps->cozo [{:db/id -1 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/id "fukan.m" :entity/name "fukan.m" :val/extracted true}
+                   {:db/id -2 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "leaked"   :val/extracted true}                      ; public, unmodelled → offender
+                   {:db/id -3 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "hidden"   :val/extracted true :val/private true}      ; exempt: internal
+                   {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "exported" :val/extracted true :val/export true}       ; exempt: mechanism
+                   {:db/id -5 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "for-test" :val/extracted true :val/test-support true} ; exempt: test-support
                    {:rel/id "m|child|leaked"   :rel/from -1 :rel/kind :child :rel/to -2}
                    {:rel/id "m|child|hidden"   :rel/from -1 :rel/kind :child :rel/to -3}
                    {:rel/id "m|child|exported" :rel/from -1 :rel/kind :child :rel/to -4}
@@ -183,13 +185,13 @@
                 ;; :entity/id so they don't merge — exactly as the real build keeps design ns and code ns
                 ;; apart, bridged by `:qualified-suffix` (same name here). The merge would make a single
                 ;; node both design+extracted, which never happens in reality.
-                {:db/id -5 :structure/of :fukan.common.vocab.code.module/Module :entity/id "Ax" :entity/name "A" :val/extracted true}
-                {:db/id -6 :structure/of :fukan.common.vocab.code.module/Module :entity/id "Bx" :entity/name "B" :val/extracted true}
-                {:db/id -7  :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-a" :val/extracted true}
-                {:db/id -8  :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-b" :val/extracted true}
+                {:db/id -5 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/id "Ax" :entity/name "A" :val/extracted true}
+                {:db/id -6 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/id "Bx" :entity/name "B" :val/extracted true}
+                {:db/id -7  :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "op-a" :val/extracted true}
+                {:db/id -8  :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "op-b" :val/extracted true}
                 {:rel/id "Ax|child|op-a" :rel/from -5 :rel/kind :child :rel/to -7}
                 {:rel/id "Bx|child|op-b" :rel/from -6 :rel/kind :child :rel/to -8}]
-         wired? (into [{:db/id -11 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "mid" :val/extracted true}
+         wired? (into [{:db/id -11 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "mid" :val/extracted true}
                        {:rel/id "Ax|child|mid" :rel/from -5 :rel/kind :child :rel/to -11}
                        {:rel/id "op-a|calls|mid" :rel/from -7  :rel/kind :calls :rel/to -11}
                        {:rel/id "mid|calls|op-b" :rel/from -11 :rel/kind :calls :rel/to -8}]))))
@@ -203,7 +205,7 @@
           legacy  '[[(legacy-twin ?a ?b)
                      [?a :structure/of :fukan.common.vocab.code.operation/Operation] (not [?a :val/extracted true])
                      [?a :entity/name ?n] (in-module ?a ?cm)
-                     [?b :structure/of :fukan.common.vocab.code.operation/Operation] [?b :val/extracted true]
+                     [?b :structure/of :fukan.common.extraction.clojure.operation/Fn] [?b :val/extracted true]
                      [?b :entity/name ?n] (in-module ?b ?km)
                      [(name-match :qualified-suffix ?cm ?km)]]]
           rules   (into (into (s/vocab-rules) op-twin) legacy)
@@ -231,9 +233,9 @@
           common [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}                          ; authored — declares nothing
                   {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                  {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}   ; code module (corresponds to "m")
-                  {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f" :val/extracted true}       ; twin of f
-                  {:db/id -5 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "g" :val/extracted true}       ; f calls g
+                  {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}   ; code module (corresponds to "m")
+                  {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "f" :val/extracted true}       ; twin of f
+                  {:db/id -5 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "g" :val/extracted true}       ; f calls g
                   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}
                   {:rel/id "km|child|g" :rel/from -3 :rel/kind :child :rel/to -5}
                   {:rel/id "f|calls|g"  :rel/from -4 :rel/kind :calls :rel/to -5}                          ; f → g (transitive reach)

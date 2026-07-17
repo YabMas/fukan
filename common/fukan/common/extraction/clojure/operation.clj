@@ -1,42 +1,44 @@
 (ns fukan.common.extraction.clojure.operation
-  "Clojure grounding for the generic code `Operation` vocabulary — BOTH halves of the seam: the
-   extraction that builds Operation facts from clj-kondo var-definitions, and the design↔Clojure
-   CORRESPONDENCE those facts are checked against.
+  "Clojure grounding for the code `Operation` vocabulary — the FACT theory (`Fn`), the extraction that
+   builds it from clj-kondo var-definitions, and the design↔Clojure CORRESPONDENCE (`Operation ↦ Fn`).
 
-   The correspondence lives here, not with the vocabulary, because it is a map into Clojure's
-   constructs: `:calls` is Clojure's call graph, and `:private`/`:export`/`:test-support` are `defn-`,
-   `^:export` and `^:test-support` — metadata CONVENTIONS of this language, not design vocabulary. It
-   sat in `vocab/code/operation.clj` until 2026-07-17, which made the shipped language-neutral tier
-   export them to every consumer. A plugin owns its specialized vocabulary together with its
-   mechanism; this is that vocabulary.
+   `Fn` is the codomain: the Clojure realization of an Operation — an extracted `defn`/`defn-`/`defmulti`
+   with its call graph and its metadata conventions (`defn-`, `^:export`, `^:test-support`). It is a
+   SPECIFIC language's construct, so it lives here, not in the language-neutral vocabulary. Before
+   2026-07-17 there was no `Fn`: the fact-side slots were grafted onto the design `Operation` tag, so
+   design Operation and Clojure function were one structure told apart by a provenance flag — and the
+   drift demands had to be six bespoke forms because a morphism had no codomain to map INTO.
 
    The generic `Operation` structure — pure, language-neutral identity — lives in
    `fukan.common.vocab.code.operation`."
   (:require [fukan.canvas.core.substrate :as sub]
-            [fukan.canvas.core.structure :as s]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.common.typing.malli :refer [Schema]]
             [fukan.common.vocab.code.effect :refer [Effect]]
             [fukan.common.vocab.code.operation :as operation :refer [Operation]]))
 
-;; ── the design↔Clojure correspondence: fact-side slots + the drift demands ────
-;; Declared against the Operation TAG from outside (the external `(correspond …)` registry hook), so
-;; the vocabulary keeps pure identity and this plugin keeps the Clojure knowledge. Contributes the
-;; extracted fact-slots + the twin (by name, nested within twinned Modules) + the drift demands,
-;; generated as laws at the stable keys :corresponds/Operation.*. Each demand's `:desc` is its
-;; human-facing name in check/drift output; a `:when`/`:require` guard reads at domain altitude
-;; through the auto-generated `out` slot-rule (`(out ?t ?_o)` ⇔ the twin declares an :out type — i.e.
-;; carries a fn-schema), not raw reified triples.
-;;
-;; NOTE this is still a map from `Operation` to ITSELF-with-extra-slots: the fact side is grafted onto
-;; the design tag, so design Operation and Clojure function are one structure told apart by a
-;; provenance flag. That graft is why the demands below have to be six bespoke forms rather than a
-;; map's components — a morphism needs a codomain. See
-;; docs/superpowers/specs/2026-07-17-correspondence-as-morphism-design.md (step 2: give it an `Fn`).
+;; ── the FACT theory: a Clojure function ──────────────────────────────────────
+(defstructure Fn
+  "The Clojure realization of an Operation — an EXTRACTED function (`defn`/`defn-`/`defmulti`), stamped
+   by the build. Carries the same input/output/effect shape as the design `Operation` (so the two agree
+   by structure) PLUS Clojure's own constructs: the actual `:calls` graph (extraction's actuals — the
+   design side authors `:delegates`, never this), and the metadata conventions that mark a public
+   surface (`:private` ← `defn-`, `:export` ← `^:export`, `:test-support` ← `^:test-support`)."
+  {:in           [:* Schema]                     ; input types — positional, ordered
+   :out          [:? Schema]                     ; output type
+   :performs     [:* Effect]                     ; the effects it performs (extracted)
+   :calls        [:* {:transitive true} Fn]      ; the ACTUAL call graph; :transitive ⇒ calls+
+   :private      [:? :boolean]                   ; public/internal — the module's surface
+   :export       [:? :boolean]                   ; intentionally public for MECHANISM (^:export)
+   :test-support [:? :boolean]})                 ; intentionally public for TEST-SUPPORT (^:test-support)
 
-(s/correspond Operation
-  {:calls        [:* {:transitive true} Operation]  ; the ACTUAL call graph (extraction's actuals); :transitive ⇒ calls+
-   :private      [:? :boolean]      ; public/internal — the module's surface (from extraction)
-   :export       [:? :boolean]      ; intentionally public for MECHANISM (^:export)
-   :test-support [:? :boolean]}     ; intentionally public for TEST-SUPPORT (^:test-support)
+;; ── the correspondence: Operation ↦ Fn + the drift demands ────────────────────
+;; Declared against the tags from outside (the external `(correspond …)` hook), so the vocabulary keeps
+;; pure identity and this plugin keeps the Clojure knowledge. Contributes the cross-tag twin (by name,
+;; nested within twinned Modules) + the drift demands, generated as laws at :corresponds/Operation.*.
+;; Each demand's `:desc` is its human-facing name in check/drift output; a `:when`/`:require` guard reads
+;; at domain altitude through Fn's `out` slot-rule (`(out ?t ?_o)` ⇔ the twin declares an :out type).
+(s/correspond Operation Fn
   (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
   (realized {:key :type-coverage :require '[(out ?t ?_o)]
              :desc "every modelled operation's realizing code carries a type signature (:malli/schema)"})
@@ -73,19 +75,18 @@
   #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti})
 
 (defn extract-operation
-  "Build an extracted Operation InstanceValue from a clj-kondo var-definition `v`, the set of effect
-   keywords `effs` directly attributed to it, and `call-ids` — the natural-key ids of the Operations it
-   calls (a `:calls` clause of `substrate/Ref`s, resolved by the assembler like an authored ref). When
-   `v` carries a `:malli/schema` function-type, the signature is DECOMPOSED into `:in`/`:out` Schema
-   subgraphs (the fact-side symmetric with the design side), built through the type dialect via
-   `s/value-literal->iv` — the queryable form the adherence comparator reads (there is no `:val/sig`
-   blob; both strata render through `operation-sig`). The Operation's own natural-key id (`\"ns/op\"`) is
-   the root id the caller assigns."
+  "Build an extracted `Fn` InstanceValue (the fact twin of a design Operation) from a clj-kondo
+   var-definition `v`, the set of effect keywords `effs` directly attributed to it, and `call-ids` — the
+   natural-key ids of the functions it calls (a `:calls` clause of `substrate/Ref`s, resolved by the
+   assembler like an authored ref). When `v` carries a `:malli/schema` function-type, the signature is
+   DECOMPOSED into `:in`/`:out` Schema subgraphs (symmetric with the design side), built through the type
+   dialect via `s/value-literal->iv` — the queryable form the adherence comparator reads. The function's
+   own natural-key id (`\"ns/op\"`) is the root id the caller assigns."
   [v effs call-ids]
   (let [sig    (:malli/schema (:meta v))
         arrow? (and (vector? sig) (= :=> (first sig)) (= 3 (count sig)))
         {:keys [in out]} (when arrow? (code-arrow->in-out sig))]
-    (sub/->InstanceValue ::operation/Operation (str (:name v)) nil
+    (sub/->InstanceValue ::Fn (str (:name v)) nil
                          (cond-> {:val/private (boolean (:private v))}
                            (:export (:meta v))       (assoc :val/export true)
                            (:test-support (:meta v)) (assoc :val/test-support true))

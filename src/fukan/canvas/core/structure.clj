@@ -55,12 +55,11 @@
 
 (declare correspondence-of syntax-for)
 (defn- slot-for
-  "The slot descriptor for `rel` on `sdef`'s EFFECTIVE structure — its own defstructure slots plus any
-   fact-slots an external `(correspond …)` contributes to its tag. So an extracted instance can carry a
-   correspondence-contributed slot (`:calls`/`:extracted`/…) even though the concept's identity omits it."
+  "The slot descriptor for `rel` on `sdef`'s structure. An extracted instance's fact-side slots
+   (`:calls`/`:private`/…) are now its OWN defstructure's slots — the codomain (`Fn`/`Ns`) is a real
+   structure — so this reads `sdef` directly; no external graft to fold in."
   [sdef rel]
-  (first (filter #(= rel (:rel %))
-                 (concat (:slots sdef) (:fact-slots (correspondence-of (:tag sdef)))))))
+  (first (filter #(= rel (:rel %)) (:slots sdef))))
 
 (defn- sdef-syntax
   "The authoring-syntax hook for `sdef` — its inline `(syntax …)` OR one registered externally against
@@ -714,14 +713,13 @@
    (when relation-character [{:kind :relation-character :opts relation-character}])
    (when derived-rule      [{:kind :defrelation :rule derived-rule}])
    ;; external correspondence (the sole correspondence surface, an inverted-dependency hook): expand the
-   ;; registered `(correspond Tag …)` config into declaration maps scoped to this tag — fact-slots as
-   ;; :slot(+:transitive) decls, the twin/demands as :correspondence, the relation demands as
-   ;; :realized-by/:covered-from — the SAME handlers a structure's own slots route through.
-   (when-let [{:keys [bridge demands fact-slots rel-demands]} (correspondence-of tag)]
+   ;; registered `(correspond Design Fact …)` config into declaration maps scoped to this design tag —
+   ;; the cross-tag twin/demands as :correspondence, the relation demands as :realized-by/:covered-from
+   ;; (the SAME handlers a structure's own slots route through). The fact-side SLOTS are no longer here:
+   ;; they belong to the codomain's own `defstructure`.
+   (when-let [{:keys [fact-tag bridge demands rel-demands]} (correspondence-of tag)]
      (concat
-      (for [sl fact-slots] {:kind :slot :slot sl})
-      (for [sl fact-slots :when (:transitive sl)] {:kind :transitive :slot sl})
-      [{:kind :correspondence :corresponds {:bridge bridge :demands demands}}]
+      [{:kind :correspondence :corresponds {:fact-tag fact-tag :bridge bridge :demands demands}}]
       (for [d rel-demands :when (:realized-by d)]  {:kind :realized-by :slot d})
       (for [d rel-demands :when (:covered-from d)] {:kind :covered-from :slot d})))
    (for [law laws] {:kind :free-law :law law})))
@@ -756,19 +754,19 @@
      :unless (unquote-lit (:unless opts))}))
 
 (defn- parse-correspond-config
-  "Parse a `(correspond Target …)` tail (the forms AFTER Target) → the external correspondence config
-   `{:bridge :demands [] :fact-slots [slot…] :rel-demands [slot-descriptor…]}`. Correspondence is
-   always by NAME — a ROOT kind (carrying a `(bridge …)` sub-form) pairs design/fact instances whose
-   names satisfy the bridge; a NESTED kind (no bridge) pairs same-named instances whose containers
-   twin — so there is no basis token: the forms are the fact-slots map + the `(bridge …)`/demand/
-   rel-demand sub-forms directly. The bridge is EITHER a strategy KEYWORD (`:qualified-suffix`,
-   `:exact`) the kernel `name-match` builtin lowers — the declarative common case, stored verbatim,
-   validated at query compile — OR a SYMBOL naming a Clojure fn (the arbitrary escape hatch): it must
-   RESOLVE at expansion and carry a registered Cozo predicate port (`cq/register-predicate-port!`).
-   Reuses `parse-slot-entry` (the fact-slots map) + `parse-demand` (node demands)."
-  [cname forms]
-  (let [fact-slots (mapv (fn [[rel v]] (parse-slot-entry rel v)) (first (filter map? forms)))
-        seq-subs   (filter seq? forms)
+  "Parse a `(correspond Design Fact …)` tail (the forms AFTER the two tags) → the external
+   correspondence config `{:fact-tag :bridge :demands [] :rel-demands [slot-descriptor…]}`. `fact-tag`
+   is the CODOMAIN — the structure the design maps INTO; its slots live in its own `defstructure`, not
+   here (before 2026-07-17 the fact-side was a slots map grafted onto the design tag — the graft that
+   made the demands a bespoke DSL rather than a map). Correspondence is always by NAME — a ROOT kind
+   (carrying a `(bridge …)` sub-form) pairs design/fact instances whose names satisfy the bridge; a
+   NESTED kind (no bridge) pairs same-named instances whose containers twin. The bridge is EITHER a
+   strategy KEYWORD (`:qualified-suffix`, `:exact`) the kernel `name-match` builtin lowers — the
+   declarative common case, stored verbatim, validated at query compile — OR a SYMBOL naming a Clojure
+   fn (the arbitrary escape hatch): it must RESOLVE at expansion and carry a registered Cozo predicate
+   port. Reuses `parse-demand` (node demands)."
+  [cname fact-tag forms]
+  (let [seq-subs   (filter seq? forms)
         bridge-sub (first (filter #(= 'bridge (first %)) seq-subs))
         bridge     (when-let [barg (second bridge-sub)]
                      (if (keyword? barg)
@@ -786,30 +784,34 @@
                         (throw (ex-info (str "correspond " cname ": duplicate demand key " (pr-str d)) {:key d}))))
         rel-subs    (remove #(or (= 'bridge (first %)) ('#{realized covered agrees} (first %))) seq-subs)
         rel-demands (mapv (fn [[rel opts]] (assoc opts :rel (keyword rel))) rel-subs)]
-    (doseq [d rel-demands :when (:covered-from d)]
-      (let [cn   (name (first (:covered-from d)))
-            base (keyword (clojure.core/subs cn 0 (dec (count cn))))]
-        (when-not (some #(and (= (:rel %) base) (:transitive %)) fact-slots)
-          (throw (ex-info (str "correspond " cname ": :covered-from closure " (:covered-from d)
-                               " over a relation not declared :transitive in the fact-slots") {:rel-demand d})))))
-    {:bridge bridge :demands demands :fact-slots fact-slots :rel-demands rel-demands}))
+    ;; NB the `:covered-from` "closure relation must be :transitive" check that once lived here is
+    ;; gone: the closure relation is now a slot of the CODOMAIN structure, whose parsed slots are not
+    ;; available at this macro-expansion (its `defstructure` registers at load). An un-transitive
+    ;; closure surfaces as a missing `R+` rule at query compile instead.
+    {:fact-tag fact-tag :bridge bridge :demands demands :rel-demands rel-demands}))
 
 (defmacro correspond
-  "Hook the correspondence EXTENSION onto a concept from OUTSIDE (inverted dependency): the concept's
-   `defstructure` never mentions correspondence; this declaration — living in a correspondence module —
-   contributes the fact-side slots + the twin + the demands to `Target`'s tag. The generic machinery
-   (twin, demand-law generation, the comparator hybrid) is unchanged; only the SOURCE of the declarations
-   moves here from the concept's own fields.
+  "Hook the correspondence morphism onto a concept from OUTSIDE (inverted dependency): the concept's
+   `defstructure` never mentions correspondence; this declaration — living in the extractor for a
+   language — maps the DESIGN structure onto its FACT codomain (`Fact`, a real `defstructure` whose
+   slots are the extracted constructs) and states the drift demands. The generic machinery (the
+   cross-tag twin, demand-law generation, the comparator hybrid) generates every law.
 
-     (correspond Target
-       {:calls [:* {:transitive true} Op] :private [:? :boolean] …}   ; fact-side grafted onto Target's tag
+     (correspond Design Fact                                      ; design ↦ fact codomain
        (bridge f)?                                                ; roots pair by a name-bridge predicate
        (realized …)* (covered …)* (agrees {:by …})*              ; node demands
-       (relname {:realized-by R …})* (relname {:covered-from …})*) ; demands ABOUT Target's own relations"
-  [target & forms]
-  (let [tag    (resolve-struct-tag target)
-        config (parse-correspond-config target forms)]
-    `(register-correspondence! ~tag '~config)))
+       (relname {:realized-by R …})* (relname {:covered-from …})*) ; demands ABOUT Design's own relations
+
+   `Fact` may be omitted, defaulting to `Design` — a same-tag identity correspondence (the two strata
+   share one structure, split by provenance), for a concept recognised in code rather than realized by
+   a distinct construct."
+  [design & forms]
+  (let [dtag         (resolve-struct-tag design)
+        [ftag forms] (if (and (symbol? (first forms)) (not (seq? (first forms))))
+                       [(resolve-struct-tag (first forms)) (rest forms)]
+                       [dtag forms])
+        config       (parse-correspond-config design ftag forms)]
+    `(register-correspondence! ~dtag '~config)))
 
 (defn- parse-law
   "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?)
@@ -1162,28 +1164,33 @@
                            '(contains ?ca ?a) '(contains ?cb ?b))]}))))
 
 (defn- node-demand-law
-  "One generated law map for a node-level demand on structure `tag`."
-  [tag {:keys [demand key desc when require unless by over]}]
-  (let [k (demand-key tag (or key demand))]
+  "One generated law map for a node-level demand — a design instance of `dtag` and its fact twin of
+   `ftag` (the codomain). Cross-tag: the design side is bound `:structure/of dtag`, the fact side
+   `:structure/of ftag`. `:val/extracted` is kept alongside the tags — belt-and-suspenders (a fact
+   node IS of a distinct extracted-only tag), and it lets a same-tag correspondence (`ftag = dtag`, an
+   identity-on-shared-sort like Schema) still split the two strata by provenance. The stable law key
+   rides `dtag`, so keys stay `:corresponds/<Design>.*`."
+  [dtag ftag {:keys [demand key desc when require unless by over]}]
+  (let [k (demand-key dtag (or key demand))]
     (case demand
       :realized
       (if require
         {:key k :offenders '[?x]
-         :desc (or desc (str (name tag) " (" (clojure.core/name (or key demand)) "): every design instance's twin satisfies the requirement"))
-         :where (vec (concat [['?x :structure/of tag] '(not [?x :val/extracted true])]
+         :desc (or desc (str (name dtag) " (" (clojure.core/name (or key demand)) "): every design instance's twin satisfies the requirement"))
+         :where (vec (concat [['?x :structure/of dtag] '(not [?x :val/extracted true])]
                              when
                              ['(twin ?x ?t)
                               (apply list 'not-join '[?t] require)]))}
         {:key k :offenders '[?x]
-         :desc (or desc (str (name tag) ": every design instance is realized by a fact twin"))
-         :where (vec (concat [['?_g :structure/of tag] '[?_g :val/extracted true]
-                              ['?x :structure/of tag] '(not [?x :val/extracted true])]
+         :desc (or desc (str (name dtag) ": every design instance is realized by a fact twin"))
+         :where (vec (concat [['?_g :structure/of ftag] '[?_g :val/extracted true]
+                              ['?x :structure/of dtag] '(not [?x :val/extracted true])]
                              when
                              ['(not-join [?x] (twin ?x ?t))]))})
       :covered
       {:key k :offenders '[?x]
-       :desc (or desc (str (name tag) ": every fact instance is covered by a design twin or deliberately exempt"))
-       :where (vec (concat [['?x :structure/of tag] '[?x :val/extracted true]]
+       :desc (or desc (str (name dtag) ": every fact instance is covered by a design twin or deliberately exempt"))
+       :where (vec (concat [['?x :structure/of ftag] '[?x :val/extracted true]]
                            when
                            (map (fn [c] (list 'not c)) unless)
                            ['(not-join [?x] (twin ?s ?x))]))}
@@ -1191,10 +1198,10 @@
       ;; a PAIR-HYBRID law: :where enumerates the design instance + its fact twin (+ any :when guard);
       ;; the check engine runs the registered `:by` comparator over each pair and offends where false.
       {:key k :offenders '[?x]
-       :desc (or desc (str (name tag) " (" (clojure.core/name (or key demand))
+       :desc (or desc (str (name dtag) " (" (clojure.core/name (or key demand))
                            "): every design instance's fact twin agrees via " by))
        :comparator (cond-> {:by by :on '[?x ?t]} over (assoc :over over))
-       :where (vec (concat [['?x :structure/of tag] '(not [?x :val/extracted true]) '(twin ?x ?t)]
+       :where (vec (concat [['?x :structure/of dtag] '(not [?x :val/extracted true]) '(twin ?x ?t)]
                            when))})))
 
 (defn- covered-from-law
@@ -1281,22 +1288,26 @@
 
 (register-declaration! :correspondence
   (fn [{:keys [corresponds]} sdef]
-    (let [tag (:tag sdef)]
+    ;; the twin is a CROSS-TAG map: design `dtag` ↦ fact `ftag` (the codomain). A ROOT kind pairs by
+    ;; name-bridge; a NESTED kind pairs same-named instances whose containers already twin. `:val/extracted`
+    ;; still marks the fact side (so `ftag = dtag` degenerates to an identity-on-shared-sort correspondence).
+    (let [dtag (:tag sdef)
+          ftag (:fact-tag corresponds)]
       {:terms [(if-let [bridge (:bridge corresponds)]
                [(list 'twin '?a '?b)
-                ['?a :structure/of tag] (list 'not ['?a :val/extracted true])
-                ['?b :structure/of tag] ['?b :val/extracted true]
+                ['?a :structure/of dtag] (list 'not ['?a :val/extracted true])
+                ['?b :structure/of ftag] ['?b :val/extracted true]
                 ['?a :entity/name '?an] ['?b :entity/name '?bn]
                 ;; a strategy KEYWORD lowers through the generic `name-match` builtin; a SYMBOL is a
                 ;; vocab fn-predicate lowered through its registered port
                 [(if (keyword? bridge) (list 'name-match bridge '?an '?bn) (list bridge '?an '?bn))]]
                [(list 'twin '?a '?b)
-                ['?a :structure/of tag] (list 'not ['?a :val/extracted true])
-                ['?b :structure/of tag] ['?b :val/extracted true]
+                ['?a :structure/of dtag] (list 'not ['?a :val/extracted true])
+                ['?b :structure/of ftag] ['?b :val/extracted true]
                 ['?a :entity/name '?n] ['?b :entity/name '?n]
                 (list 'contains '?ca '?a) (list 'contains '?cb '?b)
                 (list 'twin '?ca '?cb)])]
-       :laws (mapv #(node-demand-law tag %) (:demands corresponds))})))
+       :laws (mapv #(node-demand-law dtag ftag %) (:demands corresponds))})))
 
 (register-declaration! :free-law (fn [{:keys [law]} _sdef] {:terms [] :laws [law]}))
 

@@ -5,7 +5,11 @@
             ;; loaded for its side-effect: registers the Cozo check engine so law/check dispatches to it
             [fukan.cozo.law :as law]
             [fukan.canvas.core.rules :as rules]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]))
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            ;; loaded for their side-effect: register the Operation↦Fn / Module↦Ns correspondence the
+            ;; cross-tag twin under test is generated from
+            [fukan.common.extraction.clojure.operation]
+            [fukan.common.extraction.clojure.module]))
 
 (defstructure RuleThing
   "A fixture structure: a relation slot (→ a relation rule) + a law that reads over
@@ -95,10 +99,10 @@
   (testing "root kinds twin by bridge; nested kinds twin by name within twinned containers"
     (let [db (build/maps->cozo
               [{:entity/id "cm" :structure/of :fukan.common.vocab.code.module/Module :entity/name "infra-model"}
-               {:entity/id "km" :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.infra.model" :val/extracted true}
+               {:entity/id "km" :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.infra.model" :val/extracted true}
                {:entity/id "co" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "load-model"}
-               {:entity/id "ko" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "load-model" :val/extracted true}
-               {:entity/id "stray" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "load-model" :val/extracted true}]
+               {:entity/id "ko" :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "load-model" :val/extracted true}
+               {:entity/id "stray" :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "load-model" :val/extracted true}]
               [{:rel/id "r1" :rel/from [:entity/id "cm"] :rel/kind :exposes :rel/to [:entity/id "co"]}
                {:rel/id "r2" :rel/from [:entity/id "km"] :rel/kind :child   :rel/to [:entity/id "ko"]}])
           twins (set (cq/q '[:find ?an ?bn :in $ %

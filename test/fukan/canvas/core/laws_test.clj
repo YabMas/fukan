@@ -8,8 +8,10 @@
             ;; loaded for its side-effect: registers the Cozo check engine so law/check dispatches to it
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            ;; loaded for its side-effect: registers the correspondence demand laws
-            [fukan.common.vocab.code.module]))
+            ;; loaded for their side-effect: register the correspondence demand laws + the Fn/Ns codomain
+            ;; structures the self-model correspondence maps Operation/Module INTO
+            [fukan.common.extraction.clojure.operation]
+            [fukan.common.extraction.clojure.module]))
 
 (defn- laws [db] (set (map :law (law/check db))))
 
@@ -217,7 +219,7 @@
                 (cond-> [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/id "m" :entity/name "m"}
                          {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "lonely"}
                          {:rel/id "m|exposes|lonely" :rel/from -1 :rel/kind :exposes :rel/to -2}]
-                  with-code? (conj {:db/id -3 :structure/of :fukan.common.vocab.code.operation/Operation
+                  with-code? (conj {:db/id -3 :structure/of :fukan.common.extraction.clojure.operation/Fn
                                     :entity/name "other" :val/extracted true}))))
           guarded (mk true)]
       (is (contains? (set (map #(:entity/name (cq/entity guarded %))
@@ -243,10 +245,10 @@
    {:rel/id "s|exposes|s-op" :rel/from -1 :rel/kind :exposes :rel/to -3}
    {:rel/id "t|exposes|t-op" :rel/from -2 :rel/kind :exposes :rel/to -4}
    {:rel/id "s-op|delegates|t-op" :rel/from -3 :rel/kind :delegates :rel/to -4}
-   {:db/id -5 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.s" :val/extracted true}
-   {:db/id -6 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.t" :val/extracted true}
-   {:db/id -7 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "s-op" :val/extracted true}
-   {:db/id -8 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "t-op" :val/extracted true}
+   {:db/id -5 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.s" :val/extracted true}
+   {:db/id -6 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.t" :val/extracted true}
+   {:db/id -7 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "s-op" :val/extracted true}
+   {:db/id -8 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "t-op" :val/extracted true}
    {:rel/id "ks|child|s" :rel/from -5 :rel/kind :child :rel/to -7}
    {:rel/id "kt|child|t" :rel/from -6 :rel/kind :child :rel/to -8}])
 
@@ -271,7 +273,7 @@
   (-> (filterv #(and (not= "s-op|delegates|t-op" (:rel/id %))
                      (not= -7 (:db/id %)))
                container-base)
-      (conj {:db/id -7 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "ext-s-op" :val/extracted true})
+      (conj {:db/id -7 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "ext-s-op" :val/extracted true})
       (conj {:rel/id "call" :rel/from -7 :rel/kind :calls :rel/to -8})))
 
 ;; undeclared-call-db: undeclared-call-base as a db (faithful offender: ext-s-op)
@@ -318,9 +320,9 @@
    {:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
    {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}
    {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-   {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-   {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
-   {:db/id -5 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "g" :val/extracted true}
+   {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}
+   {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "f" :val/extracted true}
+   {:db/id -5 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "g" :val/extracted true}
    {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}
    {:rel/id "km|child|g" :rel/from -3 :rel/kind :child :rel/to -5}
    {:rel/id "f|calls|g"  :rel/from -4 :rel/kind :calls :rel/to -5}
@@ -339,8 +341,8 @@
     {:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m2"}
     {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "d"}
     {:rel/id "m2|exposes|d" :rel/from -1 :rel/kind :exposes :rel/to -2}
-    {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m2" :val/extracted true}
-    {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "d" :val/extracted true}
+    {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m2" :val/extracted true}
+    {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "d" :val/extracted true}
     {:rel/id "km2|child|d" :rel/from -3 :rel/kind :child :rel/to -4}
     {:rel/id "d|performs|io" :rel/from -4 :rel/kind :performs :rel/to -10}]))
 
@@ -374,8 +376,8 @@
                  [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}
                   {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
-                  {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
-                  {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f" :val/extracted true}
+                  {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}
+                  {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "f" :val/extracted true}
                   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
                  twin-datoms)))
           ;; :out kind "nil" matches design f's default render ([:=> [:cat] :nil]) so adherence stays green too
@@ -407,7 +409,7 @@
                 [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                  {:db/id -2 :structure/of ::LTwin :entity/name "x" :val/n design-n}
                  {:rel/id "m|child|x" :rel/from -1 :rel/kind :child :rel/to -2}
-                 {:db/id -3 :structure/of :fukan.common.vocab.code.module/Module :entity/name "fukan.m" :val/extracted true}
+                 {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}
                  {:db/id -4 :structure/of ::LTwin :entity/name "x" :val/n fact-n :val/extracted true}
                  {:rel/id "fm|child|x" :rel/from -3 :rel/kind :child :rel/to -4}]))
           drift (mk 1 2)

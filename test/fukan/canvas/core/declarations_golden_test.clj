@@ -203,8 +203,15 @@
 ;; module-depends/in-subsystem/…) enter the snapshot for the FIRST time. They were always emitted, never
 ;; guarded; this change would otherwise have moved containment into that same blind spot. Laws hold (57 —
 ;; a relation element declares none).
-(def ^:private golden-terms {:count 47 :hash -558807715})
-(def ^:private golden-laws  {:count 57 :hash -1382709262})
+;; 2026-07-17 (b): correspondence became a CROSS-TAG morphism — `Operation ↦ Fn`, `Module ↦ Ns`, the
+;; codomains being real `defstructure`s in the Clojure extraction plugin (fukan.common-scoped, so in
+;; snapshot). The fact-side slots (`:calls`/`:private`/`:export`/`:test-support`) that were grafted onto
+;; the Operation tag are now `Fn`'s own slots. Terms 47→49: +2 = the new `Fn`/`Ns` kind-rules; every
+;; shared relation rule (`in`/`out`/`performs`/`calls`/`calls+`/`child`) dedups, so no other term moves.
+;; Laws 57→62: +5 = `Fn`'s own structural laws (in/out/performs/calls target-types + the three boolean
+;; type-checks ≈ 8) plus `Ns.child` (1), MINUS the 4 fact-slot laws that used to ride Operation's graft.
+(def ^:private golden-terms {:count 49 :hash 532380915})
+(def ^:private golden-laws  {:count 62 :hash -970266870})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

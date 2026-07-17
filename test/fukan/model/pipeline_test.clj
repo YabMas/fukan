@@ -185,14 +185,14 @@
           "foci stay inline — no standalone Lens nodes"))))
 
 (deftest extraction-provenance-is-kernel-stamped
-  (testing "the BUILD stamps fact-stratum at the merge — extracted modules/ops carry it, values never do"
+  (testing "the BUILD stamps fact-stratum at the merge — extracted Ns/Fn carry it, values never do"
     (let [db (pipeline/build-model "src")]
-      (is (seq (cq/q '[:find ?m :where [?m :structure/of :fukan.common.vocab.code.module/Module]
+      (is (seq (cq/q '[:find ?m :where [?m :structure/of :fukan.common.extraction.clojure.module/Ns]
                        [?m :val/extracted true]] db))
-          "extracted modules carry the provenance attribute (kernel-stamped)")
-      (is (seq (cq/q '[:find ?o :where [?o :structure/of :fukan.common.vocab.code.operation/Operation]
+          "extracted namespaces (Ns) carry the provenance attribute (kernel-stamped)")
+      (is (seq (cq/q '[:find ?o :where [?o :structure/of :fukan.common.extraction.clojure.operation/Fn]
                        [?o :val/extracted true]] db))
-          "extracted operations carry it too")
+          "extracted functions (Fn) carry it too")
       (is (empty? (cq/q '[:find ?e :where [?e :structure/of :fukan.common.vocab.code.effect/Effect]
                           [?e :val/extracted true]] db))
           "^:value Effect nodes are stratum-free — never stamped"))))

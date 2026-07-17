@@ -105,13 +105,16 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   (Kind / Effect / Operation / Module / Subsystem). **PURE DESIGN — language-neutral.** Each element
   file carries its structure and the laws that are its own slot semantics, and knows nothing about
   what language the code is written in.
-  **The design↔code correspondence is NOT here** (since 2026-07-17): it maps into a SPECIFIC
-  language's constructs — `:calls` is a call graph, `:private`/`:export`/`:test-support` are `defn-`,
-  `^:export`, `^:test-support` — so it rides that language's extractor
-  (`common/fukan/common/extraction/clojure/{operation,module}.clj`), declared from outside against
-  the tag via the external `(correspond Tag …)` hook. It lived in the vocab until then, which made
-  this shipped, language-neutral tier export Clojure metadata conventions to every consumer. A
-  project loading the vocab with a different extractor correctly gets no `:calls` at all.
+  **The design↔code correspondence is NOT here** (since 2026-07-17): it maps design INTO a SPECIFIC
+  language's FACT theory. The codomains are real `defstructure`s in that language's extractor —
+  `Operation ↦ Fn` (a Clojure function: `:calls` graph + `:private`/`:export`/`:test-support` metadata
+  conventions), `Module ↦ Ns` (a namespace) — in
+  `common/fukan/common/extraction/clojure/{operation,module}.clj`, declared from outside via the
+  external `(correspond Design Fact …)` hook. The two strata are DISTINCT tags: the twin is a genuine
+  cross-tag map, not the Operation-tag-with-a-provenance-flag graft it was before (that graft is why
+  the demands are still six bespoke forms — a morphism needs a codomain, now it has one). Keeping the
+  fact theory here means the shipped, language-neutral vocab exports no Clojure constructs; a project
+  loading the vocab with a different extractor correctly gets no `Fn`/`:calls` at all.
   Everything is still GENERATED — the plugin hand-writes no mechanism. Adherence is the kernel's
   generic `(agrees {:by :structural :over [:in :out]})` (no hand-written comparator); call realization is
   `(delegates {:realized-by :calls :faithful true})`, generating an OP-ALTITUDE TRANSITIVE
@@ -120,8 +123,8 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   `:transitive` fact-slot already emits) plus the module-altitude `delegates-faithful` reverse. A caller
   wanting any demand as a worklist names its stable law key through `law/violation-names` directly (as
   `dev/user.clj` does) — no per-demand reader wrapper is kept.
-  `extraction/clojure/module.clj` holds the bridged twin ROOT that Operation's twins nest within —
-  `(correspond Module (bridge :qualified-suffix))`. The bridge is a name-match STRATEGY KEYWORD the
+  `extraction/clojure/module.clj` holds the `Ns` codomain + the bridged twin ROOT that `Fn` twins nest
+  within — `(correspond Module Ns (bridge :qualified-suffix))`. The bridge is a name-match STRATEGY KEYWORD the
   kernel's generic `name-match` builtin lowers (canvas short-name is a separator-agnostic dotted
   suffix of the code ns) — no hand-written CozoScript, no name-bridge fn; the generated Operation twin
   correlates modules with the same `(name-match :qualified-suffix …)` inside the injected `twin` rule.
@@ -217,14 +220,18 @@ A `defstructure` is a composition of **slots** plus **laws**:
   datalog emitting `not-join` directly (the Cozo query compiler lowers stratified
   negation correctly, so the combinators need no negation-routing dance; never
   hand-write these shapes). `(structure/check db)` runs every law → violations.
-- Correspondence is declared EXTERNALLY, via `(correspond Tag …)` (the concept's own
-  `defstructure` stays pure identity — there is no inline correspondence form). Demands
-  are declared per-structure or per-relation — `(realized …)` / `(covered …)` /
-  `(agrees …)` node demands; `:realized-by` / `:faithful` on a relation slot (op-altitude
-  transitive call demand); `:covered-from [R* S]` on a relation slot (path
-  demand: every target the twin reaches over R*·S must be declared) — and their laws
-  are GENERATED. Never hand-write `realized` / `covered` / `call-realization` /
-  `fidelity` / `covered-from` shapes by hand.
+- Correspondence is a CROSS-TAG MORPHISM, declared EXTERNALLY via `(correspond Design Fact …)` (both
+  concepts' own `defstructure`s stay pure identity — there is no inline correspondence form). `Fact` is
+  the CODOMAIN — a real `defstructure` whose slots are the extracted constructs (design `Operation` ↦
+  Clojure `Fn`; design `Module` ↦ `Ns`). The two strata are DISTINCT tags, so the twin is a genuine map
+  between two theories, not one tag split by a provenance flag. `Fact` may be omitted, defaulting to
+  `Design` — a same-tag IDENTITY correspondence (a concept recognised in code rather than realized by a
+  distinct construct). Demands are declared per-node or per-relation — `(realized …)` / `(covered …)` /
+  `(agrees …)` node demands; `:realized-by` / `:faithful` on a relation slot (op-altitude transitive
+  call demand); `:covered-from [R* S]` on a relation slot (path demand: every target the twin reaches
+  over R*·S must be declared) — and their laws are GENERATED. Never hand-write `realized` / `covered` /
+  `call-realization` / `fidelity` / `covered-from` shapes by hand. (The block is STILL six bespoke forms
+  — giving it a codomain is the precondition for collapsing it to a map's components, the next step.)
 
 The current catalog is the source — or just run `(grammar)` in the REPL: the
 print-dual renders every vocabulary live. The files are under `common/fukan/common/vocab/**`.
@@ -397,11 +404,11 @@ mixing them corrupts history.
   `:exposes`/`:owns`/`:offers` + the derived `in-module` in `code/module.clj`. The
   module-dependency-graph relations + readers (`module-owns`/`module-depends`/`module-dependencies`)
   live with the architecture laws that consume them in `code/subsystem.clj`
-- `common/fukan/common/extraction/clojure/` — the design↔Clojure map: `operation.clj` holds
-  Operation's whole correspondence (the fact-slots + the `(agrees {:by :structural})` adherence demand
-  + the `(delegates {:realized-by :calls :faithful true})` op-altitude transitive call-realization
-  demand, all GENERATED — no hand-written readers); `module.clj` holds `(bridge :qualified-suffix)`,
-  the twin root
+- `common/fukan/common/extraction/clojure/` — the FACT theory + the design↔Clojure map: `operation.clj`
+  holds the `Fn` codomain (a Clojure function) + `(correspond Operation Fn …)` (the `(agrees {:by
+  :structural})` adherence demand + the `(delegates {:realized-by :calls :faithful true})` op-altitude
+  transitive call-realization demand, all GENERATED — no hand-written readers); `module.clj` holds the
+  `Ns` codomain + `(correspond Module Ns (bridge :qualified-suffix))`, the twin root
 - `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI
