@@ -27,7 +27,7 @@
   {:in           [:* Schema]                     ; input types — positional, ordered
    :out          [:? Schema]                     ; output type
    :performs     [:* Effect]                     ; the effects it performs (extracted)
-   :calls        [:* {:transitive true} Fn]      ; the ACTUAL call graph; :transitive ⇒ calls+
+   :calls        [:* Fn]                         ; the ACTUAL call graph (calls+ is the compiler's)
    :private      [:? :boolean]                   ; public/internal — the module's surface
    :export       [:? :boolean]                   ; intentionally public for MECHANISM (^:export)
    :test-support [:? :boolean]})                 ; intentionally public for TEST-SUPPORT (^:test-support)

@@ -15,22 +15,22 @@
             [fukan.common.vocab.code.plug-point :refer [PlugPoint]]))
 
 ;; ── Module's containment species + the relation derived from them ─────────────
-;; Each is a SPECIES of the `contains` genus (`vocab/grouping`) — declared once, on the relation
-;; itself, so `in-module`/`contains+` and every law over the genus pick them up without any structure
-;; restating the character. `:satisfies` is deliberately NOT a species: it is the INVERTED edge (a
-;; plug-point owned elsewhere), not containment.
+;; Each is a SPECIES of the `contains` genus (`vocab/grouping`) — the `(:sub :contains)` inclusion,
+;; declared once on the relation itself, so `in-module`/`contains+` and every law over the genus
+;; pick them up without any structure restating it. `:satisfies` is deliberately NOT a species: it
+;; is the INVERTED edge (a plug-point owned elsewhere), not containment.
 
 (defrelation :exposes
   "The public API surface — the Operations callers depend on."
-  {:isa :contains})
+  (:sub :contains))
 
 (defrelation :owns
   "Data-shapes that CROSS THE BOUNDARY — Kinds other modules adopt by name (and don't redefine)."
-  {:isa :contains})
+  (:sub :contains))
 
 (defrelation :offers
   "Plug-points this module OWNS for others to satisfy (SPIs / dependency-inversion points)."
-  {:isa :contains})
+  (:sub :contains))
 
 (defrelation :in-module
   "An entity `?e` is a member of the container named `?mname` — the containment genus read by name.

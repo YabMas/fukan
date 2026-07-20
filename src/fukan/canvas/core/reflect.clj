@@ -91,19 +91,17 @@
 
 (defstructure Relation
   "A reflected relation KIND (`:child`/`:calls`/`:delegates`/…), reified so the grammar's EDGE
-   vocabulary is queryable like its node vocabulary (`Structure`). Carries its relation-CHARACTERS —
-   what drives rule generation: `:transitive` (a transitive-closure relation) and `:isa` (the GENUS
-   this relation is a species of — e.g. `:child` isa `contains`, so a law over the genus sees its
-   edges) — and, for a DERIVED relation element, its defining datalog as the `:rule` payload
-   (`{:head … :bodies …}` — queryable the way a Law's `:form` is, so a definitional extension's
-   body is data too). A reflection TOOL, not authored; the runtime never reads it.
-
-   Reflected from two sources, because relations are mid-migration to being elements: `:isa`/`:rule`
-   from a relation ELEMENT's declaration (`defrelation`), `:transitive` from either the element or —
-   for relations that are not yet elements (`:delegates`, `:calls`) — the slots that use the kind."
-  {:transitive [:? :boolean]
-   :isa        [:? :string]
-   :rule       [:? {:payload :form} :string]})
+   vocabulary is queryable like its node vocabulary (`Structure`). An ELEMENT carries its
+   declaration's right-hand side in the SAME (direction, expression) shape a `RelationMap` uses:
+   `:incl` (`:sub`/`:sup`/`:eq`) + `:expr` (the inclusion expression, as edn) for an inclusion
+   element, or `:incl` `:eq` + the defining datalog as the `:rule` payload for a DERIVED element —
+   a definitional extension is definitionally exact. A BARE element (a genus) and a slot-only
+   relation (not an element yet — `:calls`, `:delegates`) carry neither. (`:transitive` is gone:
+   closures belong to the compiler, not to the relation.) A reflection TOOL, not authored; the
+   runtime never reads it."
+  {:incl [:? :string]
+   :expr [:? :string]
+   :rule [:? {:payload :form} :string]})
 
 (defstructure RelationMap
   "One relation map of a reflected `Morphism`: a design relation carried to a fact-side relation
@@ -164,14 +162,21 @@
   (concat (mapcat (fn [l] (concat (:where l) (mapcat rest (:rules l)))) (:laws sd))
           (:realized-as sd)))
 
+(defn- expr-atoms
+  "The relation names an inclusion expression references — the atoms of the regular term
+   (`[:alt :via :contextualizes]` → via, contextualizes)."
+  [e]
+  (cond (keyword? e) [(name e)]
+        (vector? e)  (mapcat expr-atoms (rest e))
+        :else        nil))
+
 (defn- element-refs
-  "The names a relation ELEMENT's own declaration references: its derived bodies' rule calls,
-   its coproduct members, its `:isa` genus (a subrelation inclusion is a cross-signature
-   reference like any other)."
+  "The names a relation ELEMENT's own declaration references: its derived bodies' rule calls
+   and its inclusion expression's atoms (an inclusion is a cross-signature reference like any
+   other — `:child (:sub :contains)` reaches grouping)."
   [el]
   (concat (rule-calls (apply concat (:bodies (:derived-rule el))))
-          (map name (:relation-coproduct el))
-          (some-> (:relation-character el) :isa name list)))
+          (expr-atoms (:expr (:relation-incl el)))))
 
 (defn- ns-closure
   "Expand seed namespaces to a fixpoint through everything a signature in scope REACHES: its
@@ -298,9 +303,7 @@
         ;; (`:contains`), so it belongs to no vocabulary namespace and an ns-filter would drop it.
         ;; (That global name is also why a cross-namespace re-declaration is a collision — caught
         ;; loudly at registration.)
-        rel-elems  (into {} (for [sd (s/all-structures)
-                                  :when (or (:relation-character sd) (:derived-rule sd)
-                                            (:relation-coproduct sd))]
+        rel-elems  (into {} (for [sd (s/all-structures) :when (:relation-element sd)]
                               [(:tag sd) sd]))
         ;; rule-call → declaring signature, for the closure and the derived `:imports`: relation
         ;; elements first, then structure short names (kind rules) when globally unambiguous; a
@@ -367,25 +370,23 @@
                  [{:entity/id ":Any" :structure/of ::Structure
                    :entity/name "Any" :val/tag ":Any"
                    :entity/doc "The wildcard target — any node."}])
-        ;; reflect relation KINDS — one Relation node per relation ELEMENT (`defrelation`, the
-        ;; CHARACTER, DERIVED, and COPRODUCT forms) UNIONed with every distinct (non-scalar) slot
-        ;; kind. Completes grammar reflection: edge-kinds reified, not just node-types. A genus
-        ;; (`contains`) has no slot of its own and is reflected purely from its element; a DERIVED
-        ;; relation carries its defining rule (head + bodies) as the `:rule` payload — a
-        ;; definitional extension's body is data, like a Law's; `:transitive` still aggregates over
-        ;; slots for the relations that are not elements yet.
+        ;; reflect relation KINDS — one Relation node per relation ELEMENT (`defrelation`: bare,
+        ;; inclusion, or derived) UNIONed with every distinct (non-scalar) slot kind. Completes
+        ;; grammar reflection: edge-kinds reified, not just node-types. A genus (`contains`) has no
+        ;; slot of its own and is reflected purely from its element; an element's right-hand side
+        ;; reflects in the same (direction, expression) shape a RelationMap carries — `:incl`+
+        ;; `:expr` for an inclusion, `:incl :eq` + the `:rule` payload for a derived definition.
         rel-slots  (remove s/scalar-slot? (mapcat :slots sds))
         relation-nodes
         (for [rk    (sort-by name (into (set (keys rel-elems)) (map :rel rel-slots)))
-              :let  [el (get rel-elems rk)
-                     ch (:relation-character el)
-                     dr (:derived-rule el)
-                     slot-transitive? (some :transitive (filter #(= rk (:rel %)) rel-slots))]]
+              :let  [el   (get rel-elems rk)
+                     incl (:relation-incl el)
+                     dr   (:derived-rule el)]]
           (cond-> {:entity/id (str "relation:" (name rk)) :structure/of ::Relation :entity/name (name rk)}
-            (:doc el)                              (assoc :entity/doc (:doc el))
-            (or (:transitive ch) slot-transitive?) (assoc :val/transitive true)
-            (:isa ch)                              (assoc :val/isa (name (:isa ch)))
-            dr                                     (assoc :val/rule (pr-str dr) :val/form dr)))
+            (:doc el) (assoc :entity/doc (:doc el))
+            incl      (assoc :val/incl (pr-str (:incl incl)) :val/expr (pr-str (:expr incl)))
+            ;; a derived element is definitionally exact — :eq to its own rule
+            dr        (assoc :val/incl ":eq" :val/rule (pr-str dr) :val/form dr)))
         morphisms (keep reflect-morphism sds)
         nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes
                        (mapcat :nodes morphisms))

@@ -120,7 +120,7 @@
 (defn- names [db eids] (set (map #(:entity/name (cq/entity db %)) eids)))
 
 (deftest delegates-closure-rule-is-generated
-  (testing "marking :delegates :transitive yields a delegates+ transitive-closure rule"
+  (testing "the delegates+ closure is compiler-minted — no declaration anywhere"
     (let [db    (build/vars->cozo [#'op-a #'op-b #'op-c])
           reach (fn [n] (set (cq/q '[:find [?b ...] :in $ % ?an
                                      :where [?a :entity/name ?an] (delegates+ ?a ?b)]
@@ -144,7 +144,7 @@
           "a and b reach the effectful c through delegation; c reaches no effectful op via delegation"))))
 
 (deftest the-extracted-calls-relation-marked-transitive-earns-its-closure
-  (testing "the :calls slot (extracted-actuals, never authored) marked :transitive gives `terms-of` a calls+ closure"
+  (testing "the :calls slot (extracted-actuals, never authored) gets its calls+ closure from the compiler"
     (let [db (build/maps->cozo
               [{:entity/id "ca" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "ca"}
                {:entity/id "cb" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "cb"}

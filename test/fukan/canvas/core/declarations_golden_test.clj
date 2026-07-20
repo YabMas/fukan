@@ -265,7 +265,15 @@
 ;; rule bodies for recursion. Terms hold at 52 (`public-call`'s 2 rules replace the generated
 ;; `delegates-reach`'s 2), and laws hold at 62 (the delegates realized law now reads `(public-call …)`
 ;; with desc naming `:public-call`). Live `(check)` still 0.
-(def ^:private golden-terms {:count 52 :hash -577934162})
+;; 2026-07-20 (h): ONE inclusion construct — `defrelation` is bare / `(dir expr)` / derived, and
+;; closures are the COMPILER's. `{:isa :contains}` → `(:sub :contains)` (identical subsumption rule,
+;; no term change per species); `{:transitive true}` and the `:transitive` slot-option are RETIRED —
+;; `terms-of` now emits every binary relation's `R+` closure unconditionally (injected per-query only
+;; when referenced, so no per-law cost). Terms 52 → 92 (+40: 20 binary relations × 2 closure rules;
+;; `contains+`/`calls+`/`delegates+` were already among them, the rest are newly available); hash
+;; moves with the additions. Laws hold at 62 (inclusion lowering emits rules, never laws). Live
+;; `(check)` still 0.
+(def ^:private golden-terms {:count 92 :hash 831693030})
 (def ^:private golden-laws  {:count 62 :hash -180509930})
 
 (deftest terms-are-stable

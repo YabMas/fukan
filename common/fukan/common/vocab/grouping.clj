@@ -11,23 +11,23 @@
   (:require [fukan.canvas.core.structure :refer [defstructure defrelation]]))
 
 ;; ── the membership relations, as ELEMENTS ────────────────────────────────────
-;; A relation's CHARACTER — how it relates to other relations — is a property of the relation, so it
-;; is declared ONCE here rather than repeated on every slot that uses it. Species join the genus with
-;; `:isa`; a law over `contains` sees every species' edges for free, and `contains+` rolls the whole
-;; ladder up.
+;; A relation's INCLUSIONS — how it relates to other relations — are a property of the relation, so
+;; they are declared ONCE here rather than repeated on every slot that uses it. A species states
+;; `(:sub :contains)`, so a law over the genus sees every species' edges for free; the `contains+`
+;; closure needs no declaration at all — closures are the compiler's, minted for every relation and
+;; injected only where referenced.
 
 (defrelation :contains
-  "Membership — the GENUS. Not authored directly: a structure declares a slot of one of its SPECIES
-   (`:child` here; `:exposes`/`:owns`/`:offers` on a code Module), and the species' `:isa` lifts
-   those edges into `contains`. `:transitive` gives the `contains+` closure — containment rolls up a
-   nesting ladder (a Subsystem contains+ the Operations of the Modules it clusters)."
-  {:transitive true})
+  "Membership — the GENUS, a bare element. Not authored directly: a structure declares a slot of one
+   of its SPECIES (`:child` here; `:exposes`/`:owns`/`:offers` on a code Module), and the species'
+   `(:sub :contains)` inclusion lifts those edges into `contains`. `contains+` rolls a nesting
+   ladder up (a Subsystem contains+ the Operations of the Modules it clusters).")
 
 (defrelation :child
   "Internal membership — the ownership backbone: grain the container is source-of-truth for and no
    one else consumes. The most abstract containment species; a code Module refines it with
    surface-bearing siblings (`:exposes`/`:owns`/`:offers`)."
-  {:isa :contains})
+  (:sub :contains))
 
 (defstructure Grouping
   "The most abstract grouping — a named bag of model instances, pure membership and nothing

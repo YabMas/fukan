@@ -26,7 +26,7 @@
   {:in        [:* Schema]                          ; input types — positional, ordered, each labelled with its param name
    :out       [:? Schema]                          ; output type
    :performs  [:* Effect]                          ; the effects it performs
-   :delegates [:* {:transitive true} Operation]})  ; designed dependencies — direct callees; :transitive ⇒ the delegates+ closure
+   :delegates [:* Operation]})   ; designed dependencies — direct callees (delegates+ is the compiler's)
 
 ;; `:guidance` (implementer-directed intent) is deliberately NOT a slot — it rides the kernel's
 ;; per-instance annotation (a `:val/guidance` leaf on any instance, the read-dual of a docstring).

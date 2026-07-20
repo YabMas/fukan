@@ -3,9 +3,9 @@
    realised). On a two-view fixture mirroring the self-model's collab(purpose) →
    overview(concept) → subsystem(impl) chain:
 
-   1. `defrelation-coproduct` makes the cross-view link a VOCAB-DERIVED relation
-      (`xview` = :via ∪ :realized-by) — union rules emitted by the `:coproduct` handler.
-   2. `traces` composes that coproduct across views in one query.
+   1. an `(:eq [:alt …])` inclusion element makes the cross-view link a VOCAB-DERIVED relation
+      (`xview` = :via ∪ :realized-by) — one union rule per alternative.
+   2. `traces` composes that union across views in one query.
    3. because `xview` is vocab-derived (not law-local), a recursive `traces` rule is
       now expressible AS A LAW's :rules — the recursion guard no longer trips — so a
       cross-view reachability law runs.
@@ -27,10 +27,11 @@
 (defstructure Step "purpose-view node: sequences (:next), maps to a concept (:via)."
   {:next [:? Step] :via Fac})
 
-;; the cross-view link as a relation-coproduct — now a VOCAB-DERIVED relation.
+;; the cross-view link as an inclusion element — `(:eq [:alt …])` is the union, stated in the
+;; standard (direction, expression) triple (the old defrelation-coproduct macro is retired).
 ;; (named `xview` to avoid colliding with the real `view-map` in canvas/domain/view.clj,
 ;;  since the structure registry is a single global tag namespace.)
-(s/defrelation-coproduct :xview "test coproduct: the cross-view link relations" :via :realized-by)
+(s/defrelation :xview "test union: the cross-view link relations" (:eq [:alt :via :realized-by]))
 
 ;; `traces` = the transitive composition of the coproduct (a local recursive rule).
 (def traces-rules
@@ -44,8 +45,8 @@
 (Step sb {:via fb})
 (Step sa {:next sb :via fa})
 
-(deftest coproduct-is-vocab-derived
-  (testing "defrelation-coproduct emits the union rules into vocab-rules"
+(deftest union-inclusion-is-vocab-derived
+  (testing "(:eq [:alt …]) emits the union rules into vocab-rules"
     (let [rs (s/vocab-rules)]
       (is (some #(= % '[(xview ?a ?b) (via ?a ?b)]) rs))
       (is (some #(= % '[(xview ?a ?b) (realized-by ?a ?b)]) rs)))))

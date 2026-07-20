@@ -224,6 +224,22 @@
                          "name it a `defrelation` and reference it as an atom") {:expr expr})))
   (expand-clauses [(list 'path from (expr->path-segments expr) to)]))
 
+(defn- incl-rule-bodies
+  "Lower an inclusion expression `E` to defining rule BODIES from `?a` to `?b` (a `:sup`/`:eq`
+   relation element is DEFINED from E): an atom or path-lowerable expression → one body of its
+   expanded clauses; `[:alt E …]` → one body per alternative. Beyond the regular fragment, the
+   declaration must be DERIVED (head + body) instead — thrown eagerly, naming the element."
+  [tag expr]
+  (cond
+    (and (vector? expr) (= :alt (first expr)))
+    (vec (mapcat #(incl-rule-bodies tag %) (rest expr)))
+    (path-lowerable? expr)
+    [(expand-clauses [(list 'path '?a (expr->path-segments expr) '?b)])]
+    :else
+    (throw (ex-info (str "defrelation " tag ": inclusion expression " (pr-str expr)
+                         " is beyond the regular fragment — declare the relation DERIVED "
+                         "(head + body) instead") {:tag tag :expr expr}))))
+
 (defn- ref-arg->form
   "Code for one relation-slot target: a symbol → (var sym); an inline (Tag ...) form
    → left to evaluate (it yields an InstanceValue)."
@@ -815,15 +831,13 @@
    pure re-expression of the sdef's fields PLUS any external correspondence registered for its tag
    (`correspondence-of`); the parser is untouched. `:kind :kind` is the node-kind membership Term,
    emitted only for CONCRETE structures (not realized/coproduct/derived concepts)."
-  [{:keys [tag slots laws realized-as relation-coproduct relation-character derived-rule] :as _sdef}]
+  [{:keys [tag slots laws realized-as relation-element relation-incl derived-rule] :as _sdef}]
   (concat
-   (when-not (or realized-as relation-coproduct relation-character derived-rule) [{:kind :kind}])
+   (when-not (or realized-as relation-element derived-rule) [{:kind :kind}])
    (for [sl slots] {:kind :slot :slot sl})
-   (for [sl slots :when (:transitive sl)]   {:kind :transitive :slot sl})
-   (when realized-as       [{:kind :realized-as :body realized-as}])
-   (when relation-coproduct [{:kind :coproduct :members relation-coproduct}])
-   (when relation-character [{:kind :relation-character :opts relation-character}])
-   (when derived-rule      [{:kind :defrelation :rule derived-rule}])
+   (when realized-as   [{:kind :realized-as :body realized-as}])
+   (when relation-incl [{:kind :relation-incl :dir (:incl relation-incl) :expr (:expr relation-incl)}])
+   (when derived-rule  [{:kind :defrelation :rule derived-rule}])
    ;; external correspondence (the sole correspondence surface, an inverted-dependency hook): expand the
    ;; registered `(correspond Design Fact …)` config into declaration maps scoped to this design tag —
    ;; the cross-tag twin/demands as :correspondence, each relation map `(rel incl E)` as :relation-map.
@@ -1051,81 +1065,83 @@
                         ;; expression form: `(Tag "doc"? {…})` — anonymous / def-wrapped
                         (fukan.canvas.core.structure/instance-form ~tag args#)))))))
 
-(defmacro defrelation-coproduct
-  "Declare a relation as the COPRODUCT (union) of existing relation kinds:
-   `(V ?a ?b) ⇐ (kᵢ ?a ?b)` for each member kᵢ. Registers a vocab entry carrying
-   `:relation-coproduct`; the `:coproduct` handler emits the union rules so laws/lenses can read
-   the umbrella relation `V` at domain altitude. It is the relation-level analogue of a
-   `realized-as` coproduct (one level up, over `:rel/kind` instead of node kinds): it has
-   no slots, laws, constructor, or instances. Members must be live relation kinds — i.e.
-   relation slots present somewhere in the loaded vocab — else the union rule references an
-   undefined rule.
-
-     (defrelation-coproduct :view-map \"cross-view mapping\" :via :contextualizes)"
-  [rtag docstring & members]
-  (let [tag        (keyword (name rtag))
-        member-kws (mapv (comp keyword name) members)]
-    `(register-structure! {:tag ~tag :doc ~docstring :ns ~(str *ns*) :slots [] :laws []
-                           :relation-coproduct ~member-kws})))
-
 (defmacro defrelation
   "Declare a RELATION as an ELEMENT — the relation itself, not a slot that happens to use it.
-   Two forms, one concept:
+   Three forms, one construct:
 
-   CHARACTER (a map) — a PRIMITIVE relation: its edges come from the `:rel/kind` of whatever
-   structures declare a slot of this name; this declaration owns its CHARACTER, i.e. how it
-   relates to OTHER relations. Options:
-     `:isa <genus>`     this relation is a SPECIES of `<genus>` — emits the subsumption rule
-                        `(genus ?a ?b) ⇐ (rel ?a ?b)`, so every law over the genus sees this
-                        relation's edges for free.
-     `:transitive true` emits the `rel+` closure.
-   Character is a property of the RELATION, not of any one slot — declare it ONCE here and
-   every structure using the relation inherits it. (Before relations were elements this rode
-   a slot's props map, so `:child`'s containment had to be repeated on every structure
-   declaring a `:child` slot — three times, for one rule.)
+   BARE (name + doc only) — a PRIMITIVE relation: its edges come from the `:rel/kind` of whatever
+   structures declare a slot of this name, or from other relations' inclusions INTO it (a genus
+   is a bare element its species declare `(:sub …)` toward). The declaration claims the name
+   (signature identity — a second namespace re-declaring it throws), reflects, and owns the doc.
 
-     (defrelation :contains \"membership — the genus\" {:transitive true})
-     (defrelation :child    \"internal membership\"    {:isa :contains})
+     (defrelation :contains \"membership — the genus\")
 
-   DERIVED (a head + a where) — a named datalog rule with a CUSTOM body, injected into
-   every law and every `vocab-rules` query at domain altitude (by `check`, exactly as the
-   vocab-derived kind/relation rules are). It is the custom-body generalization of a slot's
-   relation rule and of `realized-as` (derived UNARY membership), and the open-bodied sibling
-   of `defrelation-coproduct` (a relation that is a UNION of existing relation kinds): it has
-   no slots, laws, constructor, or instances — only the rule. So a join several laws would
-   each re-inline (the module-dependency graph, say) is expressed ONCE here, and the laws just
-   call it by name (e.g. `(module-depends ?m ?n)`) instead of repeating the clauses.
+   INCLUSION (a `(direction expr)` list) — the relation stated as an INCLUSION against an
+   expression over other relations, the SAME triple a correspondence relation map uses:
+     `(:sub E)`  this relation ⊑ E — every edge of this relation is an E edge. E must be a
+                 relation ATOM; the lowering is GENERATIVE (`(E ?a ?b) ⇐ (rel ?a ?b)`), so a
+                 law over the including relation sees this one's edges for free.
+     `(:sup E)` / `(:eq E)` — this relation ⊒/≡ E: DEFINED from E (`(rel ?a ?b) ⇐ E-clauses`).
+                 E is a regular-relation expression — an atom, `[:alt E …]` (one rule per
+                 alternative), or a path (`[:cat …]`, `[:+ r]`, `[:* r]` over atoms). `:eq`
+                 states the definition is exact (nothing else feeds the relation); `:sup`
+                 leaves it open. An E beyond the fragment is a DERIVED declaration instead.
 
-   `head` is the rule's argument vector; each following body is a clause-vector — ONE body → one rule,
-   MULTIPLE bodies → several rules sharing the head, i.e. a RECURSIVE relation (a base clause + a step
-   clause that calls the relation). Bodies may reference other injected rules (`in-module`, `named`, …),
-   call predicates, and negate (`(not (public ?m))`). Prefer non-recursive: a vocab-injected rule is
-   folded into EVERY law and query, so a recursive one re-evaluates on every check (Cozo terminates via
-   its semi-naive fixpoint, but pays it each time).
+     (defrelation :child    \"internal membership\"  (:sub :contains))
+     (defrelation :view-map \"cross-view link\"      (:eq [:alt :via :contextualizes]))
+
+   DERIVED (a head + a where) — a named datalog rule with a CUSTOM body: the general
+   definitional extension, for anything the inclusion fragment can't say. `head` is the rule's
+   argument vector; each following body is a clause-vector — ONE body → one rule, MULTIPLE
+   bodies → several rules sharing the head, i.e. a RECURSIVE relation (a base clause + a step
+   clause that calls the relation). Bodies may reference other injected rules, call predicates,
+   and negate. Prefer non-recursive: a vocab-injected rule is folded into EVERY law and query,
+   so a recursive one re-evaluates on every check.
 
      (defrelation :public-call \"a reaches b through only non-public interior — the public call graph\"
        '[?a ?b] '[(calls ?a ?b)]                                    ; base: a direct call
                 '[(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
 
    A head arg may be an AGGREGATE application — `'[?m (count ?op)]` — making the derived
-   relation a MEASURE: a relation targeting a computed scalar, the derived-side mirror of a
-   scalar slot (declared relations already target scalar leaves). Plain head vars group;
-   supported aggregates are count/sum/min/max/mean. Name a measure only when a consumer
-   earns it — the inline `(measure …)` clause is the compositional default.
+   relation a MEASURE. Plain head vars group; supported aggregates are count/sum/min/max/mean.
 
-     (defrelation :produces \"an authored Operation ?o whose :out schema is a ref naming Kind ?k\"
-       '[?o ?k]
-       '[(design ?o)
-         [?or :rel/from ?o] [?or :rel/kind :out] [?or :rel/to ?sch]
-         [?sch :val/kind \"ref\"] [?sch :val/ref ?nm] [?k :entity/name ?nm]])"
+   TRANSITIVE CLOSURES are not declared at all: `R+`/`R*` belong to the expression language, and
+   the compiler emits every binary relation's closure rules unconditionally — a query pays for a
+   closure only when it references it (per-query rule injection is reachability-scoped). The old
+   `{:isa …}`/`{:transitive true}` character map and `defrelation-coproduct` are retired — the
+   inclusion form states both."
   [rtag docstring & body]
   (let [tag  (keyword (name rtag))
         ;; `:ns` records the DECLARING namespace: a relation's tag is unqualified (its rule name is
         ;; global), so the tag alone cannot say which vocabulary owns it — and anything scoping by tag
         ;; namespace (the declarations golden) would silently skip every relation element.
-        base {:tag tag :doc docstring :ns (str *ns*) :slots [] :laws []}]
-    (if (map? (first body))
-      `(register-structure! ~(assoc base :relation-character (first body)))
+        base {:tag tag :doc docstring :ns (str *ns*) :slots [] :laws [] :relation-element true}
+        f    (first body)]
+    (cond
+      (map? f)
+      (throw (ex-info (str "defrelation " tag ": the character map is retired — state the relation as "
+                           "an inclusion: {:isa :g} → (:sub :g); {:transitive true} → nothing (closures "
+                           "are the compiler's — R+ works wherever it is referenced)")
+                      {:tag tag :form f}))
+      (empty? body)
+      `(register-structure! ~base)
+      (and (seq? f) (keyword? (first f)))
+      (let [[incl expr] f
+            expr (unquote-lit expr)]
+        (when-not (#{:sub :sup :eq} incl)
+          (throw (ex-info (str "defrelation " tag ": unknown inclusion direction " incl
+                               " (one of :sub / :sup / :eq)") {:tag tag :form f})))
+        ;; validate the expression EAGERLY, at expansion — a bad E throws here naming the element
+        (if (= :sub incl)
+          (when-not (keyword? expr)
+            (throw (ex-info (str "defrelation " tag ": a within-theory :sub needs a relation ATOM "
+                                 "(the included relation accumulates this one's edges); an inclusion "
+                                 "into a compound expression is a constraint — state it at the "
+                                 "correspondence seam or as a law") {:tag tag :expr expr})))
+          (incl-rule-bodies tag expr))
+        `(register-structure! ~(assoc base :relation-incl
+                                      {:incl incl :expr (list 'quote expr)})))
+      :else
       (let [[head & wheres] body]
         `(register-structure! ~(assoc base :derived-rule
                                       {:head   (list 'quote (unquote-lit head))
@@ -1336,31 +1352,24 @@
                   ['?r :rel/from '?a] ['?r :rel/kind (:rel slot)] ['?r :rel/to '?b]]]
          :laws  (relation-slot-laws tag slot)}))))
 
-(register-declaration! :transitive
-  (fn [{:keys [slot]} _sdef] {:terms (closure-rules (rule-sym (:rel slot))) :laws []}))
-
-;; A relation ELEMENT's character — how it relates to OTHER relations. `:isa` emits the subsumption
-;; rule `(genus ?a ?b) ⇐ (rel ?a ?b)` (so every law over the genus sees the species' edges);
-;; `:transitive` emits the closure. The genus name comes from the DECLARATION — the kernel names no
-;; relation of its own.
-(register-declaration! :relation-character
-  (fn [{:keys [opts]} sdef]
+;; A relation ELEMENT's INCLUSION — the same (relation, direction, expression) triple a
+;; correspondence relation map states, lowered GENERATIVELY here (within one theory the sentence
+;; is a rule; at the correspondence seam the same sentence is a checked law — the institution
+;; keystone's two halves). `:sub` — the included relation accumulates this one's edges (the old
+;; `:isa` subsumption); `:sup`/`:eq` — this relation is DEFINED from the expression (the old
+;; coproduct was `(:eq [:alt …])`). The included names come from the DECLARATION — the kernel
+;; names no relation of its own.
+(register-declaration! :relation-incl
+  (fn [{:keys [dir expr]} sdef]
     (let [r (rule-sym (:tag sdef))]
-      {:terms (cond-> []
-                (:isa opts)        (conj [(list (rule-sym (:isa opts)) '?a '?b) (list r '?a '?b)])
-                (:transitive opts) (into (closure-rules r)))
+      {:terms (case dir
+                :sub       [[(list (rule-sym expr) '?a '?b) (list r '?a '?b)]]
+                (:sup :eq) (mapv #(into [(list r '?a '?b)] %) (incl-rule-bodies (:tag sdef) expr)))
        :laws []})))
-
 
 (register-declaration! :realized-as
   (fn [{:keys [body]} sdef]
     {:terms [(into [(list (rule-sym (:tag sdef)) '?e)] body)] :laws []}))
-
-(register-declaration! :coproduct
-  (fn [{:keys [members]} sdef]
-    {:terms (vec (for [m members]
-                   [(list (rule-sym (:tag sdef)) '?a '?b) (list (rule-sym m) '?a '?b)]))
-     :laws []}))
 
 (register-declaration! :defrelation
   (fn [{:keys [rule]} sdef]
@@ -1395,19 +1404,38 @@
 
 (register-declaration! :free-law (fn [{:keys [law]} _sdef] {:terms [] :laws [law]}))
 
-(defn ^:export terms-of
-  "All derived Terms over `structures` via the declaration handlers + the fixed substrate rules
-   (`rules/substrate-rules`) — the SOLE term emitter, dispatched by `vocab-rules`. The
-   declarations-golden test freezes its self-model output.
+(defn- binary-rule-names
+  "Every relation name `structures` gives a BINARY rule: non-scalar slot kinds, relation elements
+   (bare and inclusion elements are binary by construction), and derived relations with a
+   two-plain-var head. `terms-of` emits each one's closure `R+` UNCONDITIONALLY: transitive
+   closure belongs to the expression language, so its availability is the COMPILER's business,
+   not a declaration's (`{:transitive true}` is retired). Two Horn rules apiece; a query pays
+   for a closure only when its reachability closure references it — per-query rule injection is
+   already reachability-scoped (`cozo.query/vocab-index`)."
+  [structures]
+  (->> structures
+       (mapcat (fn [sd]
+                 (concat (map :rel (remove scalar-slot? (:slots sd)))
+                         (if-let [h (:head (:derived-rule sd))]
+                           (when (and (= 2 (count h)) (every? dvar? h)) [(:tag sd)])
+                           (when (:relation-element sd) [(:tag sd)])))))
+       (map rule-sym) (distinct) (sort)))
 
-   The kernel names NO relation of its own: a containment genus, its closure, and any relation
-   derived from it (`in-module`) are declared by the VOCABULARY as relation elements
-   (`defrelation`), not emitted here. (Until 2026-07-17 this hardcoded the symbol `contains`, its
-   closure, and `in-module` — code vocabulary welded into the kernel.)"
+(defn ^:export terms-of
+  "All derived Terms over `structures` via the declaration handlers + every binary relation's
+   closure rules (`binary-rule-names`) + the fixed substrate rules (`rules/substrate-rules`) —
+   the SOLE term emitter, dispatched by `vocab-rules`. The declarations-golden test freezes its
+   self-model output.
+
+   The kernel names NO relation of its own: a containment genus and any relation derived from it
+   (`in-module`) are declared by the VOCABULARY as relation elements (`defrelation`), not emitted
+   here. (Until 2026-07-17 this hardcoded the symbol `contains`, its closure, and `in-module` —
+   code vocabulary welded into the kernel.)"
   [structures]
   (vec (distinct (concat (mapcat (fn [sdef]
                                    (mapcat #(:terms (handle-declaration % sdef)) (sdef->declarations sdef)))
                                  structures)
+                         (mapcat closure-rules (binary-rule-names structures))
                          rules/substrate-rules))))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :any]] :map]}

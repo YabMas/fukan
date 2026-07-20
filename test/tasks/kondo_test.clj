@@ -18,7 +18,7 @@
     (is (nil? (kondo/structure-name '(defstructure Flagged "doc" (realized-as '[(Sum ?e) [?e :val/kind "a"]]))))))
   (testing "non-defstructure forms yield nil"
     (is (nil? (kondo/structure-name '(defn foo [x] x))))
-    (is (nil? (kondo/structure-name '(defrelation-coproduct :xview "doc" :via :x))))
+    (is (nil? (kondo/structure-name '(defrelation :xview "doc" (:eq [:alt :via :x])))))
     (is (nil? (kondo/structure-name '(defrelation :op-twin "doc" '[?a ?b] '[[?a :x ?v]])))
         "a defrelation interns no constructor either")
     (is (nil? (kondo/structure-name "a docstring")))))
