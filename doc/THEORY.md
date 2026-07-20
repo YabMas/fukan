@@ -53,12 +53,12 @@ codebase: a mechanism that cannot name its row is suspect.
 | `law` + `check` | **sentences** + the satisfaction relation ⊨; a violation is a counterexample witness |
 | generated laws (type checks, cardinality, correspondence demands) | derived sentences of the same presentation — one sentence kind, never a second mechanism |
 | derived `defrelation` | a **definitional extension** — a named (possibly recursive) rule, conservative over the presentation |
-| relation character (`:isa`, `:transitive`) | subrelation **inclusion** / Kleene closure — a morphism in miniature, inside one theory |
+| relation inclusion `(defrelation :r "…" (:sub E))` | a subrelation **inclusion** — the SAME (relation, direction, expression) triple a correspondence relation map states. Within one theory it lowers *generatively* (a rule: the included relation accumulates the edges); at the correspondence seam the same triple lowers as a *checked* law — the keystone's two halves ("a theory morphism IS a derived datalog rule; satisfaction IS a scoped check") |
 | `correspond` | a **theory morphism**: a sort map with codomain restriction (`Operation :eq [Fn :public]`), relation maps with a direction (`:sub` ⊑, `:sup` ⊒, `:eq` ≡), a carrier correlation (`bridge`), and *generated* satisfaction laws — the morphism's proof obligations, run by `check` like any sentence |
 | extraction | the semantics side of the seam: artifact → a model of the fact theory |
 | `^:value` structures | **free (initial) types** — terms, identified up to structural equality, no junk and no confusion; plain structures are **loose sorts** — entities with individual identity. (CASL draws exactly this line: `free type` vs `sort`.) |
 | the type-dialect SPI | the sort universe as a parameter: base sorts and predicate subsorts supplied by a plugin |
-| inline path `E` vs named `defrelation` | the decidable Kleene fragment stays inline; recursion must be named — the fragment line, enforced |
+| inline path `E` vs named `defrelation` | the decidable Kleene fragment stays inline; recursion must be named — the fragment line, enforced. Transitive closure belongs to the fragment, so it is the **compiler's**: every binary relation's `R+` is minted unconditionally and injected only where referenced — nothing declares "transitive" |
 | Lens / Projection / Check | a specification's three classical relations to a model: restriction (a view), interpretation (a rendering), satisfaction (a gate) |
 | grammar reflection | the frame **internalized**: the meta-grammar (`Structure` / `Law` / `Vocabulary` / `Relation` / `Morphism` / `RelationMap`) is a presentation of "presentation" — and of "morphism" — so the grammar and its seams are data on the same graph they govern; a `Vocabulary` reflects as a signature with owned relations and derived `:imports` |
 | the grouping ladder, refinement chains | theory **extensions** — a larger theory conservatively including a smaller one |

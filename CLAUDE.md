@@ -115,14 +115,14 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   the demands are still six bespoke forms — a morphism needs a codomain, now it has one). Keeping the
   fact theory here means the shipped, language-neutral vocab exports no Clojure constructs; a project
   loading the vocab with a different extractor correctly gets no `Fn`/`:calls` at all.
-  Everything is still GENERATED — the plugin hand-writes no mechanism. Adherence is the kernel's
-  generic `(agrees {:by :structural :over [:in :out]})` (no hand-written comparator); call realization is
-  `(delegates {:realized-by :calls :faithful true})`, generating an OP-ALTITUDE TRANSITIVE
-  `:corresponds/Operation.delegates-realized` law (every cross-module design delegation must be realized
-  by a `:calls+` PATH between the endpoints' own twins — the kernel reuses the `calls+` closure the
-  `:transitive` fact-slot already emits) plus the module-altitude `delegates-faithful` reverse. A caller
-  wanting any demand as a worklist names its stable law key through `law/violation-names` directly (as
-  `dev/user.clj` does) — no per-demand reader wrapper is kept.
+  Everything is still GENERATED — the plugin hand-writes no mechanism. The seam is ONE morphism
+  statement: `(correspond Operation :eq [Fn :public] (:delegates :sub :public-call) (:performs :sup
+  [:cat [:* :calls] :performs]))` — the object map (a bijection onto Fn's public sub-sort; the
+  identity component in↦in/out↦out is DERIVED) plus relation maps in the (relation, direction,
+  expression) triple; `public-call` is a named recursive `defrelation` in the plugin (the public
+  call graph: reach through only ¬public interior). Each map generates its `:corresponds/Operation.*`
+  law. A caller wanting any demand as a worklist names its stable law key through
+  `law/violation-names` directly (as `dev/user.clj` does) — no per-demand reader wrapper is kept.
   `extraction/clojure/module.clj` holds the `Ns` codomain + the bridged twin ROOT that `Fn` twins nest
   within — `(correspond Module Ns (bridge :qualified-suffix))`. The bridge is a name-match STRATEGY KEYWORD the
   kernel's generic `name-match` builtin lowers (canvas short-name is a separator-agnostic dotted
@@ -244,29 +244,35 @@ The current catalog is the source — or just run `(grammar)` in the REPL: the
 print-dual renders every vocabulary live. The files are under `common/fukan/common/vocab/**`.
 
 A `defrelation` (in `core/structure.clj`, sibling of `defstructure`) declares a RELATION as an
-ELEMENT — the relation itself, not a slot that happens to use it. Two forms:
+ELEMENT — the relation itself, not a slot that happens to use it. Three forms, ONE construct
+(since 2026-07-20 the `{:isa …}`/`{:transitive true}` character map and `defrelation-coproduct`
+are RETIRED — every relation statement is the same (relation, direction, expression) triple a
+correspondence relation map uses):
 
-- **Character** — `(defrelation :child "doc" {:isa :contains})` — a PRIMITIVE relation (its edges
-  come from the `:rel/kind` of whatever structures declare a slot of that name) declaring how it
-  relates to OTHER relations: `:isa <genus>` emits the subsumption rule `(genus ?a ?b) ⇐ (rel ?a ?b)`
-  so every law over the genus sees the species' edges for free; `:transitive` emits the `rel+`
-  closure. Character is a property of the RELATION, so it is declared ONCE — never repeated on each
-  slot. **The kernel names no relation of its own:** the `contains` genus, its closure, and
-  `in-module` are vocab elements (`vocab/grouping`, `vocab/code/module`), not kernel emission.
+- **Bare** — `(defrelation :contains "doc")` — a PRIMITIVE relation / genus: claims the name
+  (signature identity), reflects, owns the doc; its edges come from slots of that name or from
+  other relations' inclusions into it. **The kernel names no relation of its own:** the `contains`
+  genus and `in-module` are vocab elements (`vocab/grouping`, `vocab/code/module`).
+- **Inclusion** — `(defrelation :child "doc" (:sub :contains))` — the relation stated as an
+  inclusion, lowered GENERATIVELY (within one theory the sentence is a rule; at the correspondence
+  seam the same triple is a checked law): `(:sub atom)` — the included relation accumulates this
+  one's edges (the old `:isa`); `(:sup E)`/`(:eq E)` — DEFINED from E, an atom / `[:alt …]` (one
+  rule per alternative — the old coproduct) / a regular path over atoms.
 - **Derived** — `(defrelation :module-depends "doc" '[?m ?n] '[…])` — a named custom-bodied datalog
-  rule `check` auto-injects into every law/query (like the vocab-derived rules), the way several laws
-  share one join without each re-inlining it. A recursive body is allowed (Cozo's semi-naive fixpoint
-  terminates where datascript diverged — the old non-recursion guard is gone), but prefer
+  rule for anything beyond the fragment; multiple bodies = recursion (base + step). Prefer
   non-recursive: the rule pays the fixpoint on every check.
+
+**Closures are the COMPILER's, not declarations:** `terms-of` emits every binary relation's `R+`
+unconditionally, and per-query rule injection is reachability-scoped, so a query pays for a closure
+only when it references it. Nothing declares `:transitive` anywhere — not elements, not slots.
 
 A relation's tag is UNQUALIFIED (`:contains`) because its rule name is global — so the NAME is
 signature identity: a second vocabulary re-declaring it THROWS at registration (the registry records
 the declaring `:ns`; before 2026-07-20 this collision was silent replace-on-register). Anything
-scoping by tag namespace falls back to that `:ns` (as the declarations golden does). `:transitive`
-still rides the slot for relations that are not elements yet (`:delegates`, `:calls`) — those belong
-to no signature, visible in reflection as unowned `Relation` nodes. ⚠ REPL: MOVING a defrelation to
-another ns trips the collision guard on `(refresh)` (the defonce registry keeps the old entry) —
-restart the REPL, like a removed defmethod.
+scoping by tag namespace falls back to that `:ns` (as the declarations golden does). `:delegates`/
+`:calls` are still slot-only (not elements) — they belong to no signature, visible in reflection as
+unowned `Relation` nodes. ⚠ REPL: MOVING a defrelation to another ns trips the collision guard on
+`(refresh)` (the defonce registry keeps the old entry) — restart the REPL, like a removed defmethod.
 
 ## Spec locations
 
