@@ -2,8 +2,9 @@
 
 **Status:** Design principles — *how* the system is shaped.
 
-**Companion to** [VISION.md](./VISION.md) (the why), [MODEL.md](./MODEL.md) (the
-substrate spec), and [DECISIONS.md](./DECISIONS.md) (the decision trace).
+**Companion to** [VISION.md](./VISION.md) (the why), [THEORY.md](./THEORY.md) (the
+theoretical foundations), [MODEL.md](./MODEL.md) (the substrate spec), and
+[DECISIONS.md](./DECISIONS.md) (the decision trace).
 
 ---
 

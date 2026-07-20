@@ -4,8 +4,9 @@
 
 **Reading order:** Start here for motivation. [DESIGN.md](./DESIGN.md) carries the
 design principles (the mechanics-only core, per-project vocabulary, the build
-pipeline). [MODEL.md](./MODEL.md) holds the substrate spec. [DECISIONS.md](./DECISIONS.md)
-preserves the decision trace.
+pipeline). [THEORY.md](./THEORY.md) names the theoretical foundations every
+mechanism instantiates. [MODEL.md](./MODEL.md) holds the substrate spec.
+[DECISIONS.md](./DECISIONS.md) preserves the decision trace.
 
 ---
 
