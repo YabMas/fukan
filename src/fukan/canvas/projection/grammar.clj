@@ -171,11 +171,13 @@
 
 (defn- count-relation-demands
   "The number of demand laws generated from relation-demand prop-maps (inline slot props OR the
-   external correspondence `:rel-demands`): each `:realized-by` contributes 1 (+1 when `:faithful`);
-   each `:covered-from` contributes 1."
+   external correspondence `:rel-demands`): a relation-map `(rel incl E)` contributes 1 (`:sub`/`:sup`)
+   or 2 (`:eq`); a legacy `:realized-by` contributes 1 (+1 when `:faithful`); a legacy `:covered-from`
+   contributes 1."
   [prop-maps]
   (reduce (fn [n pm]
             (+ n
+               (case (:incl pm) :eq 2 (:sub :sup) 1 0)
                (if (:covered-from pm) 1 0)
                (if (:realized-by pm) (+ 1 (if (:faithful pm) 1 0)) 0)))
           0 prop-maps))

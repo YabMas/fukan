@@ -391,6 +391,30 @@
       (is (empty? (law/violations-of with-sig :corresponds/Operation.agrees))
           "the same twin carrying the modelled :out → green"))))
 
+;; ── the relation-map primitive (rel incl E): expression lowering + law generation ──
+
+(deftest relation-map-expression-lowering
+  (testing "`E` (regular relations) lowers to the flat path-segment vector the `path` builtin reads"
+    (is (= [:calls]            (#'s/expr->path-segments :calls))           "an atom is a one-hop segment")
+    (is (= [:calls+]           (#'s/expr->path-segments [:+ :calls]))      ":+ → the transitive-closure suffix")
+    (is (= [:calls*]           (#'s/expr->path-segments [:* :calls]))      ":* → the reflexive-transitive suffix")
+    (is (= [:calls* :performs] (#'s/expr->path-segments [:cat [:* :calls] :performs])) ":cat concatenates segments"))
+  (testing "forms that need the derived-rule compiler (not yet built) throw at lowering, naming the expr"
+    (is (thrown? Exception (#'s/expr->path-segments [:* [:cat :a :b]])) "closure over a compound")
+    (is (thrown? Exception (#'s/expr->path-segments [:alt :a :b]))      "union")
+    (is (thrown? Exception (#'s/expr->path-segments [:? :a]))           "optional")))
+
+(deftest relation-map-generates-directional-laws
+  (testing "the inclusion direction picks which homomorphism law(s) generate, keyed by direction"
+    (let [keys-of (fn [incl] (mapv :key (#'s/relation-map-laws :T {:rel :dep :incl incl :expr [:+ :link]})))]
+      (is (= [:corresponds/T.dep-realized] (keys-of :sub)) ":sub (⊑ preserve) → the realized law only")
+      (is (= [:corresponds/T.dep-covered]  (keys-of :sup)) ":sup (⊒ reflect)  → the covered law only")
+      (is (= [:corresponds/T.dep-realized :corresponds/T.dep-covered] (keys-of :eq)) ":eq (≡) → both")))
+  (testing "the preserve law binds BOTH endpoints positively via twin (an untwinned endpoint is totality's concern)"
+    (let [preserve (first (#'s/relation-map-laws :T {:rel :dep :incl :sub :expr [:+ :link]}))]
+      (is (some #{'(twin ?a ?ea)} (:where preserve)))
+      (is (some #{'(twin ?b ?eb)} (:where preserve))))))
+
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
 (defstructure LTwin
   "agrees subject: a nested-corresponding kind whose fact twin must AGREE on its `:n` leaf via a

@@ -155,6 +155,30 @@
                [clause]))
            clauses))))
 
+(defn- expr->path-segments
+  "Lower a relation-algebra expression `E` (the correspondence relation-map DSL) to the flat
+   path-segment vector the `path` builtin consumes: an atom `:r` → `:r`, `[:+ :r]` → `:r+`,
+   `[:* :r]` → `:r*`, `[:cat E …]` concatenates its parts' segments. Closure over a COMPOUND, `:?`,
+   and `:alt` need the derived-rule compiler (arrives with the roll-up in the next step) and throw
+   here — a clear expansion-time error, not a mystery at check.
+
+   `E` is regular relations (Kleene algebra over fact relations), spelled as the regex AST malli
+   itself uses; the flat path segments are the `:r`/`:r+`/`:r*` suffix notation `path` already reads."
+  [expr]
+  (cond
+    (keyword? expr) [expr]
+    (and (vector? expr) (seq expr))
+    (let [[op & args] expr]
+      (case op
+        :cat    (vec (mapcat expr->path-segments args))
+        (:+ :*) (let [[inner] args]
+                  (when-not (keyword? inner)
+                    (throw (ex-info (str "relation-map: " op " over a compound expression needs the "
+                                         "derived-rule compiler (not yet built): " (pr-str expr)) {:expr expr})))
+                  [(keyword (str (name inner) (name op)))])   ; :+/:* → the closure suffix the path builtin reads
+        (throw (ex-info (str "relation-map: unsupported expression operator " op " in " (pr-str expr)) {:expr expr}))))
+    :else (throw (ex-info (str "relation-map: unreadable expression " (pr-str expr)) {:expr expr}))))
+
 (defn- ref-arg->form
   "Code for one relation-slot target: a symbol → (var sym); an inline (Tag ...) form
    → left to evaluate (it yields an InstanceValue)."
@@ -762,7 +786,8 @@
       [{:kind :correspondence :corresponds {:fact-tag fact-tag :bridge bridge
                                             :demands (effective-node-demands tag)}}]
       (for [d rel-demands :when (:realized-by d)]  {:kind :realized-by :slot d})
-      (for [d rel-demands :when (:covered-from d)] {:kind :covered-from :slot d})))
+      (for [d rel-demands :when (:covered-from d)] {:kind :covered-from :slot d})
+      (for [d rel-demands :when (:incl d)]         {:kind :relation-map :demand d})))
    (for [law laws] {:kind :free-law :law law})))
 
 (defn- parse-demand
@@ -824,7 +849,15 @@
                       (doseq [d dupes]
                         (throw (ex-info (str "correspond " cname ": duplicate demand key " (pr-str d)) {:key d}))))
         rel-subs    (remove #(or (= 'bridge (first %)) ('#{realized covered agrees} (first %))) seq-subs)
-        rel-demands (mapv (fn [[rel opts]] (assoc opts :rel (keyword rel))) rel-subs)]
+        rel-demands (mapv (fn [[rel x expr]]
+                            (if ('#{:sub :sup :eq} x)
+                              ;; the relation-map primitive: (rel incl E). Lower E eagerly so a malformed
+                              ;; expression throws HERE (at expansion, naming the correspond), not at check.
+                              (do (expr->path-segments expr)
+                                  {:rel (keyword rel) :incl x :expr expr})
+                              ;; legacy slot-prop rel-demand: (rel {:realized-by …}) / (rel {:covered-from …})
+                              (assoc x :rel (keyword rel))))
+                          rel-subs)]
     ;; NB the `:covered-from` "closure relation must be :transitive" check that once lived here is
     ;; gone: the closure relation is now a slot of the CODOMAIN structure, whose parsed slots are not
     ;; available at this macro-expansion (its `defstructure` registers at load). An un-transitive
@@ -1261,6 +1294,48 @@
              (list 'not-join '[?x ?v]
                    ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v])]}))
 
+;; ── the relation-map primitive: a design relation ↦ a fact expression ─────────
+;; The morphism's non-identity component, authored as `(R incl E)` where `incl` is the relation
+;; INCLUSION ordering the map asserts — `:sub` (⊑, preserve: R ⊆ E), `:sup` (⊒, reflect: R ⊇ E),
+;; `:eq` (≡, both) — and `E` is a relation-algebra term over fact relations (regular relations / the
+;; Kleene-algebra operators, spelled as the regex AST malli itself uses):
+;;   :r  atom · [:+ E] closure · [:* E] refl-closure · [:? E] optional · [:cat E…] path · [:alt E…] union
+;; This replaces the ad-hoc `:realized-by`/`:covered-from`/`:faithful` keyword grab-bag: each was a
+;; point (E, direction) in this one algebra. Grounding: SPARQL 1.1 property paths / regular path
+;; queries for E; the relation-inclusion order for the direction. (`expr->path-segments`, the lowering
+;; to the `path` builtin, lives up by `expand-clauses` — the parser needs it eagerly.)
+(defn- relation-map-laws
+  "Generated laws for a relation map `(rel incl E)` on structure `tag`. `E` is lowered to a path over
+   fact relations; the INCLUSION direction picks which homomorphism condition(s) to enforce:
+     :sub (⊑, preserve) — every design `rel` edge is realized by an `E`-path between the endpoints' twins.
+     :sup (⊒, reflect)  — every target the twin reaches over `E` is declared on the design side.
+     :eq  (≡)           — both.
+   Both endpoints of the preserve law are bound POSITIVELY via `twin` (a design endpoint with no fact
+   twin is the plain totality demand's concern, and the law is vacuously green before extraction)."
+  [tag {:keys [rel incl expr]}]
+  (let [segs     (expr->path-segments expr)
+        preserve {:key (demand-key tag (str (name rel) "-realized"))
+                  :desc (str (name tag) "." (name rel) ": every design edge is realized by a "
+                             (pr-str expr) " path between the endpoints' twins")
+                  :offenders '[?a]
+                  :where [['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
+                          '(twin ?a ?ea) '(twin ?b ?eb)
+                          (apply list 'not-join '[?ea ?eb]
+                                 (expand-clauses [(list 'path '?ea segs '?eb)]))]}
+        reflect  {:key (demand-key tag (str (name rel) "-covered"))
+                  :desc (str (name tag) "." (name rel) ": every target the twin reaches via "
+                             (pr-str expr) " is declared on the design side")
+                  :offenders '[?x]
+                  :where [['?x :structure/of tag] '(not [?x :val/extracted true])
+                          '(twin ?x ?t)
+                          (first (expand-clauses [(list 'path '?t segs '?v)]))
+                          (list 'not-join '[?x ?v]
+                                ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v])]}]
+    (case incl
+      :sub [preserve]
+      :sup [reflect]
+      :eq  [preserve reflect])))
+
 ;; ── built-in declaration handlers ────────────────────────────────────────────
 ;; Each existing construct as a registered handler emitting Terms and/or Laws — the SOLE rule/law
 ;; emitter. Both production seams dispatch through here: `laws-of` (the law side) and
@@ -1327,6 +1402,9 @@
 (register-declaration! :covered-from
   (fn [{:keys [slot]} sdef] {:terms [] :laws [(covered-from-law (:tag sdef) slot)]}))
 
+(register-declaration! :relation-map
+  (fn [{:keys [demand]} sdef] {:terms [] :laws (relation-map-laws (:tag sdef) demand)}))
+
 (register-declaration! :correspondence
   (fn [{:keys [corresponds]} sdef]
     ;; the twin is a CROSS-TAG map: design `dtag` ↦ fact `ftag` (the codomain). A ROOT kind pairs by
@@ -1390,23 +1468,32 @@
                                            (fn [ds] (mapv #(assoc % :key (demand-key tag (or (:key %) (:demand %)))) ds))))]))
         relations (vec
                    (for [{:keys [tag slots]} sdefs
-                         {:keys [rel realized-by faithful covered-from]}
+                         {:keys [rel realized-by faithful covered-from incl expr]}
                          (concat slots (:rel-demands (correspondence-of tag)))
-                         :when (or realized-by covered-from)]
+                         :when (or realized-by covered-from incl)]
                      (cond-> {:owner tag :rel rel}
+                       ;; the relation-map primitive: (rel incl E) — one map, keyed + directioned by `incl`
+                       incl         (assoc :incl incl :expr expr
+                                           :keys (case incl
+                                                   :sub [(demand-key tag (str (name rel) "-realized"))]
+                                                   :sup [(demand-key tag (str (name rel) "-covered"))]
+                                                   :eq  [(demand-key tag (str (name rel) "-realized"))
+                                                         (demand-key tag (str (name rel) "-covered"))]))
+                       ;; legacy slot-prop demands (delegates, until it moves to the primitive)
                        realized-by  (assoc :realized-by realized-by
                                            :keys (cond-> [(demand-key tag (str (name rel) "-realized"))]
                                                    faithful (conj (demand-key tag (str (name rel) "-faithful")))))
                        faithful     (assoc :faithful true)
                        covered-from (assoc :covered-from covered-from
                                            :keys [(demand-key tag (str (name rel) "-covered"))]))))
+        rel-dirs  (fn [r] (cond (:incl r)         (case (:incl r) :sub [:preserve] :sup [:reflect] :eq [:preserve :reflect])
+                                (:covered-from r)  [:covered]
+                                :else              [:realized :faithful]))
         entries   (concat
                    (for [[tag {:keys [demands]}] kinds, d demands]
                      [(:key d) {:owner tag :via :node :demand (dissoc d :key)}])
-                   ;; key/direction zip truncates correctly: a slot is one demand family (realized|faithful pair OR covered),
-                   ;; never both — guarded at defstructure time, so (:keys r) and the direction vec always align.
-                   (for [r relations, [k dir] (map vector (:keys r)
-                                                   (if (:covered-from r) [:covered] [:realized :faithful]))]
+                   ;; key/direction zip truncates correctly: each demand family's (:keys r) and direction vec align.
+                   (for [r relations, [k dir] (map vector (:keys r) (rel-dirs r))]
                      [k {:owner (:owner r) :via :relation :rel (:rel r) :direction dir}]))
         keys*     (reduce (fn [acc [k src]]
                             (when (contains? acc k)

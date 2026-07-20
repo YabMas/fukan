@@ -49,8 +49,10 @@
   (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
   (covered  {:unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]
              :desc "every public extracted operation is covered by the model or deliberately exempt"})
-  (delegates {:realized-by :calls :faithful true})  ; cross-module :delegates realized by a :calls+ path; :faithful ⇒ the module-level reverse
-  (performs  {:covered-from [:calls* :performs]}))   ; every effect the twin reaches over :calls*·:performs is declared
+  (delegates {:realized-by :calls :faithful true})     ; cross-module :delegates realized by a :calls+ path; :faithful ⇒ the module-level reverse
+  ;; the relation-map primitive: performs ⊒ calls*·performs (reflect) — every effect the twin reaches
+  ;; over the code call graph must be a declared design effect. (delegates moves to this surface next.)
+  (:performs :sup [:cat [:* :calls] :performs]))
 
 (def ^:private schema-tag
   "The type dialect's ^:value structure tag — the fact-side signature builds its :in/:out

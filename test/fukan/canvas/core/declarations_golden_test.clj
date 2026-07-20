@@ -222,8 +222,14 @@
 ;; an offender (the folded failure mode). Laws 62→61 (−the type-coverage realized law; the agrees law's
 ;; `:where` loses its guard clause, moving the hash). Live `(check)` still 0 — every modelled op's twin
 ;; carries its out on the self-model.
+;; 2026-07-20 (b): the relation-map primitive `(rel incl E)`. `performs` moved off the ad-hoc
+;; `(performs {:covered-from [:calls* :performs]})` onto `(:performs :sup [:cat [:* :calls] :performs])`
+;; — the same coverage law (still `:corresponds/Operation.performs-covered`, same `:where`), but its
+;; `:desc` now names the relation-algebra expression `[:cat [:* :calls] :performs]` instead of the
+;; `:covered-from` vector. One law before and after (count holds 61); only the desc, so the hash moves.
+;; Live `(check)` still 0. (delegates stays on `:realized-by`/`:faithful` until the roll-up step.)
 (def ^:private golden-terms {:count 49 :hash 532380915})
-(def ^:private golden-laws  {:count 61 :hash -1687637331})
+(def ^:private golden-laws  {:count 61 :hash 17889096})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
