@@ -38,10 +38,14 @@
    fukan.canvas.core.lens-test/Widget hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/Kind hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Law hooks.fukan.structure/instance
+   fukan.canvas.core.reflect/Morphism hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Relation hooks.fukan.structure/instance
+   fukan.canvas.core.reflect/RelationMap hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Structure hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Vocabulary hooks.fukan.structure/instance
    fukan.canvas.core.reflect-test/Leaf hooks.fukan.structure/instance
+   fukan.canvas.core.reflect-test/MFact hooks.fukan.structure/instance
+   fukan.canvas.core.reflect-test/MSrc hooks.fukan.structure/instance
    fukan.canvas.core.reflect-test/Node hooks.fukan.structure/instance
    fukan.canvas.core.rules-test/Mod hooks.fukan.structure/instance
    fukan.canvas.core.rules-test/RuleThing hooks.fukan.structure/instance

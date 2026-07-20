@@ -15,6 +15,8 @@
      - a LAW is a node: desc + the datalog as a `:val/form` payload (queryable as
        a form, not decomposed — like a `Lens`'s `:select` code-form leaf).
      - a VOCABULARY is one grammar namespace: `:child` edges to its Structures.
+     - a MORPHISM is a node per registered `(correspond …)`: `:from`/`:to` edges to its domain
+       and codomain Structures, `RelationMap` children carrying the relation maps.
 
    Scope: the namespace closure of the tags in use — every namespace that defines
    a tag instantiated in the db, expanded through slot targets, plus
@@ -25,7 +27,8 @@
    Kernel-native MACHINERY — this is CORE, not the reusable `fukan.common` vocab: reflection is
    grammar-AGNOSTIC (it reifies whatever registry exists, knowing no specific vocabulary), and the
    native build ALWAYS runs it (via `build/with-grammar`). Its meta-grammar (`Structure`/`Law`/
-   `Vocabulary`/`Relation`) is the tool's vocabulary for describing grammars — the same category as
+   `Vocabulary`/`Relation`/`Morphism`/`RelationMap`) is the tool's vocabulary for describing
+   grammars AND the morphisms between them — the same category as
    the act grammar in `fukan.canvas.core.lens`, so it sits beside it in core. The runtime
    (`check`/`assemble`/`evaluate-lens`) never consults the reflected nodes — they exist only so the
    grammar is viewable as data (the print-dual primer, the `unused-structures` grammar-drift reading).
@@ -82,13 +85,45 @@
    vocabulary is queryable like its node vocabulary (`Structure`). Carries its relation-CHARACTERS —
    what drives rule generation: `:transitive` (a transitive-closure relation) and `:isa` (the GENUS
    this relation is a species of — e.g. `:child` isa `contains`, so a law over the genus sees its
-   edges). A reflection TOOL, not authored; the runtime never reads it.
+   edges) — and, for a DERIVED relation element, its defining datalog as the `:rule` payload
+   (`{:head … :bodies …}` — queryable the way a Law's `:form` is, so a definitional extension's
+   body is data too). A reflection TOOL, not authored; the runtime never reads it.
 
-   Reflected from two sources, because relations are mid-migration to being elements: `:isa` from a
-   relation ELEMENT's declared character (`defrelation`), `:transitive` from either the element or —
+   Reflected from two sources, because relations are mid-migration to being elements: `:isa`/`:rule`
+   from a relation ELEMENT's declaration (`defrelation`), `:transitive` from either the element or —
    for relations that are not yet elements (`:delegates`, `:calls`) — the slots that use the kind."
   {:transitive [:? :boolean]
-   :isa        [:? :string]})
+   :isa        [:? :string]
+   :rule       [:? {:payload :form} :string]})
+
+(defstructure RelationMap
+  "One relation map of a reflected `Morphism`: a design relation carried to a fact-side relation
+   expression, with an inclusion direction — `(:delegates :sub :public-call)` reified. `:rel` is the
+   design relation, `:incl` the direction (`:sub` ⊑ preserve / `:sup` ⊒ reflect / `:eq` ≡ both),
+   `:expr` the fact-side expression (a named relation atom or an inline regular path), stored as
+   edn — NOT a `:form` payload, because a bare keyword atom (`:public-call`) is lossy through the
+   mirror's keyword-leaf stringification; the pr-str scalar round-trips faithfully."
+  {:rel  :string
+   :incl :string
+   :expr :string})
+
+(defstructure Morphism
+  "A reflected THEORY MORPHISM — one external `(correspond Design Fact …)` seam, reified as a node
+   so the morphism is data like the presentations it connects (a `Law` reflects with its datalog
+   queryable; the sort map + relation maps deserve no less). `:from`/`:to` are the domain and
+   codomain `Structure`s; `:incl` the object map's inclusion (`:eq`/`:sub`/`:sup`); `:restrict`
+   the codomain sub-sort it maps onto (`[Fn :public]`'s `:public`); `:bridge` the carrier
+   correlation strategy; `:map` the relation maps in authoring order. `:agrees` carries any
+   AUTHORED comparator escape-hatch demands as a form payload — the object-map and derived-identity
+   demands are NOT stored, they are consequences the registry recomputes
+   (`structure/effective-node-demands`). A reflection TOOL, not authored; the runtime never reads it."
+  {:incl     :string
+   :from     Structure
+   :to       Structure
+   :restrict [:? :string]
+   :bridge   [:? :string]
+   :map      [:* RelationMap]
+   :agrees   [:? {:payload :form} :string]})
 
 ;; ── the reflector ─────────────────────────────────────────────────────────────
 
@@ -97,14 +132,16 @@
 (defn- target-ns [t] (when (and (keyword? t) (namespace t)) (namespace t)))
 
 (defn- ns-closure
-  "Expand seed namespaces through their structures' slot targets, to a fixpoint —
-   so a reified slot's target Structure is always present."
+  "Expand seed namespaces through their structures' slot targets AND their correspondences'
+   fact tags, to a fixpoint — so a reified slot's target Structure and a reflected Morphism's
+   codomain Structure are always present."
   [seed]
   (loop [nss (set seed)]
     (let [nxt (into nss
                     (for [sd (s/all-structures)
                           :when (contains? nss (some-> (:tag sd) namespace))
-                          t    (map :target (:slots sd))
+                          t    (concat (map :target (:slots sd))
+                                       (some-> (s/correspondence-of (:tag sd)) :fact-tag list))
                           :let [n (target-ns t)] :when n]
                       n))]
       (if (= nxt nss) nss (recur nxt)))))
@@ -114,16 +151,13 @@
    and any Schema value targets."
   [{:keys [tag doc slots laws value? realized-as]}]
   (let [sid  (structure-id tag)
-        ;; reify the EFFECTIVE demands (authored ∪ the derived identity map, tagged `:derived`) so the
-        ;; primer's generated-law count is the true total; the print-dual form renderer skips the derived one.
-        corr (some-> (s/correspondence-of tag)   ; external `(correspond Tag …)` — the sole correspondence surface
-                     (assoc :demands (s/effective-node-demands tag)))
+        ;; a correspondence is NOT stamped here: the morphism reflects as its own `Morphism` node
+        ;; (see `reflect-morphism`), decomposed — not a payload blob on the design Structure.
         node (cond-> {:entity/id sid :structure/of ::Structure
                       :entity/name (name tag) :val/tag (str tag)}
                doc         (assoc :entity/doc doc)
                value?      (assoc :val/value true)
-               realized-as (assoc :val/realizes (pr-str realized-as) :val/form realized-as)
-               corr        (assoc :val/corresponds (pr-str (into {} (remove (comp nil? val)) corr))))
+               realized-as (assoc :val/realizes (pr-str realized-as) :val/form realized-as))
         slot-bits
         (map-indexed
          (fn [i sl]
@@ -164,6 +198,40 @@
                          (map :rel slot-bits)
                          (map :rel law-bits)))}))
 
+(defn- reflect-morphism
+  "One design sdef's registered correspondence → its `Morphism` node (+ `RelationMap` children,
+   Law-style positional ids), or nil. `:from`/`:to` edges target the two reified Structures (the
+   codomain is guaranteed present by `ns-closure`'s fact-tag expansion); scalar fields hold the
+   keyword pr-str'd (the print-dual reads them back); each relation map is a child node in
+   authoring order carrying its expression as edn; authored `agrees` demands (and only
+   those — the object-map/identity demands are recomputed consequences) ride the `:agrees`
+   payload."
+  [{:keys [tag]}]
+  (when-let [{:keys [fact-tag incl restrict bridge demands rel-demands]} (s/correspondence-of tag)]
+    (let [mid   (str "morphism:" tag)
+          mnode (cond-> {:entity/id mid :structure/of ::Morphism
+                         :entity/name (str (name tag) "↦" (name fact-tag))
+                         :val/incl (pr-str incl)}
+                  restrict      (assoc :val/restrict (pr-str restrict))
+                  bridge        (assoc :val/bridge (pr-str bridge))
+                  (seq demands) (assoc :val/agrees (pr-str (vec demands)) :val/form (vec demands)))
+          maps  (map-indexed
+                 (fn [i {:keys [rel incl expr]}]
+                   {:node {:entity/id (str mid "#map/" i) :structure/of ::RelationMap
+                           :entity/name (name rel)
+                           :val/rel (pr-str rel) :val/incl (pr-str incl)
+                           :val/expr (pr-str expr)}
+                    :rel  {:rel/id   (str mid "|map|" i)
+                           :rel/from [:entity/id mid] :rel/kind :map
+                           :rel/to   [:entity/id (str mid "#map/" i)] :rel/order i}})
+                 rel-demands)]
+      {:nodes (into [mnode] (map :node maps))
+       :rels  (into [{:rel/id (str mid "|from") :rel/from [:entity/id mid]
+                      :rel/kind :from :rel/to [:entity/id (structure-id tag)]}
+                     {:rel/id (str mid "|to") :rel/from [:entity/id mid]
+                      :rel/kind :to :rel/to [:entity/id (structure-id fact-tag)]}]
+                    (map :rel maps))})))
+
 (defn ^{:malli/schema [:=> [:catn [:tags [:vector :any]] [:extra-seeds [:vector :any]]] :map]}
   reflect
   "PURE, db-agnostic: the model's reified-grammar `{:nodes :rels}` for the structure `tags` in use
@@ -194,27 +262,36 @@
                  [{:entity/id ":Any" :structure/of ::Structure
                    :entity/name "Any" :val/tag ":Any"
                    :entity/doc "The wildcard target — any node."}])
-        ;; reflect relation KINDS — one Relation node per relation ELEMENT (`defrelation`'s declared
-        ;; character) UNIONed with every distinct (non-scalar) slot kind. Completes grammar reflection:
-        ;; edge-kinds reified, not just node-types. A genus (`contains`) has no slot of its own and is
-        ;; reflected purely from its element; `:transitive` still aggregates over slots for the relations
-        ;; that are not elements yet.
+        ;; reflect relation KINDS — one Relation node per relation ELEMENT (`defrelation`, both the
+        ;; CHARACTER and the DERIVED form) UNIONed with every distinct (non-scalar) slot kind.
+        ;; Completes grammar reflection: edge-kinds reified, not just node-types. A genus
+        ;; (`contains`) has no slot of its own and is reflected purely from its element; a DERIVED
+        ;; relation carries its defining rule (head + bodies) as the `:rule` payload — a
+        ;; definitional extension's body is data, like a Law's; `:transitive` still aggregates over
+        ;; slots for the relations that are not elements yet.
         rel-slots  (remove s/scalar-slot? (mapcat :slots sds))
         ;; NB read from the FULL registry, not the ns-scoped `sds`: a relation element's tag is
         ;; unqualified (`:contains`), so it belongs to no vocabulary namespace and the ns-filter above
         ;; would drop it. That unqualified tag is also why two vocabs declaring the same relation name
         ;; collide silently — a latent issue this change surfaces but does not fix.
-        rel-chars  (into {} (for [sd (s/all-structures) :when (:relation-character sd)]
-                              [(:tag sd) (:relation-character sd)]))
+        rel-elems  (into {} (for [sd (s/all-structures)
+                                  :when (or (:relation-character sd) (:derived-rule sd))]
+                              [(:tag sd) sd]))
         relation-nodes
-        (for [rk    (sort-by name (into (set (keys rel-chars)) (map :rel rel-slots)))
-              :let  [ch (get rel-chars rk)
+        (for [rk    (sort-by name (into (set (keys rel-elems)) (map :rel rel-slots)))
+              :let  [el (get rel-elems rk)
+                     ch (:relation-character el)
+                     dr (:derived-rule el)
                      slot-transitive? (some :transitive (filter #(= rk (:rel %)) rel-slots))]]
           (cond-> {:entity/id (str "relation:" (name rk)) :structure/of ::Relation :entity/name (name rk)}
+            (:doc el)                              (assoc :entity/doc (:doc el))
             (or (:transitive ch) slot-transitive?) (assoc :val/transitive true)
-            (:isa ch)                              (assoc :val/isa (name (:isa ch)))))
-        nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes)
-        rels   (concat (mapcat :rels bits) (mapcat :rels vocabs))
+            (:isa ch)                              (assoc :val/isa (name (:isa ch)))
+            dr                                     (assoc :val/rule (pr-str dr) :val/form dr)))
+        morphisms (keep reflect-morphism sds)
+        nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes
+                       (mapcat :nodes morphisms))
+        rels   (concat (mapcat :rels bits) (mapcat :rels vocabs) (mapcat :rels morphisms))
         ;; a slot referencing a tag NOBODY registered is a dangling grammar ref — fail with the tag,
         ;; not a cryptic missing-entity error.
         known  (into #{} (map :entity/id) nodes)]

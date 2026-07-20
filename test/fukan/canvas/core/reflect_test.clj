@@ -10,6 +10,9 @@
             [fukan.cozo.query :as cq]
             ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
             [fukan.cozo.law :as law]
+            ;; loaded for its side-effect: registers the malli type dialect, so scalar slots reflect
+            ;; as Schema value nodes even when this namespace runs standalone
+            [fukan.common.typing.malli]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── fixture vocab: every cardinality, scalar + refined targets, a law ────────
@@ -27,6 +30,20 @@
   (law "no node may be titled \"bad\""
     :offenders '[?n]
     :where '[[?n :val/title "bad"]]))
+
+;; ── morphism fixtures: a design/fact pair, a correspondence, two derived relations ──
+;; `m-`-prefixed to keep the GLOBAL (unqualified) relation-rule namespace collision-free.
+
+(defstructure MFact "Fixture codomain." {:mcalls [:* MFact]})
+(defstructure MSrc  "Fixture domain."   {:mdel   [:* MSrc]})
+
+(s/defrelation :m-public "fixture sub-sort: every MFact"
+  '[?x] '[[?x :structure/of :fukan.canvas.core.reflect-test/MFact]])
+(s/defrelation :m-link "fixture derived: a direct mcalls edge"
+  '[?a ?b] '[(mcalls ?a ?b)])
+
+(s/correspond MSrc :eq [MFact :m-public]
+  (:mdel :sub :m-link))
 
 (Leaf ^{:name "l"} t-leaf)
 (Node ^{:name "n"} t-node {:one-ref t-leaf :title "x" :mode "a"})
@@ -102,7 +119,7 @@
 
 (deftest vocabulary-groups-a-namespace
   (let [db (reflected)]
-    (is (= #{"Leaf" "Node"}
+    (is (= #{"Leaf" "Node" "MFact" "MSrc"}
            (set (cq/q '[:find [?n ...]
                        :where [?v :structure/of :fukan.canvas.core.reflect/Vocabulary]
                               [?v :entity/name "fukan.canvas.core.reflect-test"]
@@ -128,7 +145,47 @@
                                     [?s :val/tag ?vt] [?s :entity/name ?sn]]
                            db (str ":" itag))))))))
 
+(deftest the-morphism-reflects-as-a-node
+  (testing "one Morphism node per registered `(correspond …)` — the sort map decomposed,
+            not a payload blob on the design Structure"
+    (let [db (reflected)
+          m  (ffirst (cq/q '[:find ?m
+                             :where [?m :structure/of :fukan.canvas.core.reflect/Morphism]
+                                    [?m :entity/name "MSrc↦MFact"]] db))
+          e  (cq/entity db m)]
+      (is (some? m))
+      (is (= ":eq" (:val/incl e)) "the object map's inclusion is a queryable field")
+      (is (= ":m-public" (:val/restrict e)) "so is the codomain sub-sort restriction")
+      (is (nil? (:val/corresponds (cq/entity db (struct-node db ":fukan.canvas.core.reflect-test/MSrc"))))
+          "the design Structure no longer carries the corresponds blob")
+      (is (= (struct-node db ":fukan.canvas.core.reflect-test/MSrc")
+             (ffirst (cq/q '[:find ?t :in $ ?m
+                             :where [?r :rel/from ?m] [?r :rel/kind :from] [?r :rel/to ?t]] db m)))
+          ":from targets the reified domain Structure")
+      (is (= (struct-node db ":fukan.canvas.core.reflect-test/MFact")
+             (ffirst (cq/q '[:find ?t :in $ ?m
+                             :where [?r :rel/from ?m] [?r :rel/kind :to] [?r :rel/to ?t]] db m)))
+          ":to targets the reified codomain Structure")
+      (is (= #{[":mdel" ":sub" ":m-link"]}
+             (set (cq/q '[:find ?rel ?incl ?expr :in $ ?m
+                          :where [?r :rel/from ?m] [?r :rel/kind :map] [?r :rel/to ?rm]
+                                 [?rm :val/rel ?rel] [?rm :val/incl ?incl] [?rm :val/expr ?expr]]
+                        db m)))
+          "each relation map is a RelationMap child with rel/incl/expr decomposed"))))
+
+(deftest derived-relations-carry-their-rule
+  (testing "a derived defrelation's defining datalog rides its Relation node — a definitional
+            extension's body is data, like a Law's"
+    (let [db (reflected)
+          e  (cq/entity db (ffirst (cq/q '[:find ?r
+                                           :where [?r :structure/of :fukan.canvas.core.reflect/Relation]
+                                                  [?r :entity/name "m-link"]] db)))]
+      (is (= '{:head [?a ?b] :bodies [[(mcalls ?a ?b)]]}
+             (edn/read-string (:val/rule e))))
+      (is (= "fixture derived: a direct mcalls edge" (:entity/doc e))
+          "the element's doc rides along"))))
+
 (deftest reflected-model-satisfies-every-law
   (testing "meta-integrity: reflection adds no violations (the meta-grammar's own
-            slot laws run over the reified nodes)"
+            slot laws run over the reified nodes — Morphism and RelationMap included)"
     (is (empty? (law/check (reflected))))))

@@ -93,13 +93,45 @@
                          :scope (some-> (:val/scope e) edn/read-string)}
                         (payload-form (:val/form e))))))))
 
+(defn- morphism-of
+  "The reflected `Morphism` whose domain (`:from`) is the Structure `s`, decomposed back into the
+   print-dual's corresponds ingredients — or nil. The relation maps come from the `RelationMap`
+   children in authoring order; the codomain's short name from the `:to` Structure; any authored
+   `agrees` demands from the `:agrees` payload (the object-map/identity demands are consequences,
+   not stored)."
+  [db s]
+  (when-let [m (ffirst (cq/q '[:find ?m :in $ ?s
+                               :where [?m :structure/of :fukan.canvas.core.reflect/Morphism]
+                                      [?r :rel/from ?m] [?r :rel/kind :from] [?r :rel/to ?s]]
+                             db s))]
+    (let [e    (cq/entity db m)
+          to   (ffirst (cq/q '[:find ?n :in $ ?m
+                               :where [?r :rel/from ?m] [?r :rel/kind :to] [?r :rel/to ?t]
+                                      [?t :entity/name ?n]] db m))
+          maps (->> (cq/q '[:find ?rm ?o :in $ ?m
+                            :where [?r :rel/from ?m] [?r :rel/kind :map] [?r :rel/to ?rm]
+                                   [?r :rel/order ?o]] db m)
+                    (sort-by (comp ord second))
+                    (mapv (fn [[rm _]]
+                            (let [re (cq/entity db rm)]
+                              {:rel  (edn/read-string (:val/rel re))
+                               :incl (edn/read-string (:val/incl re))
+                               :expr (edn/read-string (:val/expr re))}))))]
+      {:incl        (edn/read-string (:val/incl e))
+       :fact-name   to
+       :restrict    (some-> (:val/restrict e) edn/read-string)
+       :bridge      (some-> (:val/bridge e) edn/read-string)
+       :rel-demands maps
+       :demands     (some-> (:val/form e) payload-form)})))
+
 (defn- parts [db s]
   (let [e (cq/entity db s)]
     {:name       (symbol (:entity/name e))
+     :tag        (some-> (:val/tag e) edn/read-string)
      :doc        (:entity/doc e)
      :value?     (boolean (:val/value e))
      :realizes   (when (:val/realizes e) (payload-form (:val/form e)))
-     :corresponds (some-> (:val/corresponds e) payload-form)
+     :corresponds (morphism-of db s)
      :slots      (slots-of db s)
      :laws       (laws-of db s)}))
 
@@ -114,9 +146,9 @@
             [:offenders offenders :where where])))
 
 (defn- codomain-form
-  "The sort map's codomain: a bare fact tag `Fn`, or `[Fn :test]` when restricted to a sub-sort."
-  [{:keys [fact-tag restrict]}]
-  (let [f (symbol (clojure.core/name fact-tag))]
+  "The sort map's codomain: a bare fact name `Fn`, or `[Fn :public]` when restricted to a sub-sort."
+  [{:keys [fact-name restrict]}]
+  (let [f (symbol fact-name)]
     (if restrict [f restrict] f)))
 
 (defn- rel-map-form [{:keys [rel incl expr]}] (list rel incl expr))
@@ -172,9 +204,11 @@
   (reduce (fn [n {:keys [incl]}] (+ n (case incl :eq 2 (:sub :sup) 1 0))) 0 rel-demands))
 
 (defn- fmt-structure [db s]
-  (let [{:keys [name doc value? slots corresponds realizes laws]} (parts db s)
+  (let [{:keys [name tag doc value? slots corresponds realizes laws]} (parts db s)
+        ;; the node-demand count comes from the registry's one shared source (object map ∪ authored
+        ;; agrees ∪ derived identity) — the reflected Morphism stores only the authored statement
         n-generated (when corresponds
-                      (+ (count (:demands corresponds))
+                      (+ (count (s/effective-node-demands tag))
                          (count-relation-demands (:rel-demands corresponds))))]
     (->> (concat
           [(str "(defstructure " (when value? "^:value ") name)]

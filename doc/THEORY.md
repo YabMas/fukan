@@ -93,11 +93,12 @@ Tracked here so the fundament carries no silent holes.
   collide silently, and law scoping rides short-name rules. Vocabularies exist as
   reflected rendering units, not as signatures with identity and inclusions.
   **Being closed** — signatures-first-class is in progress.
-- **The morphism is under-reflected.** A `Law` reflects as a real node with its
-  datalog queryable; a correspondence — the system's one full morphism — reflects
-  as a `pr-str` payload on the design structure, its sort map and relation maps
-  opaque to query. A derived `defrelation`'s body is likewise not reified.
-  **Being closed** — the morphism joins the meta-grammar.
+- **~~The morphism is under-reflected.~~ Closed.** A correspondence now reflects
+  as a `Morphism` node in the meta-grammar (`:from`/`:to` edges to its domain and
+  codomain `Structure`s, the inclusion / restriction / bridge as queryable fields,
+  `RelationMap` children for the relation maps), and a derived `defrelation`
+  carries its defining rule on its `Relation` node — the morphism is data, like
+  the presentations it connects.
 - **One logic.** As noted above: the object logic is Datalog, unparameterized.
   Left open deliberately; not scheduled.
 
