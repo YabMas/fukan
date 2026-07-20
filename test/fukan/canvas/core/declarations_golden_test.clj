@@ -250,8 +250,16 @@
 ;; Laws 60→62: `Module :eq Ns` now generates its object map too (a total + a surjective law — Module was
 ;; previously under-specified, only a twin), and the Operation surjective law reads `(public ?x)` (the
 ;; renamed predicate). Live `(check)` still 0 (every design Module has an Ns twin and vice-versa).
-(def ^:private golden-terms {:count 52 :hash 182421159})
-(def ^:private golden-laws  {:count 62 :hash 648478436})
+;; 2026-07-20 (f): reverted to PER-DESIGN-ELEMENT `correspond` blocks (one sort per call — same emission
+;; as the single block), and UNIFIED the public/private line: the delegates roll-up interior is now
+;; `[:test [:not :public]]` (¬public) instead of the raw `[:test :private]` flag — the SAME `public`
+;; predicate the codomain restricts to, complemented. So an unmodelled `^:export`/`^:test-support` helper
+;; is interior (routable-through), not a boundary. The `delegates-reach` rule's guard clause changes from
+;; `[?m :val/private true]` to `(not (public ?m))` (terms hash), and the delegates realized law's desc
+;; names the new expr (laws hash); counts hold (52 / 62). Live `(check)` still 0 (larger interior only
+;; realizes MORE delegations).
+(def ^:private golden-terms {:count 52 :hash -2037100877})
+(def ^:private golden-laws  {:count 62 :hash 628879367})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

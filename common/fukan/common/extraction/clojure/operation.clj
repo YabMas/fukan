@@ -43,9 +43,21 @@
   '[[?x :structure/of :fukan.common.extraction.clojure.operation/Fn]
     (not [?x :val/private true]) (not [?x :val/export true]) (not [?x :val/test-support true])])
 
-;; The correspondence morphism (`Operation :eq [Fn :public]`, its relation maps, and `Module :eq Ns`) is
-;; declared as ONE block in `fukan.common.extraction.clojure.module` — the last plugin file, which sees
-;; both fact structures. It rides Operation/Module from OUTSIDE (the concept's `defstructure` stays pure).
+;; ── the correspondence: Operation ↦ Fn, one sort of the design→Clojure morphism ──
+;; Rides Operation from OUTSIDE (its `defstructure` stays pure identity). Every law generates at
+;; :corresponds/Operation.*.
+;;   · OBJECT MAP: `Operation :eq [Fn :public]` — a bijection onto Fn's PUBLIC sub-sort (`:eq` ⇒ total,
+;;     every design Operation twinned + surjective, every public Fn has a preimage). Private/export/
+;;     test-support fns are NOT public, so neither sort images nor delegation boundaries.
+;;   · RELATION MAPS: `:delegates ⊑` the public call graph — the roll-up `calls·(¬public·calls)*`: a call
+;;     path a→b whose interior is all ¬PUBLIC (routing through another public boundary is two delegations,
+;;     not one). `¬public` — the SAME `public` line the codomain restricts to, complemented — so an
+;;     unmodelled `^:export`/`^:test-support` helper is interior, not a boundary. `:sub` only (fidelity is
+;;     Subsystem `:may-depend`'s concern). `:performs ⊒` `calls*·performs` — every reached effect declared.
+;;   · the IDENTITY component (`in↦in`, `out↦out` over the shared `Schema` sort) is DERIVED.
+(s/correspond Operation :eq [Fn :public]
+  (:delegates :sub [:cat :calls [:* [:cat [:test [:not :public]] :calls]]])
+  (:performs  :sup [:cat [:* :calls] :performs]))
 
 (def ^:private schema-tag
   "The type dialect's ^:value structure tag — the fact-side signature builds its :in/:out

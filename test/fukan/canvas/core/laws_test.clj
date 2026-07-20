@@ -390,14 +390,15 @@
 
 (deftest roll-up-compiles-to-a-guarded-transitive-closure-rule
   (testing "the roll-up `R·(P·R)*` (public call graph) compiles to a recursive derived rule: `R+`
-            restricted to P-guarded interior — base `(R a b)` binds both ends (no unsafe reflexive head)"
+            restricted to P-guarded interior — base `(R a b)` binds both ends (no unsafe reflexive head).
+            The interior test is the SAME `public` predicate, complemented (`[:not :public]` → not-public)."
     (let [{:keys [terms]} (#'s/relation-map-decl :T {:rel :dep :incl :sub
-                                                     :expr [:cat :link [:* [:cat [:test :private] :link]]]})]
+                                                     :expr [:cat :link [:* [:cat [:test [:not :public]] :link]]]})]
       (is (= 2 (count terms)) "two rule clauses: the base and the guarded-recursive step")
       (is (= '(dep-reach ?a ?b) (ffirst terms)) "the reach rule is named <rel>-reach")
       (is (= '[(dep-reach ?a ?b) (link ?a ?b)] (first terms)) "base: a direct link")
-      (is (= '[(dep-reach ?a ?b) (link ?a ?m) [?m :val/private true] (dep-reach ?m ?b)] (second terms))
-          "step: a link to a PRIVATE node, then continue"))))
+      (is (= '[(dep-reach ?a ?b) (link ?a ?m) (not (public ?m)) (dep-reach ?m ?b)] (second terms))
+          "step: a link to a ¬public (interior) node, then continue"))))
 
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
 (defstructure LTwin
@@ -406,7 +407,7 @@
    Pure identity; correspondence hooks in externally via `(correspond LTwin …)` below."
   {:n [:? :int]})
 
-(s/correspond (LTwin :eq LTwin (agrees {:by :ltwin-eq})))
+(s/correspond LTwin :eq LTwin (agrees {:by :ltwin-eq}))
 (s/register-comparator! :ltwin-eq
   (fn [db a b] (= (:val/n (cq/entity db a)) (:val/n (cq/entity db b)))))
 

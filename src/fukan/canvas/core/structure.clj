@@ -193,10 +193,21 @@
       false)
     :else false))
 
+(defn- test-clause
+  "A KAT test `P` (a coreflexive) as a datalog clause over node `var`. `P` is a PREDICATE reference — a
+   keyword `:public` → `(public ?m)` (a derived unary rule) — optionally negated `[:not :public]` →
+   `(not (public ?m))`. Tests form a Boolean algebra, so the complement of a test is a test."
+  [p var]
+  (cond
+    (keyword? p) (list (symbol (name p)) var)
+    (and (vector? p) (= :not (first p)) (keyword? (second p)))
+    (list 'not (list (symbol (name (second p))) var))
+    :else (throw (ex-info (str "relation-map: unsupported test " (pr-str p)) {:test p}))))
+
 (defn- guarded-closure
   "Recognize the roll-up — a guarded transitive closure `[:cat R [:* [:cat [:test P] R]]]`: `R`
-   contracted onto the nodes where the boolean node-slot `P` is FALSE, quotienting the `P` interior
-   (the public call graph is `[:cat :calls [:* [:cat [:test :private] :calls]]]`). Returns
+   contracted onto the boundary nodes, quotienting the `P` interior (the public call graph is
+   `[:cat :calls [:* [:cat [:test [:not :public]] :calls]]]` — interior = ¬public). Returns
    `{:base R :guard P}` or nil. This is `R·(P·R)*` in Kleene-algebra-with-tests."
   [expr]
   (when (and (vector? expr) (= :cat (first expr)) (= 3 (count expr)))
@@ -226,7 +237,7 @@
       {:clause (fn [from to] (list rname from to))
        :rules  [[(list rname '?a '?b) (list r '?a '?b)]
                 [(list rname '?a '?b) (list r '?a '?m)
-                 ['?m (keyword "val" (name guard)) true] (list rname '?m '?b)]]})
+                 (test-clause guard '?m) (list rname '?m '?b)]]})
 
     :else
     (throw (ex-info (str "relation-map: unsupported expression " (pr-str expr)
@@ -913,32 +924,25 @@
     {:fact-tag ftag :incl incl :restrict restrict :bridge bridge :demands demands :rel-demands rel-demands}))
 
 (defmacro correspond
-  "Declare the design→fact signature MORPHISM as ONE block — the concept's `defstructure` never mentions
-   correspondence (inverted dependency); this declaration lives in the extractor for a language. Every
-   entry is a map `design-symbol :incl fact-expression`:
+  "Declare ONE design sort's map in the design→fact signature morphism — the concept's `defstructure`
+   never mentions correspondence (inverted dependency); this lives in the extractor for a language.
+   The form is a SORT map `Design :incl fact-expression`, its relation maps nested:
 
-     (correspond
-       (Module    :eq Ns  (bridge :qualified-suffix))    ; SORT map — root, bijective
-       (Operation :eq [Fn :public]                       ; SORT map — nested, bijective onto public Fns
-         (delegates :sub (calls-roll-up…))               ;   RELATION maps nest under their sort map
-         (performs  :sup (…))
-         (agrees {:by …})?))                             ;   the comparator escape hatch, if any
+     (correspond Operation :eq [Fn :public]              ; SORT map — object map onto Fn's public sub-sort
+       (:delegates :sub (calls-roll-up…))                ;   RELATION maps, nested
+       (:performs  :sup (…))
+       (agrees {:by …})?)                                ;   the comparator escape hatch, if any
+     (correspond Module :eq Ns (bridge :qualified-suffix))  ; another sort's map (per design element)
 
-   A SORT map's `:incl` is the object map's inclusion (`:sub` total / `:sup` surjective / `:eq` both);
-   its codomain is a fact tag or `[FactSort :test]` (restricted to a sub-sort). Sort maps head with a
-   structure SYMBOL; relation maps with a keyword. Shared sorts (Schema/Effect — one node both strata)
-   need no entry; their identity map is derived."
-  [& entries]
-  ;; parse EAGERLY (mapv, not a lazy for) so a malformed entry throws during macroexpansion, not later.
-  (let [regs (mapv (fn [entry]
-                     (let [[dsym incl fexpr & rst] entry
-                           dtag                (resolve-struct-tag dsym)
-                           [fact-sym restrict] (if (vector? fexpr) [(first fexpr) (second fexpr)] [fexpr nil])
-                           ftag                (resolve-struct-tag fact-sym)
-                           config              (parse-sort-map (str dsym) incl ftag restrict rst)]
-                       `(register-correspondence! ~dtag '~config)))
-                   entries)]
-    `(do ~@regs)))
+   `:incl` is the object map's inclusion (`:sub` total / `:sup` surjective / `:eq` both); the codomain
+   is a fact tag or `[FactSort :test]` (restricted to a sub-sort). Relation maps head with a keyword.
+   Shared sorts (Schema/Effect — one node both strata) need no `correspond`; their identity map is derived."
+  [design incl fexpr & rest]
+  (let [dtag                (resolve-struct-tag design)
+        [fact-sym restrict] (if (vector? fexpr) [(first fexpr) (second fexpr)] [fexpr nil])
+        ftag                (resolve-struct-tag fact-sym)
+        config              (parse-sort-map (str design) incl ftag restrict rest)]
+    `(register-correspondence! ~dtag '~config)))
 
 (defn- parse-law
   "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?)

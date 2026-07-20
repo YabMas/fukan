@@ -147,7 +147,7 @@
       (is (some? corr) "the corresponds body form renders (from the external correspondence config)")
       (is (= '(corresponds :eq [Fn :public]) (take 3 corr))
           "renders as the sort map — the object map's inclusion + restricted codomain")
-      (is (some #{'(:delegates :sub [:cat :calls [:* [:cat [:test :private] :calls]]])} corr)
+      (is (some #{'(:delegates :sub [:cat :calls [:* [:cat [:test [:not :public]] :calls]]])} corr)
           "the relation maps render nested under the sort map")
       (is (= {:transitive true} (second (:delegates slots)))
           "identity slot carries only its identity option — correspondence moved external")
