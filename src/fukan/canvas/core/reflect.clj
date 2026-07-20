@@ -76,9 +76,18 @@
     (matched-by :child :from Vocabulary :unless {:tag ":Any"})))
 
 (defstructure Vocabulary
-  "One grammar namespace, reified — the Structures it defines. (Named Vocabulary,
-   not Grammar: the BNF demo owns the `Grammar` tag.)"
-  {:child [:* Structure]})
+  "One grammar namespace reified as a SIGNATURE: the Structures (sorts) it defines, the Relation
+   elements it declares (`:relation`, from the element's recorded `:ns` — an unqualified relation
+   tag cannot carry its namespace, so ownership rides the declaration), and the vocabularies it
+   references (`:imports` — DERIVED, never authored: slot targets crossing namespaces, law bodies
+   calling another vocabulary's rules, a correspondence's codomain. Entail, don't store — the
+   namespace IS the signature, its inclusions are computed from actual use). Slot-declared
+   relations that are not elements yet (`:calls`, `:delegates`) belong to no signature — that
+   asymmetry is the relations-first-class residual, visible here. (Named Vocabulary, not Grammar:
+   the BNF demo owns the `Grammar` tag.)"
+  {:child    [:* Structure]
+   :relation [:* Relation]
+   :imports  [:* Vocabulary]})
 
 (defstructure Relation
   "A reflected relation KIND (`:child`/`:calls`/`:delegates`/…), reified so the grammar's EDGE
@@ -131,19 +140,62 @@
 
 (defn- target-ns [t] (when (and (keyword? t) (namespace t)) (namespace t)))
 
+(defn- rule-calls
+  "The rule NAMES called by a seq of datalog clauses — every list clause `(rule …)`, recursing
+   through the negation/disjunction/measure wrappers. Conservative: vector clauses (datom
+   patterns and `[(pred …)]` predicate bindings) call no rules — a predicate is a Clojure var,
+   a different category."
+  [clauses]
+  (letfn [(walk [c]
+            (when (and (seq? c) (symbol? (first c)))
+              (let [[op & args] c]
+                (case op
+                  (not or and)       (mapcat walk args)
+                  (not-join or-join) (mapcat walk (rest args))    ; drop the leading var vector
+                  measure            (mapcat walk (drop 2 args))  ; (measure ?out (agg ?v) body…)
+                  [(name op)]))))]
+    (set (mapcat walk clauses))))
+
+(defn- sdef-clauses
+  "Every datalog clause an sdef's own declarations carry: its laws' `:where` (+ the bodies of any
+   inline `:rules`) and its `realized-as` membership body. The clause surface the signature
+   derivations (closure + imports) walk for cross-vocabulary rule calls."
+  [sd]
+  (concat (mapcat (fn [l] (concat (:where l) (mapcat rest (:rules l)))) (:laws sd))
+          (:realized-as sd)))
+
+(defn- element-refs
+  "The names a relation ELEMENT's own declaration references: its derived bodies' rule calls,
+   its coproduct members, its `:isa` genus (a subrelation inclusion is a cross-signature
+   reference like any other)."
+  [el]
+  (concat (rule-calls (apply concat (:bodies (:derived-rule el))))
+          (map name (:relation-coproduct el))
+          (some-> (:relation-character el) :isa name list)))
+
 (defn- ns-closure
-  "Expand seed namespaces through their structures' slot targets AND their correspondences'
-   fact tags, to a fixpoint — so a reified slot's target Structure and a reflected Morphism's
-   codomain Structure are always present."
-  [seed]
+  "Expand seed namespaces to a fixpoint through everything a signature in scope REACHES: its
+   structures' slot targets, its correspondences' fact tags, and — resolved through
+   `resolve-call` (rule name → declaring ns) — the rules its laws and owned relation elements
+   call. So a reified slot's target Structure, a Morphism's codomain, and every imported
+   vocabulary (even one contributing only relations, like a genus-declaring primitive vocab)
+   are always present."
+  [seed resolve-call]
   (loop [nss (set seed)]
     (let [nxt (into nss
-                    (for [sd (s/all-structures)
-                          :when (contains? nss (some-> (:tag sd) namespace))
-                          t    (concat (map :target (:slots sd))
-                                       (some-> (s/correspondence-of (:tag sd)) :fact-tag list))
-                          :let [n (target-ns t)] :when n]
-                      n))]
+                    (concat
+                     (for [sd (s/all-structures)
+                           :when (contains? nss (some-> (:tag sd) namespace))
+                           n    (concat (keep target-ns (map :target (:slots sd)))
+                                        (some-> (s/correspondence-of (:tag sd)) :fact-tag target-ns list)
+                                        (keep resolve-call (rule-calls (sdef-clauses sd))))
+                           :when n]
+                       n)
+                     (for [sd (s/all-structures)
+                           :when (and (nil? (namespace (:tag sd))) (contains? nss (:ns sd)))
+                           n    (keep resolve-call (element-refs sd))
+                           :when n]
+                       n)))]
       (if (= nxt nss) nss (recur nxt)))))
 
 (defn- reflect-structure
@@ -242,41 +294,87 @@
   ;; assemble the seam for its VALIDATION side-effect: a cross-family duplicate law key
   ;; throws here, so the guard fires on every build (reflection runs on every build)
   (s/correspondence)
-  (let [;; seed with this ns (the reflection self-reifies), the Schema dialect's (reflection emits
+  (let [;; relation ELEMENTS — read from the FULL registry: an element's tag is unqualified
+        ;; (`:contains`), so it belongs to no vocabulary namespace and an ns-filter would drop it.
+        ;; (That global name is also why a cross-namespace re-declaration is a collision — caught
+        ;; loudly at registration.)
+        rel-elems  (into {} (for [sd (s/all-structures)
+                                  :when (or (:relation-character sd) (:derived-rule sd)
+                                            (:relation-coproduct sd))]
+                              [(:tag sd) sd]))
+        ;; rule-call → declaring signature, for the closure and the derived `:imports`: relation
+        ;; elements first, then structure short names (kind rules) when globally unambiguous; a
+        ;; trailing `+` resolves to its base relation (the closure rides the declaration).
+        ;; Unresolvable names (substrate rules, slot-only relations — no signature owns those
+        ;; yet) contribute nothing.
+        elem-ns    (into {} (for [[rk el] rel-elems :when (:ns el)] [(name rk) (:ns el)]))
+        short-ns   (let [by-short (group-by (comp name :tag)
+                                            (filter (comp namespace :tag) (s/all-structures)))]
+                     (into {} (for [[n gs] by-short
+                                    :let [gnss (distinct (map (comp namespace :tag) gs))]
+                                    :when (= 1 (count gnss))]
+                                [n (first gnss)])))
+        resolve-call (fn [nm]
+                       (let [nm (cond-> nm (str/ends-with? nm "+") (subs 0 (dec (count nm))))]
+                         (or (elem-ns nm) (short-ns nm))))
+        ;; seed with this ns (the reflection self-reifies), the Schema dialect's (reflection emits
         ;; Schema value targets, so their grammar must be present), and any caller-supplied seeds
         nss    (ns-closure (into (conj (set (keep target-ns tags)) this-ns "fukan.common.typing.malli")
-                                 (map str (or extra-seeds []))))
+                                 (map str (or extra-seeds [])))
+                           resolve-call)
         sds    (->> (s/all-structures)
                     (filter #(contains? nss (some-> (:tag %) namespace)))
                     (sort-by (comp str :tag)))
         bits   (map reflect-structure sds)
-        vocabs (for [[vns members] (group-by (comp namespace :tag) sds)]
-                 {:node (let [vid (str "vocabulary:" vns)]
-                          {:entity/id vid :structure/of ::Vocabulary :entity/name vns})
-                  :rels (for [m members]
-                          {:rel/id   (str "vocabulary:" vns "|child|" (:tag m))
-                           :rel/from [:entity/id (str "vocabulary:" vns)]
-                           :rel/kind :child
-                           :rel/to   [:entity/id (structure-id (:tag m))]})})
+        grouped (group-by (comp namespace :tag) sds)
+        ;; SIGNATURE ownership: an element belongs to the Vocabulary of its declaring `:ns` (the
+        ;; declaration records it precisely because the unqualified tag cannot) — reflected when
+        ;; that vocabulary is in scope
+        rel-owned  (for [[rk el] rel-elems :when (contains? nss (:ns el))] [(:ns el) rk])
+        vocab-nss  (into (set (keys grouped)) (map first rel-owned))
+        ;; the DERIVED imports of one vocabulary: the signatures it actually reaches — slot
+        ;; targets crossing namespaces, its correspondences' codomains, and every name its laws /
+        ;; owned relation elements reference that another signature declares
+        imports-of (fn [vns]
+                     (let [called (into (set (mapcat (comp rule-calls sdef-clauses) (grouped vns)))
+                                        (mapcat (fn [[_ el]] (when (= vns (:ns el)) (element-refs el)))
+                                                rel-elems))
+                           slot-t (for [sd (grouped vns), sl (:slots sd)
+                                        :when (not (s/scalar-slot? sl))
+                                        :let [n (target-ns (:target sl))] :when n] n)
+                           fact-t (keep #(some-> (s/correspondence-of (:tag %)) :fact-tag namespace)
+                                        (grouped vns))]
+                       (->> (concat (keep resolve-call called) slot-t fact-t)
+                            (filter #(and (not= % vns) (contains? vocab-nss %)))
+                            set)))
+        vocabs (for [vns (sort vocab-nss)
+                     :let [vid (str "vocabulary:" vns)]]
+                 {:node {:entity/id vid :structure/of ::Vocabulary :entity/name vns}
+                  :rels (concat
+                         (for [m (grouped vns)]
+                           {:rel/id   (str vid "|child|" (:tag m))
+                            :rel/from [:entity/id vid] :rel/kind :child
+                            :rel/to   [:entity/id (structure-id (:tag m))]})
+                         (for [[ens rk] rel-owned :when (= ens vns)]
+                           {:rel/id   (str vid "|relation|" (name rk))
+                            :rel/from [:entity/id vid] :rel/kind :relation
+                            :rel/to   [:entity/id (str "relation:" (name rk))]})
+                         (for [b (sort (imports-of vns))]
+                           {:rel/id   (str vid "|imports|" b)
+                            :rel/from [:entity/id vid] :rel/kind :imports
+                            :rel/to   [:entity/id (str "vocabulary:" b)]}))})
         any    (when (some :any? bits)
                  [{:entity/id ":Any" :structure/of ::Structure
                    :entity/name "Any" :val/tag ":Any"
                    :entity/doc "The wildcard target — any node."}])
-        ;; reflect relation KINDS — one Relation node per relation ELEMENT (`defrelation`, both the
-        ;; CHARACTER and the DERIVED form) UNIONed with every distinct (non-scalar) slot kind.
-        ;; Completes grammar reflection: edge-kinds reified, not just node-types. A genus
+        ;; reflect relation KINDS — one Relation node per relation ELEMENT (`defrelation`, the
+        ;; CHARACTER, DERIVED, and COPRODUCT forms) UNIONed with every distinct (non-scalar) slot
+        ;; kind. Completes grammar reflection: edge-kinds reified, not just node-types. A genus
         ;; (`contains`) has no slot of its own and is reflected purely from its element; a DERIVED
         ;; relation carries its defining rule (head + bodies) as the `:rule` payload — a
         ;; definitional extension's body is data, like a Law's; `:transitive` still aggregates over
         ;; slots for the relations that are not elements yet.
         rel-slots  (remove s/scalar-slot? (mapcat :slots sds))
-        ;; NB read from the FULL registry, not the ns-scoped `sds`: a relation element's tag is
-        ;; unqualified (`:contains`), so it belongs to no vocabulary namespace and the ns-filter above
-        ;; would drop it. That unqualified tag is also why two vocabs declaring the same relation name
-        ;; collide silently — a latent issue this change surfaces but does not fix.
-        rel-elems  (into {} (for [sd (s/all-structures)
-                                  :when (or (:relation-character sd) (:derived-rule sd))]
-                              [(:tag sd) sd]))
         relation-nodes
         (for [rk    (sort-by name (into (set (keys rel-elems)) (map :rel rel-slots)))
               :let  [el (get rel-elems rk)

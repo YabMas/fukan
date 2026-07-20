@@ -13,6 +13,9 @@
             ;; loaded for its side-effect: registers the malli type dialect, so scalar slots reflect
             ;; as Schema value nodes even when this namespace runs standalone
             [fukan.common.typing.malli]
+            ;; the live-model signature test builds the real model (composition root + pipeline)
+            [fukan.infra.model]
+            [fukan.model.pipeline :as pipeline]
             [fukan.canvas.core.structure :as s :refer [defstructure]]))
 
 ;; ── fixture vocab: every cardinality, scalar + refined targets, a law ────────
@@ -184,6 +187,33 @@
              (edn/read-string (:val/rule e))))
       (is (= "fixture derived: a direct mcalls edge" (:entity/doc e))
           "the element's doc rides along"))))
+
+(deftest vocabularies-are-signatures
+  (testing "a Vocabulary owns its declared relation elements — ownership rides the element's
+            recorded :ns (an unqualified relation tag cannot carry its namespace)"
+    (let [db (reflected)]
+      (is (= #{"m-link" "m-public"}
+             (set (cq/q '[:find [?n ...]
+                          :where [?v :structure/of :fukan.canvas.core.reflect/Vocabulary]
+                                 [?v :entity/name "fukan.canvas.core.reflect-test"]
+                                 [?r :rel/from ?v] [?r :rel/kind :relation] [?r :rel/to ?rel]
+                                 [?rel :entity/name ?n]]
+                        db))))))
+  (testing "imports are DERIVED from actual use, never authored — the signature's inclusions"
+    (let [db (pipeline/build-model nil)
+          imports (fn [vn]
+                    (set (cq/q '[:find [?n ...] :in $ ?vn
+                                 :where [?v :structure/of :fukan.canvas.core.reflect/Vocabulary]
+                                        [?v :entity/name ?vn]
+                                        [?r :rel/from ?v] [?r :rel/kind :imports] [?r :rel/to ?i]
+                                        [?i :entity/name ?n]]
+                               db vn)))]
+      (is (contains? (imports "fukan.common.vocab.code.module") "fukan.common.vocab.grouping")
+          "in-module's body calls the `contains` genus that grouping declares — a rule-call import")
+      (is (contains? (imports "fukan.common.vocab.code.subsystem") "fukan.common.vocab.code.module")
+          "Subsystem's :child slot targets Module — a slot-target import")
+      (is (not (contains? (imports "fukan.common.vocab.grouping") "fukan.common.vocab.code.module"))
+          "the primitive vocabulary reaches nothing above it — inclusions point up the ladder"))))
 
 (deftest reflected-model-satisfies-every-law
   (testing "meta-integrity: reflection adds no violations (the meta-grammar's own
