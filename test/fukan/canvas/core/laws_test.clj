@@ -378,27 +378,17 @@
     (is (thrown? Exception (#'s/expr->path-segments [:? :a]))           "optional")))
 
 (deftest relation-map-generates-directional-laws
-  (testing "the inclusion direction picks which homomorphism law(s) generate, keyed by direction"
-    (let [keys-of (fn [incl] (mapv :key (:laws (#'s/relation-map-decl :T {:rel :dep :incl incl :expr [:+ :link]}))))]
+  (testing "the inclusion direction picks which homomorphism law(s) generate, keyed by direction. E is a
+            regular-relation atom/path here; a complex E (the public call graph) is a NAMED defrelation
+            referenced as an atom — its recursion lives with the relation, not inline."
+    (let [keys-of (fn [incl] (mapv :key (#'s/relation-map-laws :T {:rel :dep :incl incl :expr [:+ :link]})))]
       (is (= [:corresponds/T.dep-realized] (keys-of :sub)) ":sub (⊑ preserve) → the realized law only")
       (is (= [:corresponds/T.dep-covered]  (keys-of :sup)) ":sup (⊒ reflect)  → the covered law only")
       (is (= [:corresponds/T.dep-realized :corresponds/T.dep-covered] (keys-of :eq)) ":eq (≡) → both")))
   (testing "the preserve law binds BOTH endpoints positively via twin (an untwinned endpoint is totality's concern)"
-    (let [preserve (first (:laws (#'s/relation-map-decl :T {:rel :dep :incl :sub :expr [:+ :link]})))]
+    (let [preserve (first (#'s/relation-map-laws :T {:rel :dep :incl :sub :expr [:+ :link]}))]
       (is (some #{'(twin ?a ?ea)} (:where preserve)))
       (is (some #{'(twin ?b ?eb)} (:where preserve))))))
-
-(deftest roll-up-compiles-to-a-guarded-transitive-closure-rule
-  (testing "the roll-up `R·(P·R)*` (public call graph) compiles to a recursive derived rule: `R+`
-            restricted to P-guarded interior — base `(R a b)` binds both ends (no unsafe reflexive head).
-            The interior test is the SAME `public` predicate, complemented (`[:not :public]` → not-public)."
-    (let [{:keys [terms]} (#'s/relation-map-decl :T {:rel :dep :incl :sub
-                                                     :expr [:cat :link [:* [:cat [:test [:not :public]] :link]]]})]
-      (is (= 2 (count terms)) "two rule clauses: the base and the guarded-recursive step")
-      (is (= '(dep-reach ?a ?b) (ffirst terms)) "the reach rule is named <rel>-reach")
-      (is (= '[(dep-reach ?a ?b) (link ?a ?b)] (first terms)) "base: a direct link")
-      (is (= '[(dep-reach ?a ?b) (link ?a ?m) (not (public ?m)) (dep-reach ?m ?b)] (second terms))
-          "step: a link to a ¬public (interior) node, then continue"))))
 
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
 (defstructure LTwin

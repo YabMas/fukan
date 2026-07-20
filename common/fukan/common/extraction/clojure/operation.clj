@@ -43,20 +43,28 @@
   '[[?x :structure/of :fukan.common.extraction.clojure.operation/Fn]
     (not [?x :val/private true]) (not [?x :val/export true]) (not [?x :val/test-support true])])
 
+;; The PUBLIC CALL GRAPH as a first-class fact relation — `a` reaches `b` through only ¬public (internal)
+;; interior. Routing through another PUBLIC op is TWO delegations, not one; an unmodelled `^:export`/
+;; `^:test-support` helper is ¬public, so it's interior, not a boundary. The interior is the COMPLEMENT
+;; of the `public` sub-sort the object map maps onto — one `public` line, restricted on one side and
+;; negated here. A recursive derived relation (base + step); `delegates :sub :public-call` names it.
+(defrelation :public-call
+  "a reaches b through only non-public interior — the public call graph"
+  '[?a ?b] '[(calls ?a ?b)]                                     ; base: a direct call
+           '[(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
+
 ;; ── the correspondence: Operation ↦ Fn, one sort of the design→Clojure morphism ──
 ;; Rides Operation from OUTSIDE (its `defstructure` stays pure identity). Every law generates at
 ;; :corresponds/Operation.*.
 ;;   · OBJECT MAP: `Operation :eq [Fn :public]` — a bijection onto Fn's PUBLIC sub-sort (`:eq` ⇒ total,
 ;;     every design Operation twinned + surjective, every public Fn has a preimage). Private/export/
 ;;     test-support fns are NOT public, so neither sort images nor delegation boundaries.
-;;   · RELATION MAPS: `:delegates ⊑` the public call graph — the roll-up `calls·(¬public·calls)*`: a call
-;;     path a→b whose interior is all ¬PUBLIC (routing through another public boundary is two delegations,
-;;     not one). `¬public` — the SAME `public` line the codomain restricts to, complemented — so an
-;;     unmodelled `^:export`/`^:test-support` helper is interior, not a boundary. `:sub` only (fidelity is
-;;     Subsystem `:may-depend`'s concern). `:performs ⊒` `calls*·performs` — every reached effect declared.
+;;   · RELATION MAPS: `:delegates ⊑ :public-call` — every declared op-level delegation is a public-call
+;;     edge (the named fact relation above; `:sub` only, since fidelity is Subsystem `:may-depend`'s
+;;     concern). `:performs ⊒ calls*·performs` — every effect the twin reaches is a declared design effect.
 ;;   · the IDENTITY component (`in↦in`, `out↦out` over the shared `Schema` sort) is DERIVED.
 (s/correspond Operation :eq [Fn :public]
-  (:delegates :sub [:cat :calls [:* [:cat [:test [:not :public]] :calls]]])
+  (:delegates :sub :public-call)
   (:performs  :sup [:cat [:* :calls] :performs]))
 
 (def ^:private schema-tag

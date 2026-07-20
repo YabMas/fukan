@@ -193,56 +193,16 @@
       false)
     :else false))
 
-(defn- test-clause
-  "A KAT test `P` (a coreflexive) as a datalog clause over node `var`. `P` is a PREDICATE reference — a
-   keyword `:public` → `(public ?m)` (a derived unary rule) — optionally negated `[:not :public]` →
-   `(not (public ?m))`. Tests form a Boolean algebra, so the complement of a test is a test."
-  [p var]
-  (cond
-    (keyword? p) (list (symbol (name p)) var)
-    (and (vector? p) (= :not (first p)) (keyword? (second p)))
-    (list 'not (list (symbol (name (second p))) var))
-    :else (throw (ex-info (str "relation-map: unsupported test " (pr-str p)) {:test p}))))
-
-(defn- guarded-closure
-  "Recognize the roll-up — a guarded transitive closure `[:cat R [:* [:cat [:test P] R]]]`: `R`
-   contracted onto the boundary nodes, quotienting the `P` interior (the public call graph is
-   `[:cat :calls [:* [:cat [:test [:not :public]] :calls]]]` — interior = ¬public). Returns
-   `{:base R :guard P}` or nil. This is `R·(P·R)*` in Kleene-algebra-with-tests."
-  [expr]
-  (when (and (vector? expr) (= :cat (first expr)) (= 3 (count expr)))
-    (let [[_ base star] expr]
-      (when (and (keyword? base) (vector? star) (= :* (first star)))
-        (let [inner (second star)]
-          (when (and (vector? inner) (= :cat (first inner)) (= 3 (count inner))
-                     (vector? (second inner)) (= :test (first (second inner)))
-                     (= base (nth inner 2)))
-            {:base base :guard (second (second inner))}))))))
-
-(defn- reach-compile
-  "Compile a relation-algebra expr `E` to a way to bind `from`→`to` over fact relations:
-   `{:clause (fn [from to] → one datalog clause) :rules [derived-rule terms]}`. A path-lowerable `E`
-   inlines via the `path` builtin (no rules). The roll-up compiles to a recursive derived rule
-   `rname` — a `P`-guarded transitive closure of `R`, SAFE (its base `(R a b)` binds both ends, so no
-   unsafe reflexive `(= a b)` head)."
-  [rname expr]
-  (cond
-    (path-lowerable? expr)
-    {:clause (fn [from to] (first (expand-clauses [(list 'path from (expr->path-segments expr) to)])))
-     :rules  []}
-
-    (guarded-closure expr)
-    (let [{:keys [base guard]} (guarded-closure expr)
-          r (symbol (name base))]
-      {:clause (fn [from to] (list rname from to))
-       :rules  [[(list rname '?a '?b) (list r '?a '?b)]
-                [(list rname '?a '?b) (list r '?a '?m)
-                 (test-clause guard '?m) (list rname '?m '?b)]]})
-
-    :else
-    (throw (ex-info (str "relation-map: unsupported expression " (pr-str expr)
-                         " (only path expressions and the guarded-closure roll-up compile so far)")
-                    {:expr expr}))))
+(defn- reach-clause
+  "A single datalog clause binding `from`→`to` over the fact expression `E` — a regular-relation term
+   (an atom, `:cat`, `:+`/`:*` over atoms), lowered through the `path` builtin. An `E` that needs its
+   OWN recursion (the public call graph) is a NAMED fact relation — a `defrelation` — referenced here as
+   an atom, so the complex definition lives with the relation, not inline in the correspondence."
+  [expr from to]
+  (when-not (path-lowerable? expr)
+    (throw (ex-info (str "relation-map: expression " (pr-str expr) " is not a regular-relation path — "
+                         "name it a `defrelation` and reference it as an atom") {:expr expr})))
+  (first (expand-clauses [(list 'path from (expr->path-segments expr) to)])))
 
 (defn- ref-arg->form
   "Code for one relation-slot target: a symbol → (var sym); an inline (Tag ...) form
@@ -918,7 +878,7 @@
                               (throw (ex-info (str "correspond " cname ": relation map " (pr-str rel)
                                                    " needs an inclusion (:sub / :sup / :eq) then an expression, got "
                                                    (pr-str rincl)) {:rel rel :incl rincl})))
-                            (reach-compile 'validate expr)
+                            (reach-clause expr '?_a '?_b)   ; validate E eagerly (throws here, naming the correspond)
                             {:rel (keyword rel) :incl rincl :expr expr})
                           rel-subs)]
     {:fact-tag ftag :incl incl :restrict restrict :bridge bridge :demands demands :rel-demands rel-demands}))
@@ -1116,10 +1076,16 @@
    each re-inline (the module-dependency graph, say) is expressed ONCE here, and the laws just
    call it by name (e.g. `(module-depends ?m ?n)`) instead of repeating the clauses.
 
-   `head` is the rule's argument vector; `where` its body clauses, which may reference other
-   injected rules (`in-module`, `named`, …) and call predicates. Prefer a non-recursive `where`:
-   a vocab-injected rule is folded into EVERY law and query, so a recursive one re-evaluates
-   on every check (Cozo terminates, but pays the fixpoint each time).
+   `head` is the rule's argument vector; each following body is a clause-vector — ONE body → one rule,
+   MULTIPLE bodies → several rules sharing the head, i.e. a RECURSIVE relation (a base clause + a step
+   clause that calls the relation). Bodies may reference other injected rules (`in-module`, `named`, …),
+   call predicates, and negate (`(not (public ?m))`). Prefer non-recursive: a vocab-injected rule is
+   folded into EVERY law and query, so a recursive one re-evaluates on every check (Cozo terminates via
+   its semi-naive fixpoint, but pays it each time).
+
+     (defrelation :public-call \"a reaches b through only non-public interior — the public call graph\"
+       '[?a ?b] '[(calls ?a ?b)]                                    ; base: a direct call
+                '[(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
 
    A head arg may be an AGGREGATE application — `'[?m (count ?op)]` — making the derived
    relation a MEASURE: a relation targeting a computed scalar, the derived-side mirror of a
@@ -1140,10 +1106,12 @@
         base {:tag tag :doc docstring :ns (str *ns*) :slots [] :laws []}]
     (if (map? (first body))
       `(register-structure! ~(assoc base :relation-character (first body)))
-      (let [[head where] body]
+      (let [[head & wheres] body]
         `(register-structure! ~(assoc base :derived-rule
-                                      {:head (list 'quote (unquote-lit head))
-                                       :where (list 'quote (unquote-lit where))}))))))
+                                      {:head   (list 'quote (unquote-lit head))
+                                       ;; one body → one rule; MULTIPLE bodies → multiple rules with the
+                                       ;; same head (a RECURSIVE relation: a base clause + a step clause).
+                                       :bodies (mapv #(list 'quote (unquote-lit %)) wheres)}))))))
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 
@@ -1281,10 +1249,10 @@
     (let [c (correspondence-of target)]
       (boolean (and c (:fact-tag c) (not= (:fact-tag c) target))))))
 
-(defn- relation-map-decl
-  "Terms + laws for a relation map `(rel incl E)` on `tag`. `E` compiles to a way to bind two nodes
-   over fact relations (`reach-compile`) — inline for a path, or a derived recursive rule (the roll-up)
-   emitted as a TERM. The INCLUSION direction picks which homomorphism law(s) to enforce:
+(defn- relation-map-laws
+  "The generated law(s) for a relation map `(rel incl E)` on `tag`. `E` is a regular-relation expression
+   over fact relations, lowered to a `reach-clause` binding two nodes (a complex `E` is a NAMED fact
+   `defrelation`, referenced as an atom). The INCLUSION picks which homomorphism condition(s) to enforce:
      :sub (⊑, preserve) — every design `rel` edge is realized by an `E` reach between the endpoints' twins.
      :sup (⊒, reflect)  — every fact node the twin reaches over `E` is declared on the design side.
      :eq  (≡)           — both.
@@ -1292,33 +1260,31 @@
    concern, and the law is vacuously green before extraction). Reflect matches the reached fact node to
    the design edge's target directly for a SHARED sort, or through its twin for a twinned sort."
   [tag {:keys [rel incl expr]}]
-  (let [{:keys [clause rules]} (reach-compile (symbol (str (name rel) "-reach")) expr)
-        twinned? (twinned-target? tag rel)
+  (let [twinned? (twinned-target? tag rel)
         preserve {:key (demand-key tag (str (name rel) "-realized"))
                   :desc (str (name tag) "." (name rel) ": every design edge is realized by a "
                              (pr-str expr) " reach between the endpoints' twins")
                   :offenders '[?a]
                   :where [['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
                           '(twin ?a ?ea) '(twin ?b ?eb)
-                          (list 'not-join '[?ea ?eb] (clause '?ea '?eb))]}
+                          (list 'not-join '[?ea ?eb] (reach-clause expr '?ea '?eb))]}
         reflect  {:key (demand-key tag (str (name rel) "-covered"))
                   :desc (str (name tag) "." (name rel) ": every fact node the twin reaches via "
                              (pr-str expr) " is declared on the design side")
                   :offenders '[?x]
                   :where [['?x :structure/of tag] '(not [?x :val/extracted true])
                           '(twin ?x ?t)
-                          (clause '?t '?v)
+                          (reach-clause expr '?t '?v)
                           (if twinned?
                             (list 'not-join '[?x ?v]
                                   ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
                                   '(twin ?b ?v))
                             (list 'not-join '[?x ?v]
                                   ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v]))]}]
-    {:terms rules
-     :laws  (case incl
-              :sub [preserve]
-              :sup [reflect]
-              :eq  [preserve reflect])}))
+    (case incl
+      :sub [preserve]
+      :sup [reflect]
+      :eq  [preserve reflect])))
 
 ;; ── built-in declaration handlers ────────────────────────────────────────────
 ;; Each existing construct as a registered handler emitting Terms and/or Laws — the SOLE rule/law
@@ -1378,10 +1344,11 @@
 
 (register-declaration! :defrelation
   (fn [{:keys [rule]} sdef]
-    {:terms [(into [(apply list (rule-sym (:tag sdef)) (:head rule))] (:where rule))] :laws []}))
+    (let [head (apply list (rule-sym (:tag sdef)) (:head rule))]
+      {:terms (mapv (fn [body] (into [head] body)) (:bodies rule)) :laws []})))
 
 (register-declaration! :relation-map
-  (fn [{:keys [demand]} sdef] (relation-map-decl (:tag sdef) demand)))
+  (fn [{:keys [demand]} sdef] {:terms [] :laws (relation-map-laws (:tag sdef) demand)}))
 
 (register-declaration! :correspondence
   (fn [{:keys [corresponds]} sdef]

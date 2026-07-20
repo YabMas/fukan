@@ -258,8 +258,15 @@
 ;; `[?m :val/private true]` to `(not (public ?m))` (terms hash), and the delegates realized law's desc
 ;; names the new expr (laws hash); counts hold (52 / 62). Live `(check)` still 0 (larger interior only
 ;; realizes MORE delegations).
-(def ^:private golden-terms {:count 52 :hash -2037100877})
-(def ^:private golden-laws  {:count 62 :hash 628879367})
+;; 2026-07-20 (g): the delegates roll-up is now a NAMED fact relation — `public-call` (a recursive
+;; `defrelation`: base `(calls a b)` + step `(calls a m) (not (public m)) (public-call m b)`) — and the
+;; relation map references it as an atom: `(:delegates :sub :public-call)`. So the inline KAT expression
+;; (and the kernel's `guarded-closure`/`test-clause` machinery) is gone; `defrelation` gained multiple
+;; rule bodies for recursion. Terms hold at 52 (`public-call`'s 2 rules replace the generated
+;; `delegates-reach`'s 2), and laws hold at 62 (the delegates realized law now reads `(public-call …)`
+;; with desc naming `:public-call`). Live `(check)` still 0.
+(def ^:private golden-terms {:count 52 :hash -577934162})
+(def ^:private golden-laws  {:count 62 :hash -180509930})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
