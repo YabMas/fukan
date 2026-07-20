@@ -27,10 +27,11 @@ Everything in fukan is an instance of one of two pillars:
   demand, derived rule, and query compiles to this one logic (CozoScript over the
   typed-EAV view). Within it one sub-language is deliberately carved out: the
   **Kleene fragment** — regular relations (`:cat` / `:*` / `:+` / `:?` / `:alt`,
-  the shape of SPARQL property paths) — allowed *inline* in a relation map;
-  anything recursive must graduate to a *named* definitional extension
-  (`defrelation`). The fragment line is a rule of the authoring surface, not a
-  convention.
+  the shape of SPARQL property paths) — ONE expression language with three inline
+  homes: a correspondence relation map, an inclusion element, and a law/lens
+  `(path ?from E ?to)` clause. Recursion beyond simple closure (closure over a
+  compound) must graduate to a *named* definitional extension (`defrelation`).
+  The fragment line is a rule of the authoring surface, not a convention.
 
 The pillars compose cleanly because the first never dictates a logic — institutions
 are logic-independent by design — and the second is fukan's chosen instantiation.

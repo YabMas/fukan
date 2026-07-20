@@ -159,7 +159,7 @@
       (is (empty? (reach "cc")) "cc calls nothing"))))
 
 (deftest path-clause-composes-relations-with-star-closure
-  (testing "(path ?op [:calls* :performs] ?effect) composes zero-or-more calls with performs"
+  (testing "(path ?op [:cat [:* :calls] :performs] ?effect) composes zero-or-more calls with performs"
     (let [db (build/maps->cozo
               [{:entity/id "pa" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "pa"}
                {:entity/id "pb" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "pb"}
@@ -169,7 +169,7 @@
                {:rel/id "p-bc" :rel/from [:entity/id "pb"] :rel/kind :calls :rel/to [:entity/id "pc"]}
                {:rel/id "p-cio" :rel/from [:entity/id "pc"] :rel/kind :performs :rel/to [:entity/id "io"]}])
           reached (set (cq/q (vec (concat '[:find [?opn ...] :in $ % :where]
-                                           (s/expand-clauses '[(path ?op [:calls* :performs] ?effect)
+                                           (s/expand-clauses '[(path ?op [:cat [:* :calls] :performs] ?effect)
                                                                [?op :entity/name ?opn]
                                                                [?effect :val/name "io"]])))
                               db (s/vocab-rules)))]
@@ -187,7 +187,7 @@
           qa (ffirst (cq/q '[:find ?o :where [?o :entity/name "qa"]] db))]
       (is (= #{"io"}
              (set (cq/q '[:find [?en ...] :in $ ?op
-                          :where (path ?op [:calls* :performs] ?effect)
+                          :where (path ?op [:cat [:* :calls] :performs] ?effect)
                                  [?effect :val/name ?en]]
                         db qa)))))))
 
@@ -195,7 +195,7 @@
   (testing "lens selections can compose a path without minting a named reaches-effect relation"
     (let [db (build/vars->cozo [#'op-a #'op-b #'op-c])
           focus (lens/focus-nodes db '[(Operation ?n)
-                                       (path ?n [:delegates* :performs] ?effect)
+                                       (path ?n [:cat [:* :delegates] :performs] ?effect)
                                        [?effect :val/name "io"]])]
       (is (= #{"comp-a" "comp-b" "comp-c"} (names db focus))
           "delegates* includes the directly effectful operation as the zero-hop case"))))
@@ -220,7 +220,7 @@
   (law "operation reaches io"
     :scope ::PathNode
     :offenders '[?o]
-    :where '[(path ?o [:next* :marks] ?mark)
+    :where '[(path ?o [:cat [:* :next] :marks] ?mark)
              [?mark :val/kind "io"]]))
 
 (deftest laws-expand-path-clauses

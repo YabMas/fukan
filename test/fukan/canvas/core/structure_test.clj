@@ -766,10 +766,12 @@
                                           TCorrNested :eq TCorrNested (agrees {}))))  ; agrees needs :by
         "a malformed agrees throws"))
   (testing "a malformed relation-map expression throws at parse, not at check"
-    (is (thrown? Exception (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :sup [:alt :a :b])]))   ; :alt not yet compilable
-        "an unsupported expression operator throws")
+    (is (thrown? Exception (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :sup [:* [:cat :a :b]])]))  ; compound closure
+        "closure over a compound throws — that recursion is a named defrelation")
     (is (thrown? Exception (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :bogus :calls)]))       ; not a valid inclusion
-        "a bad relation-map inclusion throws")))
+        "a bad relation-map inclusion throws")
+    (is (some? (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :sup [:alt :a :b])]))
+        ":alt is inline-lowerable now — the whole regex AST is the one path language")))
 
 (deftest correspondence-reshapes-the-seam
   (testing "(s/correspondence) collects kinds, relation demands, and the key index from the registry"

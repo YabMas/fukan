@@ -91,19 +91,6 @@
 
 ;; ── authoring clause composition ─────────────────────────────────────────────
 
-(defn- path-segment
-  "Parse a path segment keyword into `[rule quantifier]`, where quantifier is one
-   of `:one`, `:one+`, or `:zero+`. The compact authoring surface mirrors regular
-   path notation: `:calls`, `:calls+`, `:calls*`."
-  [seg]
-  (when-not (or (keyword? seg) (symbol? seg))
-    (throw (ex-info (str "path segment must be a keyword or symbol: " (pr-str seg)) {:segment seg})))
-  (let [n (name seg)]
-    (cond
-      (str/ends-with? n "*") [(symbol (subs n 0 (dec (count n)))) :zero+]
-      (str/ends-with? n "+") [(symbol (subs n 0 (dec (count n)))) :one+]
-      :else                  [(symbol n) :one])))
-
 (defn- dvar? [x] (and (symbol? x) (str/starts-with? (name x) "?")))
 
 (defn- and-disjunct [clauses]
@@ -112,46 +99,118 @@
     1 (first clauses)
     (apply list 'and clauses)))
 
+(defn- zero-admitting?
+  "True when the expression `E` can match the EMPTY path (zero hops) — a bare `[:* r]`/`[:? r]`,
+   or a `:cat`/`:alt` whose parts all/any can. A zero-admitting `[:alt …]` BRANCH has no inline
+   lowering (its zero case would be an `=`-unification an or-join branch cannot host)."
+  [e]
+  (cond
+    (or (keyword? e) (symbol? e)) false
+    (and (vector? e) (seq e))
+    (case (first e)
+      (:* :?) true
+      :+      false
+      :cat    (every? zero-admitting? (rest e))
+      :alt    (boolean (some zero-admitting? (rest e)))
+      false)
+    :else false))
+
+(declare path-steps)
+
+(defn- path-steps*
+  "One expression → its step list, or throw naming the whole `expr` (the caller's context)."
+  [e expr]
+  (cond
+    (or (keyword? e) (symbol? e)) [[(symbol (name e)) :one]]
+    (and (vector? e) (seq e))
+    (let [[op & args] e]
+      (case op
+        :cat       (vec (mapcat #(path-steps* % expr) args))
+        :alt       [[:alt (vec args)]]
+        (:+ :* :?) (let [[inner] args]
+                     (when-not (or (keyword? inner) (symbol? inner))
+                       (throw (ex-info (str "path: " op " over a compound expression needs a NAMED "
+                                            "defrelation (its recursion lives with the relation): "
+                                            (pr-str expr)) {:expr expr})))
+                     [[(symbol (name inner)) ({:+ :one+, :* :zero+, :? :zero-one} op)]])
+        (throw (ex-info (str "path: " (pr-str e) " is not a regular-relation expression — an atom, "
+                             "[:cat …], [:alt …], or [:+ r]/[:* r]/[:? r]"
+                             (when (keyword? op)
+                               (str " (the suffix segments [:r :s* :t+] are retired — spell the AST:"
+                                    " [:calls* :performs] is [:cat [:* :calls] :performs])")))
+                        {:expr expr}))))
+    :else (throw (ex-info (str "path: unreadable expression " (pr-str e)) {:expr expr}))))
+
+(defn- path-steps
+  "Normalize a regular-relation expression `E` — the ONE path language, the malli-regex AST also
+   used by correspondence relation maps and inclusion elements (an atom, `:cat`, `:alt`,
+   `:+`/`:*`/`:?` over atoms) — into the linear STEP list the clause compiler walks: `[rule quant]`
+   (quant one of `:one`/`:one+`/`:zero+`/`:zero-one`) or `[:alt [E …]]` for a branch step. Closure
+   over a compound expression has no inline lowering — that recursion is a NAMED `defrelation`."
+  [expr]
+  (path-steps* expr expr))
+
 (declare path-clauses*)
 
-(defn- path-star-clause [from rule rest-steps to fresh]
+(defn- path-hop-or-skip
+  "The or-join for a zero-admitting step: { skip: the rest of the path straight from `from`,
+   hop: `hop-rule` (the closure `r+` for `[:* r]`, one `r` edge for `[:? r]`) then the rest from
+   its target }. The rest is FUSED into both branches, so the skip case never needs a bare
+   `=`-unification against an unbound fresh var."
+  [from hop-rule rest-steps to fresh]
   (let [mid (fresh)
         join-vars (vec (distinct (filter dvar? [from to])))
         zero (path-clauses* from rest-steps to fresh)
-        plus (cons (list (symbol (str (name rule) "+")) from mid)
+        plus (cons (list hop-rule from mid)
                    (path-clauses* mid rest-steps to fresh))]
     (list 'or-join join-vars (and-disjunct zero) (and-disjunct plus))))
 
 (defn- path-clauses*
-  "Compile a path expression into datalog clauses. `*` means zero or more hops,
-   so `[:calls* :performs]` expands to direct `:performs` OR `calls+` followed by
-   `:performs`."
+  "Compile a step list into datalog clauses. `[:* r]` means zero or more hops, so
+   `[:cat [:* :calls] :performs]` expands to direct `:performs` OR `calls+` followed by
+   `:performs`; an `[:alt …]` step is an or-join whose every branch positively binds its target."
   [from steps to fresh]
   (if (empty? steps)
     [(list '= from to)]
-    (let [[rule q] (path-segment (first steps))
-          more (next steps)
+    (let [[step & more*] steps
+          more   (seq more*)
           final? (nil? more)
           target (if final? to (fresh))]
-      (case q
-        :one
-        (cons (list rule from target)
-              (when-not final? (path-clauses* target more to fresh)))
+      (if (= :alt (first step))
+        (let [alts (second step)]
+          (doseq [e alts]
+            (when (zero-admitting? e)
+              (throw (ex-info (str "path: an [:alt …] branch must make at least one hop — "
+                                   (pr-str e) " admits the empty path; name that relation "
+                                   "(defrelation) or restructure the alternative") {:branch e}))))
+          (cons (apply list 'or-join (vec (distinct (filter dvar? [from target])))
+                       (map #(and-disjunct (path-clauses* from (path-steps %) target fresh)) alts))
+                (when-not final? (path-clauses* target more to fresh))))
+        (let [[rule q] step]
+          (case q
+            :one
+            (cons (list rule from target)
+                  (when-not final? (path-clauses* target more to fresh)))
 
-        :one+
-        (cons (list (symbol (str (name rule) "+")) from target)
-              (when-not final? (path-clauses* target more to fresh)))
+            :one+
+            (cons (list (symbol (str (name rule) "+")) from target)
+                  (when-not final? (path-clauses* target more to fresh)))
 
-        :zero+
-        [(path-star-clause from rule more to fresh)]))))
+            :zero+
+            [(path-hop-or-skip from (symbol (str (name rule) "+")) more to fresh)]
+
+            :zero-one
+            [(path-hop-or-skip from rule more to fresh)]))))))
 
 (defn ^:export expand-clauses
   "Expand authoring-layer composition clauses into ordinary datalog clauses.
 
    Supported forms:
-     `(path ?from [:r :s* :t+] ?to)` — relational composition over generated
-     relation rules (`r`) and closure rules (`s+`/`t+`). `*` is zero-or-more,
-     so it includes the zero-hop case; `+` is one-or-more.
+     `(path ?from E ?to)` — relational composition over the ONE regular-relation expression
+     language (the same E a correspondence relation map and an inclusion element state): an atom
+     `:calls`, `[:cat E …]`, `[:alt E …]`, `[:+ r]`/`[:* r]`/`[:? r]` over atoms. `:*` is
+     zero-or-more (includes the zero-hop case), `:?` zero-or-one; both fuse the path's remainder
+     into their or-join. (The old suffix-segment vectors `[:r :s* :t+]` are retired.)
 
    Expansion is top-level only, matching the existing `(via …)` behavior."
   [clauses]
@@ -160,53 +219,31 @@
           (map-indexed
            (fn [i clause]
              (if (and (seq? clause) (= 'path (first clause)))
-               (let [[_ from steps to] clause]
-                 (when-not (and (= 4 (count clause)) (vector? steps))
-                   (throw (ex-info (str "path clause must be (path ?from [segments...] ?to): "
-                                        (pr-str clause))
+               (let [[_ from expr to] clause]
+                 (when-not (= 4 (count clause))
+                   (throw (ex-info (str "path clause must be (path ?from E ?to): " (pr-str clause))
                                    {:clause clause})))
                  (let [counter (atom 0)
                        fresh (fn []
                                (symbol (str "?_path" i "_" (swap! counter inc))))]
-                   (path-clauses* from steps to fresh)))
+                   (path-clauses* from (path-steps expr) to fresh)))
                [clause]))
            clauses))))
 
-(defn- expr->path-segments
-  "Lower a relation-algebra expression `E` (the correspondence relation-map DSL) to the flat
-   path-segment vector the `path` builtin consumes: an atom `:r` → `:r`, `[:+ :r]` → `:r+`,
-   `[:* :r]` → `:r*`, `[:cat E …]` concatenates its parts' segments. Closure over a COMPOUND, `:?`,
-   and `:alt` need the derived-rule compiler (arrives with the roll-up in the next step) and throw
-   here — a clear expansion-time error, not a mystery at check.
-
-   `E` is regular relations (Kleene algebra over fact relations), spelled as the regex AST malli
-   itself uses; the flat path segments are the `:r`/`:r+`/`:r*` suffix notation `path` already reads."
-  [expr]
-  (cond
-    (keyword? expr) [expr]
-    (and (vector? expr) (seq expr))
-    (let [[op & args] expr]
-      (case op
-        :cat    (vec (mapcat expr->path-segments args))
-        (:+ :*) (let [[inner] args]
-                  (when-not (keyword? inner)
-                    (throw (ex-info (str "relation-map: " op " over a compound expression needs the "
-                                         "derived-rule compiler (not yet built): " (pr-str expr)) {:expr expr})))
-                  [(keyword (str (name inner) (name op)))])   ; :+/:* → the closure suffix the path builtin reads
-        (throw (ex-info (str "relation-map: unsupported expression operator " op " in " (pr-str expr)) {:expr expr}))))
-    :else (throw (ex-info (str "relation-map: unreadable expression " (pr-str expr)) {:expr expr}))))
-
 (defn- path-lowerable?
-  "True when `E` lowers to flat path segments (atom, `:cat`, `:+`/`:*` over atoms) — so it inlines
-   through the `path` builtin, safe wherever the law binds its endpoints. Compound closures (the
-   roll-up) and `:?`/`:alt` need a derived rule instead."
+  "True when `E` lowers inline through the `path` clause, safe wherever the law binds its
+   endpoints: an atom; `:cat` of lowerables; `:+`/`:*`/`:?` over atoms; `:alt` whose every branch
+   is lowerable AND makes at least one hop (a zero-admitting branch would need `=`-unification an
+   or-join branch cannot host). Beyond this — closure over a compound — the expression is a NAMED
+   derived relation instead."
   [expr]
   (cond
-    (keyword? expr) true
+    (or (keyword? expr) (symbol? expr)) true
     (and (vector? expr) (seq expr))
     (case (first expr)
-      :cat    (every? path-lowerable? (rest expr))
-      (:+ :*) (keyword? (second expr))
+      :cat       (every? path-lowerable? (rest expr))
+      :alt       (every? #(and (path-lowerable? %) (not (zero-admitting? %))) (rest expr))
+      (:+ :* :?) (keyword? (second expr))
       false)
     :else false))
 
@@ -222,7 +259,7 @@
   (when-not (path-lowerable? expr)
     (throw (ex-info (str "relation-map: expression " (pr-str expr) " is not a regular-relation path — "
                          "name it a `defrelation` and reference it as an atom") {:expr expr})))
-  (expand-clauses [(list 'path from (expr->path-segments expr) to)]))
+  (expand-clauses [(list 'path from expr to)]))
 
 (defn- incl-rule-bodies
   "Lower an inclusion expression `E` to defining rule BODIES from `?a` to `?b` (a `:sup`/`:eq`
@@ -234,7 +271,7 @@
     (and (vector? expr) (= :alt (first expr)))
     (vec (mapcat #(incl-rule-bodies tag %) (rest expr)))
     (path-lowerable? expr)
-    [(expand-clauses [(list 'path '?a (expr->path-segments expr) '?b)])]
+    [(expand-clauses [(list 'path '?a expr '?b)])]
     :else
     (throw (ex-info (str "defrelation " tag ": inclusion expression " (pr-str expr)
                          " is beyond the regular fragment — declare the relation DERIVED "
@@ -1273,8 +1310,8 @@
 ;;   :r  atom · [:+ E] closure · [:* E] refl-closure · [:? E] optional · [:cat E…] path · [:alt E…] union
 ;; This replaces the ad-hoc `:realized-by`/`:covered-from`/`:faithful` keyword grab-bag: each was a
 ;; point (E, direction) in this one algebra. Grounding: SPARQL 1.1 property paths / regular path
-;; queries for E; the relation-inclusion order for the direction. (`expr->path-segments`, the lowering
-;; to the `path` builtin, lives up by `expand-clauses` — the parser needs it eagerly.)
+;; queries for E; the relation-inclusion order for the direction. (`path-steps`, the ONE lowering of
+;; E, lives up by `expand-clauses` — the parser needs it eagerly.)
 (defn- twinned-target?
   "True when the design relation `rel` on `tag` targets a CROSS-TAG-corresponded sort (its instances
    have distinct fact twins — like `:delegates` → Operation ↦ Fn), as opposed to a SHARED sort whose

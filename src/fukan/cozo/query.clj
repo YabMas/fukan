@@ -389,7 +389,7 @@
   q
   "Run datalog `query` over the Cozo db `db`: the compiled datalog subset fukan uses —
    relation/collection finds, `:in` of `$` + optional `%` rules + scalar params incl.
-   `[attr val]` lookup-refs. Top-level `(path ?from [:r :s* :t+] ?to)` clauses are expanded
+   `[attr val]` lookup-refs. Top-level `(path ?from E ?to)` clauses are expanded
    after scalar substitution, so path endpoints may be query inputs. EIDS come back as opaque
    STRING handles; leaf values in their NATIVE type (Int/String/Bool, per the typed `triple`
    view). A relation find returns a SET of tuples; a collection find a distinct vector."

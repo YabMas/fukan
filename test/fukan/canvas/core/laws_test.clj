@@ -367,15 +367,26 @@
 ;; ── the relation-map primitive (rel incl E): expression lowering + law generation ──
 
 (deftest relation-map-expression-lowering
-  (testing "`E` (regular relations) lowers to the flat path-segment vector the `path` builtin reads"
-    (is (= [:calls]            (#'s/expr->path-segments :calls))           "an atom is a one-hop segment")
-    (is (= [:calls+]           (#'s/expr->path-segments [:+ :calls]))      ":+ → the transitive-closure suffix")
-    (is (= [:calls*]           (#'s/expr->path-segments [:* :calls]))      ":* → the reflexive-transitive suffix")
-    (is (= [:calls* :performs] (#'s/expr->path-segments [:cat [:* :calls] :performs])) ":cat concatenates segments"))
-  (testing "forms that need the derived-rule compiler (not yet built) throw at lowering, naming the expr"
-    (is (thrown? Exception (#'s/expr->path-segments [:* [:cat :a :b]])) "closure over a compound")
-    (is (thrown? Exception (#'s/expr->path-segments [:alt :a :b]))      "union")
-    (is (thrown? Exception (#'s/expr->path-segments [:? :a]))           "optional")))
+  (testing "`E` (regular relations, the ONE path language) lowers to step lists the clause compiler walks"
+    (is (= '[[calls :one]]                       (#'s/path-steps :calls))      "an atom is a one-hop step")
+    (is (= '[[calls :one+]]                      (#'s/path-steps [:+ :calls])) ":+ → the closure step")
+    (is (= '[[calls :zero+]]                     (#'s/path-steps [:* :calls])) ":* → the zero-or-more step")
+    (is (= '[[calls :zero-one]]                  (#'s/path-steps [:? :calls])) ":? → the zero-or-one step")
+    (is (= '[[calls :zero+] [performs :one]]     (#'s/path-steps [:cat [:* :calls] :performs])) ":cat concatenates steps")
+    (is (= '[[:alt [:via :realized-by]]]         (#'s/path-steps [:alt :via :realized-by])) ":alt is a branch step"))
+  (testing "the whole regex AST lowers inline now — :alt to an or-join whose branches bind positively"
+    (is (true? (#'s/path-lowerable? [:alt :a [:cat :b :c]])))
+    (is (true? (#'s/path-lowerable? [:? :a])))
+    (let [[clause] (s/expand-clauses '[(path ?x [:alt :a :b] ?y)])]
+      (is (= 'or-join (first clause)) "an :alt path is one or-join clause")
+      (is (= '[?x ?y] (second clause)) "both endpoints escape via the join vars")))
+  (testing "the fragment's edge: compound closure and zero-admitting :alt branches still refuse inline"
+    (is (thrown? Exception (#'s/path-steps [:* [:cat :a :b]])) "closure over a compound — name a defrelation")
+    (is (false? (#'s/path-lowerable? [:alt :a [:* :b]])) "a zero-admitting branch admits the empty path")
+    (is (thrown? Exception (s/expand-clauses '[(path ?x [:alt :a [:* :b]] ?y)])))
+    (is (thrown-with-msg? Exception #"suffix segments .* retired"
+                          (s/expand-clauses '[(path ?x [:calls* :performs] ?y)]))
+        "the old suffix-segment vector errors loudly, naming the migration")))
 
 (deftest relation-map-generates-directional-laws
   (testing "the inclusion direction picks which homomorphism law(s) generate, keyed by direction. E is a

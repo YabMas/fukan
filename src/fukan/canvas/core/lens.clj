@@ -106,7 +106,7 @@
   "Run datalog `:where` `clauses` (binding `?n` as the focused node) with the
    vocab-derived rules, returning the focus node-set (a set of eids). The shared
    evaluation engine behind both a stored lens and any ad-hoc focus.
-   A `(path ?from [:r :s* :t+] ?to)` clause composes relation paths, and `(via R Scope P)`
+   A `(path ?from E ?to)` clause composes relation paths, and `(via R Scope P)`
    composes a property `P` along relation `R`'s transitive closure at altitude `Scope`
    (see `expand-via`)."
   [db clauses]
