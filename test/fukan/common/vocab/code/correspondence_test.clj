@@ -112,39 +112,17 @@
     (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.delegates-realized))
         "0 unrealized — every authored :delegates is backed by a real (possibly multi-hop) call path")))
 
-(deftest fidelity-fires-on-an-undeclared-modelled-coupling
-  (testing "an actual cross-module call between two MODELLED faculties with no covering :delegates fires"
-    (let [db (build/tx-maps->cozo [;; two authored faculty modules a / b (not extracted) → fukan.a / fukan.b are 'modelled'
-                   {:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/id "a" :entity/name "a"}
-                   {:db/id -2 :structure/of :fukan.common.vocab.code.module/Module :entity/id "b" :entity/name "b"}
-                   {:db/id -3 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "oa"}
-                   {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "ob"}
-                   {:rel/id "a|exposes|oa" :rel/from -1 :rel/kind :exposes :rel/to -3}
-                   {:rel/id "b|exposes|ob" :rel/from -2 :rel/kind :exposes :rel/to -4}
-                   ;; a guard delegate (some intent authored) that does NOT cover a->b
-                   {:rel/id "oa|delegates|oa" :rel/from -3 :rel/kind :delegates :rel/to -3}
-                   ;; extracted side: fukan.a calls fukan.b, with no covering delegate
-                   {:db/id -5 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/id "fukan.a" :entity/name "fukan.a" :val/extracted true}
-                   {:db/id -6 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/id "fukan.b" :entity/name "fukan.b" :val/extracted true}
-                   {:db/id -7 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "fa" :val/extracted true}
-                   {:db/id -8 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "fb" :val/extracted true}
-                   {:rel/id "fukan.a|child|fa" :rel/from -5 :rel/kind :child :rel/to -7}
-                   {:rel/id "fukan.b|child|fb" :rel/from -6 :rel/kind :child :rel/to -8}
-                   {:rel/id "fa|calls|fb" :rel/from -7 :rel/kind :calls :rel/to -8}])]
-      (is (= #{"fa"} (law/violation-names db :corresponds/Operation.delegates-faithful))
-          "an undeclared coupling between modelled faculties is a fidelity offender"))))
-
-(deftest fidelity-green-on-the-self-model
-  (testing "every modelled-faculty coupling is declared — the enforced fidelity law is green"
-    (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.delegates-faithful))
-        "0 unfaithful — slice 2 declared every modelled-both-ends coupling")))
+;; The op-level FIDELITY (faithful) tests were RETIRED 2026-07-20 with the `delegates :sub` port: the
+;; reverse direction (is every code coupling declared?) is an ARCHITECTURAL question, enforced one
+;; altitude up by Subsystem `:may-depend` conformance (`subsystem-test`), not op-by-op. Op-level reflect
+;; redundantly re-flagged every architecturally-sanctioned kernel dependency. `delegates` keeps only its
+;; op-level question — realization (⊑ preserve): is a declared collaboration backed by real code?
 
 (deftest slice-1-self-model-is-clean
-  (testing "with :calls grounded, realization + fidelity laws green, and membership scoped, the merged
-            design+code self-model has zero law violations"
+  (testing "with :calls grounded, realization green (over the roll-up public-call graph), and membership
+            scoped, the merged design+code self-model has zero law violations"
     (let [model (pipeline/build-model "src")]
       (is (empty? (law/violation-names model :corresponds/Operation.delegates-realized)) "realization is green")
-      (is (empty? (law/violation-names model :corresponds/Operation.delegates-faithful)) "fidelity is green (modelled couplings all declared)")
       (is (empty? (law/check model))
           (str "no law violations on the merged self-model; got: "
                (mapv :law (law/check model)))))))
@@ -191,7 +169,9 @@
                 {:db/id -8  :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "op-b" :val/extracted true}
                 {:rel/id "Ax|child|op-a" :rel/from -5 :rel/kind :child :rel/to -7}
                 {:rel/id "Bx|child|op-b" :rel/from -6 :rel/kind :child :rel/to -8}]
-         wired? (into [{:db/id -11 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "mid" :val/extracted true}
+         ;; mid is PRIVATE: the roll-up `calls·(private·calls)*` realizes a delegation only through
+         ;; private interior — routing through a PUBLIC op would be two delegations, not one.
+         wired? (into [{:db/id -11 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "mid" :val/extracted true :val/private true}
                        {:rel/id "Ax|child|mid" :rel/from -5 :rel/kind :child :rel/to -11}
                        {:rel/id "op-a|calls|mid" :rel/from -7  :rel/kind :calls :rel/to -11}
                        {:rel/id "mid|calls|op-b" :rel/from -11 :rel/kind :calls :rel/to -8}]))))

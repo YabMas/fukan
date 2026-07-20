@@ -118,21 +118,21 @@
 
 (deftest primer-counts-operations-generated-laws
   (testing "the primer's corresponds pointer agrees with the generator (3 node [realized, covered, the
-            derived agrees] + 2 delegates + 1 performs = 6; the demands + relation-demands come from the
-            EXTERNAL (correspond Operation …), the identity map derived)"
+            derived agrees] + 1 delegates [:sub] + 1 performs [:sup] = 5; the demands + relation-maps
+            come from the EXTERNAL (correspond Operation …), the identity map derived)"
     (let [db (pipeline/build-model nil)]
       (is (str/includes? (g/vocabulary-primer db "fukan.common.vocab.code.operation")
-                         "; ⇒ 6 generated laws")))))
+                         "; ⇒ 5 generated laws")))))
 
 (deftest correspondence-card-shows-the-seam-and-its-generated-laws
   (testing "the card renders the twin ladder and every demand with its stable key"
     (let [card (g/correspondence-card)]
       (is (str/includes? card ":qualified-suffix") "the root bridge strategy is named")
       (is (str/includes? card ":corresponds/Operation.realized"))
-      (is (str/includes? card ":corresponds/Operation.delegates-faithful"))
+      (is (str/includes? card ":corresponds/Operation.delegates-realized"))
       (is (str/includes? card ":corresponds/Operation.performs-covered"))
       (is (str/includes? card "every authored operation is realized")
-          "descs come from the generated laws — the six invisible laws become visible"))))
+          "descs come from the generated laws — the invisible laws become visible"))))
 
 (deftest print-dual-round-trips-the-correspondence-seam
   (testing "the reflected Operation renders its (external) corresponds form; correspondence is NO LONGER

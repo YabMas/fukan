@@ -794,14 +794,13 @@
                :corresponds/Operation.covered :corresponds/Operation.agrees}
              (into #{} (map :key) (get-in seam [:kinds op :demands])))
           "node demands carry their FULL derived keys (type-coverage folded into the out↦out agrees map)")
-      (is (= #{[:delegates #{:corresponds/Operation.delegates-realized
-                             :corresponds/Operation.delegates-faithful}]
-               [:performs  #{:corresponds/Operation.performs-covered}]}
+      (is (= #{[:delegates #{:corresponds/Operation.delegates-realized}]   ; :sub — preserve only (roll-up)
+               [:performs  #{:corresponds/Operation.performs-covered}]}    ; :sup — reflect
              (into #{} (map (juxt :rel (comp set :keys)))
                    (filter #(= op (:owner %)) (:relations seam))))
-          "relation demands with their derived keys")
-      (is (= {:owner op :via :relation :rel :delegates :direction :faithful}
-             (select-keys (get-in seam [:keys :corresponds/Operation.delegates-faithful])
+          "relation demands with their derived keys (both now relation-map primitives)")
+      (is (= {:owner op :via :relation :rel :delegates :direction :preserve}
+             (select-keys (get-in seam [:keys :corresponds/Operation.delegates-realized])
                           [:owner :via :rel :direction]))
           "the key index points every key at its generating declaration"))))
 

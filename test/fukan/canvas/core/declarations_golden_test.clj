@@ -228,8 +228,16 @@
 ;; `:desc` now names the relation-algebra expression `[:cat [:* :calls] :performs]` instead of the
 ;; `:covered-from` vector. One law before and after (count holds 61); only the desc, so the hash moves.
 ;; Live `(check)` still 0. (delegates stays on `:realized-by`/`:faithful` until the roll-up step.)
-(def ^:private golden-terms {:count 49 :hash 532380915})
-(def ^:private golden-laws  {:count 61 :hash 17889096})
+;; 2026-07-20 (c): `delegates` moved off the legacy `{:realized-by :calls :faithful true}` onto the
+;; relation-map primitive as the ROLL-UP `(:delegates :sub [:cat :calls [:* [:cat [:test :private] :calls]]])`
+;; — the public call graph `calls·(private·calls)*`, PRESERVE only. Terms 49→51: the guarded-closure
+;; compiles to a recursive derived rule `delegates-reach` (2 clauses). Laws 61→60: delegates now emits
+;; ONE law (op-level realized, over the roll-up) instead of two (the old op-realized + the module-altitude
+;; faithful). Fidelity (the retired faithful direction) is an ARCHITECTURAL concern already enforced by
+;; Subsystem `:may-depend` conformance. Live `(check)` still 0 (fixed one over-declared self-model edge:
+;; model->cozo reached `q` only through public intermediates it already delegates to).
+(def ^:private golden-terms {:count 51 :hash -1747249709})
+(def ^:private golden-laws  {:count 60 :hash 132805134})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

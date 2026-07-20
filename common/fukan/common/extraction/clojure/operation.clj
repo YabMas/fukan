@@ -49,9 +49,15 @@
   (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
   (covered  {:unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]
              :desc "every public extracted operation is covered by the model or deliberately exempt"})
-  (delegates {:realized-by :calls :faithful true})     ; cross-module :delegates realized by a :calls+ path; :faithful ⇒ the module-level reverse
-  ;; the relation-map primitive: performs ⊒ calls*·performs (reflect) — every effect the twin reaches
-  ;; over the code call graph must be a declared design effect. (delegates moves to this surface next.)
+  ;; the relation-map primitive. delegates ⊑ the PUBLIC call graph — the roll-up `calls·(private·calls)*`
+  ;; (Kleene-with-tests): a call path a→b through only PRIVATE interior (routing through another PUBLIC
+  ;; op is TWO delegations, not one). PRESERVE only (:sub): every declared op-level delegation must be
+  ;; realized by such a path. The REVERSE (fidelity — is every code coupling declared?) is an
+  ;; ARCHITECTURAL question, already enforced one altitude up by Subsystem `:may-depend` conformance;
+  ;; re-checking it op-level would redundantly re-flag every sanctioned kernel dependency.
+  (:delegates :sub [:cat :calls [:* [:cat [:test :private] :calls]]])
+  ;; performs ⊒ calls*·performs (reflect) — every effect the twin reaches over the code call graph
+  ;; must be a declared design effect.
   (:performs :sup [:cat [:* :calls] :performs]))
 
 (def ^:private schema-tag

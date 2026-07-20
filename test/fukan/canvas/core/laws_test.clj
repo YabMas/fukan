@@ -228,7 +228,9 @@
       (is (empty? (law/violations-of (mk false) :corresponds/Operation.realized))
           "no code extracted → the realized demand is vacuous (the guard)"))))
 
-;; ── container-altitude relation demands (delegates-realized / delegates-faithful) ──
+;; ── op-level delegates realization (the roll-up public-call graph, :sub / preserve) ──
+;; The FIDELITY (faithful) direction was retired 2026-07-20: it is an architectural concern enforced by
+;; Subsystem `:may-depend` conformance, not op-by-op. delegates keeps only realization (⊑ preserve).
 
 (defn- names
   "Entity names for a set of offender eids — maps `violations-of` eids → entity names via `cq/entity`."
@@ -268,29 +270,6 @@
                   (not= "ks|child|s" (:rel/id %)))
             container-base)))
 
-;; undeclared-call-base: base MINUS delegates rel, MINUS orig -7, PLUS renamed ext-s-op (-7), PLUS :calls edge
-(def ^:private undeclared-call-base
-  (-> (filterv #(and (not= "s-op|delegates|t-op" (:rel/id %))
-                     (not= -7 (:db/id %)))
-               container-base)
-      (conj {:db/id -7 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "ext-s-op" :val/extracted true})
-      (conj {:rel/id "call" :rel/from -7 :rel/kind :calls :rel/to -8})))
-
-;; undeclared-call-db: undeclared-call-base as a db (faithful offender: ext-s-op)
-(def ^:private undeclared-call-db (build/tx-maps->cozo undeclared-call-base))
-
-;; declared-call-db: base + :calls edge (same as with-call-db — faithful green)
-(def ^:private declared-call-db with-call-db)
-
-;; unclaimed-container-db: undeclared-call-base MINUS design module -2/-4 and their rels
-;; (callee container has no design twin → NOT claimed → no faithful fire)
-(def ^:private unclaimed-container-db
-  (build/tx-maps->cozo
-   (filterv #(and (not= -2 (:db/id %))
-                  (not= -4 (:db/id %))
-                  (not= "t|exposes|t-op" (:rel/id %)))
-            undeclared-call-base)))
-
 (deftest delegates-realized-fires-without-a-backing-call
   (testing "op-level: a cross-module design delegation whose endpoint twins never reach each other
             through the fact call graph is an offender; adding the :calls edge clears it"
@@ -302,12 +281,6 @@
             its very existence is the plain `realized` demand's concern, not this one"
     (is (empty? (law/violations-of untwinned-module-db :corresponds/Operation.delegates-realized)))))
 
-(deftest delegates-faithful-fires-on-an-undeclared-call-between-claimed-containers
-  (testing "a fact call between twinned containers with no design delegation covering it"
-    (is (= #{"ext-s-op"} (names undeclared-call-db (law/violations-of undeclared-call-db :corresponds/Operation.delegates-faithful))))
-    (is (empty? (law/violations-of declared-call-db :corresponds/Operation.delegates-faithful)))
-    (is (empty? (law/violations-of unclaimed-container-db :corresponds/Operation.delegates-faithful))
-        "a call into an UNMODELLED container is a coverage signal, not a fidelity violation")))
 
 ;; ── :covered-from path demand (ex-EffectCorrespondence) ──────────────────────
 
@@ -406,14 +379,25 @@
 
 (deftest relation-map-generates-directional-laws
   (testing "the inclusion direction picks which homomorphism law(s) generate, keyed by direction"
-    (let [keys-of (fn [incl] (mapv :key (#'s/relation-map-laws :T {:rel :dep :incl incl :expr [:+ :link]})))]
+    (let [keys-of (fn [incl] (mapv :key (:laws (#'s/relation-map-decl :T {:rel :dep :incl incl :expr [:+ :link]}))))]
       (is (= [:corresponds/T.dep-realized] (keys-of :sub)) ":sub (⊑ preserve) → the realized law only")
       (is (= [:corresponds/T.dep-covered]  (keys-of :sup)) ":sup (⊒ reflect)  → the covered law only")
       (is (= [:corresponds/T.dep-realized :corresponds/T.dep-covered] (keys-of :eq)) ":eq (≡) → both")))
   (testing "the preserve law binds BOTH endpoints positively via twin (an untwinned endpoint is totality's concern)"
-    (let [preserve (first (#'s/relation-map-laws :T {:rel :dep :incl :sub :expr [:+ :link]}))]
+    (let [preserve (first (:laws (#'s/relation-map-decl :T {:rel :dep :incl :sub :expr [:+ :link]})))]
       (is (some #{'(twin ?a ?ea)} (:where preserve)))
       (is (some #{'(twin ?b ?eb)} (:where preserve))))))
+
+(deftest roll-up-compiles-to-a-guarded-transitive-closure-rule
+  (testing "the roll-up `R·(P·R)*` (public call graph) compiles to a recursive derived rule: `R+`
+            restricted to P-guarded interior — base `(R a b)` binds both ends (no unsafe reflexive head)"
+    (let [{:keys [terms]} (#'s/relation-map-decl :T {:rel :dep :incl :sub
+                                                     :expr [:cat :link [:* [:cat [:test :private] :link]]]})]
+      (is (= 2 (count terms)) "two rule clauses: the base and the guarded-recursive step")
+      (is (= '(dep-reach ?a ?b) (ffirst terms)) "the reach rule is named <rel>-reach")
+      (is (= '[(dep-reach ?a ?b) (link ?a ?b)] (first terms)) "base: a direct link")
+      (is (= '[(dep-reach ?a ?b) (link ?a ?m) [?m :val/private true] (dep-reach ?m ?b)] (second terms))
+          "step: a link to a PRIVATE node, then continue"))))
 
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
 (defstructure LTwin
