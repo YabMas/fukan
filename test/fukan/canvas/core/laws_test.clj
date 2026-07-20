@@ -388,7 +388,13 @@
   (testing "the preserve law binds BOTH endpoints positively via twin (an untwinned endpoint is totality's concern)"
     (let [preserve (first (#'s/relation-map-laws :T {:rel :dep :incl :sub :expr [:+ :link]}))]
       (is (some #{'(twin ?a ?ea)} (:where preserve)))
-      (is (some #{'(twin ?b ?eb)} (:where preserve))))))
+      (is (some #{'(twin ?b ?eb)} (:where preserve)))))
+  (testing "a :cat of atoms lowers to one clause PER HOP and every hop survives into the law
+            (regression: reach lowering took only the FIRST clause, silently dropping later hops)"
+    (let [covered (first (#'s/relation-map-laws :T {:rel :dep :incl :sup :expr [:cat :link :owns]}))
+          calls   (set (map first (filter seq? (:where covered))))]
+      (is (contains? calls 'link) "the first hop is in the law")
+      (is (contains? calls 'owns) "and so is the second — not dropped"))))
 
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
 (defstructure LTwin

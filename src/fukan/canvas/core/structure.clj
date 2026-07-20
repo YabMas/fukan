@@ -210,16 +210,19 @@
       false)
     :else false))
 
-(defn- reach-clause
-  "A single datalog clause binding `from`→`to` over the fact expression `E` — a regular-relation term
-   (an atom, `:cat`, `:+`/`:*` over atoms), lowered through the `path` builtin. An `E` that needs its
-   OWN recursion (the public call graph) is a NAMED fact relation — a `defrelation` — referenced here as
-   an atom, so the complex definition lives with the relation, not inline in the correspondence."
+(defn- reach-clauses
+  "The datalog clauses binding `from`→`to` over the fact expression `E` — a regular-relation term
+   (an atom, `:cat`, `:+`/`:*` over atoms), lowered through the `path` builtin. A star-headed path
+   folds into ONE `or-join` clause, but a plain `:cat` of atoms lowers to one clause PER HOP — the
+   caller must splice all of them (taking only the first silently dropped every later hop). An `E`
+   that needs its OWN recursion (the public call graph) is a NAMED fact relation — a `defrelation` —
+   referenced here as an atom, so the complex definition lives with the relation, not inline in the
+   correspondence."
   [expr from to]
   (when-not (path-lowerable? expr)
     (throw (ex-info (str "relation-map: expression " (pr-str expr) " is not a regular-relation path — "
                          "name it a `defrelation` and reference it as an atom") {:expr expr})))
-  (first (expand-clauses [(list 'path from (expr->path-segments expr) to)])))
+  (expand-clauses [(list 'path from (expr->path-segments expr) to)]))
 
 (defn- ref-arg->form
   "Code for one relation-slot target: a symbol → (var sym); an inline (Tag ...) form
@@ -895,7 +898,7 @@
                               (throw (ex-info (str "correspond " cname ": relation map " (pr-str rel)
                                                    " needs an inclusion (:sub / :sup / :eq) then an expression, got "
                                                    (pr-str rincl)) {:rel rel :incl rincl})))
-                            (reach-clause expr '?_a '?_b)   ; validate E eagerly (throws here, naming the correspond)
+                            (reach-clauses expr '?_a '?_b)   ; validate E eagerly (throws here, naming the correspond)
                             {:rel (keyword rel) :incl rincl :expr expr})
                           rel-subs)]
     {:fact-tag ftag :incl incl :restrict restrict :bridge bridge :demands demands :rel-demands rel-demands}))
@@ -1268,7 +1271,7 @@
 
 (defn- relation-map-laws
   "The generated law(s) for a relation map `(rel incl E)` on `tag`. `E` is a regular-relation expression
-   over fact relations, lowered to a `reach-clause` binding two nodes (a complex `E` is a NAMED fact
+   over fact relations, lowered to spliced `reach-clauses` binding two nodes (a complex `E` is a NAMED fact
    `defrelation`, referenced as an atom). The INCLUSION picks which homomorphism condition(s) to enforce:
      :sub (⊑, preserve) — every design `rel` edge is realized by an `E` reach between the endpoints' twins.
      :sup (⊒, reflect)  — every fact node the twin reaches over `E` is declared on the design side.
@@ -1284,20 +1287,20 @@
                   :offenders '[?a]
                   :where [['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
                           '(twin ?a ?ea) '(twin ?b ?eb)
-                          (list 'not-join '[?ea ?eb] (reach-clause expr '?ea '?eb))]}
+                          (list* 'not-join '[?ea ?eb] (reach-clauses expr '?ea '?eb))]}
         reflect  {:key (demand-key tag (str (name rel) "-covered"))
                   :desc (str (name tag) "." (name rel) ": every fact node the twin reaches via "
                              (pr-str expr) " is declared on the design side")
                   :offenders '[?x]
-                  :where [['?x :structure/of tag] '(not [?x :val/extracted true])
-                          '(twin ?x ?t)
-                          (reach-clause expr '?t '?v)
-                          (if twinned?
-                            (list 'not-join '[?x ?v]
-                                  ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
-                                  '(twin ?b ?v))
-                            (list 'not-join '[?x ?v]
-                                  ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v]))]}]
+                  :where (-> [['?x :structure/of tag] '(not [?x :val/extracted true])
+                              '(twin ?x ?t)]
+                             (into (reach-clauses expr '?t '?v))
+                             (conj (if twinned?
+                                     (list 'not-join '[?x ?v]
+                                           ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
+                                           '(twin ?b ?v))
+                                     (list 'not-join '[?x ?v]
+                                           ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v]))))}]
     (case incl
       :sub [preserve]
       :sup [reflect]
