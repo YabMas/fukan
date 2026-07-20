@@ -45,7 +45,24 @@
 
 (defonce ^:private structures (atom {}))
 
-(defn ^:export register-structure! [sdef] (swap! structures assoc (:tag sdef) sdef) (:tag sdef))
+(defn ^:export register-structure!
+  "Register `sdef` under its tag. A structure's tag is QUALIFIED (identity = defining ns + name),
+   so structures sharing a short name coexist. A RELATION element's tag is UNQUALIFIED — its
+   datalog rule name is global — so its NAME is signature identity: re-declaring the same relation
+   tag from a DIFFERENT namespace would silently replace the first declaration (the registry keys
+   by tag) and every law over the name would read only the survivor. That collision THROWS here,
+   at declaration — the registry is the only place the first declaration still exists to compare
+   against. Same-namespace re-registration (a REPL reload) replaces as before."
+  [sdef]
+  (when-not (namespace (:tag sdef))
+    (when-let [prior (get @structures (:tag sdef))]
+      (when (not= (:ns prior) (:ns sdef))
+        (throw (ex-info (str "relation " (:tag sdef) " is already declared by " (:ns prior)
+                             " — a relation's rule name is global, so a re-declaration by "
+                             (:ns sdef) " would silently shadow it. Rename one of the two.")
+                        {:tag (:tag sdef) :declared-by (:ns prior) :redeclared-by (:ns sdef)})))))
+  (swap! structures assoc (:tag sdef) sdef)
+  (:tag sdef))
 (defn ^{:malli/schema [:=> [:cat] [:vector :any]]}
   all-structures [] (vals @structures))
 (defn ^{:malli/schema [:=> [:cat :keyword] :any]}
@@ -1045,7 +1062,7 @@
   [rtag docstring & members]
   (let [tag        (keyword (name rtag))
         member-kws (mapv (comp keyword name) members)]
-    `(register-structure! {:tag ~tag :doc ~docstring :slots [] :laws []
+    `(register-structure! {:tag ~tag :doc ~docstring :ns ~(str *ns*) :slots [] :laws []
                            :relation-coproduct ~member-kws})))
 
 (defmacro defrelation

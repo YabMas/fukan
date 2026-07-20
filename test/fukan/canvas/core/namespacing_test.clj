@@ -53,3 +53,17 @@
       (is (contains? flagged "local") "the local law fires on its own ::Kind instance")
       (is (not (contains? flagged "fromlib"))
           "and NOT on fukan.common.vocab.code.kind/Kind — ns-precise scoping (pre-fix the shared short name cross-scoped)")))))
+
+(deftest relation-name-collisions-are-loud
+  (testing "a relation element's UNQUALIFIED tag is signature identity: re-declaring the same
+            relation from a DIFFERENT namespace throws at registration (the registry keys by tag,
+            so it would otherwise silently replace the first declaration — and every law over the
+            name would read only the survivor); same-ns re-registration (a REPL reload) replaces"
+    (let [decl {:tag :nt-collide :doc "d" :ns "vocab.a" :slots [] :laws []
+                :derived-rule {:head '[?x] :bodies ['[[?x :structure/of :vocab.a/T]]]}}]
+      (is (= :nt-collide (s/register-structure! decl)))
+      (is (= :nt-collide (s/register-structure! (assoc decl :doc "reloaded")))
+          "the declaring namespace may re-register (REPL reload)")
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"already declared by vocab\.a"
+                            (s/register-structure! (assoc decl :ns "vocab.b")))
+          "a second namespace claiming the name is a collision, caught at declaration"))))
