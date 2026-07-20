@@ -138,12 +138,12 @@
                    {:rel/id "m|child|hidden"   :rel/from -1 :rel/kind :child :rel/to -3}
                    {:rel/id "m|child|exported" :rel/from -1 :rel/kind :child :rel/to -4}
                    {:rel/id "m|child|for-test" :rel/from -1 :rel/kind :child :rel/to -5}])]
-      (is (= #{"leaked"} (law/violation-names db :corresponds/Operation.covered))
+      (is (= #{"leaked"} (law/violation-names db :corresponds/Operation.surjective))
           "only the public, non-exempt, unmodelled op is flagged by the covered demand"))))
 
 (deftest encapsulation-green-on-the-self-model
   (testing "the self-model's entire public surface is covered by the model or deliberately exempt"
-    (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.covered))
+    (is (empty? (law/violation-names (pipeline/build-model "src") :corresponds/Operation.surjective))
         "0 unencapsulated — every public function is modelled, private, exported, or test-support")))
 
 ;; Tiny model: authored A.op-a :delegates B.op-b. "Same module name" authored/extracted pairs make

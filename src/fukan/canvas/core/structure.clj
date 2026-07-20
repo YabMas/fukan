@@ -849,24 +849,22 @@
    vectors (:when/:require/:unless) pass through unquote-lit. Anything else throws, naming the form."
   [sname f]
   (let [[dk opts] [(keyword (first f)) (second f)]
-        allowed   (case dk
-                    :realized #{:key :desc :when :require}
-                    :covered  #{:key :desc :when :unless}
-                    :agrees   #{:key :desc :when :by :over})]
+        allowed   #{:key :desc :when :by :over}]
+    (when-not (= dk :agrees)
+      (throw (ex-info (str "correspond " sname ": unknown node-demand sub-form " (pr-str (first f))
+                           " (the object map rides the :total / :surjective-onto flags)") {:form f})))
     (when (and opts (not (map? opts)))
-      (throw (ex-info (str "defstructure " sname ": " (first f) " options must be a map") {:form f})))
+      (throw (ex-info (str "correspond " sname ": (agrees …) options must be a map") {:form f})))
     (doseq [k (keys opts)]
       (when-not (allowed k)
-        (throw (ex-info (str "defstructure " sname ": " (first f) " does not take " k
-                             " — allowed: " allowed) {:form f :key k}))))
-    (when (and (= dk :agrees) (not (:by opts)))
-      (throw (ex-info (str "defstructure " sname ": (agrees …) needs :by <comparator-key>") {:form f})))
-    (when (and (= dk :agrees) (= :structural (:by opts)) (not (seq (:over opts))))
-      (throw (ex-info (str "defstructure " sname ": (agrees {:by :structural …}) needs :over [slot…]") {:form f})))
+        (throw (ex-info (str "correspond " sname ": (agrees …) does not take " k " — allowed: " allowed) {:form f :key k}))))
+    (when-not (:by opts)
+      (throw (ex-info (str "correspond " sname ": (agrees …) needs :by <comparator-key>") {:form f})))
+    (when (and (= :structural (:by opts)) (not (seq (:over opts))))
+      (throw (ex-info (str "correspond " sname ": (agrees {:by :structural …}) needs :over [slot…]") {:form f})))
     {:demand dk
-     :key    (:key opts)  :desc (:desc opts)  :by (:by opts)  :over (:over opts)
-     :when   (unquote-lit (:when opts)) :require (unquote-lit (:require opts))
-     :unless (unquote-lit (:unless opts))}))
+     :key  (:key opts) :desc (:desc opts) :by (:by opts) :over (:over opts)
+     :when (unquote-lit (:when opts))}))
 
 (defn- parse-correspond-config
   "Parse a `(correspond Design Fact …)` tail (the forms AFTER the two tags) → the external
@@ -881,7 +879,20 @@
    fn (the arbitrary escape hatch): it must RESOLVE at expansion and carry a registered Cozo predicate
    port. Reuses `parse-demand` (node demands)."
   [cname fact-tag forms]
-  (let [seq-subs   (filter seq? forms)
+  (let [;; the OBJECT MAP rides bare keyword flags: `:total` (map is total) and `:surjective-onto <pred>`
+        ;; (map is surjective onto the fact subtheory the predicate names). Everything else is a seq sub-form.
+        [obj-demands rest-forms]
+        (loop [fs forms, obj [], rst []]
+          (cond
+            (empty? fs)                    [obj rst]
+            (= :total (first fs))          (recur (next fs) (conj obj {:demand :total}) rst)
+            (= :surjective-onto (first fs))
+            (do (when-not (keyword? (second fs))
+                  (throw (ex-info (str "correspond " cname ": :surjective-onto needs a fact predicate keyword, got "
+                                       (pr-str (second fs))) {:pred (second fs)})))
+                (recur (nnext fs) (conj obj {:demand :surjective :pred (second fs)}) rst))
+            :else                          (recur (next fs) obj (conj rst (first fs)))))
+        seq-subs   (filter seq? rest-forms)
         bridge-sub (first (filter #(= 'bridge (first %)) seq-subs))
         bridge     (when-let [barg (second bridge-sub)]
                      (if (keyword? barg)
@@ -889,15 +900,15 @@
                        (if-let [v (resolve barg)]   ; a SYMBOL → resolve + qualify (registered-port escape hatch)
                          (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
                          (throw (ex-info (str "correspond " cname ": bridge " barg " does not resolve") {:bridge barg})))))
-        demand-subs (filter #('#{realized covered agrees} (first %)) seq-subs)
-        demands     (mapv #(parse-demand cname %) demand-subs)
+        agrees-subs (filter #(= 'agrees (first %)) seq-subs)   ; the only remaining node-demand sub-form (escape hatch)
+        demands     (into obj-demands (mapv #(parse-demand cname %) agrees-subs))
         ;; local key = (or :key :demand); duplicates within one correspond throw early (the global
         ;; cross-family guard in `correspondence*` would also catch it, but at seam-collection time).
         _           (let [local-keys (map #(or (:key %) (:demand %)) demands)
                           dupes (filter #(> (count (filter #{%} local-keys)) 1) (distinct local-keys))]
                       (doseq [d dupes]
                         (throw (ex-info (str "correspond " cname ": duplicate demand key " (pr-str d)) {:key d}))))
-        rel-subs    (remove #(or (= 'bridge (first %)) ('#{realized covered agrees} (first %))) seq-subs)
+        rel-subs    (remove #(or (= 'bridge (first %)) (= 'agrees (first %))) seq-subs)
         ;; a relation map is `(rel incl E)`: the inclusion the map asserts (:sub ⊑ / :sup ⊒ / :eq ≡)
         ;; and a relation-algebra expression over fact relations. Compile E eagerly so a malformed
         ;; expression throws HERE (at expansion, naming the correspond), not at check.
@@ -1217,29 +1228,26 @@
    node IS of a distinct extracted-only tag), and it lets a same-tag correspondence (`ftag = dtag`, an
    identity-on-shared-sort like Schema) still split the two strata by provenance. The stable law key
    rides `dtag`, so keys stay `:corresponds/<Design>.*`."
-  [dtag ftag {:keys [demand key desc when require unless by over]}]
+  [dtag ftag {:keys [demand key desc when pred by over]}]
   (let [k (demand-key dtag (or key demand))]
     (case demand
-      :realized
-      (if require
-        {:key k :offenders '[?x]
-         :desc (or desc (str (name dtag) " (" (clojure.core/name (or key demand)) "): every design instance's twin satisfies the requirement"))
-         :where (vec (concat [['?x :structure/of dtag] '(not [?x :val/extracted true])]
-                             when
-                             ['(twin ?x ?t)
-                              (apply list 'not-join '[?t] require)]))}
-        {:key k :offenders '[?x]
-         :desc (or desc (str (name dtag) ": every design instance is realized by a fact twin"))
-         :where (vec (concat [['?_g :structure/of ftag] '[?_g :val/extracted true]
-                              ['?x :structure/of dtag] '(not [?x :val/extracted true])]
-                             when
-                             ['(not-join [?x] (twin ?x ?t))]))})
-      :covered
+      ;; the OBJECT MAP is total: every design instance has a fact twin (guarded on ∃ extracted fact of
+      ;; this kind, so it is vacuously green before any code is extracted).
+      :total
       {:key k :offenders '[?x]
-       :desc (or desc (str (name dtag) ": every fact instance is covered by a design twin or deliberately exempt"))
-       :where (vec (concat [['?x :structure/of ftag] '[?x :val/extracted true]]
+       :desc (or desc (str (name dtag) ": the object map is total — every design instance has a fact twin"))
+       :where (vec (concat [['?_g :structure/of ftag] '[?_g :val/extracted true]
+                            ['?x :structure/of dtag] '(not [?x :val/extracted true])]
                            when
-                           (map (fn [c] (list 'not c)) unless)
+                           ['(not-join [?x] (twin ?x ?t))]))}
+      ;; the OBJECT MAP is surjective onto a fact subtheory `pred`: every fact instance the codomain's
+      ;; own predicate calls in-subtheory (e.g. Fn's public surface) has a design preimage.
+      :surjective
+      {:key k :offenders '[?x]
+       :desc (or desc (str (name dtag) ": the object map is surjective onto " pred
+                           " — every such fact instance has a design preimage"))
+       :where (vec (concat [(list (symbol (name pred)) '?x) '[?x :val/extracted true]]
+                           when
                            ['(not-join [?x] (twin ?s ?x))]))}
       :agrees
       ;; a PAIR-HYBRID law: :where enumerates the design instance + its fact twin (+ any :when guard);

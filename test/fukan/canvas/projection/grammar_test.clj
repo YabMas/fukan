@@ -128,10 +128,10 @@
   (testing "the card renders the twin ladder and every demand with its stable key"
     (let [card (g/correspondence-card)]
       (is (str/includes? card ":qualified-suffix") "the root bridge strategy is named")
-      (is (str/includes? card ":corresponds/Operation.realized"))
+      (is (str/includes? card ":corresponds/Operation.total"))
       (is (str/includes? card ":corresponds/Operation.delegates-realized"))
       (is (str/includes? card ":corresponds/Operation.performs-covered"))
-      (is (str/includes? card "every authored operation is realized")
+      (is (str/includes? card "the object map is total")
           "descs come from the generated laws — the invisible laws become visible"))))
 
 (deftest print-dual-round-trips-the-correspondence-seam
@@ -146,8 +146,9 @@
           slots (first (filter map? form))]
       (is (some? corr) "the corresponds body form renders (from the external correspondence config)")
       (is (= 'corresponds (first corr)) "renders as a bare (corresponds …) — no basis token")
-      (is (= 2 (count (filter #(and (seq? %) (#{'realized 'covered} (first %))) corr)))
-          "the two authored node demands (realized, covered) render as sub-forms — type-coverage folded away")
+      (is (and (some #{:total} corr)
+               (= [:surjective-onto :fn-public] (->> corr (drop-while #(not= % :surjective-onto)) (take 2))))
+          "the object map renders as the bare :total / :surjective-onto flags (not sub-forms)")
       (is (= {:transitive true} (second (:delegates slots)))
           "identity slot carries only its identity option — correspondence moved external")
       (is (not (map? (second (:performs slots))))

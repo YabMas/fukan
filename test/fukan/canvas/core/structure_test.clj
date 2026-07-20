@@ -742,32 +742,25 @@
   (testing "an unresolvable bridge symbol throws at expansion"
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested (bridge nope-not-defined)))))))
 
-;; ── demand sub-forms: (realized …)/(covered …) ───────────────────────────────
+;; ── the object map: the :total / :surjective-onto flags ──────────────────────
 
-(defstructure TCorrDemand "correspond test: node demands (parse-level only — no instances)")
+(defstructure TCorrDemand "correspond test: object-map flags (parse-level only — no instances)")
 (s/correspond TCorrDemand
-  (realized)
-  (realized {:key :req-check :desc "twin carries p"
-             :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]]})
-  (covered  {:unless '[[?x :val/private true]]}))
+  :total
+  :surjective-onto :tc-public)
 
-(deftest correspond-demands-register
-  (testing "(realized …)/(covered …) sub-forms land as :demands with derived keys"
-    (is (= [{:demand :realized :key nil :desc nil :when nil :require nil :unless nil :by nil :over nil}
-            {:demand :realized :key :req-check :desc "twin carries p"
-             :when '[[?x :val/public true]] :require '[[?t :val/p ?_v]] :unless nil :by nil :over nil}
-            {:demand :covered :key nil :desc nil :when nil :require nil
-             :unless '[[?x :val/private true]] :by nil :over nil}]
+(deftest correspond-object-map-registers
+  (testing ":total / :surjective-onto flags land as :demands (the object map's two properties)"
+    (is (= [{:demand :total}
+            {:demand :surjective :pred :tc-public}]
            (:demands (s/correspondence-of ::TCorrDemand))))))
 
 (deftest correspond-demands-validate
-  (testing "malformed demands throw at expansion (via the external correspond macro)"
+  (testing "malformed forms throw at expansion (via the external correspond macro)"
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
-                                           (realized {:unless [[?x :val/p true]]})))))  ; :unless is covered-only
+                                           :surjective-onto))))       ; :surjective-onto needs a predicate keyword
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
-                                           (covered {:require [[?t :val/p ?_v]]})))))  ; :require is realized-only
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
-                                           (realized) (realized)))))  ; duplicate default key
+                                           (realized)))))             ; realized/covered are no longer sub-forms
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
                                            (agrees {})))))            ; agrees needs :by
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
@@ -788,8 +781,8 @@
              (get-in seam [:kinds :fukan.common.vocab.code.module/Module :bridge]))
           "Module is the bridged root (a name-match strategy keyword)")
       (is (= 3 (count (get-in seam [:kinds op :demands]))) "Operation's three node demands (agrees derived)")
-      (is (= #{:corresponds/Operation.realized
-               :corresponds/Operation.covered :corresponds/Operation.agrees}
+      (is (= #{:corresponds/Operation.total
+               :corresponds/Operation.surjective :corresponds/Operation.agrees}
              (into #{} (map :key) (get-in seam [:kinds op :demands])))
           "node demands carry their FULL derived keys (type-coverage folded into the out↦out agrees map)")
       (is (= #{[:delegates #{:corresponds/Operation.delegates-realized}]   ; :sub — preserve only (roll-up)

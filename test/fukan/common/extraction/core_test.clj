@@ -98,7 +98,7 @@
             op-layer Operation is backed by a real function — the cross-layer
             correspondence is assertable only because both layers share that graph"
     (let [model      (pipeline/build-model "src")        ; design + extracted code, unified
-          unrealized (law/violation-names model :corresponds/Operation.realized)]
+          unrealized (law/violation-names model :corresponds/Operation.total)]
       ;; sanity: build-model actually brought both layers together
       (is (seq (cq/q '[:find ?s :where [?s :structure/of :fukan.common.vocab.code.operation/Operation]] model)) "model has design Operations")
       (is (seq (cq/q '[:find ?o :where [?o :structure/of :fukan.common.extraction.clojure.operation/Fn]] model)) "build-model extracted code into Fns")

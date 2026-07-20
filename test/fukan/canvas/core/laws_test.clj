@@ -223,9 +223,9 @@
                                     :entity/name "other" :val/extracted true}))))
           guarded (mk true)]
       (is (contains? (set (map #(:entity/name (cq/entity guarded %))
-                               (law/violations-of guarded :corresponds/Operation.realized)))
+                               (law/violations-of guarded :corresponds/Operation.total)))
                      "lonely"))
-      (is (empty? (law/violations-of (mk false) :corresponds/Operation.realized))
+      (is (empty? (law/violations-of (mk false) :corresponds/Operation.total))
           "no code extracted → the realized demand is vacuous (the guard)"))))
 
 ;; ── op-level delegates realization (the roll-up public-call graph, :sub / preserve) ──

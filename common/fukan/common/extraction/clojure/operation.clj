@@ -12,7 +12,7 @@
    The generic `Operation` structure — pure, language-neutral identity — lives in
    `fukan.common.vocab.code.operation`."
   (:require [fukan.canvas.core.substrate :as sub]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.canvas.core.structure :as s :refer [defstructure defrelation]]
             [fukan.common.typing.malli :refer [Schema]]
             [fukan.common.vocab.code.effect :refer [Effect]]
             [fukan.common.vocab.code.operation :as operation :refer [Operation]]))
@@ -32,23 +32,30 @@
    :export       [:? :boolean]                   ; intentionally public for MECHANISM (^:export)
    :test-support [:? :boolean]})                 ; intentionally public for TEST-SUPPORT (^:test-support)
 
-;; ── the correspondence: Operation ↦ Fn + the drift demands ────────────────────
+;; Fn OWNS its public surface — the subtheory the design↦fact correspondence must be surjective ONTO.
+;; A public Fn is an extracted function that is none of private (`defn-`) / `^:export` / `^:test-support`.
+;; The correspondence names this predicate (`:surjective-onto :fn-public`) instead of reaching into Fn's
+;; raw `:val/*` triples from the design side — the codomain owns which of its instances count.
+(defrelation :fn-public
+  "Fn's public surface: an extracted function that is not private, not ^:export, not ^:test-support."
+  '[?x]
+  '[[?x :structure/of :fukan.common.extraction.clojure.operation/Fn]
+    (not [?x :val/private true]) (not [?x :val/export true]) (not [?x :val/test-support true])])
+
+;; ── the correspondence: Operation ↦ Fn, as a theory morphism ─────────────────
 ;; Declared against the tags from outside (the external `(correspond …)` hook), so the vocabulary keeps
-;; pure identity and this plugin keeps the Clojure knowledge. Contributes the cross-tag twin (by name,
-;; nested within twinned Modules) + the drift demands, generated as laws at :corresponds/Operation.*.
-;; Each demand's `:desc` is its human-facing name in check/drift output.
-;;
-;; The IDENTITY component — `in ↦ in`, `out ↦ out` (structural agreement over the shared `Schema` sort) —
-;; is NOT authored: the kernel DERIVES it from the slots Operation and Fn share by name+sort (minus the
-;; charactered `:performs`/`:delegates`), as the `:corresponds/Operation.agrees` demand. A morphism states
-;; only its NON-identity maps; the shared-sort slots agree for free (types content-dedup across strata).
-;; It also SUBSUMES the old `type-coverage` demand: `out ↦ out` FORWARD fails both when the twin's out
-;; DIFFERS from the design's (the old `adheres`) and when the twin declares NO out where the design does
-;; (the old type-coverage) — one homomorphism condition, two failure modes.
+;; pure identity and this plugin keeps the Clojure knowledge. Every law is generated at
+;; :corresponds/Operation.*. The block is exactly the morphism's components:
+;;   · the OBJECT MAP — `:total` (every design Operation has a twin) + `:surjective-onto :fn-public`
+;;     (every public extracted Fn has a design preimage; the subtheory is Fn's own public surface).
+;;   · the RELATION MAPS — `(:delegates :sub …)` and `(:performs :sup …)` below.
+;;   · the IDENTITY component (`in↦in`, `out↦out` over the shared `Schema` sort) is DERIVED, not authored
+;;     (the `:corresponds/Operation.agrees` demand) — a morphism states only its non-identity maps, and
+;;     the shared-sort slots agree for free (types content-dedup across strata). It also SUBSUMES the old
+;;     `type-coverage`: `out↦out` FORWARD fails both on a differing out (old `adheres`) and a missing one.
 (s/correspond Operation Fn
-  (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
-  (covered  {:unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]
-             :desc "every public extracted operation is covered by the model or deliberately exempt"})
+  :total
+  :surjective-onto :fn-public
   ;; the relation-map primitive. delegates ⊑ the PUBLIC call graph — the roll-up `calls·(private·calls)*`
   ;; (Kleene-with-tests): a call path a→b through only PRIVATE interior (routing through another PUBLIC
   ;; op is TWO delegations, not one). PRESERVE only (:sub): every declared op-level delegation must be

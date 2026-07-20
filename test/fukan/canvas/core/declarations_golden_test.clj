@@ -236,8 +236,15 @@
 ;; faithful). Fidelity (the retired faithful direction) is an ARCHITECTURAL concern already enforced by
 ;; Subsystem `:may-depend` conformance. Live `(check)` still 0 (fixed one over-declared self-model edge:
 ;; model->cozo reached `q` only through public intermediates it already delegates to).
-(def ^:private golden-terms {:count 51 :hash -1747249709})
-(def ^:private golden-laws  {:count 60 :hash 132805134})
+;; 2026-07-20 (d): the OBJECT MAP. `realized`→`:total`, `covered`→`:surjective-onto :fn-public` (bare
+;; keyword flags, not sub-forms). The `:private`/`:export`/`:test-support` exemptions moved OFF the
+;; correspondence ONTO `Fn`, as the `fn-public` derived predicate the codomain owns. Terms 51→52 (the
+;; new `fn-public` rule; unqualified tag, in golden scope via the declaring plugin ns). Laws hold at 60
+;; (still one total + one surjective + one agrees node demand), but their keys (`.realized`→`.total`,
+;; `.covered`→`.surjective`), descs, and the surjective `:where` (`(fn-public ?x)` instead of the inline
+;; `:val/*` exemptions) changed → laws hash moves. Live `(check)` still 0.
+(def ^:private golden-terms {:count 52 :hash 1179346982})
+(def ^:private golden-laws  {:count 60 :hash -668484897})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
