@@ -365,29 +365,31 @@
                            (filter #(= "corresponds" (namespace %))))
                  (s/all-structures))))))
 
-;; ── type-coverage generated law (ledgered dedicated offender test) ────────────
+;; ── the out↦out FORWARD map subsumes coverage (ledgered dedicated offender test) ──
 
-(deftest generated-type-coverage-fires-on-a-signatureless-twin
-  (testing "a public modelled op whose twin declares no signature (no :out) is an offender; with an :out, green
-            (the ledgered dedicated offender test for :corresponds/Operation.type-coverage)"
+(deftest generated-agrees-fires-on-a-twin-missing-a-modelled-out
+  (testing "the derived `out↦out` identity map is FORWARD: a public modelled op that DECLARES an :out
+            whose twin declares NO :out is an offender (the folded-in type-coverage failure mode); a
+            twin carrying the same :out is green. The dedicated missing-out offender test for
+            :corresponds/Operation.agrees (differing-out + :in order/arity live in correspondence-test)."
     (let [mk (fn [twin-datoms]
                (build/tx-maps->cozo
                 (concat
                  [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}
                   {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                  {:db/id -5 :structure/of :fukan.common.typing.malli/Schema :val/kind "nil"}  ; design f's modelled :out
+                  {:rel/id "f|out|s5" :rel/from -2 :rel/kind :out :rel/to -5}
                   {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}
                   {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "f" :val/extracted true}
                   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
                  twin-datoms)))
-          ;; :out kind "nil" matches design f's default render ([:=> [:cat] :nil]) so adherence stays green too
-          no-sig   (mk [])
-          with-sig (mk [{:db/id -5 :structure/of :fukan.common.typing.malli/Schema :val/kind "nil"}
-                        {:rel/id "f|out|s" :rel/from -4 :rel/kind :out :rel/to -5}])]
-      (is (= #{"f"} (names no-sig (law/violations-of no-sig :corresponds/Operation.type-coverage)))
-          "twin exists but declares no signature → offender")
-      (is (empty? (law/violations-of with-sig :corresponds/Operation.type-coverage))
-          "the same twin with an :out signature → green"))))
+          no-sig   (mk [])                                                    ; twin declares no :out → forward fail
+          with-sig (mk [{:rel/id "tf|out" :rel/from -4 :rel/kind :out :rel/to -5}])] ; twin :out = the SAME node → green
+      (is (= #{"f"} (names no-sig (law/violations-of no-sig :corresponds/Operation.agrees)))
+          "design declares an :out, twin declares none → forward out↦out offender")
+      (is (empty? (law/violations-of with-sig :corresponds/Operation.agrees))
+          "the same twin carrying the modelled :out → green"))))
 
 ;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
 (defstructure LTwin

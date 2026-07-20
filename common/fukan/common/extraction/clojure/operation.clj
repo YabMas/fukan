@@ -36,17 +36,17 @@
 ;; Declared against the tags from outside (the external `(correspond …)` hook), so the vocabulary keeps
 ;; pure identity and this plugin keeps the Clojure knowledge. Contributes the cross-tag twin (by name,
 ;; nested within twinned Modules) + the drift demands, generated as laws at :corresponds/Operation.*.
-;; Each demand's `:desc` is its human-facing name in check/drift output; a `:require` guard reads at
-;; domain altitude through Fn's `out` slot-rule (`(out ?t ?_o)` ⇔ the twin declares an :out type).
+;; Each demand's `:desc` is its human-facing name in check/drift output.
 ;;
 ;; The IDENTITY component — `in ↦ in`, `out ↦ out` (structural agreement over the shared `Schema` sort) —
 ;; is NOT authored: the kernel DERIVES it from the slots Operation and Fn share by name+sort (minus the
 ;; charactered `:performs`/`:delegates`), as the `:corresponds/Operation.agrees` demand. A morphism states
 ;; only its NON-identity maps; the shared-sort slots agree for free (types content-dedup across strata).
+;; It also SUBSUMES the old `type-coverage` demand: `out ↦ out` FORWARD fails both when the twin's out
+;; DIFFERS from the design's (the old `adheres`) and when the twin declares NO out where the design does
+;; (the old type-coverage) — one homomorphism condition, two failure modes.
 (s/correspond Operation Fn
   (realized {:desc "every authored operation is realized by an extracted operation of the same name in the corresponding module"})
-  (realized {:key :type-coverage :require '[(out ?t ?_o)]
-             :desc "every modelled operation's realizing code carries a type signature (:malli/schema)"})
   (covered  {:unless '[[?x :val/private true] [?x :val/export true] [?x :val/test-support true]]
              :desc "every public extracted operation is covered by the model or deliberately exempt"})
   (delegates {:realized-by :calls :faithful true})  ; cross-module :delegates realized by a :calls+ path; :faithful ⇒ the module-level reverse

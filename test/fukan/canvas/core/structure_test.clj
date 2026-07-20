@@ -789,11 +789,11 @@
       (is (= :qualified-suffix
              (get-in seam [:kinds :fukan.common.vocab.code.module/Module :bridge]))
           "Module is the bridged root (a name-match strategy keyword)")
-      (is (= 4 (count (get-in seam [:kinds op :demands]))) "Operation's four node demands")
-      (is (= #{:corresponds/Operation.realized :corresponds/Operation.type-coverage
+      (is (= 3 (count (get-in seam [:kinds op :demands]))) "Operation's three node demands (agrees derived)")
+      (is (= #{:corresponds/Operation.realized
                :corresponds/Operation.covered :corresponds/Operation.agrees}
              (into #{} (map :key) (get-in seam [:kinds op :demands])))
-          "node demands carry their FULL derived keys")
+          "node demands carry their FULL derived keys (type-coverage folded into the out↦out agrees map)")
       (is (= #{[:delegates #{:corresponds/Operation.delegates-realized
                              :corresponds/Operation.delegates-faithful}]
                [:performs  #{:corresponds/Operation.performs-covered}]}

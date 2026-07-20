@@ -200,9 +200,9 @@
 
 (defn type-drift
   "TYPE correspondence (model↔code): the ADHERENCE offenders — modelled Operations whose realizing
-   code signature does NOT exactly match the modelled type. Now a GATED demand, so this also fires in
-   (check); shown here as a focused worklist. (Coverage — the twin carries a sig at all — is a separate
-   demand, also in (check).)"
+   code signature does NOT exactly match the modelled type. A GATED demand, so this also fires in
+   (check); shown here as a focused worklist. The single `out↦out` map subsumes coverage: a twin that
+   declares NO out where the design does is an offender too (the old type-coverage demand folded in)."
   []
   (if-let [m (infra-model/get-model)]
     (let [drifted (law/violation-names m :corresponds/Operation.agrees)]

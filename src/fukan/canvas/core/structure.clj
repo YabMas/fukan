@@ -704,24 +704,23 @@
 ;; it is derived from the two `defstructure`s, so the author states only the NON-identity maps.
 (defn- derive-identity-demand
   "The identity component of `dtag ↦ ftag` as an `agrees` demand (nil if the two theories share no
-   un-charactered sort-slot). `:by :structural` over the shared-sort slots, PRESENCE-AWARE — an
-   optional fact slot is compared only where present (an absent fact value is a coverage concern, not
-   a disagreement), which is the `:when` guard the author used to write by hand. `charactered` is the
-   set of design relation names carrying their own relation map (the `:rel-demands`)."
+   un-charactered sort-slot). `:by :structural` over the shared-sort slots: forward-preserving
+   equality — a design instance and its twin agree iff their targets over EVERY shared slot are
+   identical by eid, so a twin MISSING a slot the design declares is an offender (this is where the
+   old `type-coverage` demand folds in — the `out↦out` map fails both on a differing out and on a
+   missing one). `charactered` is the set of design relation names carrying their own relation map
+   (the `:rel-demands`)."
   [dtag ftag dslots charactered]
   (when-let [fsdef (structure-by-tag ftag)]
     (let [fidx   (into {} (for [s (:slots fsdef)] [(:rel s) s]))
           shared (for [s dslots
-                       :let [f (fidx (:rel s))]
-                       :when (and f (not (scalar-slot? s))
-                                  (= (:target s) (:target f))
+                       :when (and (fidx (:rel s)) (not (scalar-slot? s))
+                                  (= (:target s) (:target (fidx (:rel s))))
                                   (not (charactered (:rel s))))]
-                   f)]                                      ; the FACT slot (its card gives the presence guard)
+                   s)]
       (when (seq shared)
         {:demand :agrees :by :structural :derived true
          :over   (mapv :rel shared)
-         :when   (vec (for [s shared :when (= :optional (:card s))]
-                        (list (symbol (name (:rel s))) '?t (symbol (str "?_" (name (:rel s)))))))
          :desc   (str (name dtag) ": every design instance's fact twin agrees on "
                       (str/join ", " (map (comp name :rel) shared)) " (identity map)")}))))
 

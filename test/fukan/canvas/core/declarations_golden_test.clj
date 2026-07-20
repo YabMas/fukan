@@ -216,8 +216,14 @@
 ;; (minus the charactered `:performs`), emitting it as `:corresponds/Operation.agrees`. One agree law
 ;; before and after (count holds at 62), but its `:key` (adheres→agrees), `:desc` (authored prose →
 ;; derived), and guard var (`?_o`→`?_out`) changed, so only the laws hash moves. Live `(check)` still 0.
+;; 2026-07-20: `type-coverage` FOLDED into the `out↦out` identity map. The `(realized {:key
+;; :type-coverage :require (out ?t ?_o)})` demand left the plugin block, and the derived agrees dropped
+;; its presence guard — structural equality is FORWARD, so a twin missing an :out the design declares is
+;; an offender (the folded failure mode). Laws 62→61 (−the type-coverage realized law; the agrees law's
+;; `:where` loses its guard clause, moving the hash). Live `(check)` still 0 — every modelled op's twin
+;; carries its out on the self-model.
 (def ^:private golden-terms {:count 49 :hash 532380915})
-(def ^:private golden-laws  {:count 62 :hash -1698144195})
+(def ^:private golden-laws  {:count 61 :hash -1687637331})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

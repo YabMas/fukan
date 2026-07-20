@@ -117,11 +117,12 @@
       (is (str/includes? p "(defstructure Structure")))))
 
 (deftest primer-counts-operations-generated-laws
-  (testing "the primer's corresponds pointer agrees with the generator (4 node + 2 delegates + 1 performs
-            = 7; the demands + relation-demands now come from the EXTERNAL (correspond Operation …))"
+  (testing "the primer's corresponds pointer agrees with the generator (3 node [realized, covered, the
+            derived agrees] + 2 delegates + 1 performs = 6; the demands + relation-demands come from the
+            EXTERNAL (correspond Operation …), the identity map derived)"
     (let [db (pipeline/build-model nil)]
       (is (str/includes? (g/vocabulary-primer db "fukan.common.vocab.code.operation")
-                         "; ⇒ 7 generated laws")))))
+                         "; ⇒ 6 generated laws")))))
 
 (deftest correspondence-card-shows-the-seam-and-its-generated-laws
   (testing "the card renders the twin ladder and every demand with its stable key"
@@ -145,8 +146,8 @@
           slots (first (filter map? form))]
       (is (some? corr) "the corresponds body form renders (from the external correspondence config)")
       (is (= 'corresponds (first corr)) "renders as a bare (corresponds …) — no basis token")
-      (is (= 3 (count (filter #(and (seq? %) (#{'realized 'covered} (first %))) corr)))
-          "the realized/covered node demands render as sub-forms")
+      (is (= 2 (count (filter #(and (seq? %) (#{'realized 'covered} (first %))) corr)))
+          "the two authored node demands (realized, covered) render as sub-forms — type-coverage folded away")
       (is (= {:transitive true} (second (:delegates slots)))
           "identity slot carries only its identity option — correspondence moved external")
       (is (not (map? (second (:performs slots))))
