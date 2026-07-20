@@ -282,7 +282,7 @@
     (is (empty? (law/violations-of untwinned-module-db :corresponds/Operation.delegates-realized)))))
 
 
-;; ── :covered-from path demand (ex-EffectCorrespondence) ──────────────────────
+;; ── performs reflect (⊒) — the path relation map (ex-EffectCorrespondence) ──────────
 
 ;; The COMMON BASE (raw tx-maps): one shared io Effect node (-10), design module m (-1),
 ;; authored op f (-2) exposed by m; extracted module fukan.m (-3), extracted twin f (-4)

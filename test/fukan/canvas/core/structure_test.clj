@@ -14,7 +14,14 @@
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
-            [fukan.common.typing.malli]))
+            [fukan.common.typing.malli]
+            ;; `correspondence-reshapes-the-seam` reads the live Operation/Module correspondence — the
+            ;; vocab registers the tags, the extraction plugin registers the `(correspond …)` maps. Explicit
+            ;; so the seam test doesn't depend on another test having loaded them first (the golden's lesson).
+            [fukan.common.vocab.code.module]
+            [fukan.common.vocab.code.operation]
+            [fukan.common.extraction.clojure.operation]
+            [fukan.common.extraction.clojure.module]))
 
 ;; The core is dialect-BLIND: slot targets (both plain scalar keywords and refined
 ;; vector forms) are checked through whatever :valid? the project registered. This
@@ -766,21 +773,12 @@
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
                                            (agrees {:require [[?t :val/p ?_v]]})))))))  ; :require not an agrees key
 
-(deftest relation-demand-options-validate
-  (testing "malformed relation-demand slot options throw at expansion"
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR1 "d"
-                                           {:r [:* {:realized-by :calls} TBadR1]}))))          ; :realized-by base :calls not declared :transitive here
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR2 "d"
-                                           {:r [:* {:faithful true} TBadR2]}))))               ; :faithful without :realized-by
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR3 "d"
-                                           {:r [:* {:covered-from [:calls* :performs]} TBadR3]}))))))  ; throws: the structure declares no :transitive base slot for :calls*
-
-(deftest relation-demand-both-families-forbidden
-  (testing "a slot carrying both :realized-by and :covered-from throws at expansion"
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/defstructure TBadR4 "d"
-                                           {:calls [:* {:transitive true} TBadR4]
-                                            :r [:* {:realized-by :calls
-                                                    :covered-from [:calls* :r]} TBadR4]})))))) ; both :realized-by and :covered-from on the same slot
+(deftest relation-map-expression-is-validated-at-expansion
+  (testing "a malformed relation-map throws at parse (naming the correspond), not at check"
+    (is (thrown? Exception (#'s/parse-correspond-config 'C :Fact '[(:r :sup [:alt :a :b])]))   ; :alt not yet compilable
+        "an unsupported expression operator throws")
+    (is (thrown? Exception (#'s/parse-correspond-config 'C :Fact '[(:r :bogus :calls)]))       ; not a valid inclusion
+        "a bad inclusion throws")))
 
 (deftest correspondence-reshapes-the-seam
   (testing "(s/correspondence) collects kinds, relation demands, and the key index from the registry"
@@ -805,12 +803,12 @@
           "the key index points every key at its generating declaration"))))
 
 (deftest correspondence-guards-cross-family-key-collisions
-  (testing "a node-demand :key colliding with a relation-derived key throws, naming both sources.
-            correspondence is external, so the node demand rides the registry (a fake tag, inert in the
-            live seam — never in all-structures); the relation demand rides the sdef's own slot."
+  (testing "a node-demand :key colliding with a relation-map key throws, naming both sources
+            (a fake tag, inert in the live seam — never in all-structures)"
     (let [tag :x/collision-T]
-      (s/register-correspondence! tag {:bridge nil :demands [{:demand :realized :key :r-realized}]
-                                       :fact-slots [] :rel-demands []})
-      (let [sdefs [{:tag tag :slots [{:rel :r :card :many :target tag :realized-by :q}]}]]
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"duplicate correspondence law key"
-                              (s/correspondence* sdefs)))))))
+      ;; node demand keyed :r-realized collides with the relation map `:r :sub`'s <r>-realized key
+      (s/register-correspondence! tag {:bridge nil
+                                       :demands [{:demand :realized :key :r-realized}]
+                                       :rel-demands [{:rel :r :incl :sub :expr :q}]})
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"duplicate correspondence law key"
+                            (s/correspondence* [{:tag tag}]))))))

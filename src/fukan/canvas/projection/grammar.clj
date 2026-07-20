@@ -158,35 +158,16 @@
                         slots))
          "}")))
 
-(defn- slot-props-map
-  "Extract the props map (if any) from a rendered slot value: `[quantifier props target]`
-   or `[props target]` (one-card with props). Returns nil when no props map is present."
-  [sv]
-  (when (vector? sv)
-    (let [f (first sv) s (second sv)]
-      (cond
-        (map? f) f          ; [props target] — one-card with props
-        (map? s) s          ; [quantifier props target] — quantifier + props
-        :else nil))))
-
 (defn- count-relation-demands
-  "The number of demand laws generated from relation-demand prop-maps (inline slot props OR the
-   external correspondence `:rel-demands`): a relation-map `(rel incl E)` contributes 1 (`:sub`/`:sup`)
-   or 2 (`:eq`); a legacy `:realized-by` contributes 1 (+1 when `:faithful`); a legacy `:covered-from`
-   contributes 1."
-  [prop-maps]
-  (reduce (fn [n pm]
-            (+ n
-               (case (:incl pm) :eq 2 (:sub :sup) 1 0)
-               (if (:covered-from pm) 1 0)
-               (if (:realized-by pm) (+ 1 (if (:faithful pm) 1 0)) 0)))
-          0 prop-maps))
+  "The number of demand laws a correspondence's `:rel-demands` generate: a relation map `(rel incl E)`
+   contributes 1 (`:sub`/`:sup`) or 2 (`:eq`)."
+  [rel-demands]
+  (reduce (fn [n {:keys [incl]}] (+ n (case incl :eq 2 (:sub :sup) 1 0))) 0 rel-demands))
 
 (defn- fmt-structure [db s]
   (let [{:keys [name doc value? slots corresponds realizes laws]} (parts db s)
         n-generated (when corresponds
                       (+ (count (:demands corresponds))
-                         (count-relation-demands (keep (fn [[_ sv]] (slot-props-map sv)) slots))
                          (count-relation-demands (:rel-demands corresponds))))]
     (->> (concat
           [(str "(defstructure " (when value? "^:value ") name)]

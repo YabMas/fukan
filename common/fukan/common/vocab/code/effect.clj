@@ -2,7 +2,7 @@
   "Code vocab — `Effect`: a named side effect an Operation performs, plus the generic
    operation predicate for direct effects. PURE DESIGN, language-neutral.
 
-   The effect-correspondence check is the GENERATED `:performs {:covered-from [:calls* :performs]}`
+   The effect-correspondence check is the GENERATED relation map `(:performs :sup [:cat [:* :calls] :performs])`
    demand (:corresponds/Operation.performs-covered) — declared, with the rest of the design↔Clojure
    map, in `fukan.common.extraction.clojure.operation`, since `:calls` is a Clojure construct. A
    caller names that law key through `law/violation-names` directly. Clojure-specific effect

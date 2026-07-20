@@ -824,24 +824,19 @@
    (when-not (or realized-as relation-coproduct relation-character derived-rule) [{:kind :kind}])
    (for [sl slots] {:kind :slot :slot sl})
    (for [sl slots :when (:transitive sl)]   {:kind :transitive :slot sl})
-   (for [sl slots :when (:realized-by sl)]  {:kind :realized-by :slot sl})
-   (for [sl slots :when (:covered-from sl)] {:kind :covered-from :slot sl})
    (when realized-as       [{:kind :realized-as :body realized-as}])
    (when relation-coproduct [{:kind :coproduct :members relation-coproduct}])
    (when relation-character [{:kind :relation-character :opts relation-character}])
    (when derived-rule      [{:kind :defrelation :rule derived-rule}])
    ;; external correspondence (the sole correspondence surface, an inverted-dependency hook): expand the
    ;; registered `(correspond Design Fact …)` config into declaration maps scoped to this design tag —
-   ;; the cross-tag twin/demands as :correspondence, the relation demands as :realized-by/:covered-from
-   ;; (the SAME handlers a structure's own slots route through). The fact-side SLOTS are no longer here:
-   ;; they belong to the codomain's own `defstructure`.
+   ;; the cross-tag twin/demands as :correspondence, each relation map `(rel incl E)` as :relation-map.
+   ;; The fact-side SLOTS are no longer here: they belong to the codomain's own `defstructure`.
    (when-let [{:keys [fact-tag bridge rel-demands]} (correspondence-of tag)]
      (concat
       [{:kind :correspondence :corresponds {:fact-tag fact-tag :bridge bridge
                                             :demands (effective-node-demands tag)}}]
-      (for [d rel-demands :when (:realized-by d)]  {:kind :realized-by :slot d})
-      (for [d rel-demands :when (:covered-from d)] {:kind :covered-from :slot d})
-      (for [d rel-demands :when (:incl d)]         {:kind :relation-map :demand d})))
+      (for [d rel-demands] {:kind :relation-map :demand d})))
    (for [law laws] {:kind :free-law :law law})))
 
 (defn- parse-demand
@@ -903,19 +898,17 @@
                       (doseq [d dupes]
                         (throw (ex-info (str "correspond " cname ": duplicate demand key " (pr-str d)) {:key d}))))
         rel-subs    (remove #(or (= 'bridge (first %)) ('#{realized covered agrees} (first %))) seq-subs)
-        rel-demands (mapv (fn [[rel x expr]]
-                            (if ('#{:sub :sup :eq} x)
-                              ;; the relation-map primitive: (rel incl E). Compile E eagerly so a malformed
-                              ;; expression throws HERE (at expansion, naming the correspond), not at check.
-                              (do (reach-compile 'validate expr)
-                                  {:rel (keyword rel) :incl x :expr expr})
-                              ;; legacy slot-prop rel-demand: (rel {:realized-by …}) / (rel {:covered-from …})
-                              (assoc x :rel (keyword rel))))
+        ;; a relation map is `(rel incl E)`: the inclusion the map asserts (:sub ⊑ / :sup ⊒ / :eq ≡)
+        ;; and a relation-algebra expression over fact relations. Compile E eagerly so a malformed
+        ;; expression throws HERE (at expansion, naming the correspond), not at check.
+        rel-demands (mapv (fn [[rel incl expr]]
+                            (when-not ('#{:sub :sup :eq} incl)
+                              (throw (ex-info (str "correspond " cname ": relation map " (pr-str rel)
+                                                   " needs an inclusion (:sub / :sup / :eq) then an expression, got "
+                                                   (pr-str incl)) {:rel rel :incl incl})))
+                            (reach-compile 'validate expr)
+                            {:rel (keyword rel) :incl incl :expr expr})
                           rel-subs)]
-    ;; NB the `:covered-from` "closure relation must be :transitive" check that once lived here is
-    ;; gone: the closure relation is now a slot of the CODOMAIN structure, whose parsed slots are not
-    ;; available at this macro-expansion (its `defstructure` registers at load). An un-transitive
-    ;; closure surfaces as a missing `R+` rule at query compile instead.
     {:fact-tag fact-tag :bridge bridge :demands demands :rel-demands rel-demands}))
 
 (defmacro correspond
@@ -927,8 +920,8 @@
 
      (correspond Design Fact                                      ; design ↦ fact codomain
        (bridge f)?                                                ; roots pair by a name-bridge predicate
-       (realized …)* (covered …)* (agrees {:by …})*              ; node demands
-       (relname {:realized-by R …})* (relname {:covered-from …})*) ; demands ABOUT Design's own relations
+       (realized …)* (covered …)* (agrees {:by …})*              ; node demands (object map)
+       (relname incl E)*)                                         ; relation maps: R ⊑/⊒/≡ a fact expression E
 
    `Fact` may be omitted, defaulting to `Design` — a same-tag identity correspondence (the two strata
    share one structure, split by provenance), for a concept recognised in code rather than realized by
@@ -1023,38 +1016,6 @@
                                 " must be bare (one) or [:? ...] (optional), not [:"
                                 (name (:card s)) " ...]")
                            {:structure sname :slot (:rel s) :card (:card s)}))))
-        _      (doseq [s slots]
-                 (when (and (:realized-by s) (:covered-from s))
-                   (throw (ex-info (str "defstructure " sname ": slot " (:rel s)
-                                        " declares BOTH :realized-by and :covered-from — one relation demand"
-                                        " family per slot (the generator and the seam each assume it)")
-                                   {:structure sname :slot (:rel s)})))
-                 (when-let [cf (:covered-from s)]
-                   (let [closure-ok? (fn [x] (and (or (keyword? x) (symbol? x))
-                                                   (= \* (last (name x)))))]
-                     (when-not (and (vector? cf) (= 2 (count cf))
-                                    (closure-ok? (first cf))
-                                    (keyword? (second cf)))
-                       (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
-                                            " :covered-from must be [closure-sym* final-kw]")
-                                       {:structure sname :slot (:rel s) :covered-from cf})))
-                     (let [cn     (name (first cf))
-                           base-kw (keyword (subs cn 0 (dec (count cn))))]
-                       (when-not (some #(and (= (:rel %) base-kw) (:transitive %)) slots)
-                         (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
-                                              " :covered-from closure over a relation not declared :transitive on this structure")
-                                         {:structure sname :slot (:rel s) :covered-from cf :base base-kw}))))))
-                 (when (and (:faithful s) (not (:realized-by s)))
-                   (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
-                                        " :faithful requires :realized-by")
-                                   {:structure sname :slot (:rel s)})))
-                 (when-let [rb (:realized-by s)]
-                   ;; the realized law reaches through the R'+ closure of the realized-by relation, so
-                   ;; that relation must be declared :transitive on this structure (mirrors :covered-from).
-                   (when-not (some #(and (= (:rel %) rb) (:transitive %)) slots)
-                     (throw (ex-info (str "defstructure " sname ": :" (name (:rel s))
-                                          " :realized-by " rb " requires " rb " declared :transitive on this structure")
-                                     {:structure sname :slot (:rel s) :realized-by rb})))))
         laws   (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
         explicit-reader (some (fn [f] (when (= 'reader (first f)) (second f)))
                               (filter #(= 'reader (first %)) body))
@@ -1229,67 +1190,25 @@
 
 ;; ── correspondence demand laws: generated from (corresponds …) declarations ──
 ;;
-;; ⚠ KNOWN LEAK (2026-07-17, deliberate — do not "defend" it, fix it). The generated bodies below,
-;; and the nested `twin` rule further down, still NAME the vocabulary relation `contains`. Two
-;; separate design decisions are welded into this supposedly-generic generator:
-;;   1. the cross-container guard `(contains ?ca ?a) (contains ?cb ?b) [(not= ?ca ?cb)]` encodes what
-;;      `delegates` MEANS — that a delegation only carries intent ACROSS a boundary, because within a
-;;      container the wiring is implementation detail. That belongs on the `delegates` element.
-;;   2. the twin rule hardcodes the morphism's CARRIER ("same name within twinned containers").
-;; Both resolve when the carrier becomes an authored parameter rather than a name the kernel knows
-;; (the correspondence-as-morphism work: `:by (name-within Module Ns)`). Until then the kernel still
-;; ships this much vocabulary, and it only resolves because the vocab happens to declare a genus
-;; called `contains`. See docs/superpowers/specs/2026-07-17-correspondence-as-morphism-design.md.
+;; ⚠ KNOWN LEAK (2026-07-17, deliberate — do not "defend" it, fix it). The NESTED `twin` rule further
+;; down still NAMES the vocabulary relation `contains`: it hardcodes the morphism's CARRIER ("same name
+;; within twinned containers"). It resolves when the carrier becomes an authored parameter rather than a
+;; name the kernel knows (`:by (name-within Module Ns)`); until then the kernel ships this much
+;; vocabulary, and it only resolves because the vocab happens to declare a genus called `contains`.
+;; (The other half of this leak — a cross-container guard welded into a "generic" law — went away with
+;; the legacy `realized-by-laws`: delegates' realization is now the roll-up relation map, and its
+;; fidelity is an architectural concern at the Subsystem altitude, not a guard in here.)
 ;;
-;; The demand SHAPES (design↔fact, node level). Bodies inline the stratum literal
-;; (:val/extracted — see substrate/stratum-attr's sync note) for range-boundedness and call
-;; the injected twin rule. Guard discipline (the dissolved holders' hard-won lessons):
-;; plain realized guards on ∃ fact instance OF THIS KIND (small set, no cartesian multiply);
-;; realized-with-:require binds the twin POSITIVELY (a missing twin is plain realized's
-;; offence — no double-fire); covered needs no guard (its subject IS a fact instance).
+;; The NODE-demand SHAPES (design↔fact). Bodies inline the stratum literal (:val/extracted — see
+;; substrate/stratum-attr's sync note) for range-boundedness and call the injected twin rule. Guard
+;; discipline: plain realized guards on ∃ fact instance OF THIS KIND (small set, no cartesian multiply);
+;; realized-with-:require binds the twin POSITIVELY (a missing twin is plain realized's offence — no
+;; double-fire); covered needs no guard (its subject IS a fact instance).
 
 (defn- demand-key
   "A demand's full stable law key: :corresponds/<Short>.<local>."
   [tag local]
   (keyword "corresponds" (str (name tag) "." (name local))))
-
-(defn- realized-by-laws
-  "Generated laws for a relation slot carrying {:realized-by R' :faithful bool} on structure `tag`,
-   where R' is a `:transitive` relation on the fact side (so its `R'+` closure exists):
-
-   REALIZED (op-altitude, transitive): every cross-module design `rel` edge is realized by an `R'+`
-   PATH between the endpoints' OWN twins — the specific design endpoints must reach each other through
-   the actual R' call graph. Both endpoints bound POSITIVELY via `twin`, so a design endpoint with no
-   fact twin is OUT OF SCOPE (its very existence is the plain `realized` demand's concern, not this
-   one) — and vacuously green before any code is extracted (no twins ⇒ no rows), needing no guard.
-
-   FAITHFUL (module-altitude, direct — when :faithful): every direct R' edge between twinned
-   containers is covered by a design edge (the reverse; a fact coupling between CLAIMED — positively
-   twinned — containers must be declared as intent). Asymmetric altitude is intentional: realization
-   asks whether a specific delegation is wired; faithfulness asks whether module couplings are declared."
-  [tag {:keys [rel realized-by faithful]}]
-  (let [r+ (symbol (str (name realized-by) "+"))]
-    (cond-> [{:key  (demand-key tag (str (name rel) "-realized"))
-              :desc (str (name tag) "." (name rel) ": every cross-module design edge is realized by a "
-                         realized-by "-path between the endpoints' twins")
-              :offenders '[?a]
-              :where [['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
-                      '(contains ?ca ?a) '(contains ?cb ?b) '[(not= ?ca ?cb)]
-                      '(twin ?a ?ea) '(twin ?b ?eb)
-                      (list 'not-join '[?ea ?eb] (list r+ '?ea '?eb))]}]
-      faithful
-      (conj {:key  (demand-key tag (str (name rel) "-faithful"))
-             :desc (str (name tag) "." (name rel) ": every " realized-by
-                        " edge between twinned containers is covered by a design edge")
-             :offenders '[?e1]
-             :where [['?cr :rel/from '?e1] ['?cr :rel/kind realized-by] ['?cr :rel/to '?e2]
-                     '[?e1 :val/extracted true] '[?e2 :val/extracted true]
-                     '(contains ?ka ?e1) '(contains ?kb ?e2) '[(not= ?ka ?kb)]
-                     '(twin ?ca ?ka) '(twin ?cb ?kb)
-                     (list 'not-join '[?ca ?cb]
-                           ['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
-                           '(not [?a :val/extracted true])
-                           '(contains ?ca ?a) '(contains ?cb ?b))]}))))
 
 (defn- node-demand-law
   "One generated law map for a node-level demand — a design instance of `dtag` and its fact twin of
@@ -1331,22 +1250,6 @@
        :comparator (cond-> {:by by :on '[?x ?t]} over (assoc :over over))
        :where (vec (concat [['?x :structure/of dtag] '(not [?x :val/extracted true]) '(twin ?x ?t)]
                            when))})))
-
-(defn- covered-from-law
-  "Generated law for {:covered-from [R* S]} on slot `rel` of `tag`: every target the fact
-   twin reaches over the path must be a target of the design instance's own `rel` edge —
-   compared by NODE IDENTITY (^:value targets are stratum-free: content-equal ⇒ one node)."
-  [tag {:keys [rel covered-from]}]
-  (let [[closure final] covered-from]
-    {:key (demand-key tag (str (name rel) "-covered"))
-     :desc (str (name tag) "." (name rel) ": every target the twin reaches via " covered-from
-                " is declared on the design side")
-     :offenders '[?x]
-     :where [['?x :structure/of tag] '(not [?x :val/extracted true])
-             '(twin ?x ?t)
-             (first (expand-clauses [(list 'path '?t [closure final] '?v)]))
-             (list 'not-join '[?x ?v]
-                   ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v])]}))
 
 ;; ── the relation-map primitive: a design relation ↦ a fact expression ─────────
 ;; The morphism's non-identity component, authored as `(R incl E)` where `incl` is the relation
@@ -1467,12 +1370,6 @@
   (fn [{:keys [rule]} sdef]
     {:terms [(into [(apply list (rule-sym (:tag sdef)) (:head rule))] (:where rule))] :laws []}))
 
-(register-declaration! :realized-by
-  (fn [{:keys [slot]} sdef] {:terms [] :laws (realized-by-laws (:tag sdef) slot)}))
-
-(register-declaration! :covered-from
-  (fn [{:keys [slot]} sdef] {:terms [] :laws [(covered-from-law (:tag sdef) slot)]}))
-
 (register-declaration! :relation-map
   (fn [{:keys [demand]} sdef] (relation-map-decl (:tag sdef) demand)))
 
@@ -1537,29 +1434,17 @@
                                    (assoc :demands (effective-node-demands tag))
                                    (update :demands
                                            (fn [ds] (mapv #(assoc % :key (demand-key tag (or (:key %) (:demand %)))) ds))))]))
+        ;; a relation map `(rel incl E)`: keyed + directioned by its inclusion.
         relations (vec
-                   (for [{:keys [tag slots]} sdefs
-                         {:keys [rel realized-by faithful covered-from incl expr]}
-                         (concat slots (:rel-demands (correspondence-of tag)))
-                         :when (or realized-by covered-from incl)]
-                     (cond-> {:owner tag :rel rel}
-                       ;; the relation-map primitive: (rel incl E) — one map, keyed + directioned by `incl`
-                       incl         (assoc :incl incl :expr expr
-                                           :keys (case incl
-                                                   :sub [(demand-key tag (str (name rel) "-realized"))]
-                                                   :sup [(demand-key tag (str (name rel) "-covered"))]
-                                                   :eq  [(demand-key tag (str (name rel) "-realized"))
-                                                         (demand-key tag (str (name rel) "-covered"))]))
-                       ;; legacy slot-prop demands (delegates, until it moves to the primitive)
-                       realized-by  (assoc :realized-by realized-by
-                                           :keys (cond-> [(demand-key tag (str (name rel) "-realized"))]
-                                                   faithful (conj (demand-key tag (str (name rel) "-faithful")))))
-                       faithful     (assoc :faithful true)
-                       covered-from (assoc :covered-from covered-from
-                                           :keys [(demand-key tag (str (name rel) "-covered"))]))))
-        rel-dirs  (fn [r] (cond (:incl r)         (case (:incl r) :sub [:preserve] :sup [:reflect] :eq [:preserve :reflect])
-                                (:covered-from r)  [:covered]
-                                :else              [:realized :faithful]))
+                   (for [{:keys [tag]} sdefs
+                         {:keys [rel incl expr]} (:rel-demands (correspondence-of tag))]
+                     {:owner tag :rel rel :incl incl :expr expr
+                      :keys (case incl
+                              :sub [(demand-key tag (str (name rel) "-realized"))]
+                              :sup [(demand-key tag (str (name rel) "-covered"))]
+                              :eq  [(demand-key tag (str (name rel) "-realized"))
+                                    (demand-key tag (str (name rel) "-covered"))])}))
+        rel-dirs  (fn [r] (case (:incl r) :sub [:preserve] :sup [:reflect] :eq [:preserve :reflect]))
         entries   (concat
                    (for [[tag {:keys [demands]}] kinds, d demands]
                      [(:key d) {:owner tag :via :node :demand (dissoc d :key)}])
