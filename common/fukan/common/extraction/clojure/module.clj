@@ -11,6 +11,7 @@
   (:require [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.common.extraction.clojure.operation :refer [Fn]]
+            [fukan.common.vocab.code.operation :refer [Operation]]
             [fukan.common.vocab.code.module :as module :refer [Module]]))
 
 ;; ── the FACT theory: a Clojure namespace ─────────────────────────────────────
@@ -19,8 +20,26 @@
    (a `contains` species). The fact-side root the design Module twins with by name."
   {:child [:* Fn]})
 
-;; ── the correspondence: Module ↦ Ns (the twin ROOT) ──────────────────────────
-(s/correspond Module Ns (bridge :qualified-suffix))
+;; ── the design→Clojure signature MORPHISM — one block ─────────────────────────
+;; Every entry is `design-symbol :incl fact-expression`. Declared here (the last plugin file) because it
+;; sees both fact structures — `Fn` (required) and `Ns` (above). It rides Operation/Module from OUTSIDE
+;; (their `defstructure`s stay pure identity); every law is generated at :corresponds/*.
+;;
+;;   · OBJECT MAP (the sort maps): `Module :eq Ns` (a bijection, root, paired by name-match) and
+;;     `Operation :eq [Fn :public]` (a bijection onto Fn's PUBLIC sub-sort — private fns are interior,
+;;     neither sort images nor coupling endpoints). `:eq` ⇒ total (every design node twinned) + surjective
+;;     (every codomain node has a preimage). Nested sorts pair by name within twinned containers.
+;;   · RELATION MAPS (nested under Operation): `:delegates ⊑` the public call graph — the roll-up
+;;     `calls·(private·calls)*` (a delegation routed through another PUBLIC op is two delegations, not
+;;     one); its reverse (fidelity) is an ARCHITECTURAL concern Subsystem `:may-depend` already enforces,
+;;     so `:sub` only. `:performs ⊒` `calls*·performs` — every effect the twin reaches must be declared.
+;;   · the IDENTITY component (`in↦in`, `out↦out` over the shared `Schema` sort) is DERIVED — a morphism
+;;     states only its non-identity maps; the shared-sort slots agree for free (types content-dedup).
+(s/correspond
+  (Module    :eq Ns  (bridge :qualified-suffix))
+  (Operation :eq [Fn :public]
+    (:delegates :sub [:cat :calls [:* [:cat [:test :private] :calls]]])
+    (:performs  :sup [:cat [:* :calls] :performs])))
 
 (defn extract-module
   "Build an extracted `Ns` InstanceValue named `mname` owning the functions named by `op-ids` (their

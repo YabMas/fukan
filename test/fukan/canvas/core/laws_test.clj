@@ -406,7 +406,7 @@
    Pure identity; correspondence hooks in externally via `(correspond LTwin …)` below."
   {:n [:? :int]})
 
-(s/correspond LTwin (agrees {:by :ltwin-eq}))
+(s/correspond (LTwin :eq LTwin (agrees {:by :ltwin-eq})))
 (s/register-comparator! :ltwin-eq
   (fn [db a b] (= (:val/n (cq/entity db a)) (:val/n (cq/entity db b)))))
 

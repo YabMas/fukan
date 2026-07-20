@@ -113,35 +113,39 @@
             (when rules [:rules rules])
             [:offenders offenders :where where])))
 
-(defn- demand-forms
-  "A corresponds demand map → the token(s) it contributes to the authored `(corresponds …)` form. The
-   OBJECT MAP rides bare keyword flags (`:total`, `:surjective-onto <pred>`); the `agrees` escape hatch
-   renders as `(agrees {opts})`. Empty for a DERIVED demand (the identity map) — a kernel consequence,
-   not an authored form (it still counts toward the generated-law total)."
-  [{:keys [demand pred derived] :as d}]
-  (cond
-    derived                (list)
-    (= demand :total)      (list :total)
-    (= demand :surjective) (list :surjective-onto pred)
-    :else (let [opts (not-empty (into {} (remove (comp nil? val)) (dissoc d :demand)))]
-            (list (if opts (list (symbol (name demand)) opts) (list (symbol (name demand))))))))
+(defn- codomain-form
+  "The sort map's codomain: a bare fact tag `Fn`, or `[Fn :test]` when restricted to a sub-sort."
+  [{:keys [fact-tag restrict]}]
+  (let [f (symbol (clojure.core/name fact-tag))]
+    (if restrict [f restrict] f)))
+
+(defn- rel-map-form [{:keys [rel incl expr]}] (list rel incl expr))
+
+(defn- agrees-form
+  "The `agrees` comparator escape hatch → `(agrees {opts})`. Nil for the object-map (total/surjective —
+   rendered via the sort map's inclusion) and the derived identity map (a kernel consequence)."
+  [{:keys [demand derived] :as d}]
+  (when (and (= demand :agrees) (not derived))
+    (let [opts (not-empty (into {} (remove (comp nil? val)) (dissoc d :demand)))]
+      (if opts (list 'agrees opts) (list 'agrees)))))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Form]}
   structure-form
   "The reified Structure at `eid` rendered back as its `defstructure` data form —
    the print-dual of the authoring surface. Laws carry their datalog unquoted
    (this is the PARSED form); `^:value` rides the name symbol's metadata.
-   A `(corresponds …)` declaration restores the correspondence seam and its demand
-   sub-forms; slot props (characters + demand options) render in the slots map's props position."
+   A `(corresponds …)` declaration restores this structure's SORT MAP (inclusion + codomain + carrier)
+   and its nested relation maps; the object-map total/surjective laws are the inclusion's meaning."
   [db eid]
   (let [{:keys [name doc value? slots corresponds realizes laws]} (parts db eid)]
     (concat ['defstructure (if value? (with-meta name {:value true}) name)]
             (when doc [doc])
             (when (seq slots) [(apply array-map (mapcat identity slots))])
             (when corresponds
-              [(concat ['corresponds]
+              [(concat ['corresponds (:incl corresponds) (codomain-form corresponds)]
                        (when-let [b (:bridge corresponds)] [(list 'bridge b)])
-                       (mapcat demand-forms (:demands corresponds)))])
+                       (mapv rel-map-form (:rel-demands corresponds))
+                       (keep agrees-form (:demands corresponds)))])
             (when realizes [(list 'realized-as realizes)])
             (map law-form laws))))
 

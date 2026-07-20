@@ -243,8 +243,15 @@
 ;; (still one total + one surjective + one agrees node demand), but their keys (`.realized`→`.total`,
 ;; `.covered`→`.surjective`), descs, and the surjective `:where` (`(fn-public ?x)` instead of the inline
 ;; `:val/*` exemptions) changed → laws hash moves. Live `(check)` still 0.
-(def ^:private golden-terms {:count 52 :hash 1179346982})
-(def ^:private golden-laws  {:count 60 :hash -668484897})
+;; 2026-07-20 (e): the correspondence is ONE `(correspond …)` block of `design-symbol :incl fact-expr`
+;; maps (a signature morphism). The object map is a SORT-map inclusion: `Operation :eq [Fn :public]` and
+;; `Module :eq Ns` (was two blocks, with Operation carrying `:total`/`:surjective-onto` flags and Module
+;; carrying only a bridge). Terms hold at 52 (the `fn-public` predicate renamed to `public` — same rule).
+;; Laws 60→62: `Module :eq Ns` now generates its object map too (a total + a surjective law — Module was
+;; previously under-specified, only a twin), and the Operation surjective law reads `(public ?x)` (the
+;; renamed predicate). Live `(check)` still 0 (every design Module has an Ns twin and vice-versa).
+(def ^:private golden-terms {:count 52 :hash 182421159})
+(def ^:private golden-laws  {:count 62 :hash 648478436})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

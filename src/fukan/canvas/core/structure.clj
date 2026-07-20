@@ -803,16 +803,21 @@
                       (str/join ", " (map (comp name :rel) shared)) " (identity map)")}))))
 
 (defn ^:export effective-node-demands
-  "The node demands of `dtag`'s correspondence: the AUTHORED demands ∪ the DERIVED identity map (tagged
-   `:derived`). Every reader of the demands — the law generator (`sdef->declarations`), the seam reader
-   (`correspondence*`), and grammar reflection — goes through here, so the identity map is visible
-   identically to `check`, to the `(correspondence)` card, and to the primer's law count. Nil when
-   `dtag` carries no correspondence."
+  "The node demands of `dtag`'s correspondence: the OBJECT-MAP demands (derived from the sort map's
+   inclusion — `:sub`→total, `:sup`→surjective onto the `:restrict` sub-sort, `:eq`→both) ∪ any AUTHORED
+   `agrees` (the comparator escape hatch) ∪ the DERIVED identity map (tagged `:derived`). Every reader of
+   the demands — the law generator (`sdef->declarations`), the seam reader (`correspondence*`), and
+   grammar reflection — goes through here, so all three see the same demands. Nil when `dtag` carries no
+   correspondence."
   [dtag]
-  (when-let [{:keys [fact-tag demands rel-demands]} (correspondence-of dtag)]
-    (let [identity (derive-identity-demand dtag fact-tag (:slots (structure-by-tag dtag))
+  (when-let [{:keys [fact-tag incl restrict demands rel-demands]} (correspondence-of dtag)]
+    (let [obj      (case incl
+                     :sub [{:demand :total}]
+                     :sup [{:demand :surjective :pred restrict}]
+                     :eq  [{:demand :total} {:demand :surjective :pred restrict}])
+          identity (derive-identity-demand dtag fact-tag (:slots (structure-by-tag dtag))
                                            (set (map :rel rel-demands)))]
-      (cond-> demands identity (conj identity)))))
+      (cond-> (into obj demands) identity (conj identity)))))
 
 (defn ^:export sdef->declarations
   "Adapt an sdef (built by the unchanged parser) into typed declaration maps for the registry — a
@@ -866,84 +871,74 @@
      :key  (:key opts) :desc (:desc opts) :by (:by opts) :over (:over opts)
      :when (unquote-lit (:when opts))}))
 
-(defn- parse-correspond-config
-  "Parse a `(correspond Design Fact …)` tail (the forms AFTER the two tags) → the external
-   correspondence config `{:fact-tag :bridge :demands [] :rel-demands [slot-descriptor…]}`. `fact-tag`
-   is the CODOMAIN — the structure the design maps INTO; its slots live in its own `defstructure`, not
-   here (before 2026-07-17 the fact-side was a slots map grafted onto the design tag — the graft that
-   made the demands a bespoke DSL rather than a map). Correspondence is always by NAME — a ROOT kind
-   (carrying a `(bridge …)` sub-form) pairs design/fact instances whose names satisfy the bridge; a
-   NESTED kind (no bridge) pairs same-named instances whose containers twin. The bridge is EITHER a
-   strategy KEYWORD (`:qualified-suffix`, `:exact`) the kernel `name-match` builtin lowers — the
-   declarative common case, stored verbatim, validated at query compile — OR a SYMBOL naming a Clojure
-   fn (the arbitrary escape hatch): it must RESOLVE at expansion and carry a registered Cozo predicate
-   port. Reuses `parse-demand` (node demands)."
-  [cname fact-tag forms]
-  (let [;; the OBJECT MAP rides bare keyword flags: `:total` (map is total) and `:surjective-onto <pred>`
-        ;; (map is surjective onto the fact subtheory the predicate names). Everything else is a seq sub-form.
-        [obj-demands rest-forms]
-        (loop [fs forms, obj [], rst []]
-          (cond
-            (empty? fs)                    [obj rst]
-            (= :total (first fs))          (recur (next fs) (conj obj {:demand :total}) rst)
-            (= :surjective-onto (first fs))
-            (do (when-not (keyword? (second fs))
-                  (throw (ex-info (str "correspond " cname ": :surjective-onto needs a fact predicate keyword, got "
-                                       (pr-str (second fs))) {:pred (second fs)})))
-                (recur (nnext fs) (conj obj {:demand :surjective :pred (second fs)}) rst))
-            :else                          (recur (next fs) obj (conj rst (first fs)))))
-        seq-subs   (filter seq? rest-forms)
-        bridge-sub (first (filter #(= 'bridge (first %)) seq-subs))
-        bridge     (when-let [barg (second bridge-sub)]
-                     (if (keyword? barg)
-                       barg    ; a kernel name-match STRATEGY (declarative)
-                       (if-let [v (resolve barg)]   ; a SYMBOL → resolve + qualify (registered-port escape hatch)
-                         (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
-                         (throw (ex-info (str "correspond " cname ": bridge " barg " does not resolve") {:bridge barg})))))
-        agrees-subs (filter #(= 'agrees (first %)) seq-subs)   ; the only remaining node-demand sub-form (escape hatch)
-        demands     (into obj-demands (mapv #(parse-demand cname %) agrees-subs))
-        ;; local key = (or :key :demand); duplicates within one correspond throw early (the global
-        ;; cross-family guard in `correspondence*` would also catch it, but at seam-collection time).
-        _           (let [local-keys (map #(or (:key %) (:demand %)) demands)
-                          dupes (filter #(> (count (filter #{%} local-keys)) 1) (distinct local-keys))]
-                      (doseq [d dupes]
-                        (throw (ex-info (str "correspond " cname ": duplicate demand key " (pr-str d)) {:key d}))))
+(defn- parse-bridge
+  "Parse a `(bridge <arg>)` carrier: a strategy KEYWORD (`:qualified-suffix`, `:exact`) the kernel
+   `name-match` builtin lowers (the declarative common case), or a SYMBOL naming a Clojure fn (the
+   escape hatch — must RESOLVE at expansion + carry a registered Cozo predicate port)."
+  [cname barg]
+  (if (keyword? barg)
+    barg
+    (if-let [v (resolve barg)]
+      (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
+      (throw (ex-info (str "correspond " cname ": bridge " barg " does not resolve") {:bridge barg})))))
+
+(defn- parse-sort-map
+  "Parse ONE sort-map entry of a `(correspond …)` block — `(DesignSort :incl FactExpr carrier? nested…)`
+   — into a per-design-tag config. `:incl` is the OBJECT MAP's inclusion: `:sub` (⊑ total — every design
+   node has a twin), `:sup` (⊒ surjective — every fact node in the codomain has a preimage), `:eq` (≡ a
+   bijection). `FactExpr` is the codomain: a bare fact tag, or `[FactSort :test]` restricting it to a
+   sub-sort (`[Fn :public]`). The carrier is `(bridge …)` for ROOT sorts (name-match) or absent =
+   NESTED (paired by name within twinned containers). Nested sub-forms are the RELATION maps
+   `(rel :incl E)` and the `(agrees {:by …})` comparator escape hatch."
+  [cname incl ftag restrict rest-forms]
+  (when-not ('#{:sub :sup :eq} incl)
+    (throw (ex-info (str "correspond " cname ": sort map needs an inclusion (:sub / :sup / :eq), got "
+                         (pr-str incl)) {:incl incl})))
+  (let [seq-subs    (filter seq? rest-forms)
+        bridge-sub  (first (filter #(= 'bridge (first %)) seq-subs))
+        bridge      (when-let [barg (second bridge-sub)] (parse-bridge cname barg))
+        agrees-subs (filter #(= 'agrees (first %)) seq-subs)          ; the comparator escape hatch
+        demands     (mapv #(parse-demand cname %) agrees-subs)
         rel-subs    (remove #(or (= 'bridge (first %)) (= 'agrees (first %))) seq-subs)
-        ;; a relation map is `(rel incl E)`: the inclusion the map asserts (:sub ⊑ / :sup ⊒ / :eq ≡)
-        ;; and a relation-algebra expression over fact relations. Compile E eagerly so a malformed
-        ;; expression throws HERE (at expansion, naming the correspond), not at check.
-        rel-demands (mapv (fn [[rel incl expr]]
-                            (when-not ('#{:sub :sup :eq} incl)
+        ;; a relation map `(rel :incl E)`: an inclusion + a relation-algebra expression over fact
+        ;; relations. Compile E eagerly so a malformed expression throws HERE (naming the correspond).
+        rel-demands (mapv (fn [[rel rincl expr]]
+                            (when-not ('#{:sub :sup :eq} rincl)
                               (throw (ex-info (str "correspond " cname ": relation map " (pr-str rel)
                                                    " needs an inclusion (:sub / :sup / :eq) then an expression, got "
-                                                   (pr-str incl)) {:rel rel :incl incl})))
+                                                   (pr-str rincl)) {:rel rel :incl rincl})))
                             (reach-compile 'validate expr)
-                            {:rel (keyword rel) :incl incl :expr expr})
+                            {:rel (keyword rel) :incl rincl :expr expr})
                           rel-subs)]
-    {:fact-tag fact-tag :bridge bridge :demands demands :rel-demands rel-demands}))
+    {:fact-tag ftag :incl incl :restrict restrict :bridge bridge :demands demands :rel-demands rel-demands}))
 
 (defmacro correspond
-  "Hook the correspondence morphism onto a concept from OUTSIDE (inverted dependency): the concept's
-   `defstructure` never mentions correspondence; this declaration — living in the extractor for a
-   language — maps the DESIGN structure onto its FACT codomain (`Fact`, a real `defstructure` whose
-   slots are the extracted constructs) and states the drift demands. The generic machinery (the
-   cross-tag twin, demand-law generation, the comparator hybrid) generates every law.
+  "Declare the design→fact signature MORPHISM as ONE block — the concept's `defstructure` never mentions
+   correspondence (inverted dependency); this declaration lives in the extractor for a language. Every
+   entry is a map `design-symbol :incl fact-expression`:
 
-     (correspond Design Fact                                      ; design ↦ fact codomain
-       (bridge f)?                                                ; roots pair by a name-bridge predicate
-       (realized …)* (covered …)* (agrees {:by …})*              ; node demands (object map)
-       (relname incl E)*)                                         ; relation maps: R ⊑/⊒/≡ a fact expression E
+     (correspond
+       (Module    :eq Ns  (bridge :qualified-suffix))    ; SORT map — root, bijective
+       (Operation :eq [Fn :public]                       ; SORT map — nested, bijective onto public Fns
+         (delegates :sub (calls-roll-up…))               ;   RELATION maps nest under their sort map
+         (performs  :sup (…))
+         (agrees {:by …})?))                             ;   the comparator escape hatch, if any
 
-   `Fact` may be omitted, defaulting to `Design` — a same-tag identity correspondence (the two strata
-   share one structure, split by provenance), for a concept recognised in code rather than realized by
-   a distinct construct."
-  [design & forms]
-  (let [dtag         (resolve-struct-tag design)
-        [ftag forms] (if (and (symbol? (first forms)) (not (seq? (first forms))))
-                       [(resolve-struct-tag (first forms)) (rest forms)]
-                       [dtag forms])
-        config       (parse-correspond-config design ftag forms)]
-    `(register-correspondence! ~dtag '~config)))
+   A SORT map's `:incl` is the object map's inclusion (`:sub` total / `:sup` surjective / `:eq` both);
+   its codomain is a fact tag or `[FactSort :test]` (restricted to a sub-sort). Sort maps head with a
+   structure SYMBOL; relation maps with a keyword. Shared sorts (Schema/Effect — one node both strata)
+   need no entry; their identity map is derived."
+  [& entries]
+  ;; parse EAGERLY (mapv, not a lazy for) so a malformed entry throws during macroexpansion, not later.
+  (let [regs (mapv (fn [entry]
+                     (let [[dsym incl fexpr & rst] entry
+                           dtag                (resolve-struct-tag dsym)
+                           [fact-sym restrict] (if (vector? fexpr) [(first fexpr) (second fexpr)] [fexpr nil])
+                           ftag                (resolve-struct-tag fact-sym)
+                           config              (parse-sort-map (str dsym) incl ftag restrict rst)]
+                       `(register-correspondence! ~dtag '~config)))
+                   entries)]
+    `(do ~@regs)))
 
 (defn- parse-law
   "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?)
@@ -1240,13 +1235,16 @@
                             ['?x :structure/of dtag] '(not [?x :val/extracted true])]
                            when
                            ['(not-join [?x] (twin ?x ?t))]))}
-      ;; the OBJECT MAP is surjective onto a fact subtheory `pred`: every fact instance the codomain's
-      ;; own predicate calls in-subtheory (e.g. Fn's public surface) has a design preimage.
+      ;; the OBJECT MAP is surjective onto the codomain — every fact instance has a design preimage.
+      ;; `pred` (the codomain restriction, e.g. Fn's `public` test) narrows the codomain to a sub-sort;
+      ;; without it, every fact instance of the sort must have a preimage.
       :surjective
       {:key k :offenders '[?x]
-       :desc (or desc (str (name dtag) ": the object map is surjective onto " pred
+       :desc (or desc (str (name dtag) ": the object map is surjective onto "
+                           (if pred (str "the " (clojure.core/name pred) " sub-sort") (name ftag))
                            " — every such fact instance has a design preimage"))
-       :where (vec (concat [(list (symbol (name pred)) '?x) '[?x :val/extracted true]]
+       :where (vec (concat [(if pred (list (symbol (clojure.core/name pred)) '?x) ['?x :structure/of ftag])
+                            '[?x :val/extracted true]]
                            when
                            ['(not-join [?x] (twin ?s ?x))]))}
       :agrees

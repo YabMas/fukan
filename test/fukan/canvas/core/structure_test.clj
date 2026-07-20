@@ -720,58 +720,56 @@
  (fn [[a b]] [(str a " == " b) #{}])
  {})
 
-;; These are IDENTITY correspondences — no explicit codomain, so `:fact-tag` defaults to the design tag
-;; (the two strata share one structure, split by provenance). The cross-tag case (Operation ↦ Fn) is
-;; exercised in the extraction/correspondence tests.
-(defstructure TCorrRoot "correspond test: a ROOT kind (bridged) — pure identity")
-(s/correspond TCorrRoot (bridge tc-bridge))
+;; Same-tag IDENTITY sort maps (`X :eq X`) — the two strata share one structure, split by provenance.
+;; The cross-tag case (Operation ↦ Fn) is exercised in the extraction/correspondence tests.
+(defstructure TCorrRoot "correspond test: a ROOT sort map (bridged) — same-tag identity")
+(s/correspond (TCorrRoot :eq TCorrRoot (bridge tc-bridge)))
 
-(defstructure TCorrNested "correspond test: a NESTED kind (same name within twinned containers)")
-(s/correspond TCorrNested)
+(defstructure TCorrNested "correspond test: a NESTED sort map (same name within twinned containers)")
+(s/correspond (TCorrNested :eq TCorrNested))
 
-(deftest correspond-registers-bridge
-  (testing "the (correspond …) config lands in the registry, bridge fully qualified, fact-tag defaulting to design"
-    (is (= {:fact-tag ::TCorrRoot :bridge 'fukan.canvas.core.structure-test/tc-bridge :demands [] :rel-demands []}
+(deftest correspond-registers-the-sort-map
+  (testing "a sort-map entry lands in the registry: fact-tag, inclusion, bridge (fully qualified for a symbol)"
+    (is (= {:fact-tag ::TCorrRoot :incl :eq :restrict nil
+            :bridge 'fukan.canvas.core.structure-test/tc-bridge :demands [] :rel-demands []}
            (s/correspondence-of ::TCorrRoot)))
-    (is (= {:fact-tag ::TCorrNested :bridge nil :demands [] :rel-demands []}
+    (is (= {:fact-tag ::TCorrNested :incl :eq :restrict nil :bridge nil :demands [] :rel-demands []}
            (s/correspondence-of ::TCorrNested)))
     (is (nil? (s/correspondence-of ::Plain))
         "an undeclared structure carries no correspondence")))
 
 (deftest correspond-rejects-an-unresolvable-bridge
   (testing "an unresolvable bridge symbol throws at expansion"
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested (bridge nope-not-defined)))))))
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
+                                          (TCorrNested :eq TCorrNested (bridge nope-not-defined))))))))
 
-;; ── the object map: the :total / :surjective-onto flags ──────────────────────
+;; ── the object map: the sort-map inclusion + codomain restriction ────────────
 
-(defstructure TCorrDemand "correspond test: object-map flags (parse-level only — no instances)")
-(s/correspond TCorrDemand
-  :total
-  :surjective-onto :tc-public)
+(defstructure TCorrDemand "correspond test: a restricted sort map (parse-level only — no instances)")
+(s/correspond (TCorrDemand :sup [TCorrDemand :tc-public]))
 
 (deftest correspond-object-map-registers
-  (testing ":total / :surjective-onto flags land as :demands (the object map's two properties)"
-    (is (= [{:demand :total}
-            {:demand :surjective :pred :tc-public}]
-           (:demands (s/correspondence-of ::TCorrDemand))))))
+  (testing "the sort map's :incl + codomain restriction land in the config; the object-map demands derive from :incl"
+    (let [c (s/correspondence-of ::TCorrDemand)]
+      (is (= :sup (:incl c)) "the inclusion is stored")
+      (is (= :tc-public (:restrict c)) "the codomain restriction ([TCorrDemand :tc-public]) is stored")
+      (is (= [{:demand :surjective :pred :tc-public}]
+             (remove :derived (s/effective-node-demands ::TCorrDemand)))
+          ":sup ⇒ a surjective demand onto the restricted sub-sort (derived, not authored)"))))
 
 (deftest correspond-demands-validate
-  (testing "malformed forms throw at expansion (via the external correspond macro)"
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
-                                           :surjective-onto))))       ; :surjective-onto needs a predicate keyword
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
-                                           (realized)))))             ; realized/covered are no longer sub-forms
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
-                                           (agrees {})))))            ; agrees needs :by
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond TCorrNested
-                                           (agrees {:require [[?t :val/p ?_v]]})))))))  ; :require not an agrees key
-
-(deftest relation-map-expression-is-validated-at-expansion
-  (testing "a malformed relation-map throws at parse (naming the correspond), not at check"
-    (is (thrown? Exception (#'s/parse-correspond-config 'C :Fact '[(:r :sup [:alt :a :b])]))   ; :alt not yet compilable
+  (testing "malformed entries throw at expansion (via the external correspond macro)"
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
+                                          (TCorrNested :bogus TCorrNested))))       ; sort map: bad inclusion
+        "a bad sort-map inclusion throws")
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
+                                          (TCorrNested :eq TCorrNested (agrees {})))))  ; agrees needs :by
+        "a malformed agrees throws"))
+  (testing "a malformed relation-map expression throws at parse, not at check"
+    (is (thrown? Exception (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :sup [:alt :a :b])]))   ; :alt not yet compilable
         "an unsupported expression operator throws")
-    (is (thrown? Exception (#'s/parse-correspond-config 'C :Fact '[(:r :bogus :calls)]))       ; not a valid inclusion
-        "a bad inclusion throws")))
+    (is (thrown? Exception (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :bogus :calls)]))       ; not a valid inclusion
+        "a bad relation-map inclusion throws")))
 
 (deftest correspondence-reshapes-the-seam
   (testing "(s/correspondence) collects kinds, relation demands, and the key index from the registry"
@@ -799,9 +797,9 @@
   (testing "a node-demand :key colliding with a relation-map key throws, naming both sources
             (a fake tag, inert in the live seam — never in all-structures)"
     (let [tag :x/collision-T]
-      ;; node demand keyed :r-realized collides with the relation map `:r :sub`'s <r>-realized key
-      (s/register-correspondence! tag {:bridge nil
-                                       :demands [{:demand :realized :key :r-realized}]
+      ;; an authored agrees keyed :r-realized collides with the relation map `:r :sub`'s <r>-realized key
+      (s/register-correspondence! tag {:fact-tag tag :incl :eq :restrict nil :bridge nil
+                                       :demands [{:demand :agrees :key :r-realized}]
                                        :rel-demands [{:rel :r :incl :sub :expr :q}]})
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"duplicate correspondence law key"
                             (s/correspondence* [{:tag tag}]))))))

@@ -32,40 +32,20 @@
    :export       [:? :boolean]                   ; intentionally public for MECHANISM (^:export)
    :test-support [:? :boolean]})                 ; intentionally public for TEST-SUPPORT (^:test-support)
 
-;; Fn OWNS its public surface — the subtheory the design↦fact correspondence must be surjective ONTO.
-;; A public Fn is an extracted function that is none of private (`defn-`) / `^:export` / `^:test-support`.
-;; The correspondence names this predicate (`:surjective-onto :fn-public`) instead of reaching into Fn's
-;; raw `:val/*` triples from the design side — the codomain owns which of its instances count.
-(defrelation :fn-public
+;; Fn OWNS its public surface — the sub-sort the design↦fact object map is surjective ONTO (the codomain
+;; restriction `[Fn :public]`). A public Fn is an extracted function that is none of private (`defn-`) /
+;; `^:export` / `^:test-support`. The codomain decides which of its instances count, rather than the
+;; correspondence reaching into Fn's raw `:val/*` triples from the design side. This is the SAME
+;; public/private line the delegates roll-up quotients over as interior — drawn once, here.
+(defrelation :public
   "Fn's public surface: an extracted function that is not private, not ^:export, not ^:test-support."
   '[?x]
   '[[?x :structure/of :fukan.common.extraction.clojure.operation/Fn]
     (not [?x :val/private true]) (not [?x :val/export true]) (not [?x :val/test-support true])])
 
-;; ── the correspondence: Operation ↦ Fn, as a theory morphism ─────────────────
-;; Declared against the tags from outside (the external `(correspond …)` hook), so the vocabulary keeps
-;; pure identity and this plugin keeps the Clojure knowledge. Every law is generated at
-;; :corresponds/Operation.*. The block is exactly the morphism's components:
-;;   · the OBJECT MAP — `:total` (every design Operation has a twin) + `:surjective-onto :fn-public`
-;;     (every public extracted Fn has a design preimage; the subtheory is Fn's own public surface).
-;;   · the RELATION MAPS — `(:delegates :sub …)` and `(:performs :sup …)` below.
-;;   · the IDENTITY component (`in↦in`, `out↦out` over the shared `Schema` sort) is DERIVED, not authored
-;;     (the `:corresponds/Operation.agrees` demand) — a morphism states only its non-identity maps, and
-;;     the shared-sort slots agree for free (types content-dedup across strata). It also SUBSUMES the old
-;;     `type-coverage`: `out↦out` FORWARD fails both on a differing out (old `adheres`) and a missing one.
-(s/correspond Operation Fn
-  :total
-  :surjective-onto :fn-public
-  ;; the relation-map primitive. delegates ⊑ the PUBLIC call graph — the roll-up `calls·(private·calls)*`
-  ;; (Kleene-with-tests): a call path a→b through only PRIVATE interior (routing through another PUBLIC
-  ;; op is TWO delegations, not one). PRESERVE only (:sub): every declared op-level delegation must be
-  ;; realized by such a path. The REVERSE (fidelity — is every code coupling declared?) is an
-  ;; ARCHITECTURAL question, already enforced one altitude up by Subsystem `:may-depend` conformance;
-  ;; re-checking it op-level would redundantly re-flag every sanctioned kernel dependency.
-  (:delegates :sub [:cat :calls [:* [:cat [:test :private] :calls]]])
-  ;; performs ⊒ calls*·performs (reflect) — every effect the twin reaches over the code call graph
-  ;; must be a declared design effect.
-  (:performs :sup [:cat [:* :calls] :performs]))
+;; The correspondence morphism (`Operation :eq [Fn :public]`, its relation maps, and `Module :eq Ns`) is
+;; declared as ONE block in `fukan.common.extraction.clojure.module` — the last plugin file, which sees
+;; both fact structures. It rides Operation/Module from OUTSIDE (the concept's `defstructure` stays pure).
 
 (def ^:private schema-tag
   "The type dialect's ^:value structure tag — the fact-side signature builds its :in/:out
