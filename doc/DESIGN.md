@@ -36,9 +36,13 @@ every modelling exercise to confront "what is the clearest vocabulary for *this*
 — which is the point of the current phase.
 
 Structure tags are **namespace-qualified** (identity = defining ns + name), so
-co-loaded projects may share short names. The remaining edge: law scoping rides
-SHORT-name rules, so two same-short-named structures *with laws* deliberately
-co-loaded would share a scope predicate — harmless until someone does it on purpose.
+co-loaded projects may share short names, and a free law self-scopes through the
+qualified tag — ns-precise. The DOMAIN-ALTITUDE rule names (`(Operation ?s)`,
+`(contains ?a ?b)`) are global, like vars in one Clojure runtime: two same-short-named
+structures deliberately co-loaded union their kind rule (the documented co-load
+allowance), and a relation *element's* name is signature identity — a second
+namespace re-declaring it fails LOUDLY at registration (see
+[THEORY.md](./THEORY.md), "Known deviations", for the signature reading).
 
 ## The `defstructure` surface
 

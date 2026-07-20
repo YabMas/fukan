@@ -156,10 +156,17 @@ SPECIALIZED vocabulary + its mechanism together, not scattered into general voca
 payload nodes, one `Vocabulary` per ns). It is grammar-AGNOSTIC (reifies whatever registry exists) and
 the build ALWAYS runs it, so it belongs with the machinery, beside the act grammar in `core/lens.clj`.
 The runtime never consults the reflected nodes — they exist only so the grammar is viewable as data (the
-print-dual, `unused-structures`). The meta-grammar it mints — `Structure`/`Law`/`Vocabulary`/`Relation`
-— is the tool's own vocabulary for describing grammars (same category as the act grammar), hence core.
+print-dual, `unused-structures`). The meta-grammar it mints — `Structure`/`Law`/`Vocabulary`/`Relation`/
+`Morphism`/`RelationMap` — is the tool's own vocabulary for describing grammars AND the morphisms between
+them (same category as the act grammar), hence core. Since 2026-07-20: a `(correspond …)` reflects as a
+decomposed `Morphism` node (`:from`/`:to` edges, `RelationMap` children — no `pr-str` blob); a derived
+defrelation carries its rule body on its `Relation` node; and a `Vocabulary` is a SIGNATURE — its owned
+relation elements (`:relation`, via the declaring `:ns`) plus DERIVED `:imports` edges (slot targets, law
+rule-calls, `:isa` genera, correspondence codomains — entailed from use, never authored). The reflection
+ns-closure follows those same references, so an imported vocabulary reflects even with zero instances.
 It reaches the type dialect only through the neutral SPI (`core/typing`), so it depends on no concrete
-dialect (the composition root wires that).
+dialect (the composition root wires that). `doc/THEORY.md` names the theoretical frame all of this
+instantiates (theory presentations & morphisms over a Datalog object logic).
 
 (The Lens-act `Coverage` law that a projection's focus once needed was DISSOLVED 2026-06-29: a
 projection now carries its focus ITSELF — an inline `:select`, a named `Lens` only when a focus is
@@ -252,10 +259,14 @@ ELEMENT — the relation itself, not a slot that happens to use it. Two forms:
   terminates where datascript diverged — the old non-recursion guard is gone), but prefer
   non-recursive: the rule pays the fixpoint on every check.
 
-A relation's tag is UNQUALIFIED (`:contains`) because its rule name is global — so two vocabularies
-declaring the same relation name collide silently, and anything scoping by tag namespace must fall
-back to the declaring `:ns` (as the declarations golden does). `:transitive` still rides the slot for
-relations that are not elements yet (`:delegates`, `:calls`).
+A relation's tag is UNQUALIFIED (`:contains`) because its rule name is global — so the NAME is
+signature identity: a second vocabulary re-declaring it THROWS at registration (the registry records
+the declaring `:ns`; before 2026-07-20 this collision was silent replace-on-register). Anything
+scoping by tag namespace falls back to that `:ns` (as the declarations golden does). `:transitive`
+still rides the slot for relations that are not elements yet (`:delegates`, `:calls`) — those belong
+to no signature, visible in reflection as unowned `Relation` nodes. ⚠ REPL: MOVING a defrelation to
+another ns trips the collision guard on `(refresh)` (the defonce registry keeps the old entry) —
+restart the REPL, like a removed defmethod.
 
 ## Spec locations
 

@@ -60,7 +60,7 @@ codebase: a mechanism that cannot name its row is suspect.
 | the type-dialect SPI | the sort universe as a parameter: base sorts and predicate subsorts supplied by a plugin |
 | inline path `E` vs named `defrelation` | the decidable Kleene fragment stays inline; recursion must be named — the fragment line, enforced |
 | Lens / Projection / Check | a specification's three classical relations to a model: restriction (a view), interpretation (a rendering), satisfaction (a gate) |
-| grammar reflection | the frame **internalized**: the meta-grammar (`Structure` / `Law` / `Vocabulary` / `Relation`) is a presentation of "presentation", so the grammar is data on the same graph it governs |
+| grammar reflection | the frame **internalized**: the meta-grammar (`Structure` / `Law` / `Vocabulary` / `Relation` / `Morphism` / `RelationMap`) is a presentation of "presentation" — and of "morphism" — so the grammar and its seams are data on the same graph they govern; a `Vocabulary` reflects as a signature with owned relations and derived `:imports` |
 | the grouping ladder, refinement chains | theory **extensions** — a larger theory conservatively including a smaller one |
 
 ## The test
@@ -86,13 +86,18 @@ grow only under concrete modelling pressure.
 
 Tracked here so the fundament carries no silent holes.
 
-- **The signature is implicit and global.** Institutions begin with a category of
-  signatures; fukan's registry is one flat tag namespace. Structure tags are
-  namespace-qualified, but a relation *element's* tag is unqualified — its datalog
-  rule name is global — so two vocabularies declaring the same relation name
-  collide silently, and law scoping rides short-name rules. Vocabularies exist as
-  reflected rendering units, not as signatures with identity and inclusions.
-  **Being closed** — signatures-first-class is in progress.
+- **~~The signature is implicit and global.~~ Closed, with one declared residual.**
+  A relation element's name is now *signature identity*: re-declaring it from a
+  second namespace throws at registration (the silent replace-on-register is gone).
+  The reflected `Vocabulary` is a genuine signature: the sorts it defines, the
+  relation elements it declares (ownership rides the element's recorded `:ns`), and
+  its inclusions — `:imports` edges *derived* from actual use (slot targets, law
+  rule-calls, `:isa` genera, correspondence codomains; entail, don't store). The
+  declared residual: rule *names* stay global — laws resolve `(contains …)` against
+  one shared rule namespace, like vars in one Clojure runtime. With collisions loud,
+  that is a constraint, not a hole; per-signature name *resolution* stays tied to
+  the relations-first-class north star (slot-only relations like `:calls` belong to
+  no signature yet — visible in the reflected graph as unowned `Relation` nodes).
 - **~~The morphism is under-reflected.~~ Closed.** A correspondence now reflects
   as a `Morphism` node in the meta-grammar (`:from`/`:to` edges to its domain and
   codomain `Structure`s, the inclusion / restriction / bridge as queryable fields,
