@@ -12,6 +12,6 @@
             [fukan.common.vocab.code.operation]
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.subsystem]
-            [fukan.common.vocab.code.plug-point]
+            [fukan.common.vocab.patterns.plug-point]
             [fukan.common.typing.malli]
             [fukan.common.extraction.core]))

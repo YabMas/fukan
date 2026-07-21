@@ -273,8 +273,15 @@
 ;; `contains+`/`calls+`/`delegates+` were already among them, the rest are newly available); hash
 ;; moves with the additions. Laws hold at 62 (inclusion lowering emits rules, never laws). Live
 ;; `(check)` still 0.
-(def ^:private golden-terms {:count 92 :hash 831693030})
-(def ^:private golden-laws  {:count 62 :hash -180509930})
+;; 2026-07-21: PlugPoint moves to the PATTERN TIER — ns `fukan.common.vocab.patterns.plug-point`
+;; (a pattern is a configuration built ON the core code grammar; in the theory frame the file is an
+;; ENRICHMENT importing the core's sorts). The `:offers` relation element moves with it (the enriching
+;; theory owns the relations it adds), and `:satisfies` becomes a declared element there (bare — the
+;; inverted edge, deliberately not a `contains` species; was slot-only). Counts hold (92 / 62): pure
+;; relocation — no rule or law added, but the PlugPoint TAG is ns-qualified, so its kind rule and the
+;; `:offers`/`:satisfies`/`:shape` target-type laws name the new qualifier → both hashes move.
+(def ^:private golden-terms {:count 92 :hash -900617012})
+(def ^:private golden-laws  {:count 62 :hash -1928187573})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

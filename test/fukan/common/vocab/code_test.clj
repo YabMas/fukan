@@ -6,7 +6,7 @@
             [fukan.common.vocab.code.kind :as kind]
             [fukan.common.vocab.code.operation :as operation]
             [fukan.common.vocab.code.module :as module]
-            [fukan.common.vocab.code.plug-point :as plug-point]
+            [fukan.common.vocab.patterns.plug-point :as plug-point]
             [fukan.common.vocab.code.subsystem :as subsystem]))
 
 (module/Module ^{:name "fx-impl"}  t-fx-impl  "a fixture module")

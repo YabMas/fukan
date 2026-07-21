@@ -7,7 +7,7 @@
    code is a projection of the model 1-on-1. The NODE substrate it sits on — `Node`/`Relation`/
    `InstanceValue`/`StructureDb` + node identity — lives one layer down in `core-substrate`."
   (:require [fukan.common.vocab.code.kind :refer [Kind]] [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
-            [fukan.common.vocab.code.plug-point :refer [PlugPoint]]
+            [fukan.common.vocab.patterns.plug-point :refer [PlugPoint]]
             [canvas.architecture.kernel.substrate :as substrate]))
 
 ;; ── owned data-shapes + the exposed capability ──────────────────────────────────────────────

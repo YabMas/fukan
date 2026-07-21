@@ -107,6 +107,15 @@ Tracked here so the fundament carries no silent holes.
   the presentations it connects.
 - **One logic.** As noted above: the object logic is Datalog, unparameterized.
   Left open deliberately; not scheduled.
+- **Enrichment slots ride the enriched structure.** The pattern tier
+  (`vocab/patterns/` — `PlugPoint`) is an enrichment: it imports the core's sorts
+  and adds relations over them, and it *owns* those relation elements
+  (`:offers`/`:satisfies`). But the authoring *slots* still sit in `Module`'s slot
+  map (and `module.clj` requires the pattern ns for the target sort) — slots are
+  the only authoring surface for a structure's edges. The missing piece is an
+  enrichment declaration shape (contributing slots from outside, the way
+  `(correspond …)` contributes correspondence); it waits for a second
+  pattern-level element to press it out.
 
 ## Lineage
 

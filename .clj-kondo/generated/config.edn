@@ -115,9 +115,9 @@
    fukan.common.vocab.code.kind/Kind hooks.fukan.structure/instance
    fukan.common.vocab.code.module/Module hooks.fukan.structure/instance
    fukan.common.vocab.code.operation/Operation hooks.fukan.structure/instance
-   fukan.common.vocab.code.plug-point/PlugPoint hooks.fukan.structure/instance
    fukan.common.vocab.code.subsystem/Subsystem hooks.fukan.structure/instance
    fukan.common.vocab.grouping/Grouping hooks.fukan.structure/instance
+   fukan.common.vocab.patterns.plug-point/PlugPoint hooks.fukan.structure/instance
    fukan.cozo.measure-test/MtCrate hooks.fukan.structure/instance
    fukan.cozo.measure-test/MtThing hooks.fukan.structure/instance
    fukan.model.pipeline-test/ECard hooks.fukan.structure/instance}}}

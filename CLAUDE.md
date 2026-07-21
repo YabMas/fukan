@@ -105,6 +105,12 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   (Kind / Effect / Operation / Module / Subsystem). **PURE DESIGN — language-neutral.** Each element
   file carries its structure and the laws that are its own slot semantics, and knows nothing about
   what language the code is written in.
+- `common/fukan/common/vocab/patterns/plug_point.clj` — the PATTERN TIER: `PlugPoint`, one rung above
+  the core code grammar. A pattern is a named CONFIGURATION built on the core elements (theory-frame
+  reading: an ENRICHMENT — it imports the core's sorts and adds its own relations), so the relations
+  the pattern adds (`:offers`/`:satisfies`) are elements of ITS signature, declared there. Known
+  residual: the slots still ride `Module`'s slot map (slots are the only authoring surface for a
+  structure's edges); an enrichment declaration shape waits for a second pattern-level element.
   **The design↔code correspondence is NOT here** (since 2026-07-17): it maps design INTO a SPECIFIC
   language's FACT theory. The codomains are real `defstructure`s in that language's extractor —
   `Operation ↦ Fn` (a Clojure function: `:calls` graph + `:private`/`:export`/`:test-support` metadata
@@ -279,8 +285,9 @@ unowned `Relation` nodes. ⚠ REPL: MOVING a defrelation to another ns trips the
 Laid out by **tier** (shipped library vs fukan's own use) and, within a tier, by **altitude**:
 
 - `common/fukan/common/vocab/**` (ns `fukan.common.vocab.*`) — the shared VOCABULARY (the grammar):
-  the structural primitives (`grouping`) and the code grammar by element
-  (`code/{kind,effect,operation,module,subsystem}`). Loaded via the `fukan.common` index (require), NOT discovered.
+  the structural primitives (`grouping`), the code grammar by element
+  (`code/{kind,effect,operation,module,subsystem}`), and the pattern tier above it
+  (`patterns/plug_point`). Loaded via the `fukan.common` index (require), NOT discovered.
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin
   (its own area, not general vocab; realizes the `typing` SPI). `common/fukan/common/extraction/**`
   (ns `fukan.common.extraction.*`) — the Clojure EXTRACTION SEAM plugin (realizes the extraction SPI).

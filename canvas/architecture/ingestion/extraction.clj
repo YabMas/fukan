@@ -4,7 +4,7 @@
    `extract-facts` WITHOUT naming it (keeps the pipeline generic); the composition root supplies it
    with `register-fact-extractor!`. Both operations mutate/read the registry slot (`:state`)."
   (:require [fukan.common.vocab.code.kind :refer [Kind]] [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
-            [fukan.common.vocab.code.plug-point :refer [PlugPoint]]))
+            [fukan.common.vocab.patterns.plug-point :refer [PlugPoint]]))
 
 (Module extraction
   "The extraction plug-point — register and run the project's code FACT extractor."

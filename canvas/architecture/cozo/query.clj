@@ -9,7 +9,7 @@
   (:require [fukan.common.vocab.code.kind :refer [Kind]]
             [fukan.common.vocab.code.operation :refer [Operation]]
             [fukan.common.vocab.code.module :refer [Module]]
-            [fukan.common.vocab.code.plug-point :refer [PlugPoint]]
+            [fukan.common.vocab.patterns.plug-point :refer [PlugPoint]]
             [canvas.architecture.cozo.db :as db]
             [canvas.architecture.kernel.structure :as kstructure]))
 

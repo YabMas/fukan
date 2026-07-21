@@ -12,13 +12,14 @@
             [fukan.common.vocab.grouping]
             [fukan.common.vocab.code.operation :refer [Operation]]
             [fukan.common.vocab.code.kind :refer [Kind]]
-            [fukan.common.vocab.code.plug-point :refer [PlugPoint]]))
+            [fukan.common.vocab.patterns.plug-point :refer [PlugPoint]]))
 
 ;; ── Module's containment species + the relation derived from them ─────────────
 ;; Each is a SPECIES of the `contains` genus (`vocab/grouping`) — the `(:sub :contains)` inclusion,
 ;; declared once on the relation itself, so `in-module`/`contains+` and every law over the genus
-;; pick them up without any structure restating it. `:satisfies` is deliberately NOT a species: it
-;; is the INVERTED edge (a plug-point owned elsewhere), not containment.
+;; pick them up without any structure restating it. The pattern-tier relations (`:offers`, and
+;; `:satisfies` — the inverted edge, deliberately NOT a species) are ELEMENTS of the pattern's own
+;; signature (`vocab/patterns/plug-point`); Module's slot map only USES their names.
 
 (defrelation :exposes
   "The public API surface — the Operations callers depend on."
@@ -26,10 +27,6 @@
 
 (defrelation :owns
   "Data-shapes that CROSS THE BOUNDARY — Kinds other modules adopt by name (and don't redefine)."
-  (:sub :contains))
-
-(defrelation :offers
-  "Plug-points this module OWNS for others to satisfy (SPIs / dependency-inversion points)."
   (:sub :contains))
 
 (defrelation :in-module
