@@ -18,6 +18,35 @@ The eventual vision is to render that graph as an interactive explorer in the
 browser — but that is **deferred indefinitely** (see below). Today fukan is a
 REPL-and-canvas tool exercised by modelling.
 
+## The theoretical frame — measure work against it
+
+`doc/THEORY.md` is the foundation every mechanism instantiates: fukan is a workbench
+for **theory presentations & morphisms** (the Burstall–Goguen / institutions
+tradition) whose one object logic is **Datalog**. Its map table is the contract with
+this codebase — every mechanism names its row; one that cannot is suspect. The
+operational gate:
+
+- **THE TEST.** Before any proposed mechanism exists, answer: is it a
+  **presentation**, a **sentence**, a **definitional extension**, a **morphism** —
+  or a **derived form**? One of the first four → it must LOOK like the existing
+  instances of its row (same declaration shape, same generated-law discipline, same
+  reflection). A derived form (notation: instance macros, law combinators,
+  `(reader f)`/`(syntax f)` hooks, strategy keywords) → it must ELIMINATE — expand
+  into the four with no meaning of its own. None of the five → the burden of proof
+  is on the mechanism; most such proposals are one of the five wearing a costume,
+  and the costume is debt.
+- **The fixed point: the logic never grows.** All growth lives in theories
+  (vocabulary extensions — definitional, or accumulative through an open genus) and
+  in derived forms (notation). Never propose extending the sentence language or
+  swapping the logic; expressive freedom belongs to the vocab-and-model axis, and
+  everything else stays rigid to fund it.
+- **No proof theory.** Every judgment is ⊨ — evaluation over the finite model; laws
+  and morphism obligations alike are model-checked, never derived.
+
+The frame says what a mechanism *is*, never that it should exist — vocabulary and
+mechanism grow only under concrete modelling pressure (see the standing discipline
+below).
+
 ## ⚠ Current state — lean kernel rebuilt; in a modelling-exploration phase
 
 The radical prune and the rebuild around a single structure-definition primitive
