@@ -22,7 +22,7 @@
 
 (defstructure Flagged
   "A realized concept: a Note whose flag is true — derived membership, NO constructor."
-  (realized-as '[(Note ?e) [?e :val/flag true]]))
+  (realized-as [(Note ?e) [?e :val/flag true]]))
 
 (deftest realized-as-parsed-and-no-constructor
   (testing "(realized-as …) registers the where-clauses and emits no constructor var"
@@ -48,7 +48,7 @@
   {:holds Note})
 (defstructure FlaggedHolder
   "Realized: a Holder holding a Flagged Note — a rule that references another realized rule."
-  (realized-as '[(Holder ?e) [?r :rel/from ?e] [?r :rel/kind :holds] [?r :rel/to ?n] (Flagged ?n)]))
+  (realized-as [(Holder ?e) [?r :rel/from ?e] [?r :rel/kind :holds] [?r :rel/to ?n] (Flagged ?n)]))
 
 (Holder hold-on  {:holds nt-on})
 (Holder hold-off {:holds nt-off})
@@ -66,10 +66,10 @@
   "A closed coproduct discriminated by :kind; totality asserted by a law."
   {:kind :string}
   (law "every Sum is a VariantA or a VariantB"
-    :offenders '[?s]
-    :where '[(not (VariantA ?s)) (not (VariantB ?s))]))
-(defstructure VariantA "Realized variant: kind = a." (realized-as '[(Sum ?e) [?e :val/kind "a"]]))
-(defstructure VariantB "Realized variant: kind = b." (realized-as '[(Sum ?e) [?e :val/kind "b"]]))
+    {:offenders [?s]
+     :where [(not (VariantA ?s)) (not (VariantB ?s))]}))
+(defstructure VariantA "Realized variant: kind = a." (realized-as [(Sum ?e) [?e :val/kind "a"]]))
+(defstructure VariantB "Realized variant: kind = b." (realized-as [(Sum ?e) [?e :val/kind "b"]]))
 
 (Sum sum-a {:kind "a"})
 (Sum sum-b {:kind "b"})
@@ -95,18 +95,18 @@
   (testing "(realized-as …) may not be combined with slots/laws/reader/^:value"
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized "d"
-             (realized-as '[(Note ?e)])
+             (realized-as [(Note ?e)])
              {:x :boolean}))
         "realized-as + slot is rejected")
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized2 "d"
-             (realized-as '[(Note ?e)])
-             (law "nope" :offenders '[?e] :where '[[?e :x 1]])))
+             (realized-as [(Note ?e)])
+             (law "nope" {:offenders [?e] :where [[?e :x 1]]})))
         "realized-as + law is rejected")
     (is (throws-realized-msg?
           '(fukan.canvas.core.structure/defstructure BadRealized3 "d"
-             (realized-as '[(Note ?e)])
-             (realized-as '[(Note ?e)])))
+             (realized-as [(Note ?e)])
+             (realized-as [(Note ?e)])))
         "multiple realized-as is rejected")))
 
 ;; ── transitive closure fixtures: a delegates chain a → b → c ────────────────
@@ -218,10 +218,10 @@
 (defstructure PathAudit
   "Flags test nodes that reach a mark through relation composition."
   (law "operation reaches io"
-    :scope ::PathNode
-    :offenders '[?o]
-    :where '[(path ?o [:cat [:* :next] :marks] ?mark)
-             [?mark :val/kind "io"]]))
+    {:scope ::PathNode
+     :offenders [?o]
+     :where [(path ?o [:cat [:* :next] :marks] ?mark)
+             [?mark :val/kind "io"]]}))
 
 (deftest laws-expand-path-clauses
   (testing "laws use the same path composition authoring layer as readings"

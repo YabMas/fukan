@@ -25,8 +25,8 @@
    :title   :string
    :mode    [:enum "a" "b"]}
   (law "no bad title"
-    :offenders '[?n]
-    :where '[[?n :val/title "bad"]])
+    {:offenders [?n]
+     :where [[?n :val/title "bad"]]})
   (law "every node references a leaf"
     (has :one-ref)))
 
@@ -60,8 +60,8 @@
                :title   :string
                :mode    [:enum "a" "b"]}
               (law "no bad title"
-                :offenders [?n]
-                :where [[?n :val/title "bad"]])
+                {:offenders [?n]
+                 :where [[?n :val/title "bad"]]})
               (law "every node references a leaf"
                 (has :one-ref)))
            f)

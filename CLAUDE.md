@@ -259,8 +259,11 @@ A `defstructure` is a composition of **slots** plus **laws**:
   defstructure's laws sit and route by target-type into the container's slots.
 - `^:value` structures are content-deduped, inline-anonymous nodes (structurally
   equal values collapse to one node) — used for nameless compound data.
-- `(law "desc" :offenders '[?x] :where '[…])` is a datalog constraint; `:scope
-  :global` opts a law out of self-scoping. The recurring shapes have COMBINATORS —
+- `(law "desc" {:offenders [?x] :where […] :rules […]? :scope …? :key …?})` is a datalog
+  constraint — ONE unquoted map, the same declaration cell as everything else (datalog in a
+  declaration form is data by position, never quoted; quotes belong to evaluated contexts —
+  the REPL, `q`. The old kwargs body throws). `:scope :global` opts a law out of
+  self-scoping. The recurring shapes have COMBINATORS —
   `(law "desc" (matched-by R :from S? :when {k v}? :scope T?))`, `(has R :when …?)`,
   `(has-any R1 R2 …)`, `(target R {k v})`, `(at-most-one R)` — which expand to
   datalog emitting `not-join` directly (the Cozo query compiler lowers stratified
@@ -297,9 +300,10 @@ correspondence relation map uses):
   seam the same triple is a checked law): `(:sub atom)` — the included relation accumulates this
   one's edges (the old `:isa`); `(:sup E)`/`(:eq E)` — DEFINED from E, an atom / `[:alt …]` (one
   rule per alternative — the old coproduct) / a regular path over atoms.
-- **Derived** — `(defrelation :module-depends "doc" '[?m ?n] '[…])` — a named custom-bodied datalog
-  rule for anything beyond the fragment; multiple bodies = recursion (base + step). Prefer
-  non-recursive: the rule pays the fixpoint on every check.
+- **Derived** — `(defrelation :module-depends "doc" [?m ?n] […])` — a named custom-bodied datalog
+  rule (head + bodies, unquoted — declaration forms never quote) for anything beyond the fragment;
+  multiple bodies = recursion (base + step). Prefer non-recursive: the rule pays the fixpoint on
+  every check.
 
 **Closures are the COMPILER's, not declarations:** `terms-of` emits every binary relation's `R+`
 unconditionally, and per-query rule injection is reachability-scoped, so a query pays for a closure

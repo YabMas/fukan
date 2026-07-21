@@ -24,6 +24,13 @@
   (let [name-node (second (:children node))]
     {:node (api/list-node [(api/token-node 'declare) name-node])}))
 
+(defn defrelation
+  "(defrelation :tag \"doc\" & body) → (defrelation :tag \"doc\"): the body — an inclusion
+   `(:sub …)` or a derived rule's unquoted head/where vectors — is datalog data, not code,
+   so it is dropped; keeping the truncated call keeps the macro var referenced."
+  [{:keys [node]}]
+  {:node (api/list-node (vec (take 3 (:children node))))})
+
 (defn correspond
   "(correspond Target :by-name … body) → (do Target): keep the target var referenced (so it isn't
    flagged unused) and drop the correspondence DSL body — the fact-slots map, (bridge …), and the

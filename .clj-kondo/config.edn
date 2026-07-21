@@ -151,4 +151,5 @@
  :hooks
  {:analyze-call
   {fukan.canvas.core.structure/defstructure hooks.fukan.structure/defstructure
+   fukan.canvas.core.structure/defrelation  hooks.fukan.structure/defrelation
    fukan.canvas.core.structure/correspond   hooks.fukan.structure/correspond}}}

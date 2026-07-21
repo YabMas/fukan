@@ -193,12 +193,12 @@
   ;; referenced type (external/library types included) to be modelled explicitly. Subsumes the old
   ;; "a ref must name a target" presence law.
   (law "every type-reference resolves to a modelled Kind"
-    :offenders '[?sch]
-    :where '[[?sch :val/kind "ref"]
+    {:offenders [?sch]
+     :where [[?sch :val/kind "ref"]
              (not-join [?sch]
                [?sch :val/ref ?nm]
                [?k :entity/name ?nm]
-               (Kind ?k))]))
+               (Kind ?k))]}))
 
 ;; names-kind — the type-ref → named-Kind navigation as a DEFRELATION (injected into every law/query
 ;; by check/vocab-rules), so the consumers that chase a ref Schema to the type it names — e.g.
@@ -207,8 +207,8 @@
 (s/defrelation :names-kind
   "a ref Schema ?sch whose :ref name leaf resolves BY NAME to the Kind ?k it references — the
    ref-Schema→named-type navigation (name-based, mirroring how the twin correlates strata)."
-  '[?sch ?k]
-  '[[?sch :val/kind "ref"] [?sch :val/ref ?nm] [?k :entity/name ?nm] (Kind ?k)])
+  [?sch ?k]
+  [[?sch :val/kind "ref"] [?sch :val/ref ?nm] [?k :entity/name ?nm] (Kind ?k)])
 
 ;; ── the runtime bridges (the interpretation mechanism) ─────────────────────────
 

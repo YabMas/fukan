@@ -67,11 +67,11 @@
    over the vocab-derived `xview`; loading this structure proves the recursion guard no
    longer trips (xview is not one of the law's own :rules)."
   (law "every step traces to an impl module"
-    :scope ::Step
-    :offenders '[?s]
-    :rules '[[(traces ?a ?b) (xview ?a ?b)]
+    {:scope ::Step
+     :offenders [?s]
+     :rules [[(traces ?a ?b) (xview ?a ?b)]
              [(traces ?a ?c) (xview ?a ?b) (traces ?b ?c)]]
-    :where '[(not-join [?s] (traces ?s ?m) (Mod ?m))]))
+     :where [(not-join [?s] (traces ?s ?m) (Mod ?m))]}))
 
 (deftest traces-in-a-law-now-works
   (testing "the traces law is accepted and runs: sb (its concept fb has no realizing Mod) is flagged"
@@ -88,9 +88,9 @@
    faculties must feed (FA :feeds FB). A step-sequence whose faculties don't flow is
    cross-view drift. Non-recursive; uses only auto-derived rel-rules (next/via/feeds)."
   (law "view-map preserves flow"
-    :scope ::Step
-    :offenders '[?a ?b]
-    :where '[(next ?a ?b) (via ?a ?fa) (via ?b ?fb) (not (feeds ?fa ?fb))]))
+    {:scope ::Step
+     :offenders [?a ?b]
+     :where [(next ?a ?b) (via ?a ?fa) (via ?b ?fb) (not (feeds ?fa ?fb))]}))
 
 ;; drift chain: SC→SD,  SC↦FC SD↦FD,  but FC does NOT feed FD
 (Fac fc)

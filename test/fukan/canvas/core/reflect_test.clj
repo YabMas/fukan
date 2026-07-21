@@ -31,8 +31,8 @@
    :title   :string
    :mode    [:enum "a" "b"]}
   (law "no node may be titled \"bad\""
-    :offenders '[?n]
-    :where '[[?n :val/title "bad"]]))
+    {:offenders [?n]
+     :where [[?n :val/title "bad"]]}))
 
 ;; ── morphism fixtures: a design/fact pair, a correspondence, two derived relations ──
 ;; `m-`-prefixed to keep the GLOBAL (unqualified) relation-rule namespace collision-free.
@@ -41,9 +41,9 @@
 (defstructure MSrc  "Fixture domain."   {:mdel   [:* MSrc]})
 
 (s/defrelation :m-public "fixture sub-sort: every MFact"
-  '[?x] '[[?x :structure/of :fukan.canvas.core.reflect-test/MFact]])
+  [?x] [[?x :structure/of :fukan.canvas.core.reflect-test/MFact]])
 (s/defrelation :m-link "fixture derived: a direct mcalls edge"
-  '[?a ?b] '[(mcalls ?a ?b)])
+  [?a ?b] [(mcalls ?a ?b)])
 
 (s/correspond MSrc :eq [MFact :m-public]
   (:mdel :sub :m-link))

@@ -39,9 +39,9 @@
 ;; public/private line the delegates roll-up quotients over as interior — drawn once, here.
 (defrelation :public
   "Fn's public surface: an extracted function that is not private, not ^:export, not ^:test-support."
-  '[?x]
-  '[[?x :structure/of :fukan.common.extraction.clojure.operation/Fn]
-    (not [?x :val/private true]) (not [?x :val/export true]) (not [?x :val/test-support true])])
+  [?x]
+  [[?x :structure/of :fukan.common.extraction.clojure.operation/Fn]
+   (not [?x :val/private true]) (not [?x :val/export true]) (not [?x :val/test-support true])])
 
 ;; The PUBLIC CALL GRAPH as a first-class fact relation — `a` reaches `b` through only ¬public (internal)
 ;; interior. Routing through another PUBLIC op is TWO delegations, not one; an unmodelled `^:export`/
@@ -50,8 +50,8 @@
 ;; negated here. A recursive derived relation (base + step); `delegates :sub :public-call` names it.
 (defrelation :public-call
   "a reaches b through only non-public interior — the public call graph"
-  '[?a ?b] '[(calls ?a ?b)]                                     ; base: a direct call
-           '[(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
+  [?a ?b] [(calls ?a ?b)]                                     ; base: a direct call
+          [(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
 
 ;; ── the correspondence: Operation ↦ Fn, one sort of the design→Clojure morphism ──
 ;; Rides Operation from OUTSIDE (its `defstructure` stays pure identity). Every law generates at

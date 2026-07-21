@@ -15,11 +15,11 @@
   (testing "an aliased s/defstructure is recognised too"
     (is (= 'Attr (kondo/structure-name '(s/defstructure Attr "doc" {:required :boolean})))))
   (testing "a realized-as concept interns NO constructor (excluded)"
-    (is (nil? (kondo/structure-name '(defstructure Flagged "doc" (realized-as '[(Sum ?e) [?e :val/kind "a"]]))))))
+    (is (nil? (kondo/structure-name '(defstructure Flagged "doc" (realized-as [(Sum ?e) [?e :val/kind "a"]]))))))
   (testing "non-defstructure forms yield nil"
     (is (nil? (kondo/structure-name '(defn foo [x] x))))
     (is (nil? (kondo/structure-name '(defrelation :xview "doc" (:eq [:alt :via :x])))))
-    (is (nil? (kondo/structure-name '(defrelation :op-twin "doc" '[?a ?b] '[[?a :x ?v]])))
+    (is (nil? (kondo/structure-name '(defrelation :op-twin "doc" [?a ?b] [[?a :x ?v]])))
         "a defrelation interns no constructor either")
     (is (nil? (kondo/structure-name "a docstring")))))
 
@@ -30,7 +30,7 @@
     (let [src (str "(ns demo.vocab (:require [x :refer [defstructure]]))\n"
                    "(defstructure Foo \"d\" {:a :string})\n"
                    "(defstructure ^:value Bar \"d\" {:b :int})\n"
-                   "(defstructure Gone \"d\" (realized-as '[(Foo ?e)]))\n"
+                   "(defstructure Gone \"d\" (realized-as [(Foo ?e)]))\n"
                    "(defn helper [x] x)")]
       (is (= ['demo.vocab/Foo 'demo.vocab/Bar]
              (kondo/qualified-names src)))))

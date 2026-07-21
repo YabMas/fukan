@@ -24,27 +24,27 @@
 ;; in-subsystem — Subsystem membership: the `contains` union restricted to a Subsystem container.
 (s/defrelation :in-subsystem
   "Module ?mod is clustered by Subsystem ?sub — the `contains` union restricted to a Subsystem container."
-  '[?mod ?sub]
-  '[[?sub :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (contains ?sub ?mod)])
+  [?mod ?sub]
+  [[?sub :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (contains ?sub ?mod)])
 
 ;; module-owns — Module ownership: the `contains` genus
 ;; restricted to a Module container. A helper for `module-depends`.
 (s/defrelation :module-owns
   "Module ?m owns ?x — the `contains` genus restricted to a Module container."
-  '[?m ?x]
-  '[[?m :structure/of :fukan.common.vocab.code.module/Module] (contains ?m ?x)])
+  [?m ?x]
+  [[?m :structure/of :fukan.common.vocab.code.module/Module] (contains ?m ?x)])
 
 (s/defrelation :module-depends
   "the COMPLETE module→module dependency graph: a call dependency (?m owns an op that :delegates to
    an op ?n owns) UNIONed with data-adoption (?m owns an op whose :in/:out ref-Schema references a Kind
    ?n owns, by name). The reader `module-dependencies` and the layering laws below read this by name."
-  '[?m ?n]
-  '[(module-owns ?m ?op)
-    (or-join [?op ?n]
-      (and (delegates ?op ?op2) (module-owns ?n ?op2))
-      (and (in ?op ?sch)  (names-kind ?sch ?k) (module-owns ?n ?k))
-      (and (out ?op ?sch) (names-kind ?sch ?k) (module-owns ?n ?k)))
-    [(not= ?m ?n)]])
+  [?m ?n]
+  [(module-owns ?m ?op)
+   (or-join [?op ?n]
+     (and (delegates ?op ?op2) (module-owns ?n ?op2))
+     (and (in ?op ?sch)  (names-kind ?sch ?k) (module-owns ?n ?k))
+     (and (out ?op ?sch) (names-kind ?sch ?k) (module-owns ?n ?k)))
+   [(not= ?m ?n)]])
 
 (defstructure Subsystem
   "A cluster of Modules realizing a capability — the rung above Module in the grouping ladder
@@ -64,20 +64,20 @@
   {:child      [:* Module]      ; the Modules this subsystem clusters (`:child` is a `contains` species — see vocab/grouping)
    :may-depend [:* Subsystem]}  ; the subsystems it is allowed to depend on (declared intent)
   (law "every cross-subsystem module dependency follows a declared :may-depend edge"
-    :scope :global
-    :offenders '[?m]
-    :rules '[[(declared-dep ?s ?t) [?s :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (may-depend ?s ?t)]]
-    :where '[(module-depends ?m ?n)
+    {:scope :global
+     :offenders [?m]
+     :rules [[(declared-dep ?s ?t) [?s :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (may-depend ?s ?t)]]
+     :where [(module-depends ?m ?n)
              (in-subsystem ?m ?s) (in-subsystem ?n ?t) [(not= ?s ?t)]
-             (not (declared-dep ?s ?t))])
+             (not (declared-dep ?s ?t))]})
   ;; self-scoped: the offender IS a Subsystem, so the scope clause [?s :structure/of ::Subsystem]
   ;; is injected — no :scope :global, no explicit tag clause. sub-reaches follows :may-depend
   ;; edges directly and is PURELY self-recursive.
   (law "the :may-depend graph is acyclic — no subsystem transitively depends on itself"
-    :offenders '[?s]
-    :rules '[[(sub-reaches ?s ?t) (may-depend ?s ?t)]
+    {:offenders [?s]
+     :rules [[(sub-reaches ?s ?t) (may-depend ?s ?t)]
              [(sub-reaches ?s ?t) (may-depend ?s ?mid) (sub-reaches ?mid ?t)]]
-    :where '[(sub-reaches ?s ?s)])
+     :where [(sub-reaches ?s ?s)]})
   ;; ── the module-graph demands, rehomed from the retired layered-architecture principle ──
   ;; ACYCLIC MODULE DEPENDENCY: no Module transitively depends on itself — the module-dependency graph
   ;; (`module-depends`, the complete graph: calls ∪ data-adoption) has no cycle. `module-reaches` is its
@@ -85,21 +85,21 @@
   ;; on a cycle. `:scope :global` — the offenders are the Modules on a cycle, not Subsystems; naturally
   ;; vacuous when no Modules are modelled.
   (law "the module-dependency graph is acyclic — no module transitively depends on itself"
-    :scope :global
-    :offenders '[?m]
-    :rules '[[(module-reaches ?m ?n) (module-depends ?m ?n)]
+    {:scope :global
+     :offenders [?m]
+     :rules [[(module-reaches ?m ?n) (module-depends ?m ?n)]
              [(module-reaches ?m ?n) (module-depends ?m ?mid) (module-reaches ?mid ?n)]]
-    :where '[[?m :structure/of :fukan.common.vocab.code.module/Module] (module-reaches ?m ?m)])
+     :where [[?m :structure/of :fukan.common.vocab.code.module/Module] (module-reaches ?m ?m)]})
   ;; MEMBERSHIP TOTALITY — every AUTHORED Module belongs to a Subsystem, so conformance has full
   ;; coverage. Guarded by a Subsystem existing (→ vacuous for subsystem-free models); negation routes
   ;; through the injected `in-subsystem` defrelation. Extracted code-fact modules are out of scope.
   (law "every Module belongs to a Subsystem"
-    :scope :global
-    :offenders '[?mod]
-    :where '[[?_s :structure/of :fukan.common.vocab.code.subsystem/Subsystem]
+    {:scope :global
+     :offenders [?mod]
+     :where [[?_s :structure/of :fukan.common.vocab.code.subsystem/Subsystem]
              [?mod :structure/of :fukan.common.vocab.code.module/Module]
              (not (fact ?mod))
-             (not-join [?mod] (in-subsystem ?mod ?_sub))]))
+             (not-join [?mod] (in-subsystem ?mod ?_sub))]}))
 
 (defn module-dependencies
   "The complete module→module dependency graph (calls ∪ data-adoption) as a set of

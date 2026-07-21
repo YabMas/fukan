@@ -55,9 +55,9 @@
    :contextualizes [:? Projection]        ; a CONTEXTUALIZATION's base projection
    :context        [:? :string]}          ; the framing prose wrapped around the base render
   (law "a projection focuses inline (:select) or through a named lens (:through), never both"
-    :offenders '[?p]
-    :where '[[?p :val/select ?s]
-             [?tr :rel/from ?p] [?tr :rel/kind :through]]))
+    {:offenders [?p]
+     :where [[?p :val/select ?s]
+             [?tr :rel/from ?p] [?tr :rel/kind :through]]}))
 
 ;; ── THE GATE: a Check turns a Lens's focus into a verdict ──────────────────────────────────────
 

@@ -20,5 +20,5 @@
   "An Operation that DIRECTLY performs an Effect. Consumers that care about a subset of effects
    should filter by the effect's name in their own layer. The leaf PROPERTY that the composition
    operator transports along a transitive relation, e.g. (via :delegates Operation effectful)."
-  '[?o]
-  '[(Operation ?o) (performs ?o ?e)])
+  [?o]
+  [(Operation ?o) (performs ?o ?e)])

@@ -23,7 +23,7 @@
 (defstructure Kind
   "Test fixture sharing the short name `Kind` with fukan.common.vocab.code.kind/Kind."
   {:note [:? :string]}
-  (law "local-kind-flag" :offenders '[?k] :where '[]))
+  (law "local-kind-flag" {:offenders [?k] :where []}))
 
 (Kind ^{:name "local"} local-kind)
 (code/Kind ^{:name "fromlib"} lib-kind)

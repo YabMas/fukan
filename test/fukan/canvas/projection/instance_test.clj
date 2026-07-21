@@ -31,8 +31,8 @@
    :vals   [:* IVal]
    :shape  [:? Schema]}
   (law "no node may be titled \"bad\""
-    :offenders '[?n]
-    :where '[[?n :val/title "bad"]]))
+    {:offenders [?n]
+     :where [[?n :val/title "bad"]]}))
 
 (ITarget t-a)
 (ITarget ^{:name "B"} t-b)

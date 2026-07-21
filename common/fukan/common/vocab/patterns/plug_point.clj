@@ -36,5 +36,5 @@
 (defrelation :offers
   "Module ?m offers plug-point ?p — the derived CONVERSE of `:owner`, the domain-altitude reading
    (\"module M offers P\") the pattern provides so the core never has to."
-  '[?m ?p]
-  '[(owner ?p ?m)])
+  [?m ?p]
+  [(owner ?p ?m)])

@@ -1000,27 +1000,48 @@
     `(register-correspondence! ~dtag '~config)))
 
 (defn- parse-law
-  "(law \"desc\" :offenders '[?vars] :where '[clauses] :rules '[rules]? :scope <tag|:global>?)
-   — or `(law \"desc\" (combinator …))`, expanded by `combinator-law`.
+  "(law \"desc\" {:offenders [?vars] :where [clauses] :rules [rules]? :scope <tag|:global>? :key k?})
+   — or `(law \"desc\" (combinator …) {:key k}?)`, expanded by `combinator-law`.
+
+   The body is ONE map, unquoted — the declaration cell every other form uses; datalog
+   inside a declaration form is data by position, so it is never quoted (quotes are for
+   evaluated contexts: the REPL, `q`). The retired kwargs style throws, naming the law.
 
    :scope controls auto-scoping of the first offender var to a structure:
    absent → the owning structure (the common case: a law about my own
    instances); a tag → that structure (a law whose subject is a related
    structure); :global → no auto-scope (the law is fully explicit)."
   [form]
-  (let [[_ desc & kvs] form]
-    (if (and (seq? (first kvs)) (symbol? (ffirst kvs)))
-      ;; a combinator law: the combinator form, optionally followed by a single :key (the one
-      ;; law-level option a combinator can't express — a worklist reader addresses the law by it).
-      (let [law  (combinator-law desc (first kvs))
-            opts (apply hash-map (rest kvs))]
+  (let [[_ desc & body] form]
+    (if (and (seq? (first body)) (symbol? (ffirst body)))
+      ;; a combinator law: the combinator form, optionally followed by an options map holding
+      ;; :key (the one law-level option a combinator can't express — worklist readers address
+      ;; the law by it).
+      (let [law  (combinator-law desc (first body))
+            opts (second body)]
+        (when (or (> (count body) 2) (and (some? opts) (not (map? opts))))
+          (throw (ex-info (str "law " (pr-str desc) ": a combinator law takes the combinator form "
+                               "and an optional options map: (law \"desc\" (has :r) {:key :k})")
+                          {:form form})))
         (doseq [k (keys opts)]
           (when-not (= k :key)
-            (throw (ex-info (str "a combinator law takes the combinator form and an optional :key: "
-                                 (pr-str form))
-                            {:form form}))))
+            (throw (ex-info (str "law " (pr-str desc) ": a combinator's options map takes only :key, got " k)
+                            {:form form :key k}))))
         (cond-> law (:key opts) (assoc :key (:key opts))))
-      (let [m (apply hash-map kvs)]
+      (let [m (first body)]
+        (when (keyword? m)
+          (throw (ex-info (str "law " (pr-str desc) ": the kwargs body is retired — one unquoted map: "
+                               "(law \"desc\" {:offenders [?x] :where […]})")
+                          {:form form})))
+        (when-not (and (map? m) (empty? (rest body)))
+          (throw (ex-info (str "law " (pr-str desc) ": the body is one map or one combinator form: "
+                               (pr-str form))
+                          {:form form})))
+        (doseq [k (keys m)]
+          (when-not (#{:key :offenders :where :rules :scope} k)
+            (throw (ex-info (str "law " (pr-str desc) ": unknown law option " k
+                                 " — allowed: :offenders :where :rules :scope :key")
+                            {:form form :key k}))))
         {:desc      desc
          :key       (:key m)
          :offenders (unquote-lit (:offenders m))
@@ -1042,7 +1063,7 @@
      (defstructure Function \"...\"
        {:takes [:* Type]
         :gives Type}
-       (law \"...\" :offenders '[?f] :where '[...] :rules '[...]?))
+       (law \"...\" {:offenders [?f] :where [...] :rules [...]?}))
 
    Instantiate with the generated macro — the instance surface MIRRORS defstructure:
    a name symbol (the var AND the entity name; `^{:name \"…\"}` meta overrides), an
@@ -1160,10 +1181,10 @@
    so a recursive one re-evaluates on every check.
 
      (defrelation :public-call \"a reaches b through only non-public interior — the public call graph\"
-       '[?a ?b] '[(calls ?a ?b)]                                    ; base: a direct call
-                '[(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
+       [?a ?b] [(calls ?a ?b)]                                    ; base: a direct call
+               [(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
 
-   A head arg may be an AGGREGATE application — `'[?m (count ?op)]` — making the derived
+   A head arg may be an AGGREGATE application — `[?m (count ?op)]` — making the derived
    relation a MEASURE. Plain head vars group; supported aggregates are count/sum/min/max/mean.
 
    TRANSITIVE CLOSURES are not declared at all: `R+`/`R*` belong to the expression language, and

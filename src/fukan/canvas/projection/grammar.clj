@@ -148,10 +148,11 @@
 (defn- law-form [{:keys [desc scope rules offenders where src]}]
   (if src
     (list 'law desc src)   ; authored through a combinator — render the combinator back
-    (concat ['law desc]
-            (when scope [:scope scope])
-            (when rules [:rules rules])
-            [:offenders offenders :where where])))
+    (list 'law desc
+          (cond-> (array-map)
+            scope (assoc :scope scope)
+            rules (assoc :rules rules)
+            true  (assoc :offenders offenders :where where)))))
 
 (defn- codomain-form
   "The sort map's codomain: a bare fact name `Fn`, or `[Fn :public]` when restricted to a sub-sort."
@@ -224,7 +225,7 @@
           (when (seq slots) [(fmt-slots slots)])
           (when corresponds
             [(str "  (corresponds …)  ; ⇒ " n-generated " generated laws")])
-          (when realizes [(str "  (realized-as '" (pr-str realizes) ")")])
+          (when realizes [(str "  (realized-as " (pr-str realizes) ")")])
           (map #(str "  (law " (pr-str (:desc %)) " …)") laws))
          (str/join "\n")
          (#(str % ")")))))

@@ -138,9 +138,9 @@
    :names [:? LDoc]}
   (law "a held, non-skipped gate names a target"
     (has :names
-         :when   '[[?hr :rel/kind :holds] [?hr :rel/to ?x]]
-         :unless '[[?x :val/skip true]])
-    :key :held-gate))
+         :when   [[?hr :rel/kind :holds] [?hr :rel/to ?x]]
+         :unless [[?x :val/skip true]])
+    {:key :held-gate}))
 (defstructure LHolder "holds gates" {:holds [:* LGate]})
 
 (LGate ^{:name "unheld"} qg-unheld)                        ; no :holds edge → :when excludes it

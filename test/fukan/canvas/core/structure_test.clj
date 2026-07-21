@@ -63,11 +63,11 @@
   "A self-referential structure."
   {:child [:* Tree]}
   (law "no cycle through :child"
-    :rules '[[(reaches ?a ?b) [?r :rel/from ?a] [?r :rel/kind :child] [?r :rel/to ?b]]
+    {:rules [[(reaches ?a ?b) [?r :rel/from ?a] [?r :rel/kind :child] [?r :rel/to ?b]]
              [(reaches ?a ?b) [?r :rel/from ?a] [?r :rel/kind :child] [?r :rel/to ?m]
                               (reaches ?m ?b)]]
-    :offenders '[?t]
-    :where '[(reaches ?t ?t)]))
+     :offenders [?t]
+     :where [(reaches ?t ?t)]}))
 
 (defstructure NonEmpty
   "Exercises the [:+ Type] cardinality — at least one."
@@ -81,15 +81,15 @@
   "A free law scoped (by default) to its own instances."
   {:field [:* Type]}
   (law "no field labelled secret"
-    :offenders '[?x]
-    :where '[[?r :rel/from ?x] [?r :rel/kind :field] [?r :rel/label "secret"]]))
+    {:offenders [?x]
+     :where [[?r :rel/from ?x] [?r :rel/kind :field] [?r :rel/label "secret"]]}))
 
 (defstructure Auditor
   "A free law whose subject is a *different* structure, via :scope."
   (law "no Plain has a secret field"
-    :scope ::Plain
-    :offenders '[?p]
-    :where '[[?r :rel/from ?p] [?r :rel/kind :field] [?r :rel/label "secret"]]))
+    {:scope ::Plain
+     :offenders [?p]
+     :where [[?r :rel/from ?p] [?r :rel/kind :field] [?r :rel/label "secret"]]}))
 
 (defstructure Box
   "Exercises value slots: a required Bool, an optional String, a required Int.
@@ -98,8 +98,8 @@
    :label [:? :string]
    :size  :int}
   (law "size must be positive"
-    :offenders '[?x]
-    :where '[[?x :val/size ?s] [(<= ?s 0)]]))
+    {:offenders [?x]
+     :where [[?x :val/size ?s] [(<= ?s 0)]]}))
 
 ;; value-identity test vocab: Pair/Boxed are ^:value (content-deduped, inline,
 ;; anonymous); Holder is an entity that holds them.

@@ -48,8 +48,8 @@
                                   [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?op]]])))))))
 
 (s/defrelation :mt-exposed-count "test measure: a module's exposed-op count"
-  '[?m (count ?op)]
-  '[[?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?op]])
+  [?m (count ?op)]
+  [[?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?op]])
 
 (deftest aggregate-headed-defrelation-is-vocab-injected
   (testing "a defrelation with an aggregate head rides vocab-rules like any derived relation"
@@ -159,10 +159,10 @@
   "measure-test: a container whose law caps its content via an inline measure"
   {:holds [:* MtThing]}
   (law "an MtCrate holds at most 2 things"
-    :offenders '[?c]
-    :where '[(measure ?k (count ?x)
+    {:offenders [?c]
+     :where [(measure ?k (count ?x)
                [?r :rel/from ?c] [?r :rel/kind :holds] [?r :rel/to ?x])
-             [(> ?k 2)]]))
+             [(> ?k 2)]]}))
 
 (MtThing mt-t1)
 (MtThing mt-t2)

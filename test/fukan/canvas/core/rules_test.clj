@@ -16,9 +16,9 @@
    the vocab-derived rules (→ exercises check's auto-injection)."
   {:links [:* RuleThing]}
   (law "no rule-thing may be named \"forbidden\""
-    :scope :global
-    :offenders '[?s]
-    :where '[(RuleThing ?s) (named ?s "forbidden")]))
+    {:scope :global
+     :offenders [?s]
+     :where [(RuleThing ?s) (named ?s "forbidden")]}))
 
 (defstructure Mod
   "A grouping fixture — a node whose :child relations place its members in a module
@@ -37,8 +37,8 @@
 ;; into the live vocab and injected into every law/vocab-rules query, like a kind/relation rule
 (s/defrelation :same-name
   "two distinct nodes that share a name"
-  '[?a ?b]
-  '[[?a :entity/name ?n] [?b :entity/name ?n] [(not= ?a ?b)]])
+  [?a ?b]
+  [[?a :entity/name ?n] [?b :entity/name ?n] [(not= ?a ?b)]])
 
 (RuleThing ^{:name "dup"} rt3-a)
 (RuleThing ^{:name "dup"} rt3-b)

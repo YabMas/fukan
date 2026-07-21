@@ -37,8 +37,8 @@
    Pure grouping vocabulary: its body mentions only the genus and the substrate's `:entity/name` —
    no code-vocab sort — so it lives here with the genus. (Until 2026-07-21 it was `in-module` in
    `code/module` — a historical narrowing: nothing about it requires a Module.)"
-  '[?e ?cname]
-  '[(contains ?c ?e) [?c :entity/name ?cname]])
+  [?e ?cname]
+  [(contains ?c ?e) [?c :entity/name ?cname]])
 
 (defstructure Grouping
   "The most abstract grouping — a named bag of model instances, pure membership and nothing

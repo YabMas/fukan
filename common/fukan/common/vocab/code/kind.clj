@@ -19,7 +19,7 @@
   {:shape [:? Schema]}                          ; its shape, when it has one (authored positionally)
   (syntax shape->slots)                         ; positional malli body → the :shape slot
   (law "a Kind is a member of at most one Module"
-    :offenders '[?k]
-    :rules '[[(kind-home ?k ?m) [?m :structure/of :fukan.common.vocab.code.module/Module]
+    {:offenders [?k]
+     :rules [[(kind-home ?k ?m) [?m :structure/of :fukan.common.vocab.code.module/Module]
               (contains ?m ?k)]]
-    :where '[(kind-home ?k ?m1) (kind-home ?k ?m2) [(not= ?m1 ?m2)]]))
+     :where [(kind-home ?k ?m1) (kind-home ?k ?m2) [(not= ?m1 ?m2)]]}))
