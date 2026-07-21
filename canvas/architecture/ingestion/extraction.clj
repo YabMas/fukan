@@ -19,9 +19,6 @@
      closure ((db)→db) the extractor supplies to ground engine-specific derived edges (the :calls
      graph). What the native Cozo build consumes, produced by the registered fact extractor."
     :map)
-  ;; the extraction plug-point — a project's per-LANGUAGE code extractor plugs in (external-by-design;
-  ;; fukan's is the Clojure extractor). The build consults the registry, naming no specific extractor.
-  (PlugPoint FactExtractor {:shape [:=> [:catn [:code-root Path]] Facts]})
   (Operation register-fact-extractor! "Register the project's FACT extractor (a fn Path → Facts)."
     {:signature [:=> [:catn [:f :any]] Unit]
      :performs  [:state]})
@@ -32,3 +29,10 @@
      beyond what `architecture/` models."
     {:signature [:=> [:catn [:code-root Path]] Facts]
      :performs  [:state]}))
+
+;; the extraction plug-point — a pattern-tier node drawn OVER the module (it names its :owner; the
+;; module stays closed): a project's per-LANGUAGE code extractor plugs in (external-by-design;
+;; fukan's is the Clojure extractor). The build consults the registry, naming no specific extractor.
+(PlugPoint FactExtractor
+  {:shape [:=> [:catn [:code-root Path]] Facts]
+   :owner extraction})

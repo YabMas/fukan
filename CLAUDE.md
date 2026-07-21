@@ -106,11 +106,13 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   file carries its structure and the laws that are its own slot semantics, and knows nothing about
   what language the code is written in.
 - `common/fukan/common/vocab/patterns/plug_point.clj` — the PATTERN TIER: `PlugPoint`, one rung above
-  the core code grammar. A pattern is a named CONFIGURATION built on the core elements (theory-frame
-  reading: an ENRICHMENT — it imports the core's sorts and adds its own relations), so the relations
-  the pattern adds (`:offers`/`:satisfies`) are elements of ITS signature, declared there. Known
-  residual: the slots still ride `Module`'s slot map (slots are the only authoring surface for a
-  structure's edges); an enrichment declaration shape waits for a second pattern-level element.
+  the core code grammar. A pattern is a named CONFIGURATION drawn OVER the core elements (theory-frame
+  reading: a theory EXTENSION — it imports the core's sorts and adds its own sort + relations), and
+  the dependency points strictly UPWARD: the pattern names its participants (`PlugPoint :owner`), the
+  core never names the pattern — `Module` carries no pattern slots and does not require the pattern ns.
+  The domain-altitude reading `(offers ?m ?p)` is a DERIVED relation in the pattern's signature (the
+  converse of `:owner`). The satisfy side is CUT until its semantics cycle (likely
+  correspondence-recognized from registration facts, not authored).
   **The design↔code correspondence is NOT here** (since 2026-07-17): it maps design INTO a SPECIFIC
   language's FACT theory. The codomains are real `defstructure`s in that language's extractor —
   `Operation ↦ Fn` (a Clojure function: `:calls` graph + `:private`/`:export`/`:test-support` metadata
@@ -425,8 +427,8 @@ mixing them corrupts history.
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by
   element + grouping. **Pure design, language-neutral — carries NO correspondence.** The membership
   relations are ELEMENTS here: the `contains` genus + `:child` + the derived by-name `:within` in
-  `grouping.clj`, `:exposes`/`:owns` in `code/module.clj`, `:offers`/`:satisfies` in
-  `patterns/plug_point.clj` (the pattern tier owns the relations it adds). The
+  `grouping.clj`, `:exposes`/`:owns` in `code/module.clj` (the pattern tier's derived `offers`
+  rides `patterns/plug_point.clj` — the tier owns the relations it adds). The
   module-dependency-graph relations + readers (`module-owns`/`module-depends`/`module-dependencies`)
   live with the architecture laws that consume them in `code/subsystem.clj`
 - `common/fukan/common/extraction/clojure/` — the FACT theory + the design↔Clojure map: `operation.clj`

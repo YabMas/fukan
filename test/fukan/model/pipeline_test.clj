@@ -11,6 +11,9 @@
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.common.typing.malli :as dialect]
+            ;; loaded for its side-effect: the composition root registers the Clojure fact extractor
+            ;; the extraction-provenance test builds through (isolation — peers must not supply it)
+            [fukan.infra.model]
             [fukan.model.pipeline :as pipeline]
             [fukan.common.vocab.code.kind :refer [Kind]]
             [fukan.canvas.core.lens :refer [Projection]]))

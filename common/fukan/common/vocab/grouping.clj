@@ -26,7 +26,7 @@
 (defrelation :child
   "Internal membership — the ownership backbone: grain the container is source-of-truth for and no
    one else consumes. The most abstract containment species; a code Module refines it with
-   surface-bearing siblings (`:exposes`/`:owns`/`:offers`)."
+   surface-bearing siblings (`:exposes`/`:owns`)."
   (:sub :contains))
 
 (defrelation :within

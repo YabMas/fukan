@@ -30,10 +30,13 @@
     {:signature [:=> [:catn [:form :any]] :any]})
   (Operation value-valid? "Whether a scalar value satisfies a refined-slot type form, via the dialect's :valid? bridge — the bridge a refined-scalar slot's auto-generated type-check law calls. Throws when no :valid? is registered."
     {:signature [:=> [:catn [:type-form :any] [:value :any]] :boolean]
-     :performs  [:throws]})
-  ;; the type-dialect plug-point itself — a project plugs its type language in; the kernel names none.
-  (PlugPoint TypeDialect
-    "The type-dialect plug-point (`register-type-dialect!`): a project's type language as a bridge-fn map
-     (render / parse / valid? / reflect-tag). The kernel dispatches type render/check to the registered
-     dialect and interprets no type form itself — it ships no dialect."
-    {:shape [:map [:render :any] [:parse :any] [:valid? :any] [:reflect-tag :any]]}))
+     :performs  [:throws]}))
+
+;; the type-dialect plug-point itself — a pattern-tier node drawn OVER the module (it names its
+;; :owner; the module stays closed): a project plugs its type language in; the kernel names none.
+(PlugPoint TypeDialect
+  "The type-dialect plug-point (`register-type-dialect!`): a project's type language as a bridge-fn map
+   (render / parse / valid? / reflect-tag). The kernel dispatches type render/check to the registered
+   dialect and interprets no type form itself — it ships no dialect."
+  {:shape [:map [:render :any] [:parse :any] [:valid? :any] [:reflect-tag :any]]
+   :owner typing})

@@ -285,8 +285,15 @@
 ;; `:entity/name`; nothing about it requires a Module — the old name/home was a historical narrowing).
 ;; Terms hold at 92 (the derived rule's head renames `in-module`→`within` → hash moves); laws hold at
 ;; 62 unchanged (no law reads the by-name convenience — they scope via kind rules / `in-subsystem`).
-(def ^:private golden-terms {:count 92 :hash 870651849})
-(def ^:private golden-laws  {:count 62 :hash -1928187573})
+;; 2026-07-21 (c): `PlugPoint` is a CONTRACT and `Module` is CLOSED to the pattern tier. The pattern
+;; names its participants — `PlugPoint {:shape :owner}` — and `offers` becomes the DERIVED converse
+;; (`(owner ?p ?m)`), no longer a `contains` species; the never-used `:satisfies` slot is cut until
+;; the satisfy cycle. Terms 92→91: −offers subsumption −offers slot-rule −satisfies slot-rule
+;; +offers derived-rule +owner slot-rule (closures net zero: satisfies+ out, owner+ in). Laws hold
+;; at 62: −Module.offers/.satisfies target-type +PlugPoint.owner target-type +owner at-most-one
+;; (cardinality `[:? Module]`); hashes move with both.
+(def ^:private golden-terms {:count 91 :hash 1281311856})
+(def ^:private golden-laws  {:count 62 :hash -1490472350})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

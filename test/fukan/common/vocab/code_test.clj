@@ -3,6 +3,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [fukan.cozo.build :as build]
             [fukan.cozo.query :as cq]
+            [fukan.canvas.core.structure :as s]
             [fukan.common.vocab.code.kind :as kind]
             [fukan.common.vocab.code.operation :as operation]
             [fukan.common.vocab.code.module :as module]
@@ -52,23 +53,21 @@
                        db a)))
           ":may-depend is a self-reference to another Subsystem (mirrors Operation :delegates)"))))
 
-;; ── the plug-point seam: a Module :offers a PlugPoint it owns; another Module :satisfies it (inverted) ──
-(plug-point/PlugPoint ^{:name "Backend"} t-plug-point "a plug-point")
-(module/Module ^{:name "Owner"} t-mod-owner   {:offers [t-plug-point]})
-(module/Module ^{:name "Impl"}  t-mod-impl    {:satisfies [t-plug-point]})
+;; ── the plug-point seam: a PlugPoint names its :owner; `offers` is the derived converse ──
+(module/Module ^{:name "Owner"} t-mod-owner)
+(plug-point/PlugPoint ^{:name "Backend"} t-plug-point "a plug-point" {:owner t-mod-owner})
 
-(deftest module-offers-and-satisfies-a-plug-point
-  (testing "an owner Module :offers a PlugPoint and an implementer Module :satisfies it — the inverted plug-point seam"
-    (let [db (build/vars->cozo [#'t-plug-point #'t-mod-owner #'t-mod-impl])]
+(deftest plug-point-names-its-owner-and-offers-derives
+  (testing "the pattern names its participants — Module stays closed to the tier above it"
+    (let [db (build/vars->cozo [#'t-plug-point #'t-mod-owner])]
+      (is (= #{["Backend" "Owner"]}
+             (set (cq/q '[:find ?cn ?mn
+                          :where [?r :rel/kind :owner] [?r :rel/from ?c] [?c :entity/name ?cn]
+                                 [?r :rel/to ?m] [?m :entity/name ?mn]]
+                        db)))
+          ":owner edge runs PlugPoint → its defining Module (authored on the pattern)")
       (is (= #{["Owner" "Backend"]}
-             (set (cq/q '[:find ?mn ?cn
-                          :where [?r :rel/kind :offers] [?r :rel/from ?m] [?m :entity/name ?mn]
-                                 [?r :rel/to ?c] [?c :entity/name ?cn]]
-                        db)))
-          ":offers edge runs owner Module → owned PlugPoint")
-      (is (= #{["Impl" "Backend"]}
-             (set (cq/q '[:find ?mn ?cn
-                          :where [?r :rel/kind :satisfies] [?r :rel/from ?m] [?m :entity/name ?mn]
-                                 [?r :rel/to ?c] [?c :entity/name ?cn]]
-                        db)))
-          ":satisfies edge runs implementer Module → the PlugPoint it satisfies (owned elsewhere)"))))
+             (set (cq/q '[:find ?mn ?cn :in $ %
+                          :where (offers ?m ?c) [?m :entity/name ?mn] [?c :entity/name ?cn]]
+                        db (s/vocab-rules))))
+          "(offers ?m ?p) — the derived converse — reads at domain altitude"))))

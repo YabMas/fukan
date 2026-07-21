@@ -11,15 +11,14 @@
   (:require [fukan.canvas.core.structure :as s :refer [defstructure defrelation]]
             [fukan.common.vocab.grouping]
             [fukan.common.vocab.code.operation :refer [Operation]]
-            [fukan.common.vocab.code.kind :refer [Kind]]
-            [fukan.common.vocab.patterns.plug-point :refer [PlugPoint]]))
+            [fukan.common.vocab.code.kind :refer [Kind]]))
 
 ;; ── Module's containment species ──────────────────────────────────────────────
 ;; Each is a SPECIES of the `contains` genus (`vocab/grouping`) — the `(:sub :contains)` inclusion,
 ;; declared once on the relation itself, so `within`/`contains+` and every law over the genus
-;; pick them up without any structure restating it. The pattern-tier relations (`:offers`, and
-;; `:satisfies` — the inverted edge, deliberately NOT a species) are ELEMENTS of the pattern's own
-;; signature (`vocab/patterns/plug-point`); Module's slot map only USES their names.
+;; pick them up without any structure restating it. The pattern tier (`vocab/patterns/`) adds NO
+;; slot here: a pattern names its participants itself (`PlugPoint :owner`), and the dependency
+;; points strictly upward — this file is CLOSED to the tiers above it.
 
 (defrelation :exposes
   "The public API surface — the Operations callers depend on."
@@ -42,11 +41,9 @@
 
    PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but that (the name bridge)
    hooks in from OUTSIDE via `(correspond Module …)` below, not here."
-  {:exposes   [:* Operation]   ; the public API surface — Operations callers depend on
-   :owns      [:* Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
-   :offers    [:* PlugPoint]   ; plug-points it OWNS for others to satisfy (SPIs / dependency-inversion points)
-   :satisfies [:* PlugPoint]   ; plug-points it SATISFIES (owned elsewhere) — the inverted edge; NOT containment
-   :child     [:* Any]})       ; internal members + grain no other module consumes
+  {:exposes [:* Operation]   ; the public API surface — Operations callers depend on
+   :owns    [:* Kind]        ; data-shapes that cross the boundary (other modules adopt by name)
+   :child   [:* Any]})       ; internal members + grain no other module consumes
 
 ;; ── correspondence: NOT here ─────────────────────────────────────────────────
 ;; Module is the ROOT of the correspondence twin ladder, but HOW a design Module finds its code twin

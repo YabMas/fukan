@@ -33,14 +33,17 @@
     {:signature [:=> [:catn [:cdb db/CozoDb] [:query :any]] :any]
      :performs  [:throws :state]
      :delegates [compile-body vocab-index db/q]})
-  (Operation entity "Resolve an eid (string) to its typed attribute map — the d/entity replacement."
-    {:signature [:=> [:catn [:cdb db/CozoDb] [:eid :any]] :any]
-     :delegates [db/q]})
   ;; `violation-names` (worklist reader) moved to `cozo-law` beside `check`/`violations-of` — it reads
   ;; check results, so it belongs with evaluation, not the compiler.
-  ;; the compiler's plug-point — vocab plugs domain fn-predicates in, the generic compiler names none.
-  (PlugPoint PredicatePort
-    "The fn-predicate CozoScript-port plug-point (`register-predicate-port!`): a vocab fn-predicate's
-     port (builder + synthetic rule defs) so the GENERIC compiler lowers a domain predicate to CozoScript
-     without naming it. Vocab registers ports at load; the compiler consults whatever is registered."
-    {:shape [:map [:builder :any] [:synthetic :map]]}))
+  (Operation entity "Resolve an eid (string) to its typed attribute map — the d/entity replacement."
+    {:signature [:=> [:catn [:cdb db/CozoDb] [:eid :any]] :any]
+     :delegates [db/q]}))
+
+;; the compiler's plug-point — a pattern-tier node drawn OVER the module (it names its :owner; the
+;; module stays closed): vocab plugs domain fn-predicates in, the generic compiler names none.
+(PlugPoint PredicatePort
+  "The fn-predicate CozoScript-port plug-point (`register-predicate-port!`): a vocab fn-predicate's
+   port (builder + synthetic rule defs) so the GENERIC compiler lowers a domain predicate to CozoScript
+   without naming it. Vocab registers ports at load; the compiler consults whatever is registered."
+  {:shape [:map [:builder :any] [:synthetic :map]]
+   :owner cozo-query})
