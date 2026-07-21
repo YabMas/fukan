@@ -15,22 +15,27 @@
 
 (Module projection-grammar
   "Render the reified grammar back out: forms, the primer, the correspondence card (registry-direct), and the grammar-drift reading.
-   The first two read through the kernel Cozo query layer (`query/q`); the card reads only the structure registry."
+   The form/primer readers use the kernel Cozo query layer (`query/q`); the card reads only the structure registry."
   (Kind Primer :string)    ; the reference-card string
   (Kind VocabName :string) ; a grammar namespace name
   (Operation correspondence-card
     "The correspondence SEAM rendered as one card — the twin ladder and every demand with its
      stable law key (the generated laws, visible and attributed). Registry-direct: no db needed."
     {:signature [:=> [:cat] Primer]
-     :performs  [:throws]
+     :performs  [:throws :state]
      :delegates [kstructure/correspondence kstructure/all-structures kstructure/laws-of]})
   (Operation structure-form
-    "A reified Structure rendered back as its map-form defstructure (the print-dual).
-     Includes the `(corresponds …)` declaration (demands + bridge) and slot props
-     (relation characters + demand options) — the correspondence seam round-trips."
+    "A reified Structure rendered back as its canonical map-form defstructure (the print-dual).
+     External correspondence renders separately through `correspondence-form`, so both forms are
+     valid authoring input."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] kstructure/Form]
      :performs  [:throws :state]                ; via the query compiler / render-type
      :delegates [typing/render-type query/q query/entity]})   ; renders refined slot targets + reads the graph
+  (Operation correspondence-form
+    "A reified Structure's external correspondence rendered as canonical `(correspond …)` data, or nil."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] :any]
+     :performs  [:throws :state]
+     :delegates [typing/render-type query/q query/entity]})
   (Operation vocabulary-primer
     "One vocabulary rendered as its defstructure forms."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName]] Primer]

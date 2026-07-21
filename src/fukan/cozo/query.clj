@@ -71,15 +71,11 @@
   (swap! synthetic-rules merge synthetic)
   nil)
 
-;; ── name-match: a generic bridge-lowering the kernel owns (no vocab named) ─────
-;; A `by-name` correspondence ROOT may declare `(bridge :strategy)` — a design↔fact name-match
-;; convention. The twin rule binds both names, then filters with `(name-match :strategy ?a ?b)`; the
-;; kernel lowers it to an INLINE CozoScript filter per this table (no synthetic rule, no re-partition —
-;; the twin rule already partitioned by stratum). `?a` is the DESIGN name, `?b` the FACT name. Vocab
-;; declares WHICH strategy (data); it names no strategy CozoScript. A bridge whose match is not one of
-;; these declares a Clojure fn + `register-predicate-port!` instead (the arbitrary escape hatch).
+;; ── name-match: a configured predicate for ordinary Datalog carriers ──────────
+;; A vocabulary may use `(name-match :strategy ?design-name ?fact-name)` in a named carrier
+;; `defrelation`. The compiler lowers it to an inline CozoScript filter per this closed table.
 (def ^:private name-match-strategies
-  "strategy keyword → (design-term fact-term) → CozoScript boolean filter."
+  "Strategy keyword → (design-term fact-term) → CozoScript boolean filter."
   {:exact            (fn [a b] (str a " == " b))
    ;; the design (canvas) name is the fact (code) name, or a separator-delimited SUFFIX of it —
    ;; separator-agnostic: canvas names use '-', code paths '.', so normalize both to '.' first.

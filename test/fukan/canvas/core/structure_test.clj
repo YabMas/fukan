@@ -221,10 +221,6 @@
 (Tree ^{:name "mid"}  at-mid  {:child [at-leaf]})
 (Tree ^{:name "root"} at-root {:child [at-mid]})
 
-;; the reserved `:guidance` annotation on a NON-slot-bearing structure (Type has no slots) —
-;; proves it rides ANY instance without being declared and lands as a `:val/guidance` leaf.
-(Type ^{:name "guided"} gd-Type {:guidance "hand-roll this; the generic path is too slow"})
-
 (declare frc-b)
 (Tree ^{:name "a"} frc-a {:child [frc-b]})   ; forward reference — frc-b declared below
 (Tree ^{:name "b"} frc-b {:child [frc-a]})   ; back reference — together an a→b→a cycle
@@ -317,7 +313,7 @@
   (syntax (fn [b] (if (map? b) b {:thing b}))))
 
 (PBody pb-pos 42)                  ; def-emitting, positional body
-(def pb-expr (PBody 42))           ; expression position, positional body
+(PBody pb-expr 42)                 ; named entity, positional sugar
 (PBody pb-map {:thing 7})          ; the map form still works
 
 (defstructure PNoSyntax {:thing [:? :int]})   ; no hook → positional body must error
@@ -351,14 +347,10 @@
       (is (empty? (laws-firing db :Function))
           "the docstring does not register as a slot or trip any law"))))
 
-(deftest guidance-annotation-rides-any-instance
-  (testing "the reserved :guidance key lands as a :val/guidance leaf on a structure that declares no slot, tripping no law"
-    (let [db (build/vars->cozo [#'gd-Type])]
-      (is (= "hand-roll this; the generic path is too slow"
-             (ffirst (cq/q '[:find ?g :where [?e :entity/name "guided"] [?e :val/guidance ?g]] db)))
-          ":guidance is stored as a :val/guidance leaf, no slot required")
-      (is (empty? (laws-firing db :Type))
-          "an annotation registers no slot and generates no law"))))
+(deftest undeclared-instance-keys-fail-closed
+  (testing "every authored fact comes from declared vocabulary"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"guidance.*is not a slot"
+                          (s/expand-instance ::Type '(guided {:guidance "hand-roll this"}))))))
 
 (deftest cardinality-one-catches-zero-and-several
   (testing "gives (one Type): zero and several are both violations"
@@ -707,79 +699,95 @@
                      "SyntClass.n value must satisfy :int")
           "the generated law routes :int through value-valid?, not a kernel predicate"))))
 
-;; ── corresponds: the model↔code twin-hood declaration ──────────────────────
-(defn- tc-bridge "test root-bridge predicate" [a b] (= a b))
+;; ── correspond: carrier relations + coverage + relation maps ────────────────
+;; Same-tag carriers share one structure across provenance strata. Matching is authored as ordinary
+;; Datalog; `correspond` only consumes the named carrier and generates its obligations.
+(defstructure TCorrRoot "correspond test: a same-name carrier relation")
+(s/defrelation :tc-root-twin "same-tag test twins by exact name"
+  [?d ?f]
+  [(is ?d TCorrRoot) (design ?d)
+   (is ?f TCorrRoot) (fact ?f)
+   (named ?d ?name) (named ?f ?name)])
+(s/correspond TCorrRoot TCorrRoot {:carrier :tc-root-twin :coverage :both})
 
-;; tc-bridge's Cozo port — a SYMBOL bridge (the arbitrary escape hatch, vs a `(bridge :strategy)`
-;; keyword) is compiled into the generated twin rule, so it needs a CozoScript translation like any
-;; law/query predicate. Equality, no aux rules. Without this, EVERY vocab-rules-consuming query would
-;; throw on the un-portable TCorrRoot disjunct — the kernel is deliberately LOUD there (a declared but
-;; unwired symbol bridge is a programming error, not a config gap).
-(cq/register-predicate-port!
- 'fukan.canvas.core.structure-test/tc-bridge
- (fn [[a b]] [(str a " == " b) #{}])
- {})
+(defstructure TCorrNested "correspond test: an explicitly declared nested carrier")
+(s/defrelation :tc-nested-twin "nested test twins inside corresponding modules"
+  [?d ?f]
+  [(is ?d TCorrNested) (design ?d)
+   (is ?f TCorrNested) (fact ?f)
+   (named ?d ?name) (named ?f ?name)
+   (contains ?m ?d) (contains ?ns ?f)
+   (module-twin ?m ?ns)])
+(s/correspond TCorrNested TCorrNested {:carrier :tc-nested-twin :coverage :both})
 
-;; Same-tag IDENTITY sort maps (`X :eq X`) — the two strata share one structure, split by provenance.
-;; The cross-tag case (Operation ↦ Fn) is exercised in the extraction/correspondence tests.
-(defstructure TCorrRoot "correspond test: a ROOT sort map (bridged) — same-tag identity")
-(s/correspond TCorrRoot :eq TCorrRoot (bridge tc-bridge))
-
-(defstructure TCorrNested "correspond test: a NESTED sort map (same name within twinned containers)")
-(s/correspond TCorrNested :eq TCorrNested)
-
-(deftest correspond-registers-the-sort-map
-  (testing "a sort-map entry lands in the registry: fact-tag, inclusion, bridge (fully qualified for a symbol)"
-    (is (= {:fact-tag ::TCorrRoot :incl :eq :restrict nil
-            :bridge 'fukan.canvas.core.structure-test/tc-bridge :demands [] :rel-demands []}
+(deftest correspond-registers-the-carrier
+  (testing "a carrier declaration lands in the registry as an ordinary relation plus independent coverage"
+    (is (= {:fact-tag ::TCorrRoot :carrier :tc-root-twin :coverage :both
+            :restrict nil :rel-demands []}
            (s/correspondence-of ::TCorrRoot)))
-    (is (= {:fact-tag ::TCorrNested :incl :eq :restrict nil :bridge nil :demands [] :rel-demands []}
+    (is (= {:fact-tag ::TCorrNested :carrier :tc-nested-twin :coverage :both
+            :restrict nil :rel-demands []}
            (s/correspondence-of ::TCorrNested)))
     (is (nil? (s/correspondence-of ::Plain))
         "an undeclared structure carries no correspondence")))
 
-(deftest correspond-rejects-an-unresolvable-bridge
-  (testing "an unresolvable bridge symbol throws at expansion"
+(deftest correspond-rejects-a-non-relation-carrier
+  (testing "the carrier must be a relation keyword"
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
-                                          TCorrNested :eq TCorrNested (bridge nope-not-defined)))))))
+                                          TCorrNested TCorrNested
+                                          {:carrier nope-not-defined :coverage :both}))))))
 
-;; ── the object map: the sort-map inclusion + codomain restriction ────────────
+;; ── the carrier: coverage + codomain restriction ─────────────────────
 
-(defstructure TCorrDemand "correspond test: a restricted sort map (parse-level only — no instances)")
-(s/correspond TCorrDemand :sup [TCorrDemand :tc-public])
+(defstructure TCorrDemand "correspond test: a restricted carrier (parse-level only — no instances)")
+(s/defrelation :tc-public
+  "The test carrier's codomain restriction."
+  [?x] [(is ?x TCorrDemand)])
+(s/defrelation :tc-demand-twin "test carrier"
+  [?d ?f]
+  [(is ?d TCorrDemand) (design ?d)
+   (is ?f TCorrDemand) (fact ?f)
+   (named ?d ?name) (named ?f ?name)])
+(s/correspond TCorrDemand [TCorrDemand :tc-public]
+  {:carrier :tc-demand-twin :coverage :fact})
 
-(deftest correspond-object-map-registers
-  (testing "the sort map's :incl + codomain restriction land in the config; the object-map demands derive from :incl"
+(deftest correspond-carrier-coverage-registers
+  (testing "coverage and codomain restriction land separately; the corresponding demand is derived"
     (let [c (s/correspondence-of ::TCorrDemand)]
-      (is (= :sup (:incl c)) "the inclusion is stored")
+      (is (= :fact (:coverage c)) "coverage is stored without overloading relation inclusion")
       (is (= :tc-public (:restrict c)) "the codomain restriction ([TCorrDemand :tc-public]) is stored")
       (is (= [{:demand :surjective :pred :tc-public}]
              (remove :derived (s/effective-node-demands ::TCorrDemand)))
-          ":sup ⇒ a surjective demand onto the restricted sub-sort (derived, not authored)"))))
+          ":fact ⇒ a surjective demand onto the restricted sub-sort (derived, not authored)"))))
 
 (deftest correspond-demands-validate
   (testing "malformed entries throw at expansion (via the external correspond macro)"
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
-                                          TCorrNested :bogus TCorrNested)))       ; sort map: bad inclusion
-        "a bad sort-map inclusion throws")
+                                          TCorrNested TCorrNested
+                                          {:carrier :tc-nested-twin :coverage :bogus})))
+        "bad coverage throws")
     (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
-                                          TCorrNested :eq TCorrNested (agrees {}))))  ; agrees needs :by
-        "a malformed agrees throws"))
+                                          TCorrNested TCorrNested
+                                          {:carrier :tc-nested-twin :coverage :both :extra true})))
+        "unknown carrier options throw"))
   (testing "a malformed relation-map expression throws at parse, not at check"
-    (is (thrown? Exception (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :sup [:* [:cat :a :b]])]))  ; compound closure
+    (is (thrown? Exception (#'s/parse-carrier-declaration "C" :Fact nil
+                            {:carrier :c-twin :coverage :both} '[(:r :sup [:* [:cat :a :b]])]))
         "closure over a compound throws — that recursion is a named defrelation")
-    (is (thrown? Exception (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :bogus :calls)]))       ; not a valid inclusion
+    (is (thrown? Exception (#'s/parse-carrier-declaration "C" :Fact nil
+                            {:carrier :c-twin :coverage :both} '[(:r :bogus :calls)]))
         "a bad relation-map inclusion throws")
-    (is (some? (#'s/parse-sort-map "C" :eq :Fact nil '[(:r :sup [:alt :a :b])]))
+    (is (some? (#'s/parse-carrier-declaration "C" :Fact nil
+                {:carrier :c-twin :coverage :both} '[(:r :sup [:alt :a :b])]))
         ":alt is inline-lowerable now — the whole regex AST is the one path language")))
 
 (deftest correspondence-reshapes-the-seam
   (testing "(s/correspondence) collects kinds, relation demands, and the key index from the registry"
     (let [seam (s/correspondence)
           op   :fukan.common.vocab.code.operation/Operation]
-      (is (= :qualified-suffix
-             (get-in seam [:kinds :fukan.common.vocab.code.module/Module :bridge]))
-          "Module is the bridged root (a name-match strategy keyword)")
+      (is (= :module-twin
+             (get-in seam [:kinds :fukan.common.vocab.code.module/Module :carrier]))
+          "Module names its ordinary Datalog carrier relation")
       (is (= 3 (count (get-in seam [:kinds op :demands]))) "Operation's three node demands (agrees derived)")
       (is (= #{:corresponds/Operation.total
                :corresponds/Operation.surjective :corresponds/Operation.agrees}
@@ -795,13 +803,13 @@
                           [:owner :via :rel :direction]))
           "the key index points every key at its generating declaration"))))
 
-(deftest correspondence-guards-cross-family-key-collisions
-  (testing "a node-demand :key colliding with a relation-map key throws, naming both sources
+(deftest correspondence-guards-generated-key-collisions
+  (testing "two relation maps generating the same stable key throw rather than silently unioning laws
             (a fake tag, inert in the live seam — never in all-structures)"
     (let [tag :x/collision-T]
-      ;; an authored agrees keyed :r-realized collides with the relation map `:r :sub`'s <r>-realized key
-      (s/register-correspondence! tag {:fact-tag tag :incl :eq :restrict nil :bridge nil
-                                       :demands [{:demand :agrees :key :r-realized}]
-                                       :rel-demands [{:rel :r :incl :sub :expr :q}]})
+      (s/register-correspondence! tag {:fact-tag tag :carrier :collision-twin
+                                       :coverage :both :restrict nil
+                                       :rel-demands [{:rel :r :incl :sub :expr :q}
+                                                     {:rel :r :incl :sub :expr :other-q}]})
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"duplicate correspondence law key"
                             (s/correspondence* [{:tag tag}]))))))

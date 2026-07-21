@@ -15,7 +15,7 @@
      - a LAW is a node: desc + the datalog as a `:val/form` payload (queryable as
        a form, not decomposed — like a `Lens`'s `:select` code-form leaf).
      - a VOCABULARY is one grammar namespace: `:child` edges to its Structures.
-     - a MORPHISM is a node per registered `(correspond …)`: `:from`/`:to` edges to its domain
+     - a CORRESPONDENCE is a node per registered `(correspond …)`: `:from`/`:to` edges to its design
        and codomain Structures, `RelationMap` children carrying the relation maps.
 
    Scope: the namespace closure of the tags in use — every namespace that defines
@@ -27,8 +27,8 @@
    Kernel-native MACHINERY — this is CORE, not the reusable `fukan.common` vocab: reflection is
    grammar-AGNOSTIC (it reifies whatever registry exists, knowing no specific vocabulary), and the
    native build ALWAYS runs it (via `build/with-grammar`). Its meta-grammar (`Structure`/`Law`/
-   `Vocabulary`/`Relation`/`Morphism`/`RelationMap`) is the tool's vocabulary for describing
-   grammars AND the morphisms between them — the same category as
+   `Vocabulary`/`Relation`/`Correspondence`/`RelationMap`) is the tool's vocabulary for describing
+   grammars and the bridge presentations between design and fact fragments — the same category as
    the act grammar in `fukan.canvas.core.lens`, so it sits beside it in core. The runtime
    (`check`/`assemble`/`evaluate-lens`) never consults the reflected nodes — they exist only so the
    grammar is viewable as data (the print-dual primer, the `unused-structures` grammar-drift reading).
@@ -76,14 +76,15 @@
     (matched-by :child :from Vocabulary :unless {:tag ":Any"})))
 
 (defstructure Vocabulary
-  "One grammar namespace reified as a SIGNATURE: the Structures (sorts) it defines, the Relation
+  "One grammar namespace reified as a PRESENTATION FRAGMENT: the Structures (sorts) it defines, the Relation
    elements it declares (`:relation`, from the element's recorded `:ns` — an unqualified relation
    tag cannot carry its namespace, so ownership rides the declaration), and the vocabularies it
    references (`:imports` — DERIVED, never authored: slot targets crossing namespaces, law bodies
    calling another vocabulary's rules, a correspondence's codomain. Entail, don't store — the
-   namespace IS the signature, its inclusions are computed from actual use). Slot-declared
-   relations that are not elements yet (`:calls`, `:delegates`) belong to no signature — that
-   asymmetry is the relations-first-class residual, visible here. (Named Vocabulary, not Grammar:
+   namespace records declaration provenance, while the loaded closure supplies one effective
+   presentation). Slot-declared relations that are not elements yet (`:calls`, `:delegates`) belong
+   to no fragment — that asymmetry is the relations-first-class residual, visible here. (Named
+   Vocabulary, not Grammar:
    the BNF demo owns the `Grammar` tag.)"
   {:child    [:* Structure]
    :relation [:* Relation]
@@ -104,7 +105,7 @@
    :rule [:? {:payload :form} :string]})
 
 (defstructure RelationMap
-  "One relation map of a reflected `Morphism`: a design relation carried to a fact-side relation
+  "One relation map of a reflected `Correspondence`: a design relation compared with a fact-side relation
    expression, with an inclusion direction — `(:delegates :sub :public-call)` reified. `:rel` is the
    design relation, `:incl` the direction (`:sub` ⊑ preserve / `:sup` ⊒ reflect / `:eq` ≡ both),
    `:expr` the fact-side expression (a named relation atom or an inline regular path), stored as
@@ -114,23 +115,21 @@
    :incl :string
    :expr :string})
 
-(defstructure Morphism
-  "A reflected THEORY MORPHISM — one external `(correspond Design Fact …)` seam, reified as a node
-   so the morphism is data like the presentations it connects (a `Law` reflects with its datalog
-   queryable; the sort map + relation maps deserve no less). `:from`/`:to` are the domain and
-   codomain `Structure`s; `:incl` the object map's inclusion (`:eq`/`:sub`/`:sup`); `:restrict`
-   the codomain sub-sort it maps onto (`[Fn :public]`'s `:public`); `:bridge` the carrier
-   correlation strategy; `:map` the relation maps in authoring order. `:agrees` carries any
-   AUTHORED comparator escape-hatch demands as a form payload — the object-map and derived-identity
-   demands are NOT stored, they are consequences the registry recomputes
-   (`structure/effective-node-demands`). A reflection TOOL, not authored; the runtime never reads it."
-  {:incl     :string
+(defstructure Correspondence
+  "A reflected BRIDGE PRESENTATION — one external `(correspond Design Fact …)` seam, reified as a node
+   so the correspondence is data like the presentation fragments it connects (a `Law` reflects with
+   its datalog queryable; the carrier statement + relation maps deserve no less). `:from`/`:to` are
+   the design and codomain `Structure`s; `:carrier` names the ordinary binary relation pairing them;
+   `:coverage` is `:design`, `:fact`, or `:both`; `:restrict` is the optional codomain sub-sort
+   (`[Fn :public]`'s `:public`); and `:map` holds relation maps in authoring order. Coverage and the
+   derived shared-sort agreement are consequences recomputed by `structure/effective-node-demands`.
+   A reflection TOOL, not authored; the runtime never reads it."
+  {:carrier  :string
+   :coverage :string
    :from     Structure
    :to       Structure
    :restrict [:? :string]
-   :bridge   [:? :string]
-   :map      [:* RelationMap]
-   :agrees   [:? {:payload :form} :string]})
+   :map      [:* RelationMap]})
 
 ;; ── the reflector ─────────────────────────────────────────────────────────────
 
@@ -156,7 +155,7 @@
 
 (defn- sdef-clauses
   "Every datalog clause an sdef's own declarations carry: its laws' `:where` (+ the bodies of any
-   inline `:rules`) and its `realized-as` membership body. The clause surface the signature
+   inline `:rules`) and its `realized-as` membership body. The clause surface the presentation-fragment
    derivations (closure + imports) walk for cross-vocabulary rule calls."
   [sd]
   (concat (mapcat (fn [l] (concat (:where l) (mapcat rest (:rules l)))) (:laws sd))
@@ -172,17 +171,17 @@
 
 (defn- element-refs
   "The names a relation ELEMENT's own declaration references: its derived bodies' rule calls
-   and its inclusion expression's atoms (an inclusion is a cross-signature reference like any
+   and its inclusion expression's atoms (an inclusion is a cross-fragment reference like any
    other — `:child (:sub :contains)` reaches grouping)."
   [el]
   (concat (rule-calls (apply concat (:bodies (:derived-rule el))))
           (expr-atoms (:expr (:relation-incl el)))))
 
 (defn- ns-closure
-  "Expand seed namespaces to a fixpoint through everything a signature in scope REACHES: its
+  "Expand seed namespaces to a fixpoint through everything a presentation fragment in scope REACHES: its
    structures' slot targets, its correspondences' fact tags, and — resolved through
    `resolve-call` (rule name → declaring ns) — the rules its laws and owned relation elements
-   call. So a reified slot's target Structure, a Morphism's codomain, and every imported
+   call. So a reified slot's target Structure, a Correspondence's codomain, and every imported
    vocabulary (even one contributing only relations, like a genus-declaring primitive vocab)
    are always present."
   [seed resolve-call]
@@ -208,8 +207,8 @@
    and any Schema value targets."
   [{:keys [tag doc slots laws value? realized-as]}]
   (let [sid  (structure-id tag)
-        ;; a correspondence is NOT stamped here: the morphism reflects as its own `Morphism` node
-        ;; (see `reflect-morphism`), decomposed — not a payload blob on the design Structure.
+        ;; a correspondence is NOT stamped here: the bridge reflects as its own `Correspondence` node
+        ;; (see `reflect-correspondence`), decomposed — not a payload blob on the design Structure.
         node (cond-> {:entity/id sid :structure/of ::Structure
                       :entity/name (name tag) :val/tag (str tag)}
                doc         (assoc :entity/doc doc)
@@ -261,23 +260,20 @@
                          (map :rel slot-bits)
                          (map :rel law-bits)))}))
 
-(defn- reflect-morphism
-  "One design sdef's registered correspondence → its `Morphism` node (+ `RelationMap` children,
+(defn- reflect-correspondence
+  "One design sdef's registered correspondence → its `Correspondence` node (+ `RelationMap` children,
    Law-style positional ids), or nil. `:from`/`:to` edges target the two reified Structures (the
    codomain is guaranteed present by `ns-closure`'s fact-tag expansion); scalar fields hold the
    keyword pr-str'd (the print-dual reads them back); each relation map is a child node in
-   authoring order carrying its expression as edn; authored `agrees` demands (and only
-   those — the object-map/identity demands are recomputed consequences) ride the `:agrees`
-   payload."
+   authoring order carrying its expression as edn."
   [{:keys [tag]}]
-  (when-let [{:keys [fact-tag incl restrict bridge demands rel-demands]} (s/correspondence-of tag)]
-    (let [mid   (str "morphism:" tag)
-          mnode (cond-> {:entity/id mid :structure/of ::Morphism
+  (when-let [{:keys [fact-tag carrier coverage restrict rel-demands]} (s/correspondence-of tag)]
+    (let [mid   (str "correspondence:" tag)
+          mnode (cond-> {:entity/id mid :structure/of ::Correspondence
                          :entity/name (str (name tag) "↦" (name fact-tag))
-                         :val/incl (pr-str incl)}
-                  restrict      (assoc :val/restrict (pr-str restrict))
-                  bridge        (assoc :val/bridge (pr-str bridge))
-                  (seq demands) (assoc :val/agrees (pr-str (vec demands)) :val/form (vec demands)))
+                         :val/carrier (pr-str carrier)
+                         :val/coverage (pr-str coverage)}
+                  restrict (assoc :val/restrict (pr-str restrict)))
           maps  (map-indexed
                  (fn [i {:keys [rel incl expr]}]
                    {:node {:entity/id (str mid "#map/" i) :structure/of ::RelationMap
@@ -311,10 +307,10 @@
         ;; loudly at registration.)
         rel-elems  (into {} (for [sd (s/all-structures) :when (:relation-element sd)]
                               [(:tag sd) sd]))
-        ;; rule-call → declaring signature, for the closure and the derived `:imports`: relation
+        ;; rule-call → declaring fragment, for the closure and the derived `:imports`: relation
         ;; elements first, then structure short names (kind rules) when globally unambiguous; a
         ;; trailing `+` resolves to its base relation (the closure rides the declaration).
-        ;; Unresolvable names (substrate rules, slot-only relations — no signature owns those
+        ;; Unresolvable names (substrate rules, slot-only relations — no fragment owns those
         ;; yet) contribute nothing.
         elem-ns    (into {} (for [[rk el] rel-elems :when (:ns el)] [(name rk) (:ns el)]))
         short-ns   (let [by-short (group-by (comp name :tag)
@@ -336,14 +332,14 @@
                     (sort-by (comp str :tag)))
         bits   (map reflect-structure sds)
         grouped (group-by (comp namespace :tag) sds)
-        ;; SIGNATURE ownership: an element belongs to the Vocabulary of its declaring `:ns` (the
+        ;; FRAGMENT provenance: an element belongs to the Vocabulary of its declaring `:ns` (the
         ;; declaration records it precisely because the unqualified tag cannot) — reflected when
         ;; that vocabulary is in scope
         rel-owned  (for [[rk el] rel-elems :when (contains? nss (:ns el))] [(:ns el) rk])
         vocab-nss  (into (set (keys grouped)) (map first rel-owned))
-        ;; the DERIVED imports of one vocabulary: the signatures it actually reaches — slot
+        ;; the DERIVED imports of one vocabulary: the fragments it actually reaches — slot
         ;; targets crossing namespaces, its correspondences' codomains, and every name its laws /
-        ;; owned relation elements reference that another signature declares
+        ;; owned relation elements reference that another fragment declares
         imports-of (fn [vns]
                      (let [called (into (set (mapcat (comp rule-calls sdef-clauses) (grouped vns)))
                                         (mapcat (fn [[_ el]] (when (= vns (:ns el)) (element-refs el)))
@@ -394,10 +390,10 @@
             incl      (assoc :val/incl (pr-str (:incl incl)) :val/expr (pr-str (:expr incl)))
             ;; a derived element is definitionally exact — :eq to its own rule
             dr        (assoc :val/incl ":eq" :val/rule (pr-str dr) :val/form dr)))
-        morphisms (keep reflect-morphism sds)
+        correspondences (keep reflect-correspondence sds)
         nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes
-                       (mapcat :nodes morphisms))
-        rels   (concat (mapcat :rels bits) (mapcat :rels vocabs) (mapcat :rels morphisms))
+                       (mapcat :nodes correspondences))
+        rels   (concat (mapcat :rels bits) (mapcat :rels vocabs) (mapcat :rels correspondences))
         ;; a slot referencing a tag NOBODY registered is a dangling grammar ref — fail with the tag,
         ;; not a cryptic missing-entity error.
         known  (into #{} (map :entity/id) nodes)]

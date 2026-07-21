@@ -24,7 +24,7 @@
     {:signature [:=> [:catn [:t :any]] :string]})
   (Operation vocab-index "Compile the vocabulary's rules once into a name→{:lines :refs} index (+ the synthetic fn-predicate rules)."
     {:signature [:=> [:cat] :any]
-     :performs  [:throws]                          ; reaches the compiler's unsupported-form throw
+     :performs  [:throws :state]                   ; reads vocab registries; may reject unsupported forms
      :delegates [kstructure/vocab-rules]})
   (Operation compile-body "Compile where-clauses + caller rules + outer-scope vars (find vars / law offenders — they count toward inline-measure grouping inference) → [rule-lines body-str], emitting the reachable vocab rules. A PURE compiler (content-named helpers, threaded wildcard counter, lifted-measure aux rules)."
     {:signature [:=> [:catn [:where :any] [:rules :any] [:index :any] [:outer-vars :any]] :any]

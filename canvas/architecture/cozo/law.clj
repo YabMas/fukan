@@ -27,7 +27,7 @@
      :delegates [kstructure/all-structures kstructure/direct-scope-tags cquery/vocab-index
                  ktyping/value-valid? db/q]})
   (Operation check
-    "Run every law over the Cozo db and return its VIOLATIONS — the drift list (the violation-only view of check-structural). THE check: it evaluates the laws the kernel defines. A law whose form isn't compilable contributes nothing (the law-engine tests guarantee fukan's own laws all compile)."
+    "Run every law over the Cozo db and return its VIOLATIONS — the drift list (the violation-only view of check-structural). THE check: it evaluates the laws the kernel defines. Fails closed when any law is unsupported, because an unevaluated constraint cannot establish satisfaction."
     {:signature  [:=> [:catn [:cdb db/CozoDb]] :any]
      :performs   [:state :throws]                    ; reaches :state/:throws through check-structural → compile-law's atoms
      :delegates  [check-structural]})

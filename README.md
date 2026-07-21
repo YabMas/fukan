@@ -70,18 +70,35 @@ print-dual of authoring.
 ## One graph spanning spec and code
 
 This is what the single graph buys. Fukan **extracts** your real code into the same
-substrate — its Clojure extractor reads clj-kondo analysis into a FACT theory (`Ns` /
+substrate — its Clojure extractor reads clj-kondo analysis into a FACT vocabulary (`Ns` /
 `Fn`: namespaces, functions, signatures, effects, the actual call graph, privacy) —
-and merges it onto the design graph. The design↔code link is then declared as a
-**morphism**, one line per design element, from outside the design vocabulary:
+and assembles it with the design facts in the same build. The design↔code link is
+then declared as a **bridge presentation**, one line per design element, from
+outside the design vocabulary:
 
 ```clojure
-;; design Module ↦ code namespace — the twin ROOT, paired by name
-(correspond Module :eq Ns (bridge :qualified-suffix))
+;; carriers use the same Datalog relation language as everything else
+(defrelation :module-twin
+  "A Module and extracted namespace whose names agree by qualified suffix."
+  [?m ?ns]
+  [(is ?m Module) (design ?m) (is ?ns Ns) (fact ?ns)
+   (named ?m ?mn) (named ?ns ?nn)
+   [(name-match :qualified-suffix ?mn ?nn)]])
+
+(correspond Module Ns
+  {:carrier :module-twin :coverage :both})
 
 ;; design Operation ↦ the PUBLIC sub-sort of extracted functions, plus relation maps:
 ;; declared delegation ⊑ the public call graph; declared effects ⊒ everything reached
-(correspond Operation :eq [Fn :public]
+(defrelation :operation-twin
+  "Same-named Operation/Fn pairs inside corresponding modules."
+  [?op ?fn]
+  [(is ?op Operation) (design ?op) (is ?fn Fn) (fact ?fn)
+   (named ?op ?name) (named ?fn ?name)
+   (contains ?m ?op) (contains ?ns ?fn) (module-twin ?m ?ns)])
+
+(correspond Operation [Fn :public]
+  {:carrier :operation-twin :coverage :both}
   (:delegates :sub :public-call)
   (:performs  :sup [:cat [:* :calls] :performs]))
 ```
@@ -97,6 +114,11 @@ invariant. Laws read in the vocabulary's own terms — `(Operation ?s)`, `(withi
 vocabulary; the recurring law shapes have **combinators** — `(law "…" (matched-by R
 :from S))`, `(has R)`, `(at-most-one R)` — so common constraints are one
 declarative line.
+
+Here `:coverage :both` makes the carrier bi-total. It does not silently add
+functionality or injectivity, so it should not be read as a bijection or a theory
+morphism. `:sub`/`:sup`/`:eq` retain their single meaning: relation inclusion in
+the nested relation maps.
 
 ## The model talks back in its own language
 
@@ -134,7 +156,7 @@ the code grammar by element (`fukan.common.vocab.code.*` — Kind / Effect / Ope
 Module / Subsystem, where a Module is one code namespace), a pattern tier above them
 (`fukan.common.vocab.patterns.*` — PlugPoint), the malli type dialect
 (`fukan.common.typing.malli`), and the Clojure extraction seam
-(`fukan.common.extraction.*` — the `Ns`/`Fn` fact theory + the correspond declarations).
+(`fukan.common.extraction.*` — the `Ns`/`Fn` fact vocabulary + the correspond declarations).
 It loads by *require* (the `fukan.common` index), not discovery, so it contributes
 grammar only when a project opts in: a consuming project depends on fukan, requires the
 vocabulary, binds `*spec-dirs*` to its own spec directory, and models against the same

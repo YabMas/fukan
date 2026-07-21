@@ -33,7 +33,6 @@
    fukan.canvas.core.laws-test/LRef hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LReviewer hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LSrc hooks.fukan.structure/instance
-   fukan.canvas.core.laws-test/LTwin hooks.fukan.structure/instance
    fukan.canvas.core.lens/Check hooks.fukan.structure/instance
    fukan.canvas.core.lens/Lens hooks.fukan.structure/instance
    fukan.canvas.core.lens/Projection hooks.fukan.structure/instance
@@ -41,8 +40,8 @@
    fukan.canvas.core.lens-test/Widget hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/Kind hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/KindAudit hooks.fukan.structure/instance
+   fukan.canvas.core.reflect/Correspondence hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Law hooks.fukan.structure/instance
-   fukan.canvas.core.reflect/Morphism hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Relation hooks.fukan.structure/instance
    fukan.canvas.core.reflect/RelationMap hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Structure hooks.fukan.structure/instance

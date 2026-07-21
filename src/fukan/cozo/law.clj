@@ -11,8 +11,9 @@
    `check-structural` runs them split: Cozo finds each instance's leaf value (in its typed bucket),
    Clojure runs the malli check. Everything else compiles to pure CozoScript.
 
-   `check` is the violation-only view; `check-structural` is the full per-law roll-call (incl.
-   coverage/`:unsupported`). `violations-of`/`violation-names` are the worklist readers over `check`."
+   `check` is the fail-closed violation view; `check-structural` is the full per-law roll-call
+   (including coverage/`:unsupported`). `violations-of`/`violation-names` are the worklist readers
+   over `check`."
   (:require [clojure.string :as str]
             [fukan.canvas.core.structure :as structure]
             [fukan.canvas.core.typing :as typing]
@@ -110,18 +111,15 @@
     (fn [a b] (= (get idx a) (get idx b)))))
 
 (defn- comparator-offenders
-  "Run an `agrees` demand law as a PAIR hybrid: compile its `:where` to enumerate the comparator's
-   columns (`:on`, the design + fact eids), run the `:by` comparator per row, keep the rows where it
-   returns false, projected to the law's `:offenders`. `:by :structural` is the kernel built-in over
-   the demand's `:over` slots; any other `:by` is a vocab-registered comparator (`register-comparator!`)."
+  "Run the derived shared-sort agreement law as a pair hybrid: compile its `:where` to enumerate
+   design/fact twins, compare the declared shared slots structurally, and retain disagreeing rows."
   [cdb law {:keys [by on over]} direct-tags index]
+  (when-not (= by :structural)
+    (throw (ex-info (str "unknown correspondence agreement " by " — only derived :structural agreement exists")
+                    {:by by})))
   (let [program (compile-law (assoc law :offenders on) direct-tags index)
         rows    (db/q cdb (str query/preamble "\n" program))
-        agree?  (if (= by :structural)
-                  (structural-agreement cdb over)
-                  (let [f (or (structure/comparator-for by)
-                              (throw (ex-info (str "no registered correspondence comparator: " by) {:by by})))]
-                    (fn [a b] (f cdb a b))))
+        agree?  (structural-agreement cdb over)
         off-ix  (mapv #(.indexOf ^java.util.List (vec on) %) (:offenders law))]
     (->> rows
          (remove (fn [row] (boolean (agree? (nth row 0) (nth row 1)))))
@@ -169,12 +167,18 @@
    :offenders}]` (offenders are eid-string tuples). THE check: it runs the same laws the kernel
    DEFINES (`structure/laws-of`/`all-structures`), which is why check lives here in the engine and
    not as a hollow shell in the kernel — evaluation is the engine's job, the kernel's is definition.
-   A law whose form isn't compilable yet contributes nothing (it is skipped, not silently
-   miscounted — `check-structural` still reports it `:unsupported`); the law-engine tests assert
-   every law of fukan's own vocabulary compiles, so on a fukan-only registry this is a complete check."
+   Satisfaction is FAIL-CLOSED: if any law cannot be compiled or evaluated, throws with every
+   unsupported law in ex-data. An unevaluated sentence is neither satisfied nor refuted, so returning
+   a green violation list would be a false claim."
   [cdb]
-  (vec (for [r (check-structural cdb) :when (:offenders r)]
-         (select-keys r [:structure :law :key :offenders]))))
+  (let [results     (check-structural cdb)
+        unsupported (vec (filter :unsupported results))]
+    (when (seq unsupported)
+      (throw (ex-info (str "cannot decide model satisfaction: " (count unsupported)
+                           " law(s) could not be evaluated")
+                      {:unsupported unsupported})))
+    (vec (for [r results :when (:offenders r)]
+           (select-keys r [:structure :law :key :offenders])))))
 
 (defn- known-law-keys
   "Every `:key` across the laws `check` runs — the addressable worklist surface, from the

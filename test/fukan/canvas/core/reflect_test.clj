@@ -34,7 +34,7 @@
     {:offenders [?n]
      :where [[?n :val/title "bad"]]}))
 
-;; ── morphism fixtures: a design/fact pair, a correspondence, two derived relations ──
+;; ── correspondence fixtures: a design/fact pair, a bridge, two derived relations ──
 ;; `m-`-prefixed to keep the GLOBAL (unqualified) relation-rule namespace collision-free.
 
 (defstructure MFact "Fixture codomain." {:mcalls [:* MFact]})
@@ -44,8 +44,13 @@
   [?x] [(is ?x MFact)])
 (s/defrelation :m-link "fixture derived: a direct mcalls edge"
   [?a ?b] [(mcalls ?a ?b)])
+(s/defrelation :m-twin "fixture carrier: exact-name design/fact pairs"
+  [?a ?b]
+  [(is ?a MSrc) (design ?a) (is ?b MFact) (fact ?b)
+   (named ?a ?name) (named ?b ?name)])
 
-(s/correspond MSrc :eq [MFact :m-public]
+(s/correspond MSrc [MFact :m-public]
+  {:carrier :m-twin :coverage :both}
   (:mdel :sub :m-link))
 
 (Leaf ^{:name "l"} t-leaf)
@@ -148,16 +153,17 @@
                                     [?s :val/tag ?vt] [?s :entity/name ?sn]]
                            db (str ":" itag))))))))
 
-(deftest the-morphism-reflects-as-a-node
-  (testing "one Morphism node per registered `(correspond …)` — the sort map decomposed,
+(deftest the-correspondence-reflects-as-a-node
+  (testing "one Correspondence node per registered `(correspond …)` — the carrier statement decomposed,
             not a payload blob on the design Structure"
     (let [db (reflected)
           m  (ffirst (cq/q '[:find ?m
-                             :where [?m :structure/of :fukan.canvas.core.reflect/Morphism]
+                             :where [?m :structure/of :fukan.canvas.core.reflect/Correspondence]
                                     [?m :entity/name "MSrc↦MFact"]] db))
           e  (cq/entity db m)]
       (is (some? m))
-      (is (= ":eq" (:val/incl e)) "the object map's inclusion is a queryable field")
+      (is (= ":m-twin" (:val/carrier e)) "the ordinary carrier relation is queryable")
+      (is (= ":both" (:val/coverage e)) "coverage is a separate queryable field")
       (is (= ":m-public" (:val/restrict e)) "so is the codomain sub-sort restriction")
       (is (nil? (:val/corresponds (cq/entity db (struct-node db ":fukan.canvas.core.reflect-test/MSrc"))))
           "the design Structure no longer carries the corresponds blob")
@@ -192,7 +198,7 @@
   (testing "a Vocabulary owns its declared relation elements — ownership rides the element's
             recorded :ns (an unqualified relation tag cannot carry its namespace)"
     (let [db (reflected)]
-      (is (= #{"m-link" "m-public"}
+      (is (= #{"m-link" "m-public" "m-twin"}
              (set (cq/q '[:find [?n ...]
                           :where [?v :structure/of :fukan.canvas.core.reflect/Vocabulary]
                                  [?v :entity/name "fukan.canvas.core.reflect-test"]
@@ -217,5 +223,5 @@
 
 (deftest reflected-model-satisfies-every-law
   (testing "meta-integrity: reflection adds no violations (the meta-grammar's own
-            slot laws run over the reified nodes — Morphism and RelationMap included)"
+            slot laws run over the reified nodes — Correspondence and RelationMap included)"
     (is (empty? (law/check (reflected))))))

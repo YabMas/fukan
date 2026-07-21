@@ -122,33 +122,35 @@
             come from the EXTERNAL (correspond Operation …), the identity map derived)"
     (let [db (pipeline/build-model nil)]
       (is (str/includes? (g/vocabulary-primer db "fukan.common.vocab.code.operation")
-                         "; ⇒ 5 generated laws")))))
+                         "⇒ 5 generated laws")))))
 
 (deftest correspondence-card-shows-the-seam-and-its-generated-laws
-  (testing "the card renders the twin ladder and every demand with its stable key"
+  (testing "the card renders named carriers, coverage, and every generated demand with its stable key"
     (let [card (g/correspondence-card)]
-      (is (str/includes? card ":qualified-suffix") "the root bridge strategy is named")
+      (is (str/includes? card ":module-twin") "the root carrier is an ordinary named relation")
+      (is (str/includes? card "coverage :both"))
       (is (str/includes? card ":corresponds/Operation.total"))
       (is (str/includes? card ":corresponds/Operation.delegates-realized"))
       (is (str/includes? card ":corresponds/Operation.performs-covered"))
-      (is (str/includes? card "the object map is total")
+      (is (str/includes? card "the carrier is left-total")
           "descs come from the generated laws — the invisible laws become visible"))))
 
 (deftest print-dual-round-trips-the-correspondence-seam
-  (testing "the reflected Operation renders its (external) corresponds form; correspondence is NO LONGER
-            on the identity slots — `:delegates` carries only its identity option, `:performs` none"
+  (testing "defstructure and external correspondence render as two valid canonical forms"
     (let [db   (pipeline/build-model nil)
           eid  (ffirst (cq/q '[:find ?s :where [?s :structure/of :fukan.canvas.core.reflect/Structure]
                                [?s :val/tag ":fukan.common.vocab.code.operation/Operation"]] db))
           form (g/structure-form db eid)
-          body (set (filter seq? form))
-          corr (first (filter #(= 'corresponds (first %)) body))
+          corr (g/correspondence-form db eid)
           slots (first (filter map? form))]
-      (is (some? corr) "the corresponds body form renders (from the external correspondence config)")
-      (is (= '(corresponds :eq [Fn :public]) (take 3 corr))
-          "renders as the sort map — the object map's inclusion + restricted codomain")
-      (is (some #{'(:delegates :sub :public-call)} corr)
-          "the relation maps render nested under the sort map (delegates ⊑ the named public-call relation)")
+      (is (not-any? #(and (seq? %) (= 'corresponds (first %))) form)
+          "defstructure contains only forms its parser accepts")
+      (is (= '(correspond Operation [Fn :public]
+                {:carrier :operation-twin :coverage :both}
+                (:delegates :sub :public-call)
+                (:performs :sup [:cat [:* :calls] :performs]))
+             corr)
+          "external correspondence round-trips as valid canonical input")
       (is (= '[:* Operation] (:delegates slots))
           ":delegates is a plain slot — no correspondence options, and no :transitive (closures are the compiler's)")
       (is (not (map? (second (:performs slots))))

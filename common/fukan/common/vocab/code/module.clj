@@ -18,18 +18,18 @@
    ELEMENTS — Operations, Kinds, and (sub)Modules, nothing else. The union IS the membership
    constraint (its generated target-type law is the teeth — never a hand-written membership law),
    and membership is ONE relation: `:child`, the containment species declared in `vocab/grouping`.
-   The fact theory models a namespace the same way (`Ns {:child [:* Fn]}`, visibility a member
+   The fact vocabulary models a namespace the same way (`Ns {:child [:* Fn]}`, visibility a member
    fact) — the two strata are symmetric.
 
    There is no authored surface or boundary ROLE (the `:exposes`/`:owns` species were cut
    2026-07-21 — nothing consumed them): fukan models SURFACES. A modelled Operation corresponds
-   to a PUBLIC code twin — the morphism `Operation :eq [Fn :public]` enforces exactly this — and
+   to a PUBLIC code correspondent — the bridge `Operation :eq [Fn :public]` enforces exactly this — and
    interior helpers stay unmodelled (the delegates roll-up routes THROUGH them as ¬public
    interior). A boundary data-shape needs no flag either: adoption is readable from the graph
    (another module's signatures naming the Kind — `module-depends`' data-adoption clause).
 
-   PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but that (the name
-   bridge) hooks in from OUTSIDE via `(correspond Module …)` in the language extractor. The
+   PURE IDENTITY — Module is the ROOT of the correspondence twin ladder, but its carrier
+   relation hooks in from OUTSIDE via `(correspond Module …)` in the language extractor. The
    pattern tier above (`vocab/patterns/`) also names its own participation (`PlugPoint :owner`);
    this file is CLOSED to the tiers above it."
   {:child [:* Operation Kind Module]})

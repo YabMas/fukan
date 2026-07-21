@@ -1,5 +1,5 @@
 (ns fukan.common.extraction.clojure.operation
-  "Clojure grounding for the code `Operation` vocabulary — the FACT theory (`Fn`), the extraction that
+  "Clojure grounding for the code `Operation` vocabulary — the FACT vocabulary (`Fn`), the extraction that
    builds it from clj-kondo var-definitions, and the design↔Clojure CORRESPONDENCE (`Operation ↦ Fn`).
 
    `Fn` is the codomain: the Clojure realization of an Operation — an extracted `defn`/`defn-`/`defmulti`
@@ -7,7 +7,7 @@
    SPECIFIC language's construct, so it lives here, not in the language-neutral vocabulary. Before
    2026-07-17 there was no `Fn`: the fact-side slots were grafted onto the design `Operation` tag, so
    design Operation and Clojure function were one structure told apart by a provenance flag — and the
-   drift demands had to be six bespoke forms because a morphism had no codomain to map INTO.
+   drift demands had to be six bespoke forms because the correspondence had no distinct fact vocabulary.
 
    The generic `Operation` structure — pure, language-neutral identity — lives in
    `fukan.common.vocab.code.operation`."
@@ -17,7 +17,7 @@
             [fukan.common.vocab.code.effect :refer [Effect]]
             [fukan.common.vocab.code.operation :as operation :refer [Operation]]))
 
-;; ── the FACT theory: a Clojure function ──────────────────────────────────────
+;; ── the FACT vocabulary: a Clojure function ──────────────────────────────────
 (defstructure Fn
   "The Clojure realization of an Operation — an EXTRACTED function (`defn`/`defn-`/`defmulti`), stamped
    by the build. Carries the same input/output/effect shape as the design `Operation` (so the two agree
@@ -32,7 +32,7 @@
    :export       [:? :boolean]                   ; intentionally public for MECHANISM (^:export)
    :test-support [:? :boolean]})                 ; intentionally public for TEST-SUPPORT (^:test-support)
 
-;; Fn OWNS its public surface — the sub-sort the design↦fact object map is surjective ONTO (the codomain
+;; Fn OWNS its public surface — the sub-sort onto which the design↔fact carrier is right-total (the codomain
 ;; restriction `[Fn :public]`). A public Fn is an extracted function that is none of private (`defn-`) /
 ;; `^:export` / `^:test-support`. The codomain decides which of its instances count, rather than the
 ;; correspondence reaching into Fn's raw `:val/*` triples from the design side. This is the SAME
@@ -46,18 +46,19 @@
 ;; The PUBLIC CALL GRAPH as a first-class fact relation — `a` reaches `b` through only ¬public (internal)
 ;; interior. Routing through another PUBLIC op is TWO delegations, not one; an unmodelled `^:export`/
 ;; `^:test-support` helper is ¬public, so it's interior, not a boundary. The interior is the COMPLEMENT
-;; of the `public` sub-sort the object map maps onto — one `public` line, restricted on one side and
+;; of the `public` sub-sort covered by the carrier — one `public` line, restricted on one side and
 ;; negated here. A recursive derived relation (base + step); `delegates :sub :public-call` names it.
 (defrelation :public-call
   "a reaches b through only non-public interior — the public call graph"
   [?a ?b] [(calls ?a ?b)]                                     ; base: a direct call
           [(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
 
-;; ── the correspondence: Operation ↦ Fn, one sort of the design→Clojure morphism ──
+;; ── the correspondence: Operation ↔ Fn, one bridge between design and Clojure facts ──
 ;; Rides Operation from OUTSIDE (its `defstructure` stays pure identity). Every law generates at
 ;; :corresponds/Operation.*.
-;;   · OBJECT MAP: `Operation :eq [Fn :public]` — a bijection onto Fn's PUBLIC sub-sort (`:eq` ⇒ total,
-;;     every design Operation twinned + surjective, every public Fn has a preimage). Private/export/
+;;   · CARRIER: `operation-twin` — a normal derived relation under bi-total coverage with Fn's PUBLIC
+;;     sub-kind (every design Operation has a twin and every public Fn has a correspondent; uniqueness
+;;     is not implied). Private/export/
 ;;     test-support fns are NOT public, so neither sort images nor delegation boundaries. This IS the
 ;;     surface doctrine (Module carries no :exposes role since 2026-07-21): modelled ⇒ public — fukan
 ;;     models surfaces, and interior helpers stay unmodelled (the roll-up routes through them).
@@ -65,14 +66,28 @@
 ;;     edge (the named fact relation above; `:sub` only, since fidelity is Subsystem `:may-depend`'s
 ;;     concern). `:performs ⊒ calls*·performs` — every effect the twin reaches is a declared design effect.
 ;;   · the IDENTITY component (`in↦in`, `out↦out` over the shared `Schema` sort) is DERIVED.
-(s/correspond Operation :eq [Fn :public]
+(defrelation :operation-twin
+  "A design Operation and extracted Fn with the same name inside corresponding modules."
+  [?op ?fn]
+  [(is ?op Operation) (design ?op)
+   (is ?fn Fn) (fact ?fn)
+   (named ?op ?name) (named ?fn ?name)
+   (contains ?m ?op) (contains ?ns ?fn)
+   (module-twin ?m ?ns)])
+
+(s/correspond Operation [Fn :public]
+  {:carrier :operation-twin :coverage :both}
   (:delegates :sub :public-call)
   (:performs  :sup [:cat [:* :calls] :performs]))
 
 (def ^:private schema-tag
-  "The type dialect's ^:value structure tag — the fact-side signature builds its :in/:out
+  "The type dialect's ^:value structure tag — the fact-side fragment builds its :in/:out
    Schema subgraphs through it (via `s/value-literal->iv`, the one value-construction path)."
   :fukan.common.typing.malli/Schema)
+
+(def ^:private effect-tag
+  "The Effect value tag, used through the same canonical value-construction path as Schema."
+  :fukan.common.vocab.code.effect/Effect)
 
 (defn- code-arrow->in-out
   "Decompose an EXTRACTED code function-schema `[:=> INPUT OUTPUT]` into `{:in [type…] :out type}`.
@@ -112,7 +127,8 @@
                            (:test-support (:meta v)) (assoc :val/test-support true))
                          (cond-> []
                            (seq effs)     (conj {:rk :performs :card :many
-                                                 :targets (mapv (fn [eff] (Effect eff)) (sort effs))})
+                                                 :targets (mapv #(s/value-literal->iv effect-tag %)
+                                                                (sort effs))})
                            (seq in)       (conj {:rk :in :card :many
                                                  :targets (mapv #(s/value-literal->iv schema-tag %) in)})
                            arrow?         (conj {:rk :out :card :optional

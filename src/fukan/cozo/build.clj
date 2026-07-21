@@ -132,10 +132,8 @@ alle[e] := *t_bool[e, _, _]
       -1))
 
 (defn ^:test-support fold-vars->cozo
-  "Fold the instance-bearing `vars` onto an already-built Cozo db `cdb` — the cozo analog of
-   `union-dbs` folding an assembled fragment onto the model. Assembles the vars, UPSERTS nodes by
-   `:entity/id` (a var-ref to an entity already in `cdb` REUSES its eid — the value-identity dedup
-   `union-dbs` did via lookup-refs; a genuinely-new node takes a fresh eid above the current max)
+  "Add the instance-bearing `vars` to an already-built Cozo db `cdb`. Assembles the vars, UPSERTS nodes by
+   `:entity/id` (a var-ref to an entity already in `cdb` REUSES its eid; a genuinely-new node takes a fresh eid above the current max)
    and rels by `:rel/id`, resolving every `[:entity/id id]` ref to its existing-or-new eid, then
    inserts. Returns `cdb`. (Mirrors `with-grammar`'s upsert, over emitted instances.)"
   [cdb vars]

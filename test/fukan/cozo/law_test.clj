@@ -44,3 +44,17 @@
           (is (seq compiled) "precondition: the compiler supports the slot-cardinality law family")
           (is (empty? fired) "no compiled law false-positives on the green real model"))
         (finally (db/close cdb))))))
+
+(deftest check-fails-closed-when-any-law-is-unsupported
+  (testing "an unevaluated law can never disappear into a false-green satisfaction result"
+    (with-redefs [law/check-structural
+                  (fn [_]
+                    [{:structure :x/T :law "supported"}
+                     {:structure :x/T :law "not compiled" :unsupported true}])]
+      (try
+        (law/check ::db)
+        (is false "check must throw when satisfaction is undecidable")
+        (catch clojure.lang.ExceptionInfo e
+          (is (re-find #"cannot decide model satisfaction" (ex-message e)))
+          (is (= [{:structure :x/T :law "not compiled" :unsupported true}]
+                 (:unsupported (ex-data e)))))))))

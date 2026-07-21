@@ -9,7 +9,7 @@
 
    THE PATTERN TIER (`vocab/patterns/`) — one rung above the core code grammar
    (`vocab/code/{kind,effect,operation,module,subsystem}`): a pattern is a named CONFIGURATION drawn
-   OVER the core elements — a theory extension that imports the core's sorts and adds its own sort
+   OVER the core elements — a presentation extension that imports the core's sorts and adds its own sort
    and relations. The dependency points strictly UPWARD: the pattern names its participants
    (`:owner`), the core never names the pattern — `Module` carries no pattern slots and does not
    require this ns. The domain-altitude reading `(offers ?m ?p)` is DERIVED (the converse of

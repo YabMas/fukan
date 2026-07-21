@@ -9,8 +9,8 @@
    classpath is a canvas port. A spec authors instances as top-level `def`s holding
    `InstanceValue`s; references between them are ordinary var references, resolved by
    the global assembler (no `build-canvas`, no merge/cross-ref pass). Adding a port is
-   a single file drop. `union-dbs` remains only to fold an extractor's code db onto
-   the assembled design db."
+   a single file drop. The native builder assembles authored and extracted facts into
+   one Cozo db."
   (:require
    [clojure.java.io :as io]
    [clojure.string :as str]))

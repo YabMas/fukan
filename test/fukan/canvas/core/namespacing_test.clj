@@ -80,7 +80,7 @@
           "the short kind rule stays the deliberate co-load union — both Kinds"))))
 
 (deftest relation-name-collisions-are-loud
-  (testing "a relation element's UNQUALIFIED tag is signature identity: re-declaring the same
+  (testing "a relation element's UNQUALIFIED tag is global presentation identity: re-declaring the same
             relation from a DIFFERENT namespace throws at registration (the registry keys by tag,
             so it would otherwise silently replace the first declaration — and every law over the
             name would read only the survivor); same-ns re-registration (a REPL reload) replaces"

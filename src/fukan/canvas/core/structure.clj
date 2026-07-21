@@ -40,7 +40,6 @@
   [slot]
   (boolean (:type-form? slot)))
 
-
 ;; ── structure registry (vocabulary as data: slots + laws, no family/payload) ──
 
 (defonce ^:private structures (atom {}))
@@ -48,7 +47,7 @@
 (defn ^:export register-structure!
   "Register `sdef` under its tag. A structure's tag is QUALIFIED (identity = defining ns + name),
    so structures sharing a short name coexist. A RELATION element's tag is UNQUALIFIED — its
-   datalog rule name is global — so its NAME is signature identity: re-declaring the same relation
+   datalog rule name is global — so its NAME is global presentation identity: re-declaring the same relation
    tag from a DIFFERENT namespace would silently replace the first declaration (the registry keys
    by tag) and every law over the name would read only the survivor. That collision THROWS here,
    at declaration — the registry is the only place the first declaration still exists to compare
@@ -70,7 +69,7 @@
 
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
-(declare correspondence-of syntax-for)
+(declare correspondence-of)
 (defn- slot-for
   "The slot descriptor for `rel` on `sdef`'s structure. An extracted instance's fact-side slots
    (`:calls`/`:private`/…) are now its OWN defstructure's slots — the codomain (`Fn`/`Ns`) is a real
@@ -79,13 +78,11 @@
   (first (filter #(= rel (:rel %)) (:slots sdef))))
 
 (defn- sdef-syntax
-  "The authoring-syntax hook for `sdef` — its inline `(syntax …)` OR one registered externally against
-   its tag (`register-syntax!`). Authoring sugar is MACHINERY, so a concept may keep its identity
-   defstructure clean and register the hook from outside."
-  [sdef] (or (:syntax sdef) (syntax-for (:tag sdef))))
+  "The optional inline `(syntax …)` elaborator for `sdef`. The slots map remains the canonical
+   instance form; a syntax hook is vocabulary-local sugar which must return that map."
+  [sdef] (:syntax sdef))
 
-
-;; ── value-authoring: instance-form / value-form ──────────────────────────────
+;; ── value authoring ──────────────────────────────────────────────────────────
 
 (defn- unquote-lit [v] (if (and (seq? v) (= 'quote (first v))) (second v) v))
 
@@ -347,16 +344,6 @@
          parsed     (mapv parse-elem args)]
      [(mapv :label parsed) (mapv :target parsed)])))
 
-(def ^:private reserved-annotation-keys
-  "Kernel-level per-instance ANNOTATION keys — free-text notes an author may attach to ANY instance,
-   not vocab slots. Stored as `:val/<key>` leaves (like a scalar slot's value, but with no declared
-   slot and no law); consumed by projections, never by laws. `:guidance` is implementer-directed
-   design intent — the read dual of the docstring (doc = prose-for-the-reader; guidance =
-   prose-for-the-implementer). Available on every structure without being defined in any of them."
-  #{:guidance})
-
-(defn- reserved-annotation-key? [k] (contains? reserved-annotation-keys k))
-
 (defn- map-entry->clause
   "One slots-map entry `slot → value` → the internal clause form. The encoding is
    schema-driven — the slot's declared quantifier/payload disambiguates the value:
@@ -365,16 +352,14 @@
      :many/:some/:set  vector of targets  (k v1 v2 …)   the bracket mirrors the quantifier
      payload slot      [value payload]    (k value payload)
 
-   A reserved annotation key (`:guidance`) needs no slot — it emits a bare leaf clause `(k v)`."
+   Every key must be a declared slot: if a value becomes a fact, its meaning comes from vocabulary."
   [tag sdef [k v]]
   (let [slot (slot-for sdef k)
         head (symbol (clojure.core/name k))]
-    (when (and (not slot) (not (reserved-annotation-key? k)))
+    (when-not slot
       (throw (ex-info (str (clojure.core/name tag) ": `" (clojure.core/name k) "` is not a slot")
                       {:tag tag :rel k})))
     (cond
-      (reserved-annotation-key? k) (list head v)
-
       (and (scalar-slot? slot) (:payload slot) (vector? v))
       (do (when-not (= 2 (count v))
             (throw (ex-info (str (clojure.core/name tag) "." (clojure.core/name k)
@@ -418,7 +403,7 @@
     :else (first body)))
 
 (defn- build-instance-form
-  "Shared clause-walker behind `instance-form`, `value-form` and `expand-instance`.
+  "Shared clause-walker behind `value-form` and named `expand-instance`.
    Builds the `->InstanceValue` call with `name-expr` (a string form or nil-literal),
    `doc` (a string or nil) and `value?-expr` (true/false literal). Validates slot
    names; separates scalar clauses from relation clauses; emits target-capture
@@ -431,11 +416,13 @@
   (let [sdef    (structure-by-tag tag)
         _       (when-not sdef
                   (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
-        scalar? (fn [c] (or (reserved-annotation-key? (keyword (first c)))
-                            (let [s (slot-for sdef (keyword (first c)))] (and s (scalar-slot? s)))))
+        scalar? (fn [c] (let [s (slot-for sdef (keyword (first c)))] (and s (scalar-slot? s))))
         scalars (into {} (for [c clauses :when (scalar? c)
                                :let [slot (slot-for sdef (keyword (first c)))]
-                               pair (cond-> [[(keyword "val" (clojure.core/name (first c))) (second c)]]
+                               pair (cond-> [[(keyword "val" (clojure.core/name (first c)))
+                                              (if (:form slot)
+                                                (list 'quote (unquote-lit (second c)))
+                                                (second c))]]
                                       (and (:payload slot) (>= (count c) 3))
                                       ;; A payload carries a companion CODE-FORM (a datalog
                                       ;; query, a predicate `(fn …)`) — stored as DATA, not
@@ -459,32 +446,6 @@
                             (rel-map-form rk (:card slot) target-forms labels))))
                       (remove scalar? clauses))]
     `(->InstanceValue ~tag ~name-expr ~doc ~scalars ~rels ~value?-expr)))
-
-(defn ^:export instance-form
-  "Macroexpansion-time: build the (->InstanceValue ...) form for an EXPRESSION-position
-   entity instance — `(Tag \"doc\"? {slot → value}?)`, mirroring defstructure's
-   docstring + one-map shape. The name is always nil: the assembler derives
-   `:entity/name` from the binding var's simple name; a named top-level instance
-   authors as the def-emitting `(Tag sym …)` form (see `expand-instance`)."
-  [tag args]
-  (let [sdef (structure-by-tag tag)
-        _    (when-not sdef
-               (throw (ex-info (str "defstructure: unknown structure " tag) {:tag tag})))
-        doc  (when (string? (first args)) (first args))
-        body (if doc (rest args) args)
-        one  (first body)]
-    ;; a structure that declares a (syntax …) hook may take a single POSITIONAL body
-    ;; (a non-map arg-tail) — the hook normalizes it to the slots map; without a hook
-    ;; the body must still be empty or a single slots map.
-    (when-not (or (empty? body)
-                  (and (empty? (rest body)) (or (map? one) (sdef-syntax sdef)))
-                  (and (sdef-syntax sdef) (seq body)))
-      (throw (ex-info (str (clojure.core/name tag) ": an instance is `("
-                           (clojure.core/name tag) " \"doc\"? {slot → value}?)` — got "
-                           (pr-str (vec body)))
-                      {:tag tag :body (vec body)})))
-    (build-instance-form tag nil doc false
-                         (map->clauses tag sdef (apply-syntax sdef (syntax-input sdef body))))))
 
 (defn ^:export value-form
   "Macroexpansion-time: build the (->InstanceValue ...) form for a ^:value instance —
@@ -781,41 +742,12 @@
                            "matched-by, target, or at-most-one")
                       {:form form})))))
 
-;; ── declaration registry: the means-of-growth seam ───────────────────────────
-;; A defstructure decomposes into DECLARATIONS, each emitting Terms (derived relations) and/or
-;; Laws (constraints). A declaration handler is `(fn [decl sdef] → {:terms [rule…] :laws [law…]})`,
-;; keyed by `:kind`; BOTH emitters (`terms-of`, `laws-of`) dispatch through the registry, so a new
-;; kind of thing-you-can-say is a registered handler, not a new parser branch. The built-in handlers
-;; (the existing constructs) register at load; the surface is unchanged.
-
-(defonce ^:private declaration-handlers (atom {}))
-
-(defn ^:export register-declaration!
-  "Register a declaration handler — `kind → (fn [decl sdef] → {:terms [rule…] :laws [law…]})`.
-   The generic seam (`terms-of`/`laws-of`) dispatches through these; built-ins register at load."
-  [kind handler] (swap! declaration-handlers assoc kind handler) kind)
-
-(defn ^:export ^{:malli/schema [:=> [:cat] [:set :any]]}
-  declaration-kinds "The registered declaration kinds." [] (set (keys @declaration-handlers)))
-
-(defn ^:export handle-declaration
-  "Dispatch one declaration to its registered handler → `{:terms […] :laws […]}` (empty when the
-   kind has no handler yet — Stage A registers them incrementally)."
-  [decl sdef]
-  (if-let [h (@declaration-handlers (:kind decl))] (h decl sdef) {:terms [] :laws []}))
-
-(defmacro defdeclaration
-  "Register a declaration handler for `kind`: `(defdeclaration :k [decl sdef] body…)` where body
-   returns `{:terms [rule…] :laws [law…]}`."
-  [kind [decl-sym sdef-sym] & body]
-  `(register-declaration! ~kind (fn [~decl-sym ~sdef-sym] ~@body)))
-
 ;; ── external correspondence registry ──────────────────────────────────────────
 ;; Correspondence is an EXTENSION that hooks a concept from OUTSIDE (inverted dependency): the concept
 ;; knows nothing; the `(correspond Tag …)` declaration (in a correspondence module) registers its config
 ;; against the target's tag. `sdef->declarations` merges these in for the target sdef, so the SAME
-;; handlers emit the SAME terms/laws — only the SOURCE moved from the sdef's own `:corresponds`/fact-slots
-;; to here. Config: `{:bridge :demands [] :fact-slots [slot…] :rel-demands [slot-descriptor…]}`.
+;; lowering emits the same terms/laws; only the source lives outside the design vocabulary.
+;; Config: `{:fact-tag … :carrier relation :coverage … :restrict … :rel-demands […]}`.
 (defonce ^:private correspondences (atom {}))
 
 (defn ^:export register-correspondence!
@@ -827,29 +759,14 @@
   "The registered external correspondence config for `tag`, or nil."
   [tag] (@correspondences tag))
 
-;; ── external authoring-syntax registry ────────────────────────────────────────
-;; A `(syntax f)` hook (body map→map, applied before slot parsing) is authoring MACHINERY, not
-;; identity, so a concept can register it from OUTSIDE its `defstructure` — `(register-syntax! tag f)`.
-;; `sdef-syntax` reads inline-or-registered; instance construction is unchanged otherwise.
-(defonce ^:private syntaxes (atom {}))
-
-(defn ^:export register-syntax!
-  "Register an authoring-syntax hook `f` (body-map → body-map) against `tag`, off the concept's
-   `defstructure`. Re-registering a tag replaces it."
-  [tag f] (swap! syntaxes assoc tag f) tag)
-
-(defn ^:export syntax-for
-  "The externally-registered authoring-syntax hook for `tag`, or nil."
-  [tag] (@syntaxes tag))
-
-;; ── the identity component of a correspondence morphism (derived, not authored) ─
-;; A morphism's identity map = the slots BOTH theories declare under the same name AND target sort,
+;; ── the shared-sort component of a correspondence (derived, not authored) ──────
+;; A correspondence's shared-sort agreement = the slots BOTH fragments declare under the same name AND target kind,
 ;; MINUS those carrying their own relation map. Those targets are a SHARED sort (a `^:value`
 ;; content-deduped structure — Schema/Effect — ONE node across strata), so `↦` is the identity,
 ;; checkable by eid. It was authored as `(agrees {:by :structural :over […]})` until 2026-07-17; now
 ;; it is derived from the two `defstructure`s, so the author states only the NON-identity maps.
 (defn- derive-identity-demand
-  "The identity component of `dtag ↦ ftag` as an `agrees` demand (nil if the two theories share no
+  "The shared-sort component of `dtag ↦ ftag` as an `agrees` demand (nil if the two fragments share no
    un-charactered sort-slot). `:by :structural` over the shared-sort slots: forward-preserving
    equality — a design instance and its twin agree iff their targets over EVERY shared slot are
    identical by eid, so a twin MISSING a slot the design declares is an offender (this is where the
@@ -871,21 +788,20 @@
                       (str/join ", " (map (comp name :rel) shared)) " (identity map)")}))))
 
 (defn ^:export effective-node-demands
-  "The node demands of `dtag`'s correspondence: the OBJECT-MAP demands (derived from the sort map's
-   inclusion — `:sub`→total, `:sup`→surjective onto the `:restrict` sub-sort, `:eq`→both) ∪ any AUTHORED
-   `agrees` (the comparator escape hatch) ∪ the DERIVED identity map (tagged `:derived`). Every reader of
+  "The node demands of `dtag`'s correspondence: explicit carrier coverage (`:design`, `:fact`,
+   or `:both`) plus the DERIVED shared-sort identity map (tagged `:derived`). Every reader of
    the demands — the law generator (`sdef->declarations`), the seam reader (`correspondence*`), and
    grammar reflection — goes through here, so all three see the same demands. Nil when `dtag` carries no
    correspondence."
   [dtag]
-  (when-let [{:keys [fact-tag incl restrict demands rel-demands]} (correspondence-of dtag)]
-    (let [obj      (case incl
-                     :sub [{:demand :total}]
-                     :sup [{:demand :surjective :pred restrict}]
-                     :eq  [{:demand :total} {:demand :surjective :pred restrict}])
+  (when-let [{:keys [fact-tag coverage restrict rel-demands]} (correspondence-of dtag)]
+    (let [coverage-demands (case coverage
+                             :design [{:demand :total}]
+                             :fact   [{:demand :surjective :pred restrict}]
+                             :both   [{:demand :total} {:demand :surjective :pred restrict}])
           identity (derive-identity-demand dtag fact-tag (:slots (structure-by-tag dtag))
                                            (set (map :rel rel-demands)))]
-      (cond-> (into obj demands) identity (conj identity)))))
+      (cond-> coverage-demands identity (conj identity)))))
 
 (defn ^:export sdef->declarations
   "Adapt an sdef (built by the unchanged parser) into typed declaration maps for the registry — a
@@ -903,100 +819,68 @@
    ;; registered `(correspond Design Fact …)` config into declaration maps scoped to this design tag —
    ;; the cross-tag twin/demands as :correspondence, each relation map `(rel incl E)` as :relation-map.
    ;; The fact-side SLOTS are no longer here: they belong to the codomain's own `defstructure`.
-   (when-let [{:keys [fact-tag bridge rel-demands]} (correspondence-of tag)]
+   (when-let [{:keys [fact-tag carrier rel-demands]} (correspondence-of tag)]
      (concat
-      [{:kind :correspondence :corresponds {:fact-tag fact-tag :bridge bridge
+      [{:kind :correspondence :corresponds {:fact-tag fact-tag :carrier carrier
                                             :demands (effective-node-demands tag)}}]
       (for [d rel-demands] {:kind :relation-map :demand d})))
    (for [law laws] {:kind :free-law :law law})))
 
-(defn- parse-demand
-  "Parse a `(realized …)`/`(covered …)`/`(agrees …)` corresponds sub-form → a demand map. Allowed
-   option keys: realized → :key :desc :when :require ; covered → :key :desc :when :unless ; agrees →
-   :key :desc :when :by :over. `:by` (required) selects the per-twin-pair comparator: the built-in
-   `:structural` (two twins agree iff their targets over the `:over` slots are IDENTICAL by eid — the
-   kernel builds the index, `:over` a vector of slot keywords, required with `:structural`) or a
-   registered comparator key (`register-comparator!`, the arbitrary escape hatch — no `:over`). Datalog
-   vectors (:when/:require/:unless) pass through unquote-lit. Anything else throws, naming the form."
-  [sname f]
-  (let [[dk opts] [(keyword (first f)) (second f)]
-        allowed   #{:key :desc :when :by :over}]
-    (when-not (= dk :agrees)
-      (throw (ex-info (str "correspond " sname ": unknown node-demand sub-form " (pr-str (first f))
-                           " (the object map rides the :total / :surjective-onto flags)") {:form f})))
-    (when (and opts (not (map? opts)))
-      (throw (ex-info (str "correspond " sname ": (agrees …) options must be a map") {:form f})))
+(defn- parse-carrier-declaration
+  "Parse one external correspondence declaration. The carrier is an ordinary named binary relation;
+   coverage is stated separately as `:design`, `:fact`, or `:both`, so relation-inclusion tokens retain
+   their one meaning. Remaining forms are relation maps `(design-rel :sub/:sup/:eq fact-expr)`."
+  [cname ftag restrict opts rel-forms]
+  (when-not (map? opts)
+    (throw (ex-info (str "correspond " cname ": expected {:carrier relation :coverage …}, got "
+                         (pr-str opts)) {:options opts})))
+  (let [allowed #{:carrier :coverage}]
     (doseq [k (keys opts)]
       (when-not (allowed k)
-        (throw (ex-info (str "correspond " sname ": (agrees …) does not take " k " — allowed: " allowed) {:form f :key k}))))
-    (when-not (:by opts)
-      (throw (ex-info (str "correspond " sname ": (agrees …) needs :by <comparator-key>") {:form f})))
-    (when (and (= :structural (:by opts)) (not (seq (:over opts))))
-      (throw (ex-info (str "correspond " sname ": (agrees {:by :structural …}) needs :over [slot…]") {:form f})))
-    {:demand dk
-     :key  (:key opts) :desc (:desc opts) :by (:by opts) :over (:over opts)
-     :when (unquote-lit (:when opts))}))
-
-(defn- parse-bridge
-  "Parse a `(bridge <arg>)` carrier: a strategy KEYWORD (`:qualified-suffix`, `:exact`) the kernel
-   `name-match` builtin lowers (the declarative common case), or a SYMBOL naming a Clojure fn (the
-   escape hatch — must RESOLVE at expansion + carry a registered Cozo predicate port)."
-  [cname barg]
-  (if (keyword? barg)
-    barg
-    (if-let [v (resolve barg)]
-      (symbol (str (ns-name (:ns (meta v)))) (name (:name (meta v))))
-      (throw (ex-info (str "correspond " cname ": bridge " barg " does not resolve") {:bridge barg})))))
-
-(defn- parse-sort-map
-  "Parse ONE sort-map entry of a `(correspond …)` block — `(DesignSort :incl FactExpr carrier? nested…)`
-   — into a per-design-tag config. `:incl` is the OBJECT MAP's inclusion: `:sub` (⊑ total — every design
-   node has a twin), `:sup` (⊒ surjective — every fact node in the codomain has a preimage), `:eq` (≡ a
-   bijection). `FactExpr` is the codomain: a bare fact tag, or `[FactSort :test]` restricting it to a
-   sub-sort (`[Fn :public]`). The carrier is `(bridge …)` for ROOT sorts (name-match) or absent =
-   NESTED (paired by name within twinned containers). Nested sub-forms are the RELATION maps
-   `(rel :incl E)` and the `(agrees {:by …})` comparator escape hatch."
-  [cname incl ftag restrict rest-forms]
-  (when-not ('#{:sub :sup :eq} incl)
-    (throw (ex-info (str "correspond " cname ": sort map needs an inclusion (:sub / :sup / :eq), got "
-                         (pr-str incl)) {:incl incl})))
-  (let [seq-subs    (filter seq? rest-forms)
-        bridge-sub  (first (filter #(= 'bridge (first %)) seq-subs))
-        bridge      (when-let [barg (second bridge-sub)] (parse-bridge cname barg))
-        agrees-subs (filter #(= 'agrees (first %)) seq-subs)          ; the comparator escape hatch
-        demands     (mapv #(parse-demand cname %) agrees-subs)
-        rel-subs    (remove #(or (= 'bridge (first %)) (= 'agrees (first %))) seq-subs)
-        ;; a relation map `(rel :incl E)`: an inclusion + a relation-algebra expression over fact
-        ;; relations. Compile E eagerly so a malformed expression throws HERE (naming the correspond).
-        rel-demands (mapv (fn [[rel rincl expr]]
-                            (when-not ('#{:sub :sup :eq} rincl)
-                              (throw (ex-info (str "correspond " cname ": relation map " (pr-str rel)
-                                                   " needs an inclusion (:sub / :sup / :eq) then an expression, got "
-                                                   (pr-str rincl)) {:rel rel :incl rincl})))
-                            (reach-clauses expr '?_a '?_b)   ; validate E eagerly (throws here, naming the correspond)
-                            {:rel (keyword rel) :incl rincl :expr expr})
-                          rel-subs)]
-    {:fact-tag ftag :incl incl :restrict restrict :bridge bridge :demands demands :rel-demands rel-demands}))
+        (throw (ex-info (str "correspond " cname ": unknown option " k " — allowed: " allowed)
+                        {:option k :options opts}))))
+    (when-not (keyword? (:carrier opts))
+      (throw (ex-info (str "correspond " cname ": :carrier must name a defrelation keyword")
+                      {:carrier (:carrier opts)})))
+    (when-not (#{:design :fact :both} (:coverage opts))
+      (throw (ex-info (str "correspond " cname ": :coverage must be :design, :fact, or :both")
+                      {:coverage (:coverage opts)})))
+    (let [rel-subs (filter seq? rel-forms)
+          ;; a relation map `(rel :incl E)`: an inclusion + a relation-algebra expression over fact
+          ;; relations. Compile E eagerly so a malformed expression throws HERE (naming the correspond).
+          rel-demands (mapv (fn [[rel rincl expr]]
+                              (when-not ('#{:sub :sup :eq} rincl)
+                                (throw (ex-info (str "correspond " cname ": relation map " (pr-str rel)
+                                                     " needs an inclusion (:sub / :sup / :eq) then an expression, got "
+                                                     (pr-str rincl)) {:rel rel :incl rincl})))
+                              (reach-clauses expr '?_a '?_b)   ; validate E eagerly (throws here, naming the correspond)
+                              {:rel (keyword rel) :incl rincl :expr expr})
+                            rel-subs)]
+      {:fact-tag ftag :carrier (:carrier opts) :coverage (:coverage opts)
+       :restrict restrict :rel-demands rel-demands})))
 
 (defmacro correspond
-  "Declare ONE design sort's map in the design→fact signature morphism — the concept's `defstructure`
-   never mentions correspondence (inverted dependency); this lives in the extractor for a language.
-   The form is a SORT map `Design :incl fact-expression`, its relation maps nested:
+  "Declare ONE design kind's carrier and relation constraints in the design↔fact bridge presentation —
+   the concept's `defstructure` never mentions correspondence (inverted dependency); this lives in
+   the extractor for a language.
+   The form names an ordinary binary carrier relation and states its coverage independently, with
+   relation maps nested:
 
-     (correspond Operation :eq [Fn :public]              ; SORT map — object map onto Fn's public sub-sort
-       (:delegates :sub (calls-roll-up…))                ;   RELATION maps, nested
-       (:performs  :sup (…))
-       (agrees {:by …})?)                                ;   the comparator escape hatch, if any
-     (correspond Module :eq Ns (bridge :qualified-suffix))  ; another sort's map (per design element)
+     (correspond Operation [Fn :public]
+       {:carrier :operation-twin :coverage :both}
+       (:delegates :sub :public-call)
+       (:performs  :sup [:cat [:* :calls] :performs]))
 
-   `:incl` is the object map's inclusion (`:sub` total / `:sup` surjective / `:eq` both); the codomain
-   is a fact tag or `[FactSort :test]` (restricted to a sub-sort). Relation maps head with a keyword.
+   `:coverage` is `:design` (every design node has a twin), `:fact` (every fact node in the optional
+   restricted codomain has a correspondent), or `:both`; it does not assert functionality or
+   injectivity. The codomain is a fact tag or `[FactSort :test]`. Relation maps retain the ordinary
+   relation-inclusion directions `:sub`, `:sup`, and `:eq`.
    Shared sorts (Schema/Effect — one node both strata) need no `correspond`; their identity map is derived."
-  [design incl fexpr & rest]
+  [design fexpr opts & rel-forms]
   (let [dtag                (resolve-struct-tag design)
         [fact-sym restrict] (if (vector? fexpr) [(first fexpr) (second fexpr)] [fexpr nil])
         ftag                (resolve-struct-tag fact-sym)
-        config              (parse-sort-map (str design) incl ftag restrict rest)]
+        config              (parse-carrier-declaration (str design) ftag restrict opts rel-forms)]
     `(register-correspondence! ~dtag '~config)))
 
 ;; ── (is ?v Sort) — declaration-site sort resolution ───────────────────────────
@@ -1135,15 +1019,15 @@
         :gives Type}
        (law \"...\" {:offenders [?f] :where [...] :rules [...]?}))
 
-   Instantiate with the generated macro — the instance surface MIRRORS defstructure:
+   Instantiate an ENTITY with the generated macro — the surface mirrors defstructure:
    a name symbol (the var AND the entity name; `^{:name \"…\"}` meta overrides), an
    optional docstring, ONE {slot → value} map, then nested member instances where
    defstructure's laws would sit. A plural slot takes a vector (authoring order is
    the sequence order); a labelled target is a `[label target]` pair; a payload
    slot takes `[value payload]`:
      (Function load-model \"doc\" {:takes [[src String] [out String]] :gives Model})
-   The same form without the symbol is an anonymous EXPRESSION instance (inline
-   values, def-wrapped instances): (Function \"doc\"? {slot → value}?)
+   Entity instances always require the name symbol. Only `^:value` structures are
+   anonymous, content-identified expressions: `(Effect :io)`, `(Schema {:kind …})`.
 
    Body forms must be the slots map or (law ...) / (reader ...) / (syntax ...) /
    (realized-as ...); anything else is rejected
@@ -1215,8 +1099,9 @@
                       (if (symbol? (first args#))
                         ;; def-emitting + nesting: `(Tag sym "doc"? {…} nested…)` interns the var
                         (cons 'do (:defs (fukan.canvas.core.structure/expand-instance ~tag args#)))
-                        ;; expression form: `(Tag "doc"? {…})` — anonymous / def-wrapped
-                        (fukan.canvas.core.structure/instance-form ~tag args#)))))))
+                        (throw (ex-info (str ~(name sname) ": entity instances require a name symbol; "
+                                             "only ^:value structures are anonymous")
+                                        {:tag ~tag :args args#}))))))))
 
 (defmacro defrelation
   "Declare a RELATION as an ELEMENT — the relation itself, not a slot that happens to use it.
@@ -1224,8 +1109,9 @@
 
    BARE (name + doc only) — a PRIMITIVE relation: its edges come from the `:rel/kind` of whatever
    structures declare a slot of this name, or from other relations' inclusions INTO it (a genus
-   is a bare element its species declare `(:sub …)` toward). The declaration claims the name
-   (signature identity — a second namespace re-declaring it throws), reflects, and owns the doc.
+   is a bare element its species declare `(:sub …)` toward). Its head is explicitly OPEN. The
+   declaration claims the name (global presentation identity — a second namespace re-declaring it
+   throws), reflects, and owns the doc.
 
      (defrelation :contains \"membership — the genus\")
 
@@ -1236,15 +1122,17 @@
                  law over the including relation sees this one's edges for free.
      `(:sup E)` / `(:eq E)` — this relation ⊒/≡ E: DEFINED from E (`(rel ?a ?b) ⇐ E-clauses`).
                  E is a regular-relation expression — an atom, `[:alt E …]` (one rule per
-                 alternative), or a path (`[:cat …]`, `[:+ r]`, `[:* r]` over atoms). `:eq`
-                 states the definition is exact (nothing else feeds the relation); `:sup`
-                 leaves it open. An E beyond the fragment is a DERIVED declaration instead.
+                 alternative), or a path (`[:cat …]`, `[:+ r]`, `[:* r]` over atoms). `:sup`
+                 contributes E to an OPEN head; `:eq` CLOSES the head and rejects any slot or
+                 downstream inclusion that would also feed it. An E beyond the fragment is a
+                 DERIVED declaration instead.
 
      (defrelation :child    \"internal membership\"  (:sub :contains))
      (defrelation :view-map \"cross-view link\"      (:eq [:alt :via :contextualizes]))
 
-   DERIVED (a head + a where) — a named datalog rule with a CUSTOM body: the general
-   definitional extension, for anything the inclusion fragment can't say. `head` is the rule's
+   DERIVED (a head + a where) — a named CLOSED datalog view with a CUSTOM body: the general
+   definitional extension, for anything the inclusion fragment can't say. The closed-head check
+   rejects any other contributor to its name. `head` is the rule's
    argument vector; each following body is a clause-vector — ONE body → one rule, MULTIPLE
    bodies → several rules sharing the head, i.e. a RECURSIVE relation (a base clause + a step
    clause that calls the relation). Bodies may reference other injected rules, call predicates,
@@ -1313,7 +1201,7 @@
   [tag {:keys [rel card target alts]}]
   (let [tn (name tag) rn (name rel)
         target-law {:desc (str tn "." rn " target must be a "
-                          (if alts (str/join "|" (map name alts)) (name target)))
+                               (if alts (str/join "|" (map name alts)) (name target)))
                     :offenders '[?x ?t]
                     :where (into [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
                                   ['?x :structure/of tag]]
@@ -1359,13 +1247,7 @@
     (cond-> [type-law]
       (= card :one) (conj none-law))))
 
-;; ── correspondence demand laws: generated from (corresponds …) declarations ──
-;;
-;; ⚠ KNOWN LEAK (2026-07-17, deliberate — do not "defend" it, fix it). The NESTED `twin` rule further
-;; down still NAMES the vocabulary relation `contains`: it hardcodes the morphism's CARRIER ("same name
-;; within twinned containers"). It resolves when the carrier becomes an authored parameter rather than a
-;; name the kernel knows (`:by (name-within Module Ns)`); until then the kernel ships this much
-;; vocabulary, and it only resolves because the vocab happens to declare a genus called `contains`.
+;; ── correspondence laws: generated from external (correspond …) declarations ──
 ;; (The other half of this leak — a cross-container guard welded into a "generic" law — went away with
 ;; the legacy `realized-by-laws`: delegates' realization is now the roll-up relation map, and its
 ;; fidelity is an architectural concern at the Subsystem altitude, not a guard in here.)
@@ -1391,23 +1273,23 @@
   [dtag ftag {:keys [demand key desc when pred by over]}]
   (let [k (demand-key dtag (or key demand))]
     (case demand
-      ;; the OBJECT MAP is total: every design instance has a fact twin (guarded on ∃ extracted fact of
+      ;; the CARRIER is left-total: every design instance has a fact twin (guarded on ∃ extracted fact of
       ;; this kind, so it is vacuously green before any code is extracted).
       :total
       {:key k :offenders '[?x]
-       :desc (or desc (str (name dtag) ": the object map is total — every design instance has a fact twin"))
+       :desc (or desc (str (name dtag) ": the carrier is left-total — every design instance has a fact twin"))
        :where (vec (concat [['?_g :structure/of ftag] '[?_g :val/extracted true]
                             ['?x :structure/of dtag] '(not [?x :val/extracted true])]
                            when
                            ['(not-join [?x] (twin ?x ?t))]))}
-      ;; the OBJECT MAP is surjective onto the codomain — every fact instance has a design preimage.
+      ;; the CARRIER is right-total onto the codomain — every fact instance has a design correspondent.
       ;; `pred` (the codomain restriction, e.g. Fn's `public` test) narrows the codomain to a sub-sort;
       ;; without it, every fact instance of the sort must have a preimage.
       :surjective
       {:key k :offenders '[?x]
-       :desc (or desc (str (name dtag) ": the object map is surjective onto "
+       :desc (or desc (str (name dtag) ": the carrier is right-total onto "
                            (if pred (str "the " (clojure.core/name pred) " sub-sort") (name ftag))
-                           " — every such fact instance has a design preimage"))
+                           " — every such fact instance has a design correspondent"))
        :where (vec (concat [(if pred (list (symbol (clojure.core/name pred)) '?x) ['?x :structure/of ftag])
                             '[?x :val/extracted true]]
                            when
@@ -1423,7 +1305,7 @@
                            when))})))
 
 ;; ── the relation-map primitive: a design relation ↦ a fact expression ─────────
-;; The morphism's non-identity component, authored as `(R incl E)` where `incl` is the relation
+;; A bridge presentation's relation constraint, authored as `(R incl E)` where `incl` is the relation
 ;; INCLUSION ordering the map asserts — `:sub` (⊑, preserve: R ⊆ E), `:sup` (⊒, reflect: R ⊇ E),
 ;; `:eq` (≡, both) — and `E` is a relation-algebra term over fact relations (regular relations / the
 ;; Kleene-algebra operators, spelled as the regex AST malli itself uses):
@@ -1445,7 +1327,7 @@
 (defn- relation-map-laws
   "The generated law(s) for a relation map `(rel incl E)` on `tag`. `E` is a regular-relation expression
    over fact relations, lowered to spliced `reach-clauses` binding two nodes (a complex `E` is a NAMED fact
-   `defrelation`, referenced as an atom). The INCLUSION picks which homomorphism condition(s) to enforce:
+   `defrelation`, referenced as an atom). The INCLUSION picks which correspondence condition(s) to enforce:
      :sub (⊑, preserve) — every design `rel` edge is realized by an `E` reach between the endpoints' twins.
      :sup (⊒, reflect)  — every fact node the twin reaches over `E` is declared on the design side.
      :eq  (≡)           — both.
@@ -1479,9 +1361,9 @@
       :sup [reflect]
       :eq  [preserve reflect])))
 
-;; ── built-in declaration handlers ────────────────────────────────────────────
-;; Each existing construct as a registered handler emitting Terms and/or Laws — the SOLE rule/law
-;; emitter. Both production seams dispatch through here: `laws-of` (the law side) and
+;; ── closed declaration lowering ──────────────────────────────────────────────
+;; Each kernel construct lowers to Terms and/or Laws here — the SOLE rule/law emitter. Both
+;; production seams pass through it: `laws-of` (the law side) and
 ;; `vocab-rules`→`terms-of` (the term side). `fukan.canvas.core.rules` now holds only the fixed
 ;; substrate rules `terms-of` composes in; the declarations-golden test freezes this emission.
 
@@ -1494,72 +1376,51 @@
     [[(list r+ '?a '?b) (list rname '?a '?b)]
      [(list r+ '?a '?b) (list rname '?a '?mid) (list r+ '?mid '?b)]]))
 
-;; Registered with `register-declaration!` + a plain `fn` (not the `defdeclaration` sugar) so the
-;; kernel's own handlers lint natively; `defdeclaration` is the project-facing growth macro.
-(register-declaration! :kind
-  (fn [_ sdef]
-    {:terms [[(list (rule-sym (:tag sdef)) '?e) ['?e :structure/of (:tag sdef)]]] :laws []}))
+;; The kernel declaration algebra is deliberately closed. Vocabulary grows through structures,
+;; relations, rules, laws, and derived authoring forms—not by installing new evaluator semantics.
+;; This exhaustive lowering is therefore both the implementation and the fail-closed boundary.
+(defn- lower-declaration
+  [{:keys [kind slot dir expr body rule demand corresponds law] :as declaration} sdef]
+  (let [tag (:tag sdef)]
+    (case kind
+      :kind
+      {:terms [[(list (rule-sym tag) '?e) ['?e :structure/of tag]]] :laws []}
 
-(register-declaration! :slot
-  (fn [{:keys [slot]} sdef]
-    (let [tag (:tag sdef)]
+      :slot
       (if (scalar-slot? slot)
         {:terms [] :laws (value-slot-laws tag slot)}
         {:terms [[(list (rule-sym (:rel slot)) '?a '?b)
                   ['?r :rel/from '?a] ['?r :rel/kind (:rel slot)] ['?r :rel/to '?b]]]
-         :laws  (relation-slot-laws tag slot)}))))
+         :laws  (relation-slot-laws tag slot)})
 
-;; A relation ELEMENT's INCLUSION — the same (relation, direction, expression) triple a
-;; correspondence relation map states, lowered GENERATIVELY here (within one theory the sentence
-;; is a rule; at the correspondence seam the same sentence is a checked law — the institution
-;; keystone's two halves). `:sub` — the included relation accumulates this one's edges (the old
-;; `:isa` subsumption); `:sup`/`:eq` — this relation is DEFINED from the expression (the old
-;; coproduct was `(:eq [:alt …])`). The included names come from the DECLARATION — the kernel
-;; names no relation of its own.
-(register-declaration! :relation-incl
-  (fn [{:keys [dir expr]} sdef]
-    (let [r (rule-sym (:tag sdef))]
-      {:terms (case dir
-                :sub       [[(list (rule-sym expr) '?a '?b) (list r '?a '?b)]]
-                (:sup :eq) (mapv #(into [(list r '?a '?b)] %) (incl-rule-bodies (:tag sdef) expr)))
-       :laws []})))
+      :relation-incl
+      (let [r (rule-sym tag)]
+        {:terms (case dir
+                  :sub       [[(list (rule-sym expr) '?a '?b) (list r '?a '?b)]]
+                  (:sup :eq) (mapv #(into [(list r '?a '?b)] %) (incl-rule-bodies tag expr)))
+         :laws []})
 
-(register-declaration! :realized-as
-  (fn [{:keys [body]} sdef]
-    {:terms [(into [(list (rule-sym (:tag sdef)) '?e)] body)] :laws []}))
+      :realized-as
+      {:terms [(into [(list (rule-sym tag) '?e)] body)] :laws []}
 
-(register-declaration! :defrelation
-  (fn [{:keys [rule]} sdef]
-    (let [head (apply list (rule-sym (:tag sdef)) (:head rule))]
-      {:terms (mapv (fn [body] (into [head] body)) (:bodies rule)) :laws []})))
+      :defrelation
+      (let [head (apply list (rule-sym tag) (:head rule))]
+        {:terms (mapv (fn [rule-body] (into [head] rule-body)) (:bodies rule)) :laws []})
 
-(register-declaration! :relation-map
-  (fn [{:keys [demand]} sdef] {:terms [] :laws (relation-map-laws (:tag sdef) demand)}))
+      :relation-map
+      {:terms [] :laws (relation-map-laws tag demand)}
 
-(register-declaration! :correspondence
-  (fn [{:keys [corresponds]} sdef]
-    ;; the twin is a CROSS-TAG map: design `dtag` ↦ fact `ftag` (the codomain). A ROOT kind pairs by
-    ;; name-bridge; a NESTED kind pairs same-named instances whose containers already twin. `:val/extracted`
-    ;; still marks the fact side (so `ftag = dtag` degenerates to an identity-on-shared-sort correspondence).
-    (let [dtag (:tag sdef)
-          ftag (:fact-tag corresponds)]
-      {:terms [(if-let [bridge (:bridge corresponds)]
-               [(list 'twin '?a '?b)
-                ['?a :structure/of dtag] (list 'not ['?a :val/extracted true])
-                ['?b :structure/of ftag] ['?b :val/extracted true]
-                ['?a :entity/name '?an] ['?b :entity/name '?bn]
-                ;; a strategy KEYWORD lowers through the generic `name-match` builtin; a SYMBOL is a
-                ;; vocab fn-predicate lowered through its registered port
-                [(if (keyword? bridge) (list 'name-match bridge '?an '?bn) (list bridge '?an '?bn))]]
-               [(list 'twin '?a '?b)
-                ['?a :structure/of dtag] (list 'not ['?a :val/extracted true])
-                ['?b :structure/of ftag] ['?b :val/extracted true]
-                ['?a :entity/name '?n] ['?b :entity/name '?n]
-                (list 'contains '?ca '?a) (list 'contains '?cb '?b)
-                (list 'twin '?ca '?cb)])]
-       :laws (mapv #(node-demand-law dtag ftag %) (:demands corresponds))})))
+      :correspondence
+      (let [ftag    (:fact-tag corresponds)
+            carrier (:carrier corresponds)]
+        {:terms [[(list 'twin '?a '?b) (list (rule-sym carrier) '?a '?b)]]
+         :laws  (mapv #(node-demand-law tag ftag %) (:demands corresponds))})
 
-(register-declaration! :free-law (fn [{:keys [law]} _sdef] {:terms [] :laws [law]}))
+      :free-law
+      {:terms [] :laws [law]}
+
+      (throw (ex-info (str "unknown declaration kind " kind)
+                      {:declaration declaration :structure tag})))))
 
 (defn- binary-rule-names
   "Every relation name `structures` gives a BINARY rule: non-scalar slot kinds, relation elements
@@ -1578,27 +1439,64 @@
                            (when (:relation-element sd) [(:tag sd)])))))
        (map rule-sym) (distinct) (sort)))
 
+(defn- relation-head-contributions
+  "Every declaration that contributes clauses to a relation head. A contribution marked
+   `:definition?` is the owning relation element's own definition; slots and `:sub` inclusions are
+   external contributors. Used to make open/closed relation semantics an enforced invariant rather
+   than prose."
+  [sdef]
+  (concat
+   (for [slot (remove scalar-slot? (:slots sdef))]
+     {:head (:rel slot) :owner (:tag sdef) :via :slot})
+   (when-let [{:keys [incl expr]} (:relation-incl sdef)]
+     [(if (= :sub incl)
+        {:head expr :owner (:tag sdef) :via :sub-inclusion}
+        {:head (:tag sdef) :owner (:tag sdef) :via incl :definition? true})])
+   (when (:derived-rule sdef)
+     [{:head (:tag sdef) :owner (:tag sdef) :via :derived :definition? true}])))
+
+(defn- validate-closed-relation-heads!
+  "Reject contributors to a CLOSED relation head other than its own definition. Derived
+   `defrelation`s and `(:eq E)` inclusions are closed; bare and `(:sup E)` relation elements are
+   open. Returns `structures` for threading."
+  [structures]
+  (let [closed (into {}
+                     (for [sdef structures
+                           :when (or (:derived-rule sdef)
+                                     (= :eq (:incl (:relation-incl sdef))))]
+                       [(:tag sdef) (:tag sdef)]))]
+    (doseq [{:keys [head owner definition?] :as contribution}
+            (mapcat relation-head-contributions structures)
+            :let [closed-owner (closed head)]
+            :when (and closed-owner
+                       (not (and definition? (= owner closed-owner))))]
+      (throw (ex-info (str "closed relation " head " is defined by " closed-owner
+                           " and cannot also be fed by " owner " via " (:via contribution))
+                      {:relation head :defined-by closed-owner :contribution contribution})))
+    structures))
+
 (defn ^:export terms-of
-  "All derived Terms over `structures` via the declaration handlers + every binary relation's
+  "All derived Terms over `structures` via closed declaration lowering + every binary relation's
    closure rules (`binary-rule-names`) + the fixed substrate rules (`rules/substrate-rules`) —
    the SOLE term emitter, dispatched by `vocab-rules`. The declarations-golden test freezes its
    self-model output.
 
    The kernel names NO relation of its own: a containment genus and any relation derived from it
-   (`within`) are declared by the VOCABULARY as relation elements (`defrelation`), not emitted
+  (`within`) are declared by the VOCABULARY as relation elements (`defrelation`), not emitted
    here. (Until 2026-07-17 this hardcoded the symbol `contains`, its closure, and `in-module` —
    code vocabulary welded into the kernel.)"
   [structures]
-  (vec (distinct (concat (mapcat (fn [sdef]
-                                   (mapcat #(:terms (handle-declaration % sdef)) (sdef->declarations sdef)))
-                                 structures)
-                         (mapcat closure-rules (binary-rule-names structures))
-                         rules/substrate-rules))))
+  (let [structures (validate-closed-relation-heads! (vec structures))]
+    (vec (distinct (concat (mapcat (fn [sdef]
+                                     (mapcat #(:terms (lower-declaration % sdef)) (sdef->declarations sdef)))
+                                   structures)
+                           (mapcat closure-rules (binary-rule-names structures))
+                           rules/substrate-rules)))))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :any]] :map]}
   correspondence*
-  "The correspondence SEAM of `sdefs` as one data structure — the collected morphism (pure;
-   `correspondence` applies it to the live registry). {:kinds tag→{:bridge :demands},
+  "The correspondence SEAM of `sdefs` as one data structure — the collected bridge presentation (pure;
+   `correspondence` applies it to the live registry). {:kinds tag→{:carrier :coverage :demands},
    :relations [{:owner :rel …demand options… :keys}], :keys full-key→source-pointer}. Assembling
    the `:keys` index GUARDS cross-family key collisions (two declarations deriving one law key
    would silently union their offender sets in `violations-of`) — it throws, naming both sources.
@@ -1612,7 +1510,7 @@
                         (for [{:keys [tag]} sdefs
                               :let [c (correspondence-of tag)]
                               :when c]
-                          [tag (-> (select-keys c [:bridge])
+                          [tag (-> (select-keys c [:carrier :coverage])
                                    (assoc :demands (effective-node-demands tag))
                                    (update :demands
                                            (fn [ds] (mapv #(assoc % :key (demand-key tag (or (:key %) (:demand %)))) ds))))]))
@@ -1657,7 +1555,7 @@
    (the Cozo law compiler) can evaluate the identical laws. Dispatched through the declaration
    handlers (no consumer depends on law order — every one treats the result as a set)."
   [sdef]
-  (vec (mapcat #(:laws (handle-declaration % sdef)) (sdef->declarations sdef))))
+  (vec (mapcat #(:laws (lower-declaration % sdef)) (sdef->declarations sdef))))
 
 (defn ^{:malli/schema [:=> [:cat [:vector :any]] :any]}
   direct-scope-tags
@@ -1676,8 +1574,8 @@
   "The datalog rules derived from the live vocabulary (one per kind + per relation
    slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
    at domain altitude: `(Operation ?s) (within ?s \"…\") (calls ?s ?c)`. Emitted through the
-   declaration handlers via `terms-of` — the same registry seam the law side (`laws-of`) dispatches
-   through; the declarations-golden test freezes this seam's self-model output."
+   closed lowering via `terms-of` — the same path the law side (`laws-of`) uses; the
+   declarations-golden test freezes this seam's self-model output."
   []
   (terms-of (all-structures)))
 
@@ -1687,24 +1585,3 @@
 ;; EVALUATES them and depends on the kernel one way — so there is no `structure ↔ law` cycle and no
 ;; registry. (This was a hollow kernel `check` shell dispatching to a registered backend; that
 ;; indirection papered over the cycle and is gone.)
-
-;; ── correspondence comparator SPI ─────────────────────────────────────────────
-;; A `(corresponds … (agrees {:by <key>}))` demand gates a per-twin-pair AGREEMENT whose comparison
-;; is not datalog-expressible (e.g. type-signature adherence). The comparator is a registered
-;; `(fn [db design-eid fact-eid] → bool)` — it owns BOTH extracting each side's comparable value AND
-;; comparing them, so the kernel's correspondence machinery stays agnostic to what is compared (the
-;; law engine just runs the registered comparator over the twin pairs the demand enumerates). Fourth
-;; instance of the kernel's delegation pattern (typing plug-point, predicate-port, value-valid? hybrid).
-(defonce ^:private comparators (atom {}))
-
-(defn ^:export ^{:malli/schema [:=> [:cat :keyword :any] :nil]}
-  register-comparator!
-  "Register a correspondence COMPARATOR: `key → (fn [db design-eid fact-eid] → boolean)`. An
-   `(agrees {:by key})` demand runs it over each twin pair; a false result is a violation.
-   Re-registering a key replaces it."
-  [key f] (swap! comparators assoc key f) nil)
-
-(defn ^:export ^{:malli/schema [:=> [:cat :keyword] :any]}
-  comparator-for
-  "The registered comparator fn for `key`, or nil."
-  [key] (@comparators key))

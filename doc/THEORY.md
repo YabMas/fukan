@@ -10,210 +10,298 @@ design principles), [MODEL.md](./MODEL.md) (the substrate spec), and
 
 ## One sentence
 
-Fukan is a workbench for **theory presentations and theory morphisms** — the
-algebraic-specification tradition running from Burstall–Goguen's *putting theories
-together* to institutions — in which the one concrete logic every sentence is
-written in is **Datalog over a typed relational model**.
+Fukan is a **language-growing deductive-modelling workbench**: vocabulary
+declarations form a relational presentation; authored and extracted instances
+form one finite database; Datalog derives its views; laws are denial constraints;
+and verification means that every violation query is empty.
 
-Everything in fukan is an instance of one of two pillars:
+The formal centre is one object, a deductive presentation:
 
-- **The meta-theory: presentations & morphisms.** What a specification *is* (a
-  signature plus sentences), what relates specifications (morphisms — maps that
-  carry one theory's vocabulary into another's and induce proof obligations), and
-  what it means for a model to satisfy one (⊨). This pillar answers what kind of
-  *thing* every fukan construct is.
-- **The object logic: Datalog.** The deductive-database tradition — stratified
-  negation, semi-naive fixpoint evaluation, definitional extensions. Every law,
-  demand, derived rule, and query compiles to this one logic (CozoScript over the
-  typed-EAV view). Within it one sub-language is deliberately carved out: the
-  **Kleene fragment** — regular relations (`:cat` / `:*` / `:+` / `:?` / `:alt`,
-  the shape of SPARQL property paths) — ONE expression language with three inline
-  homes: a correspondence relation map, an inclusion element, and a law/lens
-  `(path ?from E ?to)` clause. Recursion beyond simple closure (closure over a
-  compound) must graduate to a *named* definitional extension (`defrelation`).
-  The fragment line is a rule of the authoring surface, not a convention.
+```text
+P = (Σ, R, C)
 
-The pillars compose cleanly because the first never dictates a logic — institutions
-are logic-independent by design — and the second is fukan's chosen instantiation.
+Σ  relational vocabulary     — unary kinds, binary relations, scalar attributes
+R  intensional definitions   — stratified Datalog rules and aggregates
+C  constraints               — offender queries, read as denials
+```
 
-An honesty note the frame requires: fukan today is **one** institution — Datalog
-over the typed-EAV substrate. The type-dialect SPI parameterizes the *sort
-universe* (base scalar sorts plus refinements), not the sentence language. "The
-logic is a plug-point" is a door the frame leaves open, not a current capability;
-claiming more would be decoration.
+Given finite ground facts `M`, evaluation computes the stratified least-fixed-point
+closure `Cl_P(M)`. Satisfaction is:
 
-A second honesty note, stating a choice rather than a hole: fukan has **no proof
-theory**. The only judgment anywhere is ⊨, decided by evaluation over a finite
-structure — laws, generated demands, and a morphism's proof obligations alike are
-*model-checked*, never derived. The workbench's claims are about one concrete
-model, and evaluation decides them; a ⊢ is not missing, it is not the instrument.
+```text
+M ⊨ P    iff    offenders_c(Cl_P(M)) = ∅    for every c in C
+```
+
+This is the whole semantic loop. Define extends `P`; model adds facts to `M`;
+verify computes the closure and checks the denials; lens and projection query or
+render that same closure. A violation is a counterexample witness.
+
+Fukan has no proof calculus. It establishes that one concrete finite model
+satisfies the loaded presentation; it does not establish semantic consequence
+between presentations or prove that every model of one presentation satisfies
+another.
+
+## The foundation
+
+The primary formal home is the deductive-database tradition: EDB facts, IDB
+rules, stratified fixed-point semantics, queries, and integrity constraints. The
+algebraic-specification tradition supplies the discipline for composing small
+presentation fragments, but does not add a second semantic mechanism. Fukan has
+one loaded presentation and one evaluator.
+
+The implementation stores the model as typed EAV, but that is a representation,
+not the author-facing logic. At the authoring level a structure kind is a unary
+predicate, a relation slot is a binary predicate, and scalar slots are attributes
+whose type and cardinality declarations generate constraints. Sorts are therefore
+predicates constrained over one relational universe, not disjoint carrier sets of
+an independently implemented many-sorted logic.
+
+The supported sentence language is the Datalog subset compiled by the Cozo
+engine, including stratified negation, regular-path expansion, and stratified
+aggregation, together with an explicit set of configured semantic built-ins.
+Scalar validators and explicitly configured predicate ports belong to that
+configuration: they affect satisfaction and are not mere harness wiring. Every
+accepted law must be evaluable; unsupported laws make `check` fail rather than
+silently count as satisfied.
 
 ## The map
 
-Every mechanism, with its reading. This table is the frame's contract with the
-codebase: a mechanism that cannot name its row is suspect.
+Every live mechanism lowers to one of four semantic forms or to notation over
+them. This table is the frame's contract with the codebase.
 
-| Construct | Reading |
+| Construct | Formal reading |
 |---|---|
-| the model db (Cozo, typed EAV) | a finite relational structure — the *model*, in the Tarskian sense |
-| instance forms + the assembler | a **finitely presented model**: ground atoms authored position-for-position against the presentation; identity = the qualified var name |
-| `defstructure` | a **theory presentation**: a signature fragment (a sort, its relations with cardinalities) plus axioms |
-| `law` + `check` | **sentences** + the satisfaction relation ⊨; a violation is a counterexample witness |
-| generated laws (type checks, cardinality, correspondence demands) | derived sentences of the same presentation — one sentence kind, never a second mechanism |
-| the authoring surface — instance macros, law combinators, `(reader f)` / `(syntax f)` hooks, `bridge` strategies | **derived forms**: notation elaborating at authoring time into the four kernel things — eliminable and non-creative, or it isn't notation (see "Growing the language") |
-| derived `defrelation` | a **definitional extension** — a named (possibly recursive) rule, conservative over the presentation |
-| relation inclusion `(defrelation :r "…" (:sub E))` | a subrelation **inclusion** — the SAME (relation, direction, expression) triple a correspondence relation map states. Within one theory it lowers *generatively* (a rule: the included relation accumulates the edges); at the correspondence seam the same triple lowers as a *checked* law — the keystone's two halves ("a theory morphism IS a derived datalog rule; satisfaction IS a scoped check") |
-| `correspond` | a **theory morphism**: a sort map with codomain restriction (`Operation :eq [Fn :public]`), relation maps with a direction (`:sub` ⊑, `:sup` ⊒, `:eq` ≡), a carrier correlation (`bridge`), and *generated* satisfaction laws — the morphism's proof obligations, run by `check` like any sentence |
-| extraction | the semantics side of the seam: artifact → a model of the fact theory |
-| the design⊕code merge (`union-dbs`) | **model amalgamation** over the signature sum — the one-graph thesis under its formal name: the assembled design model and the extracted fact model amalgamate into one structure both theories constrain |
-| `^:value` structures | **free (initial) types** — terms, identified up to structural equality, no junk and no confusion; plain structures are **loose sorts** — entities with individual identity. (CASL draws exactly this line: `free type` vs `sort`.) |
-| the type-dialect SPI | the sort universe as a parameter: base sorts and predicate subsorts supplied by a plugin |
-| inline path `E` vs named `defrelation` | the **regular** (Kleene) fragment stays inline; recursion beyond it must be named — the fragment line, enforced. (Over a finite model everything is decidable — the line is regular vs general recursion, the shape of regular path queries.) Transitive closure belongs to the fragment, so it is the **compiler's**: every binary relation's `R+` is minted unconditionally and injected only where referenced — nothing declares "transitive" |
-| `measure` clauses | **stratified aggregation** — pillar 2's standard extension, sentence language not sugar: an inline aggregate lifts to an auxiliary rule head at compile time |
-| Lens / Projection / Check | a specification's three classical relations to a model: restriction (an induced substructure), interpretation (a rendering), satisfaction (a gate) |
-| grammar reflection | the frame **internalized**: the meta-grammar (`Structure` / `Law` / `Vocabulary` / `Relation` / `Morphism` / `RelationMap`) is a presentation of "presentation" — and of "morphism" — so the grammar and its seams are data on the same graph they govern; a `Vocabulary` reflects as a signature with owned relations and derived `:imports` |
-| the grouping ladder, refinement chains | theory **extensions**, in two modes the frame distinguishes: **definitional** — a defined relation (`:sup`/`:eq`, a derived rule): conservative, eliminable — and **accumulative** — an open genus fed by downstream inclusions (`:child` ⊑ `:contains` *adds edges* to `contains`): non-conservative by design. An open head is Datalog's native extension point; a bare `defrelation` genus is the declaration of openness, a defined relation is closed |
+| the loaded registry | one deductive presentation `P = (Σ, R, C)` |
+| a namespace `Vocabulary` | a provenance-bearing presentation fragment; its `:imports` are derived dependencies, not an independent signature category |
+| `defstructure` | a declaration bundle: one kind predicate, slot predicates/attributes, generated cardinality and target constraints, and an instance constructor |
+| a structure instance | finite EDB facts in `M`; named instances have qualified-var identity |
+| extraction | a trusted model producer: artifact → finite fact fragment |
+| the build | construction of one joint finite structure from design facts, extracted facts, and shared canonical values |
+| `law` | a denial constraint represented by its offender query |
+| `check` | the satisfaction decision above; empty offenders means satisfied, non-empty means refuted, inability to evaluate is an error |
+| bare `defrelation` | declaration of an **open** relation head to which later fragments may contribute rules |
+| derived `defrelation` | a fresh **closed IDB view**; under the closed-head discipline it is a conservative definitional extension |
+| `(:sup E)` relation inclusion | a definition that contributes `E` to an open relation head |
+| `(:eq E)` relation inclusion | a closed definition of a relation by `E`; other contributors to the head are rejected |
+| `(:sub R)` relation inclusion | an accumulative extension: this relation contributes its edges to the open head `R` |
+| inline path `E` | the deliberately small regular-path surface fragment; compound recursion graduates to a named `defrelation` |
+| `measure` | stratified aggregation, lowered to an auxiliary rule head |
+| `correspond` | a **bridge presentation** over design and fact vocabularies: carrier relations, relation-preservation/reflection constraints, and generated denials |
+| grammar reflection | reification of the normalized presentation as facts in a meta-vocabulary |
+| Lens / Projection | queries and readback over the closure; they add no new model semantics |
 
-## The test
+`^:value` structures deserve a deliberately modest reading: they are canonical
+structural values — ground record-like terms identified by structural content.
+This gives sharing and no unintended duplication among authored values. It does
+not by itself establish constructor generation, no-junk, no-confusion, or an
+initial-algebra semantics, so fukan does not call them free types.
 
-The frame earns its keep as a gate on growth. Every proposed mechanism must answer
-one question before it exists:
+## Composition and correspondence
 
-> **Is it a presentation, a sentence, a definitional extension, a morphism — or a
-> derived form?**
+Presentation fragments compose by contributing declarations, rules, and
+constraints to the one loaded `P`. Their namespaces record provenance and their
+derived `:imports` edges make dependencies inspectable. Today rule resolution is
+global, so these fragments are modules of one presentation, not independent
+signatures joined by institutional signature morphisms.
 
-If it is one of the first four, it should *look like* the existing instances of
-its row — same declaration shape, same generated-law discipline, same reflection.
-If it is a derived form — notation — it must **eliminate**: expand into the four
-with no remainder and no meaning of its own ("Growing the language" below carries
-the criterion). If it is none of the five, the burden of proof is on the
-mechanism: most "none of the above" proposals are one of the five wearing a
-costume, and the costume is debt. (The correspondence DSL's history is the
-cautionary tale, re-read by the criterion: six bespoke demand forms were
-*creative* notation — meaning with no kernel expression, because the morphism had
-no codomain. Restoring the missing theoretical part collapsed the DSL, not the
-other way around.)
+Design and extracted code are likewise not independently built models later
+amalgamated by a universal construction. The builder constructs one joint model
+over their combined vocabulary in one pass. Structurally equal `^:value` nodes
+are shared across the two strata by canonical identity.
 
-The companion discipline still binds ([DESIGN.md](./DESIGN.md)): the frame says
-what a mechanism *is*, never that it should exist. Vocabulary and mechanism alike
-grow only under concrete modelling pressure.
+`correspond` adds an ordinary bridge fragment to that presentation. Its carrier
+is not a second matching language: vocabulary authors first declare an ordinary
+binary `defrelation`:
+
+```text
+C_s ⊆ Design_s × Fact_s
+```
+
+`correspond` then names that relation and states its coverage independently:
+`:design` means left-total, `:fact` means right-total onto the optionally
+restricted fact kind, and `:both` means both. Coverage never implies
+functionality or injectivity. The tokens `:sub`, `:sup`, and `:eq` are reserved
+for actual relation inclusion. Relation maps generate the two familiar
+conformance directions:
+
+```text
+:sub  preserve — every design edge is realised by the fact expression
+:sup  reflect  — every fact reach is declared by a design edge
+:eq   both
+```
+
+These constraints are checked in the concrete joint model. Calling the bridge a
+theory morphism would require more: explicit sentence translation and a result
+that the target presentation entails every translated source axiom for all of
+its models. Fukan neither needs nor claims that result. The bridge-presentation
+reading preserves the useful shape of the current authoring form without
+granting it stronger mathematics than it implements.
+
+## The canonical authoring model
+
+The whole authoring surface has one operational reading:
+
+> Authors declare predicates and rules with Clojure data, add facts with instance
+> forms, and forbid witnesses with laws. Every convenience form normalizes to
+> those operations.
+
+The forms have disjoint jobs:
+
+| Form | Canonical contribution |
+|---|---|
+| `defstructure` | a constructible kind predicate, its slot predicates/attributes, and generated well-formedness denials |
+| a structure/value instance | finite ground facts |
+| `defrelation` | an open relation head, inclusion, or closed derived Datalog view |
+| `law` | a denial constraint whose query returns counterexample witnesses |
+| `correspond` | denials over an already-declared carrier relation and its relation maps |
+
+Identity is equally explicit: ordinary structures construct named entities, so
+their instance form always starts with a binding/name symbol; only `^:value`
+structures construct anonymous, content-identified values. Both elaborate to
+ground facts—the distinction determines identity, not a second model language.
+
+The slots map is the canonical instance representation. An inline `(syntax f)`
+hook may provide vocabulary-local sugar, but it is a deterministic map-to-map
+elaborator and the map form always remains valid. A `{:form true}` scalar slot
+marks declaration-position code data, so authors write Datalog forms unquoted
+there just as they do in a law; quoting belongs to evaluated runtime calls.
+
+Normalized readback follows the same boundary. `structure-form` produces a valid
+`defstructure`; `correspondence-form` produces the separate valid top-level
+`correspond`. Sugar need not round-trip textually, but normalized output must be
+accepted input at every layer.
 
 ## Growing the language
 
-[VISION.md](./VISION.md) names the premise — *bottom-up language building,
-top-down design*, the Lisp tradition of stratified languages. This section gives
-the premise the same formal standing as the rest of the frame. The claim:
-**"growing a language" is the dynamics of pillar 1.** Burstall–Goguen's *putting
-theories together* describes what a grown language *is*; Steele's *Growing a
-Language* describes the act of growing one. No third pillar. Growth happens in two
-places, is observed in a third, and is safe because of a fixed point:
+[VISION.md](./VISION.md) names the premise: *bottom-up language building,
+top-down design*. It has four precise parts, all terminating at the fixed
+deductive kernel.
 
-**Growth in theories — the library.** A vocabulary is a presentation; growing the
-language is extending a *diagram* in the category of theories. The grouping
-ladder, the code grammar, the pattern tier above it, a project's own vocabulary —
-each is a node in that diagram, and the reflected `Vocabulary`'s derived
-`:imports` edges are the diagram *internalized*: the growth structure is data on
-the graph it grew. The two extension modes (definitional vs accumulative — see
-the map) are the two Lisp growth moves under their formal names: defining a new
-word (closed, conservative, eliminable) and opening a generic that later
-vocabularies feed (an open genus — Datalog's open head as the declared extension
-point).
+### Semantic growth — extend the presentation
 
-**Growth in notation — derived forms.** Everything the authoring surface adds
-above the kernel's four things — the instance macros mirroring `defstructure`,
-the law combinators, the `(is …)` sort pin, `(reader f)` / `(syntax f)` hooks,
-`bridge` strategy keywords — is a **derived form**: notation elaborating at authoring time into
-presentations, sentences, extensions, or morphisms. The classical theory of
-definitions supplies the discipline a macro system needs: a derived form must be
-**eliminable** (it expands away without remainder) and **non-creative** (it
-expresses nothing the kernel forms cannot). Steele's actual thesis — grown words
-must be indistinguishable from primitives — is the generated-law discipline ("one
-sentence kind, never a second mechanism") extended from semantics to syntax. A
-**phase line** rides with it: derived forms elaborate strictly before assembly,
-and may consult only the *signature* (the registry), never the *model* — notation
-cannot peek at satisfaction. (The REPL's defonce-registry caveats — the collision
-guard tripping on a moved `defrelation` — are leaks across this phase line: a
-named cost of interactive growth, not a mystery.)
+Growing vocabulary changes `P` in one of three declared ways:
 
-**The register rule — theory content declares; machinery registers.** The
-authoring surface has two registers, and the split tracks the test exactly.
-Anything that *is* one of the four kernel things speaks in a declaration form:
-`defstructure` (a presentation element), `defrelation` (a relation element / an
-inclusion sentence), `correspond` (a morphism's sort map). Anything that is
-harness wiring speaks in a plain registry call: `register-syntax!`,
-`register-type-dialect!`, `register-extractor!`, `register-comparator!` — hooks
-realizing a plug-point, not content of any theory. The asymmetry is signal, not
-inconsistency: promoting a hook to a declaration form for symmetry would dress
-machinery as theory content — the costume the test exists to catch, worn in the
-other direction. So a new mechanism's surface register is decided by its test
-answer (one of the four → declare; wiring → register), and a `register-*` call
-that starts wanting a declaration form is a hint its content has quietly become
-theory — re-run the test on it.
+1. **Definitional extension.** Introduce a fresh closed IDB predicate. Old facts,
+   old derived relations, and old query answers are unchanged; the new name is
+   eliminable into its definition.
+2. **Accumulative extension.** Add a rule to a head explicitly declared open.
+   Existing derived answers may grow. Relation genera such as `contains` are
+   extension points of this kind.
+3. **Constraint refinement.** Add a law. The closure is unchanged, but the class
+   of acceptable models shrinks. This is top-down design pressure in its exact
+   semantic form.
 
-**Growth observed — homoiconicity.** Reflection is quotation: the meta-grammar is
-a presentation of "presentation", so the grown language — vocabularies, morphisms,
-the imports diagram — is data on the same graph it governs. The print-dual is
-unquotation, and two properties make "code is data" a property rather than a
-slogan: **adequacy** — every registry element reflects — and **faithfulness** —
-reflect-then-print round-trips to the authored form (the print-dual round-trip
-tests and the declarations golden are this theorem's suite).
+Adding facts is not language growth; it is model growth and may turn existing
+constraints red. Keeping those two axes separate prevents authoring notation or
+model ingestion from silently changing the meaning of the vocabulary.
 
-The premise's other half — top-down design — needs no new seat: design pressure
-*is* sentences, and holding an implementation to them *is* the morphism's
-obligations.
+### Syntactic growth — elaborate into the kernel
 
-**The fixed point — the logic never grows.** Lisp keeps `eval` small and pushes
-all growth into libraries and macros; fukan keeps the institution fixed and pushes
-all growth into theories and derived forms — `eval : logic :: library : theories
-:: macro : derived forms`. Expressive freedom lives exactly on the
-vocab-and-model axis; everything else stays rigid to fund it. This is the honesty
-note above read as a positive law, not an apology.
+Instance macros, law combinators, `(is …)`, readers, and inline syntax hooks are derived
+forms governed by an elaboration:
 
-## Known deviations
+```text
+elab_Σ : Surface → {declarations, rules, constraints, facts}
+```
 
-Tracked here so the fundament carries no silent holes.
+An elaborator must be deterministic and total on accepted forms, run before
+assembly, inspect only the loaded vocabulary, and leave no semantic remainder.
+Its correctness criterion is semantics preservation: evaluating the surface form
+means evaluating its elaboration. A form that needs a new evaluator, host callback,
+or model-dependent expansion is not notation; it is a proposed extension of the
+semantic kernel and must be named and judged as such.
 
-- **~~The signature is implicit and global.~~ Closed, with one declared residual.**
-  A relation element's name is now *signature identity*: re-declaring it from a
-  second namespace throws at registration (the silent replace-on-register is gone).
-  The reflected `Vocabulary` is a genuine signature: the sorts it defines, the
-  relation elements it declares (ownership rides the element's recorded `:ns`), and
-  its inclusions — `:imports` edges *derived* from actual use (slot targets, law
-  rule-calls, `:isa` genera, correspondence codomains; entail, don't store). The
-  declared residual: rule *names* stay global — laws resolve `(contains …)` against
-  one shared rule namespace, like vars in one Clojure runtime. With collisions loud,
-  that is a constraint, not a hole; per-signature name *resolution* stays tied to
-  the relations-first-class north star (slot-only relations like `:calls` belong to
-  no signature yet — visible in the reflected graph as unowned `Relation` nodes).
-- **~~The morphism is under-reflected.~~ Closed.** A correspondence now reflects
-  as a `Morphism` node in the meta-grammar (`:from`/`:to` edges to its domain and
-  codomain `Structure`s, the inclusion / restriction / bridge as queryable fields,
-  `RelationMap` children for the relation maps), and a derived `defrelation`
-  carries its defining rule on its `Relation` node — the morphism is data, like
-  the presentations it connects.
-- **One logic.** As noted above: the object logic is Datalog, unparameterized.
-  Left open deliberately; not scheduled.
+This is the formal integration of the Lisp premise. Steele's *Growing a Language*
+supplies the design aim — users participate in building the language from small
+words. Languages-as-libraries and macro elaboration supply the implementation
+discipline — grown surface words lower into a small stable core. Algebraic
+specification describes the semantic result: a larger presentation assembled
+from smaller fragments. No additional pillar is required.
+
+### Machinery has explicit boundaries
+
+The old declaration-versus-registration rule is refined by semantic effect:
+
+- `reader`, inline `syntax`, and law-combinator machinery are surface elaborators;
+- extractors are model producers;
+- the type dialect and predicate ports are semantic built-ins or compiler backend
+  configuration because they can affect satisfaction;
+- declaration lowering is closed and exhaustive: unknown declaration kinds fail.
+
+The core may keep genuine configuration behind registries, but registration does
+not make a semantic dependency into mere wiring. Vocabulary growth does not
+install evaluator handlers, correspondence comparators, or carrier callbacks;
+those meanings are expressed with the fixed kernel and ordinary Datalog. The
+effective logic configuration must be fixed for a build and visible to diagnostics.
+
+### Reflection — reify and read back
+
+Reflection is not the host Lisp's homoiconicity. Clojure source is already data;
+fukan additionally reifies its normalized presentation into the model:
+
+```text
+reify   : Kernel → Model_meta
+readback(reify(k)) = normalize(k)
+```
+
+The first property to maintain is coverage: every kernel declaration has a
+meta-model representation. The second is the round trip above, modulo explicit
+normalization. The print-dual is readback, not unquotation. This sharper account
+keeps the valuable self-description claim without conflating three distinct
+operations: Lisp syntax-as-data, registry reification, and source rendering.
+
+## The admission test
+
+Every proposed feature must answer two questions:
+
+1. **Which kernel form does it contribute — declaration, fact, rule, or denial?**
+2. **Does it change semantics, or only elaborate notation?**
+
+A semantic contribution should use the existing declaration shape, reflection,
+and checking discipline. A derived form must eliminate completely into existing
+kernel forms. A model producer may add facts but not rules or laws. A semantic
+built-in must be explicit, total on its declared domain, and fixed for the build.
+
+If a proposal answers none of these, the burden of proof is on the mechanism.
+This gate concentrates freedom on the two axes fukan values — vocabulary
+authoring and model building — while keeping evaluation, checking, and reflection
+constrained enough to make that freedom dependable.
+
+## Known boundaries
+
+- **One global presentation.** Structure tags are qualified and relation-element
+  collisions are loud, but rule calls still resolve through one global namespace
+  and slot-only relations have no declaring `Vocabulary`. Namespace fragments are
+  useful modules, not yet independent formal signatures.
+- **Configured built-ins.** Scalar validation and registered comparators do not
+  compile entirely to CozoScript. They are explicit semantic configuration of
+  the current evaluator. Moving them to materialized relations or compiled rules
+  would narrow this boundary further.
+- **One logic.** The sentence language is not a plug-point. Generalizing to
+  multiple institutions is neither implemented nor required by the current
+  verified-modelling aim.
 
 ## Lineage
 
-The short shelf behind the two pillars:
+The short shelf behind the foundation:
 
-- Burstall & Goguen, *Putting Theories Together to Make Specifications* (1977) —
-  specifications compose from small theories; the origin of pillar 1.
-- Goguen & Burstall, *Institutions: Abstract Model Theory for Specification and
-  Programming* (1992) — signatures, sentences, models, ⊨, and morphisms,
-  logic-independently.
-- Sannella & Tarlecki, *Foundations of Algebraic Specification and Formal Software
-  Development* (2012) — the modern synthesis: presentations, free vs loose
-  semantics, views, refinement.
-- Ceri, Gottlob & Tanca, *What You Always Wanted to Know About Datalog (And Never
-  Dared to Ask)* (1989) — pillar 2's charter.
-- Kozen, *Kleene Algebra with Tests* (1997), and SPARQL 1.1 property paths — the
-  shape of the inline path fragment and the public-call-graph quotient.
-- Steele, *Growing a Language* (OOPSLA 1998) — the growth premise; formalized here
-  as the dynamics of pillar 1.
+- Ceri, Gottlob & Tanca, *What You Always Wanted to Know About Datalog (And
+  Never Dared to Ask)* (1989) — the semantic centre: EDB, IDB, recursion,
+  fixed-point evaluation, and querying.
+- Burstall & Goguen, *Putting Theories Together to Make Specifications* (1977)
+  — the modular-presentation discipline: build larger languages from small
+  specification fragments.
 - Tobin-Hochstadt, St-Amour, Culpepper, Flatt & Felleisen, *Languages as
-  Libraries* (PLDI 2011) — the modern formal home of language growing: derived
-  forms elaborating into a small kernel, behind a phase discipline.
-- Suppes, *Introduction to Logic* (1957) — the criteria of definition,
-  eliminability and non-creativity; the derived-form gate.
+  Libraries* (2011) — extensible surface languages elaborating into a stable
+  host kernel behind a phase boundary.
+- Steele, *Growing a Language* (1998) — the motivating Lisp vision: a language
+  should be designed so its users can grow it.
+- Goguen & Burstall, *Institutions: Abstract Model Theory for Specification and
+  Programming* (1992) — the precision standard for signatures, sentence
+  translation, model reduct, and satisfaction under change of notation; retained
+  as a guard against calling a model-level correspondence a theory morphism.
+
+CASL free types, Kleene algebra with tests, SPARQL property paths, and classical
+definition criteria remain useful comparative references where a concrete
+mechanism calls for them. They are not additional foundations of the current
+kernel.

@@ -6,7 +6,8 @@
             ;; loaded for its side-effect: registers the Cozo check engine so (law/check db) dispatches to it
             [fukan.cozo.law :as law]
             [fukan.canvas.core.structure :as s]
-            [fukan.canvas.core.substrate :as sub]))
+            [fukan.canvas.core.substrate :as sub]
+            [fukan.common.vocab.grouping]))
 
 (deftest instance-value-record-holds-composition
   (let [iv (sub/->InstanceValue :Box "A" nil {} [] false)]
@@ -99,14 +100,14 @@
     (is (= [[0 "x"] [1 "y"]] rels))
     (is (empty? labels) "bare sequence slot carries no :rel/label")))
 
-;; ── entity name defaults to the binding var's simple name ────────────────────
+;; ── entity names are explicit; values alone are anonymous ───────────────────
 (s/defstructure Named "n" {:doc [:? :string]})
 
-(def nm-derived (Named))                    ; expression form, no name → derived from the var
+(Named nm-derived)                          ; symbol is both var and entity name
 (Named ^{:name "explicit"} nm-override)     ; ^{:name} meta → overrides the var
 
-(deftest entity-without-a-name-takes-the-vars-simple-name
-  (is (nil? (:name nm-derived)) "the InstanceValue carries no name until assembly")
+(deftest entity-name-comes-from-the-required-symbol
+  (is (= "nm-derived" (:name nm-derived)) "the InstanceValue carries its authored entity name")
   (let [db (build/vars->cozo [#'nm-derived #'nm-override])]
     (is (= "nm-derived"
            (:entity/name (cq/entity db [:entity/id (sub/var-id #'nm-derived)])))
@@ -114,6 +115,16 @@
     (is (= "explicit"
            (:entity/name (cq/entity db [:entity/id (sub/var-id #'nm-override)])))
         "^{:name \"…\"} meta overrides — for names the var can't carry / renamed vars")))
+
+(deftest ordinary-entities-cannot-be-anonymous
+  (let [error (try
+                (let [_ (macroexpand-1 '(fukan.canvas.core.value-authoring-test/Named))]
+                  nil)
+                (catch clojure.lang.Compiler$CompilerException e e))]
+    (is (some? error) "anonymous entity construction fails at macro-expansion")
+    (is (instance? clojure.lang.ExceptionInfo (ex-cause error)))
+    (is (re-find #"entity instances require a name symbol" (ex-message (ex-cause error)))
+        "anonymous construction belongs exclusively to ^:value structures")))
 
 ;; ── Task 4: ^:value structures — anonymous, content-identified ───────────────
 
@@ -128,6 +139,7 @@
 
 (def t4-atom (Atom :io))
 
+#_{:clj-kondo/ignore [:unused-binding]}
 (defn t4-atom-of [kw]
   (Atom kw))
 

@@ -1,11 +1,12 @@
 (ns fukan.canvas.core.declarations-test
-  "The declaration registry + sdef->declarations adapter — the means-of-growth seam (Stage A)."
+  "The closed declaration algebra + sdef->declarations adapter."
   (:require [clojure.test :refer [deftest is]]
             [fukan.canvas.core.structure :as s]))
 
-(deftest registry-dispatches
-  (s/register-declaration! ::probe (fn [_decl _sdef] {:terms [[(list 'probe '?x)]] :laws []}))
-  (is (contains? (s/declaration-kinds) ::probe)))
+(deftest declaration-lowering-fails-closed
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown declaration kind"
+                        (#'s/lower-declaration {:kind ::probe} {:tag ::Subject}))
+      "vocabulary extends through kernel forms, not by installing evaluator semantics"))
 
 (deftest adapter-covers-a-slot-and-a-law
   (let [sdef  {:tag :fukan.canvas.core.declarations-test/T
@@ -27,3 +28,31 @@
 (deftest adapter-omits-node-kind-for-derived-concepts
   (is (not (contains? (set (map :kind (s/sdef->declarations {:tag ::R :realized-as '[[?e :x]]})))
                       :kind))))
+
+(deftest closed-relation-heads-reject-other-contributors
+  (let [closed {:tag :closed-view :slots [] :laws [] :relation-element true
+                :relation-incl {:incl :eq :expr :base}}
+        feeder {:tag ::Feeder :slots [{:rel :closed-view :card :many :target ::Feeder}] :laws []}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"closed relation :closed-view"
+                          (s/terms-of [closed feeder]))
+        "an :eq view is exact: an extensional slot may not also feed its head")))
+
+(deftest derived-relations-are-closed-views
+  (let [closed {:tag :closed-derived :slots [] :laws [] :relation-element true
+                :derived-rule {:head '[?a ?b] :bodies ['[(base ?a ?b)]]}}
+        feeder {:tag :species :slots [] :laws [] :relation-element true
+                :relation-incl {:incl :sub :expr :closed-derived}}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"closed relation :closed-derived"
+                          (s/terms-of [closed feeder]))
+        "a downstream :sub inclusion may feed only an open head")))
+
+(deftest sup-relation-heads-remain-open
+  (let [open   {:tag :open-view :slots [] :laws [] :relation-element true
+                :relation-incl {:incl :sup :expr :base}}
+        feeder {:tag ::Feeder :slots [{:rel :open-view :card :many :target ::Feeder}] :laws []}
+        terms  (s/terms-of [open feeder])]
+    (is (some #(= '(open-view ?a ?b) (first %)) terms))
+    (is (some #(and (= '(open-view ?a ?b) (first %))
+                    (= '(base ?a ?b) (second %)))
+              terms)
+        ":sup contributes its definition without closing the head")))

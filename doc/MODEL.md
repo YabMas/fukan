@@ -39,8 +39,9 @@ Everything reduces to three datom shapes:
 
 ## Value identity
 
-A `^:value` structure is **content-deduped**: its `:entity/id` is a hash of its
-content, so two structurally-equal values collapse to one node. Value nodes are
+A `^:value` structure is **content-deduped**: its `:entity/id` is a deterministic
+structural serialization of its content, so two structurally-equal values collapse
+to one node. Value nodes are
 anonymous and ownerless — the canonical representation of nameless compound data
 (list/record/shape descriptions); the build dedups them on the content-keyed
 `:entity/id`, across strata too (a design signature's `Schema` and its extracted
@@ -54,7 +55,8 @@ A law is a datalog constraint: `(law "desc" {:offenders [?x] :where […]})` —
 unquoted map (declaration forms never quote). `(structure/check db)` runs every
 registered structure's laws and returns violations (the offending bindings with
 the law's description; a `:key` makes a law addressable by worklist readers, which
-throw on an unknown key).
+throw on an unknown key). If any registered law cannot be compiled or evaluated,
+`check` throws instead of silently treating that constraint as satisfied.
 
 - **Self-scoping.** By default a law is scoped to instances of its own structure
   (the engine injects the kind guard). `:scope :global` opts out — used by
@@ -80,21 +82,22 @@ throw on an unknown key).
 
 ## The registry
 
-`defstructure` registers each structure (its slots, laws, value-ness, reader,
-syntax hook) in a global table, keyed by the **namespace-qualified tag**, and
+`defstructure` registers each structure (its slots, laws, value-ness, reader, and
+optional inline syntax elaborator) in a global table, keyed by the **namespace-qualified tag**, and
 defines an instance macro mirroring defstructure's own shape: `(Structure name
 "doc"? {slot → value}? nested…)` is a top-level def-emitting form (the symbol is
-the var and the entity name); without the name symbol it is an anonymous
-expression instance. `defrelation` registers a relation ELEMENT under its
-unqualified tag (the rule name is global, so the name is signature identity — a
+the var and the entity name). Ordinary entities require that symbol; only
+`^:value` structures are anonymous content values. `defrelation` registers a relation ELEMENT under its
+unqualified tag (the rule name is global, so the name is presentation identity — a
 second namespace re-declaring it throws). External declarations hook a concept
-from outside: `(correspond Design …)` registers a correspondence morphism against
-the design tag; `register-syntax!` an authoring hook. `all-structures` and
+from outside: `(correspond Design …)` registers one part of the design↔fact bridge
+presentation against the design tag. Its carrier is an ordinary named
+`defrelation`, with coverage recorded separately. `all-structures` and
 `vocab-rules` expose the registry as data — and the registry is also **reflected
 onto the graph itself** on every build (`fukan.canvas.core.reflect/with-grammar`):
 `Structure` nodes with slots as `:slot/<card>`-kinded labeled edges and laws as
-payload-carrying nodes, a `Vocabulary` node per namespace (a signature: owned
-relations + derived `:imports`), a decomposed `Morphism` node per correspondence —
+payload-carrying nodes, a `Vocabulary` node per namespace (a presentation fragment:
+owned declarations + derived `:imports`), and a decomposed `Correspondence` node per declaration —
 so the language has no off-graph remainder and renders back as source (the
 print-dual, `fukan.canvas.projection.grammar`).
 
@@ -105,8 +108,9 @@ discovered spec namespace (`*spec-dirs*`, default `["canvas"]`) and the **global
 assembler** walks all interned instance vars into one db (nodes first, then
 relations, so lookup-refs resolve across cycles). References between specs are
 ordinary var references — identity is the qualified var name — so cross-namespace
-cycles are inexpressible by construction. `union-dbs` remains only to fold an
-extractor's code db onto the assembled design db.
+cycles are inexpressible by construction. The native builder assembles authored
+and extracted facts into the same Cozo database in one pass; this is construction
+of one joint model, not an amalgamation theorem.
 
 ## The act grammar — Lens, Projection, Check
 

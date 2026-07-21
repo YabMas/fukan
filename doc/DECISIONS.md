@@ -44,7 +44,7 @@ not removing the decision.
 ## Modelling mechanics
 
 - **D4 — Value identity for nameless compound data.** `^:value` structures are
-  content-deduped, anonymous, ownerless nodes (identity = content hash); datascript
+  content-deduped, anonymous, ownerless nodes (identity = deterministic structural content key); datascript
   dedups them. Force: in the model nothing is *inhabited*, so a value is the canonical
   representation of a nameless structural description. Verdict from modelling
   canvas-source both ways: value-style is decisively truer for compound data —

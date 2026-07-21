@@ -4,7 +4,9 @@
             [fukan.cozo.build :as build]
             [fukan.cozo.law :as law]
             [fukan.canvas.core.lens :as lens :refer [Lens Check Projection]]
-            [fukan.canvas.core.structure :as s :refer [defstructure]]))
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
+            [fukan.common.vocab.grouping]
+            [fukan.infra.model]))
 
 (defstructure Widget
   "A fixture structure with a relation slot, so a lens query can traverse it."
@@ -31,12 +33,12 @@
 
 ;; each lens carries its own selection (model-native datalog — no realization shim)
 (Lens ^{:name "in-m"}    lns-in-m    "widgets in m"
-  {:select '[(Widget ?n) (within ?n "m")]})
+  {:select [(Widget ?n) (within ?n "m")]})
 (Lens ^{:name "x-links"} lns-x-links "what x links to"
-  {:select '[(named ?root "x") (links ?root ?n)]})
+  {:select [(named ?root "x") (links ?root ?n)]})
 (Lens ^{:name "prose"}   lns-prose   "just words")
 (Lens ^{:name "none"}    lns-none    "widgets in a module that doesn't exist"
-  {:select '[(Widget ?n) (within ?n "nope")]})
+  {:select [(Widget ?n) (within ?n "nope")]})
 
 ;; a Check gates a lens — a non-empty focus is a violation
 (Check ^{:name "widgets-in-m"} chk-fires  {:gates lns-in-m :verdict "widgets exist in m"})
@@ -86,7 +88,7 @@
 ;; lens (a NAMED shared focus), or neither — no narrowing = the whole model.
 (Projection ^{:name "pf-inline"} pf-inline
   "inline focus: the projection carries its own selection"
-  {:select '[(Widget ?n) (within ?n "m")]})
+  {:select [(Widget ?n) (within ?n "m")]})
 (Projection ^{:name "pf-through"} pf-through
   "named focus: renders through a shared lens"
   {:through lns-in-m})
@@ -97,7 +99,7 @@
   {:through lns-prose})
 (Projection ^{:name "pf-both"} pf-both
   "ILLEGAL: both an inline :select and a :through lens — the never-both law's offender"
-  {:select  '[(Widget ?n)]
+  {:select  [(Widget ?n)]
    :through lns-in-m})
 
 (deftest projection-focus-resolves-three-ways

@@ -21,6 +21,11 @@
             [fukan.common.vocab.code.operation]
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.subsystem]
+            ;; …the pattern tier too: since the dependency inversion (the pattern names its
+            ;; participants, the core never names the pattern — 2026-07-21) NO vocab ns requires it,
+            ;; so only an explicit require keeps its 7 terms + 4 laws in the snapshot (the same
+            ;; order-dependence lesson as the extraction nss below).
+            [fukan.common.vocab.patterns.plug-point]
             ;; …and the Clojure extraction plugin, which since 2026-07-17 declares the design↔Clojure
             ;; CORRESPONDENCE (the fact-slots + demands) against the Operation/Module tags. Without
             ;; these the snapshot silently drops 5 terms + 11 laws — and passes anyway in a full run,
@@ -308,8 +313,17 @@
 ;; (terms hash), the `declared-dep`/`kind-home` law-local rules + the module-acyclicity and
 ;; membership-totality `:where` guards (laws hash). Counts hold (83 / 61) — pure clause reshape,
 ;; stored at domain altitude. Live `(check)` still 0.
-(def ^:private golden-terms {:count 83 :hash -1013638152})
-(def ^:private golden-laws  {:count 61 :hash -597987143})
+;; 2026-07-21 (f): correspondence terminology now matches its relational semantics. The generated
+;; carrier-coverage laws say left-total/right-total and correspondent, not object-map total/
+;; surjective/preimage (which falsely suggested functionality). Law bodies, keys, and count hold;
+;; only the four Operation/Module coverage descriptions move the laws hash. Live `(check)` still 0.
+;; 2026-07-21 (g): correspondence carriers become ordinary named `defrelation`s (`module-twin`,
+;; `operation-twin`) and `correspond` only aliases each into the shared `twin` relation while deriving
+;; explicit coverage laws. Terms 83→89: each binary derived carrier contributes its rule + two
+;; compiler-owned closure rules. Laws hold at 61: `:coverage :both` generates the same two denials and
+;; relation maps are unchanged. The kernel no longer hardcodes name/containment matching.
+(def ^:private golden-terms {:count 89 :hash -14610138})
+(def ^:private golden-laws  {:count 61 :hash -1963493187})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

@@ -49,7 +49,7 @@ co-loaded projects may share short names, and a free law self-scopes through the
 qualified tag — ns-precise. The DOMAIN-ALTITUDE rule names (`(Operation ?s)`,
 `(contains ?a ?b)`) are global, like vars in one Clojure runtime: two same-short-named
 structures deliberately co-loaded union their kind rule (the documented co-load
-allowance), and a relation *element's* name is signature identity — a second
+allowance), and a relation *element's* name is global presentation identity — a second
 namespace re-declaring it fails LOUDLY at registration (see
 [THEORY.md](./THEORY.md), "Known deviations", for the signature reading).
 
@@ -70,9 +70,10 @@ A structure is a *composition of slots* plus *datalog laws*.
   whose target is another structure reifies a relation.
 - **Slot options** ride the props position: `[:? {:payload :q} :string]`
   (`:payload` = a companion code-form stored as a sibling `:val/` datom); for
-  cardinality one, lead with the props map. `(reader f)` lets a value structure
+  cardinality one, lead with the props map. `{:form true}` marks the scalar value
+  itself as declaration-position code data, so it is authored unquoted. `(reader f)` lets a value structure
   expand authoring data-literals (the malli dialect's `Schema` reads native malli
-  forms); `(syntax f)` lets a structure own instance-level sugar — a map → map
+  forms); an inline `(syntax f)` lets a structure own instance-level sugar — a map → map
   rewrite of the authored slots map (`Operation` rewrites `:signature` into
   `:in`/`:out`).
 - **Instances mirror defstructure** position-for-position: `(Structure name "doc"?
@@ -81,18 +82,20 @@ A structure is a *composition of slots* plus *datalog laws*.
   map: a plural slot takes a vector of targets (authoring order is the sequence
   order, recorded as `:rel/order` — the bracket mirrors the quantifier), a
   labelled target is a `[label target]` pair, a payload slot takes
-  `[value payload]`, reader literals pass as values. The same form without the
-  symbol is an anonymous expression instance (inline values, def-wrapped vars).
+  `[value payload]`, reader literals pass as values. Entity instances always
+  require the symbol; anonymity is reserved for `^:value` structures.
   Nested member instances trail where defstructure's laws sit, lift to sibling
   `def`s, and route by target-type into the container's slots.
 - **`^:value` structures** are content-deduped, inline-anonymous nodes:
-  structurally-equal values collapse to a single node (identity = a content hash).
+  structurally-equal values collapse to a single node (identity = a deterministic
+  structural content key).
   Used for nameless compound data — list/record/shape descriptions — where an
   entity-style named stand-in would erase the structure.
 - **Laws:** `(law "desc" {:offenders [?x] :where […] :rules […]? :scope …? :key …?})`
   is a datalog constraint — ONE unquoted map, the same declaration cell as every
-  other form (declaration forms never quote; quotes belong to evaluated contexts:
-  the REPL, `q`, instance values). `:scope :global` opts a law out of its
+  other form. Declaration positions—including `{:form true}` instance slots—never
+  quote; quotes belong to evaluated runtime contexts such as the REPL and `q`.
+  `:scope :global` opts a law out of its
   structure's self-scoping (needed for cross-cutting laws). The recurring shapes
   have **combinators** — `(law "desc" (matched-by R :from S? :when {k v}? :scope
   T?))`, `(has R :when …?)`, `(has-any R1 R2 …)`, `(target R {k v})`,
@@ -101,12 +104,14 @@ A structure is a *composition of slots* plus *datalog laws*.
   dance is needed). `(structure/check db)` runs every law and returns the
   violations.
 - **Relations are ELEMENTS** (`defrelation`, sibling of `defstructure`) — three
-  forms, one construct: BARE (`(defrelation :contains "doc")` — a primitive/genus
+  forms, one construct: BARE (`(defrelation :contains "doc")` — an OPEN primitive/genus
   claiming the name), an INCLUSION against a regular expression over relations
   (`(:sub :contains)` / `(:sup E)` / `(:eq E)` — the same (relation, direction,
   expression) triple a correspondence relation map uses), or DERIVED
   (`(defrelation :module-depends "doc" [?m ?n] […])` — a named custom-bodied
-  datalog rule; multiple bodies = recursion). Transitive closures are the
+  datalog rule; multiple bodies = recursion). Bare relations and `:sup` heads are
+  open to contributors; derived and `:eq` heads are closed views, and vocabulary compilation
+  rejects additional contributors to those heads. Transitive closures are the
   COMPILER's: every binary relation's `R+` is minted unconditionally and injected
   only where referenced — nothing declares `:transitive`.
 
@@ -150,9 +155,10 @@ The structure registry is projected onto the model on every build
 vocab): each defstructure becomes a `Structure` node — slots as
 `:slot/<card>`-kinded labeled edges whose scalar/refined targets reify as the type
 dialect's content-deduped `Schema` values, laws as nodes carrying their datalog as
-payload — one `Vocabulary` node per namespace (a SIGNATURE: its owned relation
-elements plus DERIVED `:imports` edges, entailed from use), and each
-`(correspond …)` as a decomposed `Morphism` node with `RelationMap` children. The
+payload — one `Vocabulary` node per namespace (a presentation fragment: its owned
+declarations plus DERIVED `:imports` edges, entailed from use), and each
+`(correspond …)` as a decomposed `Correspondence` node with `RelationMap`
+children. The
 print-dual (`fukan.canvas.projection.grammar`) renders a reified structure back as
 its authoring form — `(grammar)` in the REPL is the live language reference,
 derived not maintained — and grammar drift (`unused-structures`: vocabulary no
@@ -165,19 +171,22 @@ and implementation onto the same substrate, then checking them against each othe
 
 - **Extraction (code → model), up.** `model/extraction.clj` is a vocabulary-blind
   plug-point: a project registers one extractor (`register-fact-extractor!`, wired
-  by the composition root `infra/model.clj`); the pipeline runs it over a code-root
-  and folds the result onto the design graph (`union-dbs`). Fukan's Clojure
-  extractor (`fukan.common.extraction.*`) reads clj-kondo analysis into the FACT
-  theory — `Ns` (a namespace) owning `Fn` (a function: decomposed signature,
+  by the composition root `infra/model.clj`); the builder runs it over a code-root
+  and assembles the resulting facts with the authored facts in one pass. Fukan's
+  Clojure extractor (`fukan.common.extraction.*`) reads clj-kondo analysis into the FACT
+  vocabulary — `Ns` (a namespace) owning `Fn` (a function: decomposed signature,
   effects, the actual `:calls` graph, privacy/`^:export`/`^:test-support`
   metadata). Design and fact are DISTINCT tags — never one tag split by a
   provenance flag.
-- **Correspondence (verify), across.** The design↔code link is a MORPHISM declared
-  per design element, from outside the design vocabulary, in the language's
-  extractor: `(correspond Module :eq Ns (bridge :qualified-suffix))` — the twin
-  root, paired by a name-match strategy — and `(correspond Operation :eq
-  [Fn :public] (:delegates :sub :public-call) (:performs :sup [:cat [:* :calls]
-  :performs]))` — an object map onto the public sub-sort plus relation maps; the
+- **Correspondence (verify), across.** The design↔code link is a bridge presentation
+  declared per design element, from outside the design vocabulary, in the language's
+  extractor. Matching is an ordinary derived relation (`module-twin`,
+  `operation-twin`); correspondence merely names it:
+  `(correspond Module Ns {:carrier :module-twin :coverage :both})` and
+  `(correspond Operation [Fn :public] {:carrier :operation-twin :coverage :both}
+  (:delegates :sub :public-call) (:performs :sup [:cat [:* :calls] :performs]))`.
+  Coverage is separate from the nested relation inclusions;
+  it is not a bijection or a theory morphism. The
   identity component over shared sorts (`:in`/`:out` Schema values) is derived.
   Every demand law is GENERATED from the declaration — totality, surjectivity,
   structural adherence, call-realization, effect coverage — each with a stable key

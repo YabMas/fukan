@@ -20,34 +20,27 @@ REPL-and-canvas tool exercised by modelling.
 
 ## The theoretical frame — measure work against it
 
-`doc/THEORY.md` is the foundation every mechanism instantiates: fukan is a workbench
-for **theory presentations & morphisms** (the Burstall–Goguen / institutions
-tradition) whose one object logic is **Datalog**. Its map table is the contract with
-this codebase — every mechanism names its row; one that cannot is suspect. The
-operational gate:
+`doc/THEORY.md` is the foundation every mechanism instantiates. Fukan's one semantic
+object is a deductive presentation `P = (Σ, R, C)`: relational vocabulary, stratified
+Datalog definitions, and denial constraints. Authored and extracted instances form
+the finite EDB `M`; evaluation computes `Cl_P(M)`; `M ⊨ P` exactly when every offender
+query is empty. Its map table is the contract with this codebase. The operational gate:
 
-- **THE TEST.** Before any proposed mechanism exists, answer: is it a
-  **presentation**, a **sentence**, a **definitional extension**, a **morphism** —
-  or a **derived form**? One of the first four → it must LOOK like the existing
-  instances of its row (same declaration shape, same generated-law discipline, same
-  reflection). A derived form (notation: instance macros, law combinators,
-  `(reader f)`/`(syntax f)` hooks, strategy keywords) → it must ELIMINATE — expand
-  into the four with no meaning of its own. None of the five → the burden of proof
-  is on the mechanism; most such proposals are one of the five wearing a costume,
-  and the costume is debt.
-- **Theory content declares; machinery registers.** The four kernel things speak in
-  declaration forms (`defstructure`/`defrelation`/`correspond`); harness wiring speaks
-  in plain `register-*` calls (syntax hooks, dialects, extractors, comparators). Never
-  promote wiring to a declaration form for symmetry — the split IS the signal; a
-  `register-*` call that starts wanting a declaration form has quietly become theory
-  (re-run THE TEST on it).
-- **The fixed point: the logic never grows.** All growth lives in theories
-  (vocabulary extensions — definitional, or accumulative through an open genus) and
-  in derived forms (notation). Never propose extending the sentence language or
-  swapping the logic; expressive freedom belongs to the vocab-and-model axis, and
-  everything else stays rigid to fund it.
-- **No proof theory.** Every judgment is ⊨ — evaluation over the finite model; laws
-  and morphism obligations alike are model-checked, never derived.
+- **THE TEST.** Before any proposed mechanism exists, answer two questions: which
+  kernel form does it contribute — **declaration, fact, rule, or denial** — and does
+  it change semantics or merely elaborate notation? Semantic forms use the existing
+  declaration/reflection/checking discipline. A derived form must eliminate completely
+  into the four kernel forms. A model producer may add facts but not rules or laws.
+- **Registration does not erase semantic effect.** Readers and inline syntax hooks are elaborators;
+  extractors are model producers; type dialects and predicate ports are explicit semantic/compiler
+  configuration because they can change satisfaction. Declaration lowering is closed and exhaustive;
+  correspondence matching is ordinary Datalog, not a handler/comparator/callback registry.
+- **Three semantic growth modes.** A fresh closed IDB view is definitional and
+  conservative; an explicitly open relation head accepts accumulative rules; a new law
+  is constraint refinement. Model growth is separate: it adds facts and may turn laws red.
+- **No proof theory.** Fukan checks one concrete finite model. Correspondence constraints
+  are part of a bridge presentation and are model-checked; they are not theory-morphism
+  proof obligations over all target models. An unsupported law makes `check` fail closed.
 
 The frame says what a mechanism *is*, never that it should exist — vocabulary and
 mechanism grow only under concrete modelling pressure (see the standing discipline
@@ -141,36 +134,39 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   file carries its structure and the laws that are its own slot semantics, and knows nothing about
   what language the code is written in.
 - `common/fukan/common/vocab/patterns/plug_point.clj` — the PATTERN TIER: `PlugPoint`, one rung above
-  the core code grammar. A pattern is a named CONFIGURATION drawn OVER the core elements (theory-frame
-  reading: a theory EXTENSION — it imports the core's sorts and adds its own sort + relations), and
+  the core code grammar. A pattern is a named CONFIGURATION drawn OVER the core elements (foundation
+  reading: a presentation extension — it imports the core's sorts and adds its own sort + relations), and
   the dependency points strictly UPWARD: the pattern names its participants (`PlugPoint :owner`), the
   core never names the pattern — `Module` carries no pattern slots and does not require the pattern ns.
-  The domain-altitude reading `(offers ?m ?p)` is a DERIVED relation in the pattern's signature (the
+  The domain-altitude reading `(offers ?m ?p)` is a DERIVED relation in the pattern's fragment (the
   converse of `:owner`). The satisfy side is CUT until its semantics cycle (likely
   correspondence-recognized from registration facts, not authored).
   **The design↔code correspondence is NOT here** (since 2026-07-17): it maps design INTO a SPECIFIC
-  language's FACT theory. The codomains are real `defstructure`s in that language's extractor —
+  language's FACT vocabulary. The codomains are real `defstructure`s in that language's extractor —
   `Operation ↦ Fn` (a Clojure function: `:calls` graph + `:private`/`:export`/`:test-support` metadata
   conventions), `Module ↦ Ns` (a namespace) — in
   `common/fukan/common/extraction/clojure/{operation,module}.clj`, declared from outside via the
   external `(correspond Design Fact …)` hook. The two strata are DISTINCT tags: the twin is a genuine
-  cross-tag map, not the Operation-tag-with-a-provenance-flag graft it was before (that graft is why
-  the demands are still six bespoke forms — a morphism needs a codomain, now it has one). Keeping the
-  fact theory here means the shipped, language-neutral vocab exports no Clojure constructs; a project
+  cross-tag relation, not the Operation-tag-with-a-provenance-flag graft it was before. Giving the
+  correspondence a distinct fact vocabulary is what lets one carrier statement and its relation maps
+  generate the demands. Keeping the fact vocabulary here means the shipped, language-neutral vocab
+  exports no Clojure constructs; a project
   loading the vocab with a different extractor correctly gets no `Fn`/`:calls` at all.
-  Everything is still GENERATED — the plugin hand-writes no mechanism. The seam is ONE morphism
-  statement: `(correspond Operation :eq [Fn :public] (:delegates :sub :public-call) (:performs :sup
-  [:cat [:* :calls] :performs]))` — the object map (a bijection onto Fn's public sub-sort; the
+  Everything is still GENERATED — the plugin hand-writes no mechanism. The seam names an ordinary
+  `operation-twin` derived relation:
+  `(correspond Operation [Fn :public] {:carrier :operation-twin :coverage :both}
+  (:delegates :sub :public-call) (:performs :sup [:cat [:* :calls] :performs]))` — bi-total coverage
+  onto Fn's public sub-kind (not a
+  bijection; uniqueness is not implied), the
   identity component in↦in/out↦out is DERIVED) plus relation maps in the (relation, direction,
   expression) triple; `public-call` is a named recursive `defrelation` in the plugin (the public
   call graph: reach through only ¬public interior). Each map generates its `:corresponds/Operation.*`
   law. A caller wanting any demand as a worklist names its stable law key through
   `law/violation-names` directly (as `dev/user.clj` does) — no per-demand reader wrapper is kept.
-  `extraction/clojure/module.clj` holds the `Ns` codomain + the bridged twin ROOT that `Fn` twins nest
-  within — `(correspond Module Ns (bridge :qualified-suffix))`. The bridge is a name-match STRATEGY KEYWORD the
-  kernel's generic `name-match` builtin lowers (canvas short-name is a separator-agnostic dotted
-  suffix of the code ns) — no hand-written CozoScript, no name-bridge fn; the generated Operation twin
-  correlates modules with the same `(name-match :qualified-suffix …)` inside the injected `twin` rule.
+  `extraction/clojure/module.clj` holds the `Ns` codomain and declares `module-twin` in Datalog,
+  using the configured `(name-match :qualified-suffix …)` predicate (canvas short-name is a
+  separator-agnostic dotted suffix of the code ns). `(correspond Module Ns
+  {:carrier :module-twin :coverage :both})` consumes that ordinary relation.
   The effect-correspondence check is the generated `:corresponds/Operation.performs-covered` demand
   (from `(performs {:covered-from [:calls* :performs]})`). The vocab laws reach shared vocab via datalog
   injection (no compile cycle, since the `fukan.common` index requires every element). A law that is a
@@ -200,16 +196,16 @@ payload nodes, one `Vocabulary` per ns). It is grammar-AGNOSTIC (reifies whateve
 the build ALWAYS runs it, so it belongs with the machinery, beside the act grammar in `core/lens.clj`.
 The runtime never consults the reflected nodes — they exist only so the grammar is viewable as data (the
 print-dual, `unused-structures`). The meta-grammar it mints — `Structure`/`Law`/`Vocabulary`/`Relation`/
-`Morphism`/`RelationMap` — is the tool's own vocabulary for describing grammars AND the morphisms between
-them (same category as the act grammar), hence core. Since 2026-07-20: a `(correspond …)` reflects as a
-decomposed `Morphism` node (`:from`/`:to` edges, `RelationMap` children — no `pr-str` blob); a derived
-defrelation carries its rule body on its `Relation` node; and a `Vocabulary` is a SIGNATURE — its owned
-relation elements (`:relation`, via the declaring `:ns`) plus DERIVED `:imports` edges (slot targets, law
+`Correspondence`/`RelationMap` — is the tool's own vocabulary for describing grammars and bridge
+presentations (same category as the act grammar), hence core. A `(correspond …)` reflects as a
+decomposed `Correspondence` node (`:from`/`:to` edges, `RelationMap` children — no `pr-str` blob); a derived
+defrelation carries its rule body on its `Relation` node; and a `Vocabulary` is a presentation fragment —
+its owned declarations plus DERIVED `:imports` edges (slot targets, law
 rule-calls, `:isa` genera, correspondence codomains — entailed from use, never authored). The reflection
 ns-closure follows those same references, so an imported vocabulary reflects even with zero instances.
 It reaches the type dialect only through the neutral SPI (`core/typing`), so it depends on no concrete
 dialect (the composition root wires that). `doc/THEORY.md` names the theoretical frame all of this
-instantiates (theory presentations & morphisms over a Datalog object logic).
+instantiates (one deductive presentation over a finite relational model).
 
 (The Lens-act `Coverage` law that a projection's focus once needed was DISSOLVED 2026-06-29: a
 projection now carries its focus ITSELF — an inline `:select`, a named `Lens` only when a focus is
@@ -250,9 +246,10 @@ A `defstructure` is a composition of **slots** plus **laws**:
   `fukan.common.typing.malli` registers `:valid?` at load). Never hand-write a membership/range law.
 - Slot options ride the props position: `[:? {:payload :q} :string]` (`:payload` =
   a companion code-form stored as a sibling `:val/` datom); for cardinality one,
-  lead with the props map: `[{:payload :q} :string]`. `(reader f)` expands authoring
+  lead with the props map: `[{:payload :q} :string]`. `{:form true}` stores the scalar
+  value itself as declaration-position code data, authored unquoted. `(reader f)` expands authoring
   data-literals (e.g. the malli dialect's Schema expands native malli forms); a
-  `(syntax f)` hook (map → map) rewrites an instance's slots map before parsing
+  vocabulary-local inline `(syntax f)` hook (map → map) rewrites an instance's slots map before parsing
   (e.g. the code `Operation` rewrites `:signature` into `:in`/`:out`).
 - INSTANCES mirror defstructure position-for-position: `(Structure name "doc"?
   {slot → value}? nested…)` — a top-level def-emitting form (the symbol is the var
@@ -260,8 +257,8 @@ A `defstructure` is a composition of **slots** plus **laws**:
   carry). One map of `slot → value`: a plural slot takes a VECTOR of targets
   (authoring order = `:rel/order`; the bracket mirrors the quantifier), a labelled
   target is a `[label target]` pair, a payload slot takes `[value payload]`, reader
-  literals pass as values. Anonymous/inline instances are the same form without the
-  symbol: `(Structure "doc"? {…})`. Nested member instances trail where
+  literals pass as values. Entity instances always require the symbol; only
+  `^:value` structures are anonymous expressions. Nested member instances trail where
   defstructure's laws sit and route by target-type into the container's slots.
 - `^:value` structures are content-deduped, inline-anonymous nodes (structurally
   equal values collapse to one node) — used for nameless compound data.
@@ -288,18 +285,14 @@ A `defstructure` is a composition of **slots** plus **laws**:
   `::Sort` same-ns, `::alias/Sort` through an existing ns alias; a FULL tag keyword is
   reserved for — and signals — a namespace deliberately NOT required at that site (kind.clj's
   require-cycle, the architecture print-dual's data-only vocab coupling).
-- Correspondence is a CROSS-TAG MORPHISM, declared EXTERNALLY via `(correspond Design Fact …)` (both
+- Correspondence is a CROSS-TAG BRIDGE PRESENTATION, declared EXTERNALLY via
+  `(correspond Design Fact {:carrier R :coverage C} …)` (both
   concepts' own `defstructure`s stay pure identity — there is no inline correspondence form). `Fact` is
   the CODOMAIN — a real `defstructure` whose slots are the extracted constructs (design `Operation` ↦
-  Clojure `Fn`; design `Module` ↦ `Ns`). The two strata are DISTINCT tags, so the twin is a genuine map
-  between two theories, not one tag split by a provenance flag. `Fact` may be omitted, defaulting to
-  `Design` — a same-tag IDENTITY correspondence (a concept recognised in code rather than realized by a
-  distinct construct). Demands are declared per-node or per-relation — `(realized …)` / `(covered …)` /
-  `(agrees …)` node demands; `:realized-by` / `:faithful` on a relation slot (op-altitude transitive
-  call demand); `:covered-from [R* S]` on a relation slot (path demand: every target the twin reaches
-  over R*·S must be declared) — and their laws are GENERATED. Never hand-write `realized` / `covered` /
-  `call-realization` / `fidelity` / `covered-from` shapes by hand. (The block is STILL six bespoke forms
-  — giving it a codomain is the precondition for collapsing it to a map's components, the next step.)
+  Clojure `Fn`; design `Module` ↦ `Ns`). The two strata are DISTINCT tags. The carrier `R` is an
+  ordinary binary `defrelation`; `C` is `:design`, `:fact`, or `:both`. Nested relation maps use
+  `:sub`/`:sup`/`:eq` only for relation inclusion. Coverage laws and shared-sort structural agreement
+  are derived; no author-installed comparator or bridge callback exists.
 
 The current catalog is the source — or just run `(grammar)` in the REPL: the
 print-dual renders every vocabulary live. The files are under `common/fukan/common/vocab/**`.
@@ -310,18 +303,19 @@ ELEMENT — the relation itself, not a slot that happens to use it. Three forms,
 are RETIRED — every relation statement is the same (relation, direction, expression) triple a
 correspondence relation map uses):
 
-- **Bare** — `(defrelation :contains "doc")` — a PRIMITIVE relation / genus: claims the name
-  (signature identity), reflects, owns the doc; its edges come from slots of that name or from
+- **Bare** — `(defrelation :contains "doc")` — an OPEN primitive relation / genus: claims the name
+  (global presentation identity), reflects, owns the doc; its edges come from slots of that name or from
   other relations' inclusions into it. **The kernel names no relation of its own:** the `contains`
   genus and the by-name `within` are vocab elements (both `vocab/grouping`).
 - **Inclusion** — `(defrelation :child "doc" (:sub :contains))` — the relation stated as an
-  inclusion, lowered GENERATIVELY (within one theory the sentence is a rule; at the correspondence
+  inclusion, lowered GENERATIVELY (within the loaded presentation the sentence is a rule; at the correspondence
   seam the same triple is a checked law): `(:sub atom)` — the included relation accumulates this
-  one's edges (the old `:isa`); `(:sup E)`/`(:eq E)` — DEFINED from E, an atom / `[:alt …]` (one
-  rule per alternative — the old coproduct) / a regular path over atoms.
+  one's edges (the old `:isa`); `(:sup E)` adds E to an OPEN head; `(:eq E)` defines a CLOSED head
+  and rejects any additional contributor. E is an atom / `[:alt …]` (one rule per alternative —
+  the old coproduct) / a regular path over atoms.
 - **Derived** — `(defrelation :module-depends "doc" [?m ?n] […])` — a named custom-bodied datalog
-  rule (head + bodies, unquoted — declaration forms never quote) for anything beyond the fragment;
-  multiple bodies = recursion (base + step). Prefer non-recursive: the rule pays the fixpoint on
+  CLOSED rule (head + bodies, unquoted — declaration forms never quote) for anything beyond the fragment;
+  multiple bodies = recursion (base + step); other declarations may not feed its head. Prefer non-recursive: the rule pays the fixpoint on
   every check.
 
 **Closures are the COMPILER's, not declarations:** `terms-of` emits every binary relation's `R+`
@@ -329,10 +323,10 @@ unconditionally, and per-query rule injection is reachability-scoped, so a query
 only when it references it. Nothing declares `:transitive` anywhere — not elements, not slots.
 
 A relation's tag is UNQUALIFIED (`:contains`) because its rule name is global — so the NAME is
-signature identity: a second vocabulary re-declaring it THROWS at registration (the registry records
+global presentation identity: a second vocabulary re-declaring it THROWS at registration (the registry records
 the declaring `:ns`; before 2026-07-20 this collision was silent replace-on-register). Anything
 scoping by tag namespace falls back to that `:ns` (as the declarations golden does). `:delegates`/
-`:calls` are still slot-only (not elements) — they belong to no signature, visible in reflection as
+`:calls` are still slot-only (not elements) — they belong to no declaring fragment, visible in reflection as
 unowned `Relation` nodes. ⚠ REPL: MOVING a defrelation to another ns trips the collision guard on
 `(refresh)` (the defonce registry keeps the old entry) — restart the REPL, like a removed defmethod.
 
@@ -490,11 +484,11 @@ mixing them corrupts history.
   union target; the pattern tier's derived `offers` rides `patterns/plug_point.clj`). The
   module-dependency-graph relations + readers (`module-owns`/`module-depends`/`module-dependencies`)
   live with the architecture laws that consume them in `code/subsystem.clj`
-- `common/fukan/common/extraction/clojure/` — the FACT theory + the design↔Clojure map: `operation.clj`
-  holds the `Fn` codomain (a Clojure function) + `(correspond Operation Fn …)` (the `(agrees {:by
-  :structural})` adherence demand + the `(delegates {:realized-by :calls :faithful true})` op-altitude
-  transitive call-realization demand, all GENERATED — no hand-written readers); `module.clj` holds the
-  `Ns` codomain + `(correspond Module Ns (bridge :qualified-suffix))`, the twin root
+- `common/fukan/common/extraction/clojure/` — the FACT vocabulary + the design↔Clojure bridge:
+  `operation.clj` holds the `Fn` codomain and the bi-total carrier declaration
+  `(correspond Operation [Fn :public] {:carrier :operation-twin :coverage :both} …)`, whose relation maps and shared-sort agreement
+  generate the conformance laws; `module.clj` holds the `Ns` codomain and
+  `(correspond Module Ns {:carrier :module-twin :coverage :both})`, the twin root
 - `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI

@@ -398,7 +398,7 @@
         "the old suffix-segment vector errors loudly, naming the migration")))
 
 (deftest relation-map-generates-directional-laws
-  (testing "the inclusion direction picks which homomorphism law(s) generate, keyed by direction. E is a
+  (testing "the inclusion direction picks which correspondence law(s) generate, keyed by direction. E is a
             regular-relation atom/path here; a complex E (the public call graph) is a NAMED defrelation
             referenced as an atom — its recursion lives with the relation, not inline."
     (let [keys-of (fn [incl] (mapv :key (#'s/relation-map-laws :T {:rel :dep :incl incl :expr [:+ :link]})))]
@@ -415,37 +415,6 @@
           calls   (set (map first (filter seq? (:where covered))))]
       (is (contains? calls 'link) "the first hop is in the law")
       (is (contains? calls 'owns) "and so is the second — not dropped"))))
-
-;; ── (agrees {:by …}): the correspondence comparator SPI + pair-hybrid ──────────
-(defstructure LTwin
-  "agrees subject: a nested-corresponding kind whose fact twin must AGREE on its `:n` leaf via a
-   registered comparator — exercises `register-comparator!` + the pair-hybrid law path end-to-end.
-   Pure identity; correspondence hooks in externally via `(correspond LTwin …)` below."
-  {:n [:? :int]})
-
-(s/correspond LTwin :eq LTwin (agrees {:by :ltwin-eq}))
-(s/register-comparator! :ltwin-eq
-  (fn [db a b] (= (:val/n (cq/entity db a)) (:val/n (cq/entity db b)))))
-
-(deftest agrees-demand-runs-the-registered-comparator-over-twin-pairs
-  (testing "a fact twin whose :n DISAGREES with the design is an offender; an agreeing twin is green.
-            The design LTwin `x` nests in module `m`, its fact twin in the corresponding code module
-            `fukan.m` (:qualified-suffix), so the two twin — and the :ltwin-eq comparator decides."
-    (let [mk (fn [design-n fact-n]
-               (build/tx-maps->cozo
-                [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
-                 {:db/id -2 :structure/of ::LTwin :entity/name "x" :val/n design-n}
-                 {:rel/id "m|child|x" :rel/from -1 :rel/kind :child :rel/to -2}
-                 {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}
-                 {:db/id -4 :structure/of ::LTwin :entity/name "x" :val/n fact-n :val/extracted true}
-                 {:rel/id "fm|child|x" :rel/from -3 :rel/kind :child :rel/to -4}]))
-          drift (mk 1 2)
-          match (mk 1 1)]
-      (is (= #{"x"} (names drift (law/violations-of drift :corresponds/LTwin.agrees)))
-          "a disagreeing fact twin is an offender")
-      (is (empty? (law/violations-of match :corresponds/LTwin.agrees))
-          "an agreeing fact twin is green"))))
-
 
 ;; ── (is ?v Sort): declaration-site sort resolution + compiler lowering ─────────
 

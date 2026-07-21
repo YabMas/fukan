@@ -5,9 +5,10 @@
    surface — so the grammar primer is live, derived, and can never drift from the
    registry it reflects.
 
-   Three renders from the same parts:
+   Four renders from the same parts:
      `structure-form`      — the faithful DATA form (laws carry their datalog,
                              unquoted; `^:value` rides the name symbol's metadata).
+     `correspondence-form` — the valid external `(correspond …)` data form.
      `grammar-primer`      — the reference-card STRING: every Vocabulary in the
                              model, each structure with aligned slots, first doc
                              line, law descs (datalog elided as `…`).
@@ -16,7 +17,7 @@
                              Registry-direct: reads (s/correspondence) and
                              (s/laws-of), no model db required.
 
-   The first two are model db → form / string; the card is registry-direct."
+   The first three are model db → form / string; the card is registry-direct."
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [fukan.cozo.query :as cq]
@@ -104,15 +105,13 @@
                          :scope (some-> (:val/scope e) edn/read-string)}
                         (payload-form (:val/form e))))))))
 
-(defn- morphism-of
-  "The reflected `Morphism` whose domain (`:from`) is the Structure `s`, decomposed back into the
-   print-dual's corresponds ingredients — or nil. The relation maps come from the `RelationMap`
-   children in authoring order; the codomain's short name from the `:to` Structure; any authored
-   `agrees` demands from the `:agrees` payload (the object-map/identity demands are consequences,
-   not stored)."
+(defn- reflected-correspondence-of
+  "The reflected `Correspondence` whose design side (`:from`) is the Structure `s`, decomposed back into the
+   print-dual's correspondence ingredients — or nil. The relation maps come from the `RelationMap`
+   children in authoring order and the codomain's short name from the `:to` Structure."
   [db s]
   (when-let [m (ffirst (cq/q '[:find ?m :in $ ?s
-                               :where (is ?m ::reflect/Morphism)
+                               :where (is ?m ::reflect/Correspondence)
                                       [?r :rel/from ?m] [?r :rel/kind :from] [?r :rel/to ?s]]
                              db s))]
     (let [e    (cq/entity db m)
@@ -128,12 +127,11 @@
                               {:rel  (edn/read-string (:val/rel re))
                                :incl (edn/read-string (:val/incl re))
                                :expr (edn/read-string (:val/expr re))}))))]
-      {:incl        (edn/read-string (:val/incl e))
+      {:carrier     (edn/read-string (:val/carrier e))
+       :coverage    (edn/read-string (:val/coverage e))
        :fact-name   to
        :restrict    (some-> (:val/restrict e) edn/read-string)
-       :bridge      (some-> (:val/bridge e) edn/read-string)
-       :rel-demands maps
-       :demands     (some-> (:val/form e) payload-form)})))
+       :rel-demands maps})))
 
 (defn- parts [db s]
   (let [e (cq/entity db s)]
@@ -142,7 +140,7 @@
      :doc        (:entity/doc e)
      :value?     (boolean (:val/value e))
      :realizes   (when (:val/realizes e) (payload-form (:val/form e)))
-     :corresponds (morphism-of db s)
+     :corresponds (reflected-correspondence-of db s)
      :slots      (slots-of db s)
      :laws       (laws-of db s)}))
 
@@ -158,40 +156,37 @@
             true  (assoc :offenders offenders :where where)))))
 
 (defn- codomain-form
-  "The sort map's codomain: a bare fact name `Fn`, or `[Fn :public]` when restricted to a sub-sort."
+  "The carrier declaration's codomain: a bare fact name `Fn`, or `[Fn :public]` when restricted to a sub-sort."
   [{:keys [fact-name restrict]}]
   (let [f (symbol fact-name)]
     (if restrict [f restrict] f)))
 
 (defn- rel-map-form [{:keys [rel incl expr]}] (list rel incl expr))
 
-(defn- agrees-form
-  "The `agrees` comparator escape hatch → `(agrees {opts})`. Nil for the object-map (total/surjective —
-   rendered via the sort map's inclusion) and the derived identity map (a kernel consequence)."
-  [{:keys [demand derived] :as d}]
-  (when (and (= demand :agrees) (not derived))
-    (let [opts (not-empty (into {} (remove (comp nil? val)) (dissoc d :demand)))]
-      (if opts (list 'agrees opts) (list 'agrees)))))
-
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Form]}
   structure-form
   "The reified Structure at `eid` rendered back as its `defstructure` data form —
    the print-dual of the authoring surface. Laws carry their datalog unquoted
-   (this is the PARSED form); `^:value` rides the name symbol's metadata.
-   A `(corresponds …)` declaration restores this structure's SORT MAP (inclusion + codomain + carrier)
-   and its nested relation maps; the object-map total/surjective laws are the inclusion's meaning."
+   (this is the PARSED form); `^:value` rides the name symbol's metadata. External correspondence
+   deliberately does not appear inside this form; use `correspondence-form` for its valid top-level dual."
   [db eid]
-  (let [{:keys [name doc value? slots corresponds realizes laws]} (parts db eid)]
+  (let [{:keys [name doc value? slots realizes laws]} (parts db eid)]
     (concat ['defstructure (if value? (with-meta name {:value true}) name)]
             (when doc [doc])
             (when (seq slots) [(apply array-map (mapcat identity slots))])
-            (when corresponds
-              [(concat ['corresponds (:incl corresponds) (codomain-form corresponds)]
-                       (when-let [b (:bridge corresponds)] [(list 'bridge b)])
-                       (mapv rel-map-form (:rel-demands corresponds))
-                       (keep agrees-form (:demands corresponds)))])
             (when realizes [(list 'realized-as realizes)])
             (map law-form laws))))
+
+(defn ^:export ^{:malli/schema [:=> [:cat :StructureDb :Eid] :any]}
+  correspondence-form
+  "Render the external correspondence whose design Structure is `eid` as valid canonical input,
+   or nil when the structure has no correspondence."
+  [db eid]
+  (let [{:keys [name corresponds]} (parts db eid)]
+    (when corresponds
+      (concat ['correspond name (codomain-form corresponds)
+               {:carrier (:carrier corresponds) :coverage (:coverage corresponds)}]
+              (mapv rel-map-form (:rel-demands corresponds))))))
 
 ;; ── the primer (reference-card string) ───────────────────────────────────────
 
@@ -217,8 +212,8 @@
 
 (defn- fmt-structure [db s]
   (let [{:keys [name tag doc value? slots corresponds realizes laws]} (parts db s)
-        ;; the node-demand count comes from the registry's one shared source (object map ∪ authored
-        ;; agrees ∪ derived identity) — the reflected Morphism stores only the authored statement
+        ;; the node-demand count comes from the registry's one shared source (carrier coverage ∪ authored
+        ;; agrees ∪ derived identity) — the reflected Correspondence stores only the authored statement
         n-generated (when corresponds
                       (+ (count (s/effective-node-demands tag))
                          (count-relation-demands (:rel-demands corresponds))))]
@@ -227,7 +222,7 @@
           (when doc [(str "  " (pr-str (first-line doc)))])
           (when (seq slots) [(fmt-slots slots)])
           (when corresponds
-            [(str "  (corresponds …)  ; ⇒ " n-generated " generated laws")])
+            [(str "  ;; external (correspond …) ⇒ " n-generated " generated laws")])
           (when realizes [(str "  (realized-as " (pr-str realizes) ")")])
           (map #(str "  (law " (pr-str (:desc %)) " …)") laws))
          (str/join "\n")
@@ -261,8 +256,8 @@
 
 (defn ^{:malli/schema [:=> [:cat] :Primer]}
   correspondence-card
-  "The correspondence SEAM rendered as one card — the collected design↔fact morphism: the twin
-   ladder (root kinds with their bridges, nested kinds), then every demand with its stable law
+  "The correspondence SEAM rendered as one card — the collected design↔fact bridge presentation: each
+   kind's ordinary carrier relation and coverage, then every demand with its stable law
    KEY and desc. The descs come from the GENERATED laws (via laws-of), so the laws the demand
    declarations generate — invisible in the per-structure grammar view — are all visible here,
    each attributed to its declaration. Registry-direct (no db): renders the same seam
@@ -272,10 +267,8 @@
         key->desc (into {} (for [sd (s/all-structures), law (s/laws-of sd)
                                  :when (:key law)] [(:key law) (:desc law)]))
         short     (fn [tag] (name tag))
-        kind-line (fn [[tag {:keys [bridge]}]]
-                    (if bridge
-                      (format "  %-12s twins by-name via %s  (ROOT)" (short tag) bridge)
-                      (format "  %-12s twins by-name within twinned containers" (short tag))))
+        kind-line (fn [[tag {:keys [carrier coverage]}]]
+                    (format "  %-12s via %-20s coverage %s" (short tag) carrier coverage))
         demand-lines (for [[_tag {:keys [demands]}] (sort-by (comp str key) kinds), d demands]
                        (format "  %-46s %s" (str (:key d)) (or (key->desc (:key d)) (:desc d))))
         ;; desc non-nil by construction — the seam↔laws-of key invariant: every key in (:keys r)
