@@ -53,19 +53,24 @@
       (symbol (:entity/name e)))))
 
 (defn- slot-expr
-  "Card + optional props (payload) + target → the slot's type expression. Props
+  "Card + optional props (payload) + targets → the slot's type expression. Props
    take malli's position after a quantifier; a props-only one-card leads with the
-   props map."
-  [kind props target]
-  (let [quantifier ({:slot/optional :?, :slot/many :*, :slot/some :+, :slot/set :set} kind)]
+   props map. Several targets (a UNION slot) list as alternatives after the
+   quantifier/props, mirroring the authoring form `[:* A B C]`."
+  [kind props targets]
+  (let [quantifier ({:slot/optional :?, :slot/many :*, :slot/some :+, :slot/set :set} kind)
+        single     (when (= 1 (count targets)) (first targets))]
     (cond
-      quantifier (if props [quantifier props target] [quantifier target])
-      props      [props target]
-      :else      target)))
+      quantifier (into (if props [quantifier props] [quantifier]) targets)
+      props      (into [props] targets)
+      single     single
+      :else      (into [{}] targets))))
 
 (defn- slots-of [db s]
   ;; the optional :rel/payload and :rel/props are read separately and merged (no get-else on Cozo);
-  ;; :rel/kind is a keyword the mirror stringifies, so re-keywordize it for the slot/* filter + the quantifier map
+  ;; :rel/kind is a keyword the mirror stringifies, so re-keywordize it for the slot/* filter + the
+  ;; quantifier map. A UNION slot reflects as several edges sharing label + order (alt position on
+  ;; the id suffix) — regrouped here into one entry with the alternatives in order.
   (let [base  (cq/q '[:find ?r ?k ?l ?o ?t :in $ ?s
                       :where [?r :rel/from ?s] [?r :rel/kind ?k] [?r :rel/label ?l]
                              [?r :rel/order ?o] [?r :rel/to ?t]] db s)
@@ -75,12 +80,15 @@
                                :where [?r :rel/from ?s] [?r :rel/props ?p]] db s))]
     (->> base
          (filter #(= "slot" (namespace (keyword (nth % 1)))))
-         (sort-by #(ord (nth % 3)))
-         (mapv (fn [[r k l _ t]]
-                 (let [char-props (some-> (propm r) payload-form)
+         (sort-by (fn [[r _ _ o _]] [(ord o) (str r)]))
+         (partition-by (fn [[_ k l _ _]] [k l]))
+         (mapv (fn [rows]
+                 (let [[r k l _ _] (first rows)
+                       char-props (some-> (propm r) payload-form)
                        pay-props  (when-let [p (pays r)] {:payload (keyword p)})
-                       props      (not-empty (merge char-props pay-props))]
-                   [(keyword l) (slot-expr (keyword k) props (target-expr db t))]))))))
+                       props      (not-empty (merge char-props pay-props))
+                       targets    (mapv (fn [[_ _ _ _ t]] (target-expr db t)) rows)]
+                   [(keyword l) (slot-expr (keyword k) props targets)]))))))
 
 (defn- laws-of [db s]
   (->> (cq/q '[:find ?l ?id :in $ ?s

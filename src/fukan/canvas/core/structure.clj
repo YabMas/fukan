@@ -448,7 +448,9 @@
         rels    (mapv (fn [c]
                         (let [rk         (keyword (first c))
                               slot       (slot-for sdef rk)
-                              target-sdef (when slot (structure-by-tag (:target slot)))]
+                              ;; a union slot's targets are plain refs — no single reader applies
+                              target-sdef (when (and slot (nil? (:alts slot)))
+                                            (structure-by-tag (:target slot)))]
                           (when-not slot
                             (throw (ex-info (str (clojure.core/name tag) ": `"
                                                  (clojure.core/name rk) "` is not a slot")
@@ -533,11 +535,14 @@
 
 (defn- route-slot
   "Which slot a nested instance of `kid-tag` routes to in `sdef`: the slot whose target IS that
-   tag (the role slot — an Operation → :exposes, a Kind → :owns), unless `private?`, then the
+   tag — or whose union of alternatives (`:alts`) admits it — unless `private?`, then the
    `Any`-targeting fallback (the internal :child slot)."
   [sdef kid-tag private?]
   (or (when-not private?
-        (some #(when (= (:target %) kid-tag) (:rel %)) (:slots sdef)))
+        (some #(when (or (= (:target %) kid-tag)
+                         (some #{kid-tag} (:alts %)))
+                 (:rel %))
+              (:slots sdef)))
       (some #(when (= (:target %) :Any) (:rel %)) (:slots sdef))))
 
 (declare expand-instance)
@@ -640,6 +645,7 @@
      :reads Model                      one (the default — a bare target)
      :doc   [:? :string]               optional
      :child [:* Node]                  zero or more, ordered
+     :child [:* Op Kind Node]          zero or more, a UNION of sorts
      :item  [:+ Item]                  one or more, ordered
      :field [:set Field]               zero or more, unordered identity
      :mode  [:enum \"a\" \"b\"]            a refined scalar, cardinality one
@@ -649,23 +655,41 @@
    The target form: a SYMBOL resolves to a structure tag (a ref-slot; `Any` is the
    wildcard). A KEYWORD or VECTOR is a TYPE FORM (a value-slot): stored verbatim and
    never interpreted by the kernel — the generated law checks values through the
-   registered type dialect (`fukan.canvas.core.typing/value-valid?`)."
+   registered type dialect (`fukan.canvas.core.typing/value-valid?`).
+
+   A UNION target lists ALTERNATIVE structure refs after the quantifier (or props map):
+   `[:* A B C]` / `[{} A B]`. Structure refs only (no scalars, no `Any` — a union of
+   anything is `Any`); `:target` holds the first alternative, `:alts` the full vector,
+   and the generated target-type law checks the disjunction."
   [rel v]
-  (let [[card props form] (cond
-                            (and (vector? v) (contains? quantifiers (first v)))
-                            (let [props (when (map? (second v)) (second v))]
-                              [(quantifiers (first v)) props (if props (nth v 2 nil) (second v))])
-                            (and (vector? v) (map? (first v)))
-                            [:one (first v) (second v)]
-                            :else [:one nil v])
-        type-form? (or (keyword? form) (vector? form))   ; symbol → structure-ref; else → a type form
+  (let [[card props forms] (cond
+                             (and (vector? v) (contains? quantifiers (first v)))
+                             (let [props (when (map? (second v)) (second v))]
+                               [(quantifiers (first v)) props (vec (drop (if props 2 1) v))])
+                             (and (vector? v) (map? (first v)))
+                             [:one (first v) (vec (rest v))]
+                             :else [:one nil [v]])
+        form   (first forms)
+        union? (> (count forms) 1)
+        _ (when union?
+            (when-not (every? symbol? forms)
+              (throw (ex-info (str "slot " rel ": a union target lists structure refs only — got "
+                                   (pr-str v))
+                              {:rel rel :form v})))
+            (when (some #(= 'Any %) forms)
+              (throw (ex-info (str "slot " rel ": Any in a union is just Any — " (pr-str v))
+                              {:rel rel :form v}))))
+        type-form? (and (not union?)
+                        (or (keyword? form) (vector? form)))  ; symbol → structure-ref; else → a type form
         target (cond
                  (symbol? form)  (resolve-struct-tag form)
-                 (vector? form)  form
-                 (keyword? form) (keyword (name form))
+                 (and (not union?) (vector? form))  form
+                 (and (not union?) (keyword? form)) (keyword (name form))
                  :else (throw (ex-info (str "slot " rel ": unreadable type expression " (pr-str v))
                                        {:rel rel :form v})))]
-    (merge {:rel rel :card card :target target :type-form? type-form?} props)))
+    (merge (cond-> {:rel rel :card card :target target :type-form? type-form?}
+             union? (assoc :alts (mapv resolve-struct-tag forms)))
+           props)))
 
 ;; ── law combinators: the recurring law shapes, datalog-correct by construction ─
 ;; A combinator names a law SHAPE at domain altitude and expands to the datalog —
@@ -1191,14 +1215,18 @@
 (defn- relation-slot-laws
   "Cardinality + target-type laws for a RELATION slot (target is a structure).
    When `target` is `:Any` (the wildcard), the target-type law is skipped —
-   any node is accepted; only cardinality laws are emitted."
-  [tag {:keys [rel card target]}]
+   any node is accepted; only cardinality laws are emitted. A UNION slot
+   (`:alts`) checks the disjunction: the target must be NONE of the alternatives
+   to offend (a conjunction of `not`s)."
+  [tag {:keys [rel card target alts]}]
   (let [tn (name tag) rn (name rel)
-        target-law {:desc (str tn "." rn " target must be a " (name target))
+        target-law {:desc (str tn "." rn " target must be a "
+                          (if alts (str/join "|" (map name alts)) (name target)))
                     :offenders '[?x ?t]
-                    :where [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
-                            ['?x :structure/of tag]
-                            (list 'not ['?t :structure/of target])]}
+                    :where (into [['?r :rel/from '?x] ['?r :rel/kind rel] ['?r :rel/to '?t]
+                                  ['?x :structure/of tag]]
+                                 (for [a (or alts [target])]
+                                   (list 'not ['?t :structure/of a])))}
         none-law (fn [verb]
                    {:desc (str tn "." rn " " verb " (found none)")
                     :offenders '[?x]

@@ -191,7 +191,7 @@
                     (concat
                      (for [sd (s/all-structures)
                            :when (contains? nss (some-> (:tag sd) namespace))
-                           n    (concat (keep target-ns (map :target (:slots sd)))
+                           n    (concat (keep target-ns (mapcat #(or (:alts %) [(:target %)]) (:slots sd)))
                                         (some-> (s/correspondence-of (:tag sd)) :fact-tag target-ns list)
                                         (keep resolve-call (rule-calls (sdef-clauses sd))))
                            :when n]
@@ -216,24 +216,30 @@
                value?      (assoc :val/value true)
                realized-as (assoc :val/realizes (pr-str realized-as) :val/form realized-as))
         slot-bits
-        (map-indexed
-         (fn [i sl]
-           (let [label  (name (:rel sl))
-                 kind   (keyword "slot" (name (:card sl)))
-                 [tid emitted] (if (s/scalar-slot? sl)
-                                 (let [sub (typing/reflect-type (:target sl))]
-                                   [(:id sub) sub])
-                                 [(structure-id (:target sl)) nil])
-                 props* (not-empty (dissoc sl :rel :card :target :type-form? :payload))]
-             {:emitted emitted
-              :any?    (= :Any (:target sl))
-              :rel     (cond-> {:rel/id   (str sid "|" (name kind) "|" label)
-                                :rel/from [:entity/id sid] :rel/kind kind
-                                :rel/to   [:entity/id tid]
-                                :rel/label label :rel/order i}
-                         (:payload sl) (assoc :rel/payload (:payload sl))
-                         props*        (assoc :rel/props (pr-str props*)))}))
-         slots)
+        (->> slots
+             (map-indexed
+              (fn [i sl]
+                (let [label  (name (:rel sl))
+                      kind   (keyword "slot" (name (:card sl)))
+                      props* (not-empty (dissoc sl :rel :card :target :type-form? :payload :alts))
+                      mk     (fn [suffix tid emitted any?]
+                               {:emitted emitted
+                                :any?    any?
+                                :rel     (cond-> {:rel/id   (str sid "|" (name kind) "|" label suffix)
+                                                  :rel/from [:entity/id sid] :rel/kind kind
+                                                  :rel/to   [:entity/id tid]
+                                                  :rel/label label :rel/order i}
+                                           (:payload sl) (assoc :rel/payload (:payload sl))
+                                           props*        (assoc :rel/props (pr-str props*)))})]
+                  ;; a UNION slot reflects as one edge per alternative (same label + order; the
+                  ;; alt position rides the id suffix — the print-dual regroups by label)
+                  (if-let [alts (:alts sl)]
+                    (map-indexed (fn [j a] (mk (str "|" j) (structure-id a) nil false)) alts)
+                    [(if (s/scalar-slot? sl)
+                       (let [sub (typing/reflect-type (:target sl))]
+                         (mk "" (:id sub) sub false))
+                       (mk "" (structure-id (:target sl)) nil (= :Any (:target sl))))]))))
+             (mapcat identity))
         law-bits
         (map-indexed
          (fn [i law]
@@ -344,7 +350,8 @@
                                                 rel-elems))
                            slot-t (for [sd (grouped vns), sl (:slots sd)
                                         :when (not (s/scalar-slot? sl))
-                                        :let [n (target-ns (:target sl))] :when n] n)
+                                        t (or (:alts sl) [(:target sl)])
+                                        :let [n (target-ns t)] :when n] n)
                            fact-t (keep #(some-> (s/correspondence-of (:tag %)) :fact-tag namespace)
                                         (grouped vns))]
                        (->> (concat (keep resolve-call called) slot-t fact-t)
