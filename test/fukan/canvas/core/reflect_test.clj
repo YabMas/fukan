@@ -208,8 +208,8 @@
                                         [?r :rel/from ?v] [?r :rel/kind :imports] [?r :rel/to ?i]
                                         [?i :entity/name ?n]]
                                db vn)))]
-      (is (contains? (imports "fukan.common.vocab.code.module") "fukan.common.vocab.grouping")
-          "the species' (:sub :contains) inclusions reference the genus grouping declares — a genus import")
+      (is (contains? (imports "fukan.common.vocab.code.kind") "fukan.common.vocab.grouping")
+          "Kind's ownership law rule-calls the `contains` genus grouping declares — a rule-call import")
       (is (contains? (imports "fukan.common.vocab.code.subsystem") "fukan.common.vocab.code.module")
           "Subsystem's :child slot targets Module — a slot-target import")
       (is (not (contains? (imports "fukan.common.vocab.grouping") "fukan.common.vocab.code.module"))

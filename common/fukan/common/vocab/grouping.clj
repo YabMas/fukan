@@ -18,22 +18,22 @@
 ;; injected only where referenced.
 
 (defrelation :contains
-  "Membership — the GENUS, a bare element. Not authored directly: a structure declares a slot of one
-   of its SPECIES (`:child` here; `:exposes`/`:owns`/`:offers` on a code Module), and the species'
-   `(:sub :contains)` inclusion lifts those edges into `contains`. `contains+` rolls a nesting
-   ladder up (a Subsystem contains+ the Operations of the Modules it clusters).")
+  "Membership — the GENUS, a bare element. Not authored directly: a structure declares a slot of a
+   SPECIES (`:child`), and the species' `(:sub :contains)` inclusion lifts those edges into
+   `contains`. `contains+` rolls a nesting ladder up (a Subsystem contains+ the Operations of the
+   Modules it clusters).")
 
 (defrelation :child
-  "Internal membership — the ownership backbone: grain the container is source-of-truth for and no
-   one else consumes. The most abstract containment species; a code Module refines it with
-   surface-bearing siblings (`:exposes`/`:owns`)."
+  "Membership — the ownership backbone: what the container collects and is the home of. The one
+   containment species; a structure narrows WHO may be a member by its slot's target (a code
+   Module's `:child` takes the union of code-element sorts, a Subsystem's takes Modules)."
   (:sub :contains))
 
 (defrelation :within
   "An entity `?e` is a member of the container named `?cname` — the `contains` genus read by name,
    the membership convenience every law and lens selection uses at domain altitude
    (`(Operation ?s) (within ?s \"…\")`). It reads `contains`, so it resolves over EVERY species
-   (`:child`, and a code Module's `:exposes`/`:owns`/`:offers`) for free, over any NAMED container.
+   (`:child`) for free, over any NAMED container.
    Pure grouping vocabulary: its body mentions only the genus and the substrate's `:entity/name` —
    no code-vocab sort — so it lives here with the genus. (Until 2026-07-21 it was `in-module` in
    `code/module` — a historical narrowing: nothing about it requires a Module.)"

@@ -30,8 +30,8 @@
 (declare t-mb-op)
 (operation/Operation ^{:name "ma-op"} t-ma-op {:delegates [t-mb-op]})
 (operation/Operation ^{:name "mb-op"} t-mb-op {:delegates [t-ma-op]})
-(module/Module ^{:name "MA"} t-mod-ma {:exposes [t-ma-op]})
-(module/Module ^{:name "MB"} t-mod-mb {:exposes [t-mb-op]})
+(module/Module ^{:name "MA"} t-mod-ma {:child [t-ma-op]})
+(module/Module ^{:name "MB"} t-mod-mb {:child [t-mb-op]})
 
 (deftest module-acyclicity-fires-on-a-mutual-pair
   (testing "two modules whose ops mutually delegate (a 2-cycle) violate the acyclicity law"
@@ -44,9 +44,9 @@
 (operation/Operation ^{:name "t3a-op"} t3-a-op {:delegates [t3-b-op]})
 (operation/Operation ^{:name "t3b-op"} t3-b-op {:delegates [t3-c-op]})
 (operation/Operation ^{:name "t3c-op"} t3-c-op {:delegates [t3-a-op]})
-(module/Module ^{:name "T3A"} t3-mod-a {:exposes [t3-a-op]})
-(module/Module ^{:name "T3B"} t3-mod-b {:exposes [t3-b-op]})
-(module/Module ^{:name "T3C"} t3-mod-c {:exposes [t3-c-op]})
+(module/Module ^{:name "T3A"} t3-mod-a {:child [t3-a-op]})
+(module/Module ^{:name "T3B"} t3-mod-b {:child [t3-b-op]})
+(module/Module ^{:name "T3C"} t3-mod-c {:child [t3-c-op]})
 
 (deftest module-acyclicity-fires-on-a-transitive-cycle
   (testing "a 3-module cycle T3A→T3B→T3C→T3A — no direct mutual pair, so the OLD 2-cycle check
@@ -61,8 +61,8 @@
 ;; ── conformance fixtures: S's op delegates to T's op (cross-subsystem) ──
 (operation/Operation ^{:name "op-t"} t-op-t "callee in T")
 (operation/Operation ^{:name "op-s"} t-op-s {:delegates [t-op-t]})
-(module/Module ^{:name "M-S"} t-cm-s {:exposes [t-op-s]})
-(module/Module ^{:name "M-T"} t-cm-t {:exposes [t-op-t]})
+(module/Module ^{:name "M-S"} t-cm-s {:child [t-op-s]})
+(module/Module ^{:name "M-T"} t-cm-t {:child [t-op-t]})
 (declare t-sub-T)
 (subsystem/Subsystem ^{:name "S-ok"}  t-sub-S-ok  {:child [t-cm-s] :may-depend [t-sub-T]})  ; declares the dep
 (subsystem/Subsystem ^{:name "S-bad"} t-sub-S-bad {:child [t-cm-s]})                          ; does NOT
@@ -80,7 +80,7 @@
 
 ;; ── over-declaration fixtures: V declares :may-depend T but M-V realizes no dependency on M-T ──
 (operation/Operation ^{:name "op-v"} t-op-v "a V op that depends on nothing cross-subsystem")
-(module/Module ^{:name "M-V"} t-cm-v {:exposes [t-op-v]})
+(module/Module ^{:name "M-V"} t-cm-v {:child [t-op-v]})
 (subsystem/Subsystem ^{:name "V"} t-sub-V {:child [t-cm-v] :may-depend [t-sub-T]})
 
 (deftest unrealized-dependency-fires-on-an-over-declared-edge

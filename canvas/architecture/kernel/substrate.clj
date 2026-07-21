@@ -55,5 +55,5 @@
 (Module core-substrate
   "The node substrate the grammar sits on — node identity + value-node construction + the empty db.
    A leaf: depends on nothing; everything above adopts its `StructureDb` and builds on its primitives."
-  {:exposes [value-content-key var-id var-simple-name instance-value? ref? stamp-stratum]
-   :owns    [Node Relation InstanceValue Ref StructureDb Eid]})
+  {:child [value-content-key var-id var-simple-name instance-value? ref? stamp-stratum
+           Node Relation InstanceValue Ref StructureDb Eid]})

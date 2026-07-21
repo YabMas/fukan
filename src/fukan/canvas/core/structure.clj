@@ -702,7 +702,7 @@
   "A combinator's `:when` subject-filter → positive where-clauses on `var`. A scalar MAP
    `{k v}` is sugar for `:val/k`-equality (`[var :val/k v]` per entry); a raw datalog
    clause-VECTOR is spliced verbatim (it uses `var` as the subject, e.g.
-   `'[(design ?x) [?xr :rel/kind :exposes] [?xr :rel/to ?x]]`) — the same datalog the
+   `'[(design ?x) [?xr :rel/kind :child] [?xr :rel/to ?x]]`) — the same datalog the
    correspondence demands' `:when`/`:require` accept. nil → none."
   [var when]
   (cond

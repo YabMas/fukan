@@ -70,10 +70,10 @@
 
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
-  {:exposes [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
-             laws-of direct-scope-tags correspondence* correspondence]
-   :owns    [Violation Form]                      ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)
-   :child   [Rule]})                              ; internal grain: the rules-output type
+  {:child [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
+           laws-of direct-scope-tags correspondence* correspondence
+           Violation Form                         ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)
+           Rule]})                                ; the rules-output type
 
 ;; the kernel's VOCAB-FACING plug-points — a project's vocab plugs its grammar into the kernel through
 ;; these, and the kernel names none of them (it ships no vocab, so the inversion is inherent, not a

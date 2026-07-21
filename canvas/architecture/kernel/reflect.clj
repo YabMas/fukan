@@ -22,4 +22,4 @@
 (Module core-reflect
   "Grammar reflection — the registry projected onto the graph. Its meta-grammar node types
    (Structure/Law/Vocabulary/Relation) are the tool's vocabulary for describing grammars."
-  {:exposes [reflect]})
+  {:child [reflect]})

@@ -103,7 +103,7 @@
                {:entity/id "co" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "load-model"}
                {:entity/id "ko" :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "load-model" :val/extracted true}
                {:entity/id "stray" :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "load-model" :val/extracted true}]
-              [{:rel/id "r1" :rel/from [:entity/id "cm"] :rel/kind :exposes :rel/to [:entity/id "co"]}
+              [{:rel/id "r1" :rel/from [:entity/id "cm"] :rel/kind :child :rel/to [:entity/id "co"]}
                {:rel/id "r2" :rel/from [:entity/id "km"] :rel/kind :child   :rel/to [:entity/id "ko"]}])
           twins (set (cq/q '[:find ?an ?bn :in $ %
                              :where (twin ?a ?b) [?a :entity/name ?an] [?b :entity/name ?bn]]

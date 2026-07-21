@@ -58,7 +58,9 @@
 ;; :corresponds/Operation.*.
 ;;   · OBJECT MAP: `Operation :eq [Fn :public]` — a bijection onto Fn's PUBLIC sub-sort (`:eq` ⇒ total,
 ;;     every design Operation twinned + surjective, every public Fn has a preimage). Private/export/
-;;     test-support fns are NOT public, so neither sort images nor delegation boundaries.
+;;     test-support fns are NOT public, so neither sort images nor delegation boundaries. This IS the
+;;     surface doctrine (Module carries no :exposes role since 2026-07-21): modelled ⇒ public — fukan
+;;     models surfaces, and interior helpers stay unmodelled (the roll-up routes through them).
 ;;   · RELATION MAPS: `:delegates ⊑ :public-call` — every declared op-level delegation is a public-call
 ;;     edge (the named fact relation above; `:sub` only, since fidelity is Subsystem `:may-depend`'s
 ;;     concern). `:performs ⊒ calls*·performs` — every effect the twin reaches is a declared design effect.

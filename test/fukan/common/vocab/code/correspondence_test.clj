@@ -59,7 +59,7 @@
                 (concat
                  [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}
-                  {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                  {:rel/id "m|child|f" :rel/from -1 :rel/kind :child :rel/to -2}
                   {:db/id -5 :structure/of :fukan.common.typing.malli/Schema :val/kind "nil"}   ; the MODELLED :out type node
                   {:rel/id "f|out|s5" :rel/from -2 :rel/kind :out :rel/to -5}
                   {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}
@@ -83,7 +83,7 @@
                   (concat
                    [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                     {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}
-                    {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                    {:rel/id "m|child|f" :rel/from -1 :rel/kind :child :rel/to -2}
                     {:db/id -10 :structure/of :fukan.common.typing.malli/Schema :val/kind "nil"}      ; type A
                     {:db/id -11 :structure/of :fukan.common.typing.malli/Schema :val/kind "any"}      ; type B
                     {:db/id -12 :structure/of :fukan.common.typing.malli/Schema :val/kind "boolean"}  ; type C (shared :out)
@@ -156,8 +156,8 @@
                 {:db/id -2 :structure/of :fukan.common.vocab.code.module/Module :entity/id "B" :entity/name "B"}
                 {:db/id -3 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-a"}
                 {:db/id -4 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "op-b"}
-                {:rel/id "A|exposes|op-a" :rel/from -1 :rel/kind :exposes :rel/to -3}
-                {:rel/id "B|exposes|op-b" :rel/from -2 :rel/kind :exposes :rel/to -4}
+                {:rel/id "A|child|op-a" :rel/from -1 :rel/kind :child :rel/to -3}
+                {:rel/id "B|child|op-b" :rel/from -2 :rel/kind :child :rel/to -4}
                 {:rel/id "op-a|delegates|op-b" :rel/from -3 :rel/kind :delegates :rel/to -4}
                 ;; the extracted (code) modules are SEPARATE nodes from the design modules — distinct
                 ;; :entity/id so they don't merge — exactly as the real build keeps design ns and code ns
@@ -212,7 +212,7 @@
           ;; authored f (module m) ; extracted twin f (module fukan.m, corresponds to m) calls g ; g performs :io
           common [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/name "m"}
                   {:db/id -2 :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "f"}                          ; authored — declares nothing
-                  {:rel/id "m|exposes|f" :rel/from -1 :rel/kind :exposes :rel/to -2}
+                  {:rel/id "m|child|f" :rel/from -1 :rel/kind :child :rel/to -2}
                   {:db/id -3 :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.m" :val/extracted true}   ; code module (corresponds to "m")
                   {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "f" :val/extracted true}       ; twin of f
                   {:db/id -5 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "g" :val/extracted true}       ; f calls g

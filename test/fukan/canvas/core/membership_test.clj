@@ -10,22 +10,22 @@
             [fukan.common.vocab.code.module :refer [Module]]
             [fukan.common.vocab.code.subsystem :refer [Subsystem]]))
 
-;; a containment ladder: subsystem m-sub ─child→ module m-mod ─exposes→ op m-op (m-op performs :io)
+;; a containment ladder: subsystem m-sub ─child→ module m-mod ─child→ op m-op (m-op performs :io)
 (declare mc-mod)
 (Operation ^{:name "m-op"} mc-op {:performs [:io]})
-(Module ^{:name "m-mod"} mc-mod {:exposes [mc-op]})
+(Module ^{:name "m-mod"} mc-mod {:child [mc-op]})
 (Subsystem ^{:name "m-sub"} mc-sub {:child [mc-mod]})
 
 (defn- names [db eids] (set (map #(:entity/name (cq/entity db %)) eids)))
 
 (deftest contains-unions-the-containment-relations-and-rolls-up
-  (testing "the species' :isa character generates `contains` (the child/exposes/owns union) + contains+ (closure)"
+  (testing "the species' (:sub :contains) inclusion generates `contains` (the :child union) + contains+ (closure)"
     (let [db (build/vars->cozo [#'mc-op #'mc-mod #'mc-sub])
           q  (fn [rule a] (set (cq/q (vec (concat '[:find [?m ...] :in $ % ?an :where [?a :entity/name ?an]]
                                                   [(list rule '?a '?m)]))
                                      db (s/vocab-rules) a)))]
-      ;; direct containment (exposes / child) collapses to `contains`
-      (is (= #{"m-op"}  (names db (q 'contains  "m-mod"))) "m-mod contains m-op (via :exposes)")
+      ;; direct containment (:child) collapses to `contains`
+      (is (= #{"m-op"}  (names db (q 'contains  "m-mod"))) "m-mod contains m-op (via :child)")
       (is (= #{"m-mod"} (names db (q 'contains  "m-sub"))) "m-sub contains m-mod (via :child)")
       ;; transitive containment (the rollup) reaches the op from the subsystem
       (is (= #{"m-op" "m-mod"} (names db (q 'contains+ "m-sub"))) "m-sub contains+ reaches both"))))

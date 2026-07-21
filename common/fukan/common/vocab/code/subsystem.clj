@@ -27,10 +27,10 @@
   '[?mod ?sub]
   '[[?sub :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (contains ?sub ?mod)])
 
-;; module-owns — Module ownership: the `contains` genus (every species — :exposes/:owns/:child)
+;; module-owns — Module ownership: the `contains` genus
 ;; restricted to a Module container. A helper for `module-depends`.
 (s/defrelation :module-owns
-  "Module ?m owns ?x — the `contains` genus (:exposes/:owns/:child) restricted to a Module container."
+  "Module ?m owns ?x — the `contains` genus restricted to a Module container."
   '[?m ?x]
   '[[?m :structure/of :fukan.common.vocab.code.module/Module] (contains ?m ?x)])
 

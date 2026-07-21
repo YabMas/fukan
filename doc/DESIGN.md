@@ -103,8 +103,8 @@ and reified `:rel/*` triples by hand.
 Module ownership flows via `:child` relations on the **owner**, not via
 back-references on the owned entity. Nested authoring routes members into the
 container's slots automatically (`(Module m … (Operation f …))` emits the
-`:exposes`/`:child` relations). Owned entities carry no module back-reference;
-`within` resolves over `:child`/`:exposes`/`:owns`.
+`:child` relations). Owned entities carry no module back-reference; `within`
+resolves membership by container name over the `contains` genus.
 
 ## Ingestion — many specs, one graph
 

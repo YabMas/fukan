@@ -189,10 +189,12 @@ bundled was kept — the two module-graph enforcement laws rehomed onto `Subsyst
 call-readers onto `operation.clj` (with the rest of Operation's correspondence), the
 effect-correspondence reader onto `effect.clj`.
 
-The grouping ladder is levelled: `Grouping` (bare membership) ⊂ `Module` (a code namespace:
-an API surface + owned types) ⊂ `Subsystem` (a cluster of modules realizing a capability, with
-a declared `:may-depend` DAG it enforces ITSELF — conformance + acyclicity are its slot-semantics
-laws — against the extracted code graph). There is **no convenience umbrella** — Clojure can't re-export the generated
+The grouping ladder is a TREE, not a chain: `Grouping` (bare membership, `:child [:* Any]`) is
+refined by two siblings that narrow the member sort — `Module` (a code namespace: a Grouping over
+code elements, `:child [:* Operation Kind Module]` — the union is the membership constraint, its
+generated target-type law the teeth) and `Subsystem` (a cluster of modules realizing a capability,
+`:child [:* Module]`, with a declared `:may-depend` DAG it enforces ITSELF — conformance +
+acyclicity are its slot-semantics laws — against the extracted code graph). There is **no convenience umbrella** — Clojure can't re-export the generated
 instance-constructor macros, so consumers `require` the specific elements they use; structure
 tags are verbose (`:fukan.common.vocab.code.operation/Operation`). Grow this vocab **only under
 concrete design pressure** — never a methodology/middle layer designed abstractly ahead of real
@@ -426,9 +428,9 @@ mixing them corrupts history.
   whole `fukan.common.*` tier (vocab + typing + extraction)
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by
   element + grouping. **Pure design, language-neutral — carries NO correspondence.** The membership
-  relations are ELEMENTS here: the `contains` genus + `:child` + the derived by-name `:within` in
-  `grouping.clj`, `:exposes`/`:owns` in `code/module.clj` (the pattern tier's derived `offers`
-  rides `patterns/plug_point.clj` — the tier owns the relations it adds). The
+  relations are ELEMENTS here: the `contains` genus + `:child` + the derived by-name `:within`, all
+  in `grouping.clj` (`code/module.clj` declares no relation element — membership is `:child` with a
+  union target; the pattern tier's derived `offers` rides `patterns/plug_point.clj`). The
   module-dependency-graph relations + readers (`module-owns`/`module-depends`/`module-dependencies`)
   live with the architecture laws that consume them in `code/subsystem.clj`
 - `common/fukan/common/extraction/clojure/` — the FACT theory + the design↔Clojure map: `operation.clj`

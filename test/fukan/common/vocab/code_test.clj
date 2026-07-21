@@ -19,10 +19,10 @@
 (operation/Operation ^{:name "a-op"} t-a-op {:delegates [t-b-op]})
 ;; c-op takes a DShape (a ref to a Kind owned by module D) → data-adoption dependency c→d
 (operation/Operation ^{:name "c-op"} t-c-op {:signature [:=> [:catn [:x DShape]] :nil]})
-(module/Module ^{:name "A"} t-mod-a {:exposes [t-a-op]})
-(module/Module ^{:name "B"} t-mod-b {:exposes [t-b-op]})
-(module/Module ^{:name "C"} t-mod-c {:exposes [t-c-op]})
-(module/Module ^{:name "D"} t-mod-d {:owns [DShape]})
+(module/Module ^{:name "A"} t-mod-a {:child [t-a-op]})
+(module/Module ^{:name "B"} t-mod-b {:child [t-b-op]})
+(module/Module ^{:name "C"} t-mod-c {:child [t-c-op]})
+(module/Module ^{:name "D"} t-mod-d {:child [DShape]})
 
 (deftest module-dependencies-unions-calls-and-data-adoption
   (testing "M depends on N via a delegate (call) OR via adopting a Kind N owns (data)"

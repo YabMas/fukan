@@ -11,8 +11,9 @@
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.operation]))
 
-;; ── fixture: two synthetic modules with :exposes/:owns/:child members ────────
-;; m1 exposes o1,o2 + owns k1 + child c1 (iface 2, contains 4); m2 exposes o3 (iface 1, contains 1)
+;; ── fixture: two synthetic modules; :exposes here is a RAW ad-hoc edge kind ───
+;; (no declared element — the queries measure raw edges), :child is the containment species.
+;; m1 exposes o1,o2 + child k1,c1 (iface 2, contains 2); m2 exposes o3 + child o3 (iface 1, contains 1)
 (defn- fixture []
   (build/maps->cozo
    [{:entity/id "m1" :structure/of :fukan.common.vocab.code.module/Module :entity/name "mod.one"}
@@ -24,9 +25,10 @@
     {:entity/id "c1" :structure/of :fukan.common.vocab.code.operation/Operation :entity/name "helper-1"}]
    [{:rel/id "r1" :rel/from [:entity/id "m1"] :rel/kind :exposes :rel/to [:entity/id "o1"]}
     {:rel/id "r2" :rel/from [:entity/id "m1"] :rel/kind :exposes :rel/to [:entity/id "o2"]}
-    {:rel/id "r3" :rel/from [:entity/id "m1"] :rel/kind :owns    :rel/to [:entity/id "k1"]}
+    {:rel/id "r3" :rel/from [:entity/id "m1"] :rel/kind :child   :rel/to [:entity/id "k1"]}
     {:rel/id "r4" :rel/from [:entity/id "m1"] :rel/kind :child   :rel/to [:entity/id "c1"]}
-    {:rel/id "r5" :rel/from [:entity/id "m2"] :rel/kind :exposes :rel/to [:entity/id "o3"]}]))
+    {:rel/id "r5" :rel/from [:entity/id "m2"] :rel/kind :exposes :rel/to [:entity/id "o3"]}
+    {:rel/id "r6" :rel/from [:entity/id "m2"] :rel/kind :child   :rel/to [:entity/id "o3"]}]))
 
 (defn- by-name
   "eid→count tuples → {entity-name count}."
@@ -103,7 +105,7 @@
                                 [?r :rel/from ?m] [?r :rel/kind :exposes] [?r :rel/to ?op])
                               (measure ?c (count ?x) (contains ?m ?x))]
                      db (s/vocab-rules))]
-      (is (= {"mod.one" [2 4] "mod.two" [1 1]}
+      (is (= {"mod.one" [2 2] "mod.two" [1 1]}
              (into {} (map (fn [[m e c]] [(:entity/name (cq/entity db m)) [e c]])) rows))))))
 
 (deftest measure-thresholds-into-a-predicate

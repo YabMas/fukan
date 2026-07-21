@@ -88,7 +88,7 @@
       (is (= ["build-model"]
              (cq/q '[:find [?n ...]
                      :where [?m :entity/name "model-pipeline"]
-                            [?cr :rel/kind :exposes] [?cr :rel/from ?m] [?cr :rel/to ?c]
+                            [?cr :rel/kind :child] [?cr :rel/from ?m] [?cr :rel/to ?c]
                             [?c :structure/of :fukan.common.vocab.code.operation/Operation] [?c :entity/name ?n]]
                    db))
           "model.pipeline exposes exactly one operation — no stale duplicate ingest")
@@ -97,22 +97,22 @@
       (is (= ["require-canvas-namespaces!"]
              (cq/q '[:find [?bn ...]
                      :where [?mp :entity/name "model-pipeline"]
-                            [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
+                            [?cm :rel/kind :child] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
                             [?bm :entity/name "build-model"]
                             [?r :rel/from ?bm] [?r :rel/kind :delegates] [?r :rel/to ?b]
                             [?cs :entity/name "canvas-source"]
-                            [?cc :rel/kind :exposes] [?cc :rel/from ?cs] [?cc :rel/to ?b]
+                            [?cc :rel/kind :child] [?cc :rel/from ?cs] [?cc :rel/to ?b]
                             [?b :entity/name ?bn]]
                    db))
           "build-model delegates to canvas-source's require-canvas-namespaces! (its exposed API)")
       (is (= ["extract-facts"]
              (cq/q '[:find [?en ...]
                     :where [?mp :entity/name "model-pipeline"]
-                           [?cm :rel/kind :exposes] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
+                           [?cm :rel/kind :child] [?cm :rel/from ?mp] [?cm :rel/to ?bm]
                            [?bm :entity/name "build-model"]
                            [?r :rel/from ?bm] [?r :rel/kind :delegates] [?r :rel/to ?e]
                            [?ex :entity/name "extraction"]
-                           [?ec :rel/kind :exposes] [?ec :rel/from ?ex] [?ec :rel/to ?e]
+                           [?ec :rel/kind :child] [?ec :rel/from ?ex] [?ec :rel/to ?e]
                            [?e :entity/name ?en]]
                   db))
           "build-model calls extraction/extract-facts — the design↔code seam, via the plug-point"))))
@@ -126,7 +126,7 @@
       (is (= ["core-substrate"]
              (cq/q '[:find [?mn ...]
                     :where [?k :entity/name "StructureDb"] [?k :structure/of :fukan.common.vocab.code.kind/Kind]
-                           [?r :rel/kind :owns] [?r :rel/from ?m] [?r :rel/to ?k] [?m :entity/name ?mn]]
+                           [?r :rel/kind :child] [?r :rel/from ?m] [?r :rel/to ?k] [?m :entity/name ?mn]]
                   db))
           "core.substrate is its sole owner (the db it constructs)")
       (is (= 1 (count (cq/q '[:find ?s

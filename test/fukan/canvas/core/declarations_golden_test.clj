@@ -292,8 +292,16 @@
 ;; +offers derived-rule +owner slot-rule (closures net zero: satisfies+ out, owner+ in). Laws hold
 ;; at 62: −Module.offers/.satisfies target-type +PlugPoint.owner target-type +owner at-most-one
 ;; (cardinality `[:? Module]`); hashes move with both.
-(def ^:private golden-terms {:count 91 :hash 1281311856})
-(def ^:private golden-laws  {:count 62 :hash -1490472350})
+;; 2026-07-21 (d): `Module` COLLAPSES to a Grouping over code elements — `{:child [:* Operation Kind
+;; Module]}` (the first UNION slot target; the union is the membership constraint, its generated
+;; disjunctive target-type law the teeth). The `:exposes`/`:owns` role species are CUT (nothing
+;; consumed them — the surface doctrine is the morphism's `Operation :eq [Fn :public]`: modelled ⇒
+;; public), leaving `:child` the ONE containment species. Kind's ownership law rephrases over the
+;; genus ("a member of at most one Module", a kind-home rule-call). Terms 91→83 (−2 species
+;; subsumption, −2 slot rules, −4 closures). Laws 62→61 (−2 role target-type laws, +1 union :child
+;; target-type — the Any target had none; Kind's law swaps 1:1).
+(def ^:private golden-terms {:count 83 :hash -160462065})
+(def ^:private golden-laws  {:count 61 :hash -793972399})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
