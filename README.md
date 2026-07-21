@@ -36,7 +36,7 @@ authors its own grammar on the core.
 ```clojure
 (require '[fukan.canvas.core.structure :as s :refer [defstructure]]
          '[fukan.canvas.core.assemble :as a]
-         '[lib.type.malli])               ;; opt into the malli scalar type dialect
+         '[fukan.common.typing.malli])    ;; opt into the malli scalar type dialect
 
 ;; a tiny vocabulary: one structure — its slots as one typed map — plus one law
 (defstructure Task
@@ -44,8 +44,8 @@ authors its own grammar on the core.
   {:done? :boolean
    :deps  [:* Task]}
   (law "a task cannot depend on itself"
-    :offenders '[?t]
-    :where '[[?r :rel/from ?t] [?r :rel/kind :deps] [?r :rel/to ?t]]))
+    {:offenders [?t]
+     :where [[?r :rel/from ?t] [?r :rel/kind :deps] [?r :rel/to ?t]]}))
 
 ;; a model authored against it — the instance form mirrors defstructure:
 ;; a name symbol (the var AND the entity name) + one {slot → value} map
@@ -70,80 +70,75 @@ print-dual of authoring.
 ## One graph spanning spec and code
 
 This is what the single graph buys. Fukan **extracts** your real code into the same
-substrate — fukan's own extractor reads clj-kondo analysis into `Module` and
-`Operation` structures — and merges it onto the design graph. Now a law can quantify
-*across* the spec↔code seam:
+substrate — its Clojure extractor reads clj-kondo analysis into a FACT theory (`Ns` /
+`Fn`: namespaces, functions, signatures, effects, the actual call graph, privacy) —
+and merges it onto the design graph. The design↔code link is then declared as a
+**morphism**, one line per design element, from outside the design vocabulary:
 
 ```clojure
-;; every authored Operation must be realized by a same-named extracted Operation
-;; in the corresponding code module — a law spanning design and implementation
-(law "every authored operation is realized in code"
-  :scope :global
-  :offenders '[?s]
-  :where '[(Operation ?s) (not [?s :val/extracted true])
-           (named ?s ?n) (within ?s ?cm)
-           (not-join [?n ?cm]
-             (Operation ?o) [?o :val/extracted true]
-             (named ?o ?n) (within ?o ?km)
-             [(module-corresponds? ?cm ?km)])])
+;; design Module ↦ code namespace — the twin ROOT, paired by name
+(correspond Module :eq Ns (bridge :qualified-suffix))
+
+;; design Operation ↦ the PUBLIC sub-sort of extracted functions, plus relation maps:
+;; declared delegation ⊑ the public call graph; declared effects ⊒ everything reached
+(correspond Operation :eq [Fn :public]
+  (:delegates :sub :public-call)
+  (:performs  :sup [:cat [:* :calls] :performs]))
 ```
 
-Run `(structure/check db)` and **drift surfaces as a law violation** — a modelled
-capability with no implementation, on the same footing as any other broken invariant.
-The converse query reports the opposite gap: code the model doesn't yet cover. Laws
-read in the vocabulary's own terms — `(Operation ?s)`, `(within …)` — because the
-core derives those rules from the live vocabulary, so a law spans design and
-implementation without ever dropping to raw triples. The recurring law shapes have
-**combinators** — `(law "…" (matched-by R :from S))`, `(has R)`, `(at-most-one R)` —
-that expand to correct datalog so common constraints are one declarative line.
+Every demand law is **generated** from that declaration — totality (every modelled
+Operation has a realizing public function), surjectivity (every public function is
+modelled: the encapsulation gap), signature adherence, call-realization, effect
+coverage — each with a stable key a worklist reader addresses. Run
+`(structure/check db)` and **drift surfaces as law violations** — a modelled
+capability with no implementation, on the same footing as any other broken
+invariant. Laws read in the vocabulary's own terms — `(Operation ?s)`, `(within …)`,
+`(delegates …)` — because the core derives those datalog rules from the live
+vocabulary; the recurring law shapes have **combinators** — `(law "…" (matched-by R
+:from S))`, `(has R)`, `(at-most-one R)` — so common constraints are one
+declarative line.
 
-## Acts through a lens
+## The model talks back in its own language
 
-You work the graph through a **lens** — a focus on some sub-graph — with two
-complementary acts:
+Everything on the graph prints back as the forms it was authored in — the
+**print-duals**. `(grammar)` renders every vocabulary live as its `defstructure`
+source; `(show 'name)` renders a node as its authored instance form; `(focus '[…])`
+renders a datalog-selected slice — the textual model explorer; `(check)` quotes each
+offender as its form; `(correspondence)` prints the design↔fact seam as one card,
+the twin ladder and every generated demand with its stable law key. Selection is
+model-native datalog (binding `?n`, evaluated with the vocab-derived rules), so a
+slice is selected in the same language the laws are written in.
 
-- **Probe** — *read* the graph and observe it. A probe yields a **Finding**: a set of
-  sub-graphs of interest, each tagged with what it is — a recurring pattern, a law
-  violation, a coverage gap — and a note. Integrity, drift, and coverage are probes
-  whose findings gate action; surveys and pattern-scans are probes you reason with.
-- **Project** — *re-present* the graph in another form. A projection renders the model
-  into a target: an implementation spec an LLM can build from, reference docs, a
-  diagram. Materialize — turning a modelled node into a signature-and-intent an LLM
-  realizes — is one projection.
+The **act grammar** — `Lens` (a named, shared focus), `Projection` (a re-presentation
+of the model from a focus), `Check` (a gate over a lens) — is the kernel's own
+vocabulary for acts on the graph, and the seam for the deferred *downward* projection
+(materializing the model toward implementation specs, cut 2026-07-15 to focus scope
+on verified modelling). It stays live for inspection: the print-duals resolve their
+focus through it.
 
-The two compose because they share one currency — the **focus**, a sub-graph. A probe
-surfaces foci; a projection consumes them. So you probe until something is worth acting
-on, project that sub-graph into a shape you can work from, and — optionally — hand it to
-an LLM to enact. Analysis and synthesis, over the same graph.
+Define → model → verify → inspect, all on one graph that holds both what the system
+is meant to be and what it actually is.
 
-Both acts are open. Adding one is dropping a file: a probe is a `run-probe` method, a
-projection a `render-base` method. Nothing in the core privileges fukan's own probes
-and projections over the ones you write — which is the point. Fukan is a small set of
-ways to act on one graph, and a way to add more.
+## The self-model and the shipped vocabulary tier
 
-Define → model → verify → act, all on one graph that holds both what the system is
-meant to be and what it actually is.
+Fukan is exercised by modelling — including **modelling itself**. `canvas/architecture/`
+models fukan as a *built* system: one self-spec per `src/` module, grouped by area and
+clustered into five subsystems (`canvas/architecture/subsystems.clj`) with a declared
+`:may-depend` DAG that the vocabulary's architecture laws enforce against the actual
+extracted code graph. Spec files under the configured spec-dirs (`*spec-dirs*`, default
+`["canvas"]`) are auto-discovered and assembled into one structure db — the model.
 
-## Self-model and demos
-
-Fukan is exercised by modelling — including **modelling itself**. The self-model is laid
-out by altitude: `canvas/instruments/` holds fukan's own use-side *instances* — the lenses
-and projections it runs on itself, authored against `lib.lens`; and `canvas/architecture/`
-models fukan as a *built* system — one self-spec per implementation module, clustered into
-subsystems (`canvas/architecture/subsystems.clj`) with a declared `:may-depend` DAG that the
-`lib.arch` laws enforce against the actual extracted code graph. The genuine model↔code
-drift-check is the op-layer `target/correspondence`. Canvas files under `canvas/**/*.clj` are
-auto-discovered and assembled into one structure db — the model.
-
-Reusable, domain-general vocabulary lives in a separate opt-in stdlib, `lib/` — code
-structures (`lib.code`: Operation / Effect / Kind / Module / Subsystem, where a Module is one
-code namespace), structural primitives (`lib.grouping`: Grouping / Connected), a pluggable
-type-authoring surface (`lib.type.malli`), grammar reflection (`lib.grammar`: the registry
-projected onto the graph, so the language is model too), and the use-side act grammar
-(`lib.lens`: Lens / Mapping / Projection). It is required, not auto-discovered, so it
-contributes grammar only when a model opts in. `clj -M:demos` runs a corpus of
-standalone modelling demos (grammar, ER, workflow, access-control, type-system, atlas,
-self) that pressure-test the core.
+The reusable vocabulary is the shipped **`fukan.common` tier** (`common/`, its own
+classpath root outside `src/`): the structural primitives (`fukan.common.vocab.grouping`),
+the code grammar by element (`fukan.common.vocab.code.*` — Kind / Effect / Operation /
+Module / Subsystem, where a Module is one code namespace), a pattern tier above them
+(`fukan.common.vocab.patterns.*` — PlugPoint), the malli type dialect
+(`fukan.common.typing.malli`), and the Clojure extraction seam
+(`fukan.common.extraction.*` — the `Ns`/`Fn` fact theory + the correspond declarations).
+It loads by *require* (the `fukan.common` index), not discovery, so it contributes
+grammar only when a project opts in: a consuming project depends on fukan, requires the
+vocabulary, binds `*spec-dirs*` to its own spec directory, and models against the same
+grammar.
 
 ## Development
 
@@ -151,9 +146,10 @@ Requires Clojure CLI (`clj`) and [clj-kondo](https://github.com/clj-kondo/clj-ko
 PATH.
 
 ```bash
-clj -M:dev:nrepl        # start an nREPL (port 7889)
+clj -M:nrepl            # start an nREPL (port 7889)
 clj -M:test             # run the test suite
-clj -M:demos            # run the demo regressions
+clj -M:lint --lint src common canvas test   # the canonical clj-kondo lint
+clj -M:kondo            # regenerate the defstructure lint hooks after adding/removing a structure
 ```
 
 In the REPL (`clj -M:dev`):
@@ -162,29 +158,30 @@ In the REPL (`clj -M:dev`):
 (go)        ; build the model (canvas specs + the Clojure extractor over src/)
 (refresh)   ; reload changed code + rebuild
 (status)    ; model state
-(architecture) ; the projected system map — subsystems, modules, the :may-depend DAG
+(architecture)    ; the projected system map — subsystems, modules, the :may-depend DAG
 (grammar)   ; the live language primer — every vocabulary rendered back as source
+(correspondence)  ; the design↔fact seam as one card, every demand with its law key
 (drift)     ; modelled capabilities not yet realized in code
-(probes)    ; run every probe over the held model, printing each finding
+(check)     ; every law's violations, offenders quoted as their authored forms
 ```
 
 ## Project structure
 
 ```
-lib/                  reusable opt-in stdlib vocab: lib.code, lib.grouping, lib.type.malli, lib.grammar, lib.lens
-canvas/instruments/   fukan's own use-side instances (lenses, projections)
-canvas/architecture/  fukan as a built system (module self-specs clustered into subsystems with a :may-depend DAG)
-demos/                standalone modelling demos (vocab + model + regression)
+common/               the shipped fukan.common tier: the vocabulary (grouping, code/*,
+                      patterns/*), the malli type dialect, the Clojure extraction seam
+canvas/architecture/  fukan's self-model: per-module specs + subsystems + the :may-depend DAG
 src/fukan/
-  canvas/core/        the defstructure primitive, derived rules, typing plug-point, lens evaluation
-  canvas/projection/  canvas ingestion, the print-duals (grammar/instance/architecture), the probe surface
-  model/              build pipeline, extraction plug-point, materialize
-  target/             Clojure code extractor + model↔code correspondence laws
-  dialect/            the malli type-dialect bridge
+  canvas/core/        the defstructure primitive, derived rules, typing plug-point,
+                      the act grammar + lens evaluation, grammar reflection
+  canvas/ingestion/   spec discovery + assembly (*spec-dirs*)
+  canvas/projection/  the print-duals (grammar / instance / architecture)
+  cozo/               the query engine: datalog→CozoScript compiler, law engine, build, mirror
+  model/              build pipeline + the extraction plug-point
   infra/              model lifecycle + composition root
 .paused/              the browser viewer stack (deferred indefinitely)
 .legacy-allium/       pre-canvas Allium/Boundary specs (read-only baseline)
-doc/                  the vision, design, substrate spec, and decision trace
+doc/                  the vision, theory, design, substrate spec, and decision trace
 ```
 
 ## License

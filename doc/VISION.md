@@ -38,7 +38,7 @@ Fukan's approach is rooted in the Lisp tradition of **stratified language
 building**: you do not model a system in a fixed notation — you first grow the
 language the domain wants, then express the system in it. The core ships no
 vocabulary; authoring a grammar is every project's *first modelling act*, and
-everything above — models, laws, probes, projections — reads in that grammar's own
+everything above — models, laws, selections, projections — reads in that grammar's own
 terms (the core derives its datalog rules from the live vocabulary, and the grammar
 itself is reflected onto the graph as data, like everything else).
 
@@ -88,9 +88,9 @@ code architecture is choosing the altitude that is buildable and useful now.
 **You grow the architecture vocabulary — the core ships none.** This pillar is
 undiminished by the narrowing. There is no fixed catalog of rule types (the
 ArchUnit / NDepend model); you author the architectural concepts and laws *your*
-codebase actually has, on the bare primitive. The opt-in stdlib `lib.code`
-(Module / Operation / Effect / …) is a *seed* to extend or replace, never a schema to
-fit into. The acts below operate on whatever vocabulary you grew.
+codebase actually has, on the bare primitive. The shipped `fukan.common` vocabulary
+tier (Module / Operation / Effect / …) is a *seed* to extend or replace, never a schema
+to fit into. The acts below operate on whatever vocabulary you grew.
 
 **The shape: two inputs → one graph → three acts.** This is "specification and
 implementation on the same graph" made concrete.
