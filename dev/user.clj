@@ -11,6 +11,7 @@
             [fukan.cozo.query :as cq]
             [fukan.cozo.law :as law]
             [fukan.infra.model :as infra-model]
+            [fukan.canvas.core.structure :as s]
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
@@ -62,7 +63,7 @@
 (defn grammar
   "Print the GRAMMAR PRIMER — every vocabulary in the held model rendered back as
    its map-form defstructures, live from the reified grammar (the print-dual).
-   Pass a namespace string for one vocabulary: (grammar \"lib.code\")."
+   Pass a namespace string for one vocabulary: (grammar \"fukan.common.vocab.grouping\")."
   ([] (if-let [m (infra-model/get-model)]
         (println (gram/grammar-primer m))
         (println "No model loaded yet. Use (go) first.")))
@@ -80,7 +81,7 @@
 (defn show
   "Print every model node named `n` (a string or symbol) as its AUTHORED form —
    the instance print-dual. The model talks back in the language you wrote it in:
-   (show 'probe) → (Act probe \"…\" {:reads model …})."
+   (show 'kernel) → (Subsystem kernel \"…\" {:child […] :may-depend []})."
   [n]
   (if-let [m (infra-model/get-model)]
     (let [eids (map first (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]]
@@ -126,22 +127,22 @@
   "The ENCAPSULATION worklist (the privacy-coverage iteration): PUBLIC extracted functions with no
    authored Operation twin — each an undeclared public surface demanding a decision (model it as
    intent, or make it `defn-`). Empty ⇔ every unmodelled function is genuinely private. Grouped by
-   code module. (The private half of the coverage gap is settled by definition.)"
+   code namespace. (The private half of the coverage gap is settled by definition.)
+   Named surfaces only: the `:corresponds/Operation.surjective` law key + the `public`/`within`
+   defrelations — the fact stratum is the `Fn` theory, never a provenance flag on Operation."
   []
   (if-let [m (infra-model/get-model)]
     (let [w (law/violation-names m :corresponds/Operation.surjective)]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
-        (let [by-mod (->> (cq/q '[:find ?on ?kmn
-                                 :where [?o :structure/of :fukan.common.vocab.code.operation/Operation] [?o :val/extracted true]
-                                        [?o :entity/name ?on] (not [?o :val/private true])
-                                        [?kr :rel/kind :child] [?kr :rel/from ?km] [?kr :rel/to ?o] [?km :entity/name ?kmn]]
-                               m)
-                          (filter (fn [[on _]] (contains? w on)))
-                          (group-by second))]
+        (let [by-ns (->> (cq/q '[:find ?on ?nn :in $ %
+                                 :where (public ?o) (named ?o ?on) (within ?o ?nn)]
+                               m (s/vocab-rules))
+                         (filter (fn [[on _]] (contains? w on)))
+                         (group-by second))]
           (println "Encapsulation worklist —" (count w) "public functions with no model twin:")
-          (doseq [[mn ops] (sort-by key by-mod)]
-            (println (format "  %-42s %s" mn (str/join ", " (sort (map first ops)))))))))
+          (doseq [[nn ops] (sort-by key by-ns)]
+            (println (format "  %-42s %s" nn (str/join ", " (sort (map first ops)))))))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn deps
@@ -159,41 +160,26 @@
                 (doseq [[a b] (sort unreal)] (println (format "  %-16s ⇢ %s" a b)))))))
     (println "No model loaded yet. Use (go) first.")))
 
-(defn dispatch
-  "Print fukan's modelled DISPATCH POINTS (Operations with a :dispatches-to fan-out) and the handlers
-   each routes to — the explicit indirection seams, derived live from the held model."
-  []
-  (if-let [m (infra-model/get-model)]
-    (doseq [[dpn hs] (->> (cq/q '[:find ?dpn ?hn
-                                 :where [?r :rel/kind :dispatches-to] [?r :rel/from ?dp] [?r :rel/to ?h]
-                                        (not [?dp :val/extracted true])
-                                        [?dp :entity/name ?dpn] [?h :entity/name ?hn]]
-                               m)
-                          (group-by first) (sort-by key))]
-      (println (format "%-16s ⟶ %s" dpn (str/join ", " (sort (map second hs))))))
-    (println "No model loaded yet. Use (go) first.")))
-
 (defn purity
-  "The EFFECT SURFACE: extracted operations that DIRECTLY perform a consequential effect
-   (:io/:state/:require — logging excluded), grouped by code module. Cross-reference (architecture)
-   for each module's region: a consequential effect in a meant-to-be-pure region is the
-   design-attention signal. This is a downstream subset of `Effect`; partiality reads `:throws`
-   separately."
+  "The EFFECT SURFACE: extracted functions that DIRECTLY perform a consequential effect
+   (`:throws` excluded — partiality reads separately), grouped by code namespace.
+   Cross-reference (architecture) for each module's region: a consequential effect in a
+   meant-to-be-pure region is the design-attention signal. Named surfaces: the `Fn` kind
+   rule + the `performs`/`within` relations (the effect's name is a scalar leaf)."
   []
   (if-let [m (infra-model/get-model)]
-    (let [rows (cq/q '[:find ?mn ?on ?en
-                      :where [?o :structure/of :fukan.common.vocab.code.operation/Operation] [?o :val/extracted true] [?o :entity/name ?on]
-                             [?pr :rel/from ?o] [?pr :rel/kind :performs] [?pr :rel/to ?e] [?e :val/name ?en]
-                             [(not= ?en "throws")]
-                             [?cr :rel/kind :child] [?cr :rel/from ?md] [?cr :rel/to ?o] [?md :entity/name ?mn]]
-                    m)]
+    (let [rows (cq/q '[:find ?nn ?on ?en :in $ %
+                       :where (Fn ?o) (named ?o ?on) (performs ?o ?e)
+                              [?e :val/name ?en] [(not= ?en "throws")]
+                              (within ?o ?nn)]
+                     m (s/vocab-rules))]
       (if (empty? rows)
-        (println "No effect surface — no extracted op performs a consequential effect.")
-        (let [by-mod (group-by first rows)]
+        (println "No effect surface — no extracted function performs a consequential effect.")
+        (let [by-ns (group-by first rows)]
           (println "Effect surface —" (count (set (map (juxt first second) rows)))
-                   "world-effect op(s) in" (count by-mod) "module(s):")
-          (doseq [[mn rs] (sort-by key by-mod)]
-            (println (format "  %s" mn))
+                   "world-effect function(s) in" (count by-ns) "namespace(s):")
+          (doseq [[nn rs] (sort-by key by-ns)]
+            (println (format "  %s" nn))
             (doseq [[on ers] (sort-by key (group-by second rs))]
               (println (format "    %-30s %s" on (str/join " " (sort (set (map #(nth % 2) ers)))))))))))
     (println "No model loaded yet. Use (go) first.")))
@@ -225,9 +211,11 @@
   (reset)
   (refresh)
   (grammar)
-  (grammar "lib.code")
-  (show 'probe)
+  (grammar "fukan.common.vocab.grouping")
+  (show 'kernel)
   (check)
   (drift)
-  (dispatch)
+  (encapsulation)
+  (purity)
+  (correspondence)
   (status))
