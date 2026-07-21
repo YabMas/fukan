@@ -22,7 +22,7 @@
 
 (defstructure Mod
   "A grouping fixture — a node whose :child relations place its members in a module
-   (so (in-module ?e \"t\") resolves)."
+   (so (within ?e \"t\") resolves)."
   {:child [:* Any]})
 
 ;; instances under test
@@ -49,7 +49,7 @@
     (let [heads (set (map (comp first first) (s/vocab-rules)))]
       (is (contains? heads 'RuleThing) "a kind rule per structure tag")
       (is (contains? heads 'links)     "a relation rule per relation slot")
-      (is (contains? heads 'in-module) "the fixed substrate rules are present")
+      (is (contains? heads 'within) "the vocab's by-name membership reading is present")
       (is (contains? heads 'named)))))
 
 (deftest domain-query-equals-substrate-query
@@ -57,7 +57,7 @@
     (let [db (build/vars->cozo [#'rt-a #'rt-b #'rt-t])
           rs (s/vocab-rules)
           via-rules (sort (cq/q '[:find [?n ...] :in $ %
-                                 :where (RuleThing ?s) (in-module ?s "t") (named ?s ?n)]
+                                 :where (RuleThing ?s) (within ?s "t") (named ?s ?n)]
                                db rs))
           via-substrate (sort (cq/q '[:find [?n ...]
                                      :where [?s :structure/of ::RuleThing]

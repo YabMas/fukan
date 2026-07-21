@@ -81,17 +81,17 @@ substrate — fukan's own extractor reads clj-kondo analysis into `Module` and
   :scope :global
   :offenders '[?s]
   :where '[(Operation ?s) (not [?s :val/extracted true])
-           (named ?s ?n) (in-module ?s ?cm)
+           (named ?s ?n) (within ?s ?cm)
            (not-join [?n ?cm]
              (Operation ?o) [?o :val/extracted true]
-             (named ?o ?n) (in-module ?o ?km)
+             (named ?o ?n) (within ?o ?km)
              [(module-corresponds? ?cm ?km)])])
 ```
 
 Run `(structure/check db)` and **drift surfaces as a law violation** — a modelled
 capability with no implementation, on the same footing as any other broken invariant.
 The converse query reports the opposite gap: code the model doesn't yet cover. Laws
-read in the vocabulary's own terms — `(Operation ?s)`, `(in-module …)` — because the
+read in the vocabulary's own terms — `(Operation ?s)`, `(within …)` — because the
 core derives those rules from the live vocabulary, so a law spans design and
 implementation without ever dropping to raw triples. The recurring law shapes have
 **combinators** — `(law "…" (matched-by R :from S))`, `(has R)`, `(at-most-one R)` —

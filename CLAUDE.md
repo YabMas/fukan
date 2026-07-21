@@ -258,7 +258,7 @@ correspondence relation map uses):
 - **Bare** — `(defrelation :contains "doc")` — a PRIMITIVE relation / genus: claims the name
   (signature identity), reflects, owns the doc; its edges come from slots of that name or from
   other relations' inclusions into it. **The kernel names no relation of its own:** the `contains`
-  genus and `in-module` are vocab elements (`vocab/grouping`, `vocab/code/module`).
+  genus and the by-name `within` are vocab elements (both `vocab/grouping`).
 - **Inclusion** — `(defrelation :child "doc" (:sub :contains))` — the relation stated as an
   inclusion, lowered GENERATIVELY (within one theory the sentence is a rule; at the correspondence
   seam the same triple is a checked law): `(:sub atom)` — the included relation accumulates this
@@ -424,8 +424,9 @@ mixing them corrupts history.
   whole `fukan.common.*` tier (vocab + typing + extraction)
 - `common/fukan/common/vocab/` (ns `fukan.common.vocab.*`) — fukan's vocabulary: the code grammar by
   element + grouping. **Pure design, language-neutral — carries NO correspondence.** The membership
-  relations are ELEMENTS here: the `contains` genus + `:child` in `grouping.clj`,
-  `:exposes`/`:owns`/`:offers` + the derived `in-module` in `code/module.clj`. The
+  relations are ELEMENTS here: the `contains` genus + `:child` + the derived by-name `:within` in
+  `grouping.clj`, `:exposes`/`:owns` in `code/module.clj`, `:offers`/`:satisfies` in
+  `patterns/plug_point.clj` (the pattern tier owns the relations it adds). The
   module-dependency-graph relations + readers (`module-owns`/`module-depends`/`module-dependencies`)
   live with the architecture laws that consume them in `code/subsystem.clj`
 - `common/fukan/common/extraction/clojure/` — the FACT theory + the design↔Clojure map: `operation.clj`

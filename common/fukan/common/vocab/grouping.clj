@@ -7,7 +7,7 @@
 
    The membership RELATIONS live here as elements alongside the structure that first uses them — the
    kernel names none of them (until 2026-07-17 it hardcoded the `contains` union, its closure, and
-   `in-module`, which is code vocabulary; `in-module` now rides `code/module`, its own element)."
+   the by-name membership reading — now the `:within` element below)."
   (:require [fukan.canvas.core.structure :refer [defstructure defrelation]]))
 
 ;; ── the membership relations, as ELEMENTS ────────────────────────────────────
@@ -28,6 +28,17 @@
    one else consumes. The most abstract containment species; a code Module refines it with
    surface-bearing siblings (`:exposes`/`:owns`/`:offers`)."
   (:sub :contains))
+
+(defrelation :within
+  "An entity `?e` is a member of the container named `?cname` — the `contains` genus read by name,
+   the membership convenience every law and lens selection uses at domain altitude
+   (`(Operation ?s) (within ?s \"…\")`). It reads `contains`, so it resolves over EVERY species
+   (`:child`, and a code Module's `:exposes`/`:owns`/`:offers`) for free, over any NAMED container.
+   Pure grouping vocabulary: its body mentions only the genus and the substrate's `:entity/name` —
+   no code-vocab sort — so it lives here with the genus. (Until 2026-07-21 it was `in-module` in
+   `code/module` — a historical narrowing: nothing about it requires a Module.)"
+  '[?e ?cname]
+  '[(contains ?c ?e) [?c :entity/name ?cname]])
 
 (defstructure Grouping
   "The most abstract grouping — a named bag of model instances, pure membership and nothing

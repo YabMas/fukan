@@ -4,7 +4,7 @@
    declaration registry (`structure/terms-of`) composes into the vocabulary-derived rules.
 
    The rule DERIVATION itself — a kind rule per structure, a relation rule per slot, inclusion /
-   coproduct / defrelation / `contains` union / transitive closures / `in-module` / correspondence
+   coproduct / defrelation / `contains` union / transitive closures / `within` / correspondence
    `twin` — lives in the kernel's declaration handlers (`canvas.architecture.kernel.structure`), NOT
    here. This module holds only the fixed substrate a pure data def; it exposes no operations and
    references nothing else, so the chain stays acyclic (lens-engine → kernel → query-engine)."

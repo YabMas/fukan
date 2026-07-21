@@ -22,7 +22,7 @@
       (is (= ":sub" (:val/incl (relation db "child")))       ":child ⊑ contains — the inclusion direction")
       (is (= ":contains" (:val/expr (relation db "child")))  "…and its expression, the genus atom")
       (is (= ":contains" (:val/expr (relation db "exposes"))) ":exposes is a species too — declared once, on the relation")
-      (is (= ":eq" (:val/incl (relation db "in-module")))    "a derived element is definitionally exact — :eq to its rule")
+      (is (= ":eq" (:val/incl (relation db "within")))    "a derived element is definitionally exact — :eq to its rule")
       (is (nil? (:val/incl (relation db "contains")))        "a bare genus states no inclusion of its own")
       (is (nil? (:val/incl (relation db "delegates")))       ":delegates is slot-only — not an element yet, no inclusion")
       (is (nil? (:val/transitive (relation db "contains")))  "closures are the compiler's — no :transitive property at all"))))

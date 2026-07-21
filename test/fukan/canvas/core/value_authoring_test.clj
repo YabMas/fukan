@@ -278,15 +278,15 @@
            (edn/read-string (:val/query (cq/entity db [:entity/id (sub/var-id #'t-focus)]))))
         "the query form round-trips through assembly (a compound payload is pr-str'd into the Cozo mirror, read back)")))
 
-;; ── Change 3: generic in-module rule ─────────────────────────────────────────
-;; (in-module ?e ?mname) now resolves via :child relations, not :Grouping tag.
+;; ── Change 3: generic within rule ─────────────────────────────────────────
+;; (within ?e ?mname) now resolves via :child relations, not :Grouping tag.
 ;; The Grp + wa + wb assembled above: grp is named "g" and has :child rels to wa and wb.
 
-(deftest in-module-via-child-relation
+(deftest within-via-child-relation
   (let [db      (build/vars->cozo [#'wa #'wb #'grp])
         members (cq/q '[:find [?e ...]
                         :in $ %
-                        :where (in-module ?e "g")]
+                        :where (within ?e "g")]
                      db (s/vocab-rules))]
     (is (= 2 (count members))
-        "(in-module ?e \"g\") via :child relation finds both heterogeneous members")))
+        "(within ?e \"g\") via :child relation finds both heterogeneous members")))

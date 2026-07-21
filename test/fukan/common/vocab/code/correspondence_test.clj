@@ -184,9 +184,9 @@
                      [?a :structure/of :fukan.common.vocab.code.operation/Operation] (twin ?a ?b)]]
           legacy  '[[(legacy-twin ?a ?b)
                      [?a :structure/of :fukan.common.vocab.code.operation/Operation] (not [?a :val/extracted true])
-                     [?a :entity/name ?n] (in-module ?a ?cm)
+                     [?a :entity/name ?n] (within ?a ?cm)
                      [?b :structure/of :fukan.common.extraction.clojure.operation/Fn] [?b :val/extracted true]
-                     [?b :entity/name ?n] (in-module ?b ?km)
+                     [?b :entity/name ?n] (within ?b ?km)
                      [(name-match :qualified-suffix ?cm ?km)]]]
           rules   (into (into (s/vocab-rules) op-twin) legacy)
           pairs   (fn [head] (set (cq/q (into [:find '?a '?b :in '$ '% :where] [(list head '?a '?b)]) db rules)))]

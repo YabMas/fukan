@@ -58,7 +58,8 @@ A law is a datalog constraint: `(law "desc" :offenders '[?x] :where '[…])`.
 - **Vocab-derived rules.** `check` derives datalog rules from the live vocabulary
   (`core/rules.clj`, pure) and injects them into every law's query: a kind rule per
   structure (`(Operation ?e)`), a relation rule per relation slot (`(calls ?a ?b)`),
-  inclusion / realized-as rules, and fixed substrate rules (`in-module`, `named`).
+  inclusion / realized-as rules, and the fixed substrate rule (`named`); membership
+  (`contains`, its closure, the by-name `within`) rides vocab relation elements.
   Laws therefore read in the vocabulary's own terms, not in raw `:structure/of` /
   `:rel/*` navigation.
 - **Combinators.** The recurring law shapes — `(matched-by R …)`, `(has R …)`,

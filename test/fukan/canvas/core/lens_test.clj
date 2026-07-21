@@ -11,7 +11,7 @@
   {:links [:* Widget]})
 
 (defstructure Grp
-  "A grouping fixture — :child relations place members in a module (in-module)."
+  "A grouping fixture — :child relations place members in a module (within)."
   {:child [:* Any]})   ; `:child`'s containment is the relation's own character (vocab/grouping), not this slot's
 
 (defn- by-name [db n]
@@ -31,12 +31,12 @@
 
 ;; each lens carries its own selection (model-native datalog — no realization shim)
 (Lens ^{:name "in-m"}    lns-in-m    "widgets in m"
-  {:select '[(Widget ?n) (in-module ?n "m")]})
+  {:select '[(Widget ?n) (within ?n "m")]})
 (Lens ^{:name "x-links"} lns-x-links "what x links to"
   {:select '[(named ?root "x") (links ?root ?n)]})
 (Lens ^{:name "prose"}   lns-prose   "just words")
 (Lens ^{:name "none"}    lns-none    "widgets in a module that doesn't exist"
-  {:select '[(Widget ?n) (in-module ?n "nope")]})
+  {:select '[(Widget ?n) (within ?n "nope")]})
 
 ;; a Check gates a lens — a non-empty focus is a violation
 (Check ^{:name "widgets-in-m"} chk-fires  {:gates lns-in-m :verdict "widgets exist in m"})
@@ -55,12 +55,12 @@
   (testing "refine intersects a focus with a further query — lens-within-lens; acts chain over it"
     (let [db    (build/vars->cozo [#'w-x #'w-y #'w-z #'w-m #'w-q #'w-other])
           all   (lens/focus-nodes db '[(Widget ?n)])                 ; x y z q
-          in-m  (lens/refine db all '[(in-module ?n "m")])]          ; narrow to module m
+          in-m  (lens/refine db all '[(within ?n "m")])]          ; narrow to module m
       (is (= #{"x" "y" "z" "q"} (names db all)))
       (is (= #{"x" "y" "z"} (names db in-m)) "refined to module m")
       ;; chaining: a focus refined again narrows further (here: x's links, then those in m)
       (is (= #{"y" "z"} (names db (lens/refine db (lens/focus-nodes db '[(named ?r "x") (links ?r ?n)])
-                                               '[(in-module ?n "m")])))
+                                               '[(within ?n "m")])))
           "refine composes — a focus narrowed step by step"))))
 
 (deftest prose-only-lens-is-not-evaluable
@@ -86,7 +86,7 @@
 ;; lens (a NAMED shared focus), or neither — no narrowing = the whole model.
 (Projection ^{:name "pf-inline"} pf-inline
   "inline focus: the projection carries its own selection"
-  {:select '[(Widget ?n) (in-module ?n "m")]})
+  {:select '[(Widget ?n) (within ?n "m")]})
 (Projection ^{:name "pf-through"} pf-through
   "named focus: renders through a shared lens"
   {:through lns-in-m})

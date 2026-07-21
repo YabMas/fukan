@@ -93,7 +93,7 @@
 (defn focus
   "Evaluate datalog `clauses` (binding ?n, with the vocab rules) over the held
    model and print the focused nodes as their authored forms — the textual model
-   explorer: (focus '[(Operation ?n) (in-module ?n \"core-structure\")])."
+   explorer: (focus '[(Operation ?n) (within ?n \"core-structure\")])."
   [clauses]
   (if-let [m (infra-model/get-model)]
     (let [out (inst/focus-text m clauses)]

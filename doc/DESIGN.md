@@ -92,9 +92,10 @@ A structure is a *composition of slots* plus *datalog laws*.
 Laws should read in the vocabulary's own terms, not in raw substrate patterns. The
 core derives a set of **datalog rules from the live vocabulary** (`core/rules.clj`,
 pure): a kind rule per structure (`(Operation ?e)`), a relation rule per relation
-slot (`(calls ?a ?b)`), inclusion/realized-as rules, plus fixed substrate rules
-(`in-module`, `named`). `check` auto-injects these into every law's query, so a law
-can say `(Operation ?s) (in-module ?s ?m)` instead of navigating `:structure/of`
+slot (`(calls ?a ?b)`), inclusion/realized-as rules, plus the fixed substrate rule
+(`named`); membership (`contains`, `within`) rides vocab relation elements. `check`
+auto-injects these into every law's query, so a law
+can say `(Operation ?s) (within ?s ?m)` instead of navigating `:structure/of`
 and reified `:rel/*` triples by hand.
 
 ## Ownership-on-owner
@@ -103,7 +104,7 @@ Module ownership flows via `:child` relations on the **owner**, not via
 back-references on the owned entity. Nested authoring routes members into the
 container's slots automatically (`(Module m … (Operation f …))` emits the
 `:exposes`/`:child` relations). Owned entities carry no module back-reference;
-`in-module` resolves over `:child`/`:exposes`/`:owns`.
+`within` resolves over `:child`/`:exposes`/`:owns`.
 
 ## Ingestion — many specs, one graph
 

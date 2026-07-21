@@ -1465,7 +1465,7 @@
    self-model output.
 
    The kernel names NO relation of its own: a containment genus and any relation derived from it
-   (`in-module`) are declared by the VOCABULARY as relation elements (`defrelation`), not emitted
+   (`within`) are declared by the VOCABULARY as relation elements (`defrelation`), not emitted
    here. (Until 2026-07-17 this hardcoded the symbol `contains`, its closure, and `in-module` —
    code vocabulary welded into the kernel.)"
   [structures]
@@ -1555,7 +1555,7 @@
   vocab-rules
   "The datalog rules derived from the live vocabulary (one per kind + per relation
    slot, plus the fixed substrate rules). Lets queries — and laws (via `check`) — read
-   at domain altitude: `(Operation ?s) (in-module ?s \"…\") (calls ?s ?c)`. Emitted through the
+   at domain altitude: `(Operation ?s) (within ?s \"…\") (calls ?s ?c)`. Emitted through the
    declaration handlers via `terms-of` — the same registry seam the law side (`laws-of`) dispatches
    through; the declarations-golden test freezes this seam's self-model output."
   []

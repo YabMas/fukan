@@ -209,7 +209,7 @@
                                         [?i :entity/name ?n]]
                                db vn)))]
       (is (contains? (imports "fukan.common.vocab.code.module") "fukan.common.vocab.grouping")
-          "in-module's body calls the `contains` genus that grouping declares — a rule-call import")
+          "the species' (:sub :contains) inclusions reference the genus grouping declares — a genus import")
       (is (contains? (imports "fukan.common.vocab.code.subsystem") "fukan.common.vocab.code.module")
           "Subsystem's :child slot targets Module — a slot-target import")
       (is (not (contains? (imports "fukan.common.vocab.grouping") "fukan.common.vocab.code.module"))

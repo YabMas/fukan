@@ -280,7 +280,12 @@
 ;; inverted edge, deliberately not a `contains` species; was slot-only). Counts hold (92 / 62): pure
 ;; relocation — no rule or law added, but the PlugPoint TAG is ns-qualified, so its kind rule and the
 ;; `:offers`/`:satisfies`/`:shape` target-type laws name the new qualifier → both hashes move.
-(def ^:private golden-terms {:count 92 :hash -900617012})
+;; 2026-07-21 (b): `in-module` REHOMED + RENAMED — `:within`, the `contains` genus read by container
+;; name, owned by the GROUPING signature (its body mentions only the genus + the substrate's
+;; `:entity/name`; nothing about it requires a Module — the old name/home was a historical narrowing).
+;; Terms hold at 92 (the derived rule's head renames `in-module`→`within` → hash moves); laws hold at
+;; 62 unchanged (no law reads the by-name convenience — they scope via kind rules / `in-subsystem`).
+(def ^:private golden-terms {:count 92 :hash 870651849})
 (def ^:private golden-laws  {:count 62 :hash -1928187573})
 
 (deftest terms-are-stable

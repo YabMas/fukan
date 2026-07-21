@@ -38,12 +38,12 @@
       (is (= #{"m-sub"} (names db (lens/focus-nodes db '[(via :contains Subsystem effectful)])))
           "the subsystem that transitively contains a directly-effectful op"))))
 
-(deftest in-module-is-derived-from-contains-and-substrate-names-no-vocab
-  (testing "in-module still resolves (now via contains), and substrate-rules names no vocab relation"
+(deftest within-is-derived-from-contains-and-substrate-names-no-vocab
+  (testing "within still resolves (now via contains), and substrate-rules names no vocab relation"
     (let [db (build/vars->cozo [#'mc-op #'mc-mod #'mc-sub])]
-      (is (= #{"m-mod"} (set (cq/q '[:find [?mn ...] :in $ % :where [?o :entity/name "m-op"] (in-module ?o ?mn)]
+      (is (= #{"m-mod"} (set (cq/q '[:find [?mn ...] :in $ % :where [?o :entity/name "m-op"] (within ?o ?mn)]
                                    db (s/vocab-rules))))
-          "m-op is in module m-mod (via the derived in-module)"))
+          "m-op is in module m-mod (via the derived within)"))
     ;; the de-leak itself: substrate-rules must not name child/exposes/owns
     (let [pr (pr-str fukan.canvas.core.rules/substrate-rules)]
       (is (not (or (re-find #":child" pr) (re-find #":exposes" pr) (re-find #":owns" pr)))
@@ -51,13 +51,13 @@
 
 (deftest the-kernel-itself-names-no-containment-vocabulary
   (testing "the strong claim (2026-07-17): with NO vocabulary loaded, terms-of emits no containment at
-            all — `contains`, `contains+` and `in-module` come from vocab relation ELEMENTS, not the
+            all — `contains`, `contains+` and `within` come from vocab relation ELEMENTS, not the
             kernel. Before, terms-of hardcoded all three; the old defence ('the SUBSTRATE names no
             code-vocab relation') held only because the hardcoding sat one file over."
     (let [heads (set (map (comp first first) (s/terms-of [])))]
       (is (not (contains? heads 'contains))  "no containment genus without a vocabulary to declare one")
       (is (not (contains? heads 'contains+)) "no genus closure either")
-      (is (not (contains? heads 'in-module)) "in-module is code vocabulary — a module is not a kernel concept")))
+      (is (not (contains? heads 'within)) "within is grouping vocabulary — membership is not a kernel concept")))
   (testing "and with the vocab loaded they are all present — emitted by the elements that declare them"
     (let [heads (set (map (comp first first) (s/vocab-rules)))]
-      (is (every? heads '[contains contains+ in-module])))))
+      (is (every? heads '[contains contains+ within])))))
