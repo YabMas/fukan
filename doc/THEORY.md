@@ -135,6 +135,21 @@ cannot peek at satisfaction. (The REPL's defonce-registry caveats — the collis
 guard tripping on a moved `defrelation` — are leaks across this phase line: a
 named cost of interactive growth, not a mystery.)
 
+**The register rule — theory content declares; machinery registers.** The
+authoring surface has two registers, and the split tracks the test exactly.
+Anything that *is* one of the four kernel things speaks in a declaration form:
+`defstructure` (a presentation element), `defrelation` (a relation element / an
+inclusion sentence), `correspond` (a morphism's sort map). Anything that is
+harness wiring speaks in a plain registry call: `register-syntax!`,
+`register-type-dialect!`, `register-extractor!`, `register-comparator!` — hooks
+realizing a plug-point, not content of any theory. The asymmetry is signal, not
+inconsistency: promoting a hook to a declaration form for symmetry would dress
+machinery as theory content — the costume the test exists to catch, worn in the
+other direction. So a new mechanism's surface register is decided by its test
+answer (one of the four → declare; wiring → register), and a `register-*` call
+that starts wanting a declaration form is a hint its content has quietly become
+theory — re-run the test on it.
+
 **Growth observed — homoiconicity.** Reflection is quotation: the meta-grammar is
 a presentation of "presentation", so the grown language — vocabularies, morphisms,
 the imports diagram — is data on the same graph it governs. The print-dual is

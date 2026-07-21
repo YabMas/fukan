@@ -35,6 +35,12 @@ operational gate:
   into the four with no meaning of its own. None of the five → the burden of proof
   is on the mechanism; most such proposals are one of the five wearing a costume,
   and the costume is debt.
+- **Theory content declares; machinery registers.** The four kernel things speak in
+  declaration forms (`defstructure`/`defrelation`/`correspond`); harness wiring speaks
+  in plain `register-*` calls (syntax hooks, dialects, extractors, comparators). Never
+  promote wiring to a declaration form for symmetry — the split IS the signal; a
+  `register-*` call that starts wanting a declaration form has quietly become theory
+  (re-run THE TEST on it).
 - **The fixed point: the logic never grows.** All growth lives in theories
   (vocabulary extensions — definitional, or accumulative through an open genus) and
   in derived forms (notation). Never propose extending the sentence language or
