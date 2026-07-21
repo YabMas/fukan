@@ -122,7 +122,7 @@
    legitimate choice, so an unrealized declared dependency reports rather than fails a check."
   [db-arg]
   (set (cq/q '[:find ?sn ?tn :in $ %
-               :where [?s :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (may-depend ?s ?t)
+               :where (is ?s ::Subsystem) (may-depend ?s ?t)
                       [?s :entity/name ?sn] [?t :entity/name ?tn]
                       (not-join [?s ?t]
                         (module-depends ?m ?n) (in-subsystem ?m ?s) (in-subsystem ?n ?t))]

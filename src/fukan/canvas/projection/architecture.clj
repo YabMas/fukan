@@ -30,9 +30,9 @@
   architecture-overview
   "Render fukan's subsystems + modules + the :may-depend DAG (string)."
   [db]
-  (let [subs  (->> (cq/q '[:find ?s ?sn :where [?s :structure/of :fukan.common.vocab.code.subsystem/Subsystem] [?s :entity/name ?sn]] db)
+  (let [subs  (->> (cq/q '[:find ?s ?sn :where (is ?s :fukan.common.vocab.code.subsystem/Subsystem) [?s :entity/name ?sn]] db)
                    (sort-by second))
-        nmod  (count (cq/q '[:find ?m :where [?m :structure/of :fukan.common.vocab.code.module/Module]] db))]
+        nmod  (count (cq/q '[:find ?m :where (is ?m :fukan.common.vocab.code.module/Module)] db))]
     (str/join
      "\n"
      (concat

@@ -41,7 +41,7 @@
 (defstructure MSrc  "Fixture domain."   {:mdel   [:* MSrc]})
 
 (s/defrelation :m-public "fixture sub-sort: every MFact"
-  [?x] [[?x :structure/of :fukan.canvas.core.reflect-test/MFact]])
+  [?x] [(is ?x MFact)])
 (s/defrelation :m-link "fixture derived: a direct mcalls edge"
   [?a ?b] [(mcalls ?a ?b)])
 
