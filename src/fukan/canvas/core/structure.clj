@@ -999,6 +999,74 @@
         config              (parse-sort-map (str design) incl ftag restrict rest)]
     `(register-correspondence! ~dtag '~config)))
 
+;; ── (is ?v Sort) — declaration-site sort resolution ───────────────────────────
+;; The ns-PRECISE dual of a bare kind-rule call: `(is ?m Module)` pins ?m to MY Module — the
+;; sort resolved at declaration time through the declaring ns's vars (the same requires-based
+;; identity an instance reference uses) — where `(Module ?m)` reads ANY co-loaded Module (the
+;; deliberate union). Resolution is PARSE-side (the declaring ns is live; the phase line holds —
+;; only the signature is consulted); the LOWERING — a `:structure/of` triple for a direct tag,
+;; the kind-rule call for a realized/facet concept — is the query compiler's
+;; (`fukan.cozo.query/compile-clause`), so a resolved `(is ?v <tag>)` works uniformly in law
+;; bodies, rule bodies, and evaluated contexts (which pass the qualified tag — a bare symbol
+;; resolves only in a declaration form). A sort must be declared BEFORE the clause that names
+;; it (resolution is lexical): use `::Sort` for a same-ns forward reference, the full tag
+;; keyword where a require would cycle.
+
+(def ^:private ^:dynamic *self-tag*
+  "The tag of the structure currently being DEFINED, bound while its laws parse — so a law may
+   say `(is ?s MyOwnSort)` before its own registration exists (the self-reference case)."
+  nil)
+
+(defn- resolve-is-clause
+  "Resolve the sort NAME in one `(is ?v Sort)` clause → `(is ?v <qualified-tag>)`. A symbol
+   resolves self-tag first (the defining scope), then by var (requires-based), then by a
+   same-ns registered tag (realized concepts intern no var); a keyword passes through
+   (validated at compile). Anything else — or an unresolvable symbol — throws, naming the sort."
+  [c]
+  (if-not (and (seq? c) (= 'is (first c)))
+    c
+    (let [[_ v target] c]
+      (when-not (= 3 (count c))
+        (throw (ex-info (str "(is …) wants (is ?var Sort): " (pr-str c)) {:clause c})))
+      (cond
+        (keyword? target) c
+        (symbol? target)
+        (let [via-self (when (and *self-tag* (= (name target) (name *self-tag*))) *self-tag*)
+              via-var  (when-let [vr (resolve target)]
+                         (let [m (meta vr)
+                               t (keyword (str (ns-name (:ns m))) (name (:name m)))]
+                           (when (structure-by-tag t) t)))
+              via-ns   (let [t (keyword (str *ns*) (name target))]
+                         (when (structure-by-tag t) t))
+              tag      (or via-self via-var via-ns)]
+          (when-not tag
+            (throw (ex-info (str "(is " v " " target "): no structure named " target " resolves here"
+                                 " — require its defining namespace (resolution rides requires, like"
+                                 " an instance reference), or use ::" target " / the full tag keyword"
+                                 " for a forward or cyclic reference")
+                            {:clause c :sort target})))
+          (list 'is v tag))
+        :else
+        (throw (ex-info (str "(is …) sort must be a symbol (resolved here) or a qualified tag"
+                             " keyword: " (pr-str c)) {:clause c}))))))
+
+(defn- resolve-sorts
+  "Walk `clauses` — into not / not-join / or-join / and / measure containers — resolving every
+   `(is ?v Sort)` sort symbol to its qualified tag (`resolve-is-clause`)."
+  [clauses]
+  (mapv (fn [c]
+          (let [c (resolve-is-clause c)]
+            (if-not (seq? c)
+              c
+              (let [[h & args] c]
+                (cond
+                  ('#{not and} h)          (apply list h (resolve-sorts (vec args)))
+                  ('#{not-join or-join} h) (apply list h (first args) (resolve-sorts (vec (rest args))))
+                  (= 'measure h)           (apply list h (first args) (second args)
+                                                  (resolve-sorts (vec (drop 2 args))))
+                  :else c)))))
+        clauses))
+
 (defn- parse-law
   "(law \"desc\" {:offenders [?vars] :where [clauses] :rules [rules]? :scope <tag|:global>? :key k?})
    — or `(law \"desc\" (combinator …) {:key k}?)`, expanded by `combinator-law`.
@@ -1027,7 +1095,8 @@
           (when-not (= k :key)
             (throw (ex-info (str "law " (pr-str desc) ": a combinator's options map takes only :key, got " k)
                             {:form form :key k}))))
-        (cond-> law (:key opts) (assoc :key (:key opts))))
+        (cond-> (update law :where resolve-sorts)
+          (:key opts) (assoc :key (:key opts))))
       (let [m (first body)]
         (when (keyword? m)
           (throw (ex-info (str "law " (pr-str desc) ": the kwargs body is retired — one unquoted map: "
@@ -1045,8 +1114,9 @@
         {:desc      desc
          :key       (:key m)
          :offenders (unquote-lit (:offenders m))
-         :where     (expand-clauses (unquote-lit (:where m)))
-         :rules     (unquote-lit (:rules m))
+         :where     (expand-clauses (resolve-sorts (unquote-lit (:where m))))
+         :rules     (some->> (unquote-lit (:rules m))
+                             (mapv (fn [[h & b]] (into [h] (resolve-sorts (vec b))))))
          :scope     (:scope m)}))))
 
 (defmacro defstructure
@@ -1102,7 +1172,8 @@
                                 " must be bare (one) or [:? ...] (optional), not [:"
                                 (name (:card s)) " ...]")
                            {:structure sname :slot (:rel s) :card (:card s)}))))
-        laws   (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body))
+        laws   (binding [*self-tag* tag]
+                 (mapv #(assoc (parse-law %) :owner tag) (filter #(= 'law (first %)) body)))
         explicit-reader (some (fn [f] (when (= 'reader (first f)) (second f)))
                               (filter #(= 'reader (first %)) body))
         ;; a ^:value structure with exactly one scalar slot and no explicit (reader …) is a
@@ -1119,7 +1190,7 @@
         ;; parsing, so a structure owns its surface sugar (e.g. Operation's `->`) — NOT core.
         syntax-form (some (fn [f] (when (= 'syntax (first f)) (second f)))
                           (filter #(= 'syntax (first %)) body))
-        realized (some (fn [f] (when (= 'realized-as (first f)) (unquote-lit (second f))))
+        realized (some (fn [f] (when (= 'realized-as (first f)) (resolve-sorts (unquote-lit (second f)))))
                        (filter #(= 'realized-as (first %)) body))
         _      (when realized
                  (when (or (seq slots) (seq laws) value? reader-form)
@@ -1229,7 +1300,7 @@
                                       {:head   (list 'quote (unquote-lit head))
                                        ;; one body → one rule; MULTIPLE bodies → multiple rules with the
                                        ;; same head (a RECURSIVE relation: a base clause + a step clause).
-                                       :bodies (mapv #(list 'quote (unquote-lit %)) wheres)}))))))
+                                       :bodies (mapv #(list 'quote (resolve-sorts (unquote-lit %))) wheres)}))))))
 
 ;; ── laws: slot-derived + free, run over a db ─────────────────────────────────
 

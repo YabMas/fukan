@@ -22,17 +22,19 @@
 ;; + readers — a cross-module analysis, which Subsystem is the natural holder for.
 
 ;; in-subsystem — Subsystem membership: the `contains` union restricted to a Subsystem container.
+;; (`::Subsystem` — the ns-precise `(is …)` sort pin; the keyword form because the defstructure
+;; is below: `is` resolves lexically, and a same-ns forward reference states the tag directly.)
 (s/defrelation :in-subsystem
   "Module ?mod is clustered by Subsystem ?sub — the `contains` union restricted to a Subsystem container."
   [?mod ?sub]
-  [[?sub :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (contains ?sub ?mod)])
+  [(is ?sub ::Subsystem) (contains ?sub ?mod)])
 
 ;; module-owns — Module ownership: the `contains` genus
 ;; restricted to a Module container. A helper for `module-depends`.
 (s/defrelation :module-owns
   "Module ?m owns ?x — the `contains` genus restricted to a Module container."
   [?m ?x]
-  [[?m :structure/of :fukan.common.vocab.code.module/Module] (contains ?m ?x)])
+  [(is ?m Module) (contains ?m ?x)])
 
 (s/defrelation :module-depends
   "the COMPLETE module→module dependency graph: a call dependency (?m owns an op that :delegates to
@@ -66,7 +68,7 @@
   (law "every cross-subsystem module dependency follows a declared :may-depend edge"
     {:scope :global
      :offenders [?m]
-     :rules [[(declared-dep ?s ?t) [?s :structure/of :fukan.common.vocab.code.subsystem/Subsystem] (may-depend ?s ?t)]]
+     :rules [[(declared-dep ?s ?t) (is ?s Subsystem) (may-depend ?s ?t)]]
      :where [(module-depends ?m ?n)
              (in-subsystem ?m ?s) (in-subsystem ?n ?t) [(not= ?s ?t)]
              (not (declared-dep ?s ?t))]})
@@ -89,15 +91,14 @@
      :offenders [?m]
      :rules [[(module-reaches ?m ?n) (module-depends ?m ?n)]
              [(module-reaches ?m ?n) (module-depends ?m ?mid) (module-reaches ?mid ?n)]]
-     :where [[?m :structure/of :fukan.common.vocab.code.module/Module] (module-reaches ?m ?m)]})
+     :where [(is ?m Module) (module-reaches ?m ?m)]})
   ;; MEMBERSHIP TOTALITY — every AUTHORED Module belongs to a Subsystem, so conformance has full
   ;; coverage. Guarded by a Subsystem existing (→ vacuous for subsystem-free models); negation routes
   ;; through the injected `in-subsystem` defrelation. Extracted code-fact modules are out of scope.
   (law "every Module belongs to a Subsystem"
     {:scope :global
      :offenders [?mod]
-     :where [[?_s :structure/of :fukan.common.vocab.code.subsystem/Subsystem]
-             [?mod :structure/of :fukan.common.vocab.code.module/Module]
+     :where [(is ?_s Subsystem) (is ?mod Module)
              (not (fact ?mod))
              (not-join [?mod] (in-subsystem ?mod ?_sub))]}))
 

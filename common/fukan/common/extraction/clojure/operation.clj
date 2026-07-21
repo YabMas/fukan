@@ -40,7 +40,7 @@
 (defrelation :public
   "Fn's public surface: an extracted function that is not private, not ^:export, not ^:test-support."
   [?x]
-  [[?x :structure/of :fukan.common.extraction.clojure.operation/Fn]
+  [(is ?x Fn)
    (not [?x :val/private true]) (not [?x :val/export true]) (not [?x :val/test-support true])])
 
 ;; The PUBLIC CALL GRAPH as a first-class fact relation — `a` reaches `b` through only ¬public (internal)

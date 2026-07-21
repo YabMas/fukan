@@ -121,8 +121,8 @@ point).
 
 **Growth in notation — derived forms.** Everything the authoring surface adds
 above the kernel's four things — the instance macros mirroring `defstructure`,
-the law combinators, `(reader f)` / `(syntax f)` hooks, `bridge` strategy
-keywords — is a **derived form**: notation elaborating at authoring time into
+the law combinators, the `(is …)` sort pin, `(reader f)` / `(syntax f)` hooks,
+`bridge` strategy keywords — is a **derived form**: notation elaborating at authoring time into
 presentations, sentences, extensions, or morphisms. The classical theory of
 definitions supplies the discipline a macro system needs: a derived form must be
 **eliminable** (it expands away without remainder) and **non-creative** (it

@@ -275,6 +275,16 @@ A `defstructure` is a composition of **slots** plus **laws**:
   datalog emitting `not-join` directly (the Cozo query compiler lowers stratified
   negation correctly, so the combinators need no negation-routing dance; never
   hand-write these shapes). `(structure/check db)` runs every law → violations.
+- `(is ?x Sort)` pins a clause's sort NS-PRECISELY — the precise dual of the bare kind-rule
+  call: the sort symbol resolves at DECLARATION time through the declaring ns (requires-based,
+  like an instance reference; a law may name the structure being defined; `::Sort` for a
+  same-ns forward reference; the full tag keyword where a require would cycle — resolution
+  rides the acyclic ns graph), and the query compiler LOWERS the resolved tag — a
+  `:structure/of` triple for a direct tag, the kind-rule call for a realized concept. The bare
+  rule call `(Sort ?x)` stays the deliberate CO-LOAD UNION (any same-short-named sort). Never
+  hand-write a `[?x :structure/of <qualified-tag>]` guard in vocab laws/defrelations.
+  Evaluated contexts (REPL `focus`, `q`) pass the qualified tag — a bare symbol resolves only
+  in declaration forms.
 - Correspondence is a CROSS-TAG MORPHISM, declared EXTERNALLY via `(correspond Design Fact …)` (both
   concepts' own `defstructure`s stay pure identity — there is no inline correspondence form). `Fact` is
   the CODOMAIN — a real `defstructure` whose slots are the extracted constructs (design `Operation` ↦

@@ -232,6 +232,26 @@
     (and (seq? c) (= 'measure (first c)))
     (throw (ex-info (str "(measure …) is not supported inside not-join/or-join — lift it to the top level: "
                          (pr-str c)) {:clause c}))
+    ;; (is ?v <qualified-tag>) — the ns-precise sort pin. Declaration forms resolve the sort
+    ;; SYMBOL to its tag at parse (structure/resolve-sorts); here the resolved tag LOWERS: a
+    ;; direct tag → the `:structure/of` triple; a realized/facet concept (no direct instances)
+    ;; → its kind-rule call. Recursion through not/not-join/or-join bodies comes free.
+    (and (seq? c) (= 'is (first c)))
+    (let [[_ v tag] c]
+      (when-not (and (= 3 (count c)) (keyword? tag))
+        (throw (ex-info (str "(is ?var <qualified-tag>) — a bare sort symbol resolves only in a "
+                             "declaration form; evaluated contexts pass the tag: " (pr-str c))
+                        {:clause c})))
+      (let [sdef (structure/structure-by-tag tag)]
+        (when-not sdef
+          (throw (ex-info (str "(is …): no structure registered for " tag) {:clause c :tag tag})))
+        (when (:relation-element sdef)
+          (throw (ex-info (str "(is …): " tag " is a relation element, not a sort: " (pr-str c))
+                          {:clause c :tag tag})))
+        (compile-clause
+         (if (contains? (structure/direct-scope-tags [sdef]) tag)
+           [v :structure/of tag]
+           (list (symbol (name tag)) v)))))
     (and (seq? c) (symbol? (first c)))
     (let [nm (rname (first c))]
       [(str nm "[" (str/join ", " (map cterm (rest c))) "]") nil #{nm}])

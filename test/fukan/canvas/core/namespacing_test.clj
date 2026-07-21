@@ -28,6 +28,16 @@
 (Kind ^{:name "local"} local-kind)
 (code/Kind ^{:name "fromlib"} lib-kind)
 
+;; a GLOBAL law whose sort guard is `(is ?k Kind)` — declaration-site resolution picks THIS
+;; namespace's Kind (the var), so the law reads at domain altitude yet stays ns-precise even
+;; under :scope :global. The bare rule call `(Kind ?k)` remains the deliberate co-load union.
+(defstructure KindAudit
+  "Fixture: a global law over the ns-precisely pinned local Kind."
+  (law "is-pins-local-kind"
+    {:scope :global
+     :offenders [?k]
+     :where [(is ?k Kind)]}))
+
 (deftest same-short-name-different-ns-coexist
   (testing "two `Kind`s from different namespaces keep distinct identities and instances"
     ;; the registry keeps BOTH defs under their qualified tags — neither overwrites the other
@@ -53,6 +63,21 @@
       (is (contains? flagged "local") "the local law fires on its own ::Kind instance")
       (is (not (contains? flagged "fromlib"))
           "and NOT on fukan.common.vocab.code.kind/Kind — ns-precise scoping (pre-fix the shared short name cross-scoped)")))))
+
+(deftest is-pins-a-sort-ns-precisely-where-the-rule-call-unions
+  (testing "(is ?k Kind) resolved the LOCAL Kind at declaration; the bare rule call is the union"
+    (let [db      (build/vars->cozo [#'local-kind #'lib-kind])
+          flagged (->> (law/check db)
+                       (filter #(= "is-pins-local-kind" (:law %)))
+                       (mapcat :offenders)
+                       (map (comp :entity/name #(cq/entity db %) first))
+                       set)]
+      (is (= #{"local"} flagged)
+          "despite :scope :global, (is ?k Kind) ranges over ::Kind only — not the co-loaded lib Kind")
+      (is (= #{"local" "fromlib"}
+             (set (map first (cq/q '[:find ?n :in $ % :where (Kind ?k) [?k :entity/name ?n]]
+                                   db (s/vocab-rules)))))
+          "the short kind rule stays the deliberate co-load union — both Kinds"))))
 
 (deftest relation-name-collisions-are-loud
   (testing "a relation element's UNQUALIFIED tag is signature identity: re-declaring the same

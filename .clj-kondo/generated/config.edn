@@ -17,6 +17,9 @@
    fukan.canvas.core.composition-test/PathMark hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/PathNode hooks.fukan.structure/instance
    fukan.canvas.core.composition-test/Sum hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/IsAudit hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/IsSelf hooks.fukan.structure/instance
+   fukan.canvas.core.laws-test/IsThing hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LBot hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LDoc hooks.fukan.structure/instance
    fukan.canvas.core.laws-test/LGate hooks.fukan.structure/instance
@@ -37,6 +40,7 @@
    fukan.canvas.core.lens-test/Grp hooks.fukan.structure/instance
    fukan.canvas.core.lens-test/Widget hooks.fukan.structure/instance
    fukan.canvas.core.namespacing-test/Kind hooks.fukan.structure/instance
+   fukan.canvas.core.namespacing-test/KindAudit hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Law hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Morphism hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Relation hooks.fukan.structure/instance

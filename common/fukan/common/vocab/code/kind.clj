@@ -20,6 +20,8 @@
   (syntax shape->slots)                         ; positional malli body → the :shape slot
   (law "a Kind is a member of at most one Module"
     {:offenders [?k]
-     :rules [[(kind-home ?k ?m) [?m :structure/of :fukan.common.vocab.code.module/Module]
+     ;; the full tag keyword: `module` requires `kind` (Module's :child names Kind), so the
+     ;; symbol form would need a cyclic require — `is` resolution rides the acyclic ns graph.
+     :rules [[(kind-home ?k ?m) (is ?m :fukan.common.vocab.code.module/Module)
               (contains ?m ?k)]]
      :where [(kind-home ?k ?m1) (kind-home ?k ?m2) [(not= ?m1 ?m2)]]}))

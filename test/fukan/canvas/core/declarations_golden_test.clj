@@ -300,8 +300,16 @@
 ;; genus ("a member of at most one Module", a kind-home rule-call). Terms 91→83 (−2 species
 ;; subsumption, −2 slot rules, −4 closures). Laws 62→61 (−2 role target-type laws, +1 union :child
 ;; target-type — the Any target had none; Kind's law swaps 1:1).
-(def ^:private golden-terms {:count 83 :hash -160462065})
-(def ^:private golden-laws  {:count 61 :hash -793972399})
+;; 2026-07-21 (e): the `(is ?v Sort)` sort pin lands — declaration-site ns-precise kind guards.
+;; The shipped vocab's raw `[?x :structure/of <qualified-tag>]` clauses convert to `(is ?x <tag>)`
+;; (resolved at parse — symbol via the declaring ns's vars / self-tag, `::Sort` forward refs, the
+;; full keyword where a require would cycle; LOWERED by the query compiler to the same triple or
+;; kind-rule call, so evaluation is unchanged): `in-subsystem`/`module-owns`/`public` rule bodies
+;; (terms hash), the `declared-dep`/`kind-home` law-local rules + the module-acyclicity and
+;; membership-totality `:where` guards (laws hash). Counts hold (83 / 61) — pure clause reshape,
+;; stored at domain altitude. Live `(check)` still 0.
+(def ^:private golden-terms {:count 83 :hash -1013638152})
+(def ^:private golden-laws  {:count 61 :hash -597987143})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

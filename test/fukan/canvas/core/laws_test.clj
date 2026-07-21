@@ -446,3 +446,71 @@
       (is (empty? (law/violations-of match :corresponds/LTwin.agrees))
           "an agreeing fact twin is green"))))
 
+
+;; ── (is ?v Sort): declaration-site sort resolution + compiler lowering ─────────
+
+(defstructure IsThing "is-fixture: a direct sort." {:t [:? :string]})
+(defstructure IsOn "is-fixture: realized — an IsThing whose t is \"on\"."
+  (realized-as [(is ?e IsThing) [?e :val/t "on"]]))
+(defstructure IsAudit
+  "is-fixture: a global law over the ns-precise sort — every IsThing carries t."
+  (law "every IsThing has t"
+    {:scope :global
+     :offenders [?x]
+     :where [(is ?x IsThing) (not-join [?x] [?x :val/t ?v])]}))
+(defstructure IsSelf
+  "is-fixture: a SELF-reference — the law names the structure being defined."
+  {:next [:? IsSelf]}
+  (law "no self-next"
+    {:offenders [?x]
+     :where [(is ?x IsSelf) [?r :rel/from ?x] [?r :rel/kind :next] [?r :rel/to ?x]]}))
+(s/defrelation :is-genus "is-fixture: a bare relation element — NOT a sort")
+
+(IsThing is-on  {:t "on"})
+(IsThing is-bare)
+(declare is-loop)
+(IsSelf is-loop {:next is-loop})
+
+(deftest is-resolves-at-declaration-time
+  (testing "the stored law carries the resolved qualified tag, not the symbol"
+    (let [audit (first (filter #(= "every IsThing has t" (:desc %))
+                               (s/laws-of (s/structure-by-tag ::IsAudit))))]
+      (is (= '(is ?x :fukan.canvas.core.laws-test/IsThing) (first (:where audit))))))
+  (testing "a realized concept's rule body resolves too"
+    (is (= '(is ?e :fukan.canvas.core.laws-test/IsThing)
+           (first (:realized-as (s/structure-by-tag ::IsOn))))))
+  (testing "the defining structure's own name resolves before its registration (self-tag)"
+    (let [self (first (filter #(= "no self-next" (:desc %))
+                              (s/laws-of (s/structure-by-tag ::IsSelf))))]
+      (is (= '(is ?x :fukan.canvas.core.laws-test/IsSelf) (first (:where self)))))))
+
+(deftest is-lowers-and-fires
+  (let [db (build/vars->cozo [#'is-on #'is-bare #'is-loop])]
+    (testing "a direct tag lowers to the :structure/of triple — the law fires on the t-less IsThing"
+      (is (= 1 (count (->> (law/check db)
+                           (filter #(= "every IsThing has t" (:law %)))
+                           (mapcat :offenders))))))
+    (testing "the self-referential law fires on the self-loop"
+      (is (seq (->> (law/check db) (filter #(= "no self-next" (:law %)))))))
+    (testing "(is ?n <tag>) works in an evaluated context — the compiler lowers the tag form"
+      (is (= 2 (count (cq/q '[:find ?n :in $ % :where (is ?n :fukan.canvas.core.laws-test/IsThing)]
+                            db (s/vocab-rules))))))
+    (testing "a realized sort lowers to its kind-rule call"
+      (is (= 1 (count (cq/q '[:find ?n :in $ % :where (is ?n :fukan.canvas.core.laws-test/IsOn)]
+                            db (s/vocab-rules))))))))
+
+(deftest is-surface-errors
+  (testing "an unresolvable sort symbol throws at declaration, naming the sort"
+    (let [msg (try (let [_ (macroexpand
+                            '(fukan.canvas.core.structure/defstructure IsBad "d"
+                               (law "nope" {:offenders [?x] :where [(is ?x NoSuchSort)]})))]
+                     "no throw")
+                   (catch Throwable e
+                     (loop [t e] (if-let [c (ex-cause t)] (recur c) (ex-message t)))))]
+      (is (re-find #"no structure named NoSuchSort" msg))))
+  (testing "a bare sort symbol in an evaluated context throws — no resolution context"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"resolves only in a declaration"
+          (cq/q '[:find ?n :where (is ?n IsThing)] (build/vars->cozo [#'is-on])))))
+  (testing "a relation element is rejected — (is …) takes a sort"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"relation element, not a sort"
+          (cq/q '[:find ?a :where (is ?a :is-genus)] (build/vars->cozo [#'is-on]))))))
