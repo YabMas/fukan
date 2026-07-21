@@ -413,6 +413,11 @@ structure substrate which is the model:
 - `(correspondence)` — the design↔fact seam as one card: twin ladder + every demand with its stable law key.
 - Build a db directly: top-level instance `def`s + `(a/assemble-vars [#'x …])`, query with
   `d/q`, run `(s/check db)`.
+- **REPL helpers speak only through NAMED surfaces** — stable law keys
+  (`law/violation-names`/`violations-of`), defrelations, and the print-duals — never inline
+  `:rel/*`/`:val/*` substrate datalog. Named surfaces fail LOUD when the grammar moves (an
+  unknown law key THROWS; a relation collision throws at registration); inline substrate
+  queries rot silently into always-empty helpers.
 - **Never** use `remove-ns`, `require :reload`, or `(reload/reload)` directly.
 
 nREPL runs on port 7889 (`clj -M:nrepl`).

@@ -176,13 +176,27 @@
   (vec (for [r (check-structural cdb) :when (:offenders r)]
          (select-keys r [:structure :law :key :offenders]))))
 
+(defn- known-law-keys
+  "Every `:key` across the laws `check` runs — the addressable worklist surface, from the
+   same registry source (`all-laws`) check evaluates."
+  []
+  (into #{} (keep (comp :key second)) (all-laws)))
+
 (defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] :any]}
   violations-of
   "The offender eids of the law keyed `k` — the generic reader behind every law-specific worklist
    fn (filter `check` by the law's stable `:key`, first offender var). Returns a set of eid strings;
-   callers name them through `violation-names`."
+   callers name them through `violation-names`.
+
+   An UNKNOWN key throws (naming the known keys): a reader addressing a retired or misspelled
+   law must fail the moment it runs, not report an empty worklist forever — the reader-side
+   symmetric of the duplicate-law-key registration guard."
   [cdb k]
-  (->> (check cdb) (filter #(= k (:key %))) (mapcat :offenders) (map first) set))
+  (let [known (known-law-keys)]
+    (when-not (contains? known k)
+      (throw (ex-info (str "no law keyed " k " — known keys: " (str/join ", " (sort known)))
+                      {:key k :known known})))
+    (->> (check cdb) (filter #(= k (:key %))) (mapcat :offenders) (map first) set)))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] [:set :string]]}
   violation-names

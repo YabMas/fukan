@@ -190,6 +190,15 @@
     (let [db (build/vars->cozo [#'qg-held-bare #'qg-h1])]
       (is (seq (law/violations-of db :held-gate))))))
 
+(deftest unknown-law-key-throws
+  (testing "a worklist reader addressing a key no registered law carries fails LOUD — a
+            retired/misspelled key must not read as an empty (clean) worklist forever"
+    (let [db (build/vars->cozo [#'qg-held-bare #'qg-h1])]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no law keyed :no-such-law"
+            (law/violations-of db :no-such-law)))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no law keyed"
+            (law/violation-names db :corresponds/Operation.retired-demand))))))
+
 ;; ── surface errors ────────────────────────────────────────────────────────────
 
 (deftest unknown-combinator-is-rejected-at-expansion
