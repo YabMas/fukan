@@ -21,7 +21,10 @@
             [clojure.string :as str]
             [fukan.cozo.query :as cq]
             [fukan.canvas.core.structure :as s]
-            [fukan.canvas.core.typing :as typing]))
+            [fukan.canvas.core.typing :as typing]
+            ;; aliased for its meta-grammar sorts (::reflect/Structure …) — the print-dual
+            ;; renders exactly the nodes reflection mints, so the edge is honest
+            [fukan.canvas.core.reflect :as reflect]))
 
 ;; ── parts: one reified Structure → its authoring ingredients ─────────────────
 
@@ -109,7 +112,7 @@
    not stored)."
   [db s]
   (when-let [m (ffirst (cq/q '[:find ?m :in $ ?s
-                               :where (is ?m :fukan.canvas.core.reflect/Morphism)
+                               :where (is ?m ::reflect/Morphism)
                                       [?r :rel/from ?m] [?r :rel/kind :from] [?r :rel/to ?s]]
                              db s))]
     (let [e    (cq/entity db m)
@@ -235,7 +238,7 @@
   "One vocabulary (a grammar namespace) rendered as its defstructure forms."
   [db vocab-name]
   (let [members (->> (cq/q '[:find ?c ?n :in $ ?vn
-                             :where (is ?v :fukan.canvas.core.reflect/Vocabulary)
+                             :where (is ?v ::reflect/Vocabulary)
                                     [?v :entity/name ?vn]
                                     [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
                                     [?c :entity/name ?n]]
@@ -252,7 +255,7 @@
    reified grammar — the canvas's language reference, derived not maintained."
   [db]
   (let [vocabs (sort (cq/q '[:find [?n ...]
-                             :where (is ?v :fukan.canvas.core.reflect/Vocabulary)
+                             :where (is ?v ::reflect/Vocabulary)
                                     [?v :entity/name ?n]] db))]
     (str/join "\n\n" (map #(vocabulary-primer db %) vocabs))))
 
@@ -302,7 +305,7 @@
         realized (into #{} (map first)
                        (cq/q '[:find ?s :where [?s :val/realizes _]] db))]
     (->> (cq/q '[:find ?s ?n ?t
-                 :where (is ?s :fukan.canvas.core.reflect/Structure)
+                 :where (is ?s ::reflect/Structure)
                         [?s :entity/name ?n] [?s :val/tag ?t]]
                db)
          (remove (fn [[s _ t]] (or (realized s) (= ":Any" t) (in-use t))))

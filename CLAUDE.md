@@ -284,7 +284,10 @@ A `defstructure` is a composition of **slots** plus **laws**:
   rule call `(Sort ?x)` stays the deliberate CO-LOAD UNION (any same-short-named sort). Never
   hand-write a `[?x :structure/of <qualified-tag>]` guard in vocab laws/defrelations.
   Evaluated contexts (REPL `focus`, `q`) pass the qualified tag — a bare symbol resolves only
-  in declaration forms.
+  in declaration forms. SPELLING converges to the most-resolved reader form available:
+  `::Sort` same-ns, `::alias/Sort` through an existing ns alias; a FULL tag keyword is
+  reserved for — and signals — a namespace deliberately NOT required at that site (kind.clj's
+  require-cycle, the architecture print-dual's data-only vocab coupling).
 - Correspondence is a CROSS-TAG MORPHISM, declared EXTERNALLY via `(correspond Design Fact …)` (both
   concepts' own `defstructure`s stay pure identity — there is no inline correspondence form). `Fact` is
   the CODOMAIN — a real `defstructure` whose slots are the extracted constructs (design `Operation` ↦

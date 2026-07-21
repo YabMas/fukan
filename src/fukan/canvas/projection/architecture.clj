@@ -30,6 +30,9 @@
   architecture-overview
   "Render fukan's subsystems + modules + the :may-depend DAG (string)."
   [db]
+  ;; FULL tags, deliberately: the kernel ships no vocabulary, so this src/ print-dual names the
+  ;; code-grammar sorts as DATA — no require, no ::alias. The spelling is the signal: a full tag
+  ;; in an `is` marks a namespace deliberately not required here (soft coupling only).
   (let [subs  (->> (cq/q '[:find ?s ?sn :where (is ?s :fukan.common.vocab.code.subsystem/Subsystem) [?s :entity/name ?sn]] db)
                    (sort-by second))
         nmod  (count (cq/q '[:find ?m :where (is ?m :fukan.common.vocab.code.module/Module)] db))]

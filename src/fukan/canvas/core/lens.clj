@@ -165,7 +165,7 @@
    never fires). Laws gate the substrate; Checks gate a use-side focus."
   [db]
   (for [[c verdict lens] (cq/q '[:find ?c ?verdict ?lens
-                                 :where (is ?c :fukan.canvas.core.lens/Check)
+                                 :where (is ?c ::Check)
                                         [?c :val/verdict ?verdict]
                                         [?g :rel/kind :gates] [?g :rel/from ?c] [?g :rel/to ?lens]]
                                db)

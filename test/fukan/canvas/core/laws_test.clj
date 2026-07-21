@@ -493,10 +493,10 @@
     (testing "the self-referential law fires on the self-loop"
       (is (seq (->> (law/check db) (filter #(= "no self-next" (:law %)))))))
     (testing "(is ?n <tag>) works in an evaluated context — the compiler lowers the tag form"
-      (is (= 2 (count (cq/q '[:find ?n :in $ % :where (is ?n :fukan.canvas.core.laws-test/IsThing)]
+      (is (= 2 (count (cq/q '[:find ?n :in $ % :where (is ?n ::IsThing)]
                             db (s/vocab-rules))))))
     (testing "a realized sort lowers to its kind-rule call"
-      (is (= 1 (count (cq/q '[:find ?n :in $ % :where (is ?n :fukan.canvas.core.laws-test/IsOn)]
+      (is (= 1 (count (cq/q '[:find ?n :in $ % :where (is ?n ::IsOn)]
                             db (s/vocab-rules))))))))
 
 (deftest is-surface-errors
