@@ -38,6 +38,13 @@
   "The live registry roll-call — every registered structure definition (slots + laws). The seam
    grammar reflection reads to project the registry onto the model."
   {:signature [:=> [:cat] [:vector :any]]})
+(Operation all-corresponds
+  "The correspondence roll-call — every registered essential `(correspond …)` config (head + match +
+   realization map). The registry seam grammar reflection and the correspondence card read."
+  {:signature [:=> [:cat] [:vector :any]]})
+(Operation correspond-by-pair
+  "Look up a registered correspondence config by its [design fact] sort pair."
+  {:signature [:=> [:catn [:pair :any]] :any]})
 (Operation laws-of
   "Every law of a structure — slot-derived cardinality/type laws plus its free laws, the same
    set check runs. (Correspondence generates no laws — coverage/adherence are READINGS over the
@@ -53,6 +60,7 @@
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:child [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
+           all-corresponds correspond-by-pair
            laws-of direct-scope-tags
            Violation Form                         ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)
            Rule]})                                ; the rules-output type

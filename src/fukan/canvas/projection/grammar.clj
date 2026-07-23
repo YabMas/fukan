@@ -8,19 +8,27 @@
    Four renders from the same parts:
      `structure-form`      — the faithful DATA form (laws carry their datalog,
                              unquoted; `^:value` rides the name symbol's metadata).
-     `correspondence-form` — STUB (Task 6): the valid essential `(correspond …)` data form, once
-                             the reflected node carries enough to reconstruct it.
+     `correspondence-form` — the external `(correspond …)` data form for a design Structure,
+                             registry-direct (the authored head/match/map), or nil when no
+                             correspondence has that design sort.
      `grammar-primer`      — the reference-card STRING: every Vocabulary in the
                              model, each structure with aligned slots, first doc
                              line, law descs (datalog elided as `…`).
-     `correspondence-card` — STUB (Task 6): the design↔fact seam as one card. The kernel demolition
-                             (Task 4) retired the legacy registry seam this used to render; the
-                             essential `correspond` construct generates no demand laws to show.
+     `correspondence-card` — the design↔fact seam as one card: every registered essential
+                             `correspond` (registry-direct — the authored head/match/map) plus its
+                             live VOCAB-GENERIC coverage READINGS (unrealized/ambiguous, computed
+                             over the model db's `corresponds`/`realized-*` rules — the kernel
+                             demolition (Task 4) retired the demand-law seam this used to render;
+                             coverage is a reading now, not a generated law). The unaccounted-public
+                             reading needs the fact sort's own `public` predicate — vocabulary this
+                             kernel tier must not name — so it is `dev/user.clj`'s business,
+                             appended after this card, not rendered here.
 
-   The first three are model db → form / string; the card is registry-direct."
+   The first three are model db → form / string; the card is registry-direct + db-direct."
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [fukan.cozo.query :as cq]
+            [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.typing :as typing]
             ;; aliased for its meta-grammar sorts (::reflect/Structure …) — the print-dual
             ;; renders exactly the nodes reflection mints, so the edge is honest
@@ -138,16 +146,21 @@
             (when realizes [(list 'realized-as realizes)])
             (map law-form laws))))
 
+(declare corr-head)
+
 (defn ^:export ^{:malli/schema [:=> [:cat :StructureDb :Eid] :any]}
   correspondence-form
-  "Render the essential `(correspond …)` whose design Structure is `eid` as canonical data, or nil.
-   STUB pending Task 6's proper card: the reflected `Correspondence` node carries the pairing MATCH
-   and realization MAP (`:val/match`/`:val/map`) but not the author's `?d`/`?f` head symbols a
-   faithful `(correspond [Design ?d Fact ?f] …)` round-trip needs — Task 6 reconstructs the head.
-   For now this keeps the ns compiling against the NEW node shape (`:from`/`:to`/`:val/match`/
-   `:val/map`), replacing the legacy `:val/carrier`-keyed internals it used to render."
-  [_db _eid]
-  nil)
+  "Render the external `(correspond …)` whose DESIGN Structure is `eid` as canonical, re-authorable
+   data — `(correspond [Design ?d Fact ?f] match realization-map)` — or nil when no correspondence has
+   that design sort. Registry-direct: the reflected Structure at `eid` carries the design `:val/tag`,
+   and the matching config in `s/all-corresponds` supplies the authored head (`corr-head`), the pairing
+   MATCH, and the realization MAP verbatim (the same parts `correspondence-card` renders). The dual of
+   `structure-form` for the bridge declaration that `structure-form` deliberately omits from a
+   defstructure form (correspondence is EXTERNAL)."
+  [db eid]
+  (let [tag (ffirst (cq/q '[:find ?t :in $ ?s :where [?s :val/tag ?t]] db eid))]
+    (when-let [c (first (filter #(= tag (str (:design %))) (s/all-corresponds)))]
+      (list 'correspond (corr-head c) (:match c) (:map c)))))
 
 ;; ── the primer (reference-card string) ───────────────────────────────────────
 
@@ -202,16 +215,76 @@
                                     [?v :entity/name ?n]] db))]
     (str/join "\n\n" (map #(vocabulary-primer db %) vocabs))))
 
-(defn ^{:malli/schema [:=> [:cat] :Primer]}
+(defn- corr-head
+  "One registry config's authored `[Design ?d Fact ?f]` head — a VECTOR (the only shape the
+   `correspond` macro accepts, so the render is re-authorable syntax, not just descriptive text) of
+   short (unqualified) sort symbols, the same convention `target-expr` renders a slot target with;
+   `dvar`/`fvar` ride the config verbatim (the exact symbols the author wrote, captured at
+   macroexpansion)."
+  [{:keys [design fact dvar fvar]}]
+  [(symbol (name design)) dvar (symbol (name fact)) fvar])
+
+(defn- reading-count
+  "Run a collection-find count query binding `v`, over `where` (extra `is`/`corresponds`-shaped
+   clauses) + the live vocab rules — the shared shape every coverage reading below refines."
+  [db v where]
+  (count (cq/q (into [:find [v '...] :in '$ '% :where] where) db (s/vocab-rules))))
+
+(defn- unrealized-count
+  "Design elements of one correspondence's design sort with no `corresponds` partner — the
+   `(design dvar)` provenance clause + the unbound gate var of the fact sort mirror dev/user.clj's
+   `drift` exactly (byte-parity between the two mirrored readings): design elements are authored by
+   construction (a design tag never carries `:val/extracted`), so `(design dvar)` is a defensive
+   restatement, not new selectivity; the gate keeps this 0, not a false backlog, when the fact sort
+   has no instances yet (extraction hasn't run)."
+  [db {:keys [design fact dvar]}]
+  (reading-count db dvar
+                 [(list 'is dvar design)
+                  (list 'design dvar)
+                  (list 'is '?_gate fact)
+                  (list 'not-join [dvar] (list 'corresponds dvar '?_f))]))
+
+(defn- ambiguous-count
+  "Design elements paired with MORE THAN ONE distinct fact partner."
+  [db {:keys [design dvar]}]
+  (reading-count db dvar
+                 [(list 'is dvar design)
+                  (list 'corresponds dvar '?_f1)
+                  (list 'corresponds dvar '?_f2)
+                  [(list 'not= '?_f1 '?_f2)]]))
+
+(defn- fmt-correspond
+  "One registered essential correspondence → its card entry: the authored `(correspond …)` data
+   form (head/match/map, `pr-str`'d — mirroring `fmt-structure`'s pretty-print) followed by its live
+   VOCAB-GENERIC coverage readings (unrealized/ambiguous — computed from the registry + the
+   `corresponds` rule alone, no vocabulary knowledge needed). The unaccounted-public reading is
+   deliberately NOT here: it requires naming the fact sort's own `public` predicate, which this
+   kernel tier (ships no domain vocabulary) must not do — `dev/user.clj`'s `(correspondence)`
+   appends it after the card, reusing `encapsulation`'s query."
+  [db {:keys [match] rmap :map :as c}]
+  (let [unrealized (unrealized-count db c)
+        ambiguous  (ambiguous-count db c)]
+    (str/join "\n"
+              [(str "(correspond " (pr-str (corr-head c)))
+               (str "  " (pr-str match))
+               (str "  " (pr-str rmap) ")")
+               (str "  unrealized: " unrealized "  ambiguous: " ambiguous)])))
+
+(defn ^{:malli/schema [:=> [:cat :StructureDb] :Primer]}
   correspondence-card
-  "The correspondence SEAM rendered as one card — pending Task 6, the header only. The kernel
-   demolition (Task 4) retired the OLD carrier-registry seam this card used to read (kinds/demands/
-   stable law keys, generated from carrier coverage) along with the demand-law generators it
-   described — the essential `correspond` construct generates no such laws (coverage/adherence are
-   READINGS over `corresponds`/`realized-*`, viewed through `(correspondence)` / dev/user.clj, not
-   this card). Task 6 rebuilds the proper card over `s/all-corresponds`."
-  []
-  "━━ CORRESPONDENCE — design ↔ fact ━━")
+  "The correspondence SEAM rendered as one card: every registered essential `correspond` — its
+   authored head/match/map data form (registry-direct) — followed by its live VOCAB-GENERIC coverage
+   READINGS over `db` (unrealized/ambiguous, computed over the `corresponds`/`realized-*` rules
+   `terms-of` emits). Coverage is a READING here, not a law — the kernel demolition (Task 4) retired
+   the demand-law generators this card used to describe; the essential `correspond` construct
+   generates none to show. The unaccounted-public reading (which needs the fact sort's own `public`
+   predicate — vocabulary this kernel tier must not name) is `dev/user.clj`'s business, appended
+   after this card."
+  [db]
+  (let [cs (sort-by (comp name :design) (s/all-corresponds))]
+    (str/join "\n\n"
+              (into ["━━ CORRESPONDENCE — design ↔ fact ━━"]
+                    (map #(fmt-correspond db %) cs)))))
 
 ;; ── grammar drift (the dead-vocabulary reading) ───────────────────────────────
 

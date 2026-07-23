@@ -117,23 +117,31 @@
       (is (str/includes? p "(defstructure Structure")))))
 
 ;; (`primer-counts-operations-generated-laws` was retired at the essential-correspond cutover: the
-;;  generated `:corresponds/*` demand laws — whose count the primer pointed at — dissolved into readings,
-;;  and re-pointing the INLINE per-structure correspondence render to the new match/map node is Task 6's
-;;  work. The seam is now viewed through `correspondence-card` / `(correspondence)`, tested below.)
+;;  generated `:corresponds/*` demand laws — whose count the primer pointed at — dissolved into readings.
+;;  The seam is now viewed through `correspondence-card` / `(correspondence)` and the per-Structure
+;;  external render `correspondence-form` — all tested below.)
 
-(deftest correspondence-card-is-dormant-after-the-cutover
-  (testing "the card is DORMANT since the essential-correspond cutover — the legacy seam it reads is
-            empty for the self-model's correspondences, so it renders its header but no generated
-            `:corresponds/*` demand keys (those dissolved into readings). Task 6 re-points it to
-            `s/all-corresponds` as the proper card."
-    (let [card (g/correspondence-card)]
-      (is (str/includes? card "━━ CORRESPONDENCE") "the card still renders (no crash)")
-      (is (not (str/includes? card ":corresponds/Operation")) "no generated demand keys — they dissolved"))))
+(deftest correspondence-card-renders-authored-form-and-live-readings
+  (testing "the card is registry-direct (authored head/match/map) + db-direct (live coverage
+            readings) — Task 5 rebuilds it over `s/all-corresponds`: no more generated
+            `:corresponds/*` demand keys, coverage is a READING now"
+    (let [db   (pipeline/build-model nil)
+          card (g/correspondence-card db)]
+      (is (str/includes? card "━━ CORRESPONDENCE") "the card still renders its header")
+      (is (str/includes? card "[Operation ?op Fn ?fn]")
+          "the head renders as a VECTOR — the only shape `correspond` accepts, so this is
+           re-authorable syntax, not just descriptive text")
+      (is (str/includes? card ":delegates") "the authored realization map renders (e.g. :delegates)")
+      (is (str/includes? card "unrealized") "the live unrealized-count reading renders")
+      (is (not (str/includes? card ":corresponds/Operation")) "no generated demand keys — they dissolved")
+      (is (not (str/includes? card "unaccounted-public"))
+          "the card stays VOCAB-GENERIC — it never names the `public` predicate; that reading is
+           dev/user.clj's business, appended after the card"))))
 
 (deftest print-dual-keeps-operation-slots-free-of-correspondence
   (testing "the defstructure render carries only forms its parser accepts — Operation's slots are plain,
-            never polluted with correspondence options (correspondence is EXTERNAL). The inline
-            correspondence render is dormant until Task 6 re-points it to the new match/map node."
+            never polluted with correspondence options (correspondence is EXTERNAL). The external
+            correspondence renders SEPARATELY through `correspondence-form`, its own re-authorable dual."
     (let [db   (pipeline/build-model nil)
           eid  (ffirst (cq/q '[:find ?s :where [?s :structure/of :fukan.canvas.core.reflect/Structure]
                                [?s :val/tag ":fukan.common.vocab.code.operation/Operation"]] db))
@@ -141,8 +149,13 @@
           slots (first (filter map? form))]
       (is (not-any? #(and (seq? %) (= 'corresponds (first %))) form)
           "defstructure contains only forms its parser accepts")
-      (is (nil? (g/correspondence-form db eid))
-          "the inline correspondence render is dormant (new match/map node) — Task 6 re-points it")
+      (let [cf (g/correspondence-form db eid)]
+        (is (= 'correspond (first cf))
+            "the design Structure's external correspondence renders as a top-level (correspond …) form")
+        (is (= '[Operation ?op Fn ?fn] (second cf))
+            "the head is the re-authorable VECTOR of short sort symbols + the author's head vars")
+        (is (= '[:cat :calls [:* [:cat [:not public] :calls]]] (:delegates (nth cf 3)))
+            "the realization map renders its authored code-graph paths verbatim"))
       (is (= '[:* Operation] (:delegates slots))
           ":delegates is a plain slot — no correspondence options, and no :transitive (closures are the compiler's)")
       (is (not (map? (second (:performs slots))))

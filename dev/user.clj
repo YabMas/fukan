@@ -72,18 +72,31 @@
      (println (gram/vocabulary-primer m vocab-name))
      (println "No model loaded yet. Use (go) first."))))
 
+(defn- unaccounted-public
+  "PUBLIC extracted Clojure functions with no authored Operation twin — the coverage-gap SET
+   `encapsulation` reports as a worklist and `correspondence` appends as a count after the card
+   (factored here so neither duplicates the query — kernel-tier `correspondence-card` deliberately
+   stays vocab-agnostic and never names `public` itself)."
+  [m]
+  (set (cq/q '[:find [?n ...] :in $ %
+               :where
+               (is ?fn :fukan.common.extraction.clojure.operation/Fn) (public ?fn)
+               (not-join [?fn] (corresponds ?_op ?fn))
+               [?fn :entity/name ?n]]
+             m (s/vocab-rules))))
+
 (defn correspondence
-  "Print the registered essential correspondences — each `(correspond …)` config: the design↦fact
-   sort pair, its pairing MATCH query, and its realization MAP. A placeholder view; Task 6 builds the
-   proper design↔fact card over the `corresponds`/`realized-*` readings."
+  "Print the CORRESPONDENCE CARD: every registered essential `(correspond …)` — its authored
+   head/match/map form (registry-direct) — plus its live VOCAB-GENERIC coverage readings
+   (unrealized/ambiguous), computed over the held model's `corresponds`/`realized-*` rules. Appends
+   the unaccounted-public count — the same coverage-gap SET `encapsulation` reports as a worklist —
+   since the card itself is kernel-tier and stays vocab-agnostic (it never names the `public`
+   predicate; that is this project's business)."
   []
-  (let [cs (s/all-corresponds)]
-    (if (empty? cs)
-      (println "No correspondences registered.")
-      (doseq [c cs]
-        (println (format "%s ↦ %s" (name (:design c)) (name (:fact c))))
-        (println "  match:" (pr-str (:match c)))
-        (println "  map:  " (pr-str (:map c)))))))
+  (if-let [m (infra-model/get-model)]
+    (do (println (gram/correspondence-card m))
+        (println (str "unaccounted-public: " (count (unaccounted-public m)))))
+    (println "No model loaded yet. Use (go) first.")))
 
 (defn show
   "Print every model node named `n` (a string or symbol) as its AUTHORED form —
@@ -147,12 +160,7 @@
    `correspond`) via the `public`/`within` defrelations — the fact stratum is the `Fn` theory."
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (set (cq/q '[:find [?n ...] :in $ %
-                         :where
-                         (is ?fn :fukan.common.extraction.clojure.operation/Fn) (public ?fn)
-                         (not-join [?fn] (corresponds ?_op ?fn))
-                         [?fn :entity/name ?n]]
-                       m (s/vocab-rules)))]
+    (let [w (unaccounted-public m)]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
         (let [by-ns (->> (cq/q '[:find ?on ?nn :in $ %

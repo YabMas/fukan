@@ -887,8 +887,10 @@
     (swap! corresponds-registry assoc k config)
     k))
 
-(defn ^:export correspond-by-pair [pair] (get @corresponds-registry pair))
-(defn ^:export all-corresponds [] (vals @corresponds-registry))
+(defn ^{:malli/schema [:=> [:catn [:pair :any]] :any]}
+  correspond-by-pair [pair] (get @corresponds-registry pair))
+(defn ^{:malli/schema [:=> [:cat] [:vector :any]]}
+  all-corresponds [] (vals @corresponds-registry))
 
 (defmacro correspond
   "Declare a correspondence — the ENTIRE bridge between a design sort and a fact sort:

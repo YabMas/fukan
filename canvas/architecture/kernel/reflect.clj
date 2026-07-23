@@ -17,7 +17,7 @@
    throws on a dangling grammar reference."
   {:signature [:=> [:catn [:tags [:vector :any]] [:extra-seeds [:vector :any]]] :map]
    :performs  [:throws]                            ; dangling-grammar-ref throw
-   :delegates [kernel/all-structures kernel/scalar-slot? typing/reflect-type]})
+   :delegates [kernel/all-structures kernel/all-corresponds kernel/scalar-slot? typing/reflect-type]})
 
 (Module core-reflect
   "Grammar reflection — the registry projected onto the graph. Its meta-grammar node types

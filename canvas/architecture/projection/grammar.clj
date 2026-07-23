@@ -14,15 +14,21 @@
             [canvas.architecture.cozo.query :as query]))
 
 (Module projection-grammar
-  "Render the reified grammar back out: forms, the primer, the correspondence card (registry-direct), and the grammar-drift reading.
-   The form/primer readers use the kernel Cozo query layer (`query/q`); the card reads only the structure registry."
+  "Render the reified grammar back out: forms, the primer, the correspondence card (registry-direct
+   authored form + db-direct live coverage readings), and the grammar-drift reading.
+   The form/primer/card readers use the kernel Cozo query layer (`query/q`)."
   (Kind Primer :string)    ; the reference-card string
   (Kind VocabName :string) ; a grammar namespace name
   (Operation correspondence-card
-    "The correspondence SEAM rendered as one card. STUB pending Task 6: the kernel demolition
-     retired the legacy registry seam this used to render (the essential `correspond` construct
-     generates no demand laws to show)."
-    {:signature [:=> [:cat] Primer]})
+    "The correspondence SEAM rendered as one card: every registered essential `correspond` — its
+     authored head/match/map form — plus its live VOCAB-GENERIC coverage readings
+     (unrealized/ambiguous) computed over the model db's `corresponds`/`realized-*` rules. Coverage
+     is a READING, not a generated law. Stays vocab-agnostic on purpose: the unaccounted-public
+     reading needs the fact sort's own `public` predicate, so it is dev/user.clj's business,
+     appended after this card."
+    {:signature [:=> [:catn [:db substrate/StructureDb]] Primer]
+     :performs  [:throws :state]
+     :delegates [query/q kstructure/vocab-rules kstructure/all-corresponds]})
   (Operation structure-form
     "A reified Structure rendered back as its canonical map-form defstructure (the print-dual).
      External correspondence renders separately through `correspondence-form`, so both forms are
@@ -31,10 +37,13 @@
      :performs  [:throws :state]                ; via the query compiler / render-type
      :delegates [typing/render-type query/q query/entity]})   ; renders refined slot targets + reads the graph
   (Operation correspondence-form
-    "A reified Structure's essential correspondence rendered as canonical `(correspond …)` data, or
-     nil. STUB pending Task 6: always nil for now — the reflected Correspondence node doesn't yet
-     carry enough (the author's ?d/?f head symbols) to round-trip faithfully."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] :any]})
+    "A design Structure's external correspondence rendered as canonical, re-authorable `(correspond …)`
+     data, or nil when no correspondence has that design sort. Registry-direct (the authored
+     head/match/realization-map) — the dual of `structure-form` for the bridge declaration a
+     defstructure form omits."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] :any]
+     :performs  [:throws :state]
+     :delegates [query/q kstructure/all-corresponds]})
   (Operation vocabulary-primer
     "One vocabulary rendered as its defstructure forms."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName]] Primer]
