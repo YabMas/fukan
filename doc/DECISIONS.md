@@ -120,6 +120,33 @@ not removing the decision.
   vision but is not on the near roadmap; the core is exercised first. Parked under
   `.paused/`; not to be proposed as a next step.
 
+- **D14 — Correspondence is the essential surface: definition, not assertion (2026-07-23).**
+  The design↔code bridge collapsed to ONE construct: `(correspond [Design ?d Fact ?f] match
+  realization-map)` — a HEAD (the identity, design sort first), a flat identity MATCH body, and a
+  REALIZATION MAP total over the design sort's non-scalar slots (each entry a pure code-graph path;
+  the same-named atom `:in :in` is identity realization, `nil` = declared-unrealized). It lowers
+  EXCLUSIVELY to definitional rules — a pairing rule feeding the open ambient `corresponds`, a
+  compiler-minted `realized-<rel>` per entry, per-`^:value` reflexivity — no denials. Demolished: the
+  `{:carrier :coverage}` options, the carrier `defrelation`s (`operation-twin`/`module-twin`),
+  `public-call`, the global `twin` alias, the `(:rel :sub/:sup/:eq E)` relation maps at the bridge,
+  the generated `:corresponds/*` demand laws, the derived shared-slot agreement, the comparator engine
+  branch, and `RelationMap` reflection (a `Correspondence` node now carries `:from`/`:to` +
+  `:val/match`/`:val/map`). Force: two principles pull the same way — the DEFINITION/ASSERTION split
+  (a correspondence DEFINES what realises what; whether that realisation must hold is a separate
+  ASSERTION) and anything-the-graph-determines-is-not-authored (coverage and adherence are derivable
+  from the pairing and the `realized-*` rules, so they are READINGS — `(drift)` / `(encapsulation)` /
+  `(type-drift)` — not authored laws). Consequence, stated honestly: `(check)` currently carries NO
+  correspondence violations; the constraint layer over `corresponds`/`realized-*` is a DEFERRED
+  successor arc (the natural next step — turn the coverage readings into authored denials with teeth).
+  Live validation of the pure-rule seam: 117 realized Operation/Fn pairs, 52 crossing a subsystem
+  boundary, 0 undeclared against the `:may-depend` DAG (all sanctioned) — surfaced by the new
+  `(undeclared-code-dependencies)` reading, which reads the CODE module graph through
+  `realized-delegates`, a gap the retired op-level reflect had hidden. Refines D8 (correspondence
+  stays its own concern) with the mechanism's new shape.
+  Errata: the match body's acyclicity is NOT a registration-time check — every match joins the open
+  `corresponds` head and is therefore inherently recursive, so a genuine (non-stratifiable) cycle fails
+  only at EVALUATION, not as a declaration-time guard.
+
 ---
 
 *Section identifiers from the prior trace (K\*/R\*/V\*/C\*/P\*/B\*) are retired with the

@@ -60,8 +60,7 @@ throw on an unknown key). If any registered law cannot be compiled or evaluated,
 
 - **Self-scoping.** By default a law is scoped to instances of its own structure
   (the engine injects the kind guard). `:scope :global` opts out — used by
-  cross-cutting laws (e.g. the generated correspondence demands) that quantify
-  over other kinds.
+  cross-cutting laws that quantify over other kinds.
 - **Vocab-derived rules.** `check` derives datalog rules from the live vocabulary
   (`core/rules.clj`, pure) and injects them into every law's query: a kind rule per
   structure (`(Operation ?e)`), a relation rule per relation slot (`(calls ?a ?b)`),
@@ -90,16 +89,18 @@ the var and the entity name). Ordinary entities require that symbol; only
 `^:value` structures are anonymous content values. `defrelation` registers a relation ELEMENT under its
 unqualified tag (the rule name is global, so the name is presentation identity — a
 second namespace re-declaring it throws). External declarations hook a concept
-from outside: `(correspond Design …)` registers one part of the design↔fact bridge
-presentation against the design tag. Its carrier is an ordinary named
-`defrelation`, with coverage recorded separately. `all-structures` and
+from outside: `(correspond [Design ?d Fact ?f] match realization-map)` registers the
+whole design↔fact bridge presentation, keyed by the sort pair (cross-ns collision
+throws), and lowers to definitional pairing / `realized-*` rules — no carrier or
+coverage options, no generated laws. `all-structures` and
 `vocab-rules` expose the registry as data — and the registry is also **reflected
 onto the graph itself** on every build (`fukan.canvas.core.reflect/with-grammar`):
 `Structure` nodes with slots as `:slot/<card>`-kinded labeled edges and laws as
 payload-carrying nodes, a `Vocabulary` node per namespace (a presentation fragment:
-owned declarations + derived `:imports`), and a decomposed `Correspondence` node per declaration —
-so the language has no off-graph remainder and renders back as source (the
-print-dual, `fukan.canvas.projection.grammar`).
+owned declarations + derived `:imports`), and a `Correspondence` node per declaration
+(`:from`/`:to` edges to design and codomain `Structure`s + the match and realization
+map as payloads) — so the language has no off-graph remainder and renders back as
+source (the print-dual, `fukan.canvas.projection.grammar`).
 
 ## Assembly and cross-spec references
 
@@ -143,8 +144,10 @@ of one joint model, not an amalgamation theorem.
 3. `reflect/with-grammar` — reflect the registry onto the graph (the model's
    grammar is part of the model).
 
-`(structure/check db)` over the result runs all laws — including the generated
-correspondence demands — so model↔code drift surfaces as violations on one graph.
+`(structure/check db)` over the result runs all laws over the joint graph.
+Correspondence lowers to definitional `corresponds`/`realized-*` rules, not laws, so
+model↔code drift is READ off those rules (`(drift)`/`(encapsulation)`) rather than
+firing as check violations; constraints over them are a deferred law layer.
 
 ---
 

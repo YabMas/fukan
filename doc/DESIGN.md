@@ -106,8 +106,9 @@ A structure is a *composition of slots* plus *datalog laws*.
 - **Relations are ELEMENTS** (`defrelation`, sibling of `defstructure`) — three
   forms, one construct: BARE (`(defrelation :contains "doc")` — an OPEN primitive/genus
   claiming the name), an INCLUSION against a regular expression over relations
-  (`(:sub :contains)` / `(:sup E)` / `(:eq E)` — the same (relation, direction,
-  expression) triple a correspondence relation map uses), or DERIVED
+  (`(:sub :contains)` / `(:sup E)` / `(:eq E)` — a relation, a direction, and a
+  regular-relation expression E, the same path language a correspondence realization
+  entry (`rel → E`) draws on), or DERIVED
   (`(defrelation :module-depends "doc" [?m ?n] […])` — a named custom-bodied
   datalog rule; multiple bodies = recursion). Bare relations and `:sup` heads are
   open to contributors; derived and `:eq` heads are closed views, and vocabulary compilation
@@ -157,8 +158,9 @@ vocab): each defstructure becomes a `Structure` node — slots as
 dialect's content-deduped `Schema` values, laws as nodes carrying their datalog as
 payload — one `Vocabulary` node per namespace (a presentation fragment: its owned
 declarations plus DERIVED `:imports` edges, entailed from use), and each
-`(correspond …)` as a decomposed `Correspondence` node with `RelationMap`
-children. The
+`(correspond …)` as a `Correspondence` node — `:from`/`:to` edges to its design and
+codomain `Structure`s plus the pairing match and realization map as
+`:val/match`/`:val/map` payloads. The
 print-dual (`fukan.canvas.projection.grammar`) renders a reified structure back as
 its authoring form — `(grammar)` in the REPL is the live language reference,
 derived not maintained — and grammar drift (`unused-structures`: vocabulary no
@@ -180,17 +182,25 @@ and implementation onto the same substrate, then checking them against each othe
   provenance flag.
 - **Correspondence (verify), across.** The design↔code link is a bridge presentation
   declared per design element, from outside the design vocabulary, in the language's
-  extractor. Matching is an ordinary derived relation (`module-twin`,
-  `operation-twin`); correspondence merely names it:
-  `(correspond Module Ns {:carrier :module-twin :coverage :both})` and
-  `(correspond Operation [Fn :public] {:carrier :operation-twin :coverage :both}
-  (:delegates :sub :public-call) (:performs :sup [:cat [:* :calls] :performs]))`.
-  Coverage is separate from the nested relation inclusions;
-  it is not a bijection or a theory morphism. The
-  identity component over shared sorts (`:in`/`:out` Schema values) is derived.
-  Every demand law is GENERATED from the declaration — totality, surjectivity,
-  structural adherence, call-realization, effect coverage — each with a stable key
-  a worklist reader addresses (`law/violation-names`). Correspondence is its own
+  extractor. A correspondence is ONE declaration — a HEAD (its identity, design sort
+  first), a MATCH body (flat identity logic, ordinary Datalog; it may reference the
+  ambient `corresponds` — recursion through the pairing, acyclic), and a REALIZATION
+  MAP (total over the design sort's non-scalar slots, each entry a pure code-graph
+  path; the same-named atom `:in :in` for identity realization, `nil` for
+  declared-unrealized):
+  `(correspond [Module ?m Ns ?ns] [(named ?m ?mn) (named ?ns ?nn) [(name-match
+  :qualified-suffix ?mn ?nn)]] {:child :child})` and
+  `(correspond [Operation ?op Fn ?fn] match {:in :in :out :out :performs [:cat [:*
+  :calls] :performs] :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})`.
+  The declaration lowers EXCLUSIVELY to rules — a pairing rule feeding the open,
+  ambient `corresponds`, a compiler-minted `realized-<rel>` rule per entry, and
+  per-`^:value` reflexivity — definitional and conservative, adding no denials. A
+  realization entry `R ↦ E` reads: an `R`-edge is realized by an `E`-path from the
+  source's code witness to the target's code witness; a content-identified `^:value`
+  node is its own witness, which is why entries never mention transport. Coverage is
+  a set of READINGS over those rules (`(drift)`, `(encapsulation)`, ambiguous), NOT
+  laws: `(check)` currently carries no correspondence violations, and constraints
+  over `corresponds`/`realized-*` are a deferred law layer. Correspondence is its own
   concern: the design vocabulary stays pure and language-neutral, so a project
   loading it with a different extractor gets no Clojure constructs at all.
 - **Materialize (model → code), down — CUT.** The downward projection
@@ -217,7 +227,7 @@ performs on them):
 
 Selection and traversal are one expression — `(path ?from E ?to)` composes relation
 paths (the same regular-expression language E used by relation inclusions and
-correspondence relation maps), and `(via R Scope P)` transports a property along a
+correspondence realization entries), and `(via R Scope P)` transports a property along a
 relation's compiler-minted closure. The grammar is dormant as a projection surface
 (see the cut above) but live for inspection: the print-duals resolve focus through
 `focus-nodes`.
@@ -240,9 +250,10 @@ The serving daemon is paused, so the loop is in-process (`clj -M:dev`):
 `(go)` builds the model (canvas specs + the Clojure extractor over `src/`),
 `(refresh)` reloads + rebuilds, `(status)` reports state, `(architecture)` projects
 the system map, `(grammar)` prints the live language primer, `(correspondence)`
-prints the design↔fact seam card, `(drift)` / `(encapsulation)` / `(type-drift)`
-read the generated correspondence demands by their stable law keys, and `(check)`
-prints violations with each offender quoted as its authored form. Build a db
+prints the design↔fact seam card, `(drift)` / `(encapsulation)` / `(type-drift)` /
+`(undeclared-code-dependencies)` are READINGS over the `corresponds`/`realized-*`
+rules (coverage gaps, not laws — `(check)` carries no correspondence violations), and
+`(check)` prints violations with each offender quoted as its authored form. Build a db
 directly with top-level instance `def`s + `assemble-vars`, query with `cq/q`, check
 with `(s/check db)`. Front-door helpers speak only through NAMED surfaces — law
 keys, defrelations, the print-duals — never inline substrate datalog.

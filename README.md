@@ -73,52 +73,50 @@ This is what the single graph buys. Fukan **extracts** your real code into the s
 substrate — its Clojure extractor reads clj-kondo analysis into a FACT vocabulary (`Ns` /
 `Fn`: namespaces, functions, signatures, effects, the actual call graph, privacy) —
 and assembles it with the design facts in the same build. The design↔code link is
-then declared as a **bridge presentation**, one line per design element, from
+then declared as a **bridge presentation**, one declaration per design element, from
 outside the design vocabulary:
 
 ```clojure
-;; carriers use the same Datalog relation language as everything else
-(defrelation :module-twin
-  "A Module and extracted namespace whose names agree by qualified suffix."
-  [?m ?ns]
-  [(is ?m Module) (design ?m) (is ?ns Ns) (fact ?ns)
-   (named ?m ?mn) (named ?ns ?nn)
-   [(name-match :qualified-suffix ?mn ?nn)]])
+;; a correspondence is ONE declaration: a HEAD (the identity, design sort first),
+;; a MATCH body (flat identity logic — ordinary Datalog), and a REALIZATION MAP
+;; (each design slot ↦ the pure code-graph path that realizes it)
 
-(correspond Module Ns
-  {:carrier :module-twin :coverage :both})
+;; Module ↦ Ns — the twin ROOT: a canvas short-name is a dotted suffix of the code ns
+(correspond [Module ?m Ns ?ns]
+  [(named ?m ?mn) (named ?ns ?nn)
+   [(name-match :qualified-suffix ?mn ?nn)]]
+  {:child :child})
 
-;; design Operation ↦ the PUBLIC sub-sort of extracted functions, plus relation maps:
-;; declared delegation ⊑ the public call graph; declared effects ⊒ everything reached
-(defrelation :operation-twin
-  "Same-named Operation/Fn pairs inside corresponding modules."
-  [?op ?fn]
-  [(is ?op Operation) (design ?op) (is ?fn Fn) (fact ?fn)
-   (named ?op ?name) (named ?fn ?name)
-   (contains ?m ?op) (contains ?ns ?fn) (module-twin ?m ?ns)])
-
-(correspond Operation [Fn :public]
-  {:carrier :operation-twin :coverage :both}
-  (:delegates :sub :public-call)
-  (:performs  :sup [:cat [:* :calls] :performs]))
+;; Operation ↦ Fn — pairs nest inside the Module root via the ambient `corresponds`;
+;; delegation routes through non-public interior, effects reach to call-graph depth
+(correspond [Operation ?op Fn ?fn]
+  [(named ?op ?n) (named ?fn ?n)
+   (contains ?m ?op) (contains ?ns ?fn)
+   (corresponds ?m ?ns)]
+  {:in        :in
+   :out       :out
+   :performs  [:cat [:* :calls] :performs]
+   :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})
 ```
 
-Every demand law is **generated** from that declaration — totality (every modelled
-Operation has a realizing public function), surjectivity (every public function is
-modelled: the encapsulation gap), signature adherence, call-realization, effect
-coverage — each with a stable key a worklist reader addresses. Run
-`(structure/check db)` and **drift surfaces as law violations** — a modelled
-capability with no implementation, on the same footing as any other broken
-invariant. Laws read in the vocabulary's own terms — `(Operation ?s)`, `(within …)`,
+The declaration lowers **exclusively to rules** — a pairing rule feeding the open,
+ambient `corresponds` relation, one compiler-minted `realized-<rel>` rule per
+realization entry, and per-`^:value` reflexivity — definitional and conservative,
+adding no denials. A realization entry `R ↦ E` reads: an `R`-edge is realized by an
+`E`-path from the source's code witness to the target's code witness; a
+content-identified `^:value` node is its own witness, which is why entries never
+mention transport. The same-named atom (`:in :in`) is identity realization; `nil`
+declares a slot deliberately unrealized.
+
+**Coverage is a set of READINGS over those rules, not laws.** `(drift)` reports
+modelled Operations no function realizes; `(encapsulation)` reports public functions
+no Operation models. `(check)` currently carries **no** correspondence violations —
+checks over `corresponds`/`realized-*` are a deferred law layer (the natural next
+arc). Laws still read in the vocabulary's own terms — `(Operation ?s)`, `(within …)`,
 `(delegates …)` — because the core derives those datalog rules from the live
 vocabulary; the recurring law shapes have **combinators** — `(law "…" (matched-by R
-:from S))`, `(has R)`, `(at-most-one R)` — so common constraints are one
-declarative line.
-
-Here `:coverage :both` makes the carrier bi-total. It does not silently add
-functionality or injectivity, so it should not be read as a bijection or a theory
-morphism. `:sub`/`:sup`/`:eq` retain their single meaning: relation inclusion in
-the nested relation maps.
+:from S))`, `(has R)`, `(at-most-one R)` — so common constraints are one declarative
+line.
 
 ## The model talks back in its own language
 
@@ -126,8 +124,9 @@ Everything on the graph prints back as the forms it was authored in — the
 **print-duals**. `(grammar)` renders every vocabulary live as its `defstructure`
 source; `(show 'name)` renders a node as its authored instance form; `(focus '[…])`
 renders a datalog-selected slice — the textual model explorer; `(check)` quotes each
-offender as its form; `(correspondence)` prints the design↔fact seam as one card,
-the twin ladder and every generated demand with its stable law key. Selection is
+offender as its form; `(correspondence)` prints the design↔fact seam as one card —
+each `(correspond …)`'s authored form plus its live coverage readings (unrealized /
+ambiguous) and a trailing unaccounted-public count. Selection is
 model-native datalog (binding `?n`, evaluated with the vocab-derived rules), so a
 slice is selected in the same language the laws are written in.
 
@@ -182,8 +181,8 @@ In the REPL (`clj -M:dev`):
 (status)    ; model state
 (architecture)    ; the projected system map — subsystems, modules, the :may-depend DAG
 (grammar)   ; the live language primer — every vocabulary rendered back as source
-(correspondence)  ; the design↔fact seam as one card, every demand with its law key
-(drift)     ; modelled capabilities not yet realized in code
+(correspondence)  ; the design↔fact seam as one card — authored forms + coverage readings
+(drift)     ; modelled Operations no function realizes (a reading, not a law)
 (check)     ; every law's violations, offenders quoted as their authored forms
 ```
 

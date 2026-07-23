@@ -86,7 +86,7 @@ them. This table is the frame's contract with the codebase.
 | `(:sub R)` relation inclusion | an accumulative extension: this relation contributes its edges to the open head `R` |
 | inline path `E` | the deliberately small regular-path surface fragment; compound recursion graduates to a named `defrelation` |
 | `measure` | stratified aggregation, lowered to an auxiliary rule head |
-| `correspond` | a **bridge presentation** over design and fact vocabularies: carrier relations, relation-preservation/reflection constraints, and generated denials |
+| `correspond` | a **bridge presentation** over design and fact vocabularies: two typed queries and a realization map, lowering to definitional pairing and `realized-*` rules; any constraints are deferred to ordinary laws authored over those rules |
 | grammar reflection | reification of the normalized presentation as facts in a meta-vocabulary |
 | Lens / Projection | queries and readback over the closure; they add no new model semantics |
 
@@ -109,33 +109,35 @@ amalgamated by a universal construction. The builder constructs one joint model
 over their combined vocabulary in one pass. Structurally equal `^:value` nodes
 are shared across the two strata by canonical identity.
 
-`correspond` adds an ordinary bridge fragment to that presentation. Its carrier
-is not a second matching language: vocabulary authors first declare an ordinary
-binary `defrelation`:
+`correspond` adds an ordinary bridge fragment to that presentation. It is not a
+second matching language: a correspondence is a HEAD naming the two sorts, a MATCH
+body — flat identity Datalog defining the pairing relation
 
 ```text
-C_s ⊆ Design_s × Fact_s
+corresponds ⊆ Design × Fact
 ```
 
-`correspond` then names that relation and states its coverage independently:
-`:design` means left-total, `:fact` means right-total onto the optionally
-restricted fact kind, and `:both` means both. Coverage never implies
-functionality or injectivity. The tokens `:sub`, `:sup`, and `:eq` are reserved
-for actual relation inclusion. Relation maps generate the two familiar
-conformance directions:
+which may itself reference the ambient `corresponds` recursively — and a REALIZATION
+MAP total over the design sort's non-scalar slots, each entry a regular code-graph
+path `E`. The fragment lowers EXCLUSIVELY to definitional rules: a pairing rule
+contributing to the open `corresponds` head, one `realized-<rel>` rule per entry
+conjugating the fact-graph path with the pairing on both witnesses, and one
+reflexivity rule per `^:value` sort (a content-identified value is its own witness).
+This is a conservative extension — it adds derived views, not denials.
 
-```text
-:sub  preserve — every design edge is realised by the fact expression
-:sup  reflect  — every fact reach is declared by a design edge
-:eq   both
-```
+Conformance — coverage, adherence, effect realisation — is therefore NOT part of the
+`correspond` declaration. Those are ordinary laws (denials) authored separately over
+`corresponds` and the `realized-*` rules; at present none are authored, so a `check`
+carries no correspondence obligations and the constraint layer is a deliberate
+deferral. This keeps the definition/assertion split sharp: the declaration says what
+realises what, and a later law says what must hold of it.
 
-These constraints are checked in the concrete joint model. Calling the bridge a
-theory morphism would require more: explicit sentence translation and a result
-that the target presentation entails every translated source axiom for all of
-its models. Fukan neither needs nor claims that result. The bridge-presentation
-reading preserves the useful shape of the current authoring form without
-granting it stronger mathematics than it implements.
+Whatever those laws come to check, they are checked in the concrete joint model.
+Calling the bridge a theory morphism would require more: explicit sentence
+translation and a result that the target presentation entails every translated
+source axiom for all of its models. Fukan neither needs nor claims that result. The
+bridge-presentation reading preserves the useful shape of the current authoring form
+without granting it stronger mathematics than it implements.
 
 ## The canonical authoring model
 
@@ -153,7 +155,7 @@ The forms have disjoint jobs:
 | a structure/value instance | finite ground facts |
 | `defrelation` | an open relation head, inclusion, or closed derived Datalog view |
 | `law` | a denial constraint whose query returns counterexample witnesses |
-| `correspond` | denials over an already-declared carrier relation and its relation maps |
+| `correspond` | a pairing relation (head + match) and a realization map, lowering to definitional pairing / `realized-*` rules; conformance is deferred to ordinary laws |
 
 Identity is equally explicit: ordinary structures construct named entities, so
 their instance form always starts with a binding/name symbol; only `^:value`
@@ -230,7 +232,7 @@ The old declaration-versus-registration rule is refined by semantic effect:
 
 The core may keep genuine configuration behind registries, but registration does
 not make a semantic dependency into mere wiring. Vocabulary growth does not
-install evaluator handlers, correspondence comparators, or carrier callbacks;
+install evaluator handlers, correspondence comparators, or bridge callbacks;
 those meanings are expressed with the fixed kernel and ordinary Datalog. The
 effective logic configuration must be fixed for a build and visible to diagnostics.
 
@@ -273,7 +275,7 @@ constrained enough to make that freedom dependable.
   collisions are loud, but rule calls still resolve through one global namespace
   and slot-only relations have no declaring `Vocabulary`. Namespace fragments are
   useful modules, not yet independent formal signatures.
-- **Configured built-ins.** Scalar validation and registered comparators do not
+- **Configured built-ins.** Scalar validation and registered predicate ports do not
   compile entirely to CozoScript. They are explicit semantic configuration of
   the current evaluator. Moving them to materialized relations or compiled rules
   would narrow this boundary further.
