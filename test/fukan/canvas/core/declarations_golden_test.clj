@@ -322,7 +322,14 @@
 ;; explicit coverage laws. Terms 83→89: each binary derived carrier contributes its rule + two
 ;; compiler-owned closure rules. Laws hold at 61: `:coverage :both` generates the same two denials and
 ;; relation maps are unchanged. The kernel no longer hardcodes name/containment matching.
-(def ^:private golden-terms {:count 89 :hash -14610138})
+;; 2026-07-23: the essential `correspond` construct's term emission lands. `terms-of` now adds, per
+;; `^:value` structure, a `corresponds(?v ?v)` REFLEXIVITY rule (a content-identified value is its own
+;; pairing witness) plus the pairing/`realized-*` rules of every registered NEW-STYLE correspondence.
+;; The self-model registers none of the new construct yet (its two correspondences still ride the
+;; renamed `correspond-legacy` seam, whose emission is untouched), so the only delta is the four
+;; reflexivity rules for the self-model's `^:value` sorts — Schema/SchemaChoice/SchemaField (malli) +
+;; Effect. Terms 89→93 (+4 reflexivity); laws hold at 61 (these rules are definitional — no denials).
+(def ^:private golden-terms {:count 93 :hash -911851794})
 (def ^:private golden-laws  {:count 61 :hash -1963493187})
 
 (deftest terms-are-stable

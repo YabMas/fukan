@@ -49,7 +49,7 @@
   [(is ?a MSrc) (design ?a) (is ?b MFact) (fact ?b)
    (named ?a ?name) (named ?b ?name)])
 
-(s/correspond MSrc [MFact :m-public]
+(s/correspond-legacy MSrc [MFact :m-public]
   {:carrier :m-twin :coverage :both}
   (:mdel :sub :m-link))
 

@@ -30,7 +30,7 @@
    (named ?m ?mn) (named ?ns ?nn)
    [(name-match :qualified-suffix ?mn ?nn)]])
 
-(s/correspond Module Ns
+(s/correspond-legacy Module Ns
   {:carrier :module-twin :coverage :both})
 
 (defn extract-module

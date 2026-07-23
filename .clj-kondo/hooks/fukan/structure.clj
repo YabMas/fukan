@@ -32,12 +32,17 @@
   {:node (api/list-node (vec (take 3 (:children node))))})
 
 (defn correspond
-  "(correspond Target :by-name … body) → (do Target): keep the target var referenced (so it isn't
-   flagged unused) and drop the correspondence DSL body — the fact-slots map, (bridge …), and the
-   (agrees …)/(realized …)/(covered …)/(relname {…}) sub-forms are data, not code."
+  "(correspond [Design ?d Fact ?f] match rmap) → (do Design Fact): keep the two SORT vars
+   referenced (so they aren't flagged unused) and drop everything else — the ?binding vars in the
+   head, the datalog match body, and the realization map are data, not code. (The retired legacy
+   shape `(correspond Target … body)` had a bare-symbol target; the current construct leads with a
+   4-element head vector, so the two sorts are its 1st and 3rd elements.)"
   [{:keys [node]}]
-  (let [target (second (:children node))]
-    {:node (api/list-node [(api/token-node 'do) target])}))
+  (let [head (second (:children node))
+        refs (if (and head (= :vector (api/tag head)))
+               (let [cs (:children head)] (remove nil? [(nth cs 0 nil) (nth cs 2 nil)]))
+               [head])]
+    {:node (api/list-node (into [(api/token-node 'do)] refs))}))
 
 (defn- instance-syms
   "The name symbols a def-emitting instance form interns: its own (the second

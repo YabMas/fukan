@@ -21,6 +21,7 @@
    datalog rules supported) over a db, injecting the vocab-derived rules so laws read
    at domain altitude. The schema is minimal and classification-free."
   (:require [clojure.string :as str]
+            [clojure.walk :as walk]
             [fukan.canvas.core.rules :as rules]
             ;; the node substrate this grammar sits on (the InstanceValue the macro emits,
             ;; node identity, the empty db) lives one layer down
@@ -882,8 +883,9 @@
       {:fact-tag ftag :carrier (:carrier opts) :coverage (:coverage opts)
        :restrict restrict :rel-demands rel-demands})))
 
-(defmacro correspond
-  "Declare ONE design kind's carrier and relation constraints in the design↔fact bridge presentation —
+(defmacro correspond-legacy
+  "LEGACY — replaced by the essential `correspond`; deleted with the old machinery.
+   Declare ONE design kind's carrier and relation constraints in the design↔fact bridge presentation —
    the concept's `defstructure` never mentions correspondence (inverted dependency); this lives in
    the extractor for a language.
    The form names an ordinary binary carrier relation and states its coverage independently, with
@@ -973,6 +975,75 @@
                                                   (resolve-sorts (vec (drop 2 args))))
                   :else c)))))
         clauses))
+
+;; ── the essential correspondence: two queries + a realization map ─────────────
+;; `(correspond [Design ?d Fact ?f] match-body {rel → E})` — the WHOLE bridge declaration.
+;; Head = identity (sorts constitutive, design first). Match body = flat identity logic (may
+;; reference the ambient `corresponds` — recursion; acyclicity is the author's obligation, a
+;; cycle fails at evaluation). Map = TOTAL over the design sort's non-scalar slots; entries are
+;; PURE code-graph paths; `nil` = declared-unrealized. Lowers EXCLUSIVELY to rules (pairing,
+;; realized-<rel>, per-^:value reflexivity) — definitional, no denials (THE TEST). The term
+;; emission (`entry-rules`/`correspond-terms`/`value-reflexivity-terms`) rides with `closure-rules`
+;; below; this section is the registry + the authoring macro.
+
+(defonce ^:private corresponds-registry (atom {}))
+
+(defn ^:export register-correspond!
+  "Register a correspond config keyed by its sort pair. The completeness guard runs FIRST — every
+   non-scalar design slot needs an entry (or nil) — so an under-specified map fails on its own
+   terms regardless of who declares it. Then every non-nil entry expression must make at least one
+   hop: a ZERO-ADMITTING E (one that matches the empty path — a bare `[:* r]`/`[:? r]`, or a `:cat`
+   all of whose parts admit it) is the identity, which would mint an ungroundable reflexive
+   `realized-<rel>` rule (a bare `(= from to)` unification Cozo cannot ground), so it throws here.
+   Aux extraction preserves zero-admittance, so the raw entry is the faithful test. Then cross-ns
+   re-registration THROWS (mirrors `register-structure!`'s relation guard); same-ns replaces (REPL reload)."
+  [{:keys [design fact map ns] :as config}]
+  (let [k [design fact]]
+    (when-let [sdef (structure-by-tag design)]
+      (doseq [sl (remove scalar-slot? (:slots sdef))]
+        (when-not (contains? map (:rel sl))
+          (throw (ex-info (str "correspond " k ": design slot " (:rel sl)
+                               " has no realization entry — state its code path, or nil for "
+                               "declared-unrealized") {:pair k :slot (:rel sl)})))))
+    (doseq [[rel expr] map :when expr]
+      (when (zero-admitting? expr)
+        (throw (ex-info (str "correspond " k ": realization entry " rel " ↦ " (pr-str expr)
+                             " admits the empty path — the zero case is the identity — state the atom"
+                             " or restructure") {:pair k :slot rel :expr expr}))))
+    (when-let [prior (get @corresponds-registry k)]
+      (when (not= (:ns prior) ns)
+        (throw (ex-info (str "correspondence " k " is already declared by " (:ns prior))
+                        {:pair k :declared-by (:ns prior) :redeclared-by ns}))))
+    (swap! corresponds-registry assoc k config)
+    k))
+
+(defn ^:export correspond-by-pair [pair] (get @corresponds-registry pair))
+(defn ^:export all-corresponds [] (vals @corresponds-registry))
+
+(defmacro correspond
+  "Declare a correspondence — the ENTIRE bridge between a design sort and a fact sort:
+
+     (correspond [Operation ?op Fn ?fn]
+       [(named ?op ?n) (named ?fn ?n)
+        (contains ?m ?op) (contains ?ns ?fn) (corresponds ?m ?ns)]
+       {:in :in  :out :out
+        :performs  [:cat [:* :calls] :performs]
+        :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})
+
+   Pairing joins into the ambient `corresponds`; each entry mints `realized-<rel>` (an E-path
+   between witnesses — a `^:value` node is its own witness); coverage classes are READINGS,
+   not laws. Checks are ordinary laws over these rules, authored separately."
+  [head match rmap]
+  (when-not (and (vector? head) (= 4 (count head))
+                 (symbol? (nth head 0)) (dvar? (nth head 1))
+                 (symbol? (nth head 2)) (dvar? (nth head 3)))
+    (throw (ex-info "correspond head must be [DesignSort ?d FactSort ?f]" {:head head})))
+  (let [[dsym dvar fsym fvar] head
+        dtag  (resolve-struct-tag dsym)
+        ftag  (resolve-struct-tag fsym)
+        match (resolve-sorts match)]         ; the SAME (is …) pass law bodies get
+    `(register-correspond! {:design ~dtag :fact ~ftag :dvar '~dvar :fvar '~fvar
+                            :match '~match :map '~rmap :ns (str *ns*)})))
 
 (defn- parse-law
   "(law \"desc\" {:offenders [?vars] :where [clauses] :rules [rules]? :scope <tag|:global>? :key k?})
@@ -1399,6 +1470,83 @@
     [[(list r+ '?a '?b) (list rname '?a '?b)]
      [(list r+ '?a '?b) (list rname '?a '?mid) (list r+ '?mid '?b)]]))
 
+;; ── correspondence term emission (the essential construct's rules) ────────────
+;; A registered `(correspond [Design ?d Fact ?f] match {rel → E})` lowers to a PAIRING rule (the
+;; ambient open `corresponds` head, guarded by both sorts) + one `realized-<rel>` rule per entry +
+;; per-`^:value` reflexivity. All definitional — no denials (checks are ordinary laws over these,
+;; authored separately). Read by `terms-of` below, alongside the closure/substrate rules.
+
+(defn- distribute-trailing-closure
+  "Cozo cannot ground a standalone or-join helper whose reflexive (zero) branch is a bare `(= from to)`
+   unification — neither head var is bound by a relation there (`unbound variable`). A path whose FINAL
+   step is a zero-admitting closure lowers to exactly that, so rewrite it to make the zero case reuse
+   the preceding hop's binding instead: `[:cat P… [:? X]]` → `[:alt [:cat P…] [:cat P… X]]` and
+   `[:cat P… [:* X]]` → `[:alt [:cat P…] [:cat P… [:+ X]]]` — both alternatives now ground `to` through
+   a relation. Only the :cat-trailing shape (the delegates roll-up `[:cat :calls [:? aux]]`) needs it;
+   any other expression passes through unchanged."
+  [expr]
+  (if (and (vector? expr) (= :cat (first expr)) (>= (count expr) 3)
+           (vector? (peek expr)) (#{:? :*} (first (peek expr))))
+    (let [body   (vec (rest expr))
+          prefix (subvec body 0 (dec (count body)))
+          [q x]  (peek body)
+          pfx    (if (= 1 (count prefix)) (first prefix) (into [:cat] prefix))]
+      [:alt pfx (into [:cat] (conj prefix (if (= q :?) x [:+ x])))])
+    expr))
+
+(defn- entry-rules
+  "The rules for one realization entry `rel ↦ expr` of correspondence `c`. The `realized-<rel>`
+   rule CONJUGATES the fact-graph path with the pairing relation on both ends — a design edge
+   `rel(?d, ?e)` is realized when `?d`'s fact witness reaches `?e`'s fact witness along `expr`.
+   Compound closure (`[:* C]`/`[:+ C]` over a compound `C`) is legal HERE — it mints an auxiliary
+   recursive rule `<realized-name>-s<i>` for `C+` (one-or-more `C`; base + step, the `public-call`
+   shape) and folds the quantifier back around that aux ATOM so no extra `+` closure is needed
+   (`:+ ↦ aux`, `:* ↦ [:? aux]`). A resulting TRAILING zero-admitting step is then distributed
+   (`distribute-trailing-closure`) so its reflexive case stays groundable. Inline `path` contexts
+   still reject compound closure. Each rule's variables are rule-local: the aux rules use `?a/?b/?m`."
+  [{:keys [dvar]} rel expr]
+  (let [rname (symbol (str "realized-" (name rel)))
+        aux-n (atom 0)
+        auxes (atom [])
+        ;; rewrite each compound closure bottom-up into a minted aux ATOM before the path steps see it
+        expr' (walk/postwalk
+               (fn [e]
+                 (if (and (vector? e) (#{:* :+} (first e)) (vector? (second e)))
+                   (let [q    (first e)
+                         c    (second e)
+                         aux  (symbol (str rname "-s" (swap! aux-n inc)))
+                         base (into [(list aux '?a '?b)]                       ; base: one C
+                                    (expand-clauses [(list 'path '?a c '?b)]))
+                         step (into [(list aux '?a '?b) (list aux '?a '?m)]    ; step: aux then one C
+                                    (expand-clauses [(list 'path '?m c '?b)]))]
+                     (swap! auxes conj base step)
+                     ;; aux ≡ C+, so [:+ C] is the bare aux and [:* C] is an optional aux (= C*)
+                     (if (= q :+) (keyword aux) [:? (keyword aux)]))
+                   e))
+               expr)
+        wd    '?_cd     ; the design node's fact witness
+        we    '?_cw     ; the realized design node's fact witness
+        e     '?_ce]    ; the realized design node
+    (into [(into [(list rname dvar e) (list 'corresponds dvar wd)]
+                 (concat (reach-clauses (distribute-trailing-closure expr') wd we)
+                         [(list 'corresponds e we)]))]
+          @auxes)))
+
+(defn- correspond-terms
+  "All rules one registered correspondence lowers to: the pairing rule + every entry's rules."
+  [{:keys [design fact dvar fvar match] rmap :map :as c}]
+  (into [(into [(list 'corresponds dvar fvar)
+                [dvar :structure/of design] [fvar :structure/of fact]]
+               match)]
+        (mapcat (fn [[rel expr]] (when expr (entry-rules c rel expr))) rmap)))
+
+(defn- value-reflexivity-terms
+  "One `corresponds(?v ?v)` rule per `^:value` structure — a content-identified value is its own
+   witness, which is what makes the pairing relation total on shared sorts (no case analysis)."
+  [structures]
+  (for [sd structures :when (:value? sd)]
+    [(list 'corresponds '?v '?v) ['?v :structure/of (:tag sd)]]))
+
 ;; The kernel declaration algebra is deliberately closed. Vocabulary grows through structures,
 ;; relations, rules, laws, and derived authoring forms—not by installing new evaluator semantics.
 ;; This exhaustive lowering is therefore both the implementation and the fail-closed boundary.
@@ -1507,13 +1655,24 @@
    The kernel names NO relation of its own: a containment genus and any relation derived from it
   (`within`) are declared by the VOCABULARY as relation elements (`defrelation`), not emitted
    here. (Until 2026-07-17 this hardcoded the symbol `contains`, its closure, and `in-module` —
-   code vocabulary welded into the kernel.)"
+   code vocabulary welded into the kernel.)
+
+   Each essential correspondence whose DESIGN sort is in `structures` contributes its pairing/
+   `realized-*` rules, and every `^:value` structure its `corresponds(?v ?v)` reflexivity — the
+   ambient `corresponds` head those definitional rules union into. Scoping the correspondences by
+   in-scope design tag mirrors the per-sdef legacy emission above (which only reads
+   `correspondence-of` for the sdefs it is handed), so a subset call — the declarations golden's
+   `self-model-structures` — stays stable regardless of which fixtures polluted the global registry."
   [structures]
-  (let [structures (validate-closed-relation-heads! (vec structures))]
+  (let [structures (validate-closed-relation-heads! (vec structures))
+        in-scope   (into #{} (map :tag) structures)]
     (vec (distinct (concat (mapcat (fn [sdef]
                                      (mapcat #(:terms (lower-declaration % sdef)) (sdef->declarations sdef)))
                                    structures)
                            (mapcat closure-rules (binary-rule-names structures))
+                           (mapcat correspond-terms
+                                   (filter #(contains? in-scope (:design %)) (all-corresponds)))
+                           (value-reflexivity-terms structures)
                            rules/substrate-rules)))))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :any]] :map]}

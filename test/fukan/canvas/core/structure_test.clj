@@ -708,7 +708,7 @@
   [(is ?d TCorrRoot) (design ?d)
    (is ?f TCorrRoot) (fact ?f)
    (named ?d ?name) (named ?f ?name)])
-(s/correspond TCorrRoot TCorrRoot {:carrier :tc-root-twin :coverage :both})
+(s/correspond-legacy TCorrRoot TCorrRoot {:carrier :tc-root-twin :coverage :both})
 
 (defstructure TCorrNested "correspond test: an explicitly declared nested carrier")
 (s/defrelation :tc-nested-twin "nested test twins inside corresponding modules"
@@ -718,7 +718,7 @@
    (named ?d ?name) (named ?f ?name)
    (contains ?m ?d) (contains ?ns ?f)
    (module-twin ?m ?ns)])
-(s/correspond TCorrNested TCorrNested {:carrier :tc-nested-twin :coverage :both})
+(s/correspond-legacy TCorrNested TCorrNested {:carrier :tc-nested-twin :coverage :both})
 
 (deftest correspond-registers-the-carrier
   (testing "a carrier declaration lands in the registry as an ordinary relation plus independent coverage"
@@ -733,7 +733,7 @@
 
 (deftest correspond-rejects-a-non-relation-carrier
   (testing "the carrier must be a relation keyword"
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond-legacy
                                           TCorrNested TCorrNested
                                           {:carrier nope-not-defined :coverage :both}))))))
 
@@ -748,7 +748,7 @@
   [(is ?d TCorrDemand) (design ?d)
    (is ?f TCorrDemand) (fact ?f)
    (named ?d ?name) (named ?f ?name)])
-(s/correspond TCorrDemand [TCorrDemand :tc-public]
+(s/correspond-legacy TCorrDemand [TCorrDemand :tc-public]
   {:carrier :tc-demand-twin :coverage :fact})
 
 (deftest correspond-carrier-coverage-registers
@@ -762,11 +762,11 @@
 
 (deftest correspond-demands-validate
   (testing "malformed entries throw at expansion (via the external correspond macro)"
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond-legacy
                                           TCorrNested TCorrNested
                                           {:carrier :tc-nested-twin :coverage :bogus})))
         "bad coverage throws")
-    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond
+    (is (thrown? Exception (macroexpand '(fukan.canvas.core.structure/correspond-legacy
                                           TCorrNested TCorrNested
                                           {:carrier :tc-nested-twin :coverage :both :extra true})))
         "unknown carrier options throw"))

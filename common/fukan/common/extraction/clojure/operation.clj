@@ -75,7 +75,7 @@
    (contains ?m ?op) (contains ?ns ?fn)
    (module-twin ?m ?ns)])
 
-(s/correspond Operation [Fn :public]
+(s/correspond-legacy Operation [Fn :public]
   {:carrier :operation-twin :coverage :both}
   (:delegates :sub :public-call)
   (:performs  :sup [:cat [:* :calls] :performs]))
