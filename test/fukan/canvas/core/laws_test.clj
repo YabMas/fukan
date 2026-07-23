@@ -361,14 +361,10 @@
   (testing "the reflexive base: an effect the twin performs directly (zero call hops) must be declared"
     (is (= #{"d"} (effect-drift direct-effect-db)))))
 
-;; ── seam↔generator key invariant ─────────────────────────────────────────────
-
-(deftest seam-keys-equal-generated-law-keys
-  (testing "the seam's key index and the generated laws agree exactly — neither can drift"
-    (is (= (set (keys (:keys (s/correspondence))))
-           (into #{} (comp (mapcat s/laws-of) (keep :key)
-                           (filter #(= "corresponds" (namespace %))))
-                 (s/all-structures))))))
+;; (The `seam-keys-equal-generated-law-keys` unit test — asserting `s/correspondence`'s key index
+;;  against `s/laws-of`'s generated `:corresponds/*` keys — was removed at the kernel demolition
+;;  (Task 4): the legacy seam it compared is gone, and the essential `correspond` construct
+;;  generates no `:corresponds/*` law keys to compare against.)
 
 ;; ── the out↦out FORWARD map subsumes coverage (ledgered dedicated offender test) ──
 

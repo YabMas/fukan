@@ -19,11 +19,10 @@
   (Kind Primer :string)    ; the reference-card string
   (Kind VocabName :string) ; a grammar namespace name
   (Operation correspondence-card
-    "The correspondence SEAM rendered as one card — the twin ladder and every demand with its
-     stable law key (the generated laws, visible and attributed). Registry-direct: no db needed."
-    {:signature [:=> [:cat] Primer]
-     :performs  [:throws :state]
-     :delegates [kstructure/correspondence kstructure/all-structures kstructure/laws-of]})
+    "The correspondence SEAM rendered as one card. STUB pending Task 6: the kernel demolition
+     retired the legacy registry seam this used to render (the essential `correspond` construct
+     generates no demand laws to show)."
+    {:signature [:=> [:cat] Primer]})
   (Operation structure-form
     "A reified Structure rendered back as its canonical map-form defstructure (the print-dual).
      External correspondence renders separately through `correspondence-form`, so both forms are
@@ -32,10 +31,10 @@
      :performs  [:throws :state]                ; via the query compiler / render-type
      :delegates [typing/render-type query/q query/entity]})   ; renders refined slot targets + reads the graph
   (Operation correspondence-form
-    "A reified Structure's external correspondence rendered as canonical `(correspond …)` data, or nil."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] :any]
-     :performs  [:throws :state]
-     :delegates [typing/render-type query/q query/entity]})
+    "A reified Structure's essential correspondence rendered as canonical `(correspond …)` data, or
+     nil. STUB pending Task 6: always nil for now — the reflected Correspondence node doesn't yet
+     carry enough (the author's ?d/?f head symbols) to round-trip faithfully."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] :any]})
   (Operation vocabulary-primer
     "One vocabulary rendered as its defstructure forms."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName]] Primer]

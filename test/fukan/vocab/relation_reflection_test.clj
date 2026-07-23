@@ -12,7 +12,7 @@
 
 (deftest relation-kinds-are-reflected-with-their-inclusions
   (testing "grammar reflection reifies relation KINDS as Relation nodes carrying their declared
-            inclusions — the same (direction, expression) shape a RelationMap uses"
+            inclusions — direction + expression"
     (let [db (p/build-model nil)]
       ;; the grammar's edge vocabulary is now reified, like its node vocabulary
       (is (some? (relation db "child"))     ":child is reified as a Relation node")

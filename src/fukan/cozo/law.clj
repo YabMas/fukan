@@ -89,42 +89,6 @@
          (filter (fn [[_ v]] (false? (typing/value-valid? target (validate-value v)))))
          (mapv (fn [[x _]] [(str x)])))))
 
-;; ── the comparator hybrid: Cozo finds twin PAIRS, Clojure runs a comparator ──
-(defn- structural-agreement
-  "The built-in `:by :structural` comparator over the `over` slots: `(fn [a b] → agree?)`, where two
-   nodes agree iff their targets over EVERY `over` slot are IDENTICAL by eid. Since types content-dedup
-   across strata (a shared target is ONE node), eid identity IS structural equality — no per-pair
-   render. Builds `{eid {rel → target-eids sorted by (:rel/order, eid)}}` ONCE (ordered slots compare
-   by position, set/single by canonical eid order), so the per-pair test is a map lookup."
-  [cdb over]
-  (let [orders (into {} (query/q '[:find ?r ?ord :where [?r :rel/order ?ord]] cdb))
-        idx    (reduce
-                (fn [m rel]
-                  (reduce (fn [m [op r to]]
-                            (update-in m [op rel] (fnil conj []) [(get orders r 0) to]))
-                          m
-                          (query/q [:find '?op '?r '?to :where
-                                    ['?r :rel/kind rel] ['?r :rel/from '?op] ['?r :rel/to '?to]] cdb)))
-                {} over)
-        idx    (into {} (for [[op slots] idx]
-                          [op (into {} (for [[rel pairs] slots] [rel (mapv second (sort pairs))]))]))]
-    (fn [a b] (= (get idx a) (get idx b)))))
-
-(defn- comparator-offenders
-  "Run the derived shared-sort agreement law as a pair hybrid: compile its `:where` to enumerate
-   design/fact twins, compare the declared shared slots structurally, and retain disagreeing rows."
-  [cdb law {:keys [by on over]} direct-tags index]
-  (when-not (= by :structural)
-    (throw (ex-info (str "unknown correspondence agreement " by " — only derived :structural agreement exists")
-                    {:by by})))
-  (let [program (compile-law (assoc law :offenders on) direct-tags index)
-        rows    (db/q cdb (str query/preamble "\n" program))
-        agree?  (structural-agreement cdb over)
-        off-ix  (mapv #(.indexOf ^java.util.List (vec on) %) (:offenders law))]
-    (->> rows
-         (remove (fn [row] (boolean (agree? (nth row 0) (nth row 1)))))
-         (mapv (fn [row] (mapv #(nth row %) off-ix))))))
-
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check-structural
   "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
@@ -136,12 +100,6 @@
         direct-tags (structure/direct-scope-tags (structure/all-structures))]
     (vec (for [[tag law] (all-laws)]
            (cond
-             (:comparator law)
-             (let [offs (comparator-offenders cdb law (:comparator law) direct-tags index)]
-               (cond-> {:structure tag :law (:desc law)}
-                 (:key law) (assoc :key (:key law))
-                 (seq offs) (assoc :offenders offs)))
-
              (value-check-law law)
              (let [offs (value-offenders cdb (value-check-law law))]
                (cond-> {:structure tag :law (:desc law)}

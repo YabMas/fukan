@@ -49,13 +49,10 @@
   [(is ?a MSrc) (design ?a) (is ?b MFact) (fact ?b)
    (named ?a ?name) (named ?b ?name)])
 
-(s/correspond-legacy MSrc [MFact :m-public]
-  {:carrier :m-twin :coverage :both}
-  (:mdel :sub :m-link))
-
-;; the ESSENTIAL correspondence — `reflect-correspondence` reads the NEW registry, so THIS is the one
-;; that reflects as a `Correspondence` node. (The legacy carrier above stays for the demolition task; it
-;; no longer produces a reflected node.)
+;; the ESSENTIAL correspondence — `reflect-correspondence` reads the registry, so THIS is what
+;; reflects as a `Correspondence` node. `:m-public`/`:m-link`/`:m-twin` above are exercised as plain
+;; reflected relation elements (`derived-relations-carry-their-rule`, `vocabularies-are-signatures`),
+;; not as a carrier — the demolished machinery had no other user here.
 (s/correspond [MSrc ?a MFact ?b]
   [(is ?a MSrc) (design ?a) (is ?b MFact) (fact ?b)
    (named ?a ?name) (named ?b ?name)]
@@ -163,7 +160,7 @@
 
 (deftest the-correspondence-reflects-as-a-node
   (testing "one Correspondence node per registered essential `(correspond …)` — `:from`/`:to` edges and
-            the pairing MATCH + realization MAP as pr-str'd payloads (no carrier/coverage/RelationMap)"
+            the pairing MATCH + realization MAP as pr-str'd payloads (no carrier/coverage fields)"
     (let [db (reflected)
           m  (ffirst (cq/q '[:find ?m
                              :where [?m :structure/of :fukan.canvas.core.reflect/Correspondence]
@@ -188,7 +185,7 @@
           ":to targets the reified codomain Structure")
       (is (empty? (cq/q '[:find ?rm :in $ ?m
                           :where [?r :rel/from ?m] [?r :rel/kind :map] [?r :rel/to ?rm]] db m))
-          "no RelationMap children — the map rides as a payload, not decomposed children"))))
+          "no decomposed relation-map children — the map rides as a payload"))))
 
 (deftest derived-relations-carry-their-rule
   (testing "a derived defrelation's defining datalog rides its Relation node — a definitional
@@ -231,5 +228,5 @@
 
 (deftest reflected-model-satisfies-every-law
   (testing "meta-integrity: reflection adds no violations (the meta-grammar's own
-            slot laws run over the reified nodes — Correspondence and RelationMap included)"
+            slot laws run over the reified nodes — Correspondence included)"
     (is (empty? (law/check (reflected))))))

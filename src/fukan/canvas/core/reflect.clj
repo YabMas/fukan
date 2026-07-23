@@ -28,7 +28,7 @@
    Kernel-native MACHINERY — this is CORE, not the reusable `fukan.common` vocab: reflection is
    grammar-AGNOSTIC (it reifies whatever registry exists, knowing no specific vocabulary), and the
    native build ALWAYS runs it (via `build/with-grammar`). Its meta-grammar (`Structure`/`Law`/
-   `Vocabulary`/`Relation`/`Correspondence`/`RelationMap`) is the tool's vocabulary for describing
+   `Vocabulary`/`Relation`/`Correspondence`) is the tool's vocabulary for describing
    grammars and the bridge presentations between design and fact fragments — the same category as
    the act grammar in `fukan.canvas.core.lens`, so it sits beside it in core. The runtime
    (`check`/`assemble`/`evaluate-lens`) never consults the reflected nodes — they exist only so the
@@ -94,9 +94,9 @@
 (defstructure Relation
   "A reflected relation KIND (`:child`/`:calls`/`:delegates`/…), reified so the grammar's EDGE
    vocabulary is queryable like its node vocabulary (`Structure`). An ELEMENT carries its
-   declaration's right-hand side in the SAME (direction, expression) shape a `RelationMap` uses:
-   `:incl` (`:sub`/`:sup`/`:eq`) + `:expr` (the inclusion expression, as edn) for an inclusion
-   element, or `:incl` `:eq` + the defining datalog as the `:rule` payload for a DERIVED element —
+   declaration's right-hand side as `:incl` (`:sub`/`:sup`/`:eq`) + `:expr` (the inclusion
+   expression, as edn) for an inclusion element, or `:incl` `:eq` + the defining datalog as the
+   `:rule` payload for a DERIVED element —
    a definitional extension is definitionally exact. A BARE element (a genus) and a slot-only
    relation (not an element yet — `:calls`, `:delegates`) carry neither. (`:transitive` is gone:
    closures belong to the compiler, not to the relation.) A reflection TOOL, not authored; the
@@ -105,26 +105,15 @@
    :expr [:? :string]
    :rule [:? {:payload :form} :string]})
 
-(defstructure RelationMap
-  "One relation map of a reflected `Correspondence`: a design relation compared with a fact-side relation
-   expression, with an inclusion direction — `(:delegates :sub :public-call)` reified. `:rel` is the
-   design relation, `:incl` the direction (`:sub` ⊑ preserve / `:sup` ⊒ reflect / `:eq` ≡ both),
-   `:expr` the fact-side expression (a named relation atom or an inline regular path), stored as
-   edn — NOT a `:form` payload, because a bare keyword atom (`:public-call`) is lossy through the
-   mirror's keyword-leaf stringification; the pr-str scalar round-trips faithfully."
-  {:rel  :string
-   :incl :string
-   :expr :string})
-
 (defstructure Correspondence
   "A reflected BRIDGE PRESENTATION — one essential `(correspond [Design ?d Fact ?f] match realization-map)`
    seam, reified as a node so the correspondence is data like the presentation fragments it connects (a
    `Law` reflects with its datalog queryable; the whole bridge declaration deserves no less). `:from`/
    `:to` are the design and codomain `Structure`s; `:match` is the pairing query and `:map` the
    realization map, each pr-str'd (a scalar leaf, NOT a `:val/form` payload — both forms carry bare
-   keywords the mirror's keyword-leaf stringification would strip, the same reason RelationMap stored
-   its `:expr` as edn). Coverage classes are READINGS of the pairing join, not reflected here. A
-   reflection TOOL, not authored; the runtime never reads it."
+   keywords the mirror's keyword-leaf stringification would strip, the same reason `Relation` stores
+   an inclusion's `:expr` as edn). Coverage classes are READINGS of the pairing join, not reflected
+   here. A reflection TOOL, not authored; the runtime never reads it."
   {:from  Structure
    :to    Structure
    :match [:? :string]
@@ -190,7 +179,6 @@
                      (for [sd (s/all-structures)
                            :when (contains? nss (some-> (:tag sd) namespace))
                            n    (concat (keep target-ns (mapcat #(or (:alts %) [(:target %)]) (:slots sd)))
-                                        (some-> (s/correspondence-of (:tag sd)) :fact-tag target-ns list)
                                         (keep (fn [c] (when (= (:design c) (:tag sd)) (target-ns (:fact c))))
                                               (s/all-corresponds))
                                         (keep resolve-call (rule-calls (sdef-clauses sd))))
@@ -266,8 +254,8 @@
    the reified design and codomain `Structure`s (both guaranteed present when the config is in scope —
    the caller filters on both namespaces). The pairing MATCH and the realization MAP ride as pr-str'd
    `:val/match`/`:val/map` scalar leaves — NOT a `:val/form` payload, because both forms carry bare
-   keywords the mirror's keyword-leaf stringification would strip (the same reason `RelationMap` stored
-   its `:expr` as edn); the pr-str scalar round-trips faithfully."
+   keywords the mirror's keyword-leaf stringification would strip (the same reason `Relation` stores
+   an inclusion's `:expr` as edn); the pr-str scalar round-trips faithfully."
   [{:keys [design fact match] rmap :map}]
   (let [mid   (str "correspondence:" design "↦" fact)
         mnode {:entity/id mid :structure/of ::Correspondence
@@ -287,9 +275,6 @@
    closure, so a zero-instance grammar stratum still reflects). The caller inserts the datoms onto
    its Cozo substrate (the native build's upsert insert)."
   [tags extra-seeds]
-  ;; assemble the seam for its VALIDATION side-effect: a cross-family duplicate law key
-  ;; throws here, so the guard fires on every build (reflection runs on every build)
-  (s/correspondence)
   (let [;; relation ELEMENTS — read from the FULL registry: an element's tag is unqualified
         ;; (`:contains`), so it belongs to no vocabulary namespace and an ns-filter would drop it.
         ;; (That global name is also why a cross-namespace re-declaration is a collision — caught
@@ -327,8 +312,8 @@
         rel-owned  (for [[rk el] rel-elems :when (contains? nss (:ns el))] [(:ns el) rk])
         vocab-nss  (into (set (keys grouped)) (map first rel-owned))
         ;; the DERIVED imports of one vocabulary: the fragments it actually reaches — slot
-        ;; targets crossing namespaces, its correspondences' codomains, and every name its laws /
-        ;; owned relation elements reference that another fragment declares
+        ;; targets crossing namespaces and every name its laws / owned relation elements
+        ;; reference that another fragment declares
         imports-of (fn [vns]
                      (let [called (into (set (mapcat (comp rule-calls sdef-clauses) (grouped vns)))
                                         (mapcat (fn [[_ el]] (when (= vns (:ns el)) (element-refs el)))
@@ -336,10 +321,8 @@
                            slot-t (for [sd (grouped vns), sl (:slots sd)
                                         :when (not (s/scalar-slot? sl))
                                         t (or (:alts sl) [(:target sl)])
-                                        :let [n (target-ns t)] :when n] n)
-                           fact-t (keep #(some-> (s/correspondence-of (:tag %)) :fact-tag namespace)
-                                        (grouped vns))]
-                       (->> (concat (keep resolve-call called) slot-t fact-t)
+                                        :let [n (target-ns t)] :when n] n)]
+                       (->> (concat (keep resolve-call called) slot-t)
                             (filter #(and (not= % vns) (contains? vocab-nss %)))
                             set)))
         vocabs (for [vns (sort vocab-nss)
@@ -366,8 +349,8 @@
         ;; inclusion, or derived) UNIONed with every distinct (non-scalar) slot kind. Completes
         ;; grammar reflection: edge-kinds reified, not just node-types. A genus (`contains`) has no
         ;; slot of its own and is reflected purely from its element; an element's right-hand side
-        ;; reflects in the same (direction, expression) shape a RelationMap carries — `:incl`+
-        ;; `:expr` for an inclusion, `:incl :eq` + the `:rule` payload for a derived definition.
+        ;; reflects as `:incl`+`:expr` for an inclusion, `:incl :eq` + the `:rule` payload for a
+        ;; derived definition.
         rel-slots  (remove s/scalar-slot? (mapcat :slots sds))
         relation-nodes
         (for [rk    (sort-by name (into (set (keys rel-elems)) (map :rel rel-slots)))

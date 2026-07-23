@@ -1,7 +1,8 @@
 (ns fukan.canvas.core.rules
   "The fixed substrate rules — vocab-agnostic datalog the model always carries, independent of any
    vocabulary. The vocab-DERIVED rules (kind / relation / relation-inclusion / defrelation /
-   compiler-minted closures / correspondence `twin`) are emitted by the kernel's closed declaration lowering
+   compiler-minted closures / the essential correspond's `corresponds`/`realized-*` pairing rules)
+   are emitted by the kernel's closed declaration lowering
    (`fukan.canvas.core.structure/terms-of`) from what the VOCABULARY declares — containment
    (`contains`, its closure, `within`) is no exception, and rides ordinary relation elements like
    any other. This namespace holds only the fixed substrate, which `terms-of` composes in. It takes

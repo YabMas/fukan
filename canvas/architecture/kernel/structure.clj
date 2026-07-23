@@ -38,20 +38,11 @@
   "The live registry roll-call — every registered structure definition (slots + laws). The seam
    grammar reflection reads to project the registry onto the model."
   {:signature [:=> [:cat] [:vector :any]]})
-(Operation correspondence*
-  "The seam of an sdef seq as data; guards duplicate law keys (throws)."
-  {:signature [:=> [:catn [:sdefs [:sequential :any]]] :map]
-   :performs  [:throws]})
-(Operation correspondence
-  "The live registry's correspondence seam — see correspondence*."
-  {:signature [:=> [:cat] :map]
-   :performs  [:throws]
-   :delegates [correspondence*]})
 (Operation laws-of
-  "Every law of a structure — slot-derived cardinality/type laws, correspondence-demand laws
-   (generated from (realized …)/(covered …) sub-forms and from relation slots carrying
-   :realized-by/:faithful), plus its free laws, the same set check runs.
-   Public so the Cozo law engine can evaluate the identical laws."
+  "Every law of a structure — slot-derived cardinality/type laws plus its free laws, the same
+   set check runs. (Correspondence generates no laws — coverage/adherence are READINGS over the
+   corresponds/realized-* rules terms-of emits, not laws.) Public so the Cozo law engine can
+   evaluate the identical laws."
   {:signature [:=> [:catn [:sdef :any]] :any]
    :performs  [:throws :state]})
 (Operation direct-scope-tags
@@ -62,6 +53,6 @@
 (Module core-structure
   "The defstructure grammar — the registry + value-construction + laws → violations over the graph."
   {:child [vocab-rules structure-by-tag value-literal->iv scalar-slot? all-structures
-           laws-of direct-scope-tags correspondence* correspondence
+           laws-of direct-scope-tags
            Violation Form                         ; check-output SHAPE (cozo-law produces it) + the print-dual code-form (projections produce it)
            Rule]})                                ; the rules-output type

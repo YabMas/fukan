@@ -70,7 +70,6 @@
 
 ;; ── instantiation (the interpreter: instance → Node + reified slot Relations) ─
 
-(declare correspondence-of)
 (defn- slot-for
   "The slot descriptor for `rel` on `sdef`'s structure. An extracted instance's fact-side slots
    (`:calls`/`:private`/…) are now its OWN defstructure's slots — the codomain (`Fn`/`Ns`) is a real
@@ -278,7 +277,7 @@
    correspondence."
   [expr from to]
   (when-not (path-lowerable? expr)
-    (throw (ex-info (str "relation-map: expression " (pr-str expr) " is not a regular-relation path — "
+    (throw (ex-info (str "correspond: expression " (pr-str expr) " is not a regular-relation path — "
                          "name it a `defrelation` and reference it as an atom") {:expr expr})))
   (expand-clauses [(list 'path from expr to)]))
 
@@ -687,8 +686,7 @@
   "A combinator's `:when` subject-filter → positive where-clauses on `var`. A scalar MAP
    `{k v}` is sugar for `:val/k`-equality (`[var :val/k v]` per entry); a raw datalog
    clause-VECTOR is spliced verbatim (it uses `var` as the subject, e.g.
-   `'[(design ?x) [?xr :rel/kind :child] [?xr :rel/to ?x]]`) — the same datalog the
-   correspondence demands' `:when`/`:require` accept. nil → none."
+   `'[(design ?x) [?xr :rel/kind :child] [?xr :rel/to ?x]]`). nil → none."
   [var when]
   (cond
     (nil? when) []
@@ -698,7 +696,7 @@
 (defn- exemption-clauses
   "A combinator's `:unless` exemption → NEGATED where-clauses on `var`. A scalar MAP `{k v}`
    is sugar for `(not [var :val/k v])` per entry; a raw datalog clause-VECTOR has each clause
-   negated (`(not c)`), like the `covered` demand's `:unless`. nil → none."
+   negated (`(not c)`). nil → none."
   [var unless]
   (cond
     (nil? unless) []
@@ -717,10 +715,9 @@
 
    :when (Q) filters the law's subjects, :unless (E) exempts them — each a scalar map
    `{k v}` (sugar for `:val/k`-equality / its negation) OR a raw datalog clause-vector
-   (spliced positive / negated, using `?x` as the subject), the same datalog the
-   correspondence demands accept; :from constrains the matching counterpart's structure;
-   :scope (a structure symbol) hosts the law about ANOTHER structure's instances (default:
-   self-scoped to the owner)."
+   (spliced positive / negated, using `?x` as the subject); :from constrains the matching
+   counterpart's structure; :scope (a structure symbol) hosts the law about ANOTHER
+   structure's instances (default: self-scoped to the owner)."
   [desc form]
   (let [[op & args] form
         kvs    (fn [xs] (apply hash-map xs))
@@ -766,147 +763,20 @@
                            "matched-by, target, or at-most-one")
                       {:form form})))))
 
-;; ── external correspondence registry ──────────────────────────────────────────
-;; Correspondence is an EXTENSION that hooks a concept from OUTSIDE (inverted dependency): the concept
-;; knows nothing; the `(correspond Tag …)` declaration (in a correspondence module) registers its config
-;; against the target's tag. `sdef->declarations` merges these in for the target sdef, so the SAME
-;; lowering emits the same terms/laws; only the source lives outside the design vocabulary.
-;; Config: `{:fact-tag … :carrier relation :coverage … :restrict … :rel-demands […]}`.
-(defonce ^:private correspondences (atom {}))
-
-(defn ^:export register-correspondence!
-  "Register an external correspondence config against target `tag` (see the registry note). Re-registering
-   a tag replaces it. Emitted by the `correspond` macro; read by `sdef->declarations`."
-  [tag config] (swap! correspondences assoc tag config) tag)
-
-(defn ^:export correspondence-of
-  "The registered external correspondence config for `tag`, or nil."
-  [tag] (@correspondences tag))
-
-;; ── the shared-sort component of a correspondence (derived, not authored) ──────
-;; A correspondence's shared-sort agreement = the slots BOTH fragments declare under the same name AND target kind,
-;; MINUS those carrying their own relation map. Those targets are a SHARED sort (a `^:value`
-;; content-deduped structure — Schema/Effect — ONE node across strata), so `↦` is the identity,
-;; checkable by eid. It was authored as `(agrees {:by :structural :over […]})` until 2026-07-17; now
-;; it is derived from the two `defstructure`s, so the author states only the NON-identity maps.
-(defn- derive-identity-demand
-  "The shared-sort component of `dtag ↦ ftag` as an `agrees` demand (nil if the two fragments share no
-   un-charactered sort-slot). `:by :structural` over the shared-sort slots: forward-preserving
-   equality — a design instance and its twin agree iff their targets over EVERY shared slot are
-   identical by eid, so a twin MISSING a slot the design declares is an offender (this is where the
-   old `type-coverage` demand folds in — the `out↦out` map fails both on a differing out and on a
-   missing one). `charactered` is the set of design relation names carrying their own relation map
-   (the `:rel-demands`)."
-  [dtag ftag dslots charactered]
-  (when-let [fsdef (structure-by-tag ftag)]
-    (let [fidx   (into {} (for [s (:slots fsdef)] [(:rel s) s]))
-          shared (for [s dslots
-                       :when (and (fidx (:rel s)) (not (scalar-slot? s))
-                                  (= (:target s) (:target (fidx (:rel s))))
-                                  (not (charactered (:rel s))))]
-                   s)]
-      (when (seq shared)
-        {:demand :agrees :by :structural :derived true
-         :over   (mapv :rel shared)
-         :desc   (str (name dtag) ": every design instance's fact twin agrees on "
-                      (str/join ", " (map (comp name :rel) shared)) " (identity map)")}))))
-
-(defn ^:export effective-node-demands
-  "The node demands of `dtag`'s correspondence: explicit carrier coverage (`:design`, `:fact`,
-   or `:both`) plus the DERIVED shared-sort identity map (tagged `:derived`). Every reader of
-   the demands — the law generator (`sdef->declarations`), the seam reader (`correspondence*`), and
-   grammar reflection — goes through here, so all three see the same demands. Nil when `dtag` carries no
-   correspondence."
-  [dtag]
-  (when-let [{:keys [fact-tag coverage restrict rel-demands]} (correspondence-of dtag)]
-    (let [coverage-demands (case coverage
-                             :design [{:demand :total}]
-                             :fact   [{:demand :surjective :pred restrict}]
-                             :both   [{:demand :total} {:demand :surjective :pred restrict}])
-          identity (derive-identity-demand dtag fact-tag (:slots (structure-by-tag dtag))
-                                           (set (map :rel rel-demands)))]
-      (cond-> coverage-demands identity (conj identity)))))
-
 (defn ^:export sdef->declarations
   "Adapt an sdef (built by the unchanged parser) into typed declaration maps for the registry — a
-   pure re-expression of the sdef's fields PLUS any external correspondence registered for its tag
-   (`correspondence-of`); the parser is untouched. `:kind :kind` is the node-kind membership Term,
-   emitted only for CONCRETE structures (not realized/coproduct/derived concepts)."
-  [{:keys [tag slots laws realized-as relation-element relation-incl derived-rule] :as _sdef}]
+   pure re-expression of the sdef's fields; the parser is untouched. `:kind :kind` is the node-kind
+   membership Term, emitted only for CONCRETE structures (not realized/coproduct/derived concepts).
+   (Cross-tag correspondence is a separate declaration form — `correspond`, below — lowered on its
+   own path through `terms-of`, not merged in here.)"
+  [{:keys [slots laws realized-as relation-element relation-incl derived-rule]}]
   (concat
    (when-not (or realized-as relation-element derived-rule) [{:kind :kind}])
    (for [sl slots] {:kind :slot :slot sl})
    (when realized-as   [{:kind :realized-as :body realized-as}])
    (when relation-incl [{:kind :relation-incl :dir (:incl relation-incl) :expr (:expr relation-incl)}])
    (when derived-rule  [{:kind :defrelation :rule derived-rule}])
-   ;; external correspondence (the sole correspondence surface, an inverted-dependency hook): expand the
-   ;; registered `(correspond Design Fact …)` config into declaration maps scoped to this design tag —
-   ;; the cross-tag twin/demands as :correspondence, each relation map `(rel incl E)` as :relation-map.
-   ;; The fact-side SLOTS are no longer here: they belong to the codomain's own `defstructure`.
-   (when-let [{:keys [fact-tag carrier rel-demands]} (correspondence-of tag)]
-     (concat
-      [{:kind :correspondence :corresponds {:fact-tag fact-tag :carrier carrier
-                                            :demands (effective-node-demands tag)}}]
-      (for [d rel-demands] {:kind :relation-map :demand d})))
    (for [law laws] {:kind :free-law :law law})))
-
-(defn- parse-carrier-declaration
-  "Parse one external correspondence declaration. The carrier is an ordinary named binary relation;
-   coverage is stated separately as `:design`, `:fact`, or `:both`, so relation-inclusion tokens retain
-   their one meaning. Remaining forms are relation maps `(design-rel :sub/:sup/:eq fact-expr)`."
-  [cname ftag restrict opts rel-forms]
-  (when-not (map? opts)
-    (throw (ex-info (str "correspond " cname ": expected {:carrier relation :coverage …}, got "
-                         (pr-str opts)) {:options opts})))
-  (let [allowed #{:carrier :coverage}]
-    (doseq [k (keys opts)]
-      (when-not (allowed k)
-        (throw (ex-info (str "correspond " cname ": unknown option " k " — allowed: " allowed)
-                        {:option k :options opts}))))
-    (when-not (keyword? (:carrier opts))
-      (throw (ex-info (str "correspond " cname ": :carrier must name a defrelation keyword")
-                      {:carrier (:carrier opts)})))
-    (when-not (#{:design :fact :both} (:coverage opts))
-      (throw (ex-info (str "correspond " cname ": :coverage must be :design, :fact, or :both")
-                      {:coverage (:coverage opts)})))
-    (let [rel-subs (filter seq? rel-forms)
-          ;; a relation map `(rel :incl E)`: an inclusion + a relation-algebra expression over fact
-          ;; relations. Compile E eagerly so a malformed expression throws HERE (naming the correspond).
-          rel-demands (mapv (fn [[rel rincl expr]]
-                              (when-not ('#{:sub :sup :eq} rincl)
-                                (throw (ex-info (str "correspond " cname ": relation map " (pr-str rel)
-                                                     " needs an inclusion (:sub / :sup / :eq) then an expression, got "
-                                                     (pr-str rincl)) {:rel rel :incl rincl})))
-                              (reach-clauses expr '?_a '?_b)   ; validate E eagerly (throws here, naming the correspond)
-                              {:rel (keyword rel) :incl rincl :expr expr})
-                            rel-subs)]
-      {:fact-tag ftag :carrier (:carrier opts) :coverage (:coverage opts)
-       :restrict restrict :rel-demands rel-demands})))
-
-(defmacro correspond-legacy
-  "LEGACY — replaced by the essential `correspond`; deleted with the old machinery.
-   Declare ONE design kind's carrier and relation constraints in the design↔fact bridge presentation —
-   the concept's `defstructure` never mentions correspondence (inverted dependency); this lives in
-   the extractor for a language.
-   The form names an ordinary binary carrier relation and states its coverage independently, with
-   relation maps nested:
-
-     (correspond Operation [Fn :public]
-       {:carrier :operation-twin :coverage :both}
-       (:delegates :sub :public-call)
-       (:performs  :sup [:cat [:* :calls] :performs]))
-
-   `:coverage` is `:design` (every design node has a twin), `:fact` (every fact node in the optional
-   restricted codomain has a correspondent), or `:both`; it does not assert functionality or
-   injectivity. The codomain is a fact tag or `[FactSort :test]`. Relation maps retain the ordinary
-   relation-inclusion directions `:sub`, `:sup`, and `:eq`.
-   Shared sorts (Schema/Effect — one node both strata) need no `correspond`; their identity map is derived."
-  [design fexpr opts & rel-forms]
-  (let [dtag                (resolve-struct-tag design)
-        [fact-sym restrict] (if (vector? fexpr) [(first fexpr) (second fexpr)] [fexpr nil])
-        ftag                (resolve-struct-tag fact-sym)
-        config              (parse-carrier-declaration (str design) ftag restrict opts rel-forms)]
-    `(register-correspondence! ~dtag '~config)))
 
 ;; ── (is ?v Sort) — declaration-site sort resolution ───────────────────────────
 ;; The ns-PRECISE dual of a bare kind-rule call: `(is ?m Module)` pins ?m to MY Module — the
@@ -1341,120 +1211,6 @@
     (cond-> [type-law]
       (= card :one) (conj none-law))))
 
-;; ── correspondence laws: generated from external (correspond …) declarations ──
-;; (The other half of this leak — a cross-container guard welded into a "generic" law — went away with
-;; the legacy `realized-by-laws`: delegates' realization is now the roll-up relation map, and its
-;; fidelity is an architectural concern at the Subsystem altitude, not a guard in here.)
-;;
-;; The NODE-demand SHAPES (design↔fact). Bodies inline the stratum literal (:val/extracted — see
-;; substrate/stratum-attr's sync note) for range-boundedness and call the injected twin rule. Guard
-;; discipline: plain realized guards on ∃ fact instance OF THIS KIND (small set, no cartesian multiply);
-;; realized-with-:require binds the twin POSITIVELY (a missing twin is plain realized's offence — no
-;; double-fire); covered needs no guard (its subject IS a fact instance).
-
-(defn- demand-key
-  "A demand's full stable law key: :corresponds/<Short>.<local>."
-  [tag local]
-  (keyword "corresponds" (str (name tag) "." (name local))))
-
-(defn- node-demand-law
-  "One generated law map for a node-level demand — a design instance of `dtag` and its fact twin of
-   `ftag` (the codomain). Cross-tag: the design side is bound `:structure/of dtag`, the fact side
-   `:structure/of ftag`. `:val/extracted` is kept alongside the tags — belt-and-suspenders (a fact
-   node IS of a distinct extracted-only tag), and it lets a same-tag correspondence (`ftag = dtag`, an
-   identity-on-shared-sort like Schema) still split the two strata by provenance. The stable law key
-   rides `dtag`, so keys stay `:corresponds/<Design>.*`."
-  [dtag ftag {:keys [demand key desc when pred by over]}]
-  (let [k (demand-key dtag (or key demand))]
-    (case demand
-      ;; the CARRIER is left-total: every design instance has a fact twin (guarded on ∃ extracted fact of
-      ;; this kind, so it is vacuously green before any code is extracted).
-      :total
-      {:key k :offenders '[?x]
-       :desc (or desc (str (name dtag) ": the carrier is left-total — every design instance has a fact twin"))
-       :where (vec (concat [['?_g :structure/of ftag] '[?_g :val/extracted true]
-                            ['?x :structure/of dtag] '(not [?x :val/extracted true])]
-                           when
-                           ['(not-join [?x] (twin ?x ?t))]))}
-      ;; the CARRIER is right-total onto the codomain — every fact instance has a design correspondent.
-      ;; `pred` (the codomain restriction, e.g. Fn's `public` test) narrows the codomain to a sub-sort;
-      ;; without it, every fact instance of the sort must have a preimage.
-      :surjective
-      {:key k :offenders '[?x]
-       :desc (or desc (str (name dtag) ": the carrier is right-total onto "
-                           (if pred (str "the " (clojure.core/name pred) " sub-sort") (name ftag))
-                           " — every such fact instance has a design correspondent"))
-       :where (vec (concat [(if pred (list (symbol (clojure.core/name pred)) '?x) ['?x :structure/of ftag])
-                            '[?x :val/extracted true]]
-                           when
-                           ['(not-join [?x] (twin ?s ?x))]))}
-      :agrees
-      ;; a PAIR-HYBRID law: :where enumerates the design instance + its fact twin (+ any :when guard);
-      ;; the check engine runs the registered `:by` comparator over each pair and offends where false.
-      {:key k :offenders '[?x]
-       :desc (or desc (str (name dtag) " (" (clojure.core/name (or key demand))
-                           "): every design instance's fact twin agrees via " by))
-       :comparator (cond-> {:by by :on '[?x ?t]} over (assoc :over over))
-       :where (vec (concat [['?x :structure/of dtag] '(not [?x :val/extracted true]) '(twin ?x ?t)]
-                           when))})))
-
-;; ── the relation-map primitive: a design relation ↦ a fact expression ─────────
-;; A bridge presentation's relation constraint, authored as `(R incl E)` where `incl` is the relation
-;; INCLUSION ordering the map asserts — `:sub` (⊑, preserve: R ⊆ E), `:sup` (⊒, reflect: R ⊇ E),
-;; `:eq` (≡, both) — and `E` is a relation-algebra term over fact relations (regular relations / the
-;; Kleene-algebra operators, spelled as the regex AST malli itself uses):
-;;   :r  atom · [:+ E] closure · [:* E] refl-closure · [:? E] optional · [:cat E…] path · [:alt E…] union
-;; This replaces the ad-hoc `:realized-by`/`:covered-from`/`:faithful` keyword grab-bag: each was a
-;; point (E, direction) in this one algebra. Grounding: SPARQL 1.1 property paths / regular path
-;; queries for E; the relation-inclusion order for the direction. (`path-steps`, the ONE lowering of
-;; E, lives up by `expand-clauses` — the parser needs it eagerly.)
-(defn- twinned-target?
-  "True when the design relation `rel` on `tag` targets a CROSS-TAG-corresponded sort (its instances
-   have distinct fact twins — like `:delegates` → Operation ↦ Fn), as opposed to a SHARED sort whose
-   design and fact nodes are one (`:performs` → Effect). Decides the reflect law's target check: a
-   reached fact node is matched to the design edge's target directly (shared) or through its twin."
-  [tag rel]
-  (when-let [target (:target (slot-for (structure-by-tag tag) rel))]
-    (let [c (correspondence-of target)]
-      (boolean (and c (:fact-tag c) (not= (:fact-tag c) target))))))
-
-(defn- relation-map-laws
-  "The generated law(s) for a relation map `(rel incl E)` on `tag`. `E` is a regular-relation expression
-   over fact relations, lowered to spliced `reach-clauses` binding two nodes (a complex `E` is a NAMED fact
-   `defrelation`, referenced as an atom). The INCLUSION picks which correspondence condition(s) to enforce:
-     :sub (⊑, preserve) — every design `rel` edge is realized by an `E` reach between the endpoints' twins.
-     :sup (⊒, reflect)  — every fact node the twin reaches over `E` is declared on the design side.
-     :eq  (≡)           — both.
-   Preserve binds BOTH endpoints positively via `twin` (an untwinned endpoint is the totality demand's
-   concern, and the law is vacuously green before extraction). Reflect matches the reached fact node to
-   the design edge's target directly for a SHARED sort, or through its twin for a twinned sort."
-  [tag {:keys [rel incl expr]}]
-  (let [twinned? (twinned-target? tag rel)
-        preserve {:key (demand-key tag (str (name rel) "-realized"))
-                  :desc (str (name tag) "." (name rel) ": every design edge is realized by a "
-                             (pr-str expr) " reach between the endpoints' twins")
-                  :offenders '[?a]
-                  :where [['?dr :rel/from '?a] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
-                          '(twin ?a ?ea) '(twin ?b ?eb)
-                          (list* 'not-join '[?ea ?eb] (reach-clauses expr '?ea '?eb))]}
-        reflect  {:key (demand-key tag (str (name rel) "-covered"))
-                  :desc (str (name tag) "." (name rel) ": every fact node the twin reaches via "
-                             (pr-str expr) " is declared on the design side")
-                  :offenders '[?x]
-                  :where (-> [['?x :structure/of tag] '(not [?x :val/extracted true])
-                              '(twin ?x ?t)]
-                             (into (reach-clauses expr '?t '?v))
-                             (conj (if twinned?
-                                     (list 'not-join '[?x ?v]
-                                           ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?b]
-                                           '(twin ?b ?v))
-                                     (list 'not-join '[?x ?v]
-                                           ['?dr :rel/from '?x] ['?dr :rel/kind rel] ['?dr :rel/to '?v]))))}]
-    (case incl
-      :sub [preserve]
-      :sup [reflect]
-      :eq  [preserve reflect])))
-
 ;; ── closed declaration lowering ──────────────────────────────────────────────
 ;; Each kernel construct lowers to Terms and/or Laws here — the SOLE rule/law emitter. Both
 ;; production seams pass through it: `laws-of` (the law side) and
@@ -1551,7 +1307,7 @@
 ;; relations, rules, laws, and derived authoring forms—not by installing new evaluator semantics.
 ;; This exhaustive lowering is therefore both the implementation and the fail-closed boundary.
 (defn- lower-declaration
-  [{:keys [kind slot dir expr body rule demand corresponds law] :as declaration} sdef]
+  [{:keys [kind slot dir expr body rule law] :as declaration} sdef]
   (let [tag (:tag sdef)]
     (case kind
       :kind
@@ -1577,15 +1333,6 @@
       :defrelation
       (let [head (apply list (rule-sym tag) (:head rule))]
         {:terms (mapv (fn [rule-body] (into [head] rule-body)) (:bodies rule)) :laws []})
-
-      :relation-map
-      {:terms [] :laws (relation-map-laws tag demand)}
-
-      :correspondence
-      (let [ftag    (:fact-tag corresponds)
-            carrier (:carrier corresponds)]
-        {:terms [[(list 'twin '?a '?b) (list (rule-sym carrier) '?a '?b)]]
-         :laws  (mapv #(node-demand-law tag ftag %) (:demands corresponds))})
 
       :free-law
       {:terms [] :laws [law]}
@@ -1660,9 +1407,9 @@
    Each essential correspondence whose DESIGN sort is in `structures` contributes its pairing/
    `realized-*` rules, and every `^:value` structure its `corresponds(?v ?v)` reflexivity — the
    ambient `corresponds` head those definitional rules union into. Scoping the correspondences by
-   in-scope design tag mirrors the per-sdef legacy emission above (which only reads
-   `correspondence-of` for the sdefs it is handed), so a subset call — the declarations golden's
-   `self-model-structures` — stays stable regardless of which fixtures polluted the global registry."
+   in-scope design tag mirrors the per-sdef lowering above (which only sees the sdefs it is
+   handed), so a subset call — the declarations golden's `self-model-structures` — stays stable
+   regardless of which fixtures polluted the global registry."
   [structures]
   (let [structures (validate-closed-relation-heads! (vec structures))
         in-scope   (into #{} (map :tag) structures)]
@@ -1675,67 +1422,14 @@
                            (value-reflexivity-terms structures)
                            rules/substrate-rules)))))
 
-(defn ^{:malli/schema [:=> [:cat [:sequential :any]] :map]}
-  correspondence*
-  "The correspondence SEAM of `sdefs` as one data structure — the collected bridge presentation (pure;
-   `correspondence` applies it to the live registry). {:kinds tag→{:carrier :coverage :demands},
-   :relations [{:owner :rel …demand options… :keys}], :keys full-key→source-pointer}. Assembling
-   the `:keys` index GUARDS cross-family key collisions (two declarations deriving one law key
-   would silently union their offender sets in `violations-of`) — it throws, naming both sources.
-   The A↔B surface-neutral core: an alternative authoring surface (a `defcorrespondence` block)
-   would WRITE what this READS."
-  [sdefs]
-  ;; correspondence is EXTERNAL — registered by `(correspond Tag …)` against the tag — so the seam reads
-  ;; it from the registry (`correspondence-of`), in lockstep with the laws `sdef->declarations` emits.
-  ;; Relation demands come from a structure's own slots ∪ the external `:rel-demands`.
-  (let [kinds     (into {}
-                        (for [{:keys [tag]} sdefs
-                              :let [c (correspondence-of tag)]
-                              :when c]
-                          [tag (-> (select-keys c [:carrier :coverage])
-                                   (assoc :demands (effective-node-demands tag))
-                                   (update :demands
-                                           (fn [ds] (mapv #(assoc % :key (demand-key tag (or (:key %) (:demand %)))) ds))))]))
-        ;; a relation map `(rel incl E)`: keyed + directioned by its inclusion.
-        relations (vec
-                   (for [{:keys [tag]} sdefs
-                         {:keys [rel incl expr]} (:rel-demands (correspondence-of tag))]
-                     {:owner tag :rel rel :incl incl :expr expr
-                      :keys (case incl
-                              :sub [(demand-key tag (str (name rel) "-realized"))]
-                              :sup [(demand-key tag (str (name rel) "-covered"))]
-                              :eq  [(demand-key tag (str (name rel) "-realized"))
-                                    (demand-key tag (str (name rel) "-covered"))])}))
-        rel-dirs  (fn [r] (case (:incl r) :sub [:preserve] :sup [:reflect] :eq [:preserve :reflect]))
-        entries   (concat
-                   (for [[tag {:keys [demands]}] kinds, d demands]
-                     [(:key d) {:owner tag :via :node :demand (dissoc d :key)}])
-                   ;; key/direction zip truncates correctly: each demand family's (:keys r) and direction vec align.
-                   (for [r relations, [k dir] (map vector (:keys r) (rel-dirs r))]
-                     [k {:owner (:owner r) :via :relation :rel (:rel r) :direction dir}]))
-        keys*     (reduce (fn [acc [k src]]
-                            (when (contains? acc k)
-                              (throw (ex-info (str "duplicate correspondence law key " k
-                                                   " — derived by both " (pr-str (acc k))
-                                                   " and " (pr-str src))
-                                              {:key k :first (acc k) :second src})))
-                            (assoc acc k src))
-                          {} entries)]
-    {:kinds kinds :relations relations :keys keys*}))
-
-(defn ^{:malli/schema [:=> [:cat] :map]}
-  correspondence
-  "The live registry's correspondence seam — see `correspondence*`."
-  []
-  (correspondence* (all-structures)))
-
 (defn ^{:malli/schema [:=> [:cat :any] :any]}
   laws-of
-  "Every law of structure `sdef` — the slot-derived cardinality/type laws plus its
-   correspondence-demand laws (generated from `(realized …)`/`(covered …)` sub-forms)
-   plus its free `(law …)`s, the same set `check` runs. Public so an alternative engine
-   (the Cozo law compiler) can evaluate the identical laws. Dispatched through the declaration
-   handlers (no consumer depends on law order — every one treats the result as a set)."
+  "Every law of structure `sdef` — the slot-derived cardinality/type laws plus its free
+   `(law …)`s, the same set `check` runs. Public so an alternative engine (the Cozo law
+   compiler) can evaluate the identical laws. Dispatched through the declaration handlers
+   (no consumer depends on law order — every one treats the result as a set). (Correspondence
+   generates no laws — the essential `correspond` construct is definitional-only; coverage and
+   adherence are READINGS over the `corresponds`/`realized-*` rules `terms-of` emits, not laws.)"
   [sdef]
   (vec (mapcat #(:laws (lower-declaration % sdef)) (sdef->declarations sdef))))
 

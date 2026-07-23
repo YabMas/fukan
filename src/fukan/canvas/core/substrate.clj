@@ -34,11 +34,10 @@
    non-value node arriving through the extraction plug-point (`fukan.cozo.build/model->cozo`
    via `stamp-stratum`); the generic `(fact ?n)`/`(design ?n)` substrate rules
    (`fukan.canvas.core.rules/substrate-rules`) read it — embedded LITERALLY in `substrate-rules`
-   (rules are pure quoted data; keep in sync) AND, in `fukan.canvas.core.structure`, in the
-   `:correspondence` declaration handler (the twin-rule generator) and the demand-law generators
-   (node-demand-law / relation-map-decl) — update all in concert. Provenance has ONE writer — `stamp-stratum` (the pipeline); it is NOT an authoring concern,
-   so no vocab slot exposes it. Tests synthesize a fact-side node the same way, via
-   `fukan.cozo.build/fact-vars->cozo` (stamps the designated fixtures fact)."
+   (rules are pure quoted data; keep in sync). Provenance has ONE writer — `stamp-stratum` (the
+   pipeline); it is NOT an authoring concern, so no vocab slot exposes it. Tests synthesize a
+   fact-side node the same way, via `fukan.cozo.build/fact-vars->cozo` (stamps the designated
+   fixtures fact)."
   :val/extracted)
 
 (defn ^{:malli/schema [:=> [:cat :any] :any]}

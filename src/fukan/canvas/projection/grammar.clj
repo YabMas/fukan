@@ -8,22 +8,19 @@
    Four renders from the same parts:
      `structure-form`      — the faithful DATA form (laws carry their datalog,
                              unquoted; `^:value` rides the name symbol's metadata).
-     `correspondence-form` — the valid external `(correspond …)` data form.
+     `correspondence-form` — STUB (Task 6): the valid essential `(correspond …)` data form, once
+                             the reflected node carries enough to reconstruct it.
      `grammar-primer`      — the reference-card STRING: every Vocabulary in the
                              model, each structure with aligned slots, first doc
                              line, law descs (datalog elided as `…`).
-     `correspondence-card` — the design↔fact seam as one card: twin ladder and
-                             every demand with its stable law key and desc.
-                             Registry-direct: reads (s/correspondence) and
-                             (s/laws-of), no model db required. (DORMANT since the
-                             essential-correspond cutover — the seam it reads is
-                             empty; Task 6 re-points it to s/all-corresponds.)
+     `correspondence-card` — STUB (Task 6): the design↔fact seam as one card. The kernel demolition
+                             (Task 4) retired the legacy registry seam this used to render; the
+                             essential `correspond` construct generates no demand laws to show.
 
    The first three are model db → form / string; the card is registry-direct."
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [fukan.cozo.query :as cq]
-            [fukan.canvas.core.structure :as s]
             [fukan.canvas.core.typing :as typing]
             ;; aliased for its meta-grammar sorts (::reflect/Structure …) — the print-dual
             ;; renders exactly the nodes reflection mints, so the edge is honest
@@ -107,50 +104,14 @@
                          :scope (some-> (:val/scope e) edn/read-string)}
                         (payload-form (:val/form e))))))))
 
-(defn- reflected-correspondence-of
-  "The reflected LEGACY-shape `Correspondence` whose design side (`:from`) is the Structure `s`, decomposed
-   back into the print-dual's correspondence ingredients — or nil.
-
-   ⚠ Since the essential-correspond cutover (2026-07-23), reflection mints the NEW node shape
-   (`:val/match`/`:val/map`, no `:val/carrier`/RelationMap children), so this legacy reader returns nil
-   for it — the inline correspondence line is DORMANT in the primer, and the seam is viewed through
-   `(correspondence)` / `correspondence-card` (registry-direct over `s/all-corresponds`) instead.
-   Re-pointing the inline print-dual to the new shape is TASK 6's concern (the proper card)."
-  [db s]
-  (when-let [m (ffirst (cq/q '[:find ?m :in $ ?s
-                               :where (is ?m ::reflect/Correspondence)
-                                      [?r :rel/from ?m] [?r :rel/kind :from] [?r :rel/to ?s]]
-                             db s))]
-    (let [e (cq/entity db m)]
-      (when (:val/carrier e)   ; legacy-shape node only; the new match/map node → nil (Task 6 handles it)
-        (let [to   (ffirst (cq/q '[:find ?n :in $ ?m
-                                   :where [?r :rel/from ?m] [?r :rel/kind :to] [?r :rel/to ?t]
-                                          [?t :entity/name ?n]] db m))
-              maps (->> (cq/q '[:find ?rm ?o :in $ ?m
-                                :where [?r :rel/from ?m] [?r :rel/kind :map] [?r :rel/to ?rm]
-                                       [?r :rel/order ?o]] db m)
-                        (sort-by (comp ord second))
-                        (mapv (fn [[rm _]]
-                                (let [re (cq/entity db rm)]
-                                  {:rel  (edn/read-string (:val/rel re))
-                                   :incl (edn/read-string (:val/incl re))
-                                   :expr (edn/read-string (:val/expr re))}))))]
-          {:carrier     (edn/read-string (:val/carrier e))
-           :coverage    (edn/read-string (:val/coverage e))
-           :fact-name   to
-           :restrict    (some-> (:val/restrict e) edn/read-string)
-           :rel-demands maps})))))
-
 (defn- parts [db s]
   (let [e (cq/entity db s)]
-    {:name       (symbol (:entity/name e))
-     :tag        (some-> (:val/tag e) edn/read-string)
-     :doc        (:entity/doc e)
-     :value?     (boolean (:val/value e))
-     :realizes   (when (:val/realizes e) (payload-form (:val/form e)))
-     :corresponds (reflected-correspondence-of db s)
-     :slots      (slots-of db s)
-     :laws       (laws-of db s)}))
+    {:name     (symbol (:entity/name e))
+     :doc      (:entity/doc e)
+     :value?   (boolean (:val/value e))
+     :realizes (when (:val/realizes e) (payload-form (:val/form e)))
+     :slots    (slots-of db s)
+     :laws     (laws-of db s)}))
 
 ;; ── the data form (round-trip) ────────────────────────────────────────────────
 
@@ -162,14 +123,6 @@
             scope (assoc :scope scope)
             rules (assoc :rules rules)
             true  (assoc :offenders offenders :where where)))))
-
-(defn- codomain-form
-  "The carrier declaration's codomain: a bare fact name `Fn`, or `[Fn :public]` when restricted to a sub-sort."
-  [{:keys [fact-name restrict]}]
-  (let [f (symbol fact-name)]
-    (if restrict [f restrict] f)))
-
-(defn- rel-map-form [{:keys [rel incl expr]}] (list rel incl expr))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Form]}
   structure-form
@@ -187,14 +140,14 @@
 
 (defn ^:export ^{:malli/schema [:=> [:cat :StructureDb :Eid] :any]}
   correspondence-form
-  "Render the external correspondence whose design Structure is `eid` as valid canonical input,
-   or nil when the structure has no correspondence."
-  [db eid]
-  (let [{:keys [name corresponds]} (parts db eid)]
-    (when corresponds
-      (concat ['correspond name (codomain-form corresponds)
-               {:carrier (:carrier corresponds) :coverage (:coverage corresponds)}]
-              (mapv rel-map-form (:rel-demands corresponds))))))
+  "Render the essential `(correspond …)` whose design Structure is `eid` as canonical data, or nil.
+   STUB pending Task 6's proper card: the reflected `Correspondence` node carries the pairing MATCH
+   and realization MAP (`:val/match`/`:val/map`) but not the author's `?d`/`?f` head symbols a
+   faithful `(correspond [Design ?d Fact ?f] …)` round-trip needs — Task 6 reconstructs the head.
+   For now this keeps the ns compiling against the NEW node shape (`:from`/`:to`/`:val/match`/
+   `:val/map`), replacing the legacy `:val/carrier`-keyed internals it used to render."
+  [_db _eid]
+  nil)
 
 ;; ── the primer (reference-card string) ───────────────────────────────────────
 
@@ -212,25 +165,12 @@
                         slots))
          "}")))
 
-(defn- count-relation-demands
-  "The number of demand laws a correspondence's `:rel-demands` generate: a relation map `(rel incl E)`
-   contributes 1 (`:sub`/`:sup`) or 2 (`:eq`)."
-  [rel-demands]
-  (reduce (fn [n {:keys [incl]}] (+ n (case incl :eq 2 (:sub :sup) 1 0))) 0 rel-demands))
-
 (defn- fmt-structure [db s]
-  (let [{:keys [name tag doc value? slots corresponds realizes laws]} (parts db s)
-        ;; the node-demand count comes from the registry's one shared source (carrier coverage ∪ authored
-        ;; agrees ∪ derived identity) — the reflected Correspondence stores only the authored statement
-        n-generated (when corresponds
-                      (+ (count (s/effective-node-demands tag))
-                         (count-relation-demands (:rel-demands corresponds))))]
+  (let [{:keys [name doc value? slots realizes laws]} (parts db s)]
     (->> (concat
           [(str "(defstructure " (when value? "^:value ") name)]
           (when doc [(str "  " (pr-str (first-line doc)))])
           (when (seq slots) [(fmt-slots slots)])
-          (when corresponds
-            [(str "  ;; external (correspond …) ⇒ " n-generated " generated laws")])
           (when realizes [(str "  (realized-as " (pr-str realizes) ")")])
           (map #(str "  (law " (pr-str (:desc %)) " …)") laws))
          (str/join "\n")
@@ -264,34 +204,14 @@
 
 (defn ^{:malli/schema [:=> [:cat] :Primer]}
   correspondence-card
-  "The correspondence SEAM rendered as one card — the collected design↔fact bridge presentation: each
-   kind's ordinary carrier relation and coverage, then every demand with its stable law
-   KEY and desc. The descs come from the GENERATED laws (via laws-of), so the laws the demand
-   declarations generate — invisible in the per-structure grammar view — are all visible here,
-   each attributed to its declaration. Registry-direct (no db): renders the same seam
-   (s/correspondence) returns as data.
-
-   ⚠ DORMANT since the essential-correspond cutover (2026-07-23): the seam it reads (`s/correspondence`,
-   the LEGACY registry) is empty for the self-model's correspondences now — coverage/adherence are
-   READINGS over `corresponds`/`realized-*` (viewed through `(correspondence)` / dev/user.clj), not
-   generated demand laws. TASK 6 re-points this to the new registry (`s/all-corresponds`) as the proper
-   card; kept behavior-identical here so the self-model's `:calls` graph does not drift."
+  "The correspondence SEAM rendered as one card — pending Task 6, the header only. The kernel
+   demolition (Task 4) retired the OLD carrier-registry seam this card used to read (kinds/demands/
+   stable law keys, generated from carrier coverage) along with the demand-law generators it
+   described — the essential `correspond` construct generates no such laws (coverage/adherence are
+   READINGS over `corresponds`/`realized-*`, viewed through `(correspondence)` / dev/user.clj, not
+   this card). Task 6 rebuilds the proper card over `s/all-corresponds`."
   []
-  (let [{:keys [kinds relations]} (s/correspondence)
-        key->desc (into {} (for [sd (s/all-structures), law (s/laws-of sd)
-                                 :when (:key law)] [(:key law) (:desc law)]))
-        short     (fn [tag] (name tag))
-        kind-line (fn [[tag {:keys [carrier coverage]}]]
-                    (format "  %-12s via %-20s coverage %s" (short tag) carrier coverage))
-        demand-lines (for [[_tag {:keys [demands]}] (sort-by (comp str key) kinds), d demands]
-                       (format "  %-46s %s" (str (:key d)) (or (key->desc (:key d)) (:desc d))))
-        rel-lines (for [r (sort-by (comp str :owner) relations), k (:keys r)]
-                    (format "  %-46s %s" (str k) (key->desc k)))]
-    (str/join "\n"
-              (concat ["━━ CORRESPONDENCE — design ↔ fact ━━" ""]
-                      (map kind-line (sort-by (comp str key) kinds))
-                      ["" "node demands:"] demand-lines
-                      ["" "relation demands:"] rel-lines))))
+  "━━ CORRESPONDENCE — design ↔ fact ━━")
 
 ;; ── grammar drift (the dead-vocabulary reading) ───────────────────────────────
 

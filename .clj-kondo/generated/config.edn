@@ -45,7 +45,6 @@
    fukan.canvas.core.reflect/Correspondence hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Law hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Relation hooks.fukan.structure/instance
-   fukan.canvas.core.reflect/RelationMap hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Structure hooks.fukan.structure/instance
    fukan.canvas.core.reflect/Vocabulary hooks.fukan.structure/instance
    fukan.canvas.core.reflect-test/Leaf hooks.fukan.structure/instance
@@ -73,9 +72,6 @@
    fukan.canvas.core.structure-test/Seq2 hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/SetVal hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/SyntClass hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/TCorrDemand hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/TCorrNested hooks.fukan.structure/instance
-   fukan.canvas.core.structure-test/TCorrRoot hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Tagged hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Tree hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Type hooks.fukan.structure/instance
