@@ -150,6 +150,37 @@
         (println "Drift —" (count unrealized) "modelled Operation(s) with no realizing function:" (sort unrealized))))
     (println "No model loaded yet. Use (go) first.")))
 
+(defn undeclared-code-dependencies
+  "Cross-subsystem dependencies present in CODE — `realized-delegates` (which holds for ANY corresponded
+   op pair whose fact witnesses connect through non-public interior `:calls` — the transported reading of
+   the delegation graph, NOT contingent on an authored `:delegates` edge; those authored edges are what a
+   future law would COMPARE against this), rolled up through
+   `contains`/`in-subsystem` to subsystem altitude — that cross a subsystem boundary with NO
+   declared `:may-depend` edge covering it. THE previously-invisible drift: since the morphism arc
+   retired op-level reflect, no live law or reading saw the CODE's module-dependency graph —
+   Subsystem's `:may-depend` conformance law reads `module-depends`, which is built from `delegates`
+   (design intent), not `:calls` (code fact) — so a design delegation that follows a declared edge
+   could still be realized in code by a path that crosses an UNDECLARED subsystem boundary, unseen.
+   A SIGNAL, not a law — the law layer decides teeth if this ever grows one."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [rows (->> (cq/q '[:find ?sn ?tn ?an ?bn :in $ %
+                            :where
+                            (realized-delegates ?a ?b)
+                            (contains ?ma ?a) (contains ?mb ?b) [(not= ?ma ?mb)]
+                            (in-subsystem ?ma ?s) (in-subsystem ?mb ?t) [(not= ?s ?t)]
+                            (not-join [?s ?t] (may-depend ?s ?t))
+                            [?s :entity/name ?sn] [?t :entity/name ?tn]
+                            [?a :entity/name ?an] [?b :entity/name ?bn]]
+                          m (s/vocab-rules))
+                    sort vec)]
+      (if (empty? rows)
+        (println "No undeclared code dependencies — every cross-subsystem code call the model can see follows a declared :may-depend edge.")
+        (do (println "Undeclared code dependencies —" (count rows) "cross-subsystem call(s) with no declared :may-depend edge:")
+            (doseq [[sn tn an bn] rows]
+              (println (format "  %-16s ⟶ %-16s   (%s → %s)" sn tn an bn))))))
+    (println "No model loaded yet. Use (go) first.")))
+
 (defn encapsulation
   "The ENCAPSULATION worklist (the privacy-coverage iteration): PUBLIC extracted functions with no
    authored Operation twin — each an undeclared public surface demanding a decision (model it as
@@ -256,6 +287,7 @@
   (show 'kernel)
   (check)
   (drift)
+  (undeclared-code-dependencies)
   (encapsulation)
   (purity)
   (correspondence)
