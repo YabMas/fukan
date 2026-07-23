@@ -107,6 +107,8 @@
     (case (first e)
       (:* :?) true
       :+      false
+      :not    true
+      :inv    false
       :cat    (every? zero-admitting? (rest e))
       :alt    (boolean (some zero-admitting? (rest e)))
       false)
@@ -130,6 +132,16 @@
                                             "defrelation (its recursion lives with the relation): "
                                             (pr-str expr)) {:expr expr})))
                      [[(symbol (name inner)) ({:+ :one+, :* :zero+, :? :zero-one} op)]])
+        :not       (let [[pred] args]
+                     (when-not (or (keyword? pred) (symbol? pred))
+                       (throw (ex-info (str "path: [:not pred] takes a unary relation/predicate name: "
+                                            (pr-str e)) {:expr expr})))
+                     [[:not (symbol (name pred))]])
+        :inv       (let [[inner] args]
+                     (when-not (or (keyword? inner) (symbol? inner))
+                       (throw (ex-info (str "path: [:inv r] inverts a relation ATOM only — name a compound "
+                                            "as a defrelation first: " (pr-str e)) {:expr expr})))
+                     [[(symbol (name inner)) :one :inv]])
         (throw (ex-info (str "path: " (pr-str e) " is not a regular-relation expression — an atom, "
                              "[:cat …], [:alt …], or [:+ r]/[:* r]/[:? r]"
                              (when (keyword? op)
@@ -165,7 +177,10 @@
 (defn- path-clauses*
   "Compile a step list into datalog clauses. `[:* r]` means zero or more hops, so
    `[:cat [:* :calls] :performs]` expands to direct `:performs` OR `calls+` followed by
-   `:performs`; an `[:alt …]` step is an or-join whose every branch positively binds its target."
+   `:performs`; an `[:alt …]` step is an or-join whose every branch positively binds its target.
+   A `[:not pred]` step is zero-width — it filters the CURRENT position and does not advance,
+   so it may not be the final step (nothing would bind `to`). An `:inv` marker on a `:one` hop
+   reverses the rule's argument order (an inverse traversal of the relation)."
   [from steps to fresh]
   (if (empty? steps)
     [(list '= from to)]
@@ -173,31 +188,37 @@
           more   (seq more*)
           final? (nil? more)
           target (if final? to (fresh))]
-      (if (= :alt (first step))
-        (let [alts (second step)]
-          (doseq [e alts]
-            (when (zero-admitting? e)
-              (throw (ex-info (str "path: an [:alt …] branch must make at least one hop — "
-                                   (pr-str e) " admits the empty path; name that relation "
-                                   "(defrelation) or restructure the alternative") {:branch e}))))
-          (cons (apply list 'or-join (vec (distinct (filter dvar? [from target])))
-                       (map #(and-disjunct (path-clauses* from (path-steps %) target fresh)) alts))
-                (when-not final? (path-clauses* target more to fresh))))
-        (let [[rule q] step]
-          (case q
-            :one
-            (cons (list rule from target)
-                  (when-not final? (path-clauses* target more to fresh)))
+      (if (= :not (first step))
+        (if final?
+          (throw (ex-info "path: [:not pred] cannot end a path — it filters a position, it doesn't bind one"
+                          {:step step}))
+          (cons (list 'not (list (second step) from))
+                (path-clauses* from more to fresh)))
+        (if (= :alt (first step))
+          (let [alts (second step)]
+            (doseq [e alts]
+              (when (zero-admitting? e)
+                (throw (ex-info (str "path: an [:alt …] branch must make at least one hop — "
+                                     (pr-str e) " admits the empty path; name that relation "
+                                     "(defrelation) or restructure the alternative") {:branch e}))))
+            (cons (apply list 'or-join (vec (distinct (filter dvar? [from target])))
+                         (map #(and-disjunct (path-clauses* from (path-steps %) target fresh)) alts))
+                  (when-not final? (path-clauses* target more to fresh))))
+          (let [[rule q inv?] step]
+            (case q
+              :one
+              (cons (list rule (if inv? target from) (if inv? from target))
+                    (when-not final? (path-clauses* target more to fresh)))
 
-            :one+
-            (cons (list (symbol (str (name rule) "+")) from target)
-                  (when-not final? (path-clauses* target more to fresh)))
+              :one+
+              (cons (list (symbol (str (name rule) "+")) from target)
+                    (when-not final? (path-clauses* target more to fresh)))
 
-            :zero+
-            [(path-hop-or-skip from (symbol (str (name rule) "+")) more to fresh)]
+              :zero+
+              [(path-hop-or-skip from (symbol (str (name rule) "+")) more to fresh)]
 
-            :zero-one
-            [(path-hop-or-skip from rule more to fresh)]))))))
+              :zero-one
+              [(path-hop-or-skip from rule more to fresh)])))))))
 
 (defn ^:export expand-clauses
   "Expand authoring-layer composition clauses into ordinary datalog clauses.
@@ -241,6 +262,8 @@
       :cat       (every? path-lowerable? (rest expr))
       :alt       (every? #(and (path-lowerable? %) (not (zero-admitting? %))) (rest expr))
       (:+ :* :?) (keyword? (second expr))
+      :not       (let [[pred] (rest expr)] (or (keyword? pred) (symbol? pred)))
+      :inv       (let [[inner] (rest expr)] (or (keyword? inner) (symbol? inner)))
       false)
     :else false))
 

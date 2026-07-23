@@ -233,3 +233,33 @@
                          (names db)
                          set)]
       (is (= #{"pnode-a" "pnode-b" "pnode-c"} offenders)))))
+
+(deftest not-filter-step
+  ;; [:cat :calls [:not public] :calls] — a call, a ¬public waypoint, a call
+  (let [cs (s/expand-clauses '[(path ?a [:cat :calls [:not public] :calls] ?b)])]
+    ;; two hops through one fresh mid var, with a negated predicate call on the mid
+    (is (= 3 (count cs)))
+    (let [[c1 cnot c2] cs
+          mid (nth c1 2)]
+      (is (= (list 'calls '?a mid) c1))
+      (is (= (list 'not (list 'public mid)) cnot))
+      (is (= (list 'calls mid '?b) c2)))))
+
+(deftest inv-step
+  ;; [:cat :contains :delegates [:inv :contains]] — down, across, back up
+  (let [cs (s/expand-clauses '[(path ?m [:cat :contains :delegates [:inv :contains]] ?n)])]
+    (is (= 3 (count cs)))
+    (let [[c1 c2 c3] cs]
+      (is (= 'contains (first c1)))
+      (is (= 'delegates (first c2)))
+      ;; inverse hop: the rule's FIRST arg is the path's target
+      (is (= (list 'contains '?n (nth c2 2)) c3)))))
+
+(deftest inv-rejects-compound
+  (is (thrown? clojure.lang.ExceptionInfo
+        (s/expand-clauses '[(path ?a [:inv [:cat :x :y]] ?b)]))))
+
+(deftest not-is-zero-width
+  ;; a filter step never terminates a path: trailing [:not p] throws (nothing to bind ?to)
+  (is (thrown? clojure.lang.ExceptionInfo
+        (s/expand-clauses '[(path ?a [:cat :calls [:not public]] ?b)]))))
