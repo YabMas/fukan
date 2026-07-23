@@ -116,41 +116,33 @@
       (is (str/includes? p "━━ fukan.canvas.core.reflect — "))
       (is (str/includes? p "(defstructure Structure")))))
 
-(deftest primer-counts-operations-generated-laws
-  (testing "the primer's corresponds pointer agrees with the generator (3 node [realized, covered, the
-            derived agrees] + 1 delegates [:sub] + 1 performs [:sup] = 5; the demands + relation-maps
-            come from the EXTERNAL (correspond Operation …), the identity map derived)"
-    (let [db (pipeline/build-model nil)]
-      (is (str/includes? (g/vocabulary-primer db "fukan.common.vocab.code.operation")
-                         "⇒ 5 generated laws")))))
+;; (`primer-counts-operations-generated-laws` was retired at the essential-correspond cutover: the
+;;  generated `:corresponds/*` demand laws — whose count the primer pointed at — dissolved into readings,
+;;  and re-pointing the INLINE per-structure correspondence render to the new match/map node is Task 6's
+;;  work. The seam is now viewed through `correspondence-card` / `(correspondence)`, tested below.)
 
-(deftest correspondence-card-shows-the-seam-and-its-generated-laws
-  (testing "the card renders named carriers, coverage, and every generated demand with its stable key"
+(deftest correspondence-card-is-dormant-after-the-cutover
+  (testing "the card is DORMANT since the essential-correspond cutover — the legacy seam it reads is
+            empty for the self-model's correspondences, so it renders its header but no generated
+            `:corresponds/*` demand keys (those dissolved into readings). Task 6 re-points it to
+            `s/all-corresponds` as the proper card."
     (let [card (g/correspondence-card)]
-      (is (str/includes? card ":module-twin") "the root carrier is an ordinary named relation")
-      (is (str/includes? card "coverage :both"))
-      (is (str/includes? card ":corresponds/Operation.total"))
-      (is (str/includes? card ":corresponds/Operation.delegates-realized"))
-      (is (str/includes? card ":corresponds/Operation.performs-covered"))
-      (is (str/includes? card "the carrier is left-total")
-          "descs come from the generated laws — the invisible laws become visible"))))
+      (is (str/includes? card "━━ CORRESPONDENCE") "the card still renders (no crash)")
+      (is (not (str/includes? card ":corresponds/Operation")) "no generated demand keys — they dissolved"))))
 
-(deftest print-dual-round-trips-the-correspondence-seam
-  (testing "defstructure and external correspondence render as two valid canonical forms"
+(deftest print-dual-keeps-operation-slots-free-of-correspondence
+  (testing "the defstructure render carries only forms its parser accepts — Operation's slots are plain,
+            never polluted with correspondence options (correspondence is EXTERNAL). The inline
+            correspondence render is dormant until Task 6 re-points it to the new match/map node."
     (let [db   (pipeline/build-model nil)
           eid  (ffirst (cq/q '[:find ?s :where [?s :structure/of :fukan.canvas.core.reflect/Structure]
                                [?s :val/tag ":fukan.common.vocab.code.operation/Operation"]] db))
           form (g/structure-form db eid)
-          corr (g/correspondence-form db eid)
           slots (first (filter map? form))]
       (is (not-any? #(and (seq? %) (= 'corresponds (first %))) form)
           "defstructure contains only forms its parser accepts")
-      (is (= '(correspond Operation [Fn :public]
-                {:carrier :operation-twin :coverage :both}
-                (:delegates :sub :public-call)
-                (:performs :sup [:cat [:* :calls] :performs]))
-             corr)
-          "external correspondence round-trips as valid canonical input")
+      (is (nil? (g/correspondence-form db eid))
+          "the inline correspondence render is dormant (new match/map node) — Task 6 re-points it")
       (is (= '[:* Operation] (:delegates slots))
           ":delegates is a plain slot — no correspondence options, and no :transitive (closures are the compiler's)")
       (is (not (map? (second (:performs slots))))

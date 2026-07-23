@@ -4,10 +4,15 @@
 
    `Fn` is the codomain: the Clojure realization of an Operation — an extracted `defn`/`defn-`/`defmulti`
    with its call graph and its metadata conventions (`defn-`, `^:export`, `^:test-support`). It is a
-   SPECIFIC language's construct, so it lives here, not in the language-neutral vocabulary. Before
-   2026-07-17 there was no `Fn`: the fact-side slots were grafted onto the design `Operation` tag, so
-   design Operation and Clojure function were one structure told apart by a provenance flag — and the
-   drift demands had to be six bespoke forms because the correspondence had no distinct fact vocabulary.
+   SPECIFIC language's construct, so it lives here, not in the language-neutral vocabulary.
+
+   The correspondence is the essential `(correspond [Operation ?op Fn ?fn] match realization-map)`: the
+   MATCH is a flat identity query (same name inside corresponding containers — publicness is a future
+   LAW, not match logic), and the REALIZATION MAP names, per design slot, the pure fact-graph path that
+   realizes it (`:in↦:in`, `:out↦:out`, delegation through non-public interior, effects to call-graph
+   depth). Coverage — unrealized/unaccounted/drifted — is a READING of the pairing join (`drift`/
+   `encapsulation`/`type-drift` in dev/user.clj), no longer a set of generated carrier/coverage/relation-map
+   demand laws.
 
    The generic `Operation` structure — pure, language-neutral identity — lives in
    `fukan.common.vocab.code.operation`."
@@ -43,42 +48,21 @@
   [(is ?x Fn)
    (not [?x :val/private true]) (not [?x :val/export true]) (not [?x :val/test-support true])])
 
-;; The PUBLIC CALL GRAPH as a first-class fact relation — `a` reaches `b` through only ¬public (internal)
-;; interior. Routing through another PUBLIC op is TWO delegations, not one; an unmodelled `^:export`/
-;; `^:test-support` helper is ¬public, so it's interior, not a boundary. The interior is the COMPLEMENT
-;; of the `public` sub-sort covered by the carrier — one `public` line, restricted on one side and
-;; negated here. A recursive derived relation (base + step); `delegates :sub :public-call` names it.
-(defrelation :public-call
-  "a reaches b through only non-public interior — the public call graph"
-  [?a ?b] [(calls ?a ?b)]                                     ; base: a direct call
-          [(calls ?a ?m) (not (public ?m)) (public-call ?m ?b)])  ; step: through a ¬public node
-
-;; ── the correspondence: Operation ↔ Fn, one bridge between design and Clojure facts ──
-;; Rides Operation from OUTSIDE (its `defstructure` stays pure identity). Every law generates at
-;; :corresponds/Operation.*.
-;;   · CARRIER: `operation-twin` — a normal derived relation under bi-total coverage with Fn's PUBLIC
-;;     sub-kind (every design Operation has a twin and every public Fn has a correspondent; uniqueness
-;;     is not implied). Private/export/
-;;     test-support fns are NOT public, so neither sort images nor delegation boundaries. This IS the
-;;     surface doctrine (Module carries no :exposes role since 2026-07-21): modelled ⇒ public — fukan
-;;     models surfaces, and interior helpers stay unmodelled (the roll-up routes through them).
-;;   · RELATION MAPS: `:delegates ⊑ :public-call` — every declared op-level delegation is a public-call
-;;     edge (the named fact relation above; `:sub` only, since fidelity is Subsystem `:may-depend`'s
-;;     concern). `:performs ⊒ calls*·performs` — every effect the twin reaches is a declared design effect.
-;;   · the IDENTITY component (`in↦in`, `out↦out` over the shared `Schema` sort) is DERIVED.
-(defrelation :operation-twin
-  "A design Operation and extracted Fn with the same name inside corresponding modules."
-  [?op ?fn]
-  [(is ?op Operation) (design ?op)
-   (is ?fn Fn) (fact ?fn)
-   (named ?op ?name) (named ?fn ?name)
+;; ── the correspondence: the ENTIRE Operation ↔ Fn bridge ─────────────────────
+;; Pairing = same name inside corresponding containers (pure identity logic; publicness is
+;; POLICY — a future law — not match logic: an op realized by a private fn PAIRS, and
+;; realized-but-private is that law's precise finding). Entries are pure code-graph paths:
+;; identity = the same-named atom; delegation = a call reaching through non-public interior;
+;; performing = every effect the code reaches. Coverage (unrealized/unaccounted/ambiguous)
+;; is a READING of the pairing join — `(drift)` reports it; no law fires until authored.
+(s/correspond [Operation ?op Fn ?fn]
+  [(named ?op ?n) (named ?fn ?n)
    (contains ?m ?op) (contains ?ns ?fn)
-   (module-twin ?m ?ns)])
-
-(s/correspond-legacy Operation [Fn :public]
-  {:carrier :operation-twin :coverage :both}
-  (:delegates :sub :public-call)
-  (:performs  :sup [:cat [:* :calls] :performs]))
+   (corresponds ?m ?ns)]
+  {:in        :in
+   :out       :out
+   :performs  [:cat [:* :calls] :performs]
+   :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})
 
 (def ^:private schema-tag
   "The type dialect's ^:value structure tag — the fact-side fragment builds its :in/:out

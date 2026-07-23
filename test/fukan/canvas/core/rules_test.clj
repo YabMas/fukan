@@ -6,8 +6,8 @@
             [fukan.cozo.law :as law]
             [fukan.canvas.core.rules :as rules]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
-            ;; loaded for their side-effect: register the Operation↦Fn / Module↦Ns correspondence the
-            ;; cross-tag twin under test is generated from
+            ;; loaded for their side-effect: register the Operation↦Fn / Module↦Ns correspondence whose
+            ;; `corresponds` pairing rule under test is generated from
             [fukan.common.extraction.clojure.operation]
             [fukan.common.extraction.clojure.module]))
 
@@ -95,8 +95,8 @@
       (is (= #{["dup" "dup"]} (set pairs))
           "only the two distinct same-named nodes pair — the custom predicate body fired"))))
 
-(deftest twin-pairs-design-and-fact-across-the-containment-ladder
-  (testing "root kinds twin by bridge; nested kinds twin by name within twinned containers"
+(deftest corresponds-pairs-design-and-fact-across-the-containment-ladder
+  (testing "root kinds pair by bridge; nested kinds pair by name within corresponding containers"
     (let [db (build/maps->cozo
               [{:entity/id "cm" :structure/of :fukan.common.vocab.code.module/Module :entity/name "infra-model"}
                {:entity/id "km" :structure/of :fukan.common.extraction.clojure.module/Ns :entity/name "fukan.infra.model" :val/extracted true}
@@ -105,12 +105,12 @@
                {:entity/id "stray" :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "load-model" :val/extracted true}]
               [{:rel/id "r1" :rel/from [:entity/id "cm"] :rel/kind :child :rel/to [:entity/id "co"]}
                {:rel/id "r2" :rel/from [:entity/id "km"] :rel/kind :child   :rel/to [:entity/id "ko"]}])
-          twins (set (cq/q '[:find ?an ?bn :in $ %
-                             :where (twin ?a ?b) [?a :entity/name ?an] [?b :entity/name ?bn]]
+          pairs (set (cq/q '[:find ?an ?bn :in $ %
+                             :where (corresponds ?a ?b) [?a :entity/name ?an] [?b :entity/name ?bn]]
                            db (s/vocab-rules)))]
-      (is (contains? twins ["infra-model" "fukan.infra.model"]) "module pair twins via the bridge")
-      (is (contains? twins ["load-model" "load-model"]) "op pair twins by name within the twinned containers")
-      (is (= 2 (count twins)) "the un-contained same-named stray op does NOT twin"))))
+      (is (contains? pairs ["infra-model" "fukan.infra.model"]) "module pair corresponds via the bridge")
+      (is (contains? pairs ["load-model" "load-model"]) "op pair corresponds by name within corresponding containers")
+      (is (= 2 (count pairs)) "the un-contained same-named stray op does NOT correspond"))))
 
 (deftest strata-rules-classify-provenance
   (testing "(fact ?n) / (design ?n) split nodes by the kernel provenance attribute"

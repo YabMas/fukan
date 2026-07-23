@@ -15,7 +15,9 @@
      `correspondence-card` — the design↔fact seam as one card: twin ladder and
                              every demand with its stable law key and desc.
                              Registry-direct: reads (s/correspondence) and
-                             (s/laws-of), no model db required.
+                             (s/laws-of), no model db required. (DORMANT since the
+                             essential-correspond cutover — the seam it reads is
+                             empty; Task 6 re-points it to s/all-corresponds.)
 
    The first three are model db → form / string; the card is registry-direct."
   (:require [clojure.edn :as edn]
@@ -106,32 +108,38 @@
                         (payload-form (:val/form e))))))))
 
 (defn- reflected-correspondence-of
-  "The reflected `Correspondence` whose design side (`:from`) is the Structure `s`, decomposed back into the
-   print-dual's correspondence ingredients — or nil. The relation maps come from the `RelationMap`
-   children in authoring order and the codomain's short name from the `:to` Structure."
+  "The reflected LEGACY-shape `Correspondence` whose design side (`:from`) is the Structure `s`, decomposed
+   back into the print-dual's correspondence ingredients — or nil.
+
+   ⚠ Since the essential-correspond cutover (2026-07-23), reflection mints the NEW node shape
+   (`:val/match`/`:val/map`, no `:val/carrier`/RelationMap children), so this legacy reader returns nil
+   for it — the inline correspondence line is DORMANT in the primer, and the seam is viewed through
+   `(correspondence)` / `correspondence-card` (registry-direct over `s/all-corresponds`) instead.
+   Re-pointing the inline print-dual to the new shape is TASK 6's concern (the proper card)."
   [db s]
   (when-let [m (ffirst (cq/q '[:find ?m :in $ ?s
                                :where (is ?m ::reflect/Correspondence)
                                       [?r :rel/from ?m] [?r :rel/kind :from] [?r :rel/to ?s]]
                              db s))]
-    (let [e    (cq/entity db m)
-          to   (ffirst (cq/q '[:find ?n :in $ ?m
-                               :where [?r :rel/from ?m] [?r :rel/kind :to] [?r :rel/to ?t]
-                                      [?t :entity/name ?n]] db m))
-          maps (->> (cq/q '[:find ?rm ?o :in $ ?m
-                            :where [?r :rel/from ?m] [?r :rel/kind :map] [?r :rel/to ?rm]
-                                   [?r :rel/order ?o]] db m)
-                    (sort-by (comp ord second))
-                    (mapv (fn [[rm _]]
-                            (let [re (cq/entity db rm)]
-                              {:rel  (edn/read-string (:val/rel re))
-                               :incl (edn/read-string (:val/incl re))
-                               :expr (edn/read-string (:val/expr re))}))))]
-      {:carrier     (edn/read-string (:val/carrier e))
-       :coverage    (edn/read-string (:val/coverage e))
-       :fact-name   to
-       :restrict    (some-> (:val/restrict e) edn/read-string)
-       :rel-demands maps})))
+    (let [e (cq/entity db m)]
+      (when (:val/carrier e)   ; legacy-shape node only; the new match/map node → nil (Task 6 handles it)
+        (let [to   (ffirst (cq/q '[:find ?n :in $ ?m
+                                   :where [?r :rel/from ?m] [?r :rel/kind :to] [?r :rel/to ?t]
+                                          [?t :entity/name ?n]] db m))
+              maps (->> (cq/q '[:find ?rm ?o :in $ ?m
+                                :where [?r :rel/from ?m] [?r :rel/kind :map] [?r :rel/to ?rm]
+                                       [?r :rel/order ?o]] db m)
+                        (sort-by (comp ord second))
+                        (mapv (fn [[rm _]]
+                                (let [re (cq/entity db rm)]
+                                  {:rel  (edn/read-string (:val/rel re))
+                                   :incl (edn/read-string (:val/incl re))
+                                   :expr (edn/read-string (:val/expr re))}))))]
+          {:carrier     (edn/read-string (:val/carrier e))
+           :coverage    (edn/read-string (:val/coverage e))
+           :fact-name   to
+           :restrict    (some-> (:val/restrict e) edn/read-string)
+           :rel-demands maps})))))
 
 (defn- parts [db s]
   (let [e (cq/entity db s)]
@@ -261,7 +269,13 @@
    KEY and desc. The descs come from the GENERATED laws (via laws-of), so the laws the demand
    declarations generate — invisible in the per-structure grammar view — are all visible here,
    each attributed to its declaration. Registry-direct (no db): renders the same seam
-   (s/correspondence) returns as data."
+   (s/correspondence) returns as data.
+
+   ⚠ DORMANT since the essential-correspond cutover (2026-07-23): the seam it reads (`s/correspondence`,
+   the LEGACY registry) is empty for the self-model's correspondences now — coverage/adherence are
+   READINGS over `corresponds`/`realized-*` (viewed through `(correspondence)` / dev/user.clj), not
+   generated demand laws. TASK 6 re-points this to the new registry (`s/all-corresponds`) as the proper
+   card; kept behavior-identical here so the self-model's `:calls` graph does not drift."
   []
   (let [{:keys [kinds relations]} (s/correspondence)
         key->desc (into {} (for [sd (s/all-structures), law (s/laws-of sd)
@@ -271,8 +285,6 @@
                     (format "  %-12s via %-20s coverage %s" (short tag) carrier coverage))
         demand-lines (for [[_tag {:keys [demands]}] (sort-by (comp str key) kinds), d demands]
                        (format "  %-46s %s" (str (:key d)) (or (key->desc (:key d)) (:desc d))))
-        ;; desc non-nil by construction — the seam↔laws-of key invariant: every key in (:keys r)
-        ;; was generated by correspondence-laws, and key->desc is built from the same laws-of pass.
         rel-lines (for [r (sort-by (comp str :owner) relations), k (:keys r)]
                     (format "  %-46s %s" (str k) (key->desc k)))]
     (str/join "\n"

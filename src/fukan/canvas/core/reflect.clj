@@ -15,8 +15,9 @@
      - a LAW is a node: desc + the datalog as a `:val/form` payload (queryable as
        a form, not decomposed — like a `Lens`'s `:select` code-form leaf).
      - a VOCABULARY is one grammar namespace: `:child` edges to its Structures.
-     - a CORRESPONDENCE is a node per registered `(correspond …)`: `:from`/`:to` edges to its design
-       and codomain Structures, `RelationMap` children carrying the relation maps.
+     - a CORRESPONDENCE is a node per registered `(correspond [Design ?d Fact ?f] match map)`:
+       `:from`/`:to` edges to its design and codomain Structures, plus the pairing MATCH and realization
+       MAP as pr-str'd `:val/match`/`:val/map` leaves.
 
    Scope: the namespace closure of the tags in use — every namespace that defines
    a tag instantiated in the db, expanded through slot targets, plus
@@ -116,20 +117,18 @@
    :expr :string})
 
 (defstructure Correspondence
-  "A reflected BRIDGE PRESENTATION — one external `(correspond Design Fact …)` seam, reified as a node
-   so the correspondence is data like the presentation fragments it connects (a `Law` reflects with
-   its datalog queryable; the carrier statement + relation maps deserve no less). `:from`/`:to` are
-   the design and codomain `Structure`s; `:carrier` names the ordinary binary relation pairing them;
-   `:coverage` is `:design`, `:fact`, or `:both`; `:restrict` is the optional codomain sub-sort
-   (`[Fn :public]`'s `:public`); and `:map` holds relation maps in authoring order. Coverage and the
-   derived shared-sort agreement are consequences recomputed by `structure/effective-node-demands`.
-   A reflection TOOL, not authored; the runtime never reads it."
-  {:carrier  :string
-   :coverage :string
-   :from     Structure
-   :to       Structure
-   :restrict [:? :string]
-   :map      [:* RelationMap]})
+  "A reflected BRIDGE PRESENTATION — one essential `(correspond [Design ?d Fact ?f] match realization-map)`
+   seam, reified as a node so the correspondence is data like the presentation fragments it connects (a
+   `Law` reflects with its datalog queryable; the whole bridge declaration deserves no less). `:from`/
+   `:to` are the design and codomain `Structure`s; `:match` is the pairing query and `:map` the
+   realization map, each pr-str'd (a scalar leaf, NOT a `:val/form` payload — both forms carry bare
+   keywords the mirror's keyword-leaf stringification would strip, the same reason RelationMap stored
+   its `:expr` as edn). Coverage classes are READINGS of the pairing join, not reflected here. A
+   reflection TOOL, not authored; the runtime never reads it."
+  {:from  Structure
+   :to    Structure
+   :match [:? :string]
+   :map   [:? :string]})
 
 ;; ── the reflector ─────────────────────────────────────────────────────────────
 
@@ -192,6 +191,8 @@
                            :when (contains? nss (some-> (:tag sd) namespace))
                            n    (concat (keep target-ns (mapcat #(or (:alts %) [(:target %)]) (:slots sd)))
                                         (some-> (s/correspondence-of (:tag sd)) :fact-tag target-ns list)
+                                        (keep (fn [c] (when (= (:design c) (:tag sd)) (target-ns (:fact c))))
+                                              (s/all-corresponds))
                                         (keep resolve-call (rule-calls (sdef-clauses sd))))
                            :when n]
                        n)
@@ -261,35 +262,23 @@
                          (map :rel law-bits)))}))
 
 (defn- reflect-correspondence
-  "One design sdef's registered correspondence → its `Correspondence` node (+ `RelationMap` children,
-   Law-style positional ids), or nil. `:from`/`:to` edges target the two reified Structures (the
-   codomain is guaranteed present by `ns-closure`'s fact-tag expansion); scalar fields hold the
-   keyword pr-str'd (the print-dual reads them back); each relation map is a child node in
-   authoring order carrying its expression as edn."
-  [{:keys [tag]}]
-  (when-let [{:keys [fact-tag carrier coverage restrict rel-demands]} (s/correspondence-of tag)]
-    (let [mid   (str "correspondence:" tag)
-          mnode (cond-> {:entity/id mid :structure/of ::Correspondence
-                         :entity/name (str (name tag) "↦" (name fact-tag))
-                         :val/carrier (pr-str carrier)
-                         :val/coverage (pr-str coverage)}
-                  restrict (assoc :val/restrict (pr-str restrict)))
-          maps  (map-indexed
-                 (fn [i {:keys [rel incl expr]}]
-                   {:node {:entity/id (str mid "#map/" i) :structure/of ::RelationMap
-                           :entity/name (name rel)
-                           :val/rel (pr-str rel) :val/incl (pr-str incl)
-                           :val/expr (pr-str expr)}
-                    :rel  {:rel/id   (str mid "|map|" i)
-                           :rel/from [:entity/id mid] :rel/kind :map
-                           :rel/to   [:entity/id (str mid "#map/" i)] :rel/order i}})
-                 rel-demands)]
-      {:nodes (into [mnode] (map :node maps))
-       :rels  (into [{:rel/id (str mid "|from") :rel/from [:entity/id mid]
-                      :rel/kind :from :rel/to [:entity/id (structure-id tag)]}
-                     {:rel/id (str mid "|to") :rel/from [:entity/id mid]
-                      :rel/kind :to :rel/to [:entity/id (structure-id fact-tag)]}]
-                    (map :rel maps))})))
+  "One registered essential correspondence config → its `Correspondence` node. `:from`/`:to` edges target
+   the reified design and codomain `Structure`s (both guaranteed present when the config is in scope —
+   the caller filters on both namespaces). The pairing MATCH and the realization MAP ride as pr-str'd
+   `:val/match`/`:val/map` scalar leaves — NOT a `:val/form` payload, because both forms carry bare
+   keywords the mirror's keyword-leaf stringification would strip (the same reason `RelationMap` stored
+   its `:expr` as edn); the pr-str scalar round-trips faithfully."
+  [{:keys [design fact match] rmap :map}]
+  (let [mid   (str "correspondence:" design "↦" fact)
+        mnode {:entity/id mid :structure/of ::Correspondence
+               :entity/name (str (name design) "↦" (name fact))
+               :val/match (pr-str match)
+               :val/map (pr-str rmap)}]
+    {:nodes [mnode]
+     :rels  [{:rel/id (str mid "|from") :rel/from [:entity/id mid]
+              :rel/kind :from :rel/to [:entity/id (structure-id design)]}
+             {:rel/id (str mid "|to") :rel/from [:entity/id mid]
+              :rel/kind :to :rel/to [:entity/id (structure-id fact)]}]}))
 
 (defn ^{:malli/schema [:=> [:catn [:tags [:vector :any]] [:extra-seeds [:vector :any]]] :map]}
   reflect
@@ -390,7 +379,13 @@
             incl      (assoc :val/incl (pr-str (:incl incl)) :val/expr (pr-str (:expr incl)))
             ;; a derived element is definitionally exact — :eq to its own rule
             dr        (assoc :val/incl ":eq" :val/rule (pr-str dr) :val/form dr)))
-        correspondences (keep reflect-correspondence sds)
+        ;; the essential correspondences in scope — read from the NEW registry (`all-corresponds`),
+        ;; keyed by sort pair; reflected only when BOTH endpoints' vocabularies are in the closure so
+        ;; the `:from`/`:to` edges never dangle.
+        correspondences (for [c (s/all-corresponds)
+                              :when (and (contains? nss (namespace (:design c)))
+                                         (contains? nss (namespace (:fact c))))]
+                          (reflect-correspondence c))
         nodes  (concat (mapcat :nodes bits) (map :node vocabs) any relation-nodes
                        (mapcat :nodes correspondences))
         rels   (concat (mapcat :rels bits) (mapcat :rels vocabs) (mapcat :rels correspondences))

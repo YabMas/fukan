@@ -329,8 +329,27 @@
 ;; renamed `correspond-legacy` seam, whose emission is untouched), so the only delta is the four
 ;; reflexivity rules for the self-model's `^:value` sorts — Schema/SchemaChoice/SchemaField (malli) +
 ;; Effect. Terms 89→93 (+4 reflexivity); laws hold at 61 (these rules are definitional — no denials).
-(def ^:private golden-terms {:count 93 :hash -911851794})
-(def ^:private golden-laws  {:count 61 :hash -1963493187})
+;; 2026-07-23 (b): the seam CUTOVER — the self-model's two correspondences move from `correspond-legacy`
+;; to the essential `correspond` (operation.clj: `[Operation ?op Fn ?fn]`; module.clj: `[Module ?m Ns ?ns]`).
+;; Terms 93→90 (−3): OUT −12 = the two `twin` alias rules + `operation-twin`/`module-twin` derived rules
+;; (1 each) + their `R+` closures (2 each) + `public-call`'s 2 rules + its `R+` closure (2); IN +9 = the
+;; two `corresponds` pairing rules + `realized-{in,out,performs,delegates,child}` + the `realized-delegates-s1`
+;; aux pair (base+step, the ex-`public-call` roll-up minted as a compound-closure aux). The four `^:value`
+;; reflexivity rules stay. Laws 61→54 (−7): every generated `:corresponds/*` demand dissolves —
+;; Operation.{total,surjective,agrees,delegates-realized,performs-covered} (5) + Module.{total,surjective}
+;; (2); NONE added (the essential construct is definitional — no denials). Coverage/adherence are now
+;; READINGS (`drift`/`encapsulation`/`type-drift` in dev/user.clj), not laws. Live `(check)` still 0.
+;; 2026-07-23 (c): fixed a latent Task-2 emission bug the cutover's readings surfaced —
+;; `realized-delegates`'s roll-up `[:cat :calls [:* [:cat [:not public] :calls]]]` lowered (after aux
+;; extraction) to `[:cat :calls [:? aux]]`, whose TRAILING zero-admitting step emitted a bare `(= a b)`
+;; unification in a standalone or-join helper Cozo cannot ground (`unbound variable` — the rule was
+;; unqueryable, uncaught because no law evaluates it post-cutover). `distribute-trailing-closure` now
+;; rewrites a `:cat` ending in `[:? X]`/`[:* X]` to `[:alt prefix (prefix++X|X+)]`, so the reflexive
+;; case grounds `to` through a relation. Only `realized-delegates`'s body changes (its or-join branches
+;; move from `(= …)`/`(aux … (= …))` to `(calls …)`/`(calls … aux)`); term COUNT holds at 90, laws at
+;; 54 — only the terms hash moves.
+(def ^:private golden-terms {:count 90 :hash 2134778958})
+(def ^:private golden-laws  {:count 54 :hash 374611073})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

@@ -15,9 +15,10 @@
             [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.typing :as typing]
             [fukan.common.typing.malli]
-            ;; `correspondence-reshapes-the-seam` reads the live Operation/Module correspondence — the
-            ;; vocab registers the tags, the extraction plugin registers the `(correspond …)` maps. Explicit
-            ;; so the seam test doesn't depend on another test having loaded them first (the golden's lesson).
+            ;; the vocab + extraction plugins register the code tags and the essential Module↦Ns / Operation↦Fn
+            ;; correspondences — so the `corresponds` pairing rule is available to the `tc-nested-twin`
+            ;; fixture below (ex-`module-twin`). Explicit so the fixtures don't depend on another test having
+            ;; loaded them first (the golden's lesson).
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.operation]
             [fukan.common.extraction.clojure.operation]
@@ -717,7 +718,7 @@
    (is ?f TCorrNested) (fact ?f)
    (named ?d ?name) (named ?f ?name)
    (contains ?m ?d) (contains ?ns ?f)
-   (module-twin ?m ?ns)])
+   (corresponds ?m ?ns)])   ; the module pairing (module.clj's essential correspond; ex-`module-twin`)
 (s/correspond-legacy TCorrNested TCorrNested {:carrier :tc-nested-twin :coverage :both})
 
 (deftest correspond-registers-the-carrier
@@ -782,26 +783,20 @@
         ":alt is inline-lowerable now — the whole regex AST is the one path language")))
 
 (deftest correspondence-reshapes-the-seam
-  (testing "(s/correspondence) collects kinds, relation demands, and the key index from the registry"
+  (testing "(s/correspondence) collects kinds, demands, and the key index from the LEGACY registry —
+            asserted over the local TCorr* `correspond-legacy` fixtures. (The self-model's Operation/
+            Module correspondences moved to the essential construct's own registry at the 2026-07-23
+            cutover, so they no longer ride this legacy seam; the machinery stays until demolition.)"
     (let [seam (s/correspondence)
-          op   :fukan.common.vocab.code.operation/Operation]
-      (is (= :module-twin
-             (get-in seam [:kinds :fukan.common.vocab.code.module/Module :carrier]))
-          "Module names its ordinary Datalog carrier relation")
-      (is (= 3 (count (get-in seam [:kinds op :demands]))) "Operation's three node demands (agrees derived)")
-      (is (= #{:corresponds/Operation.total
-               :corresponds/Operation.surjective :corresponds/Operation.agrees}
-             (into #{} (map :key) (get-in seam [:kinds op :demands])))
-          "node demands carry their FULL derived keys (type-coverage folded into the out↦out agrees map)")
-      (is (= #{[:delegates #{:corresponds/Operation.delegates-realized}]   ; :sub — preserve only (roll-up)
-               [:performs  #{:corresponds/Operation.performs-covered}]}    ; :sup — reflect
-             (into #{} (map (juxt :rel (comp set :keys)))
-                   (filter #(= op (:owner %)) (:relations seam))))
-          "relation demands with their derived keys (both now relation-map primitives)")
-      (is (= {:owner op :via :relation :rel :delegates :direction :preserve}
-             (select-keys (get-in seam [:keys :corresponds/Operation.delegates-realized])
-                          [:owner :via :rel :direction]))
-          "the key index points every key at its generating declaration"))))
+          root ::TCorrRoot]
+      (is (= :tc-root-twin (get-in seam [:kinds root :carrier]))
+          "TCorrRoot names its ordinary Datalog carrier relation")
+      (is (= #{:corresponds/TCorrRoot.total :corresponds/TCorrRoot.surjective}
+             (into #{} (map :key) (get-in seam [:kinds root :demands])))
+          ":both ⇒ left-total + right-total node demands, carrying their full derived keys")
+      (is (= {:owner root :via :node}
+             (select-keys (get-in seam [:keys :corresponds/TCorrRoot.total]) [:owner :via]))
+          "the key index points every derived key at its generating declaration"))))
 
 (deftest correspondence-guards-generated-key-collisions
   (testing "two relation maps generating the same stable key throw rather than silently unioning laws

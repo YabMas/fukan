@@ -53,6 +53,14 @@
   {:carrier :m-twin :coverage :both}
   (:mdel :sub :m-link))
 
+;; the ESSENTIAL correspondence — `reflect-correspondence` reads the NEW registry, so THIS is the one
+;; that reflects as a `Correspondence` node. (The legacy carrier above stays for the demolition task; it
+;; no longer produces a reflected node.)
+(s/correspond [MSrc ?a MFact ?b]
+  [(is ?a MSrc) (design ?a) (is ?b MFact) (fact ?b)
+   (named ?a ?name) (named ?b ?name)]
+  {:mdel :mcalls})
+
 (Leaf ^{:name "l"} t-leaf)
 (Node ^{:name "n"} t-node {:one-ref t-leaf :title "x" :mode "a"})
 
@@ -154,19 +162,22 @@
                            db (str ":" itag))))))))
 
 (deftest the-correspondence-reflects-as-a-node
-  (testing "one Correspondence node per registered `(correspond …)` — the carrier statement decomposed,
-            not a payload blob on the design Structure"
+  (testing "one Correspondence node per registered essential `(correspond …)` — `:from`/`:to` edges and
+            the pairing MATCH + realization MAP as pr-str'd payloads (no carrier/coverage/RelationMap)"
     (let [db (reflected)
           m  (ffirst (cq/q '[:find ?m
                              :where [?m :structure/of :fukan.canvas.core.reflect/Correspondence]
                                     [?m :entity/name "MSrc↦MFact"]] db))
           e  (cq/entity db m)]
       (is (some? m))
-      (is (= ":m-twin" (:val/carrier e)) "the ordinary carrier relation is queryable")
-      (is (= ":both" (:val/coverage e)) "coverage is a separate queryable field")
-      (is (= ":m-public" (:val/restrict e)) "so is the codomain sub-sort restriction")
-      (is (nil? (:val/corresponds (cq/entity db (struct-node db ":fukan.canvas.core.reflect-test/MSrc"))))
-          "the design Structure no longer carries the corresponds blob")
+      (is (= '[(is ?a :fukan.canvas.core.reflect-test/MSrc) (design ?a)
+               (is ?b :fukan.canvas.core.reflect-test/MFact) (fact ?b)
+               (named ?a ?name) (named ?b ?name)]
+             (edn/read-string (:val/match e)))
+          "the pairing match query rides as a pr-str'd form (sorts resolved at declaration)")
+      (is (= '{:mdel :mcalls} (edn/read-string (:val/map e)))
+          "the realization map rides as a pr-str'd form")
+      (is (nil? (:val/carrier e)) "no legacy carrier field on the reflected node")
       (is (= (struct-node db ":fukan.canvas.core.reflect-test/MSrc")
              (ffirst (cq/q '[:find ?t :in $ ?m
                              :where [?r :rel/from ?m] [?r :rel/kind :from] [?r :rel/to ?t]] db m)))
@@ -175,12 +186,9 @@
              (ffirst (cq/q '[:find ?t :in $ ?m
                              :where [?r :rel/from ?m] [?r :rel/kind :to] [?r :rel/to ?t]] db m)))
           ":to targets the reified codomain Structure")
-      (is (= #{[":mdel" ":sub" ":m-link"]}
-             (set (cq/q '[:find ?rel ?incl ?expr :in $ ?m
-                          :where [?r :rel/from ?m] [?r :rel/kind :map] [?r :rel/to ?rm]
-                                 [?rm :val/rel ?rel] [?rm :val/incl ?incl] [?rm :val/expr ?expr]]
-                        db m)))
-          "each relation map is a RelationMap child with rel/incl/expr decomposed"))))
+      (is (empty? (cq/q '[:find ?rm :in $ ?m
+                          :where [?r :rel/from ?m] [?r :rel/kind :map] [?r :rel/to ?rm]] db m))
+          "no RelationMap children — the map rides as a payload, not decomposed children"))))
 
 (deftest derived-relations-carry-their-rule
   (testing "a derived defrelation's defining datalog rides its Relation node — a definitional

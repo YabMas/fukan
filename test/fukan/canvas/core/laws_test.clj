@@ -216,13 +216,23 @@
       (is (= '(matched-by :approves :from LReviewer :when {:flag true}) (:src law))))))
 
 ;; (The law :key + violations-of coverage rode the TrustBoundary `:totality` law, retired with the
-;; principles layer. The generated correspondence demand laws below carry stable `:corresponds/*`
-;; keys and exercise the same keyed-law path.)
+;; principles layer. The `combinator-key-rides-a-combinator-law` test above exercises the same
+;; keyed-law path over a live combinator law.)
 
-;; ── generated correspondence demand laws ─────────────────────────────────────
+;; ── correspondence coverage READINGS (the ex-`:corresponds/*` demand laws) ────
+;; The essential `correspond` (2026-07-23) dissolved the generated carrier/coverage/relation-map demand
+;; LAWS into READINGS over the ambient `corresponds`/`realized-*` rules. The tests below reuse the same
+;; fixtures but assert the reading queries (the shape dev/user.clj's `drift`/`encapsulation`/`type-drift`
+;; run) instead of the retired law keys. `law/check` gates parity separately (0 violations).
 
-(deftest generated-realized-law-matches-the-dissolved-realization
-  (testing "an authored op with no twin is an offender iff any code is extracted (the guard)"
+(defn- read-names
+  "Run a datalog READING (auto-injecting the vocab rules) → the set of names bound to ?n."
+  [db clauses]
+  (set (cq/q (into '[:find [?n ...] :in $ % :where] clauses) db (s/vocab-rules))))
+
+(deftest drift-reading-flags-an-unrealized-op-when-code-is-extracted
+  (testing "the drift reading (ex-:corresponds/Operation.total): an authored op with no `corresponds`
+            twin is unrealized iff any code is extracted (the `Fn` gate makes it vacuous otherwise)"
     (let [mk (fn [with-code?]
                (build/tx-maps->cozo
                 (cond-> [{:db/id -1 :structure/of :fukan.common.vocab.code.module/Module :entity/id "m" :entity/name "m"}
@@ -230,21 +240,17 @@
                          {:rel/id "m|child|lonely" :rel/from -1 :rel/kind :child :rel/to -2}]
                   with-code? (conj {:db/id -3 :structure/of :fukan.common.extraction.clojure.operation/Fn
                                     :entity/name "other" :val/extracted true}))))
-          guarded (mk true)]
-      (is (contains? (set (map #(:entity/name (cq/entity guarded %))
-                               (law/violations-of guarded :corresponds/Operation.total)))
-                     "lonely"))
-      (is (empty? (law/violations-of (mk false) :corresponds/Operation.total))
-          "no code extracted → the realized demand is vacuous (the guard)"))))
+          drift (fn [db] (read-names db '[(is ?op :fukan.common.vocab.code.operation/Operation) (design ?op)
+                                          (is ?_g :fukan.common.extraction.clojure.operation/Fn)
+                                          (not-join [?op] (corresponds ?op ?_t))
+                                          [?op :entity/name ?n]]))]
+      (is (contains? (drift (mk true)) "lonely"))
+      (is (empty? (drift (mk false)))
+          "no code extracted → the drift reading is vacuous (the gate)"))))
 
 ;; ── op-level delegates realization (the roll-up public-call graph, :sub / preserve) ──
 ;; The FIDELITY (faithful) direction was retired 2026-07-20: it is an architectural concern enforced by
 ;; Subsystem `:may-depend` conformance, not op-by-op. delegates keeps only realization (⊑ preserve).
-
-(defn- names
-  "Entity names for a set of offender eids — maps `violations-of` eids → entity names via `cq/entity`."
-  [db eids]
-  (set (map #(:entity/name (cq/entity db %)) eids)))
 
 ;; The COMMON BASE (raw tx-maps): design modules s,t with s-op→(delegates)→t-op, code modules
 ;; fukan.s/fukan.t with twins s-op/t-op. The five dbs derive from it by stated deltas.
@@ -279,16 +285,25 @@
                   (not= "ks|child|s" (:rel/id %)))
             container-base)))
 
+;; the delegates-realization reading: a design delegation whose endpoints BOTH pair (corresponds) but
+;; whose twins don't reach each other along the public-call path (`realized-delegates`). An endpoint
+;; with no twin is out of scope (the `corresponds` guards drop it) — its existence is drift's concern.
+(defn- delegate-drift [db]
+  (read-names db '[(delegates ?a ?b)
+                   (corresponds ?a ?_fa) (corresponds ?b ?_fb)
+                   (not-join [?a ?b] (realized-delegates ?a ?b))
+                   [?a :entity/name ?n]]))
+
 (deftest delegates-realized-fires-without-a-backing-call
-  (testing "op-level: a cross-module design delegation whose endpoint twins never reach each other
-            through the fact call graph is an offender; adding the :calls edge clears it"
-    (is (= #{"s-op"} (names no-call-db (law/violations-of no-call-db :corresponds/Operation.delegates-realized))))
-    (is (empty? (law/violations-of with-call-db :corresponds/Operation.delegates-realized)))))
+  (testing "op-level reading: a cross-module design delegation whose endpoint twins never reach each
+            other through the fact call graph is an offender; adding the :calls edge clears it"
+    (is (= #{"s-op"} (delegate-drift no-call-db)))
+    (is (empty? (delegate-drift with-call-db)))))
 
 (deftest delegates-realized-ignores-a-delegation-whose-endpoint-has-no-twin
-  (testing "op-altitude: a design endpoint with NO extracted twin is OUT OF SCOPE for realization —
-            its very existence is the plain `realized` demand's concern, not this one"
-    (is (empty? (law/violations-of untwinned-module-db :corresponds/Operation.delegates-realized)))))
+  (testing "op-altitude reading: a design endpoint with NO extracted twin is OUT OF SCOPE for
+            realization — the `corresponds` guard drops it; its existence is drift's concern, not this"
+    (is (empty? (delegate-drift untwinned-module-db)))))
 
 
 ;; ── performs reflect (⊒) — the path relation map (ex-EffectCorrespondence) ──────────
@@ -328,15 +343,23 @@
     {:rel/id "km2|child|d" :rel/from -3 :rel/kind :child :rel/to -4}
     {:rel/id "d|performs|io" :rel/from -4 :rel/kind :performs :rel/to -10}]))
 
+;; the effect-coverage reading: a design op whose twin REACHES an effect (via `realized-performs`, the
+;; `calls*·performs` roll-up) that the design op does NOT itself declare. Identity is by the shared
+;; content-deduped Effect node (a `^:value`, its own `corresponds` witness).
+(defn- effect-drift [db]
+  (read-names db '[(realized-performs ?a ?e)
+                   (not-join [?a ?e] (performs ?a ?e))
+                   [?a :entity/name ?n]]))
+
 (deftest performs-covered-fires-on-a-transitively-reached-undeclared-effect
   (testing "the twin reaches io via a call chain; the design op declares nothing → offender;
             declaring io (same value node) → green"
-    (is (= #{"f"} (names undeclared-db (law/violations-of undeclared-db :corresponds/Operation.performs-covered))))
-    (is (empty? (law/violations-of declared-db :corresponds/Operation.performs-covered)))))
+    (is (= #{"f"} (effect-drift undeclared-db)))
+    (is (empty? (effect-drift declared-db)))))
 
 (deftest performs-covered-includes-the-twin-s-DIRECT-effects
   (testing "the reflexive base: an effect the twin performs directly (zero call hops) must be declared"
-    (is (= #{"d"} (names direct-effect-db (law/violations-of direct-effect-db :corresponds/Operation.performs-covered))))))
+    (is (= #{"d"} (effect-drift direct-effect-db)))))
 
 ;; ── seam↔generator key invariant ─────────────────────────────────────────────
 
@@ -349,11 +372,22 @@
 
 ;; ── the out↦out FORWARD map subsumes coverage (ledgered dedicated offender test) ──
 
-(deftest generated-agrees-fires-on-a-twin-missing-a-modelled-out
-  (testing "the derived `out↦out` identity map is FORWARD: a public modelled op that DECLARES an :out
-            whose twin declares NO :out is an offender (the folded-in type-coverage failure mode); a
-            twin carrying the same :out is green. The dedicated missing-out offender test for
-            :corresponds/Operation.agrees (differing-out + :in order/arity live in correspondence-test)."
+;; the type-drift reading (ex-:corresponds/Operation.agrees): a paired op and its twin whose `:in`/`:out`
+;; type nodes disagree by eid, either direction. ⚠ set-equality (no `:rel/order`) — a pure reorder reads
+;; as adhering; a missing/differing `:out` or a dropped `:in` arg is caught.
+(defn- type-drift [db]
+  (read-names db '[(is ?op :fukan.common.vocab.code.operation/Operation) (design ?op)
+                   (corresponds ?op ?fn)
+                   (or-join [?op ?fn]
+                     (and (out ?op ?o) (not-join [?fn ?o] (out ?fn ?o)))
+                     (and (out ?fn ?o) (not-join [?op ?o] (out ?op ?o)))
+                     (and (in ?op ?s)  (not-join [?fn ?s] (in ?fn ?s)))
+                     (and (in ?fn ?s)  (not-join [?op ?s] (in ?op ?s))))
+                   [?op :entity/name ?n]]))
+
+(deftest type-drift-reading-fires-on-a-twin-missing-a-modelled-out
+  (testing "a public modelled op that DECLARES an :out whose twin declares NO :out disagrees (the
+            folded-in type-coverage failure mode); a twin carrying the same :out node is green"
     (let [mk (fn [twin-datoms]
                (build/tx-maps->cozo
                 (concat
@@ -366,11 +400,11 @@
                   {:db/id -4 :structure/of :fukan.common.extraction.clojure.operation/Fn :entity/name "f" :val/extracted true}
                   {:rel/id "km|child|f" :rel/from -3 :rel/kind :child :rel/to -4}]
                  twin-datoms)))
-          no-sig   (mk [])                                                    ; twin declares no :out → forward fail
+          no-sig   (mk [])                                                    ; twin declares no :out → disagree
           with-sig (mk [{:rel/id "tf|out" :rel/from -4 :rel/kind :out :rel/to -5}])] ; twin :out = the SAME node → green
-      (is (= #{"f"} (names no-sig (law/violations-of no-sig :corresponds/Operation.agrees)))
-          "design declares an :out, twin declares none → forward out↦out offender")
-      (is (empty? (law/violations-of with-sig :corresponds/Operation.agrees))
+      (is (= #{"f"} (type-drift no-sig))
+          "design declares an :out, twin declares none → out↦out disagreement")
+      (is (empty? (type-drift with-sig))
           "the same twin carrying the modelled :out → green"))))
 
 ;; ── the relation-map primitive (rel incl E): expression lowering + law generation ──
@@ -397,24 +431,10 @@
                           (s/expand-clauses '[(path ?x [:calls* :performs] ?y)]))
         "the old suffix-segment vector errors loudly, naming the migration")))
 
-(deftest relation-map-generates-directional-laws
-  (testing "the inclusion direction picks which correspondence law(s) generate, keyed by direction. E is a
-            regular-relation atom/path here; a complex E (the public call graph) is a NAMED defrelation
-            referenced as an atom — its recursion lives with the relation, not inline."
-    (let [keys-of (fn [incl] (mapv :key (#'s/relation-map-laws :T {:rel :dep :incl incl :expr [:+ :link]})))]
-      (is (= [:corresponds/T.dep-realized] (keys-of :sub)) ":sub (⊑ preserve) → the realized law only")
-      (is (= [:corresponds/T.dep-covered]  (keys-of :sup)) ":sup (⊒ reflect)  → the covered law only")
-      (is (= [:corresponds/T.dep-realized :corresponds/T.dep-covered] (keys-of :eq)) ":eq (≡) → both")))
-  (testing "the preserve law binds BOTH endpoints positively via twin (an untwinned endpoint is totality's concern)"
-    (let [preserve (first (#'s/relation-map-laws :T {:rel :dep :incl :sub :expr [:+ :link]}))]
-      (is (some #{'(twin ?a ?ea)} (:where preserve)))
-      (is (some #{'(twin ?b ?eb)} (:where preserve)))))
-  (testing "a :cat of atoms lowers to one clause PER HOP and every hop survives into the law
-            (regression: reach lowering took only the FIRST clause, silently dropping later hops)"
-    (let [covered (first (#'s/relation-map-laws :T {:rel :dep :incl :sup :expr [:cat :link :owns]}))
-          calls   (set (map first (filter seq? (:where covered))))]
-      (is (contains? calls 'link) "the first hop is in the law")
-      (is (contains? calls 'owns) "and so is the second — not dropped"))))
+;; (The `relation-map-generates-directional-laws` unit test — asserting `#'s/relation-map-laws`'s
+;;  `(twin ?a ?ea)` law shapes — was removed at the essential-correspond cutover: it pinned the legacy
+;;  relation-map/node-demand law generator, which Task 4 demolishes. The general E-language lowering it
+;;  shared with the new construct is still covered by `relation-map-expression-lowering` above.)
 
 ;; ── (is ?v Sort): declaration-site sort resolution + compiler lowering ─────────
 

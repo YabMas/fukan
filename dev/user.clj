@@ -73,10 +73,17 @@
      (println "No model loaded yet. Use (go) first."))))
 
 (defn correspondence
-  "Print the CORRESPONDENCE CARD — the design↔fact seam as one object: the twin ladder and every
-   demand with its stable law key (the generated laws, visible and attributed). Registry-direct."
+  "Print the registered essential correspondences — each `(correspond …)` config: the design↦fact
+   sort pair, its pairing MATCH query, and its realization MAP. A placeholder view; Task 6 builds the
+   proper design↔fact card over the `corresponds`/`realized-*` readings."
   []
-  (println (gram/correspondence-card)))
+  (let [cs (s/all-corresponds)]
+    (if (empty? cs)
+      (println "No correspondences registered.")
+      (doseq [c cs]
+        (println (format "%s ↦ %s" (name (:design c)) (name (:fact c))))
+        (println "  match:" (pr-str (:match c)))
+        (println "  map:  " (pr-str (:map c)))))))
 
 (defn show
   "Print every model node named `n` (a string or symbol) as its AUTHORED form —
@@ -112,15 +119,22 @@
 
 (defn drift
   "Model↔code drift in the held (unified) model: modelled Operations with no realizing
-   function of the same name. Empty ⇔ the implementation fully realizes every
-   modelled capability. (Build with a code-root — `(go)` defaults to \"src\" — so
-   the held model carries the extracted code.)"
+   function — a READING of the `corresponds` pairing join (the generated `:corresponds/*`
+   demand laws dissolved with the essential `correspond`). Empty ⇔ the implementation fully
+   realizes every modelled capability; vacuous when no code is extracted (the `Fn` gate).
+   (Build with a code-root — `(go)` defaults to \"src\" — so the held model carries the code.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [d (law/violation-names m :corresponds/Operation.total)]
-      (if (empty? d)
+    (let [unrealized (cq/q '[:find [?n ...] :in $ %
+                             :where
+                             (is ?op :fukan.common.vocab.code.operation/Operation) (design ?op)
+                             (is ?_g :fukan.common.extraction.clojure.operation/Fn)   ; gate: extraction ran
+                             (not-join [?op] (corresponds ?op ?_t))
+                             [?op :entity/name ?n]]
+                           m (s/vocab-rules))]
+      (if (empty? unrealized)
         (println "No drift — every modelled Operation is realized in code.")
-        (println "Drift —" (count d) "modelled Operation(s) with no realizing function:" (sort d))))
+        (println "Drift —" (count unrealized) "modelled Operation(s) with no realizing function:" (sort unrealized))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn encapsulation
@@ -128,11 +142,17 @@
    authored Operation twin — each an undeclared public surface demanding a decision (model it as
    intent, or make it `defn-`). Empty ⇔ every unmodelled function is genuinely private. Grouped by
    code namespace. (The private half of the coverage gap is settled by definition.)
-   Named surfaces only: the `:corresponds/Operation.surjective` law key + the `public`/`within`
-   defrelations — the fact stratum is the `Fn` theory, never a provenance flag on Operation."
+   A READING of the `corresponds` join (the `public` scope lives in the reading now — a public `Fn`
+   paired by nothing; the `:corresponds/Operation.surjective` law dissolved with the essential
+   `correspond`) via the `public`/`within` defrelations — the fact stratum is the `Fn` theory."
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (law/violation-names m :corresponds/Operation.surjective)]
+    (let [w (set (cq/q '[:find [?n ...] :in $ %
+                         :where
+                         (is ?fn :fukan.common.extraction.clojure.operation/Fn) (public ?fn)
+                         (not-join [?fn] (corresponds ?_op ?fn))
+                         [?fn :entity/name ?n]]
+                       m (s/vocab-rules)))]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
         (let [by-ns (->> (cq/q '[:find ?on ?nn :in $ %
@@ -185,13 +205,26 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn type-drift
-  "TYPE correspondence (model↔code): the ADHERENCE offenders — modelled Operations whose realizing
-   code signature does NOT exactly match the modelled type. A GATED demand, so this also fires in
-   (check); shown here as a focused worklist. The single `out↦out` map subsumes coverage: a twin that
-   declares NO out where the design does is an offender too (the old type-coverage demand folded in)."
+  "TYPE correspondence (model↔code): paired Operations whose signature DISAGREES with the code's
+   `:malli/schema` — a READING over the `corresponds` join (the generated `:corresponds/*` agrees
+   demand dissolved with the essential `correspond`). A twin missing an `:out` the design declares, or
+   an `:in`/`:out` type node present on one side and not the other, is an offender. ⚠ current strength:
+   this reading compares `:in`/`:out` type nodes by SET-EQUALITY (eid), NOT `:rel/order` — a pure
+   REORDER of same-typed args reads as adhering here (the old structural comparator checked order;
+   restoring order-sensitivity waits on the authored agrees law's return)."
   []
   (if-let [m (infra-model/get-model)]
-    (let [drifted (law/violation-names m :corresponds/Operation.agrees)]
+    (let [drifted (cq/q '[:find [?n ...] :in $ %
+                          :where
+                          (is ?op :fukan.common.vocab.code.operation/Operation) (design ?op)
+                          (corresponds ?op ?fn)
+                          (or-join [?op ?fn]
+                            (and (out ?op ?o) (not-join [?fn ?o] (out ?fn ?o)))
+                            (and (out ?fn ?o) (not-join [?op ?o] (out ?op ?o)))
+                            (and (in ?op ?s)  (not-join [?fn ?s] (in ?fn ?s)))
+                            (and (in ?fn ?s)  (not-join [?op ?s] (in ?op ?s))))
+                          [?op :entity/name ?n]]
+                        m (s/vocab-rules))]
       (println "ADHERENCE — modelled signature disagrees with the code's :malli/schema:")
       (if (empty? drifted)
         (println "  (none — every code signature exactly adheres to its modelled type)")
