@@ -40,7 +40,10 @@
    are first-class), and the second half of what makes the see-through view whole. Rows are file-local,
    so this is per-file; a defmethod's body spans from its header row to the next top-level definition.
    Usages already carrying a `:from-var`, the defmethod headers themselves, and files with no defmethods
-   pass through untouched."
+   pass through untouched — as do ROW-LESS usages: clj-kondo emits macroexpansion artifacts (an injected
+   `clojure.core/->`, `if`, …) with no source position, and a usage with no row cannot be positionally
+   attributed to an enclosing defmethod. They carry no `:from-var` either, so `call-graph` drops them
+   regardless; passing them through is what keeps positional attribution total."
   [var-definitions var-usages]
   (let [defs-by-file    (group-by :filename var-definitions)
         markers-by-file (->> var-usages (filter :defmethod) (group-by :filename))
@@ -51,7 +54,8 @@
                                           m-at    (into {} (map (juxt :row identity)) markers)]]
                                 [file {:bounds bounds :m-at m-at}]))]
     (mapv (fn [u]
-            (if (or (:from-var u) (:defmethod u) (not (contains? per-file (:filename u))))
+            (if (or (:from-var u) (:defmethod u) (nil? (:row u))
+                    (not (contains? per-file (:filename u))))
               u
               (let [{:keys [bounds m-at]} (per-file (:filename u))
                     enclosing (last (filter #(<= % (:row u)) bounds))

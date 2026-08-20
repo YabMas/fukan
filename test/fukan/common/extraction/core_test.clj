@@ -92,6 +92,21 @@
       (is (contains? calls ["render-shape" "area"])
           "a call inside a defmethod body (area) re-homes onto the multimethod render-shape (attribute-defmethod-bodies)"))))
 
+(deftest row-less-var-usages-survive-defmethod-attribution
+  (testing "clj-kondo emits macroexpansion artifacts with no :row — they pass through attribution untouched
+            rather than NPE-ing the whole extraction (found the first time fukan was pointed at an
+            external project: 150 of clojure-mcp's 7763 var-usages carry :row nil)"
+    (let [vds [{:filename "f.clj" :ns 'demo :name 'describe :row 1}]
+          vus [{:filename "f.clj" :defmethod true :to 'demo :name 'render-shape :row 5}
+               {:filename "f.clj" :to 'clojure.core :name '-> :row nil}   ; macroexpansion artifact
+               {:filename "f.clj" :to 'demo :name 'area :row 7}]          ; a real defmethod-body call
+          out (#'tc/attribute-defmethod-bodies vds vus)]
+      (is (= [nil nil 'render-shape] (map :from-var out))
+          "the row-less usage passes through unattributed; the positioned body call still re-homes onto
+           the multimethod")
+      (is (= (take 2 vus) (take 2 out))
+          "untouched means untouched — the marker and the row-less usage are returned identical"))))
+
 (deftest every-modelled-stage-is-realized-in-src
   (testing "fukan-on-itself: build-model unifies the authored self-model (canvas/)
             with the code extracted from src/ on one graph, and every modelled
