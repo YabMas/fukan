@@ -18,6 +18,7 @@
    `fukan.common.vocab.code.operation`."
   (:require [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.structure :as s :refer [defstructure defrelation]]
+            [fukan.cozo.query :as cq]
             [fukan.common.typing.malli :refer [Schema]]
             [fukan.common.vocab.code.effect :refer [Effect]]
             [fukan.common.vocab.code.operation :as operation :refer [Operation]]))
@@ -63,6 +64,29 @@
    :out       :out
    :performs  [:cat [:* :calls] :performs]
    :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})
+
+(defn unaccounted-public
+  "The ENCAPSULATION coverage gap: PUBLIC extracted functions inside an ADOPTED namespace that no
+   authored Operation models. Each is an undeclared public surface demanding a decision — model it as
+   intent, or make it `defn-`.
+
+   Relativized to `adopted` namespaces (the Ns half of a live `Module ↦ Ns` pairing, declared in
+   fukan.common.extraction.clojure.module and reached here by NAME through datalog injection, so the
+   Module fragment need not be required back). Un-relativized, this reading asserts TOTAL coverage —
+   every public function in the project should be modelled — which is true only of a fully-adopted
+   codebase and is the premise incremental adoption denies. Scoped, it means: within the region the
+   model has claimed, this much of the public surface is unaccounted for. Empty ⇔ every unmodelled
+   function in the claimed region is genuinely private. The private half of the gap is settled by
+   definition; the UNCLAIMED half is `adoption-frontier`'s business, not a gap at all.
+
+   A READING of the `corresponds` join via the `public` predicate — `public` is policy, never match
+   logic, so an Operation realized by a private fn still pairs."
+  [db]
+  (set (cq/q '[:find [?n ...] :in $ %
+               :where (public ?fn) (contains ?ns ?fn) (adopted ?ns)
+                      (not-join [?fn] (corresponds ?_op ?fn))
+                      [?fn :entity/name ?n]]
+             db (s/vocab-rules))))
 
 (def ^:private schema-tag
   "The type dialect's ^:value structure tag — the fact-side fragment builds its :in/:out

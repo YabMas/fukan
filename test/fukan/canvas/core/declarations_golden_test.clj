@@ -348,7 +348,16 @@
 ;; case grounds `to` through a relation. Only `realized-delegates`'s body changes (its or-join branches
 ;; move from `(= …)`/`(aux … (= …))` to `(calls …)`/`(calls … aux)`); term COUNT holds at 90, laws at
 ;; 54 — only the terms hash moves.
-(def ^:private golden-terms {:count 90 :hash 2134778958})
+;; 2026-08-20: the ADOPTION frontier — `(defrelation :adopted [?ns] …)` in the Clojure extraction
+;; plugin (module.clj) names the Ns half of a live `Module ↦ Ns` pairing, so the coverage readings can
+;; be relativized to the region a project has actually claimed instead of asserting total coverage over
+;; the whole codebase. Terms 90→91 (+1): one rule for `adopted`, and NO closure — closures are minted
+;; per BINARY relation and this one is unary. Laws hold at 54: a defrelation declares no denial, and
+;; adoption coverage stays a READING (an unclaimed namespace is not an offender). The frontier readers
+;; themselves (`ns-dependencies`/`adoption-frontier`/`adoption-candidates`) are ordinary Clojure over
+;; single-relation pulls, so they emit no terms at all — deliberately, see `ns-dependencies` on why the
+;; three-way join is not expressible in datalog at a usable cost.
+(def ^:private golden-terms {:count 91 :hash 1483709239})
 (def ^:private golden-laws  {:count 54 :hash 374611073})
 
 (deftest terms-are-stable

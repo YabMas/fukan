@@ -15,7 +15,9 @@
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
-            [fukan.common.vocab.code.subsystem :as code-subsystem]))
+            [fukan.common.vocab.code.subsystem :as code-subsystem]
+            [fukan.common.extraction.clojure.module :as clj-module]
+            [fukan.common.extraction.clojure.operation :as clj-operation]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -72,19 +74,6 @@
      (println (gram/vocabulary-primer m vocab-name))
      (println "No model loaded yet. Use (go) first."))))
 
-(defn- unaccounted-public
-  "PUBLIC extracted Clojure functions with no authored Operation twin — the coverage-gap SET
-   `encapsulation` reports as a worklist and `correspondence` appends as a count after the card
-   (factored here so neither duplicates the query — kernel-tier `correspondence-card` deliberately
-   stays vocab-agnostic and never names `public` itself)."
-  [m]
-  (set (cq/q '[:find [?n ...] :in $ %
-               :where
-               (is ?fn :fukan.common.extraction.clojure.operation/Fn) (public ?fn)
-               (not-join [?fn] (corresponds ?_op ?fn))
-               [?fn :entity/name ?n]]
-             m (s/vocab-rules))))
-
 (defn correspondence
   "Print the CORRESPONDENCE CARD: every registered essential `(correspond …)` — its authored
    head/match/map form (registry-direct) — plus its live VOCAB-GENERIC coverage readings
@@ -95,7 +84,7 @@
   []
   (if-let [m (infra-model/get-model)]
     (do (println (gram/correspondence-card m))
-        (println (str "unaccounted-public: " (count (unaccounted-public m)))))
+        (println (str "unaccounted-public: " (count (clj-operation/unaccounted-public m)))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn show
@@ -182,16 +171,16 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn encapsulation
-  "The ENCAPSULATION worklist (the privacy-coverage iteration): PUBLIC extracted functions with no
-   authored Operation twin — each an undeclared public surface demanding a decision (model it as
-   intent, or make it `defn-`). Empty ⇔ every unmodelled function is genuinely private. Grouped by
-   code namespace. (The private half of the coverage gap is settled by definition.)
-   A READING of the `corresponds` join (the `public` scope lives in the reading now — a public `Fn`
-   paired by nothing; the `:corresponds/Operation.surjective` law dissolved with the essential
-   `correspond`) via the `public`/`within` defrelations — the fact stratum is the `Fn` theory."
+  "The ENCAPSULATION worklist (the privacy-coverage iteration): PUBLIC extracted functions inside an
+   ADOPTED namespace with no authored Operation twin — each an undeclared public surface demanding a
+   decision (model it as intent, or make it `defn-`). Grouped by code namespace. Empty ⇔ every
+   unmodelled function in the CLAIMED region is genuinely private; namespaces the model has not
+   claimed are not a gap here — they are `(frontier)`/`(leaves)`' business.
+   The query ships in `fukan.common.extraction.clojure.operation` (it names `public`, so it belongs
+   with the vocabulary that owns it, and an external consumer needs it too); this prints it."
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (unaccounted-public m)]
+    (let [w (clj-operation/unaccounted-public m)]
       (if (empty? w)
         (println "Fully encapsulated — every unmodelled function is private.")
         (let [by-ns (->> (cq/q '[:find ?on ?nn :in $ %
@@ -202,6 +191,42 @@
           (println "Encapsulation worklist —" (count w) "public functions with no model twin:")
           (doseq [[nn ops] (sort-by key by-ns)]
             (println (format "  %-42s %s" nn (str/join ", " (sort (map first ops)))))))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn leaves
+  "The ADOPTION CANDIDATES: unadopted namespaces that depend on no other namespace in the project,
+   ranked by fan-in. These are where leaf-upward adoption starts — modelling one drags nothing else
+   in (`:delegates` can only target an authored Operation, so the adopted set is downward-closed by
+   construction), and the highest fan-in unblocks the most callers for the next step.
+   Needs no authored model at all: pure extraction, readable on a codebase with an empty spec dir."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [cands (clj-module/adoption-candidates m)]
+      (if (empty? cands)
+        (println "No adoption candidates — every unadopted namespace depends on another.")
+        (do (println "Adoption candidates —" (count cands) "unadopted leaf namespace(s), most depended-upon first:")
+            (doseq [[n d] cands] (println (format "  %-52s fan-in %d" n d))))))
+    (println "No model loaded yet. Use (go) first.")))
+
+(defn frontier
+  "The ADOPTION FRONTIER: calls from ADOPTED code out into code the model does not yet claim, grouped
+   by the unadopted callee namespace and ranked by how many adopted namespaces reach it.
+
+   The blind spot leaf-upward adoption has no other way to see: such a call carries no `:delegates`
+   edge (unauthorable — the slot may only target an authored Operation) and no `realized-delegates`
+   (needs both ends paired), so the model silently asserts the operation delegates to nothing.
+   Empty ⇔ the adopted region really is closed — every dependency it has is modelled. Otherwise this
+   is both the correction to that silence and the ranked worklist for what to adopt next."
+  []
+  (if-let [m (infra-model/get-model)]
+    (let [edges (clj-module/adoption-frontier m)]
+      (if (empty? edges)
+        (println "Closed frontier — the adopted region depends on nothing unmodelled.")
+        (let [by-callee (group-by second edges)]
+          (println "Adoption frontier —" (count edges) "call(s) from adopted code into"
+                   (count by-callee) "unclaimed namespace(s):")
+          (doseq [[callee es] (sort-by (juxt (comp - count val) key) by-callee)]
+            (println (format "  %-52s ← %s" callee (str/join ", " (sort (map first es)))))))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn deps
@@ -289,6 +314,8 @@
   (drift)
   (undeclared-code-dependencies)
   (encapsulation)
+  (leaves)
+  (frontier)
   (purity)
   (correspondence)
   (status))
