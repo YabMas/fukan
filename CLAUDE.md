@@ -172,7 +172,8 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   an `R`-edge is realized by an `E`-path from the source's code witness to the target's code witness;
   a content-identified `^:value` node is its own witness, which is why entries never mention transport.
   Coverage is a set of READINGS over these rules — `(drift)` (unrealized, gated on extraction),
-  `(encapsulation)` (unaccounted public functions), ambiguous — NOT laws: `(check)` currently carries
+  `(encapsulation)` (unaccounted public functions, scoped to ADOPTED namespaces), ambiguous — NOT laws:
+  `(check)` currently carries
   NO correspondence violations, and checks over `corresponds`/`realized-*` are a deferred law layer (the
   natural next arc). `public` appears in exactly two places — the `:delegates` realization path and the
   dev-side readings (policy) — never in match logic: an op realized by a private fn PAIRS, and
@@ -444,7 +445,15 @@ structure substrate which is the model:
 - `(correspondence)` — the design↔fact seam as one card: each `(correspond …)`'s authored form plus its
   live coverage readings (unrealized/ambiguous) and a trailing unaccounted-public count.
 - `(encapsulation)` / `(type-drift)` — the other correspondence READINGS: public functions no
-  Operation models; paired Operations whose signature disagrees with the code's `:malli/schema`.
+  Operation models — scoped to ADOPTED namespaces (see below); paired Operations whose signature
+  disagrees with the code's `:malli/schema`.
+- `(leaves)` / `(frontier)` — the INCREMENTAL-ADOPTION instruments, for pointing fukan at an existing
+  codebase one module at a time. `(leaves)` ranks the unadopted namespaces that depend on nothing else
+  in the project by fan-in — where leaf-upward adoption starts, readable with NO model authored at all.
+  `(frontier)` reports adopted code calling out into code the model does not yet claim: the blind spot
+  (such a call has no `:delegates` edge — unauthorable, the slot only targets an authored Operation —
+  and no `realized-delegates`, which needs both ends paired), so it is both the proof that a module
+  called a leaf really is one, and the worklist for what to adopt next. Both are READINGS.
 - `(undeclared-code-dependencies)` — the code module graph (through `realized-delegates`) vs the
   declared `:may-depend` DAG: cross-subsystem code calls no declared edge covers. A SIGNAL, not a law.
 - Build a db directly: top-level instance `def`s + `(a/assemble-vars [#'x …])`, query with
@@ -495,7 +504,9 @@ mixing them corrupts history.
 ## Key Files
 
 - `dev/user.clj` — REPL helpers (`go`/`refresh`/`reset`/`status`/`drift`/`encapsulation`/
-  `correspondence`/`undeclared-code-dependencies`) — the correspondence coverage READINGS live here
+  `correspondence`/`undeclared-code-dependencies`/`leaves`/`frontier`) — thin PRINTERS now: the
+  coverage + adoption reading QUERIES ship in the `fukan.common` Clojure tier (an external consumer
+  needs them, and they name `public`/`Ns` — vocabulary the kernel tier must not)
 - `src/fukan/infra/model.clj` — model lifecycle + the composition root (registers
   the Clojure extractor)
 - `src/fukan/model/pipeline.clj` — `build-model` (canvas ingestion + extraction merge)
@@ -513,8 +524,15 @@ mixing them corrupts history.
 - `common/fukan/common/extraction/clojure/` — the FACT vocabulary + the design↔Clojure bridge:
   `operation.clj` holds the `Fn` codomain and the essential correspondence
   `(correspond [Operation ?op Fn ?fn] match {:in :in :out :out :performs … :delegates …})`, whose
-  realization map lowers to `realized-<rel>` rules; `module.clj` holds the `Ns` codomain and the twin
-  ROOT `(correspond [Module ?m Ns ?ns] match {:child :child})`
+  realization map lowers to `realized-<rel>` rules, plus the adopted-scoped `unaccounted-public`
+  reading; `module.clj` holds the `Ns` codomain and the twin ROOT
+  `(correspond [Module ?m Ns ?ns] match {:child :child})`, plus the INCREMENTAL-ADOPTION readings —
+  the `adopted` relation (the Ns half of a live pairing, which is what makes the frontier need no new
+  declaration) and `ns-dependencies`/`adoption-frontier`/`adoption-candidates`. ⚠ those three join two
+  single-relation pulls in CLOJURE, and there is deliberately no `ns-depends` defrelation: measured on
+  clojure-mcp, every datalog formulation of that three-way join costs 58-69s against 0.70s for the
+  pulls (clause order, sort guards, `:child` vs the `contains` genus, and raw `:rel/*` triples with no
+  rule at all all land in the same place — it is the query compiler's three-way join plan)
 - `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI
