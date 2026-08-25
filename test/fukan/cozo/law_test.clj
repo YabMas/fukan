@@ -15,8 +15,11 @@
   (testing "compile-law emits the expected CozoScript for a none (not-join) law"
     ;; the not-join helper is named by content hash (pure compiler) — `nj_hsighp` is the
     ;; deterministic name for this clause, stable across runs
-    (is (= (str "nj_hsighp[x] := triple[r, 'rel/from', x], triple[r, 'rel/kind', 'exposes']\n"
-                "?[x] := triple[x, 'structure/of', 'fukan.common.vocab.code.module/Module'], not nj_hsighp[x]")
+    ;; every clause is DIRECT stored-relation access — never a view (a view is materialized and a
+    ;; materialized relation has no key, which cost ~136x on any multi-hop join). The bucket comes
+    ;; from the substrate's fixed encoding, so this compiles the same with no db in hand.
+    (is (= (str "nj_hsighp[x] := *t_int[r, 'rel/from', x], *t_str[r, 'rel/kind', 'exposes']\n"
+                "?[x] := *t_str[x, 'structure/of', 'fukan.common.vocab.code.module/Module'], not nj_hsighp[x]")
            (law/compile-law '{:offenders [?x]
                               :where [[?x :structure/of :fukan.common.vocab.code.module/Module]
                                       (not-join [?x] [?r :rel/from ?x] [?r :rel/kind :exposes])]}
@@ -24,9 +27,9 @@
 
 (deftest compiles-a-not=-cardinality-law
   (testing "compile-law emits the expected CozoScript for an at-most-one (not=) law"
-    (is (= (str "?[x] := triple[x, 'structure/of', 'M/K'], triple[r1, 'rel/from', x], "
-                "triple[r1, 'rel/kind', 'shape'], triple[r2, 'rel/from', x], "
-                "triple[r2, 'rel/kind', 'shape'], r1 != r2")
+    (is (= (str "?[x] := *t_str[x, 'structure/of', 'M/K'], *t_int[r1, 'rel/from', x], "
+                "*t_str[r1, 'rel/kind', 'shape'], *t_int[r2, 'rel/from', x], "
+                "*t_str[r2, 'rel/kind', 'shape'], r1 != r2")
            (law/compile-law '{:offenders [?x]
                               :where [[?x :structure/of :M/K]
                                       [?r1 :rel/from ?x] [?r1 :rel/kind :shape]

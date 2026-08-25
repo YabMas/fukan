@@ -87,17 +87,18 @@
                        ["t_int" "t_str" "t_bool"])]
     (->> rows
          (filter (fn [[_ v]] (false? (typing/value-valid? target (validate-value v)))))
-         (mapv (fn [[x _]] [(str x)])))))
+         (mapv (fn [[x _]] [x])))))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check-structural
   "Run every law over the Cozo db `cdb`, returning `[{:structure :law :offenders}]` (offenders
-   = matched eid-string tuples) for laws that fire, and `{:structure :law :unsupported true}`
+   = matched eid tuples, native handles) for laws that fire, and `{:structure :law :unsupported true}`
    for laws whose form (or a vocab rule they read) isn't compiled yet. A type-check law runs
    the hybrid (`value-offenders`); everything else compiles to CozoScript and runs."
   [cdb]
   (let [index       (query/vocab-index)
-        direct-tags (structure/direct-scope-tags (structure/all-structures))]
+        direct-tags (structure/direct-scope-tags (structure/all-structures))
+        buckets     (query/buckets-of cdb)]
     (vec (for [[tag law] (all-laws)]
            (cond
              (value-check-law law)
@@ -107,12 +108,13 @@
                  (seq offs) (assoc :offenders offs)))
 
              :else
-             (let [program (try (compile-law law direct-tags index)
+             (let [program (try (binding [query/*attr-buckets* buckets]
+                                  (compile-law law direct-tags index))
                                 (catch clojure.lang.ExceptionInfo _ ::unsupported))]
                (if (= program ::unsupported)
                  {:structure tag :law (:desc law) :unsupported true}
                  (try
-                   (let [rows (db/q cdb (str query/preamble "\n" program))]
+                   (let [rows (db/q cdb program)]
                      (cond-> {:structure tag :law (:desc law)}
                        (:key law) (assoc :key (:key law))
                        (seq rows) (assoc :offenders (vec rows))))
@@ -122,7 +124,7 @@
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check
   "Run every law over the Cozo db `cdb` and return its VIOLATIONS — `[{:structure :law
-   :offenders}]` (offenders are eid-string tuples). THE check: it runs the same laws the kernel
+   :offenders}]` (offenders are eid tuples, native handles). THE check: it runs the same laws the kernel
    DEFINES (`structure/laws-of`/`all-structures`), which is why check lives here in the engine and
    not as a hollow shell in the kernel — evaluation is the engine's job, the kernel's is definition.
    Satisfaction is FAIL-CLOSED: if any law cannot be compiled or evaluated, throws with every
@@ -147,7 +149,7 @@
 (defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] :any]}
   violations-of
   "The offender eids of the law keyed `k` — the generic reader behind every law-specific worklist
-   fn (filter `check` by the law's stable `:key`, first offender var). Returns a set of eid strings;
+   fn (filter `check` by the law's stable `:key`, first offender var). Returns a set of eids;
    callers name them through `violation-names`.
 
    An UNKNOWN key throws (naming the known keys): a reader addressing a retired or misspelled

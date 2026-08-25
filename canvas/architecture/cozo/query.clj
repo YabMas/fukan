@@ -3,9 +3,9 @@
    accessor: the kernel query primitive on Cozo (the `d/q` + `d/entity` replacement at
    cut-over). It owns the clause/rule compiler (datom / not / not-join / or-join /
    predicates / rule-calls + the vocab-rule index and reachability closure); the law engine
-   and the ported readers build on it. `q` compiles a datalog query over the unified
-   all-string `triple` view (eids/values come back as strings); `entity` resolves an eid to
-   its typed attribute map from the typed buckets."
+   and the ported readers build on it. `q` compiles each clause to DIRECT stored-relation
+   access (never a view — a view is materialized and a materialized relation has no key), so
+   eids come back as native handles; `entity` resolves an eid to its typed attribute map."
   (:require [fukan.common.vocab.code.kind :refer [Kind]]
             [fukan.common.vocab.code.operation :refer [Operation]]
             [fukan.common.vocab.code.module :refer [Module]]
@@ -29,13 +29,17 @@
   (Operation compile-body "Compile where-clauses + caller rules + outer-scope vars (find vars / law offenders — they count toward inline-measure grouping inference) → [rule-lines body-str], emitting the reachable vocab rules. A PURE compiler (content-named helpers, threaded wildcard counter, lifted-measure aux rules)."
     {:signature [:=> [:catn [:where :any] [:rules :any] [:index :any] [:outer-vars :any]] :any]
      :performs  [:throws]})
-  (Operation q "Run a datalog query over a Cozo db like d/q — relation/collection finds, an :in of $ + optional % (rules) + scalar params. Cells are strings (the triple view)."
+  (Operation buckets-of "The db's attr→bucket index (which typed relation holds each attribute), memoized on the db handle — what lets a clause compile to ONE stored relation instead of a view."
+    {:signature [:=> [:catn [:cdb db/CozoDb]] :any]
+     :performs  [:state]
+     :delegates [db/q]})
+  (Operation q "Run a datalog query over a Cozo db like d/q — relation/collection finds, an :in of $ + optional % (rules) + scalar params. Eids come back as native handles."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:query :any]] :any]
      :performs  [:throws :state]
-     :delegates [compile-body vocab-index db/q]})
+     :delegates [compile-body vocab-index buckets-of db/q]})
   ;; `violation-names` (worklist reader) moved to `cozo-law` beside `check`/`violations-of` — it reads
   ;; check results, so it belongs with evaluation, not the compiler.
-  (Operation entity "Resolve an eid (string) to its typed attribute map — the d/entity replacement."
+  (Operation entity "Resolve an eid to its typed attribute map — the d/entity replacement."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:eid :any]] :any]
      :delegates [db/q]}))
 

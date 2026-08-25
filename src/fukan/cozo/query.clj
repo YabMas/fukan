@@ -6,18 +6,17 @@
 
    `q` compiles the datalog subset fukan uses — relation (`[:find ?a ?b]`) and collection
    (`[:find [?v …]]`) find specs, an `:in` of `$` + optional `%` (rules) + bound scalar
-   params, and the full where/rule machinery — and runs it. Results come back over the
-   unified all-string `triple` view, so EIDS AND VALUES ARE STRINGS (an opaque eid is a
-   string handle; `entity` resolves it to typed attributes from the typed buckets). A
-   query that needs a typed leaf value reads it through `entity`, not a find-var.
+   params, and the full where/rule machinery — and runs it. Every clause compiles to DIRECT
+   stored-relation access (never a view — see `compile-datom`, where the reason is measured),
+   so EIDS COME BACK NATIVE (an opaque Int handle) and leaf values in their real
+   Int/String/Bool type.
 
-   `entity` resolves an eid (string) to its attribute map — the `d/entity` replacement —
-   with values in their real types (Int/String/Bool from the typed buckets)."
+   `entity` resolves an eid to its attribute map — the `d/entity` replacement — with values
+   in their real types (Int/String/Bool from the typed buckets)."
   (:require [clojure.string :as str]
             [clojure.walk :as walk]
             [fukan.canvas.core.structure :as structure]
-            [fukan.cozo.db :as db]
-            [fukan.cozo.rules :as rules]))
+            [fukan.cozo.db :as db]))
 
 ;; ── term + name helpers ───────────────────────────────────────────────────────
 (defn- dvar? [t] (and (symbol? t) (str/starts-with? (name t) "?")))
@@ -42,6 +41,85 @@
    non-alphanumeric char folded to `_` (module-depends → r_module_depends, Operation → r_Operation)."
   [sym]
   (str "r_" (str/replace (name sym) #"[^A-Za-z0-9]" "_")))
+
+
+;; ── storage buckets: which typed relation holds an attribute's datoms ─────────
+;; Every clause compiles to DIRECT stored-relation access (`*t_str[e, 'attr', v]`), never to a
+;; view. This is a PERFORMANCE-CRITICAL invariant, measured, not a preference: a view is a rule,
+;; a rule is materialized, and a materialized relation carries NO key — so every join over it
+;; degrades to a scan. Against the stored relations Cozo drives from an attribute scan and then
+;; uses the `(e, a, v)` PRIMARY KEY for e-bound prefix lookups. On clojure-mcp (72 ns / 659 fns)
+;; the same nine-way join measured 80.10s through the old unified `triple` view and 0.59s
+;; direct — ~136x. Dropping the view's `to_string` alone recovered only 10x of that; the
+;; remaining 12x is the materialization itself, so a "fixed" view is not a fix.
+;; EIDS ARE THEREFORE NATIVE Ints (the view used to stringify them, which also made every join
+;; key a COMPUTED value — no index could ever apply).
+
+(def ^:dynamic *attr-buckets*
+  "attr-string → #{bucket-name} for the db being compiled against, bound by `q`/`check`. Lets a
+   var-valued clause pick the ONE bucket its attribute actually occupies. Unbound (nil) is
+   correct but slow: the clause falls back to a per-attribute union helper."
+  nil)
+
+(defn- bucket-of-literal
+  "The typed bucket a LITERAL value lands in — mirroring `fukan.cozo.mirror/classify`, so a clause
+   with a literal value needs no index at all: it classifies itself. (A literal whose attribute
+   does not occupy that bucket simply matches nothing, which is the right answer.)"
+  [v]
+  (cond (boolean? v) "t_bool"
+        (integer? v) "t_int"
+        :else        "t_str"))
+
+(defn- ^{:malli/schema [:=> [:cat :CozoDb] :any]}
+  attr-buckets
+  "Read `attr → #{bucket}` off `cdb` — which typed relation(s) hold each attribute's datoms.
+   Exact and self-maintaining (no static table to rot); in practice one attribute spans buckets
+   (the generic scalar leaf, authored at more than one type)."
+  [cdb]
+  (reduce (fn [m b]
+            (reduce (fn [m [a]] (update m a (fnil conj #{}) b)) m
+                    (db/q cdb (str "?[a] := *" b "[e, a, v]"))))
+          {} ["t_int" "t_str" "t_bool"]))
+
+(def ^:private substrate-buckets
+  "The bucket each SUBSTRATE attribute always occupies — fixed by the mirror's own encoding rather
+   than by what happens to be stored, so these compile to direct access with no db in hand (and with
+   no per-db index lookup). Only `:val/*` leaf scalars vary by authored type."
+  {"rel/from"     #{"t_int"}
+   "rel/to"       #{"t_int"}
+   "rel/order"    #{"t_int"}
+   "rel/kind"     #{"t_str"}
+   "structure/of" #{"t_str"}
+   "entity/name"  #{"t_str"}
+   "entity/id"    #{"t_str"}})
+
+(defn- buckets-for
+  "The bucket(s) a `[?e :attr v]` clause must read: a literal value classifies itself; a substrate
+   attribute is fixed by the mirror's encoding; otherwise consult `*attr-buckets*`, falling back to
+   all three (correct, slower) when unbound."
+  [attr-kw v-term]
+  (let [a (attr attr-kw)]
+    (cond
+      (not (dvar? v-term))            #{(bucket-of-literal v-term)}
+      (substrate-buckets a)           (substrate-buckets a)
+      (get *attr-buckets* a)          (get *attr-buckets* a)
+      :else                           #{"t_int" "t_str" "t_bool"})))
+
+(defn- compile-datom
+  "A `[?e :attr ?v]` clause → `[fragment extra-rules refs]`. Single bucket (the overwhelming
+   majority) → direct stored-relation access, which is the whole point. Several → a per-attribute
+   union helper, named by attribute so it dedupes across clauses."
+  [c]
+  (let [a  (attr (nth c 1))
+        e  (cterm (nth c 0))
+        v  (cterm (nth c 2))
+        bs (sort (buckets-for (nth c 1) (nth c 2)))]
+    (if (= 1 (count bs))
+      [(str "*" (first bs) "[" e ", '" a "', " v "]") nil #{}]
+      (let [hn (str "at_" (str/replace a #"[^A-Za-z0-9]" "_"))]
+        [(str hn "[" e ", " v "]")
+         (map #(str hn "[e, v] := *" % "[e, '" a "', v]") bs)
+         #{}]))))
 
 ;; ── synthetic rules: cozo ports of Clojure fn-predicates ──────────────────────
 ;; A `[(pred ?a ?b)]` clause whose `pred` is a Clojure fn (not a datalog rule) can't be a
@@ -201,7 +279,7 @@
   [c]
   (cond
     (and (vector? c) (= 3 (count c)) (keyword? (nth c 1)))
-    [(str "triple[" (cterm (nth c 0)) ", '" (attr (nth c 1)) "', " (cterm (nth c 2)) "]") nil #{}]
+    (compile-datom c)
     (and (vector? c) (= 1 (count c)) (seq? (first c)))
     (let [[frag refs] (compile-predicate (first c))] [frag nil refs])
     (and (seq? c) (= 'not (first c)) (= 2 (count c)))     ; (not <single-clause>)
@@ -345,7 +423,21 @@
         vocab-lines         (mapcat #(:lines (index %)) (closure index (into erefs wrefs)))]
     [(distinct (concat vocab-lines rule-lines extra)) body]))
 
-(def preamble "The always-prepended substrate: the unified all-string `triple` view." rules/triple)
+(def ^:private attr-bucket-cache
+  "Caches `attr-buckets` per db handle (compared by `identical?`) — the index is read once per
+   build, not once per query."
+  (atom nil))
+
+(defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
+  buckets-of
+  "`attr-buckets` for `cdb`, memoized on the db handle."
+  [cdb]
+  (let [c @attr-bucket-cache]
+    (if (and c (identical? (:db c) cdb))
+      (:idx c)
+      (let [idx (attr-buckets cdb)]
+        (reset! attr-bucket-cache {:db cdb :idx idx})
+        idx))))
 
 ;; ── the general query runner ──────────────────────────────────────────────────
 (defn- split-query
@@ -384,8 +476,10 @@
   [v] (and (vector? v) (= 2 (count v)) (keyword? (first v))))
 
 (defn- resolve-lookup
-  "Resolve a lookup-ref `[attr val]` to its STRING eid by reading the typed bucket `val`'s
-   type lands in (the `entity/id` lookups carry string ids → t_str). Returns nil for no match."
+  "Resolve a lookup-ref `[attr val]` to its NATIVE (Int) eid by reading the typed bucket `val`'s
+   type lands in (the `entity/id` lookups carry string ids → t_str). Returns nil for no match.
+   Native, not stringified: a string eid would compile to a QUOTED literal and never match the
+   Int subject column."
   [cdb [attr val]]
   (let [a (subs (str attr) 1)
         [rel cv] (cond
@@ -393,12 +487,11 @@
                    (integer? val) ["t_int" val]
                    (keyword? val) ["t_str" (subs (str val) 1)]
                    :else          ["t_str" val])]
-    (some-> (ffirst (db/q cdb (str "?[e] := *" rel "[e, '" a "', v], v == $v") {:v cv})) str)))
+    (ffirst (db/q cdb (str "?[e] := *" rel "[e, '" a "', v], v == $v") {:v cv}))))
 
 (defn- resolve-param
   "A query `:in` scalar param → the value substituted into the where body: a lookup-ref is
-   resolved to its string eid (so it joins the stringified-eid `triple` view); any other
-   scalar passes through unchanged."
+   resolved to its native eid; any other scalar passes through unchanged."
   [cdb v] (if (lookup-ref? v) (resolve-lookup cdb v) v))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb :any] :any]}
@@ -407,8 +500,8 @@
    relation/collection finds, `:in` of `$` + optional `%` rules + scalar params incl.
    `[attr val]` lookup-refs. Top-level `(path ?from E ?to)` clauses are expanded
    after scalar substitution, so path endpoints may be query inputs. EIDS come back as opaque
-   STRING handles; leaf values in their NATIVE type (Int/String/Bool, per the typed `triple`
-   view). A relation find returns a SET of tuples; a collection find a distinct vector."
+   NATIVE (Int) handles; leaf values in their real Int/String/Bool type. A relation find
+   returns a SET of tuples; a collection find a distinct vector."
   [query db & inputs]
   (let [{:keys [find in where]} (split-query query)
         {:keys [rules subst]}   (bind-inputs in inputs)
@@ -417,9 +510,10 @@
         ;; and never close over query `:in` inputs — substituting a scalar into a rule would
         ;; corrupt its head (e.g. a shared name like `?op`), so the rules are passed verbatim.
         where*  (structure/expand-clauses (walk/postwalk-replace subst where))
-        [rule-lines body] (compile-body where* (vec rules) (vocab-index) (find-vars find))
+        [rule-lines body] (binding [*attr-buckets* (buckets-of db)]
+                            (compile-body where* (vec rules) (vocab-index) (find-vars find)))
         head    (str/join ", " (map cvar (find-vars find)))
-        program (str preamble "\n" (str/join "\n" rule-lines) "\n?[" head "] := " body)
+        program (str (str/join "\n" rule-lines) "\n?[" head "] := " body)
         rows    (db/q db program)]
     (if (collection-find? find)
       (vec (distinct (map first rows)))
@@ -429,7 +523,7 @@
 (defn ^{:malli/schema [:=> [:cat :CozoDb :any] :any]}
   entity
   "Resolve `eid` to its attribute map (the `d/entity` replacement): reads the typed buckets,
-   so values come back in their real Int/String/Bool types (eid is a string handle), returning
+   so values come back in their real Int/String/Bool types (eid is a native handle), returning
    `{attr-keyword value}` (nil for an unknown eid). `eid` may be an opaque string/number handle
    OR an `[attr val]` lookup-ref (resolved to the matching eid first)."
   [db eid]

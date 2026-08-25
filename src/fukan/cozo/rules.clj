@@ -4,9 +4,11 @@
    seam over physical storage: when the mirror's shape changes, only this namespace does.
    Compose with `str`: `(str eav \"…query…\")` (code-surface fragments live in vocab, not here).
 
-   `triple` (the unified value-typed EAV view) underpins the general query/law compiler
-   (`fukan.cozo.query`); `eav` (the logical edge/node/leaf decode) underpins the native
-   build's raw queries (`fukan.cozo.build`). Code-surface CozoScript that names code-vocab
+   `eav` (the logical edge/node/leaf decode) underpins the native build's raw queries
+   (`fukan.cozo.build`). The query/law compiler (`fukan.cozo.query`) names NO view: it emits
+   each clause as DIRECT stored-relation access, because a view is materialized and a
+   materialized rule has no key — see `query/compile-clause`. A unified `triple` view lived
+   here until 2026-08-25 and cost ~136x on any multi-hop join. Code-surface CozoScript that names code-vocab
    (`Operation`/`:calls`) lives in canvas, not here: this substrate is vocab-agnostic. The
    earlier hand-ported LAW fragments (module-depends / subsystem / correspondence / effect)
    were retired once the law/query compiler subsumed them.")
@@ -25,19 +27,4 @@ valkind[e, k]    := *t_str[e, 'val/kind', k]
 valname[e, n]    := *t_str[e, 'val/name', n]
 extracted[e]     := *t_bool[e, 'val/extracted', true]
 isprivate[e]     := *t_bool[e, 'val/private', true]
-")
-
-(def triple
-  "The unified EAV view over the typed mirror relations — EIDS are always strings (an
-   opaque handle), but LEAF VALUES keep their native type (Int/String/Bool), so a
-   `[?e :attr ?v]` find-var binds the real value, not a stringified one. The two
-   eid-VALUED int attributes (`rel/from`/`rel/to` — a relation's endpoint eids) are
-   stringified too, so they join with the (stringified) subject eids; every other int
-   (`rel/order` + leaf scalars) stays native. Cozo permits the mixed value column."
-  "
-triple[e, a, v] := *t_int[ei, a, v], a != 'rel/from', a != 'rel/to', e = to_string(ei)
-triple[e, a, v] := *t_int[ei, 'rel/from', vi], a = 'rel/from', e = to_string(ei), v = to_string(vi)
-triple[e, a, v] := *t_int[ei, 'rel/to', vi],   a = 'rel/to',   e = to_string(ei), v = to_string(vi)
-triple[e, a, v] := *t_str[ei, a, v],  e = to_string(ei)
-triple[e, a, v] := *t_bool[ei, a, v], e = to_string(ei)
 ")
