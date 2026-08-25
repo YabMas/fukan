@@ -66,7 +66,11 @@ structure substrate **is** the model (no separate model-map).
   focus sub-graph; also OWNS the act grammar (`Lens`/`Projection`/`Check`)
 - `cozo/` — the query engine. The model db **is a CozoDB**, and CozoScript (datalog)
   is what every query, law, and reader compiles to: `cozo/query.clj` — the kernel query
-  primitive (`q`/`entity`), fukan's datalog subset → CozoScript over a typed-EAV view;
+  primitive (`q`/`entity`), fukan's datalog subset → CozoScript. ⚠ INVARIANT: every clause compiles
+  to DIRECT stored-relation access (`*t_str[e, 'attr', v]`), NEVER to a view — a view is a rule, a
+  rule is materialized, and a materialized relation carries no key, so every join over it degrades
+  to a scan. A unified `triple` view cost ~136x on multi-hop joins until 2026-08-25 (it also
+  stringified eids, making join keys COMPUTED so no index could ever apply). Eids are native Ints;
   `cozo/law.clj` — compiles every defstructure law → CozoScript and registers the
   check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
   the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom
