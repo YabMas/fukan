@@ -357,7 +357,14 @@
 ;; themselves (`ns-dependencies`/`adoption-frontier`/`adoption-candidates`) are ordinary Clojure over
 ;; single-relation pulls, so they emit no terms at all — deliberately, see `ns-dependencies` on why the
 ;; three-way join is not expressible in datalog at a usable cost.
-(def ^:private golden-terms {:count 91 :hash 1483709239})
+;; 2026-08-25: the substrate fix restores `ns-depends` as a real defrelation. It was withheld at
+;; 91 because the three-way join it expresses cost 58-69s through the old unified `triple` view —
+;; a 60-second landmine for any law that read it. With every clause compiling to DIRECT
+;; stored-relation access that same join is 0.29s on clojure-mcp (1.20s on babel, down from
+;; 591.6s), so the relation is safe to declare and coverage stays pure datalog. Terms 91→94 (+3):
+;; the `ns-depends` rule plus the compiler-minted `R+` closure pair (it is BINARY, unlike the unary
+;; `adopted`). Laws hold at 54 — a defrelation declares no denial.
+(def ^:private golden-terms {:count 94 :hash 936939754})
 (def ^:private golden-laws  {:count 54 :hash 374611073})
 
 (deftest terms-are-stable

@@ -47,74 +47,62 @@
   [?ns]
   [(is ?ns ::Ns) (corresponds ?_m ?ns)])
 
-(defn- eid-names
-  "eid → `:entity/name`, as one map. A single-attribute pull the readings below join against in
-   Clojure rather than re-joining per clause in datalog (see `ns-dependencies` on why that matters)."
-  [db]
-  (into {} (cq/q '[:find ?e ?n :where [?e :entity/name ?n]] db)))
+(s/defrelation :ns-depends
+  "Namespace ?a depends on ?b — ?a owns a function that calls one ?b owns (the extracted `:calls`
+   graph at namespace altitude). Intra-project only: extraction resolves `:calls` between extracted
+   functions, so calls into libraries are not edges here (they surface as `:performs` effects).
+
+   Its design-side counterpart `module-depends` (fukan.common.vocab.code.subsystem) is built from
+   authored `:delegates` and so says nothing until a region is modelled; this one needs no authoring
+   at all and is visible the moment extraction runs. That is what makes it the SCOUTING instrument —
+   the leaves of an entirely unmodelled codebase are readable before a line is authored."
+  [?a ?b]
+  [(is ?a ::Ns) (contains ?a ?f) (calls ?f ?g) (contains ?b ?g) (is ?b ::Ns) [(not= ?a ?b)]])
 
 (defn ns-dependencies
-  "The complete CODE-side namespace dependency graph as a set of [from to] name pairs — ?a owns a
-   function that calls one ?b owns. A pure read over the extracted `:calls` graph: unlike
-   `module-depends` (fukan.common.vocab.code.subsystem), which is built from authored `:delegates` and
-   so says nothing until a region is modelled, this needs no authoring at all and is visible the moment
-   extraction runs. That is what makes it the SCOUTING instrument — the leaves of an entirely unmodelled
-   codebase are readable before a single line is authored. Intra-project only: extraction resolves
-   `:calls` between extracted functions, so calls into libraries are not edges here (they surface as
-   `:performs` effects instead).
-
-   ⚠ Composed from two SINGLE-relation pulls joined in Clojure, not as one datalog conjunction, and that
-   is not a style preference. Measured on clojure-mcp (72 namespaces, 659 functions, 742 call edges) the
-   conjunction `(calls ?f ?g) (contains ?a ?f) (contains ?b ?g)` costs 58-69s where the two pulls cost
-   0.70s and the Clojure join is instant — identical 154 edges, ~100x. Reversing clause order, dropping
-   the sort guards, using the `:child` species instead of the `contains` genus, and writing raw `:rel/*`
-   triples with no rule at all ALL land in the same 58-69s, so the cost is the query compiler's
-   three-way join plan, not this relation's shape. It is also why there is no `ns-depends` defrelation:
-   registering one would hand every future law a 60-second landmine."
+  "The complete CODE-side namespace dependency graph as a set of [from to] name pairs."
   [db]
-  (let [nm  (eid-names db)
-        own (into {} (for [[a f] (cq/q '[:find ?a ?f :in $ % :where (contains ?a ?f)] db (s/vocab-rules))]
-                       [f (nm a)]))]
-    (set (for [[f g] (cq/q '[:find ?f ?g :in $ % :where (calls ?f ?g)] db (s/vocab-rules))
-               :let  [a (own f) b (own g)]
-               :when (and a b (not= a b))]
-           [a b]))))
+  (set (cq/q '[:find ?an ?bn :in $ %
+               :where (ns-depends ?a ?b) [?a :entity/name ?an] [?b :entity/name ?bn]]
+             db (s/vocab-rules))))
 
 (defn adopted-namespaces
   "The names of the code namespaces the model has CLAIMED — the adopted region."
   [db]
-  (let [nm (eid-names db)]
-    (set (keep nm (cq/q '[:find [?ns ...] :in $ % :where (adopted ?ns)] db (s/vocab-rules))))))
+  (set (cq/q '[:find [?n ...] :in $ %
+               :where (adopted ?ns) [?ns :entity/name ?n]]
+             db (s/vocab-rules))))
 
 (defn adoption-frontier
-  "The FRONTIER: [adopted-ns unadopted-ns] name pairs where adopted code calls out into code the model
-   does not yet claim.
+  "The FRONTIER: [adopted-ns unadopted-ns] name pairs where adopted code calls out into code the
+   model does not yet claim.
 
-   This is the blind spot leaf-upward adoption cannot see any other way. An adopted Operation whose code
-   calls into an unadopted namespace carries NO `:delegates` edge — the slot may only target an authored
-   Operation, so the edge is unauthorable — and no `realized-delegates` either, since that needs both
-   ends paired. The model therefore asserts the operation delegates to nothing, and nothing contradicts
-   it. This reading is that contradiction: both the check that a module you called a leaf really is one,
-   and the ranked worklist of what to adopt next."
+   This is the blind spot leaf-upward adoption cannot see any other way. An adopted Operation whose
+   code calls into an unadopted namespace carries NO `:delegates` edge — the slot may only target an
+   authored Operation, so the edge is unauthorable — and no `realized-delegates` either, since that
+   needs both ends paired. The model therefore asserts the operation delegates to nothing, and
+   nothing contradicts it. This reading is that contradiction: both the check that a module you
+   called a leaf really is one, and the ranked worklist of what to adopt next."
   [db]
-  (let [ad (adopted-namespaces db)]
-    (set (filter (fn [[a b]] (and (ad a) (not (ad b)))) (ns-dependencies db)))))
+  (set (cq/q '[:find ?an ?bn :in $ %
+               :where (ns-depends ?a ?b) (adopted ?a) (not (adopted ?b))
+                      [?a :entity/name ?an] [?b :entity/name ?bn]]
+             db (s/vocab-rules))))
 
 (defn adoption-candidates
-  "Unadopted namespaces that are LEAVES — they depend on no other namespace in the project, so modelling
-   one drags nothing else in — as [name fan-in] pairs, most depended-upon first.
+  "Unadopted namespaces that are LEAVES — they depend on no other namespace in the project, so
+   modelling one drags nothing else in — as [name fan-in] pairs, most depended-upon first.
 
-   Fan-in is the ranking because adopting a high-fan-in leaf unblocks the most callers for the next step:
-   this is where a leaf-upward adoption starts."
+   Fan-in is the ranking because adopting a high-fan-in leaf unblocks the most callers for the next
+   step: this is where a leaf-upward adoption starts. The leaf PREDICATE is datalog (a negated
+   `ns-depends`); only the ordering is Clojure, over the edge set datalog already returned."
   [db]
-  (let [nm     (eid-names db)
-        all    (keep nm (cq/q '[:find [?ns ...] :in $ % :where (is ?ns ::Ns)] db (s/vocab-rules)))
-        ad     (adopted-namespaces db)
-        edges  (ns-dependencies db)
-        out    (set (map first edges))
-        in-deg (frequencies (map second edges))]
-    (->> all
-         (remove ad) (remove out)
+  (let [in-deg (frequencies (map second (ns-dependencies db)))]
+    (->> (cq/q '[:find [?n ...] :in $ %
+                 :where (is ?ns ::Ns) (not (adopted ?ns))
+                        (not-join [?ns] (ns-depends ?ns ?_b))
+                        [?ns :entity/name ?n]]
+               db (s/vocab-rules))
          (map (fn [n] [n (get in-deg n 0)]))
          (sort-by (juxt (comp - second) first))
          vec)))
