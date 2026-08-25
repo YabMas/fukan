@@ -70,7 +70,21 @@ structure substrate **is** the model (no separate model-map).
   to DIRECT stored-relation access (`*t_str[e, 'attr', v]`), NEVER to a view — a view is a rule, a
   rule is materialized, and a materialized relation carries no key, so every join over it degrades
   to a scan. A unified `triple` view cost ~136x on multi-hop joins until 2026-08-25 (it also
-  stringified eids, making join keys COMPUTED so no index could ever apply). Eids are native Ints;
+  stringified eids, making join keys COMPUTED so no index could ever apply). Eids are native Ints.
+  ⚠ THE SAME INVARIANT REACHES VOCAB RULES: a single-definition rule (`contains`, `calls`, a
+  one-bodied defrelation) IS a view, so the compiler INLINES it at the call site
+  (`query/inline-clauses`) instead of emitting it — and then ORIENTS each expansion against what
+  the preceding clauses already bound (`order-expansion`), because Cozo executes a body largely in
+  WRITTEN order: `*t_int[r, 'rel/from', a]` with `a` bound is a constrained probe, the same clause
+  with `a` free is a scan of every `rel/from` datom. BOTH halves are load-bearing — measured on
+  brian (898 ns / 10,673 fns), `ns-depends` ran 123.6s through the rules, **305.7s inlined but
+  unoriented**, and 1.0s inlined + oriented. Multi-bodied heads (a union, a recursion, a
+  compiler-minted closure) are genuine derivations and stay rules; and inlinability is decided over
+  the rules IN SCOPE (caller `%` rules merged with the vocab's, deduped by FORM) — a name the caller
+  REDEFINES gains a second definition and stops being a view, while one merely passed through again
+  dedups to one and still inlines, which the readings depend on since they hand `q` the whole vocab
+  rule set. Re-ordering may move a `not` or predicate ahead of its binder: Cozo binds by analysis,
+  not by position (measured);
   `cozo/law.clj` — compiles every defstructure law → CozoScript and registers the
   check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
   the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom

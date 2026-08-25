@@ -340,21 +340,139 @@
      (mapcat second rs)
      (reduce into #{} (map #(nth % 2) rs))]))
 
+;; ── rule INLINING: a view is a rule, and a rule has no key ────────────────────
+;; The same defect the `triple` view had, one level up. A vocab rule (`contains`, `calls`, a
+;; single-bodied defrelation) is materialized by Cozo before the join that reads it, and a
+;; materialized relation carries no key — so every hop through one degrades to a scan. Measured
+;; on brian (898 ns / 10,673 fns / 20,903 call edges), the same `ns-depends` join:
+;;
+;;   through the emitted rules ......... 123,633 ms
+;;   inlined, expansions UNORDERED ..... 305,740 ms   ← inlining alone makes it WORSE
+;;   inlined + expansions ORIENTED ......... 1,007 ms
+;;
+;; Both halves are required. Cozo executes a body largely in WRITTEN ORDER, so the first datom of
+;; an expansion decides the hop: `*t_int[r, 'rel/from', a]` with `a` bound is a constrained probe,
+;; the same clause with `a` free is a scan of every `rel/from` datom. `order-expansion` therefore
+;; re-orients each expanded body against what the preceding clauses have already bound.
+
+(def ^:private inline-max-depth
+  "How deep a rule call expands. Bounds pathological or mutually-recursive single-body rules
+   without a cycle analysis — at the cap the call is simply left as a rule call."
+  6)
+
+(def ^:private inline-max-clauses
+  "Expansion size ceiling. Past this a call stays a rule call rather than flooding the body."
+  48)
+
+(defn- subst-form
+  "Simultaneous variable substitution through `form` (one walk, so a var never re-substitutes)."
+  [form m]
+  (cond
+    (and (symbol? form) (contains? m form)) (m form)
+    (vector? form) (mapv #(subst-form % m) form)
+    (seq? form)    (apply list (map #(subst-form % m) form))
+    :else          form))
+
+(defn- plain-rule-call?
+  "A positive rule call — the only clause shape inlining touches. `not`/`not-join`/`or-join` are
+   left alone: `not (A, B)` is not `not A, B`, and the join helpers already compile to their own
+   rules. `is`/`measure` are handled by the clause compiler."
+  [c]
+  (and (seq? c) (symbol? (first c))
+       (not (#{'not 'not-join 'or-join 'is 'measure} (first c)))))
+
+(defn ^:private ^{:malli/schema [:=> [:cat :any] :any]}
+  inline-index
+  "The vocab rules that are INLINABLE — `rule-name → {:params :body}`. A rule qualifies when it
+   has exactly ONE definition (a multi-bodied head is a union or a recursion, which must
+   materialize) and its head args are distinct plain vars (no aggregate heads). Purely a
+   datalog-level analysis of the rule forms, so it needs no compilation and can be built before
+   the compiled index."
+  [rules]
+  (into {} (for [[nm defs] (group-by #(rname (ffirst %)) rules)
+                 :when (= 1 (count defs))
+                 :let  [[head & body] (first defs)
+                        args (vec (rest head))]
+                 :when (and (seq args) (every? dvar? args) (apply distinct? args))]
+             [nm {:params args :body (vec body)}])))
+
+(defn- expand-call
+  "One rule call → its substituted body, expanded transitively (depth-capped). Non-param body
+   vars are renamed per call site (`?i<n>_<k>`) so two expansions in one body never collide.
+   Returns `[clauses n']`, or nil when the call is not inlinable / too deep / too large."
+  [c idx depth n]
+  (when (and (plain-rule-call? c) (< depth inline-max-depth))
+    (when-let [{:keys [params body]} (get idx (rname (first c)))]
+      (let [args (vec (rest c))]
+        (when (and (= (count args) (count params)) (every? #(or (dvar? %) (not (coll? %))) args))
+          (let [inner (remove (set params) (vars-of body))
+                fresh (into {} (map-indexed (fn [i v] [v (symbol (str "?i" n "_" i))]) inner))
+                sub   (merge fresh (zipmap params args))
+                body* (mapv #(subst-form % sub) body)]
+            (loop [pending body*, out [], n (inc n)]
+              (cond
+                (empty? pending)                 [out n]
+                (> (count out) inline-max-clauses) [(into out pending) n]
+                :else
+                (let [[c* & more] pending]
+                  (if-let [[cs n*] (expand-call c* idx (inc depth) n)]
+                    (recur (vec more) (into out cs) n*)
+                    (recur (vec more) (conj out c*) n)))))))))))
+
+(defn- order-expansion
+  "Order an expanded body so each clause runs as constrained as it can be: repeatedly take the
+   clause sharing the most vars with what is already bound, earliest-first on ties. This is the
+   half that matters — see the measurements above.
+
+   Re-ordering is safe for a `not` or a predicate landing ahead of the clauses that bind it:
+   Cozo does its own binding analysis over the whole body rather than positionally (measured —
+   `not *t_bool[e,…], *t_str[e, 'entity/name', n]` answers exactly as the reverse order does)."
+  [clauses bound]
+  (loop [pending (vec clauses), bound bound, out []]
+    (if (empty? pending)
+      out
+      (let [score (fn [i] (count (filter bound (vars-of (pending i)))))
+            best  (reduce (fn [b i] (if (> (score i) (score b)) i b)) 0 (range 1 (count pending)))
+            c     (pending best)]
+        (recur (into (subvec pending 0 best) (subvec pending (inc best)))
+               (into bound (vars-of c))
+               (conj out c))))))
+
+(defn ^:private ^{:malli/schema [:=> [:cat :any :any] :any]}
+  inline-clauses
+  "Source-to-source: expand every inlinable rule call in `clauses` into its body, each expansion
+   oriented against the vars the preceding clauses have already bound. Clause order as WRITTEN is
+   otherwise preserved — only the interior of an expansion is re-ordered, so an author's negation
+   and predicate placement still hold."
+  [clauses idx]
+  (if (empty? idx)
+    (vec clauses)
+    (loop [pending (vec clauses), bound #{}, n 0, out []]
+      (if (empty? pending)
+        out
+        (let [[c & more] pending]
+          (if-let [[cs n*] (expand-call c idx 0 n)]
+            (let [cs* (order-expansion cs bound)]
+              (recur (vec more) (into bound (mapcat vars-of cs*)) n* (into out cs*)))
+            (recur (vec more) (into bound (vars-of c)) n (conj out c))))))))
+
 (defn- compile-rule
   "A datalog rule `[(head args…) body…]` → `[def-lines refs]`: the head line, any not-join/
    or-join helpers, and any lifted-measure aux rules its body spawned (compiled recursively —
    nested measures fall out), plus the rule names its body calls (PURE). A head arg may be an
    aggregate application `(agg ?v)` (see `chead`) — the rule is then a MEASURE."
-  [[head & body]]
+  ([rule] (compile-rule rule nil))
+  ([[head & body] inl]
   (let [[body* aux]          (expand-measures (filter dvar? (rest head)) body)
+        body*                (cond-> body* inl (inline-clauses inl))
         [bodystr extra refs] (compile-clauses body*)
         [aux-lines aux-refs] (reduce (fn [[ls rs] r]
-                                       (let [[l rf] (compile-rule (dewild r))]
+                                       (let [[l rf] (compile-rule (dewild r) inl)]
                                          [(into ls l) (into rs rf)]))
                                      [[] #{}] aux)]
     [(concat [(str (rname (first head)) "[" (str/join ", " (map chead (rest head))) "] := " bodystr)]
              extra aux-lines)
-     (into refs aux-refs)]))
+     (into refs aux-refs)])))
 
 ;; ── the vocab-rule index + reachability closure ───────────────────────────────
 (defn ^{:malli/schema [:=> [:cat] :any]}
@@ -363,15 +481,23 @@
    `rule-name → {:lines [cozo-defs] :refs #{names it calls}}`, merging a rule's multiple
    definitions. Uncompilable rules are skipped. The synthetic rules are merged in as seed."
   []
-  (reduce (fn [idx rule]
-            (try
-              (let [[lines refs] (compile-rule rule)
-                    nm           (rname (ffirst rule))]
-                (-> idx
-                    (update-in [nm :lines] (fnil into []) lines)
-                    (update-in [nm :refs] (fnil into #{}) refs)))
-              (catch clojure.lang.ExceptionInfo _ idx)))
-          @synthetic-rules (structure/vocab-rules)))
+  (let [rules (structure/vocab-rules)
+        inl   (inline-index rules)]
+    (-> (reduce (fn [idx rule]
+                  (try
+                    (let [[lines refs] (compile-rule rule inl)
+                          nm           (rname (ffirst rule))]
+                      (-> idx
+                          (update-in [nm :lines] (fnil into []) lines)
+                          (update-in [nm :refs] (fnil into #{}) refs)))
+                    (catch clojure.lang.ExceptionInfo _ idx)))
+                @synthetic-rules rules)
+        ;; carried on the index so `compile-body` reaches them without a signature change; the keys
+        ;; are keywords and rule names are strings, so neither can shadow a rule. `::rules` is the
+        ;; raw rule FORMS — a scope with its own `%` rules rebuilds the inline index over the
+        ;; MERGED set, which is the only way to tell a caller's redefinition from the same rule
+        ;; simply being passed through again.
+        (assoc ::inline inl ::rules rules))))
 
 (defn- closure
   "The set of vocab-rule names reachable from `seeds` through the index's `:refs`."
@@ -403,6 +529,7 @@
               :else       [x n]))]
     (first (go form 0))))
 
+
 (defn ^{:malli/schema [:=> [:cat :any :any :any :any] :any]}
   compile-body
   "Compile `where` (a seq of clauses) + caller-supplied `extra-rules` (datalog rules) into
@@ -415,8 +542,18 @@
   (let [where               (dewild where)
         [where* aux]        (expand-measures outer-vars where)
         extra-rules         (into (vec extra-rules) aux)
+        ;; Inlinability is decided over the rules IN SCOPE — the caller's `%` rules merged with the
+        ;; vocab's, deduped by form. A name the caller REDEFINES then has two definitions and stops
+        ;; being a view, so the call reaches the caller's rule (a test fixture's `:pair` slot
+        ;; shadowing a `%`-supplied `pair` is how this surfaced); a name the caller merely passes
+        ;; through again dedups to one and still inlines — which matters, because the readings hand
+        ;; `q` the WHOLE vocab rule set as `%`.
+        inl                 (if-let [vr (::rules index)]
+                              (inline-index (distinct (concat extra-rules vr)))
+                              (::inline index))
+        where*              (cond-> where* (seq inl) (inline-clauses inl))
         [rule-lines erefs]  (reduce (fn [[lines refs] r]
-                                      (let [[l rf] (compile-rule (dewild r))]
+                                      (let [[l rf] (compile-rule (dewild r) inl)]
                                         [(into lines l) (into refs rf)]))
                                     [[] #{}] extra-rules)
         [body extra wrefs]  (compile-clauses where*)
