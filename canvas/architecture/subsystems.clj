@@ -19,6 +19,7 @@
             [canvas.architecture.projection.grammar :refer [projection-grammar]]
             [canvas.architecture.projection.architecture :refer [architecture]]
             [canvas.architecture.projection.design :refer [projection-design]]
+            [canvas.architecture.projection.prose :refer [projection-prose]]
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
             [canvas.architecture.orchestration.infra :refer [infra-model]]
             [canvas.architecture.orchestration.core :refer [core]]
@@ -57,7 +58,7 @@
   "The outbound render surface — the inspection print-duals that re-present the model
    as authored forms (instance/grammar) plus the system map (architecture). The act
    grammar (Lens/Projection/Check) and its engine live in the kernel (core-lens)."
-  {:child [projection-instance projection-grammar projection-design architecture] :may-depend [kernel]})
+  {:child [projection-instance projection-grammar projection-design projection-prose architecture] :may-depend [kernel]})
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entries — coordinates ingestion onto the model. Realizes no subject

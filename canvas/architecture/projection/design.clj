@@ -11,7 +11,8 @@
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.cozo.query :as query]
             [canvas.architecture.projection.grammar :as grammar]
-            [canvas.architecture.projection.instance :as instance]))
+            [canvas.architecture.projection.instance :as instance]
+            [canvas.architecture.projection.prose :as prose]))
 
 (Module projection-design
   "Render a project's own declared design as one document."
@@ -27,8 +28,11 @@
      :performs  [:throws :state]
      :delegates [declared-nodes]})
   (Operation design-text
-    "The declared design as one document: each vocabulary used, then every instance, both as
-     their authored forms."
-    {:signature [:=> [:catn [:db substrate/StructureDb]] instance/Text]
+    "The declared design as one document, in one of two registers: :forms renders the authored
+     declarations, :prose renders the same declarations as sentences."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:register :keyword]] instance/Text]
      :performs  [:throws :state]
-     :delegates [declared-nodes declared-vocabularies grammar/vocabulary-primer instance/focus-text]}))
+     :delegates [declared-nodes declared-vocabularies query/q
+                 grammar/vocabulary-primer grammar/structure-form
+                 instance/focus-text instance/instance-form
+                 prose/structure-prose prose/instance-prose]}))

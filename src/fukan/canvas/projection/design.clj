@@ -23,6 +23,7 @@
   (:require [clojure.string :as str]
             [fukan.canvas.projection.grammar :as gram]
             [fukan.canvas.projection.instance :as inst]
+            [fukan.canvas.projection.prose :as prose]
             [fukan.cozo.query :as cq]))
 
 (def ^:private meta-grammar-ns
@@ -54,17 +55,45 @@
        sort
        vec))
 
-(defn ^{:malli/schema [:=> [:cat :StructureDb] :Text]}
-  design-text
-  "The declared design as one document: each vocabulary the project used, rendered as its
-   `defstructure` forms, then every instance rendered as its authored form.
+(defn- structures-of
+  "The reified Structure nodes for the vocabularies `vocabs`, in the order the primer uses."
+  [db vocabs]
+  (vec (for [v vocabs
+             s (->> (cq/q '[:find ?c ?n :in $ ?vn
+                            :where [?v :structure/of :fukan.canvas.core.reflect/Vocabulary]
+                                   [?v :entity/name ?vn]
+                                   [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
+                                   [?c :entity/name ?n]]
+                          db v)
+                    (sort-by second)
+                    (map first))]
+         s)))
 
-   The grammar half first because it is the shorter one and it is what makes the second half
-   readable: an instance is a shape filled in, and a reader who has not seen the shape is
-   reading a list of maps."
-  [db]
+(defn ^{:malli/schema [:=> [:cat :StructureDb :keyword] :Text]}
+  design-text
+  "The declared design as one document, in one of two registers.
+
+   `:forms` renders the authored declarations — what was written, and what you would write to
+   change it. `:prose` renders the same declarations as sentences, for a reader whose question
+   is what the rules ARE rather than how they are spelled; an agent asked to obey a design
+   should not have to learn an authoring notation to find out what it says.
+
+   Either way the concepts come before the instances: an instance is a shape filled in, and a
+   reader who has not seen the shape is reading a list of maps."
+  [db register]
   (let [vocabs (declared-vocabularies db)
         eids   (mapv first (declared-nodes db))]
-    (str/join "\n\n"
-              (concat (map #(gram/vocabulary-primer db % {:full? true}) vocabs)
-                      (when (seq eids) [(inst/focus-text db eids)])))))
+    (if (= :prose register)
+      ;; No document TITLE: this renders into whatever the caller is composing — a briefing that
+      ;; already announced the section, a file, a terminal — and a projection that titled itself
+      ;; would be duplicating a heading its only readers have already written.
+      (str/join "\n"
+                (concat ["## The concepts\n"]
+                        (map #(prose/structure-prose (gram/structure-form db %))
+                             (structures-of db vocabs))
+                        ["\n## What it declares\n"]
+                        (map #(prose/instance-prose (inst/instance-form db %))
+                             (sort-by #(:entity/name (cq/entity db %)) eids))))
+      (str/join "\n\n"
+                (concat (map #(gram/vocabulary-primer db % {:full? true}) vocabs)
+                        (when (seq eids) [(inst/focus-text db eids)]))))))

@@ -11,7 +11,7 @@
      check      does the code still OBEY it?       — the violations, as data
 
    Usage:
-     clojure -M:fukan -m fukan.cli describe [--spec-dirs canvas]
+     clojure -M:fukan -m fukan.cli describe [--spec-dirs canvas] [--format prose|forms]
      clojure -M:fukan -m fukan.cli check --src src [--spec-dirs canvas] [--format edn|text]
 
    `describe` takes no `--src` and that is the point: a declared design is what the project
@@ -91,9 +91,10 @@
 (defn- describe-verb
   "Render the project's declared design. No code root: a declaration is what the project SAID,
    and a design document that moved when the code moved would not be one."
-  [{:keys [spec-dirs]}]
+  [{:keys [spec-dirs format]}]
   (binding [canvas-source/*spec-dirs* spec-dirs]
-    {:ok true :text (design/design-text (pipeline/build-model nil))}))
+    {:ok true :text (design/design-text (pipeline/build-model nil)
+                                        (if (= :forms format) :forms :prose))}))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :string]] :nil]}
   -main

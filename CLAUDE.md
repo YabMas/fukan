@@ -533,7 +533,8 @@ mixing them corrupts history.
 - `src/fukan/model/pipeline.clj` — `build-model` (canvas ingestion + extraction merge)
 - `src/fukan/cli.clj` — the non-REPL entry: what the REPL cockpit does, for a PROGRAM. Two verbs,
   because a reader arrives with two questions — `clojure -M:fukan -m fukan.cli describe
-  [--spec-dirs canvas]` (what has this project DECLARED — the design as its authored forms) and
+  [--spec-dirs canvas] [--format prose|forms]` (what has this project DECLARED — the design as
+  PROSE by default, or as the authored forms) and
   `… -m fukan.cli check --src src [--spec-dirs canvas] [--format edn|text]` (does the code still
   OBEY it — violations as DATA: offender eids resolved to names, rows kept as TUPLES so an
   edge-binding law carries both ends, `:vars` alongside so a consumer can label the columns).
@@ -542,9 +543,15 @@ mixing them corrupts history.
   **1** unsatisfied / **2** UNDECIDABLE — a consumer must tell "your design is violated" from "the
   checker broke", or it waves through the branch that broke the checker. stdout is the report,
   stderr is the narration
+- `src/fukan/canvas/projection/prose.clj` — the PROSE dual: the same declarations as SENTENCES.
+  A form dual renders the AUTHOR's view (`{:may-depend [:* Band]}` is what you would write to
+  change it); a reader who has to OBEY the design wants to be told the rule, not to infer it from
+  a quantifier vector — and that reader is usually an agent now. It queries nothing: every fn is
+  a pure function of `structure-form`/`instance-form` output, which is what keeps the two views
+  from drifting into two designs. Law DESCRIPTIONS, never law bodies
 - `src/fukan/canvas/projection/design.clj` — the DESIGN projection: grammar + instance duals
-  composed into the document a reader arrives for. Its own contribution is the SCOPING, and neither
-  exclusion is a heuristic: the reflection meta-grammar is in every model and authored by none, and
+  composed into the document a reader arrives for, in either register. Its own contribution is
+  the SCOPING, and neither exclusion is a heuristic: the reflection meta-grammar is in every model and authored by none, and
   an anonymous `^:value` node is already rendered inline by its owner. What remains is derived from
   the INSTANCES — a vocabulary appears because the project instantiated something from it, so a
   grammar merely loaded is never mistaken for a design
