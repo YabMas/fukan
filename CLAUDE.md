@@ -83,8 +83,11 @@ structure substrate **is** the model (no separate model-map).
   the rules IN SCOPE (caller `%` rules merged with the vocab's, deduped by FORM) — a name the caller
   REDEFINES gains a second definition and stops being a view, while one merely passed through again
   dedups to one and still inlines, which the readings depend on since they hand `q` the whole vocab
-  rule set. Re-ordering may move a `not` or predicate ahead of its binder: Cozo binds by analysis,
-  not by position (measured);
+  rule set. Re-ordering may move a `not` ahead of its binder (Cozo binds by analysis, not by position
+  — measured), but NEVER a PREDICATE: a comparison or a registered predicate PORT compiles to an
+  EXPRESSION, and a function call reached before its argument is bound can fail outright
+  (`starts_with` on an unbound var), which `check` swallows into an UNDECIDABLE law. `order-expansion`
+  holds a predicate back until every var it mentions is bound;
   `cozo/law.clj` — compiles every defstructure law → CozoScript and registers the
   check-engine plug-point (so `structure/check` runs on Cozo); `cozo/build.clj` —
   the native model→CozoDB build; `cozo/{db,mirror,rules}.clj` — the db handle, datom
@@ -546,11 +549,9 @@ mixing them corrupts history.
   reading; `module.clj` holds the `Ns` codomain and the twin ROOT
   `(correspond [Module ?m Ns ?ns] match {:child :child})`, plus the INCREMENTAL-ADOPTION readings —
   the `adopted` relation (the Ns half of a live pairing, which is what makes the frontier need no new
-  declaration) and `ns-dependencies`/`adoption-frontier`/`adoption-candidates`. ⚠ those three join two
-  single-relation pulls in CLOJURE, and there is deliberately no `ns-depends` defrelation: measured on
-  clojure-mcp, every datalog formulation of that three-way join costs 58-69s against 0.70s for the
-  pulls (clause order, sort guards, `:child` vs the `contains` genus, and raw `:rel/*` triples with no
-  rule at all all land in the same place — it is the query compiler's three-way join plan)
+  declaration) and `ns-dependencies`/`adoption-frontier`/`adoption-candidates`. `ns-depends` is a DEFRELATION
+  again since the substrate fix: the three-way join that once cost 58-69s on clojure-mcp against 0.70s
+  for two Clojure-side pulls was the `triple` view plus un-oriented rules, not the planner
 - `src/fukan/canvas/core/reflect.clj` (ns `fukan.canvas.core.reflect`) — grammar REFLECTION (registry → model db); kernel-native CORE machinery, not the reusable vocab
 - `common/fukan/common/typing/malli.clj` (ns `fukan.common.typing.malli`) — the malli type DIALECT plugin, one file
   (shape vocab + bridges + wiring); realizes the `typing` SPI

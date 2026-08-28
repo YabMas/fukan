@@ -60,3 +60,35 @@
                          [?e :entity/name ?n]
                          (not [?e :val/extracted ?p])]])))
         "the extracted node is excluded wherever the ordering put the negation")))
+
+(deftest a-predicate-inside-an-expansion-is-not-hoisted-above-its-binder
+  (testing "a `not` may be re-ordered ahead of what binds it, but a PREDICATE may not: it compiles
+            to an expression, and a registered predicate PORT compiles to a CozoScript function
+            call. Evaluated before its argument is bound, Cozo may fail outright — the query ERRORS
+            rather than answering wrong, and `check` then reports the law as undecidable. That is
+            what a band's membership relation hit when it derived a namespace's band from its path
+            with clojure.string/starts-with?:
+
+              starts_with(i6_2, i6_1), at_val_value[i6_0, i6_1]
+              x Evaluation of expression failed
+              help: 'starts_with' requires strings or bytes
+
+            Cozo's tolerance for a late binder is not uniform — the same shape over a stored
+            relation answers fine — so this asserts the LOWERING rather than the answer, like
+            `passing-the-vocab-rules-through-still-inlines` above. The hoist needs a var bound
+            ENTERING the expansion, or the initial all-zero tie-break keeps written order and
+            hides it: with ?n already bound, the predicate scores 1 while `[?y :val/name ?v]` —
+            the only clause that can bind ?v — scores 0."
+    (let [d    (db)
+          body (second (binding [cq/*attr-buckets* (cq/buckets-of d)]
+                         (cq/compile-body '[[?x :entity/name ?n] (prefix-of ?n ?v)]
+                                          '[[(prefix-of ?n ?v)
+                                             [?e :entity/name ?n]
+                                             [(clojure.string/starts-with? ?v ?n)]
+                                             [?y :val/name ?v]]]
+                                          (cq/vocab-index) '[?n])))
+          pred (.indexOf ^String body "starts_with(")
+          bind (.indexOf ^String body "'val/name'")]
+      (is (pos? pred) (str "the predicate should be emitted at all; got: " body))
+      (is (< bind pred)
+          (str "the clause binding ?v must precede the predicate reading it; got: " body)))))

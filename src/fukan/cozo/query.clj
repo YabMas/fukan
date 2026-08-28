@@ -419,21 +419,40 @@
                     (recur (vec more) (into out cs) n*)
                     (recur (vec more) (conj out c*) n)))))))))))
 
+(defn- predicate-clause?
+  "True for a predicate clause — `[(= ?a ?b)]`, `[(starts-with? ?n ?p)]`: a one-element vector
+   wrapping a call. Distinguishes it from a datom clause `[?e :attr ?v]` and a rule call
+   `(rule ?a ?b)`, neither of which is order-sensitive here."
+  [c]
+  (and (vector? c) (= 1 (count c)) (seq? (first c))))
+
 (defn- order-expansion
   "Order an expanded body so each clause runs as constrained as it can be: repeatedly take the
    clause sharing the most vars with what is already bound, earliest-first on ties. This is the
    half that matters — see the measurements above.
 
-   Re-ordering is safe for a `not` or a predicate landing ahead of the clauses that bind it:
-   Cozo does its own binding analysis over the whole body rather than positionally (measured —
-   `not *t_bool[e,…], *t_str[e, 'entity/name', n]` answers exactly as the reverse order does)."
+   Re-ordering is safe for a `not` landing ahead of the clauses that bind it: Cozo does its own
+   binding analysis over the whole body rather than positionally (measured — `not *t_bool[e,…],
+   *t_str[e, 'entity/name', n]` answers exactly as the reverse order does).
+
+   It is NOT safe for a PREDICATE. That analysis covers relational atoms; a predicate compiles
+   to an expression — a comparison, or a registered predicate port's function call — and a
+   function call evaluated before its argument is bound fails outright (`starts_with(n, p)`
+   ahead of what binds `p`: \"'starts_with' requires strings or bytes\"). A predicate is
+   therefore held back until every var it mentions is bound, falling back to written order when
+   no such clause remains (a predicate over vars an OUTER clause binds later can only go last)."
   [clauses bound]
   (loop [pending (vec clauses), bound bound, out []]
     (if (empty? pending)
       out
-      (let [score (fn [i] (count (filter bound (vars-of (pending i)))))
-            best  (reduce (fn [b i] (if (> (score i) (score b)) i b)) 0 (range 1 (count pending)))
-            c     (pending best)]
+      (let [ready? (fn [i] (or (not (predicate-clause? (pending i)))
+                               (every? bound (vars-of (pending i)))))
+            score  (fn [i] (count (filter bound (vars-of (pending i)))))
+            idxs   (range (count pending))
+            usable (filterv ready? idxs)
+            pool   (if (seq usable) usable (vec idxs))
+            best   (reduce (fn [b i] (if (> (score i) (score b)) i b)) (first pool) (rest pool))
+            c      (pending best)]
         (recur (into (subvec pending 0 best) (subvec pending (inc best)))
                (into bound (vars-of c))
                (conj out c))))))
