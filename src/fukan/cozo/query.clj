@@ -20,7 +20,15 @@
 
 ;; ── term + name helpers ───────────────────────────────────────────────────────
 (defn- dvar? [t] (and (symbol? t) (str/starts-with? (name t) "?")))
-(defn ^{:malli/schema [:=> [:cat :any] :string]} cvar "?e → e" [t] (subs (name t) 1))
+(defn ^{:malli/schema [:=> [:cat :any] :string]} cvar
+  "?e → e — a datalog var → a CozoScript variable name, every non-alphanumeric char folded to
+   `_` the way `rname` folds a rule name. A datalog var is an ordinary Clojure symbol and
+   `?from-band` is the natural way to write one; without the fold it lowers to the invalid
+   identifier `from-band`, and the law it appears in fails closed as UNDECIDABLE. Offender var
+   names travel to consumers now (`law/check`'s `:vars`), so they are chosen to READ, and a
+   compiler that refused the readable spelling would be choosing the wrong master."
+  [t]
+  (str/replace (subs (name t) 1) #"[^A-Za-z0-9]" "_"))
 (defn- clit
   "A datalog literal → its CozoScript form, MATCHING the typed `triple` view: a keyword
    is the colon-stripped quoted string the mirror stores (:calls → 'calls'), a string is

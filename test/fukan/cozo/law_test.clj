@@ -75,3 +75,17 @@
           (is (every? #(every? symbol? (:vars %)) results)
               "the law's own var symbols, not a rendering of them"))
         (finally (db/close cdb))))))
+
+(deftest a-hyphenated-offender-var-still-compiles
+  (testing "a datalog var is an ordinary Clojure symbol, and `?from-band` is how one is
+            naturally spelled. Unmunged it lowers to the invalid CozoScript identifier
+            `from-band` and the law fails closed as UNDECIDABLE — which is honest, and still
+            the wrong answer. Offender var names travel to consumers now, so they are chosen
+            to read."
+    (is (= (str "?[from_band, to_band] := *t_str[from_band, 'structure/of', 'M/K'], "
+                "*t_int[r, 'rel/from', from_band], *t_int[r, 'rel/to', to_band]")
+           (law/compile-law '{:offenders [?from-band ?to-band]
+                              :where [[?from-band :structure/of :M/K]
+                                      [?r :rel/from ?from-band]
+                                      [?r :rel/to ?to-band]]}
+                            #{} {})))))
