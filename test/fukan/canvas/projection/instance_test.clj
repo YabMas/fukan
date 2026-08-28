@@ -37,6 +37,11 @@
 (ITarget t-a)
 (ITarget ^{:name "B"} t-b)
 
+(ITarget prose
+  "A first line.
+
+   A second paragraph, with a \"quoted\" word in it.")
+
 (INode full
   "A node exercising every encoding."
   {:title "x"
@@ -51,7 +56,7 @@
 (INode ^{:name "bad"} offender {:title "bad" :main t-a})
 
 (defn- db []
-  (build/vars->cozo [#'t-a #'t-b #'full #'bare #'offender]))
+  (build/vars->cozo [#'t-a #'t-b #'prose #'full #'bare #'offender]))
 
 (defn- by-name [db n]
   (ffirst (cq/q '[:find ?e :in $ ?n :where [?e :entity/name ?n]] db n)))
@@ -103,6 +108,20 @@
                 "  {:title \"y\"\n"
                 "   :main  t-a})")
            txt))))
+
+(deftest a-multi-line-docstring-renders-as-it-was-authored
+  ;; `pr-str` escapes the newlines, so a paragraph of documentation came back as one
+  ;; line with \n in it — unreadable, and not the authored form this projection claims
+  ;; to render. It matters now that a session briefing is written from these.
+  (let [d*  (db)
+        txt (inst/instance-text d* (by-name d* "prose"))]
+    (is (= (str "(ITarget prose\n"
+                "  \"A first line.\n"
+                "\n"
+                "   A second paragraph, with a \\\"quoted\\\" word in it.\")")
+           txt))
+    (is (not (str/includes? txt "\\n"))
+        "a real newline, not an escaped one")))
 
 (deftest focus-text-renders-a-clause-selected-slice
   (let [d* (db)

@@ -166,6 +166,17 @@
                          (map pr-str v)) "]")
       flat)))
 
+(defn- doc-text
+  "A docstring as it was AUTHORED — a real multi-line string, not a `pr-str`'d one.
+
+   `pr-str` escapes the newlines, so a paragraph of documentation comes back as one line with
+   `\\n` in it — unreadable, and not the authored form this projection claims to render. The
+   stored string still carries the continuation indent it was written with, so emitting it raw
+   between quotes reproduces the source exactly. Only `\\` and `\"` need escaping, and in that
+   order."
+  [doc]
+  (str \" (-> doc (str/replace "\\" "\\\\") (str/replace "\"" "\\\"")) \"))
+
 (defn ^{:malli/schema [:=> [:cat :StructureDb :Eid] :Text]}
   instance-text
   "`instance-form`, formatted like the authored source: head line (tag, name,
@@ -185,7 +196,7 @@
                                            m))
                             "}"))]
     (str (->> (concat [head]
-                      (when doc [(str "  " (pr-str doc))])
+                      (when doc [(str "  " (doc-text doc))])
                       (when body [body]))
               (str/join "\n"))
          ")")))
