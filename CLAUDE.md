@@ -151,8 +151,12 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
 
 - `common/fukan/common/vocab/grouping.clj` — `Grouping` (the most abstract membership primitive) +
   `Connected` (a flow-node facet). The structural primitives the rest builds on.
-- `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem}.clj` — the code grammar
-  (Kind / Effect / Operation / Module / Subsystem). **PURE DESIGN — language-neutral.** Each element
+- `common/fukan/common/vocab/code/{kind,effect,operation,module,subsystem,band}.clj` — the code
+  grammar (Kind / Effect / Operation / Module / Subsystem / Band). **PURE DESIGN — language-neutral**,
+  with ONE stated exception: `band` names the Clojure `Ns` sort (by full tag keyword, the documented
+  spelling for a deliberate non-require), because a Band's whole point is that its evidence is the
+  EXTRACTED call graph. A non-Clojure project gets vacuous laws rather than a load error; the honest
+  fix is an extractor-neutral code-unit sort, and a second extractor is the trigger to build one. Each element
   file carries its structure and the laws that are its own slot semantics, and knows nothing about
   what language the code is written in.
 - `common/fukan/common/vocab/patterns/plug_point.clj` — the PATTERN TIER: `PlugPoint`, one rung above
@@ -251,6 +255,18 @@ Boundary/Depth/latent-boundaries readings) is gone (git history preserves it); t
 bundled was kept — the two module-graph enforcement laws rehomed onto `Subsystem`, the correspondence
 call-readers onto `operation.clj` (with the rest of Operation's correspondence), the
 effect-correspondence reader onto `effect.clj`.
+
+`Band` is `Subsystem`'s sibling and the difference is the EVIDENCE: a Subsystem clusters authored
+Modules and checks `:may-depend` against `module-depends` (built from authored `:delegates`, so it
+says nothing until a region is modelled op by op); a Band claims namespaces by NAME PREFIX and checks
+the same declaration against `ns-depends`, which extraction produces the moment it runs. That makes a
+large existing codebase declarable in an afternoon instead of an adoption project. Membership is
+DERIVED, never authored — a namespace's band is readable from its own name and cannot drift from the
+tree. Its coverage law ("every namespace belongs to a band") is GATED on at least one Band existing,
+and the gate is what the rule MEANS rather than politeness to non-adopters: a project declaring no
+bands asserts no partition, while one declaring a band asserts a partition, and a partition with a
+hole in it is exactly the blindness the law exists to close (an unbanded package is an offender
+NOWHERE — the cross-band law needs both ends banded before it fires).
 
 The grouping ladder is a TREE, not a chain: `Grouping` (bare membership, `:child [:* Any]`) is
 refined by two siblings that narrow the member sort — `Module` (a code namespace: a Grouping over

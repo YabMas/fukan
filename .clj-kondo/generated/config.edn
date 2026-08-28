@@ -116,6 +116,8 @@
    fukan.common.typing.malli/SchemaField hooks.fukan.structure/instance
    fukan.common.typing.render-test/RenderHolder hooks.fukan.structure/instance
    fukan.common.typing.vocab-test/SchemaHolder hooks.fukan.structure/instance
+   fukan.common.vocab.code.band/Band hooks.fukan.structure/instance
+   fukan.common.vocab.code.band/NsPrefix hooks.fukan.structure/instance
    fukan.common.vocab.code.effect/Effect hooks.fukan.structure/instance
    fukan.common.vocab.code.kind/Kind hooks.fukan.structure/instance
    fukan.common.vocab.code.module/Module hooks.fukan.structure/instance

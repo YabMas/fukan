@@ -364,8 +364,17 @@
 ;; 591.6s), so the relation is safe to declare and coverage stays pure datalog. Terms 91→94 (+3):
 ;; the `ns-depends` rule plus the compiler-minted `R+` closure pair (it is BINARY, unlike the unary
 ;; `adopted`). Laws hold at 54 — a defrelation declares no denial.
-(def ^:private golden-terms {:count 94 :hash 936939754})
-(def ^:private golden-laws  {:count 54 :hash 374611073})
+;; 2026-08-28: `Band` promoted into the shipped vocab (fukan.common.vocab.code.band) — the
+;; namespace-prefix stratum whose evidence is the extracted call graph, nido's element made
+;; reusable. Terms 94→103 (+9): two kind rules (Band, NsPrefix), NsPrefix's `^:value`
+;; reflexivity, the `in-band` defrelation plus its compiler-minted closure pair, and the
+;; `prefix` slot rule plus ITS closure pair. `may-depend` adds NOTHING — Subsystem already
+;; declares a slot of that name and the emitted rule is keyed on `:rel/kind`, so the two forms
+;; are identical and dedup. Laws 54→62 (+8): five GENERATED (prefix target-type + at-least-one,
+;; may-depend target-type, value cardinality + :string) and three AUTHORED (cross-band
+;; conformance, coverage-once-any-band-is-declared, acyclicity).
+(def ^:private golden-terms {:count 103 :hash 2063935565})
+(def ^:private golden-laws  {:count 62 :hash 1237624926})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
