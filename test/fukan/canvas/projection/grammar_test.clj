@@ -86,7 +86,7 @@
 
 (deftest primer-renders-the-reference-card
   (let [db (reflected)
-        p  (g/vocabulary-primer db "fukan.canvas.projection.grammar-test")]
+        p  (g/vocabulary-primer db "fukan.canvas.projection.grammar-test" nil)]
     (testing "header + every structure"
       (is (str/includes? p "fukan.canvas.projection.grammar-test — 4 structures"))
       (is (str/includes? p "(defstructure PLeaf"))
@@ -160,3 +160,16 @@
           ":delegates is a plain slot — no correspondence options, and no :transitive (closures are the compiler's)")
       (is (not (map? (second (:performs slots))))
           ":performs is a plain identity slot now — no correspondence options in its props position"))))
+
+(deftest full-mode-renders-the-design-document-not-the-reference-card
+  (testing "a reference card wants one line and the rest of the page; a design DOCUMENT wants
+            the concept explained. Law bodies stay elided either way — the description states
+            the rule and the datalog under it is the mechanism."
+    (let [db (reflected)
+          p  (g/vocabulary-primer db "fukan.canvas.projection.grammar-test" {:full? true})]
+      (is (str/includes? p "Second doc line") "the whole docstring, not its first line")
+      (is (not (str/includes? p "A node fixture. …")) "and no elision mark")
+      (is (not (str/includes? p "\\n"))
+          "rendered as a real multi-line string — the authored form, not a pr-str'd one")
+      (is (str/includes? p "(law \"no bad title\" …)") "laws stay elided to their description")
+      (is (not (str/includes? p ":offenders"))))))

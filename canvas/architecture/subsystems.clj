@@ -18,10 +18,11 @@
             [canvas.architecture.projection.instance :refer [projection-instance]]
             [canvas.architecture.projection.grammar :refer [projection-grammar]]
             [canvas.architecture.projection.architecture :refer [architecture]]
+            [canvas.architecture.projection.design :refer [projection-design]]
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
             [canvas.architecture.orchestration.infra :refer [infra-model]]
             [canvas.architecture.orchestration.core :refer [core]]
-            [canvas.architecture.orchestration.check :refer [check]]
+            [canvas.architecture.orchestration.cli :refer [cli]]
             [canvas.architecture.cozo.db :refer [cozo-db]]
             [canvas.architecture.cozo.mirror :refer [cozo-mirror]]
             [canvas.architecture.cozo.build :refer [cozo-build]]
@@ -56,11 +57,11 @@
   "The outbound render surface — the inspection print-duals that re-present the model
    as authored forms (instance/grammar) plus the system map (architecture). The act
    grammar (Lens/Projection/Check) and its engine live in the kernel (core-lens)."
-  {:child [projection-instance projection-grammar architecture] :may-depend [kernel]})
+  {:child [projection-instance projection-grammar projection-design architecture] :may-depend [kernel]})
 
 (Subsystem orchestration
   "Lifecycle + composition root + CLI entries — coordinates ingestion onto the model. Realizes no subject
    faculty. Depends on cozo during the cut-over: the lifecycle holds a Cozo mirror of the model, and
    on projection because an entry point RENDERS: `check --format text` reports through the same
    instance print-dual the REPL does, rather than growing a second way to quote an offender."
-  {:child [model-pipeline infra-model core check] :may-depend [kernel ingestion cozo projection]})
+  {:child [model-pipeline infra-model core cli] :may-depend [kernel ingestion cozo projection]})

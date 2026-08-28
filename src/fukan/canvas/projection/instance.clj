@@ -166,14 +166,18 @@
                          (map pr-str v)) "]")
       flat)))
 
-(defn- doc-text
+(defn ^{:malli/schema [:=> [:cat :string] :string]}
+  doc-text
   "A docstring as it was AUTHORED — a real multi-line string, not a `pr-str`'d one.
 
    `pr-str` escapes the newlines, so a paragraph of documentation comes back as one line with
    `\\n` in it — unreadable, and not the authored form this projection claims to render. The
    stored string still carries the continuation indent it was written with, so emitting it raw
    between quotes reproduces the source exactly. Only `\\` and `\"` need escaping, and in that
-   order."
+   order.
+
+   Public because the GRAMMAR dual renders full docstrings too, and an escaping rule stated in
+   two renderers is an escaping rule that will differ in two renderers."
   [doc]
   (str \" (-> doc (str/replace "\\" "\\\\") (str/replace "\"" "\\\"")) \"))
 

@@ -32,7 +32,10 @@
             [fukan.canvas.core.typing :as typing]
             ;; aliased for its meta-grammar sorts (::reflect/Structure …) — the print-dual
             ;; renders exactly the nodes reflection mints, so the edge is honest
-            [fukan.canvas.core.reflect :as reflect]))
+            [fukan.canvas.core.reflect :as reflect]
+            ;; for `doc-text` only: rendering a docstring the way it was authored is one rule,
+            ;; and the node dual is where it lives. Stating it twice is how the two duals drift.
+            [fukan.canvas.projection.instance :as inst]))
 
 ;; ── parts: one reified Structure → its authoring ingredients ─────────────────
 
@@ -178,32 +181,42 @@
                         slots))
          "}")))
 
-(defn- fmt-structure [db s]
+(defn- fmt-structure
+  "One structure as its `defstructure` form. `full?` keeps the whole docstring — a design
+   DOCUMENT wants the concept explained, where a reference card wants one line and the rest of
+   the page. Law bodies stay elided either way: the description states the rule, and the datalog
+   under it is the mechanism."
+  [db s full?]
   (let [{:keys [name doc value? slots realizes laws]} (parts db s)]
     (->> (concat
           [(str "(defstructure " (when value? "^:value ") name)]
-          (when doc [(str "  " (pr-str (first-line doc)))])
+          (when doc [(str "  " (if full? (inst/doc-text doc) (pr-str (first-line doc))))])
           (when (seq slots) [(fmt-slots slots)])
           (when realizes [(str "  (realized-as " (pr-str realizes) ")")])
           (map #(str "  (law " (pr-str (:desc %)) " …)") laws))
          (str/join "\n")
          (#(str % ")")))))
 
-(defn ^{:malli/schema [:=> [:cat :StructureDb :VocabName] :Primer]}
+(defn ^{:malli/schema [:=> [:cat :StructureDb :VocabName [:or :map :nil]] :Primer]}
   vocabulary-primer
-  "One vocabulary (a grammar namespace) rendered as its defstructure forms."
-  [db vocab-name]
+  "One vocabulary (a grammar namespace) rendered as its defstructure forms.
+
+   `{:full? true}` keeps whole docstrings — the difference between a reference card, which is
+   what the REPL primer wants, and a design document, which is what a reader arriving at the
+   project wants. `opts` is required rather than an arity, so the modelled signature is one
+   signature: the type dialect has no `:maybe`, and a fn with two shapes has two."
+  [db vocab-name {:keys [full?]}]
   (let [members (->> (cq/q '[:find ?c ?n :in $ ?vn
                              :where (is ?v ::reflect/Vocabulary)
                                     [?v :entity/name ?vn]
                                     [?r :rel/from ?v] [?r :rel/kind :child] [?r :rel/to ?c]
                                     [?c :entity/name ?n]]
                            db vocab-name)
-                     (sort-by second)
-                     (map first))]
+                      (sort-by second)
+                      (map first))]
     (str/join "\n"
               (concat [(str "━━ " vocab-name " — " (count members) " structures ━━") ""]
-                      (interpose "" (map #(fmt-structure db %) members))))))
+                      (interpose "" (map #(fmt-structure db % full?) members))))))
 
 (defn ^{:malli/schema [:=> [:cat :StructureDb] :Primer]}
   grammar-primer
@@ -213,7 +226,7 @@
   (let [vocabs (sort (cq/q '[:find [?n ...]
                              :where (is ?v ::reflect/Vocabulary)
                                     [?v :entity/name ?n]] db))]
-    (str/join "\n\n" (map #(vocabulary-primer db %) vocabs))))
+    (str/join "\n\n" (map #(vocabulary-primer db % nil) vocabs))))
 
 (defn- corr-head
   "One registry config's authored `[Design ?d Fact ?f]` head — a VECTOR (the only shape the

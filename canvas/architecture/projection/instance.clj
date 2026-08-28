@@ -22,6 +22,10 @@
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] kernel/Form]
      :performs  [:throws :state]                   ; render-type → the query compiler
      :delegates [kernel/structure-by-tag typing/render-type query/q query/entity]})   ; resolve the structure + render refined targets + read the graph
+  (Operation doc-text
+    "A docstring rendered as it was AUTHORED — a real multi-line string, not a pr-str'd one.
+     Shared with the grammar dual: an escaping rule stated twice differs twice."
+    {:signature [:=> [:catn [:doc :string]] :string]})
   (Operation instance-text
     "instance-form, formatted like the authored source (aligned slot map)."
     {:signature [:=> [:catn [:db substrate/StructureDb] [:eid substrate/Eid]] Text]

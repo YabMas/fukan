@@ -71,7 +71,7 @@
         (println "No model loaded yet. Use (go) first.")))
   ([vocab-name]
    (if-let [m (infra-model/get-model)]
-     (println (gram/vocabulary-primer m vocab-name))
+     (println (gram/vocabulary-primer m vocab-name nil))
      (println "No model loaded yet. Use (go) first."))))
 
 (defn correspondence

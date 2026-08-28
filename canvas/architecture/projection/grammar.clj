@@ -11,7 +11,8 @@
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.kernel.structure :as kstructure]
             [canvas.architecture.kernel.typing :as typing]
-            [canvas.architecture.cozo.query :as query]))
+            [canvas.architecture.cozo.query :as query]
+            [canvas.architecture.projection.instance :as instance]))
 
 (Module projection-grammar
   "Render the reified grammar back out: forms, the primer, the correspondence card (registry-direct
@@ -45,9 +46,11 @@
      :performs  [:throws :state]
      :delegates [query/q kstructure/all-corresponds]})
   (Operation vocabulary-primer
-    "One vocabulary rendered as its defstructure forms."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName]] Primer]
-     :performs  [:throws :state]})
+    "One vocabulary rendered as its defstructure forms; {:full? true} keeps whole docstrings —
+     a design DOCUMENT rather than a reference card."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:vocab-name VocabName] [:opts [:or :map :nil]]] Primer]
+     :performs  [:throws :state]
+     :delegates [instance/doc-text]})
   (Operation grammar-primer
     "Every vocabulary in the model — the live language reference, derived not maintained."
     {:signature [:=> [:catn [:db substrate/StructureDb]] Primer]

@@ -531,12 +531,23 @@ mixing them corrupts history.
 - `src/fukan/infra/model.clj` — model lifecycle + the composition root (registers
   the Clojure extractor)
 - `src/fukan/model/pipeline.clj` — `build-model` (canvas ingestion + extraction merge)
-- `src/fukan/check.clj` — the non-REPL check entry: `clojure -M:fukan -m fukan.check --src src
-  [--spec-dirs canvas] [--format edn|text]` builds a project's model and reports its violations as
-  DATA (offender eids resolved to names, offender rows kept as TUPLES so an edge-binding law carries
-  both ends). Exit **0** satisfied / **1** unsatisfied / **2** UNDECIDABLE — a consumer must tell
-  "your design is violated" from "the checker broke", or it waves through the branch that broke the
-  checker. stdout is the report, stderr is the narration
+- `src/fukan/cli.clj` — the non-REPL entry: what the REPL cockpit does, for a PROGRAM. Two verbs,
+  because a reader arrives with two questions — `clojure -M:fukan -m fukan.cli describe
+  [--spec-dirs canvas]` (what has this project DECLARED — the design as its authored forms) and
+  `… -m fukan.cli check --src src [--spec-dirs canvas] [--format edn|text]` (does the code still
+  OBEY it — violations as DATA: offender eids resolved to names, rows kept as TUPLES so an
+  edge-binding law carries both ends, `:vars` alongside so a consumer can label the columns).
+  `describe` takes NO `--src`: a declared design is what the project SAID, and one that moved when
+  the code moved would not be a declaration (it is also 40ms instead of 8s). Exit **0** satisfied /
+  **1** unsatisfied / **2** UNDECIDABLE — a consumer must tell "your design is violated" from "the
+  checker broke", or it waves through the branch that broke the checker. stdout is the report,
+  stderr is the narration
+- `src/fukan/canvas/projection/design.clj` — the DESIGN projection: grammar + instance duals
+  composed into the document a reader arrives for. Its own contribution is the SCOPING, and neither
+  exclusion is a heuristic: the reflection meta-grammar is in every model and authored by none, and
+  an anonymous `^:value` node is already rendered inline by its owner. What remains is derived from
+  the INSTANCES — a vocabulary appears because the project instantiated something from it, so a
+  grammar merely loaded is never mistaken for a design
 - `src/fukan/canvas/core/structure.clj` — the `defstructure` primitive + `check`
 - `src/fukan/canvas/ingestion/canvas_source.clj` — canvas discovery, merge, cross-refs
 - `common/fukan/common.clj` (ns `fukan.common`) — the grammar INDEX: one require that registers the
