@@ -61,3 +61,17 @@
           (is (re-find #"cannot decide model satisfaction" (ex-message e)))
           (is (= [{:structure :x/T :law "not compiled" :unsupported true}]
                  (:unsupported (ex-data e)))))))))
+
+(deftest a-violation-carries-the-law-s-offender-var-names
+  (testing "a multi-var law's row is four names in a line unless something says which column is
+            which. `:vars` travels with the rows so a consumer — a CLI, an agent harness — can
+            label them, which is the difference between a finding that is readable downstream
+            and one that has to be correlated back against the law by hand."
+    (let [cdb (pipeline/build-model "src")]
+      (try
+        (let [results (remove :unsupported (law/check-structural cdb))]
+          (is (seq results) "precondition: some law compiled")
+          (is (every? #(vector? (:vars %)) results))
+          (is (every? #(every? symbol? (:vars %)) results)
+              "the law's own var symbols, not a rendering of them"))
+        (finally (db/close cdb))))))

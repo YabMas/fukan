@@ -50,12 +50,15 @@
 
    Offenders stay TUPLES. A law whose offender var list is `[?a ?b]` — a band's undeclared
    dependency, say — carries the whole edge in each row, and flattening it to the first var
-   would throw away the half that says what to do about it."
+   would throw away the half that says what to do about it. `:vars` travels with them so a
+   consumer can label the columns instead of printing four names and leaving the reader to
+   guess which is which; a law that names its offender vars well is legible downstream."
   [db violations]
   {:ok         (empty? violations)
-   :violations (vec (for [{:keys [structure law key offenders]} violations]
+   :violations (vec (for [{:keys [structure law key vars offenders]} violations]
                       (cond-> {:structure structure :law law}
-                        key (assoc :key key)
+                        key  (assoc :key key)
+                        vars (assoc :vars (mapv str vars))
                         true (assoc :offenders (mapv #(mapv (partial offender-name db) %)
                                                      offenders)))))})
 

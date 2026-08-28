@@ -103,7 +103,7 @@
            (cond
              (value-check-law law)
              (let [offs (value-offenders cdb (value-check-law law))]
-               (cond-> {:structure tag :law (:desc law)}
+               (cond-> {:structure tag :law (:desc law) :vars (vec (:offenders law))}
                  (:key law) (assoc :key (:key law))
                  (seq offs) (assoc :offenders offs)))
 
@@ -115,7 +115,7 @@
                  {:structure tag :law (:desc law) :unsupported true}
                  (try
                    (let [rows (db/q cdb program)]
-                     (cond-> {:structure tag :law (:desc law)}
+                     (cond-> {:structure tag :law (:desc law) :vars (vec (:offenders law))}
                        (:key law) (assoc :key (:key law))
                        (seq rows) (assoc :offenders (vec rows))))
                    (catch clojure.lang.ExceptionInfo _
@@ -123,8 +123,10 @@
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb] :any]}
   check
-  "Run every law over the Cozo db `cdb` and return its VIOLATIONS — `[{:structure :law
-   :offenders}]` (offenders are eid tuples, native handles). THE check: it runs the same laws the kernel
+  "Run every law over the Cozo db `cdb` and return its VIOLATIONS — `[{:structure :law :vars
+   :offenders}]` (offenders are eid TUPLES, native handles; `:vars` is the law's offender var
+   list, so a consumer rendering a multi-var row can say which column is which rather than
+   printing four names in a line and leaving the reader to guess). THE check: it runs the same laws the kernel
    DEFINES (`structure/laws-of`/`all-structures`), which is why check lives here in the engine and
    not as a hollow shell in the kernel — evaluation is the engine's job, the kernel's is definition.
    Satisfaction is FAIL-CLOSED: if any law cannot be compiled or evaluated, throws with every
@@ -138,7 +140,7 @@
                            " law(s) could not be evaluated")
                       {:unsupported unsupported})))
     (vec (for [r results :when (:offenders r)]
-           (select-keys r [:structure :law :key :offenders])))))
+           (select-keys r [:structure :law :key :vars :offenders])))))
 
 (defn- known-law-keys
   "Every `:key` across the laws `check` runs — the addressable worklist surface, from the
