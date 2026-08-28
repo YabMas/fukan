@@ -134,10 +134,12 @@
             (:min props) (conj (list 'min (:min props)))
             (:max props) (conj (list 'max (:max props)))
             (:re  props) (conj (list 'regex (str (:re props)))))
-          (:vector :set :sequential)
+          (:vector :set :sequential :maybe)
           ;; one element — clause args are varargs now (no vector splicing), so a
           ;; vector schema element (e.g. [:vector [:map …]]) passes through as one
-          ;; reader literal.
+          ;; reader literal. `:maybe` rides here because it is the same shape (one child)
+          ;; even though it is not a collection: it stays its OWN kind rather than lowering
+          ;; to `[:or X :nil]`, so the print-dual renders back what was authored.
           [(list 'kind (name op)) (list 'of (first args))]
           (:tuple :or :and)
           [(list 'kind (name op)) (cons 'of args)]
@@ -168,7 +170,9 @@
 (defstructure ^:value Schema
   "A malli schema, value-identified. `:kind` (a String) is the combinator:
    scalar (int/string/boolean/keyword/double — with :min/:max/:regex leaves),
-   collection (vector/set/sequential — one element in :of), tuple/or/and
+   collection (vector/set/sequential — one element in :of), maybe (one element in
+   :of — malli's own spelling for optional, kept as itself rather than normalized
+   to [:or X :nil] so the print-dual returns what was authored), tuple/or/and
    (children in :of), map (labelled :field entries), map-of (two ordered :of
    children — key then value), enum (:choice members),
    ref (NAMES another type via the :ref name leaf), or arrow (=> — labelled :in
@@ -256,7 +260,7 @@
     (case kind
       ("int" "string" "boolean" "keyword" "double" "symbol" "any" "nil")
       (if (seq props) [(keyword kind) props] (keyword kind))
-      ("vector" "set" "sequential")
+      ("vector" "set" "sequential" "maybe")
       [(keyword kind) (render db (first (children db eid :of)))]
       ("tuple" "or" "and")
       (into [(keyword kind)] (map #(render db %) (children db eid :of)))

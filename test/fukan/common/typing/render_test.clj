@@ -27,8 +27,9 @@
 (RenderHolder h-ref   {:schema Socket})
 (RenderHolder h-or    {:schema [:or :int :string]})
 (RenderHolder h-tup   {:schema [:tuple :string :int :keyword]})
+(RenderHolder h-may   {:schema [:maybe :string]})
 
-(defn- db [] (build/vars->cozo [#'Socket #'h-port #'h-addr #'h-color #'h-tags #'h-kw #'h-ref #'h-or #'h-tup]))
+(defn- db [] (build/vars->cozo [#'Socket #'h-port #'h-addr #'h-color #'h-tags #'h-kw #'h-ref #'h-or #'h-tup #'h-may]))
 (defn- root [db kind] (ffirst (cq/q '[:find ?s :in $ ?k :where [?s :val/kind ?k]] db kind)))
 
 (deftest renders-scalar-with-constraints
@@ -89,3 +90,12 @@
   ;; element order preserved (a buggy reader scrambled/collapsed these).
   (let [d* (db)]
     (is (= [:tuple :string :int :keyword] (typing/render-type d* (root d* "tuple"))))))
+
+(deftest renders-maybe
+  (testing "malli's own spelling for optional survives the round trip. It is kept as its own
+            kind rather than normalized to [:or X :nil] — the two mean the same thing, and a
+            print-dual that returned the one the author did not write is a print-dual that
+            rewrites code. It matters beyond tidiness: `:maybe` used to THROW at extraction, so
+            a project whose annotations already used it could not build a model at all."
+    (let [d* (db)]
+      (is (= [:maybe :string] (typing/render-type d* (root d* "maybe")))))))
