@@ -531,6 +531,12 @@ mixing them corrupts history.
 - `src/fukan/infra/model.clj` — model lifecycle + the composition root (registers
   the Clojure extractor)
 - `src/fukan/model/pipeline.clj` — `build-model` (canvas ingestion + extraction merge)
+- `src/fukan/check.clj` — the non-REPL check entry: `clojure -M:fukan -m fukan.check --src src
+  [--spec-dirs canvas] [--format edn|text]` builds a project's model and reports its violations as
+  DATA (offender eids resolved to names, offender rows kept as TUPLES so an edge-binding law carries
+  both ends). Exit **0** satisfied / **1** unsatisfied / **2** UNDECIDABLE — a consumer must tell
+  "your design is violated" from "the checker broke", or it waves through the branch that broke the
+  checker. stdout is the report, stderr is the narration
 - `src/fukan/canvas/core/structure.clj` — the `defstructure` primitive + `check`
 - `src/fukan/canvas/ingestion/canvas_source.clj` — canvas discovery, merge, cross-refs
 - `common/fukan/common.clj` (ns `fukan.common`) — the grammar INDEX: one require that registers the

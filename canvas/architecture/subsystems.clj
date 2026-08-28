@@ -21,6 +21,7 @@
             [canvas.architecture.orchestration.pipeline :refer [model-pipeline]]
             [canvas.architecture.orchestration.infra :refer [infra-model]]
             [canvas.architecture.orchestration.core :refer [core]]
+            [canvas.architecture.orchestration.check :refer [check]]
             [canvas.architecture.cozo.db :refer [cozo-db]]
             [canvas.architecture.cozo.mirror :refer [cozo-mirror]]
             [canvas.architecture.cozo.build :refer [cozo-build]]
@@ -58,6 +59,8 @@
   {:child [projection-instance projection-grammar architecture] :may-depend [kernel]})
 
 (Subsystem orchestration
-  "Lifecycle + composition root + CLI entry — coordinates ingestion onto the model. Realizes no subject
-   faculty. Depends on cozo during the cut-over: the lifecycle holds a Cozo mirror of the model."
-  {:child [model-pipeline infra-model core] :may-depend [kernel ingestion cozo]})
+  "Lifecycle + composition root + CLI entries — coordinates ingestion onto the model. Realizes no subject
+   faculty. Depends on cozo during the cut-over: the lifecycle holds a Cozo mirror of the model, and
+   on projection because an entry point RENDERS: `check --format text` reports through the same
+   instance print-dual the REPL does, rather than growing a second way to quote an offender."
+  {:child [model-pipeline infra-model core check] :may-depend [kernel ingestion cozo projection]})
