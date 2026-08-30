@@ -42,8 +42,13 @@
     {:signature [:=> [:catn [:cdb db/CozoDb] [:k :keyword]] [:set :string]]
      :performs  [:state :throws]                     ; reaches check's :state/:throws (via violations-of)
      :delegates [violations-of cquery/entity]})
+  (Operation offender-label
+    "One offender cell as text: an eid answers with its entity's name, anything else IS its own name. An offender need not be a node — a law may bind any var, and the useful one is sometimes a VALUE (a type-reference reports the NAME it could not resolve)."
+    {:signature [:=> [:catn [:cdb db/CozoDb] [:x :any]] :any]
+     :performs  [:state :throws]
+     :delegates [cquery/entity]})
   (Operation violation-rows
-    "Every offender ROW of the law keyed k, each cell resolved to its :entity/name. violation-names answers with the first offender var alone, which was enough while a law named one thing; a law that binds an EDGE carries the whole finding in the row."
+    "Every offender ROW of the law keyed k, each cell labelled. violation-names answers with the first offender var alone, which was enough while a law named one thing; a law that binds an EDGE carries the whole finding in the row."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:k :keyword]] [:set [:vector :any]]]
      :performs  [:state :throws]                     ; reaches check's :state/:throws through the private offender-rows
-     :delegates [check cquery/entity]}))
+     :delegates [check offender-label]}))

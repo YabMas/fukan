@@ -413,8 +413,14 @@
 ;;
 ;; Laws 66→64 (−2): each stratum traded two generated target-type laws (`:in`, `:out`) for one
 ;; (`:signature`).
+;;
+;; Laws 64→65 (+1): the dialect's no-dangling-ref law SPLIT in two. "a type-reference names a
+;; target" keeps the Schema node as its offender — a ref with no name has none to report — while
+;; "every type-reference resolves to a modelled Kind" now reports the NAME, which is the only part
+;; a reader can act on (the anonymous `^:value` Schema rendered as a bare eid). Two failures, two
+;; findings, each naming what it can.
 (def ^:private golden-terms {:count 129 :hash 1658986965})
-(def ^:private golden-laws  {:count 64 :hash -1580978360})
+(def ^:private golden-laws  {:count 65 :hash -919841517})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

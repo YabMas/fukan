@@ -223,13 +223,27 @@
   ;; :ref name, or a name no Kind carries, is a violation — the design pressure that forces every
   ;; referenced type (external/library types included) to be modelled explicitly. Subsumes the old
   ;; "a ref must name a target" presence law.
-  (law "every type-reference resolves to a modelled Kind"
+  ;; TWO laws, because the two failures differ in what a reader can do about them — and what
+  ;; each can NAME is the difference. A `^:value` Schema is anonymous, so a law reporting the
+  ;; node reports an eid (`["1038"]`), which says a dangling reference exists and nothing about
+  ;; which one. The name is the only part anybody can act on, and it is what they will grep for;
+  ;; a ref that carries no name has none to give, and there the node is all there is.
+  (law "a type-reference names a target"
     {:offenders [?sch]
      :where [[?sch :val/kind "ref"]
-             (not-join [?sch]
-               [?sch :val/ref ?nm]
-               [?k :entity/name ?nm]
-               (Kind ?k))]}))
+             (not-join [?sch] [?sch :val/ref ?_n])]})
+  ;; Reporting the NAME also collapses correctly: two signatures referencing the same missing
+  ;; Kind are one cause and one finding, rather than one finding per mention.
+  ;; ⚠ `:scope :global` is LOAD-BEARING, not tidiness. A self-scoped law injects its sort clause
+  ;; on the FIRST offender var, and this one's is `?nm` — a NAME, a string, never a node. Injected
+  ;; there the law reads "every string that is a Schema…", which is nothing, and it goes quietly
+  ;; vacuous rather than failing. So the sort is pinned on `?sch` in the body instead, where it
+  ;; belongs. Changing which var an offender list leads with can silently switch a law off.
+  (law "every type-reference resolves to a modelled Kind"
+    {:scope :global
+     :offenders [?nm]
+     :where [(is ?sch ::Schema) [?sch :val/kind "ref"] [?sch :val/ref ?nm]
+             (not-join [?nm] [?k :entity/name ?nm] (Kind ?k))]}))
 
 ;; ── what it MEANS for two schemas to say the same thing ─────────────────────────────────────
 ;; The dialect owns the shape of a function type, so it owns the comparison too. Before

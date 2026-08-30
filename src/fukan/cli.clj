@@ -44,7 +44,6 @@
             [fukan.canvas.projection.design :as design]
             [fukan.canvas.projection.instance :as inst]
             [fukan.cozo.law :as law]
-            [fukan.cozo.query :as cq]
             [fukan.infra.model :as infra-model]
             [fukan.model.pipeline :as pipeline]))
 
@@ -64,10 +63,16 @@
       out)))
 
 (defn- offender-name
-  "Name one offender eid. A named entity answers with its `:entity/name`; a `^:value` node has
-   none, so it answers with its eid — enough to correlate, and honest that there is no name."
-  [db eid]
-  (or (:entity/name (cq/entity db eid)) (str eid)))
+  "Name one offender cell. An eid answers with its entity's name; a `^:value` node has none, so it
+   answers with its eid — enough to correlate, and honest that there is no name. A cell that is
+   not an eid at all is already its own name and answers with itself.
+
+   That last case is not hypothetical: a law may bind any var as an offender, and the useful one
+   is sometimes a VALUE. `every type-reference resolves to a modelled Kind` reports the NAME it
+   could not resolve, because the anonymous Schema carrying it has an eid nobody can act on.
+   Assuming every cell was an eid turned that finding into a Cozo error."
+  [db x]
+  (law/offender-label db x))
 
 (defn ^{:malli/schema [:=> [:cat :any :any] :any]}
   findings

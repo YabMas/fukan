@@ -178,6 +178,20 @@
   [cdb k]
   (set (map #(:entity/name (query/entity cdb %)) (violations-of cdb k))))
 
+(defn ^{:malli/schema [:=> [:cat :CozoDb :any] :any]}
+  offender-label
+  "One offender cell as text. An eid answers with its entity's name; anything else IS its own
+   name already and answers with itself.
+
+   An offender does not have to be a node. A law may bind any var it likes, and the useful one is
+   sometimes a VALUE — a type-reference reports the NAME it could not resolve, because the
+   `^:value` Schema carrying it is anonymous and its eid says nothing anyone can act on. Resolving
+   every cell as an eid turned that into a Cozo error against a name used as an entity id."
+  [cdb x]
+  (if (int? x)
+    (or (:entity/name (query/entity cdb x)) (str x))
+    (str x)))
+
 (defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] [:set [:vector :any]]]}
   violation-rows
   "Every offender ROW of the law keyed `k`, each cell resolved to its `:entity/name`.
@@ -187,5 +201,4 @@
    the module it was claimed in — carries the whole finding in the row, and keeping only the
    first column throws away the half that says what to do about it."
   [cdb k]
-  (set (map (fn [row] (mapv #(:entity/name (query/entity cdb %)) row))
-            (offender-rows cdb k))))
+  (set (map (fn [row] (mapv #(offender-label cdb %) row)) (offender-rows cdb k))))
