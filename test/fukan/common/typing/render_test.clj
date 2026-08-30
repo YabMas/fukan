@@ -120,3 +120,18 @@
     (let [d* (build/vars->cozo [#'h-varargs])]
       (is (= [:=> [:catn [:path :string] [:rest [:* :any]]] :any]
              (typing/render-type d* (root d* "=>")))))))
+
+(RenderHolder h-multi
+  {:schema [:function [:=> [:catn [:project :string]] :any]
+                      [:=> [:catn [:project :string] [:live-names :any]] :any]]})
+
+(deftest renders-multi-arity-function
+  (testing "malli's own spelling for a function with several shapes. It matters beyond
+            completeness: it is what lets a MULTI-ARITY operation be typed without fukan
+            inventing an arity vocabulary of its own — the dialect already owns what a
+            function type is, so `[:function …]` is one more kind here rather than a new slot
+            on Operation."
+    (let [d* (build/vars->cozo [#'h-multi])]
+      (is (= [:function [:=> [:catn [:project :string]] :any]
+                        [:=> [:catn [:project :string] [:live-names :any]] :any]]
+             (typing/render-type d* (root d* "function")))))))

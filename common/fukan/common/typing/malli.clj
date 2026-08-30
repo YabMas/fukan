@@ -101,6 +101,8 @@
      [:*|:+|:? X]                              malli regex repetition — how a VARARGS
                                                parameter is typed inside [:catn …]
      [:tuple A B ...] / [:or ...] / [:and ...]  ordered/alternative children :of
+     [:function [:=> …] [:=> …]]               a MULTI-ARITY function — one arrow child
+                                               per arity, malli's own spelling
      [:map [:k V] [:k {:optional true} V]]     labelled :field entries
      [:enum :a :b] / [:enum \"a\" \"b\"]           :choice members (type preserved)
      [:re \"pat\"]                               string + regex (normalizes to the
@@ -151,7 +153,7 @@
           ;; not an edge, an eighth of a real codebase's surface, and the same wall `:maybe`
           ;; was until three days ago.
           [(list 'kind (name op)) (list 'of (first args))]
-          (:tuple :or :and)
+          (:tuple :or :and :function)
           [(list 'kind (name op)) (cons 'of args)]
           :map
           (into [(list 'kind "map")]
@@ -185,7 +187,9 @@
    to [:or X :nil] so the print-dual returns what was authored), the regex sequence
    ops */+/? (one element in :of — repetition inside a :cat/:catn, which is how a
    VARARGS parameter is spelled), tuple/or/and
-   (children in :of), map (labelled :field entries), map-of (two ordered :of
+   (children in :of), function (one `=>` child per arity — malli's own spelling for a
+   multi-arity function, so a fn with several shapes needs no vocabulary of its own),
+   map (labelled :field entries), map-of (two ordered :of
    children — key then value), enum (:choice members),
    ref (NAMES another type via the :ref name leaf), or arrow (=> — labelled :in
    params + :out). Author as native malli; read-malli expands it. A ref stores the
@@ -274,7 +278,7 @@
       (if (seq props) [(keyword kind) props] (keyword kind))
       ("vector" "set" "sequential" "maybe" "*" "+" "?")
       [(keyword kind) (render db (first (children db eid :of)))]
-      ("tuple" "or" "and")
+      ("tuple" "or" "and" "function")
       (into [(keyword kind)] (map #(render db %) (children db eid :of)))
       "map"
       ;; `:field` is an UNORDERED slot (a map has no field order), so the relations carry no
