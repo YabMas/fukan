@@ -39,9 +39,9 @@ query is empty. Its map table is the contract with this codebase. The operationa
   conservative; an explicitly open relation head accepts accumulative rules; a new law
   is constraint refinement. Model growth is separate: it adds facts and may turn laws red.
 - **No proof theory.** Fukan checks one concrete finite model. `correspond` lowers to
-  definitional pairing/`realized-*` rules, not constraints; any correspondence CONSTRAINT would be
-  an ordinary law model-checked in the joint model (a deferred layer — none authored yet), never a
-  theory-morphism proof obligation over all target models. An unsupported law makes `check` fail closed.
+  definitional pairing/`realized-*` rules, not constraints; a correspondence CONSTRAINT is an
+  ordinary law model-checked in the joint model (four are authored — see the correspondence LAWS
+  below), never a theory-morphism proof obligation over all target models. An unsupported law makes `check` fail closed.
 
 The frame says what a mechanism *is*, never that it should exist — vocabulary and
 mechanism grow only under concrete modelling pressure (see the standing discipline
@@ -196,13 +196,17 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   conservative, no denials (THE TEST verdict: declarations → rules). A realization entry `R ↦ E` reads:
   an `R`-edge is realized by an `E`-path from the source's code witness to the target's code witness;
   a content-identified `^:value` node is its own witness, which is why entries never mention transport.
-  Coverage is a set of READINGS over these rules — `(drift)` (unrealized, gated on extraction),
-  `(encapsulation)` (unaccounted public functions, scoped to ADOPTED namespaces), ambiguous — NOT laws:
-  `(check)` currently carries
-  NO correspondence violations, and checks over `corresponds`/`realized-*` are a deferred law layer (the
-  natural next arc). `public` appears in exactly two places — the `:delegates` realization path and the
-  dev-side readings (policy) — never in match logic: an op realized by a private fn PAIRS, and
-  realized-but-private is a future law's precise finding. The vocab laws reach shared vocab via datalog
+  Coverage over those rules is FOUR LAWS (2026-08-29 — the declaration stays definitional; the laws
+  are ordinary denials riding the CODOMAIN structures, since `correspond` has no law position):
+  `:correspondence/module-unrealized` (a Module no namespace realizes — gated on an `Ns` existing),
+  `:correspondence/operation-unrealized` (an Operation no function realizes — scoped to PAIRED
+  modules, which is both its gate and what keeps one cause to one finding),
+  `:correspondence/public-unaccounted` (a public Fn in an ADOPTED namespace no Operation models),
+  `:correspondence/signature-disagrees` (a paired pair whose `:in`/`:out` differ — symmetric, and
+  ⚠ order-insensitive, a known false negative). `(drift)`/`(encapsulation)`/`(type-drift)` are now
+  PRINTERS over those keys, not second definitions. `public` appears in exactly two places — the
+  `:delegates` realization path and the public-unaccounted law (policy) — never in match logic: an
+  op realized by a private fn PAIRS, and realized-but-private is a future law's precise finding. The vocab laws reach shared vocab via datalog
   injection (no compile cycle, since the `fukan.common` index requires every element). A law that is a
   declaration's SLOT SEMANTICS rides the declaring structure itself: `Subsystem` carries the
   `:may-depend` conformance/acyclicity teeth **plus** the rehomed module-graph acyclicity +
@@ -343,8 +347,9 @@ A `defstructure` is a composition of **slots** plus **laws**:
   whose slots are the extracted constructs (design `Operation` ↦ Clojure `Fn`; design `Module` ↦ `Ns`);
   the two strata are DISTINCT tags. The whole declaration lowers EXCLUSIVELY to rules (a pairing rule
   feeding the open ambient `corresponds`, a compiler-minted `realized-<rel>` per entry, per-`^:value`
-  reflexivity) — definitional, conservative, no denials. Coverage classes are READINGS, not laws; no
-  author-installed comparator or bridge callback exists. Registration keys by the sort pair (cross-ns
+  reflexivity) — definitional, conservative, no denials of its own. Coverage is enforced by ORDINARY
+  laws riding the codomain structures, not by anything the declaration generates; no author-installed
+  comparator or bridge callback exists. Registration keys by the sort pair (cross-ns
   collision throws; multiple correspondences per design sort are allowed).
 
 The current catalog is the source — or just run `(grammar)` in the REPL: the
@@ -473,17 +478,19 @@ structure substrate which is the model:
   canvas spec or any `src/` code.
 - `(reset)` — reload + rebuild from scratch. Use after adding a new canvas file or
   removing/renaming a var (a removed `defmethod`/`defn` lingers until a clean reset).
-- `(status)` — report model state. `(drift)` — modelled Operations no function realizes, a READING of
-  the `corresponds` pairing join (gated on extraction, not a law).
+- `(status)` — report model state. `(drift)` — what the design CLAIMS that the code does not have,
+  at both altitudes: modules no namespace realizes, operations no function realizes. A PRINTER over
+  the two `:correspondence/*-unrealized` law keys, so it and `(check)` cannot disagree.
 - `(show 'name)` — print a node as its AUTHORED form (the instance print-dual);
   `(focus '[(Operation ?n) …])` — render a datalog-selected slice as authored
   forms (the textual model explorer); `(check)` — violations with each offender
   quoted as its form.
 - `(correspondence)` — the design↔fact seam as one card: each `(correspond …)`'s authored form plus its
   live coverage readings (unrealized/ambiguous) and a trailing unaccounted-public count.
-- `(encapsulation)` / `(type-drift)` — the other correspondence READINGS: public functions no
-  Operation models — scoped to ADOPTED namespaces (see below); paired Operations whose signature
-  disagrees with the code's `:malli/schema`.
+- `(encapsulation)` / `(type-drift)` — printers over the other two correspondence laws: public
+  functions no Operation models — scoped to ADOPTED namespaces (see below); paired Operations whose
+  signature disagrees with the code's `:malli/schema`. Like `(drift)`, they address the law by KEY —
+  a renamed or retired law makes them throw, never quietly report nothing.
 - `(leaves)` / `(frontier)` — the INCREMENTAL-ADOPTION instruments, for pointing fukan at an existing
   codebase one module at a time. `(leaves)` ranks the unadopted namespaces that depend on nothing else
   in the project by fan-in — where leaf-upward adoption starts, readable with NO model authored at all.
@@ -511,9 +518,9 @@ nREPL runs on port 7889 (`clj -M:nrepl`).
 by *require* at the composition root, not discovered); when a `code-root` exists AND an extractor is
 registered, merge the extracted code structures onto the same graph and re-resolve cross-refs.
 `(structure/check db)` then runs all laws over the joint graph. Correspondence lowers to definitional
-rules (`corresponds`/`realized-*`), NOT laws, so `(check)` currently carries no correspondence
-violations; model↔code drift is READ off those rules (`(drift)`/`(encapsulation)`), and constraints
-over them are a deferred law layer. The legacy Allium/Boundary parse phases
+rules (`corresponds`/`realized-*`); the CONSTRAINTS over those rules are four ordinary laws on the
+codomain structures, so `(check)` does carry correspondence violations, and `(drift)`/
+`(encapsulation)`/`(type-drift)` print them rather than re-deriving them. The legacy Allium/Boundary parse phases
 and the old Phase 4–6 analyzer are retired.
 
 **Classpath tiers (`deps.edn`).** Base `:paths ["src" "common" "resources"]` is the *shipped* surface —
@@ -541,9 +548,10 @@ mixing them corrupts history.
 ## Key Files
 
 - `dev/user.clj` — REPL helpers (`go`/`refresh`/`reset`/`status`/`drift`/`encapsulation`/
-  `correspondence`/`undeclared-code-dependencies`/`leaves`/`frontier`) — thin PRINTERS now: the
-  coverage + adoption reading QUERIES ship in the `fukan.common` Clojure tier (an external consumer
-  needs them, and they name `public`/`Ns` — vocabulary the kernel tier must not)
+  `correspondence`/`undeclared-code-dependencies`/`leaves`/`frontier`) — thin PRINTERS: coverage
+  reads the four correspondence LAWS by key (`law/violation-rows`), and the ADOPTION reading queries
+  ship in the `fukan.common` Clojure tier (an external consumer needs them, and they name
+  `public`/`Ns` — vocabulary the kernel tier must not)
 - `src/fukan/infra/model.clj` — model lifecycle + the composition root (registers
   the Clojure extractor)
 - `src/fukan/model/pipeline.clj` — `build-model` (canvas ingestion + extraction merge)
@@ -585,8 +593,8 @@ mixing them corrupts history.
 - `common/fukan/common/extraction/clojure/` — the FACT vocabulary + the design↔Clojure bridge:
   `operation.clj` holds the `Fn` codomain and the essential correspondence
   `(correspond [Operation ?op Fn ?fn] match {:in :in :out :out :performs … :delegates …})`, whose
-  realization map lowers to `realized-<rel>` rules, plus the adopted-scoped `unaccounted-public`
-  reading; `module.clj` holds the `Ns` codomain and the twin ROOT
+  realization map lowers to `realized-<rel>` rules, plus the three `Fn`-borne correspondence laws
+  (operation-unrealized, public-unaccounted, signature-disagrees); `module.clj` holds the `Ns` codomain and the twin ROOT
   `(correspond [Module ?m Ns ?ns] match {:child :child})`, plus the INCREMENTAL-ADOPTION readings —
   the `adopted` relation (the Ns half of a live pairing, which is what makes the frontier need no new
   declaration) and `ns-dependencies`/`adoption-frontier`/`adoption-candidates`. `ns-depends` is a DEFRELATION

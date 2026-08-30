@@ -86,7 +86,7 @@ them. This table is the frame's contract with the codebase.
 | `(:sub R)` relation inclusion | an accumulative extension: this relation contributes its edges to the open head `R` |
 | inline path `E` | the deliberately small regular-path surface fragment; compound recursion graduates to a named `defrelation` |
 | `measure` | stratified aggregation, lowered to an auxiliary rule head |
-| `correspond` | a **bridge presentation** over design and fact vocabularies: two typed queries and a realization map, lowering to definitional pairing and `realized-*` rules; any constraints are deferred to ordinary laws authored over those rules |
+| `correspond` | a **bridge presentation** over design and fact vocabularies: two typed queries and a realization map, lowering to definitional pairing and `realized-*` rules; constraints are ordinary laws authored over those rules, riding the codomain structures |
 | grammar reflection | reification of the normalized presentation as facts in a meta-vocabulary |
 | Lens / Projection | queries and readback over the closure; they add no new model semantics |
 
@@ -127,10 +127,13 @@ This is a conservative extension — it adds derived views, not denials.
 
 Conformance — coverage, adherence, effect realisation — is therefore NOT part of the
 `correspond` declaration. Those are ordinary laws (denials) authored separately over
-`corresponds` and the `realized-*` rules; at present none are authored, so a `check`
-carries no correspondence obligations and the constraint layer is a deliberate
-deferral. This keeps the definition/assertion split sharp: the declaration says what
-realises what, and a later law says what must hold of it.
+`corresponds` and the `realized-*` rules. Four are authored (2026-08-29): a modelled
+Module no namespace realises, a modelled Operation no function realises, a public
+function no Operation models, and a paired pair whose signatures disagree. They ride
+the CODOMAIN structures — `correspond` has no law position, so a denial about a
+correspondence rides a structure, and the codomain declared beside it is the honest
+one. This keeps the definition/assertion split sharp: the declaration says what
+realises what, and a separate law says what must hold of it.
 
 Whatever those laws come to check, they are checked in the concrete joint model.
 Calling the bridge a theory morphism would require more: explicit sentence
@@ -155,7 +158,7 @@ The forms have disjoint jobs:
 | a structure/value instance | finite ground facts |
 | `defrelation` | an open relation head, inclusion, or closed derived Datalog view |
 | `law` | a denial constraint whose query returns counterexample witnesses |
-| `correspond` | a pairing relation (head + match) and a realization map, lowering to definitional pairing / `realized-*` rules; conformance is deferred to ordinary laws |
+| `correspond` | a pairing relation (head + match) and a realization map, lowering to definitional pairing / `realized-*` rules; conformance is separate ordinary laws |
 
 Identity is equally explicit: ordinary structures construct named entities, so
 their instance form always starts with a binding/name symbol; only `^:value`
