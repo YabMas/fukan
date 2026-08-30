@@ -38,14 +38,16 @@
 
 (s/defrelation :module-depends
   "the COMPLETE module→module dependency graph: a call dependency (?m owns an op that :delegates to
-   an op ?n owns) UNIONed with data-adoption (?m owns an op whose :in/:out ref-Schema references a Kind
-   ?n owns, by name). The reader `module-dependencies` and the layering laws below read this by name."
+   an op ?n owns) UNIONed with data-adoption (?m owns an op whose SIGNATURE mentions a ref-Schema
+   naming a Kind ?n owns). `signature-type` is the dialect's — it reaches parameter and result
+   types through an arrow directly and through each arity of a multi-arity function, which is one
+   place this file no longer has to know the shape of a function type. The reader `module-dependencies` and the layering laws below read this by name."
   [?m ?n]
   [(module-owns ?m ?op)
    (or-join [?op ?n]
      (and (delegates ?op ?op2) (module-owns ?n ?op2))
-     (and (in ?op ?sch)  (names-kind ?sch ?k) (module-owns ?n ?k))
-     (and (out ?op ?sch) (names-kind ?sch ?k) (module-owns ?n ?k)))
+     (and (signature ?op ?sig) (signature-type ?sig ?sch)
+          (names-kind ?sch ?k) (module-owns ?n ?k)))
    [(not= ?m ?n)]])
 
 (defstructure Subsystem

@@ -396,8 +396,25 @@
 ;; only one — it is TERNARY, so it gets no compiler-minted `R+` closure pair the way a binary
 ;; relation does. Laws hold at 66; the signature law's BODY changed, which the hash catches and
 ;; the count cannot.
-(def ^:private golden-terms {:count 104 :hash -741387668})
-(def ^:private golden-laws  {:count 66 :hash 1191490878})
+;;
+;; 2026-08-29 (later): a SIGNATURE IS ONE SCHEMA. `Operation` and `Fn` drop `:in`/`:out` — fukan
+;; restating at the vocabulary altitude what the type dialect already models — for a single
+;; `:signature [:? Schema]`, and the dialect gains the datalog for comparing two of them. That is
+;; what makes MULTI-ARITY expressible with no arity vocabulary: `[:function …]` is malli's own
+;; spelling and a signature slot just holds it.
+;;
+;; Terms 104→129 (+25). ADDED 28: `arrow` (1, unary), `arrow-param-at` (1 — TERNARY, so no
+;; closure pair), `arrow-differs` (4 bodies + 2 closure = 6), `arrow-agrees` (1 + 2 = 3),
+;; `signature-shaped` (2 bodies, unary), `signature-differs` (4 + 2 = 6), `signature-type`
+;; (4 + 2 = 6), and the `signature` slot rule shared by both strata (1 + 2 = 3). REMOVED 3:
+;; `in-at` (the dialect's `arrow-param-at` supersedes it) plus `realized-in`/`realized-out` —
+;; the realization map now declares `:signature nil`, because signature agreement is a
+;; CONSTRAINT carried by the law, not a definitional path between two code witnesses.
+;;
+;; Laws 66→64 (−2): each stratum traded two generated target-type laws (`:in`, `:out`) for one
+;; (`:signature`).
+(def ^:private golden-terms {:count 129 :hash 1658986965})
+(def ^:private golden-laws  {:count 64 :hash -1580978360})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

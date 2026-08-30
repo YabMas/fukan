@@ -135,3 +135,22 @@
       (is (= [:function [:=> [:catn [:project :string]] :any]
                         [:=> [:catn [:project :string] [:live-names :any]] :any]]
              (typing/render-type d* (root d* "function")))))))
+
+(RenderHolder h-positional {:schema [:=> [:cat :string :int] :boolean]})
+(RenderHolder h-named      {:schema [:=> [:catn [:path :string] [:depth :int]] :boolean]})
+
+(deftest both-malli-input-spellings-round-trip
+  (testing "`[:cat …]` was rejected until 2026-08-29 — a rule fukan invented, and an incoherent
+            one, since the fact tier dropped names anyway. Both are malli's, both are stored, and
+            each renders back as authored."
+    (let [d* (build/vars->cozo [#'h-positional #'h-named])
+          of-holder (fn [n] (ffirst (cq/q '[:find ?s :in $ ?n
+                                            :where [?h :entity/name ?n] [?r :rel/from ?h]
+                                                   [?r :rel/kind :schema] [?r :rel/to ?s]]
+                                          d* n)))]
+      (is (= [:=> [:cat :string :int] :boolean] (typing/render-type d* (of-holder "h-positional"))))
+      (is (= [:=> [:catn [:path :string] [:depth :int]] :boolean]
+             (typing/render-type d* (of-holder "h-named"))))
+      (testing "and they are DISTINCT nodes — the name is in the arrow's value identity, which is
+                why adherence compares positions rather than node identity"
+        (is (not= (of-holder "h-positional") (of-holder "h-named")))))))

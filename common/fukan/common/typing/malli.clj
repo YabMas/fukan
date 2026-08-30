@@ -21,13 +21,22 @@
 ;; ── the shape vocabulary (malli's grammar as queryable ^:value structures) ─────
 
 (defn ^:export catn->pairs
-  "Parse a malli function-input schema into ordered [param-name-symbol type-form] pairs —
-   the SHARED arrow-input representation used by both Operation's `:signature` sugar and
-   the `:=>` Schema combinator. `[:catn [:name T] …]` → pairs; `[:cat]` → []; a positional
-   `[:cat Type …]` is rejected (name your parameters)."
+  "Parse a malli function-input schema into ordered [param-name-or-nil type-form] pairs — the
+   arrow-input representation the `:=>` Schema combinator builds on. `[:catn [:name T] …]` →
+   NAMED pairs; `[:cat T …]` → pairs with no name; `[:cat]` → [].
+
+   Both spellings are malli's and both are accepted. Until 2026-08-29 `[:cat T …]` was REJECTED
+   (\"name your parameters\") — a rule fukan invented, and an incoherent one: the design tier was
+   forced to name parameters while the fact tier dropped the names, because the two fed different
+   slots. A signature is one `Schema` now and both strata read it through here, so a code
+   annotation written `[:cat …]` — which is the common style — must parse.
+
+   A NAME is design documentation, and it is what the print-dual renders back; it is deliberately
+   NOT part of what adherence compares (`signature-agrees` below ignores it), so a project may
+   name its design parameters and leave its annotations positional."
   [input]
   (when-not (vector? input)
-    (throw (ex-info (str "function input must be [:catn …] or [:cat]: " (pr-str input)) {:form input})))
+    (throw (ex-info (str "function input must be [:catn …] or [:cat …]: " (pr-str input)) {:form input})))
   (let [[op & more] input]
     (case op
       :catn (mapv (fn [pair]
@@ -35,10 +44,8 @@
                       (throw (ex-info (str ":catn entry must be [:name Type]: " (pr-str pair)) {:form input})))
                     [(symbol (name (first pair))) (second pair)])
                   more)
-      :cat  (if (seq more)
-              (throw (ex-info (str "name your parameters — use [:catn [:name Type] …], not [:cat …]: " (pr-str input)) {:form input}))
-              [])
-      (throw (ex-info (str "function input must be [:catn …] or [:cat]: " (pr-str input)) {:form input})))))
+      :cat  (mapv (fn [t] [nil t]) more)
+      (throw (ex-info (str "function input must be [:catn …] or [:cat …]: " (pr-str input)) {:form input})))))
 
 (defn ^:export arrow->in-out
   "Decompose a malli function schema `[:=> INPUT OUTPUT]` into `{:in [[param-name type] …]
@@ -171,7 +178,11 @@
           ;; schema, exactly as code/operation stores a signature (the shared representation).
           (let [{:keys [in out]} (arrow->in-out (into [:=>] args))]
             (into [(list 'kind "=>") (list 'out out)]
-                  (map (fn [[pname ptype]] (list 'in [pname ptype])) in)))
+                  ;; a NAMED param is a `[label target]` clause (the name rides the edge as
+                  ;; `:rel/label`); an unnamed one is the bare target. The name is therefore in
+                  ;; the arrow's value identity — which is why `signature-agrees` compares
+                  ;; positions rather than node identity.
+                  (map (fn [[pname ptype]] (list 'in (if pname [pname ptype] ptype))) in)))
           :map-of
           ;; two ordered :of children — the key schema then the value schema
           [(list 'kind "map-of") (cons 'of args)]
@@ -219,6 +230,77 @@
                [?sch :val/ref ?nm]
                [?k :entity/name ?nm]
                (Kind ?k))]}))
+
+;; ── what it MEANS for two schemas to say the same thing ─────────────────────────────────────
+;; The dialect owns the shape of a function type, so it owns the comparison too. Before
+;; 2026-08-29 this logic lived in the correspondence law, over `:in`/`:out` slots that
+;; `Operation` and `Fn` each carried — fukan restating at the vocabulary altitude what the
+;; dialect already modelled. A signature is one `Schema` now, and these relations are how a
+;; design one and a code one are checked against each other.
+
+(s/defrelation :arrow-param-at
+  "The ?i-th parameter TYPE of arrow schema ?s. The param NAME rides the edge as `:rel/label`
+   and is deliberately absent here: a name is design documentation — it is what the print-dual
+   renders back — and a code annotation written `[:cat …]` carries none, so comparing names
+   would make every positional annotation disagree with a named spec."
+  [?s ?i ?t]
+  [[?r :rel/from ?s] [?r :rel/kind :in] [?r :rel/to ?t] [?r :rel/order ?i]])
+
+(s/defrelation :arrow
+  "A single-arity function type."
+  [?s]
+  [[?s :val/kind "=>"]])
+
+(s/defrelation :arrow-differs
+  "Two arrow schemas that do not describe the same function: a parameter type at a position the
+   other does not have there, or a different result. POSITIONAL — a set of parameter types can
+   see neither a reordering nor an arity difference among same-typed params.
+
+   Both ends are bound positively (`arrow`) in every body, and they have to be: a var appearing
+   ONLY under negation is not range-restricted, and the engine rejects the rule rather than
+   quietly ranging it over the universe. That makes this a product over DISTINCT arrow schemas —
+   `Schema` is content-deduped, so it is the number of distinct signatures in the model, not the
+   number of functions."
+  [?a ?b]
+  [(arrow ?a) (arrow ?b) (arrow-param-at ?a ?i ?t) (not-join [?b ?i ?t] (arrow-param-at ?b ?i ?t))]
+  [(arrow ?a) (arrow ?b) (arrow-param-at ?b ?i ?t) (not-join [?a ?i ?t] (arrow-param-at ?a ?i ?t))]
+  [(arrow ?a) (arrow ?b) (out ?a ?t) (not-join [?b ?t] (out ?b ?t))]
+  [(arrow ?a) (arrow ?b) (out ?b ?t) (not-join [?a ?t] (out ?a ?t))])
+
+(s/defrelation :arrow-agrees
+  "Two arrow schemas describing the same function."
+  [?a ?b]
+  [(arrow ?a) (arrow ?b) (not (arrow-differs ?a ?b))])
+
+(s/defrelation :signature-shaped
+  "A schema that can be a signature: one arity, or several."
+  [?s]
+  [(arrow ?s)]
+  [[?s :val/kind "function"]])
+
+(s/defrelation :signature-differs
+  "Two signatures that do not say the same thing — the comparison an adherence law is written
+   against. A signature is an arrow (`:=>`) or a multi-arity function (`[:function …]`), and for
+   the multi-arity case each arity must have an agreeing arity on the other side. Arities are
+   matched by SHAPE rather than by position, because `[:function A B]` and `[:function B A]`
+   declare the same function."
+  [?a ?b]
+  [(signature-shaped ?a) (signature-shaped ?b)
+   [?a :val/kind ?ka] [?b :val/kind ?kb] [(not= ?ka ?kb)]]
+  [(arrow-differs ?a ?b)]
+  [[?a :val/kind "function"] [?b :val/kind "function"]
+   (of ?a ?x) (not-join [?b ?x] (of ?b ?y) (arrow-agrees ?x ?y))]
+  [[?a :val/kind "function"] [?b :val/kind "function"]
+   (of ?b ?y) (not-join [?a ?y] (of ?a ?x) (arrow-agrees ?x ?y))])
+
+(s/defrelation :signature-type
+  "A type a signature mentions at a parameter or result position — directly for an arrow, and
+   through each arity for a multi-arity function. What a cross-module data-dependency reads."
+  [?sig ?t]
+  [(in ?sig ?t)]
+  [(out ?sig ?t)]
+  [(of ?sig ?arrow) (in ?arrow ?t)]
+  [(of ?sig ?arrow) (out ?arrow ?t)])
 
 ;; names-kind — the type-ref → named-Kind navigation as a DEFRELATION (injected into every law/query
 ;; by check/vocab-rules), so the consumers that chase a ref Schema to the type it names — e.g.
@@ -314,9 +396,18 @@
       "map-of"
       (let [[k v] (children db eid :of)] [:map-of (render db k) (render db v)])
       "=>"
-      [:=> (into [:catn] (map (fn [[ieid lbl]] [(keyword lbl) (render db ieid)])
-                              (labelled-children db eid :in)))
-       (render db (first (children db eid :out)))]
+      ;; Params render back in the spelling they were authored in: NAMED ones as `[:catn …]`,
+      ;; positional ones as `[:cat …]`. Both are malli's, and a print-dual that returned the one
+      ;; the author did not write would be rewriting their code — the same rule `:maybe` follows.
+      ;; A partly-named arrow cannot arise: `catn->pairs` names all of a `:catn`'s params or none
+      ;; of a `:cat`'s.
+      (let [params (labelled-children db eid :in)
+            ;; `labelled-children` reports an absent label as "", not nil
+            named? (every? (fn [[_ lbl]] (seq (str lbl))) params)]
+        [:=> (if (and named? (seq params))
+               (into [:catn] (map (fn [[ieid lbl]] [(keyword lbl) (render db ieid)]) params))
+               (into [:cat]  (map (fn [[ieid _]] (render db ieid)) params)))
+         (render db (first (children db eid :out)))])
       ;; TOTAL: an unknown kind cannot occur for a well-formed Schema (validated at construction),
       ;; so render a visible structured placeholder instead of throwing — keeps the read side total
       ;; (a marker that can never pass as a real malli type), rather than leaking partiality upward.

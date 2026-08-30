@@ -91,18 +91,34 @@
 
 ;; ── an instance, as an entry ─────────────────────────────────────────────────
 
+(defn- type-form?
+  "A vector whose head is a KEYWORD is a type form — the dialect's — not a list of targets.
+
+   The distinction is not cosmetic. A plural slot's value and a malli schema are both vectors, so
+   without it a signature renders as its own elements joined by commas: `[:=> [:catn [:db
+   CozoDb]] :any]` came out as \"signature: :=>, :catn, :db, CozoDb, :any\", which is not prose,
+   it is a type form with the structure removed. Targets are named entities, labelled pairs, or
+   literals; a keyword-headed vector is only ever written by the type dialect."
+  [v]
+  (and (vector? v) (keyword? (first v))))
+
 (defn- value-phrase
   "One slot value as text. A labelled target `[label target]` keeps its label; an anonymous
    `^:value` node with a single slot renders as that slot's value, because a one-slot value node
-   IS its value and naming its wrapper adds a word and no information."
+   IS its value and naming its wrapper adds a word and no information.
+
+   A type form renders VERBATIM. Paraphrasing it — \"takes a string and an optional map\" —
+   would put a second, worse type language in the projection layer, which is the same reason
+   `type-phrase` leaves a refined scalar alone."
   [v]
   (cond
     (and (seq? v) (map? (second v)) (= 1 (count (second v))))
     (pr-str (val (first (second v))))
 
-    (seq? v)    (pr-str v)
-    (vector? v) (str/join ", " (map value-phrase v))
-    :else       (pr-str v)))
+    (seq? v)      (pr-str v)
+    (type-form? v) (pr-str v)
+    (vector? v)   (str/join ", " (map value-phrase v))
+    :else         (pr-str v)))
 
 (defn ^{:malli/schema [:=> [:cat :any] :string]}
   instance-prose

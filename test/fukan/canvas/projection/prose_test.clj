@@ -51,3 +51,19 @@
 (deftest a-declaration-with-no-doc-or-slots-still-renders
   (is (str/includes? (prose/structure-prose '(defstructure PLeaf)) "### PLeaf"))
   (is (str/includes? (prose/instance-prose '(PLeaf p-leaf)) "**p-leaf** (PLeaf)")))
+
+(deftest a-type-form-renders-verbatim-not-as-its-elements
+  (testing "a plural slot's value and a malli schema are both VECTORS, so without the keyword-head
+            discriminator a signature renders as its own elements joined by commas — `signature:
+            :=>, :catn, :db, CozoDb, :any`, which is a type form with the structure taken out.
+            This became reachable when a signature stopped being decomposed into `:in`/`:out`
+            slots and became one `Schema` the dialect owns."
+    (let [text (prose/instance-prose
+                '(Operation q "Run a script."
+                   {:signature [:=> [:catn [:db :CozoDb] [:script :string] [:params [:? :map]]]
+                                [:vector :any]]
+                    :delegates [compile-body entity]}))]
+      (is (str/includes? text "signature: [:=> [:catn [:db :CozoDb] [:script :string] [:params [:? :map]]] [:vector :any]]")
+          "the type form is rendered as authored")
+      (testing "and a genuine target LIST still reads as a list"
+        (is (str/includes? text "delegates: compile-body, entity"))))))

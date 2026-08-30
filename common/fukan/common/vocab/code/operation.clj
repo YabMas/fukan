@@ -9,19 +9,8 @@
    here: `fukan.common.extraction.clojure.operation` declares it from outside via the external
    `(correspond Operation …)` hook, and every drift check is GENERATED from that declaration."
   (:require [fukan.canvas.core.structure :refer [defstructure]]
-            [fukan.common.typing.malli :as ct :refer [Schema]]
+            [fukan.common.typing.malli :refer [Schema]]
             [fukan.common.vocab.code.effect :refer [Effect]]))
-
-(defn ^:export signature->slots
-  "Rewrite an Operation's `:signature` (a malli function-schema) into the canonical `:in`/`:out`
-   slots map. The input's named params become the ordered `:in` vector and the output becomes `:out`;
-   a map without `:signature` passes through unchanged."
-  [m]
-  (if-not (contains? m :signature)
-    m
-    (let [{:keys [in out]} (ct/arrow->in-out (:signature m))]
-      (cond-> (-> m (dissoc :signature) (assoc :out out))
-        (seq in) (assoc :in in)))))
 
 (defstructure Operation
   "A named unit of computation, either AUTHORED (a self-model's intent) or EXTRACTED from code (the fact
@@ -30,14 +19,22 @@
    intended and actual structure stay checkable against each other.
 
    Authored with a malli signature — `(Operation f \"doc\" {:signature [:=> [:catn [:name Type] …] Out]
-   :delegates […]})` — which the `signature->slots` sugar rewrites into the `:in`/`:out` slots. A design
-   op authors `:delegates` (the cross-module surfaces it relies on), never `:calls`: internal wiring is
-   extraction's job, so the actual call graph rides a fact-side slot the extractor fills."
-  {:in        [:* Schema]                          ; input types — positional, ordered, each labelled with its param name
-   :out       [:? Schema]                          ; output type
+   :delegates […]})`. `:signature` is an ORDINARY slot holding one `Schema`, the type dialect's own
+   node, so the authored malli form is stored as authored and renders back unchanged.
+
+   Until 2026-08-29 it was sugar: a `(syntax …)` hook decomposed the arrow into `:in`/`:out` slots
+   of this structure. That was fukan restating, at the vocabulary altitude, what the dialect
+   already modelled — `Schema` has had an arrow kind all along — and the duplication is what made
+   MULTI-ARITY look like it needed an arity vocabulary of its own. It does not: `[:function [:=> …]
+   [:=> …]]` is malli's spelling, the dialect reads it, and this slot holds it. The print-dual also
+   stops lying — you authored `:signature` and `(show …)` used to answer `:in`/`:out`.
+
+   A design op authors `:delegates` (the cross-module surfaces it relies on), never `:calls`:
+   internal wiring is extraction's job, so the actual call graph rides a fact-side slot the
+   extractor fills."
+  {:signature [:? Schema]                          ; the whole function type — the DIALECT's, not decomposed here
    :performs  [:* Effect]                          ; the effects it performs
-   :delegates [:* Operation]}                      ; designed dependencies — direct callees
-  (syntax signature->slots))                       ; optional sugar → the canonical slots map
+   :delegates [:* Operation]})                     ; designed dependencies — direct callees
 
 ;; An Operation's PROVENANCE is not vocab: `(design ?o)` (authored) and `(fact ?o)` (extracted) are the
 ;; kernel's universal substrate rules (`fukan.canvas.core.rules`), ambient in every law and query — pair

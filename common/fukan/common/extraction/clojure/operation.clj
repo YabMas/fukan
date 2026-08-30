@@ -30,8 +30,7 @@
    by structure) PLUS Clojure's own constructs: the actual `:calls` graph (extraction's actuals — the
    design side authors `:delegates`, never this), and the metadata conventions that mark a public
    surface (`:private` ← `defn-`, `:export` ← `^:export`, `:test-support` ← `^:test-support`)."
-  {:in           [:* Schema]                     ; input types — positional, ordered
-   :out          [:? Schema]                     ; output type
+  {:signature    [:? Schema]                     ; the whole function type, as the annotation wrote it
    :performs     [:* Effect]                     ; the effects it performs (extracted)
    :calls        [:* Fn]                         ; the ACTUAL call graph (calls+ is the compiler's)
    :private      [:? :boolean]                   ; public/internal — the module's surface
@@ -98,12 +97,13 @@
     ;; "every operation is typeable" an absent type is not modesty, it is a gap — `:any` and
     ;; `:nil` are the honest declarations for the cases that look untypeable.
     ;;
-    ;; POSITIONAL, through `in-at`. It shipped set-based for one day, inherited from the reading
-    ;; it replaced, and that was worse than the "cannot see a reordering" it was documented as:
-    ;; a set of type nodes cannot see an ARITY difference either, since `#{:any}` is `#{:any}`
-    ;; for one parameter or three. `fukan.cli/findings` was exactly that — two parameters
-    ;; declared, one annotated — and it passed. Comparing index-for-index is what
-    ;; `code-arrow->in-out` always claimed adherence did ("argument TYPES and ORDER, not names").
+    ;; The comparison itself belongs to the DIALECT (`signature-differs`), which owns what a
+    ;; function type is. It is POSITIONAL — a set of parameter types can see neither a reordering
+    ;; nor an arity difference among same-typed params (`#{:any}` is `#{:any}` for one parameter
+    ;; or three; `fukan.cli/findings` was exactly that and passed) — and it ignores param NAMES,
+    ;; which are design documentation rather than contract: a spec written `[:catn …]` agrees
+    ;; with an annotation written `[:cat …]`. MULTI-ARITY needs nothing here: a `[:function …]`
+    ;; signature is one Schema like any other, and the dialect matches its arities by shape.
     ;;
     ;; ⚠ It also makes the MULTI-ARITY gap visible rather than quiet. A function whose arities
     ;; differ has no `:signature` spelling on the design side, so annotating its code without
@@ -113,12 +113,18 @@
     {:scope     :global
      :key       :correspondence/signature-disagrees
      :offenders [?op ?m]
-     :rules     [[(signature-disagrees ?op ?fn) (out ?op ?t) (not-join [?fn ?t] (out ?fn ?t))]
-                 [(signature-disagrees ?op ?fn) (out ?fn ?t) (not-join [?op ?t] (out ?op ?t))]
-                 [(signature-disagrees ?op ?fn) (in-at ?op ?i ?t) (not-join [?fn ?i ?t] (in-at ?fn ?i ?t))]
-                 [(signature-disagrees ?op ?fn) (in-at ?fn ?i ?t) (not-join [?op ?i ?t] (in-at ?op ?i ?t))]]
-     :where     [(is ?op Operation) (design ?op) (corresponds ?op ?fn)
-                 (signature-disagrees ?op ?fn)
+     ;; Each body leads with `corresponds`, and it is load-bearing rather than tidy: a var that
+     ;; appears ONLY inside a negation is not range-restricted, and the engine rejects such a rule
+     ;; (fail-closed, as an UNDECIDABLE law) rather than ranging it over the universe. The pairing
+     ;; binds both ends — and scopes the whole comparison to operations that actually pair.
+     :rules     [[(sig-mismatch ?op ?fn) (corresponds ?op ?fn)
+                  (signature ?op ?s) (signature ?fn ?t) (signature-differs ?s ?t)]
+                 [(sig-mismatch ?op ?fn) (corresponds ?op ?fn)
+                  (signature ?op ?_s) (not-join [?fn] (signature ?fn ?t))]
+                 [(sig-mismatch ?op ?fn) (corresponds ?op ?fn)
+                  (signature ?fn ?_t) (not-join [?op] (signature ?op ?s))]]
+     :where     [(is ?op Operation) (design ?op)
+                 (sig-mismatch ?op ?fn)
                  (contains ?m ?op)]}))
 
 ;; Fn OWNS its public surface — the sub-sort onto which the design↔fact carrier is right-total (the codomain
@@ -126,19 +132,6 @@
 ;; `^:export` / `^:test-support`. The codomain decides which of its instances count, rather than the
 ;; correspondence reaching into Fn's raw `:val/*` triples from the design side. This is the SAME
 ;; public/private line the delegates roll-up quotients over as interior — drawn once, here.
-(defrelation :in-at
-  "The ?i-th input type of ?x — `:in` with the position the plain `in` rule throws away.
-
-   Both `Operation :in` and `Fn :in` are ORDERED slots (`[:* Schema]`), so the substrate records
-   `:rel/order` on every edge; the slot-generated `in` rule projects from/to and drops the index.
-   Adherence needs it. Comparing `:in` as a SET of type nodes cannot see a reordering — and,
-   worse, cannot see an ARITY difference among same-typed parameters, because `#{:any}` is
-   `#{:any}` whether there is one of them or three. That is not hypothetical: `fukan.cli/findings`
-   declared two parameters and its `:malli/schema` claimed one, and the set comparison called
-   them equal."
-  [?x ?i ?t]
-  [[?r :rel/from ?x] [?r :rel/kind :in] [?r :rel/to ?t] [?r :rel/order ?i]])
-
 (defrelation :public
   "Fn's public surface: an extracted function that is not private, not ^:export, not ^:test-support."
   [?x]
@@ -156,8 +149,14 @@
   [(named ?op ?n) (named ?fn ?n)
    (contains ?m ?op) (contains ?ns ?fn)
    (corresponds ?m ?ns)]
-  {:in        :in
-   :out       :out
+  {;; The signature has NO realizing code-graph path, and that is not a shrug. A realization
+   ;; entry says "this design edge is realized by that path between the two code witnesses", and
+   ;; `corresponds` on a `^:value` node is identity — so an entry here would hold only when the
+   ;; two strata wrote the malli form byte-for-byte alike, and a design that names its parameters
+   ;; against an annotation that does not would read as unrealized. Signature agreement is a
+   ;; CONSTRAINT, not a definitional path: the `signature-disagrees` law above carries it,
+   ;; through the dialect's `signature-differs`, which compares positions and ignores names.
+   :signature nil
    :performs  [:cat [:* :calls] :performs]
    :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})
 
@@ -169,19 +168,6 @@
 (def ^:private effect-tag
   "The Effect value tag, used through the same canonical value-construction path as Schema."
   :fukan.common.vocab.code.effect/Effect)
-
-(defn- code-arrow->in-out
-  "Decompose an EXTRACTED code function-schema `[:=> INPUT OUTPUT]` into `{:in [type…] :out type}`.
-   Unlike the authoring `arrow->in-out`, INPUT may be POSITIONAL `[:cat T…]` (code's convention —
-   no param names) as well as named `[:catn [:n T]…]`; param names are dropped, since adherence
-   compares argument TYPES and ORDER, not names."
-  [form]
-  (let [[_ input output] form
-        in (case (first input)
-             :cat  (vec (rest input))
-             :catn (mapv second (rest input))
-             [])]
-    {:in in :out output}))
 
 (def fn-defining
   "clj-kondo `:defined-by` values that denote a computation unit.
@@ -199,9 +185,11 @@
    dialect via `s/value-literal->iv` — the queryable form the adherence comparator reads. The function's
    own natural-key id (`\"ns/op\"`) is the root id the caller assigns."
   [v effs call-ids]
-  (let [sig    (:malli/schema (:meta v))
-        arrow? (and (vector? sig) (= :=> (first sig)) (= 3 (count sig)))
-        {:keys [in out]} (when arrow? (code-arrow->in-out sig))]
+  (let [sig     (:malli/schema (:meta v))
+        ;; `:=>` is one arity, `:function` several — both are function types and both are stored
+        ;; whole. Anything else on `:malli/schema` (a project annotating a non-function value) is
+        ;; not a signature and is left alone.
+        fn-sig? (and (vector? sig) (#{:=> :function} (first sig)))]
     (sub/->InstanceValue ::Fn (str (:name v)) nil
                          (cond-> {:val/private (boolean (:private v))}
                            (:export (:meta v))       (assoc :val/export true)
@@ -210,10 +198,8 @@
                            (seq effs)     (conj {:rk :performs :card :many
                                                  :targets (mapv #(s/value-literal->iv effect-tag %)
                                                                 (sort effs))})
-                           (seq in)       (conj {:rk :in :card :many
-                                                 :targets (mapv #(s/value-literal->iv schema-tag %) in)})
-                           arrow?         (conj {:rk :out :card :optional
-                                                 :targets [(s/value-literal->iv schema-tag out)]})
+                           fn-sig?        (conj {:rk :signature :card :optional
+                                                 :targets [(s/value-literal->iv schema-tag sig)]})
                            (seq call-ids) (conj {:rk :calls :card :many
                                                  :targets (mapv sub/->Ref call-ids)}))
                          false)))

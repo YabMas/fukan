@@ -35,19 +35,27 @@
       (is (= {"alpha" false "beta" false "delta" true} ops)
           "every defn/defn- becomes an Fn; the def (gamma) is ignored; defn- is private"))))
 
-(deftest decomposes-malli-schema-into-in-out
-  (testing "an annotated defn's :malli/schema is DECOMPOSED into :in/:out Schema nodes (no blob)"
+(deftest stores-malli-schema-as-one-decomposed-signature
+  (testing "an annotated defn's :malli/schema is stored as ONE `Schema` — the type dialect's own
+            node — not as a blob and not decomposed into `:in`/`:out` slots of `Fn`. Until
+            2026-08-29 it was the latter, which meant fukan restated at the vocabulary altitude
+            what the dialect already modelled; the decomposition still exists, it just lives
+            entirely inside the Schema subgraph, one level down."
     (let [db  (extract "test/fixtures/target/sample.clj")
-          out (ffirst (cq/q '[:find ?k
-                             :where [?e :structure/of :fukan.common.extraction.clojure.operation/Fn] [?e :entity/name "alpha"]
-                                    [?r :rel/from ?e] [?r :rel/kind :out] [?r :rel/to ?s] [?s :val/kind ?k]]
-                           db))
-          ins (cq/q '[:find [?k ...]
-                     :where [?e :structure/of :fukan.common.extraction.clojure.operation/Fn] [?e :entity/name "alpha"]
-                            [?r :rel/from ?e] [?r :rel/kind :in] [?r :rel/to ?s] [?s :val/kind ?k]]
-                   db)]
-      (is (= "int" out) "alpha's [:=> [:cat :int] :int] :out is a Schema of kind int")
-      (is (= ["int"] ins) "alpha's :in is [int]"))))
+          sig (ffirst (cq/q '[:find ?s
+                              :where [?e :structure/of :fukan.common.extraction.clojure.operation/Fn]
+                                     [?e :entity/name "alpha"]
+                                     [?r :rel/from ?e] [?r :rel/kind :signature] [?r :rel/to ?s]]
+                            db))
+          out (ffirst (cq/q '[:find ?k :in $ ?s
+                              :where [?r :rel/from ?s] [?r :rel/kind :out] [?r :rel/to ?o] [?o :val/kind ?k]]
+                            db sig))
+          ins (cq/q '[:find [?k ...] :in $ ?s
+                      :where [?r :rel/from ?s] [?r :rel/kind :in] [?r :rel/to ?i] [?i :val/kind ?k]]
+                    db sig)]
+      (is (= "=>" (:val/kind (cq/entity db sig))) "alpha's signature is one arrow Schema")
+      (is (= "int" out) "whose :out is a Schema of kind int")
+      (is (= ["int"] ins) "and whose params are [int] — queryable, just one hop deeper"))))
 
 (deftest operations-are-owned-by-their-subsystem
   (testing "each namespace becomes an Ns (the Module codomain) that owns its Fns (via :child relations)"

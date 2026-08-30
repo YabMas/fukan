@@ -142,8 +142,8 @@
 (Module ^{:name "typed-thing"} t-mod-typed {:child [t-op-typed]})
 (def ^:private typed-design-vars [#'t-op-typed #'t-mod-typed])
 
-(clj-op/Fn ^{:name "parse"} t-fn-agreeing    {:in [:string] :out :string})
-(clj-op/Fn ^{:name "parse"} t-fn-disagreeing {:in [:string] :out :int})
+(clj-op/Fn ^{:name "parse"} t-fn-agreeing    {:signature [:=> [:cat :string] :string]})
+(clj-op/Fn ^{:name "parse"} t-fn-disagreeing {:signature [:=> [:cat :string] :int]})
 (clj-op/Fn ^{:name "parse"} t-fn-untyped)
 
 (clj-module/Ns ^{:name "app.typed.thing"} t-ns-agree    {:child [t-fn-agreeing]})
@@ -175,8 +175,8 @@
 (Operation ^{:name "pair"} t-op-pair {:signature [:=> [:catn [:x :any] [:y :any]] :any]})
 (Module ^{:name "order-thing"} t-mod-order {:child [t-op-swap t-op-pair]})
 
-(clj-op/Fn ^{:name "swap"} t-fn-swapped  {:in [:int :string] :out :any})  ; same types, wrong order
-(clj-op/Fn ^{:name "pair"} t-fn-one-arg  {:in [:any]         :out :any})  ; same type, wrong arity
+(clj-op/Fn ^{:name "swap"} t-fn-swapped  {:signature [:=> [:cat :int :string] :any]}) ; same types, wrong order
+(clj-op/Fn ^{:name "pair"} t-fn-one-arg  {:signature [:=> [:cat :any] :any]})         ; same type, wrong arity
 (clj-module/Ns ^{:name "app.order.thing"} t-ns-order {:child [t-fn-swapped t-fn-one-arg]})
 
 (deftest a-reordering-of-same-typed-parameters-is-a-disagreement
@@ -200,7 +200,7 @@
 (Operation ^{:name "spit-all"} t-op-varargs
   {:signature [:=> [:catn [:path :string] [:rest [:* :any]]] :any]})
 (Module ^{:name "varargs-thing"} t-mod-varargs {:child [t-op-varargs]})
-(clj-op/Fn ^{:name "spit-all"} t-fn-varargs {:in [:string [:* :any]] :out :any})
+(clj-op/Fn ^{:name "spit-all"} t-fn-varargs {:signature [:=> [:cat :string [:* :any]] :any]})
 (clj-module/Ns ^{:name "app.varargs.thing"} t-ns-varargs {:child [t-fn-varargs]})
 
 (deftest a-varargs-signature-agrees-across-the-two-strata
@@ -209,3 +209,37 @@
             reduce it to the same node, so the pair agrees."
     (let [db (build/vars->cozo [#'t-op-varargs #'t-mod-varargs #'t-fn-varargs #'t-ns-varargs])]
       (is (empty? (offenders db :correspondence/signature-disagrees))))))
+
+;; ── multi-arity: the case that started this ──────────────────────────────────
+;; `gates` has two arities, the shorter delegating to the longer. Until the signature became one
+;; `Schema`, this was unmodellable: `Operation` carried a single flat `:in`/`:out`, so a function
+;; with two shapes had no spelling — and inventing an arity vocabulary for it would have been
+;; fukan restating what malli's `[:function …]` already says.
+
+(Operation ^{:name "gates"} t-op-multi
+  {:signature [:function [:=> [:catn [:project :string]] :any]
+                         [:=> [:catn [:project :string] [:live-names :any]] :any]]})
+(Module ^{:name "multi-thing"} t-mod-multi {:child [t-op-multi]})
+
+;; the code's annotation: same two arities, POSITIONAL and in the opposite order
+(clj-op/Fn ^{:name "gates"} t-fn-multi
+  {:signature [:function [:=> [:cat :string :any] :any]
+                         [:=> [:cat :string] :any]]})
+;; …and a version that implements only one of them
+(clj-op/Fn ^{:name "gates"} t-fn-half {:signature [:=> [:cat :string] :any]})
+
+(clj-module/Ns ^{:name "app.multi.thing"} t-ns-multi {:child [t-fn-multi]})
+(clj-module/Ns ^{:name "app.multi.thing"} t-ns-half  {:child [t-fn-half]})
+
+(deftest a-multi-arity-signature-agrees-arity-for-arity
+  (testing "arities match by SHAPE, not position — `[:function A B]` and `[:function B A]` declare
+            the same function. Param names are ignored too, so a `[:catn …]` spec agrees with the
+            `[:cat …]` annotation a developer would actually write."
+    (let [db (build/vars->cozo [#'t-op-multi #'t-mod-multi #'t-fn-multi #'t-ns-multi])]
+      (is (empty? (offenders db :correspondence/signature-disagrees))))))
+
+(deftest a-function-missing-a-declared-arity-disagrees
+  (testing "one arity against two is not the same declaration, and neither is an arrow against a
+            multi-arity function — the kinds differ before the arities are even compared"
+    (let [db (build/vars->cozo [#'t-op-multi #'t-mod-multi #'t-fn-half #'t-ns-half])]
+      (is (= #{["gates" "multi-thing"]} (offenders db :correspondence/signature-disagrees))))))
