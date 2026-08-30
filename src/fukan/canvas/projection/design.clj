@@ -140,11 +140,19 @@
                    (sort-by (juxt :vocab :sort)))
         width (apply max 4 (map (comp count :sort) rows))
         line  (str "  %4d  %-" width "s  %s")]
-    (str "## What this project declares\n\n"
-         (str/join "\n"
-                   (for [{:keys [sort vocab n]} rows]
-                     (str (format line n sort vocab)
-                          (format "\n        --select '[(%s ?n)]'" sort))))
-         "\n\nThe whole design is " (count (design-text db :prose)) " characters."
-         "\nAsk for one sort to get less of it, or narrow by name:"
-         "\n        --select '[(" (:sort (first rows)) " ?n) (named ?n \"...\")]'\n")))
+    (if (empty? rows)
+      ;; A project that declares nothing is the COMMON case, not a degenerate one — most projects
+      ;; are not modelled, and this is the first thing an agent runs to find out which kind it is
+      ;; in. Answering with an empty table and an example selection built from a sort that does
+      ;; not exist told it there was something here and handed it a malformed query to find it.
+      (str "## What this project declares\n\n"
+           "  Nothing — this project declares no design.\n\n"
+           "There is no model here to read, to select from, or to check code against.\n")
+      (str "## What this project declares\n\n"
+           (str/join "\n"
+                     (for [{:keys [sort vocab n]} rows]
+                       (str (format line n sort vocab)
+                            (format "\n        --select '[(%s ?n)]'" sort))))
+           "\n\nThe whole design is " (count (design-text db :prose)) " characters."
+           "\nAsk for one sort to get less of it, or narrow by name:"
+           "\n        --select '[(" (:sort (first rows)) " ?n) (named ?n \"...\")]'\n"))))

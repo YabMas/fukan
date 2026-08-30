@@ -112,3 +112,15 @@
   (let [d (db)]
     (is (< (count (design/design-index d)) (count (design/design-text d :prose)))
         "an index that cost what the document costs would not be a way in")))
+
+(deftest a-project-that-declares-nothing-is-told-so-plainly
+  (testing "the common case, not a degenerate one — most projects are not modelled, and this is
+            the first thing an agent runs to find out which kind it is in. An empty table plus an
+            example selection built from a sort that does not exist told it there was something
+            here, and handed it a malformed query to go and find it."
+    (let [t (design/design-index (build/with-grammar (build/vars->cozo []) nil))]
+      (is (str/includes? t "declares no design"))
+      (is (not (str/includes? t "--select"))
+          "no selection is offered, because there is nothing to select from")
+      (is (not (re-find #"\[\(\s" t))
+          "and certainly not a selection with an empty sort in it"))))
