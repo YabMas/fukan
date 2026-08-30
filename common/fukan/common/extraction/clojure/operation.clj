@@ -84,7 +84,42 @@
      :key       :correspondence/public-unaccounted
      :offenders [?fn ?ns]
      :where     [(public ?fn) (contains ?ns ?fn) (adopted ?ns)
-                 (not-join [?fn] (corresponds ?op ?fn))]}))
+                 (not-join [?fn] (corresponds ?op ?fn))]})
+
+  (law "a realized Operation's signature agrees with the code's"
+    ;; The three laws above are about EXISTENCE — something claimed that is not there, something
+    ;; there that was not claimed. This one is about AGREEMENT: the pairing holds, and the two
+    ;; halves say different things about the same function. It is the law that catches the most
+    ;; ordinary drift there is — a return type that changed and a spec that did not.
+    ;;
+    ;; SYMMETRIC, and deliberately so. A type on one side and nothing on the other is a finding
+    ;; in both directions: the design declaring `:out` the code does not state is an unverified
+    ;; claim, and the code stating one the design does not is an undeclared contract. Under
+    ;; "every operation is typeable" an absent type is not modesty, it is a gap — `:any` and
+    ;; `:nil` are the honest declarations for the cases that look untypeable.
+    ;;
+    ;; ⚠ ORDER-INSENSITIVE, inherited from the reading this replaces. `:in` is compared as a SET
+    ;; of type nodes, so a pure REORDER of same-typed parameters — `[:catn [:from :string]
+    ;; [:to :string]]` swapped — reads as agreement. A known false negative, not a claim that
+    ;; order does not matter: order lives on the edge (`:rel/order`), and reaching it needs an
+    ;; edge-level relation this vocabulary does not yet have. The law still catches strictly
+    ;; more than the nothing that preceded it.
+    ;;
+    ;; ⚠ It also makes the MULTI-ARITY gap visible rather than quiet. A function whose arities
+    ;; differ has no `:signature` spelling on the design side, so annotating its code without
+    ;; being able to model it produces a finding with no fix in the vocabulary. That is the
+    ;; modelling question surfacing, which is better than it hiding — but it is a real edge, and
+    ;; the answer to it is a spelling for multi-arity, not an exemption here.
+    {:scope     :global
+     :key       :correspondence/signature-disagrees
+     :offenders [?op ?m]
+     :rules     [[(signature-disagrees ?op ?fn) (out ?op ?t) (not-join [?fn ?t] (out ?fn ?t))]
+                 [(signature-disagrees ?op ?fn) (out ?fn ?t) (not-join [?op ?t] (out ?op ?t))]
+                 [(signature-disagrees ?op ?fn) (in ?op ?t)  (not-join [?fn ?t] (in ?fn ?t))]
+                 [(signature-disagrees ?op ?fn) (in ?fn ?t)  (not-join [?op ?t] (in ?op ?t))]]
+     :where     [(is ?op Operation) (design ?op) (corresponds ?op ?fn)
+                 (signature-disagrees ?op ?fn)
+                 (contains ?m ?op)]}))
 
 ;; Fn OWNS its public surface — the sub-sort onto which the design↔fact carrier is right-total (the codomain
 ;; restriction `[Fn :public]`). A public Fn is an extracted function that is none of private (`defn-`) /

@@ -389,8 +389,11 @@
 ;; …then the other direction — the code exposing surface the design never claimed. Laws 64→65
 ;; (+1): public-unaccounted on `Fn`, relativized to adopted namespaces rather than gated, since
 ;; the unclaimed region is not a coverage gap but the adoption frontier.
+;; …and finally AGREEMENT, where the pairing holds but the two halves say different things
+;; about the same function. Laws 65→66 (+1): signature-disagrees on `Fn`. Its four bodies are
+;; one local rule, not four laws — a law's `:rules` are its own, and multi-bodied means union.
 (def ^:private golden-terms {:count 103 :hash 2063935565})
-(def ^:private golden-laws  {:count 65 :hash -509984403})
+(def ^:private golden-laws  {:count 66 :hash -202063742})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

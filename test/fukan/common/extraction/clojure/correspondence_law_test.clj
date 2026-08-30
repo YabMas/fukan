@@ -132,3 +132,39 @@
     (let [db (build/vars->cozo (into design-vars [#'t-fn-read #'t-fn-write #'t-ns
                                                   #'t-fn-helper #'t-ns-unclaimed]))]
       (is (empty? (offenders db :correspondence/public-unaccounted))))))
+
+
+;; ── agreement: the pairing holds, the two halves disagree ────────────────────
+;; Each of these three namespaces twins with the same design module — one at a time, so each
+;; test builds a db holding exactly the fact side it is about.
+
+(Operation ^{:name "parse"} t-op-typed {:signature [:=> [:catn [:s :string]] :string]})
+(Module ^{:name "typed-thing"} t-mod-typed {:child [t-op-typed]})
+(def ^:private typed-design-vars [#'t-op-typed #'t-mod-typed])
+
+(clj-op/Fn ^{:name "parse"} t-fn-agreeing    {:in [:string] :out :string})
+(clj-op/Fn ^{:name "parse"} t-fn-disagreeing {:in [:string] :out :int})
+(clj-op/Fn ^{:name "parse"} t-fn-untyped)
+
+(clj-module/Ns ^{:name "app.typed.thing"} t-ns-agree    {:child [t-fn-agreeing]})
+(clj-module/Ns ^{:name "app.typed.thing"} t-ns-disagree {:child [t-fn-disagreeing]})
+(clj-module/Ns ^{:name "app.typed.thing"} t-ns-untyped  {:child [t-fn-untyped]})
+
+(deftest an-agreeing-signature-is-not-a-finding
+  (let [db (build/vars->cozo (into typed-design-vars [#'t-fn-agreeing #'t-ns-agree]))]
+    (is (empty? (offenders db :correspondence/signature-disagrees)))))
+
+(deftest a-changed-return-type-is-the-drift-this-law-exists-for
+  (testing "the pairing still holds — same name, corresponding containers — so none of the
+            existence laws fire. Only agreement catches it."
+    (let [db (build/vars->cozo (into typed-design-vars [#'t-fn-disagreeing #'t-ns-disagree]))]
+      (is (= #{["parse" "typed-thing"]} (offenders db :correspondence/signature-disagrees)))
+      (is (empty? (offenders db :correspondence/operation-unrealized)))
+      (is (empty? (offenders db :correspondence/public-unaccounted))))))
+
+(deftest a-declared-type-the-code-does-not-state-is-an-unverified-claim
+  (testing "symmetric on purpose. Under \"every operation is typeable\" an absent type is not
+            modesty but a gap — `:any` and `:nil` are the honest declarations for the cases that
+            look untypeable."
+    (let [db (build/vars->cozo (into typed-design-vars [#'t-fn-untyped #'t-ns-untyped]))]
+      (is (= #{["parse" "typed-thing"]} (offenders db :correspondence/signature-disagrees))))))
