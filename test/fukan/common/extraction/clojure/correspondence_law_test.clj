@@ -101,3 +101,34 @@
       (is (set? (law/violations-of db :correspondence/operation-unrealized)))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no law keyed"
                             (law/violations-of db :correspondence/nonexistent))))))
+
+;; ── the other direction: surface the design never claimed ────────────────────
+;; `helper` is public and inside the adopted namespace, and no Operation models it.
+
+(clj-op/Fn ^{:name "helper"}  t-fn-helper)
+(clj-op/Fn ^{:name "hidden"}  t-fn-hidden  {:private true})
+(clj-op/Fn ^{:name "wired"}   t-fn-wired   {:export true})
+(clj-module/Ns ^{:name "app.core.thing"} t-ns-wide
+  {:child [t-fn-read t-fn-write t-fn-helper t-fn-hidden t-fn-wired]})
+
+(deftest an-unmodelled-public-function-is-undeclared-surface
+  (let [db (build/vars->cozo (into design-vars [#'t-fn-read #'t-fn-write #'t-fn-helper
+                                                #'t-fn-hidden #'t-fn-wired #'t-ns-wide]))]
+    (is (= #{["helper" "app.core.thing"]} (offenders db :correspondence/public-unaccounted))
+        "the two ways out of this finding are the two honest ones — model it as intent, or
+         make it `defn-`")
+    (testing "a private function is settled by definition, and ^:export is a declaration in its
+              own right — neither is undeclared surface"
+      (is (not (contains? (offenders db :correspondence/public-unaccounted) ["hidden" "app.core.thing"])))
+      (is (not (contains? (offenders db :correspondence/public-unaccounted) ["wired" "app.core.thing"]))))))
+
+;; the same functions in a namespace no Module claims
+(clj-module/Ns ^{:name "app.unclaimed.thing"} t-ns-unclaimed {:child [t-fn-helper]})
+
+(deftest an-unadopted-namespace-has-no-coverage-gap-to-report
+  (testing "unrelativized, this law asserts total coverage of the project's public surface —
+            true only of a fully adopted codebase, and the premise incremental adoption denies.
+            An unclaimed namespace is not a gap; it is the adoption frontier."
+    (let [db (build/vars->cozo (into design-vars [#'t-fn-read #'t-fn-write #'t-ns
+                                                  #'t-fn-helper #'t-ns-unclaimed]))]
+      (is (empty? (offenders db :correspondence/public-unaccounted))))))

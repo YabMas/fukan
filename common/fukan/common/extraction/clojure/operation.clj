@@ -62,7 +62,29 @@
      :offenders [?op ?m]
      :where     [(is ?op Operation) (design ?op)
                  (contains ?m ?op) (corresponds ?m ?_ns)
-                 (not-join [?op] (corresponds ?op ?fn))]}))
+                 (not-join [?op] (corresponds ?op ?fn))]})
+
+  (law "every public function in an adopted namespace is modelled by an Operation"
+    ;; The law above says the design claims nothing the code lacks; this one says the code
+    ;; exposes nothing the design has not claimed. Together they are what makes a module's
+    ;; specification its surface rather than a subset of it — without this half, adopting a
+    ;; namespace and modelling three of its ten public functions reads as a complete claim.
+    ;;
+    ;; RELATIVIZED to `adopted` namespaces — the Ns half of a live pairing. Unrelativized this
+    ;; asserts total coverage of the project's public surface, which is true only of a fully
+    ;; adopted codebase and is the premise incremental adoption denies. Scoped, it says: within
+    ;; the region the model has claimed, this much surface is unaccounted for. The UNCLAIMED half
+    ;; is not a gap at all — it is `adoption-frontier`'s business.
+    ;;
+    ;; `public` is POLICY and appears only here and in the delegation path, never in match logic:
+    ;; an Operation realized by a PRIVATE function still pairs, so it is not an offender of this
+    ;; law, and the two ways out of a finding are the two honest ones — model the function as
+    ;; intent, or make it `defn-`.
+    {:scope     :global
+     :key       :correspondence/public-unaccounted
+     :offenders [?fn ?ns]
+     :where     [(public ?fn) (contains ?ns ?fn) (adopted ?ns)
+                 (not-join [?fn] (corresponds ?op ?fn))]}))
 
 ;; Fn OWNS its public surface — the sub-sort onto which the design↔fact carrier is right-total (the codomain
 ;; restriction `[Fn :public]`). A public Fn is an extracted function that is none of private (`defn-`) /
