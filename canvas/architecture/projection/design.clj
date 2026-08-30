@@ -37,4 +37,11 @@
      :delegates [declared-nodes vocabularies-of lens/focus-nodes query/q
                  grammar/vocabulary-primer grammar/structure-form
                  instance/focus-text instance/instance-form
-                 prose/structure-prose prose/instance-prose]}))
+                 prose/structure-prose prose/instance-prose]})
+  (Operation design-index
+    "The design's table of contents: every sort declared, how many, and the selection that
+     fetches it. What a selection is useless without — asking for one sort presupposes knowing
+     that sort exists, and the only thing that said so was the whole document."
+    {:signature [:=> [:catn [:db substrate/StructureDb]] instance/Text]
+     :performs  [:throws :state]
+     :delegates [declared-nodes design-text]}))

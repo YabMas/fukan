@@ -83,3 +83,32 @@
   (let [t (design/design-text (db) :forms '[(DStratum ?n)])]
     (is (str/includes? t "floor"))
     (is (not (str/includes? t "beam")))))
+
+;; ── the way in ───────────────────────────────────────────────────────────────
+
+(deftest the-index-names-every-sort-with-a-count
+  (let [t (design/design-index (db))]
+    (is (str/includes? t "DStratum"))
+    (is (str/includes? t "DPart"))
+    (is (str/includes? t "Module"))
+    (is (re-find #"2\s+DStratum" t) "two stratum instances, counted")))
+
+(deftest the-index-teaches-the-selection-that-fetches-each-sort
+  (testing "a selection is useless without knowing what is selectable, and until the index the
+            only thing that said a `DStratum` exists was the whole document — the very thing a
+            reader asks for a selection to avoid"
+    (let [t (design/design-index (db))]
+      (is (str/includes? t "--select '[(DStratum ?n)]'"))
+      (is (str/includes? t "--select '[(DPart ?n)]'")))))
+
+(deftest the-index-reports-what-reading-everything-would-cost
+  (testing "the first useful question is whether the whole design is affordable at all"
+    (let [d (db)
+          t (design/design-index d)]
+      (is (str/includes? t (str (count (design/design-text d :prose))))
+          "the size it reports is the size the document actually is"))))
+
+(deftest the-index-is-far-cheaper-than-the-document-it-indexes
+  (let [d (db)]
+    (is (< (count (design/design-index d)) (count (design/design-text d :prose)))
+        "an index that cost what the document costs would not be a way in")))

@@ -11,9 +11,13 @@
      check      does the code still OBEY it?       — the violations, as data
 
    Usage:
-     clojure -M:fukan -m fukan.cli describe [--spec-dirs canvas] [--format prose|forms]
+     clojure -M:fukan -m fukan.cli describe [--spec-dirs canvas] [--format index|prose|forms]
                                             [--select '[(Band ?n)]']
      clojure -M:fukan -m fukan.cli check --src src [--spec-dirs canvas] [--format edn|text]
+
+   `describe --format index` is the way IN: the sorts, their counts, and the selection that
+   fetches each. A reader who has to read everything to find out what to read has not been given
+   one, and `--select '[(Band ?n)]'` presupposes knowing a Band exists.
 
    `describe` takes `--select` — datalog `:where` clauses binding `?n` — because a whole design
    is the right answer only while a project has a small one. Asking for `[(Band ?n)]` yields the
@@ -101,9 +105,14 @@
    and a design document that moved when the code moved would not be one."
   [{:keys [spec-dirs format select]}]
   (binding [canvas-source/*spec-dirs* spec-dirs]
-    {:ok true :text (design/design-text (pipeline/build-model nil)
-                                        (if (= :forms format) :forms :prose)
-                                        select)}))
+    (let [db (pipeline/build-model nil)]
+      {:ok true
+       :text (if (= :index format)
+               ;; the index is a way IN, so it describes the WHOLE design however narrow the
+               ;; question that follows — an index of a selection could not tell you what you
+               ;; had not already asked for
+               (design/design-index db)
+               (design/design-text db (if (= :forms format) :forms :prose) select))})))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :string]] :nil]}
   -main

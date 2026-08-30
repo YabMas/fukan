@@ -116,3 +116,35 @@
        (str/join "\n\n"
                  (concat (map #(gram/vocabulary-primer db % {:full? true}) vocabs)
                          (when (seq eids) [(inst/focus-text db eids)])))))))
+
+(defn ^{:malli/schema [:=> [:cat :StructureDb] :Text]}
+  design-index
+  "The design's TABLE OF CONTENTS: every sort the project declared something of, how many, which
+   vocabulary it comes from, and the selection that fetches it.
+
+   What a selection is useless without. `--select '[(Band ?n)]'` presupposes knowing that a Band
+   exists, and until now the only thing that said so was the whole document — the very thing a
+   reader asks for a selection to avoid. A reader who must read everything to find out what to
+   read has not been given a way in.
+
+   So it teaches the selection language by example rather than describing it, and it reports the
+   full document's size, because the first useful question is whether reading all of it is
+   affordable at all. The cheapest thing this projection can answer, and the first thing an agent
+   exploring an unfamiliar design should ask."
+  [db]
+  (let [rows  (->> (declared-nodes db)
+                   (group-by second)
+                   (map (fn [[t es]]
+                          (let [k (keyword (str/replace (str t) #"^:" ""))]
+                            {:sort (name k) :vocab (namespace k) :n (count es)})))
+                   (sort-by (juxt :vocab :sort)))
+        width (apply max 4 (map (comp count :sort) rows))
+        line  (str "  %4d  %-" width "s  %s")]
+    (str "## What this project declares\n\n"
+         (str/join "\n"
+                   (for [{:keys [sort vocab n]} rows]
+                     (str (format line n sort vocab)
+                          (format "\n        --select '[(%s ?n)]'" sort))))
+         "\n\nThe whole design is " (count (design-text db :prose)) " characters."
+         "\nAsk for one sort to get less of it, or narrow by name:"
+         "\n        --select '[(" (:sort (first rows)) " ?n) (named ?n \"...\")]'\n")))
