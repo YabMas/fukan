@@ -16,6 +16,9 @@
   (Operation close "Close a Cozo database, releasing its native resources."
     {:signature [:=> [:catn [:db CozoDb]] :any]})
   (Operation q "Run a CozoScript script (optionally with a $params map) and return its :rows."
-    {:signature [:=> [:catn [:db CozoDb] [:script :string]] [:vector :any]]})
+    ;; `([db script] [db script params])` — a defaults chain, which is ONE operation with an
+    ;; optional parameter rather than two, and `[:? …]` says exactly that: the regex matches 2 or
+    ;; 3 arguments. Declaring only the shorter arity, as this did until 2026-08-29, hid one.
+    {:signature [:=> [:catn [:db CozoDb] [:script :string] [:params [:? :map]]] [:vector :any]]})
   (Operation with-db "Open a db, call (f db), and close it even on throw; returns f's value."
     {:signature [:=> [:catn [:f [:=> [:catn [:db CozoDb]] :any]]] :any]}))

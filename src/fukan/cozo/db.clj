@@ -20,7 +20,7 @@
   [db]
   (cozo/close-db db))
 
-(defn ^{:malli/schema [:=> [:cat :CozoDb :string] [:vector :any]]}
+(defn ^{:malli/schema [:=> [:cat :CozoDb :string [:? :map]] [:vector :any]]}
   q
   "Run CozoScript `script` against `db` and return its `:rows` (a vector of
    row-vectors). With a `params` map, the entries are bound as `$name` variables
