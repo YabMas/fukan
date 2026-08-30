@@ -57,7 +57,7 @@
   [db eid]
   (or (:entity/name (cq/entity db eid)) (str eid)))
 
-(defn ^{:malli/schema [:=> [:cat :any] :any]}
+(defn ^{:malli/schema [:=> [:cat :any :any] :any]}
   findings
   "The violations of the model held in `db`, as data: one entry per law that fired, its
    offenders NAMED rather than left as eids.

@@ -169,6 +169,32 @@
     (let [db (build/vars->cozo (into typed-design-vars [#'t-fn-untyped #'t-ns-untyped]))]
       (is (= #{["parse" "typed-thing"]} (offenders db :correspondence/signature-disagrees))))))
 
+;; ── the two disagreements a SET comparison cannot see ────────────────────────
+
+(Operation ^{:name "swap"} t-op-swap {:signature [:=> [:catn [:a :string] [:b :int]] :any]})
+(Operation ^{:name "pair"} t-op-pair {:signature [:=> [:catn [:x :any] [:y :any]] :any]})
+(Module ^{:name "order-thing"} t-mod-order {:child [t-op-swap t-op-pair]})
+
+(clj-op/Fn ^{:name "swap"} t-fn-swapped  {:in [:int :string] :out :any})  ; same types, wrong order
+(clj-op/Fn ^{:name "pair"} t-fn-one-arg  {:in [:any]         :out :any})  ; same type, wrong arity
+(clj-module/Ns ^{:name "app.order.thing"} t-ns-order {:child [t-fn-swapped t-fn-one-arg]})
+
+(deftest a-reordering-of-same-typed-parameters-is-a-disagreement
+  (testing "`[:catn [:a :string] [:b :int]]` against `[:cat :int :string]`. As SETS these are
+            equal — {string, int} both ways — which is why the law compares index for index."
+    (let [db (build/vars->cozo [#'t-op-swap #'t-op-pair #'t-mod-order
+                                #'t-fn-swapped #'t-fn-one-arg #'t-ns-order])]
+      (is (contains? (offenders db :correspondence/signature-disagrees) ["swap" "order-thing"])))))
+
+(deftest an-arity-difference-among-same-typed-parameters-is-a-disagreement
+  (testing "the case that made this law positional rather than set-based, and the one the
+            original framing missed: `#{:any}` is `#{:any}` whether there is one parameter or
+            three, so a set comparison cannot see arity at all. `fukan.cli/findings` declared
+            two parameters and annotated one, and passed."
+    (let [db (build/vars->cozo [#'t-op-swap #'t-op-pair #'t-mod-order
+                                #'t-fn-swapped #'t-fn-one-arg #'t-ns-order])]
+      (is (contains? (offenders db :correspondence/signature-disagrees) ["pair" "order-thing"])))))
+
 ;; ── varargs, now that the dialect spells it ──────────────────────────────────
 
 (Operation ^{:name "spit-all"} t-op-varargs

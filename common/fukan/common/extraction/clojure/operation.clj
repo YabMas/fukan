@@ -98,12 +98,12 @@
     ;; "every operation is typeable" an absent type is not modesty, it is a gap — `:any` and
     ;; `:nil` are the honest declarations for the cases that look untypeable.
     ;;
-    ;; ⚠ ORDER-INSENSITIVE, inherited from the reading this replaces. `:in` is compared as a SET
-    ;; of type nodes, so a pure REORDER of same-typed parameters — `[:catn [:from :string]
-    ;; [:to :string]]` swapped — reads as agreement. A known false negative, not a claim that
-    ;; order does not matter: order lives on the edge (`:rel/order`), and reaching it needs an
-    ;; edge-level relation this vocabulary does not yet have. The law still catches strictly
-    ;; more than the nothing that preceded it.
+    ;; POSITIONAL, through `in-at`. It shipped set-based for one day, inherited from the reading
+    ;; it replaced, and that was worse than the "cannot see a reordering" it was documented as:
+    ;; a set of type nodes cannot see an ARITY difference either, since `#{:any}` is `#{:any}`
+    ;; for one parameter or three. `fukan.cli/findings` was exactly that — two parameters
+    ;; declared, one annotated — and it passed. Comparing index-for-index is what
+    ;; `code-arrow->in-out` always claimed adherence did ("argument TYPES and ORDER, not names").
     ;;
     ;; ⚠ It also makes the MULTI-ARITY gap visible rather than quiet. A function whose arities
     ;; differ has no `:signature` spelling on the design side, so annotating its code without
@@ -115,8 +115,8 @@
      :offenders [?op ?m]
      :rules     [[(signature-disagrees ?op ?fn) (out ?op ?t) (not-join [?fn ?t] (out ?fn ?t))]
                  [(signature-disagrees ?op ?fn) (out ?fn ?t) (not-join [?op ?t] (out ?op ?t))]
-                 [(signature-disagrees ?op ?fn) (in ?op ?t)  (not-join [?fn ?t] (in ?fn ?t))]
-                 [(signature-disagrees ?op ?fn) (in ?fn ?t)  (not-join [?op ?t] (in ?op ?t))]]
+                 [(signature-disagrees ?op ?fn) (in-at ?op ?i ?t) (not-join [?fn ?i ?t] (in-at ?fn ?i ?t))]
+                 [(signature-disagrees ?op ?fn) (in-at ?fn ?i ?t) (not-join [?op ?i ?t] (in-at ?op ?i ?t))]]
      :where     [(is ?op Operation) (design ?op) (corresponds ?op ?fn)
                  (signature-disagrees ?op ?fn)
                  (contains ?m ?op)]}))
@@ -126,6 +126,19 @@
 ;; `^:export` / `^:test-support`. The codomain decides which of its instances count, rather than the
 ;; correspondence reaching into Fn's raw `:val/*` triples from the design side. This is the SAME
 ;; public/private line the delegates roll-up quotients over as interior — drawn once, here.
+(defrelation :in-at
+  "The ?i-th input type of ?x — `:in` with the position the plain `in` rule throws away.
+
+   Both `Operation :in` and `Fn :in` are ORDERED slots (`[:* Schema]`), so the substrate records
+   `:rel/order` on every edge; the slot-generated `in` rule projects from/to and drops the index.
+   Adherence needs it. Comparing `:in` as a SET of type nodes cannot see a reordering — and,
+   worse, cannot see an ARITY difference among same-typed parameters, because `#{:any}` is
+   `#{:any}` whether there is one of them or three. That is not hypothetical: `fukan.cli/findings`
+   declared two parameters and its `:malli/schema` claimed one, and the set comparison called
+   them equal."
+  [?x ?i ?t]
+  [[?r :rel/from ?x] [?r :rel/kind :in] [?r :rel/to ?t] [?r :rel/order ?i]])
+
 (defrelation :public
   "Fn's public surface: an extracted function that is not private, not ^:export, not ^:test-support."
   [?x]

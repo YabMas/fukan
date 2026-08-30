@@ -392,8 +392,12 @@
 ;; …and finally AGREEMENT, where the pairing holds but the two halves say different things
 ;; about the same function. Laws 65→66 (+1): signature-disagrees on `Fn`. Its four bodies are
 ;; one local rule, not four laws — a law's `:rules` are its own, and multi-bodied means union.
-(def ^:private golden-terms {:count 103 :hash 2063935565})
-(def ^:private golden-laws  {:count 66 :hash -202063742})
+;; …and one day later that law goes POSITIONAL. Terms 103→104 (+1): the `in-at` defrelation, and
+;; only one — it is TERNARY, so it gets no compiler-minted `R+` closure pair the way a binary
+;; relation does. Laws hold at 66; the signature law's BODY changed, which the hash catches and
+;; the count cannot.
+(def ^:private golden-terms {:count 104 :hash -741387668})
+(def ^:private golden-laws  {:count 66 :hash 1191490878})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
