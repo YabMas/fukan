@@ -12,7 +12,7 @@
    Clojure runs the malli check. Everything else compiles to pure CozoScript.
 
    `check` is the fail-closed violation view; `check-structural` is the full per-law roll-call
-   (including coverage/`:unsupported`). `violations-of`/`violation-names` are the worklist readers
+   (including coverage/`:unsupported`). `violations-of`/`violation-names`/`violation-rows` are the readers
    over `check`."
   (:require [clojure.string :as str]
             [fukan.canvas.core.structure :as structure]
@@ -148,11 +148,9 @@
   []
   (into #{} (keep (comp :key second)) (all-laws)))
 
-(defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] :any]}
-  violations-of
-  "The offender eids of the law keyed `k` — the generic reader behind every law-specific worklist
-   fn (filter `check` by the law's stable `:key`, first offender var). Returns a set of eids;
-   callers name them through `violation-names`.
+(defn- offender-rows
+  "The raw offender ROWS of the law keyed `k` — the one place the key is resolved against what
+   `check` actually ran.
 
    An UNKNOWN key throws (naming the known keys): a reader addressing a retired or misspelled
    law must fail the moment it runs, not report an empty worklist forever — the reader-side
@@ -162,7 +160,16 @@
     (when-not (contains? known k)
       (throw (ex-info (str "no law keyed " k " — known keys: " (str/join ", " (sort known)))
                       {:key k :known known})))
-    (->> (check cdb) (filter #(= k (:key %))) (mapcat :offenders) (map first) set)))
+    (->> (check cdb) (filter #(= k (:key %))) (mapcat :offenders))))
+
+(defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] :any]}
+  violations-of
+  "The offender eids of the law keyed `k` — the generic reader behind every law-specific worklist
+   fn (filter `check` by the law's stable `:key`, first offender var). Returns a set of eids;
+   callers name them through `violation-names`, or take whole rows through `violation-rows`.
+   An unknown key throws, in `offender-rows`."
+  [cdb k]
+  (set (map first (offender-rows cdb k))))
 
 (defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] [:set :string]]}
   violation-names
@@ -170,3 +177,15 @@
    resolved through `query/entity`. The one home for the recurring worklist-reader shape."
   [cdb k]
   (set (map #(:entity/name (query/entity cdb %)) (violations-of cdb k))))
+
+(defn ^{:malli/schema [:=> [:cat :CozoDb :keyword] [:set [:vector :any]]]}
+  violation-rows
+  "Every offender ROW of the law keyed `k`, each cell resolved to its `:entity/name`.
+
+   `violation-names` answers with the first offender var alone, which was enough while a law
+   named one thing. A law that binds an EDGE — a band's undeclared dependency, an operation and
+   the module it was claimed in — carries the whole finding in the row, and keeping only the
+   first column throws away the half that says what to do about it."
+  [cdb k]
+  (set (map (fn [row] (mapv #(:entity/name (query/entity cdb %)) row))
+            (offender-rows cdb k))))

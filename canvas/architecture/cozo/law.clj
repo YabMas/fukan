@@ -2,7 +2,8 @@
   "Self-spec: `fukan.cozo.law` — the general law engine on Cozo, and the home of `check`. Compiles a
    defstructure law's datalog (offenders + where, read from the kernel it DEFINES via `laws-of`) into
    CozoScript over the unified `triple` view and runs it. `check` (+ its readers `violations-of`/
-   `violation-names`) lives HERE, in the engine, because it is EVALUATION — the kernel owns DEFINITION.
+   `violation-names`/`violation-rows`) lives HERE, in the engine, because it is EVALUATION — the
+   kernel owns DEFINITION.
    The dependency runs one way (engine → kernel), so there is no `structure ↔ law` cycle and no registry
    (the old hollow-kernel-`check` + `register-check-engine!` indirection is retired)."
   (:require [fukan.common.vocab.code.operation :refer [Operation]]
@@ -40,4 +41,9 @@
     "The :entity/name of every offender of the law keyed k — violations-of eids resolved through the query layer's entity. The one home for the recurring worklist-reader shape."
     {:signature [:=> [:catn [:cdb db/CozoDb] [:k :keyword]] [:set :string]]
      :performs  [:state :throws]                     ; reaches check's :state/:throws (via violations-of)
-     :delegates [violations-of cquery/entity]}))
+     :delegates [violations-of cquery/entity]})
+  (Operation violation-rows
+    "Every offender ROW of the law keyed k, each cell resolved to its :entity/name. violation-names answers with the first offender var alone, which was enough while a law named one thing; a law that binds an EDGE carries the whole finding in the row."
+    {:signature [:=> [:catn [:cdb db/CozoDb] [:k :keyword]] [:set [:vector :any]]]
+     :performs  [:state :throws]                     ; reaches check's :state/:throws through the private offender-rows
+     :delegates [check cquery/entity]}))

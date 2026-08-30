@@ -16,8 +16,7 @@
             [fukan.canvas.projection.instance :as inst]
             [fukan.canvas.projection.architecture :as arch]
             [fukan.common.vocab.code.subsystem :as code-subsystem]
-            [fukan.common.extraction.clojure.module :as clj-module]
-            [fukan.common.extraction.clojure.operation :as clj-operation]))
+            [fukan.common.extraction.clojure.module :as clj-module]))
 
 (defonce ^:private _reload-init
   (reload/init {:dirs ["src" "dev"], :no-reload '#{user}}))
@@ -84,7 +83,8 @@
   []
   (if-let [m (infra-model/get-model)]
     (do (println (gram/correspondence-card m))
-        (println (str "unaccounted-public: " (count (clj-operation/unaccounted-public m)))))
+        (println (str "unaccounted-public: "
+                      (count (law/violations-of m :correspondence/public-unaccounted)))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn show
@@ -120,23 +120,27 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn drift
-  "Model↔code drift in the held (unified) model: modelled Operations with no realizing
-   function — a READING of the `corresponds` pairing join (the generated `:corresponds/*`
-   demand laws dissolved with the essential `correspond`). Empty ⇔ the implementation fully
-   realizes every modelled capability; vacuous when no code is extracted (the `Fn` gate).
+  "Model↔code drift in the held (unified) model: what the design CLAIMS that the code does not
+   have, at both altitudes — modules no namespace realizes, and operations no function realizes.
+
+   A PRINTER over two laws, addressed by their stable keys. It was an inline query until the
+   correspondence grew teeth (2026-08-29), which meant two definitions of drift free to drift
+   from each other; now `(check)` and this report the same thing by construction, and a retired
+   law makes this THROW rather than quietly report nothing forever.
    (Build with a code-root — `(go)` defaults to \"src\" — so the held model carries the code.)"
   []
   (if-let [m (infra-model/get-model)]
-    (let [unrealized (cq/q '[:find [?n ...] :in $ %
-                             :where
-                             (is ?op :fukan.common.vocab.code.operation/Operation) (design ?op)
-                             (is ?_g :fukan.common.extraction.clojure.operation/Fn)   ; gate: extraction ran
-                             (not-join [?op] (corresponds ?op ?_t))
-                             [?op :entity/name ?n]]
-                           m (s/vocab-rules))]
-      (if (empty? unrealized)
-        (println "No drift — every modelled Operation is realized in code.")
-        (println "Drift —" (count unrealized) "modelled Operation(s) with no realizing function:" (sort unrealized))))
+    (let [modules (law/violation-rows m :correspondence/module-unrealized)
+          ops     (law/violation-rows m :correspondence/operation-unrealized)]
+      (if (and (empty? modules) (empty? ops))
+        (println "No drift — every modelled Module and Operation is realized in code.")
+        (do (when (seq modules)
+              (println "Drift —" (count modules) "modelled Module(s) with no realizing namespace:")
+              (doseq [[mn] (sort modules)] (println "  " mn)))
+            (when (seq ops)
+              (println "Drift —" (count ops) "modelled Operation(s) with no realizing function:")
+              (doseq [[on mn] (sort-by (juxt second first) ops)]
+                (println (format "   %-42s in %s" on mn)))))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn undeclared-code-dependencies
@@ -171,26 +175,23 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn encapsulation
-  "The ENCAPSULATION worklist (the privacy-coverage iteration): PUBLIC extracted functions inside an
-   ADOPTED namespace with no authored Operation twin — each an undeclared public surface demanding a
-   decision (model it as intent, or make it `defn-`). Grouped by code namespace. Empty ⇔ every
-   unmodelled function in the CLAIMED region is genuinely private; namespaces the model has not
-   claimed are not a gap here — they are `(frontier)`/`(leaves)`' business.
-   The query ships in `fukan.common.extraction.clojure.operation` (it names `public`, so it belongs
-   with the vocabulary that owns it, and an external consumer needs it too); this prints it."
+  "The ENCAPSULATION worklist: PUBLIC extracted functions inside an ADOPTED namespace that no
+   authored Operation models — each an undeclared public surface demanding a decision (model it
+   as intent, or make it `defn-`). Grouped by code namespace. Empty ⇔ every unmodelled function
+   in the CLAIMED region is genuinely private; namespaces the model has not claimed are not a
+   gap here — they are `(frontier)`/`(leaves)`' business.
+
+   A PRINTER over the law keyed `:correspondence/public-unaccounted`. The law carries the
+   namespace in its offender row, which is what lets this group without a second query."
   []
   (if-let [m (infra-model/get-model)]
-    (let [w (clj-operation/unaccounted-public m)]
-      (if (empty? w)
+    (let [rows (law/violation-rows m :correspondence/public-unaccounted)]
+      (if (empty? rows)
         (println "Fully encapsulated — every unmodelled function is private.")
-        (let [by-ns (->> (cq/q '[:find ?on ?nn :in $ %
-                                 :where (public ?o) (named ?o ?on) (within ?o ?nn)]
-                               m (s/vocab-rules))
-                         (filter (fn [[on _]] (contains? w on)))
-                         (group-by second))]
-          (println "Encapsulation worklist —" (count w) "public functions with no model twin:")
-          (doseq [[nn ops] (sort-by key by-ns)]
-            (println (format "  %-42s %s" nn (str/join ", " (sort (map first ops)))))))))
+        (let [by-ns (group-by second rows)]
+          (println "Encapsulation worklist —" (count rows) "public functions with no model twin:")
+          (doseq [[nn fns] (sort-by key by-ns)]
+            (println (format "  %-42s %s" nn (str/join ", " (sort (map first fns)))))))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn leaves
@@ -269,30 +270,22 @@
     (println "No model loaded yet. Use (go) first.")))
 
 (defn type-drift
-  "TYPE correspondence (model↔code): paired Operations whose signature DISAGREES with the code's
-   `:malli/schema` — a READING over the `corresponds` join (the generated `:corresponds/*` agrees
-   demand dissolved with the essential `correspond`). A twin missing an `:out` the design declares, or
-   an `:in`/`:out` type node present on one side and not the other, is an offender. ⚠ current strength:
-   this reading compares `:in`/`:out` type nodes by SET-EQUALITY (eid), NOT `:rel/order` — a pure
-   REORDER of same-typed args reads as adhering here (the old structural comparator checked order;
-   restoring order-sensitivity waits on the authored agrees law's return)."
+  "TYPE adherence (model↔code): paired Operations whose signature DISAGREES with the code's
+   `:malli/schema`. A twin missing an `:out` the design declares, or an `:in`/`:out` type node
+   present on one side and not the other, is an offender.
+
+   A PRINTER over the law keyed `:correspondence/signature-disagrees`. ⚠ Its strength is the
+   law's: `:in`/`:out` compare by SET-EQUALITY of type nodes, NOT `:rel/order`, so a pure REORDER
+   of same-typed args reads as adhering. Order lives on the edge and reaching it needs an
+   edge-level relation the vocabulary does not have yet."
   []
   (if-let [m (infra-model/get-model)]
-    (let [drifted (cq/q '[:find [?n ...] :in $ %
-                          :where
-                          (is ?op :fukan.common.vocab.code.operation/Operation) (design ?op)
-                          (corresponds ?op ?fn)
-                          (or-join [?op ?fn]
-                            (and (out ?op ?o) (not-join [?fn ?o] (out ?fn ?o)))
-                            (and (out ?fn ?o) (not-join [?op ?o] (out ?op ?o)))
-                            (and (in ?op ?s)  (not-join [?fn ?s] (in ?fn ?s)))
-                            (and (in ?fn ?s)  (not-join [?op ?s] (in ?op ?s))))
-                          [?op :entity/name ?n]]
-                        m (s/vocab-rules))]
+    (let [rows (law/violation-rows m :correspondence/signature-disagrees)]
       (println "ADHERENCE — modelled signature disagrees with the code's :malli/schema:")
-      (if (empty? drifted)
+      (if (empty? rows)
         (println "  (none — every code signature exactly adheres to its modelled type)")
-        (doseq [on (sort drifted)] (println "  " on))))
+        (doseq [[on mn] (sort-by (juxt second first) rows)]
+          (println (format "   %-42s in %s" on mn)))))
     (println "No model loaded yet. Use (go) first.")))
 
 (defn status []

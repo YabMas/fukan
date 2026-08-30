@@ -64,7 +64,7 @@
 
 ;; `adopted` names the claim itself — the Ns half of a live `Module ↦ Ns` pairing — so a coverage reading
 ;; can be relativized to the claimed region instead of asserting total coverage over the whole codebase.
-;; Two consumers: `adopted-namespaces` below, and `unaccounted-public`
+;; Two consumers: `adopted-namespaces` below, and the public-unaccounted LAW
 ;; (fukan.common.extraction.clojure.operation), which reaches it BY NAME through datalog injection —
 ;; no require, hence no compile cycle back from the Operation fragment into this one.
 (s/defrelation :adopted

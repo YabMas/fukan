@@ -23,10 +23,10 @@
   (Operation correspondence-card
     "The correspondence SEAM rendered as one card: every registered essential `correspond` — its
      authored head/match/map form — plus its live VOCAB-GENERIC coverage readings
-     (unrealized/ambiguous) computed over the model db's `corresponds`/`realized-*` rules. Coverage
-     is a READING, not a generated law. Stays vocab-agnostic on purpose: the unaccounted-public
-     reading needs the fact sort's own `public` predicate, so it is dev/user.clj's business,
-     appended after this card."
+     (unrealized/ambiguous) computed over the model db's `corresponds`/`realized-*` rules. Stays
+     vocab-agnostic on purpose: the unaccounted-public count needs the fact sort's own `public`
+     predicate — the law keyed :correspondence/public-unaccounted owns that, and dev/user.clj
+     appends its count after this card."
     {:signature [:=> [:catn [:db substrate/StructureDb]] Primer]
      :performs  [:throws :state]
      :delegates [query/q kstructure/vocab-rules kstructure/all-corresponds]})

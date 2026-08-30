@@ -19,8 +19,8 @@
                              live VOCAB-GENERIC coverage READINGS (unrealized/ambiguous, computed
                              over the model db's `corresponds`/`realized-*` rules — the kernel
                              demolition (Task 4) retired the demand-law seam this used to render;
-                             coverage is a reading now, not a generated law). The unaccounted-public
-                             reading needs the fact sort's own `public` predicate — vocabulary this
+                             coverage is read off the pairing rules, not generated laws). The unaccounted-public
+                             count needs the fact sort's own `public` predicate — vocabulary this
                              kernel tier must not name — so it is `dev/user.clj`'s business,
                              appended after this card, not rendered here.
 
@@ -270,10 +270,10 @@
   "One registered essential correspondence → its card entry: the authored `(correspond …)` data
    form (head/match/map, `pr-str`'d — mirroring `fmt-structure`'s pretty-print) followed by its live
    VOCAB-GENERIC coverage readings (unrealized/ambiguous — computed from the registry + the
-   `corresponds` rule alone, no vocabulary knowledge needed). The unaccounted-public reading is
+   `corresponds` rule alone, no vocabulary knowledge needed). The unaccounted-public count is
    deliberately NOT here: it requires naming the fact sort's own `public` predicate, which this
    kernel tier (ships no domain vocabulary) must not do — `dev/user.clj`'s `(correspondence)`
-   appends it after the card, reusing `encapsulation`'s query."
+   appends it after the card, reading the public-unaccounted law by key."
   [db {:keys [match] rmap :map :as c}]
   (let [unrealized (unrealized-count db c)
         ambiguous  (ambiguous-count db c)]
@@ -290,7 +290,7 @@
    READINGS over `db` (unrealized/ambiguous, computed over the `corresponds`/`realized-*` rules
    `terms-of` emits). Coverage is a READING here, not a law — the kernel demolition (Task 4) retired
    the demand-law generators this card used to describe; the essential `correspond` construct
-   generates none to show. The unaccounted-public reading (which needs the fact sort's own `public`
+   generates none to show. The unaccounted-public count (which needs the fact sort's own `public`
    predicate — vocabulary this kernel tier must not name) is `dev/user.clj`'s business, appended
    after this card."
   [db]
