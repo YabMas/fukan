@@ -98,6 +98,8 @@
      :any :nil                                 opaque/void scalar leaves
      [:int {:min _ :max _}] / [:string {:re}]  scalar + constraint leaves
      [:vector|:set|:sequential X]              collection of element X
+     [:*|:+|:? X]                              malli regex repetition — how a VARARGS
+                                               parameter is typed inside [:catn …]
      [:tuple A B ...] / [:or ...] / [:and ...]  ordered/alternative children :of
      [:map [:k V] [:k {:optional true} V]]     labelled :field entries
      [:enum :a :b] / [:enum \"a\" \"b\"]           :choice members (type preserved)
@@ -134,12 +136,20 @@
             (:min props) (conj (list 'min (:min props)))
             (:max props) (conj (list 'max (:max props)))
             (:re  props) (conj (list 'regex (str (:re props)))))
-          (:vector :set :sequential :maybe)
+          (:vector :set :sequential :maybe :* :+ :?)
           ;; one element — clause args are varargs now (no vector splicing), so a
           ;; vector schema element (e.g. [:vector [:map …]]) passes through as one
           ;; reader literal. `:maybe` rides here because it is the same shape (one child)
           ;; even though it is not a collection: it stays its OWN kind rather than lowering
           ;; to `[:or X :nil]`, so the print-dual renders back what was authored.
+          ;;
+          ;; So do malli's REGEX sequence ops `:*`/`:+`/`:?`, which are what a VARARGS
+          ;; parameter is spelled with: `[:=> [:catn [:path :string] [:rest [:* :any]]] :any]`.
+          ;; They are not collections either — they are repetition INSIDE a `:cat`/`:catn` —
+          ;; but the datom shape is identical, and refusing them made every varargs function
+          ;; untypeable. That is 110 of nido's 1165 public functions and 5 of fukan's 128:
+          ;; not an edge, an eighth of a real codebase's surface, and the same wall `:maybe`
+          ;; was until three days ago.
           [(list 'kind (name op)) (list 'of (first args))]
           (:tuple :or :and)
           [(list 'kind (name op)) (cons 'of args)]
@@ -172,7 +182,9 @@
    scalar (int/string/boolean/keyword/double — with :min/:max/:regex leaves),
    collection (vector/set/sequential — one element in :of), maybe (one element in
    :of — malli's own spelling for optional, kept as itself rather than normalized
-   to [:or X :nil] so the print-dual returns what was authored), tuple/or/and
+   to [:or X :nil] so the print-dual returns what was authored), the regex sequence
+   ops */+/? (one element in :of — repetition inside a :cat/:catn, which is how a
+   VARARGS parameter is spelled), tuple/or/and
    (children in :of), map (labelled :field entries), map-of (two ordered :of
    children — key then value), enum (:choice members),
    ref (NAMES another type via the :ref name leaf), or arrow (=> — labelled :in
@@ -260,7 +272,7 @@
     (case kind
       ("int" "string" "boolean" "keyword" "double" "symbol" "any" "nil")
       (if (seq props) [(keyword kind) props] (keyword kind))
-      ("vector" "set" "sequential" "maybe")
+      ("vector" "set" "sequential" "maybe" "*" "+" "?")
       [(keyword kind) (render db (first (children db eid :of)))]
       ("tuple" "or" "and")
       (into [(keyword kind)] (map #(render db %) (children db eid :of)))

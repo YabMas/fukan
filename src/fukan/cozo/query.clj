@@ -658,7 +658,7 @@
    resolved to its native eid; any other scalar passes through unchanged."
   [cdb v] (if (lookup-ref? v) (resolve-lookup cdb v) v))
 
-(defn ^{:malli/schema [:=> [:cat :CozoDb :any] :any]}
+(defn ^{:malli/schema [:=> [:cat :any :CozoDb [:* :any]] :any]}
   q
   "Run datalog `query` over the Cozo db `db`: the compiled datalog subset fukan uses —
    relation/collection finds, `:in` of `$` + optional `%` rules + scalar params incl.

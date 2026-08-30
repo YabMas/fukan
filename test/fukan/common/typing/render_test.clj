@@ -99,3 +99,24 @@
             a project whose annotations already used it could not build a model at all."
     (let [d* (db)]
       (is (= [:maybe :string] (typing/render-type d* (root d* "maybe")))))))
+
+(RenderHolder h-star  {:schema [:* :any]})
+(RenderHolder h-plus  {:schema [:+ :string]})
+(RenderHolder h-opt   {:schema [:? :int]})
+(RenderHolder h-varargs
+  {:schema [:=> [:catn [:path :string] [:rest [:* :any]]] :any]})
+
+(deftest renders-regex-sequence-ops
+  (testing "malli's repetition ops are how a VARARGS parameter is typed. Refusing them made
+            every varargs function untypeable — 110 of nido's 1165 public functions and 5 of
+            fukan's 128 — which is not an edge case but an eighth of a real codebase's surface."
+    (let [d* (build/vars->cozo [#'h-star #'h-plus #'h-opt])]
+      (is (= [:* :any]    (typing/render-type d* (root d* "*"))))
+      (is (= [:+ :string] (typing/render-type d* (root d* "+"))))
+      (is (= [:? :int]    (typing/render-type d* (root d* "?")))))))
+
+(deftest a-varargs-signature-round-trips
+  (testing "the whole point: an arrow whose last parameter repeats"
+    (let [d* (build/vars->cozo [#'h-varargs])]
+      (is (= [:=> [:catn [:path :string] [:rest [:* :any]]] :any]
+             (typing/render-type d* (root d* "=>")))))))

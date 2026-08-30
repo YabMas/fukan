@@ -168,3 +168,18 @@
             look untypeable."
     (let [db (build/vars->cozo (into typed-design-vars [#'t-fn-untyped #'t-ns-untyped]))]
       (is (= #{["parse" "typed-thing"]} (offenders db :correspondence/signature-disagrees))))))
+
+;; ── varargs, now that the dialect spells it ──────────────────────────────────
+
+(Operation ^{:name "spit-all"} t-op-varargs
+  {:signature [:=> [:catn [:path :string] [:rest [:* :any]]] :any]})
+(Module ^{:name "varargs-thing"} t-mod-varargs {:child [t-op-varargs]})
+(clj-op/Fn ^{:name "spit-all"} t-fn-varargs {:in [:string [:* :any]] :out :any})
+(clj-module/Ns ^{:name "app.varargs.thing"} t-ns-varargs {:child [t-fn-varargs]})
+
+(deftest a-varargs-signature-agrees-across-the-two-strata
+  (testing "malli's `[:* X]` is how a rest parameter is typed, and until the dialect accepted it
+            every varargs function was untypeable — 110 of nido's public functions. Both strata
+            reduce it to the same node, so the pair agrees."
+    (let [db (build/vars->cozo [#'t-op-varargs #'t-mod-varargs #'t-fn-varargs #'t-ns-varargs])]
+      (is (empty? (offenders db :correspondence/signature-disagrees))))))

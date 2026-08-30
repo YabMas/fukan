@@ -34,7 +34,7 @@
      :performs  [:state]
      :delegates [db/q]})
   (Operation q "Run a datalog query over a Cozo db like d/q — relation/collection finds, an :in of $ + optional % (rules) + scalar params. Eids come back as native handles."
-    {:signature [:=> [:catn [:cdb db/CozoDb] [:query :any]] :any]
+    {:signature [:=> [:catn [:query :any] [:db db/CozoDb] [:inputs [:* :any]]] :any]
      :performs  [:throws :state]
      :delegates [compile-body vocab-index buckets-of db/q]})
   ;; `violation-names` (worklist reader) moved to `cozo-law` beside `check`/`violations-of` — it reads
