@@ -313,10 +313,11 @@ A `defstructure` is a composition of **slots** plus **laws**:
   value itself as declaration-position code data, authored unquoted. `(reader f)` expands authoring
   data-literals (e.g. the malli dialect's Schema expands native malli forms); a
   vocabulary-local inline `(syntax f)` hook (map → map) rewrites an instance's slots map before
-  parsing. ⚠ NO vocab element uses one since 2026-08-29 — the code `Operation` did, to rewrite
-  `:signature` into `:in`/`:out`, and deleting that decomposition is what made multi-arity free.
-  The hook stays as the seam; reach for it when a slots map genuinely cannot be authored directly,
-  not to restate a plug-in's own vocabulary at the vocab altitude.
+  parsing. ⚠ ONE vocab element uses it — `Kind`, whose body IS its shape, so `(Kind Relation [:map …])`
+  authors positionally. The code `Operation` used to, to rewrite `:signature` into `:in`/`:out`, and
+  deleting that decomposition is what made multi-arity free. Reach for the hook when a slots map
+  genuinely cannot be authored directly, not to restate a plug-in's own vocabulary at the vocab
+  altitude.
 - INSTANCES mirror defstructure position-for-position: `(Structure name "doc"?
   {slot → value}? nested…)` — a top-level def-emitting form (the symbol is the var
   AND the entity name; `^{:name "…"}` metadata overrides, e.g. a name the var can't
