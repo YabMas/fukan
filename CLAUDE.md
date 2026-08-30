@@ -202,8 +202,14 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   `:correspondence/operation-unrealized` (an Operation no function realizes — scoped to PAIRED
   modules, which is both its gate and what keeps one cause to one finding),
   `:correspondence/public-unaccounted` (a public Fn in an ADOPTED namespace no Operation models),
-  `:correspondence/signature-disagrees` (a paired pair whose `:in`/`:out` differ — symmetric, and
-  ⚠ order-insensitive, a known false negative). `(drift)`/`(encapsulation)`/`(type-drift)` are now
+  `:correspondence/signature-disagrees` (a paired pair whose `:in`/`:out` differ — symmetric and
+  POSITIONAL, through the `in-at` defrelation: `:in` carries `:rel/order`, and comparing the type
+  SET could see neither a reordering nor an ARITY difference among same-typed params).
+  ⚠ REMAINING GAP: true MULTI-ARITY (35 of nido's public fns, 1 of fukan's) has no `:signature`
+  spelling — malli says `[:function [:=> …] [:=> …]]`, Operation's `:in`/`:out` are one flat
+  arity, and `extract-operation` SILENTLY drops a `[:function …]` annotation (its `arrow?` guard
+  is false, so no `:in`/`:out` is built). VARARGS is not part of that gap since 2026-08-29 —
+  `[:* X]` inside `[:catn …]` is malli's own spelling and the dialect now reads it. `(drift)`/`(encapsulation)`/`(type-drift)` are now
   PRINTERS over those keys, not second definitions. `public` appears in exactly two places — the
   `:delegates` realization path and the public-unaccounted law (policy) — never in match logic: an
   op realized by a private fn PAIRS, and realized-but-private is a future law's precise finding. The vocab laws reach shared vocab via datalog
