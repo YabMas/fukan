@@ -21,6 +21,13 @@
             [fukan.common.vocab.code.operation]
             [fukan.common.vocab.code.module]
             [fukan.common.vocab.code.subsystem]
+            ;; …and `Band`, promoted into the shipped vocab 2026-08-28 but never required here —
+            ;; so this snapshot passed only in a FULL run, where some other test's composition
+            ;; root registered it, and dropped 9 terms + 8 laws when run ALONE. Exactly the
+            ;; order-dependence the requires around it were added to prevent; it hid for a day
+            ;; because the counts did not move in between, and a golden that is only correct
+            ;; when other tests run first is not guarding what it claims to guard.
+            [fukan.common.vocab.code.band]
             ;; …the pattern tier too: since the dependency inversion (the pattern names its
             ;; participants, the core never names the pattern — 2026-07-21) NO vocab ns requires it,
             ;; so only an explicit require keeps its 7 terms + 4 laws in the snapshot (the same
