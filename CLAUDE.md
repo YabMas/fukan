@@ -182,8 +182,10 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   non-scalar slots; each entry a PURE code-graph path, the same-named atom `:in :in` for identity
   realization, `nil` for declared-unrealized):
   `(correspond [Operation ?op Fn ?fn] [(named ?op ?n) (named ?fn ?n) (contains ?m ?op)
-  (contains ?ns ?fn) (corresponds ?m ?ns)] {:in :in :out :out :performs [:cat [:* :calls] :performs]
-  :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})` — the codomain restricts to Fn's public
+  (contains ?ns ?fn) (corresponds ?m ?ns)] {:signature nil :performs [:cat [:* :calls] :performs]
+  :delegates [:cat :calls [:* [:cat [:not public] :calls]]]})` — `:signature nil` because `corresponds`
+  on a `^:value` node is identity, so an entry would hold only where both strata wrote the malli form
+  alike: signature agreement is a CONSTRAINT the law carries, not a path. The codomain restricts to Fn's public
   sub-sort through the `public` defrelation the `:delegates` entry names; `:delegates` routes delegation
   through non-public interior; `:performs` reaches effects to call-graph depth.
   `extraction/clojure/module.clj` holds the `Ns` codomain and the twin ROOT
@@ -205,11 +207,14 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   `:correspondence/signature-disagrees` (a paired pair whose `:in`/`:out` differ — symmetric and
   POSITIONAL, through the `in-at` defrelation: `:in` carries `:rel/order`, and comparing the type
   SET could see neither a reordering nor an ARITY difference among same-typed params).
-  ⚠ REMAINING GAP: true MULTI-ARITY (35 of nido's public fns, 1 of fukan's) has no `:signature`
-  spelling — malli says `[:function [:=> …] [:=> …]]`, Operation's `:in`/`:out` are one flat
-  arity, and `extract-operation` SILENTLY drops a `[:function …]` annotation (its `arrow?` guard
-  is false, so no `:in`/`:out` is built). VARARGS is not part of that gap since 2026-08-29 —
-  `[:* X]` inside `[:catn …]` is malli's own spelling and the dialect now reads it. `(drift)`/`(encapsulation)`/`(type-drift)` are now
+  MULTI-ARITY needs no vocabulary of its own since 2026-08-29: a signature is ONE `Schema`
+  (`Operation`/`Fn` both carry `:signature [:? Schema]` — NOT decomposed `:in`/`:out`, which was
+  fukan restating the dialect's arrow at the vocab altitude), so malli's `[:function [:=> …]
+  [:=> …]]` is simply a value that slot holds. The comparison lives in the DIALECT
+  (`signature-differs` — arities matched by SHAPE, param names IGNORED, so a `[:catn …]` spec
+  agrees with a `[:cat …]` annotation and no consumer needed migrating). ⚠ A DEFAULTS CHAIN is
+  better modelled as one operation with `[:? T]` params than as N arities — `[:?]` describes the
+  contract, `[:function …]` the implementation; 32 of nido's 35 multi-arity fns are chains. `(drift)`/`(encapsulation)`/`(type-drift)` are now
   PRINTERS over those keys, not second definitions. `public` appears in exactly two places — the
   `:delegates` realization path and the public-unaccounted law (policy) — never in match logic: an
   op realized by a private fn PAIRS, and realized-but-private is a future law's precise finding. The vocab laws reach shared vocab via datalog
@@ -307,8 +312,11 @@ A `defstructure` is a composition of **slots** plus **laws**:
   lead with the props map: `[{:payload :q} :string]`. `{:form true}` stores the scalar
   value itself as declaration-position code data, authored unquoted. `(reader f)` expands authoring
   data-literals (e.g. the malli dialect's Schema expands native malli forms); a
-  vocabulary-local inline `(syntax f)` hook (map → map) rewrites an instance's slots map before parsing
-  (e.g. the code `Operation` rewrites `:signature` into `:in`/`:out`).
+  vocabulary-local inline `(syntax f)` hook (map → map) rewrites an instance's slots map before
+  parsing. ⚠ NO vocab element uses one since 2026-08-29 — the code `Operation` did, to rewrite
+  `:signature` into `:in`/`:out`, and deleting that decomposition is what made multi-arity free.
+  The hook stays as the seam; reach for it when a slots map genuinely cannot be authored directly,
+  not to restate a plug-in's own vocabulary at the vocab altitude.
 - INSTANCES mirror defstructure position-for-position: `(Structure name "doc"?
   {slot → value}? nested…)` — a top-level def-emitting form (the symbol is the var
   AND the entity name; `^{:name "…"}` metadata overrides, e.g. a name the var can't
@@ -598,7 +606,7 @@ mixing them corrupts history.
   live with the architecture laws that consume them in `code/subsystem.clj`
 - `common/fukan/common/extraction/clojure/` — the FACT vocabulary + the design↔Clojure bridge:
   `operation.clj` holds the `Fn` codomain and the essential correspondence
-  `(correspond [Operation ?op Fn ?fn] match {:in :in :out :out :performs … :delegates …})`, whose
+  `(correspond [Operation ?op Fn ?fn] match {:signature nil :performs … :delegates …})`, whose
   realization map lowers to `realized-<rel>` rules, plus the three `Fn`-borne correspondence laws
   (operation-unrealized, public-unaccounted, signature-disagrees); `module.clj` holds the `Ns` codomain and the twin ROOT
   `(correspond [Module ?m Ns ?ns] match {:child :child})`, plus the INCREMENTAL-ADOPTION readings —
