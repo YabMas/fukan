@@ -380,8 +380,14 @@
 ;; are identical and dedup. Laws 54→62 (+8): five GENERATED (prefix target-type + at-least-one,
 ;; may-depend target-type, value cardinality + :string) and three AUTHORED (cross-band
 ;; conformance, coverage-once-any-band-is-declared, acyclicity).
+;; 2026-08-29: the correspondence grows TEETH. Coverage was a set of readings nothing enforced
+;; — a renamed function left the model claiming an Operation nothing realized, and every gate
+;; stayed green — so the two "the design claims something the code does not have" readings become
+;; gated laws on the codomain structures (`correspond` itself lowers only to rules, so a denial
+;; about a correspondence rides the codomain declared beside it). Terms hold at 103: a law
+;; declares no rule. Laws 62→64 (+2): module-unrealized on `Ns`, operation-unrealized on `Fn`.
 (def ^:private golden-terms {:count 103 :hash 2063935565})
-(def ^:private golden-laws  {:count 62 :hash 1237624926})
+(def ^:private golden-laws  {:count 64 :hash -387397092})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

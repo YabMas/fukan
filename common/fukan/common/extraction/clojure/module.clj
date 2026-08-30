@@ -18,7 +18,32 @@
 (defstructure Ns
   "The Clojure realization of a Module — an EXTRACTED namespace, owning its functions via `:child`
    (a `contains` species). The fact-side root the design Module twins with by name."
-  {:child [:* Fn]})
+  {:child [:* Fn]}
+
+  ;; ── the correspondence's TEETH, at the ROOT altitude ────────────────────────────────────────
+  ;; The law rides `Ns` because `correspond` has no law position of its own: it lowers EXCLUSIVELY
+  ;; to rules — definitional and conservative, which is THE TEST's verdict on it — so a denial
+  ;; ABOUT a correspondence has to ride some structure, and the codomain declared beside it is the
+  ;; honest one. If these accumulate, a law position on `correspond` is the change to make; two
+  ;; laws across two files is not yet a pattern.
+  (law "every modelled Module is realized by a namespace"
+    ;; Without this, a Module that fails to pair is INVISIBLE. The Operation-level law
+    ;; (fukan.common.extraction.clojure.operation) is scoped to modules that DID pair, so an
+    ;; unpaired module takes everything inside it out of view along with itself. Measured on
+    ;; nido: rename `nido.platform.charm-patch` to anything else and the operation law reports
+    ;; nothing at all, while this one names the module. That scoping is deliberate — one cause,
+    ;; one finding, at the altitude the cause lives at — and this law is what makes it safe.
+    ;;
+    ;; GATED on a namespace existing, for the reason Band's coverage law is gated on a band: a
+    ;; build with no code root extracts nothing, and an ungated law would then report every
+    ;; Module in the project. That is not a finding, it is the checker describing its own inputs.
+    {:scope     :global
+     :key       :correspondence/module-unrealized
+     :offenders [?m]
+     :rules     [[(some-ns ?ns) (is ?ns ::Ns)]]
+     :where     [(some-ns ?_ns)
+                 (is ?m Module) (design ?m)
+                 (not-join [?m] (corresponds ?m ?ns))]}))
 
 ;; ── the correspondence: the ENTIRE Module ↔ Ns bridge (the twin ROOT) ────────
 ;; Matching is a flat identity query — a canvas short-name is a separator-agnostic dotted suffix of the

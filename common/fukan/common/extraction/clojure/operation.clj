@@ -36,7 +36,33 @@
    :calls        [:* Fn]                         ; the ACTUAL call graph (calls+ is the compiler's)
    :private      [:? :boolean]                   ; public/internal — the module's surface
    :export       [:? :boolean]                   ; intentionally public for MECHANISM (^:export)
-   :test-support [:? :boolean]})                 ; intentionally public for TEST-SUPPORT (^:test-support)
+   :test-support [:? :boolean]}                  ; intentionally public for TEST-SUPPORT (^:test-support)
+
+  ;; ── the correspondence's TEETH, at the OPERATION altitude ───────────────────────────────────
+  ;; Rides `Fn` for the reason the root law rides `Ns`: `correspond` lowers exclusively to rules,
+  ;; so a denial about a correspondence rides the codomain declared beside it. See the note on
+  ;; `Ns` in fukan.common.extraction.clojure.module.
+  (law "every modelled Operation in a realized Module is realized by a function"
+    ;; This is `drift` — until now a READING nothing enforced. The model could claim an Operation
+    ;; that no function realized and every gate stayed green, which made an adopted module's
+    ;; specification decorative: rename the function and nothing anywhere said so.
+    ;;
+    ;; SCOPED to Operations whose owning Module pairs, which is both the gate and the altitude
+    ;; rule. As a gate it is exact — a build with no code root pairs no Module, so the law is
+    ;; vacuous without naming extraction at all. As an altitude rule it keeps one cause to one
+    ;; finding: when a whole module fails to pair, the module-level law names the module rather
+    ;; than this one naming every operation inside it.
+    ;;
+    ;; The owning Module needs no sort guard. `contains` reaches an Operation only from its
+    ;; Module (a Subsystem holds Modules, not Operations), and `corresponds` pins it the rest of
+    ;; the way — which also spares this namespace from naming `Module`, whose namespace requires
+    ;; THIS one and so cannot be required back.
+    {:scope     :global
+     :key       :correspondence/operation-unrealized
+     :offenders [?op ?m]
+     :where     [(is ?op Operation) (design ?op)
+                 (contains ?m ?op) (corresponds ?m ?_ns)
+                 (not-join [?op] (corresponds ?op ?fn))]}))
 
 ;; Fn OWNS its public surface — the sub-sort onto which the design↔fact carrier is right-total (the codomain
 ;; restriction `[Fn :public]`). A public Fn is an extracted function that is none of private (`defn-`) /
