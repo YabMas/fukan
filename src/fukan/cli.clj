@@ -12,7 +12,13 @@
 
    Usage:
      clojure -M:fukan -m fukan.cli describe [--spec-dirs canvas] [--format prose|forms]
+                                            [--select '[(Band ?n)]']
      clojure -M:fukan -m fukan.cli check --src src [--spec-dirs canvas] [--format edn|text]
+
+   `describe` takes `--select` — datalog `:where` clauses binding `?n` — because a whole design
+   is the right answer only while a project has a small one. Asking for `[(Band ?n)]` yields the
+   architecture without the element detail underneath it, and the concepts section narrows with
+   it. A consumer that truncates instead is not selecting, it is losing the end of the document.
 
    `describe` takes no `--src` and that is the point: a declared design is what the project
    SAID, and extraction is what the code turned out to be. Skipping it is not an optimisation
@@ -28,7 +34,8 @@
         Fukan is fail-closed about this (`law/check` throws rather than returning a green
         list), and so is this: a harness that read 2 as 0 would wave through exactly the
         branch that broke the checker."
-  (:require [clojure.pprint :as pp]
+  (:require [clojure.edn :as edn]
+            [clojure.pprint :as pp]
             [fukan.canvas.ingestion.canvas-source :as canvas-source]
             [fukan.canvas.projection.design :as design]
             [fukan.canvas.projection.instance :as inst]
@@ -48,6 +55,7 @@
         "--src"       (recur more (assoc out :src value))
         "--spec-dirs" (recur more (assoc out :spec-dirs (vec (.split ^String value ","))))
         "--format"    (recur more (assoc out :format (keyword value)))
+        "--select"    (recur more (assoc out :select (edn/read-string value)))
         (throw (ex-info (str "unknown flag " flag) {:flag flag})))
       out)))
 
@@ -91,10 +99,11 @@
 (defn- describe-verb
   "Render the project's declared design. No code root: a declaration is what the project SAID,
    and a design document that moved when the code moved would not be one."
-  [{:keys [spec-dirs format]}]
+  [{:keys [spec-dirs format select]}]
   (binding [canvas-source/*spec-dirs* spec-dirs]
     {:ok true :text (design/design-text (pipeline/build-model nil)
-                                        (if (= :forms format) :forms :prose))}))
+                                        (if (= :forms format) :forms :prose)
+                                        select)}))
 
 (defn ^{:malli/schema [:=> [:cat [:sequential :string]] :nil]}
   -main
@@ -108,6 +117,12 @@
                  (not (#{"check" "describe"} verb))
                  {:undecidable true
                   :error (str "unknown verb " (pr-str verb) " — expected `check` or `describe`")}
+
+                 ;; Same reasoning as an unknown flag: a harness that passed `--select` to `check`
+                 ;; and got a full check back would believe it had checked one region.
+                 (and (= "check" verb) (:select opts))
+                 {:undecidable true
+                  :error "`--select` is a describe flag — `check` decides the whole model"}
 
                  :else
                  (try (if (= "describe" verb) (describe-verb opts) (check-verb opts))

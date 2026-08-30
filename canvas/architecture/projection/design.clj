@@ -10,6 +10,7 @@
   (:require [fukan.common.vocab.code.operation :refer [Operation]] [fukan.common.vocab.code.module :refer [Module]]
             [canvas.architecture.kernel.substrate :as substrate]
             [canvas.architecture.cozo.query :as query]
+            [canvas.architecture.kernel.lens :as lens]
             [canvas.architecture.projection.grammar :as grammar]
             [canvas.architecture.projection.instance :as instance]
             [canvas.architecture.projection.prose :as prose]))
@@ -22,17 +23,18 @@
     {:signature [:=> [:catn [:db substrate/StructureDb]] :any]
      :performs  [:throws :state]
      :delegates [query/q]})
-  (Operation declared-vocabularies
-    "The namespaces of the vocabularies the project actually INSTANTIATED, sorted."
-    {:signature [:=> [:catn [:db substrate/StructureDb]] [:vector :string]]
-     :performs  [:throws :state]
-     :delegates [declared-nodes]})
+  (Operation vocabularies-of
+    "The namespaces of the vocabularies a node set INSTANTIATES, sorted. Takes the nodes rather
+     than the db because a SELECTED document must narrow its concepts with its instances."
+    {:signature [:=> [:catn [:nodes [:sequential :any]]] [:vector :string]]})
   (Operation design-text
-    "The declared design as one document, in one of two registers: :forms renders the authored
-     declarations, :prose renders the same declarations as sentences."
-    {:signature [:=> [:catn [:db substrate/StructureDb] [:register :keyword]] instance/Text]
+    "The declared design as one document, in one of two registers, optionally narrowed by a
+     datalog selection: :forms renders the authored declarations, :prose renders the same
+     declarations as sentences."
+    {:signature [:=> [:catn [:db substrate/StructureDb] [:register :keyword]
+                            [:select [:? [:maybe :any]]]] instance/Text]
      :performs  [:throws :state]
-     :delegates [declared-nodes declared-vocabularies query/q
+     :delegates [declared-nodes vocabularies-of lens/focus-nodes query/q
                  grammar/vocabulary-primer grammar/structure-form
                  instance/focus-text instance/instance-form
                  prose/structure-prose prose/instance-prose]}))
