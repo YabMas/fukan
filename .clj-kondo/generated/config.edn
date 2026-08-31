@@ -76,6 +76,8 @@
    fukan.canvas.core.structure-test/Tree hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Type hooks.fukan.structure/instance
    fukan.canvas.core.structure-test/Wrapped hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/sh-Mod hooks.fukan.structure/instance
+   fukan.canvas.core.structure-test/sh-Op hooks.fukan.structure/instance
    fukan.canvas.core.union-target-test/UBox hooks.fukan.structure/instance
    fukan.canvas.core.union-target-test/UEff hooks.fukan.structure/instance
    fukan.canvas.core.union-target-test/UKind hooks.fukan.structure/instance

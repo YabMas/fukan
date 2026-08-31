@@ -529,16 +529,68 @@
               (:slots sdef)))
       (some #(when (= (:target %) :Any) (:rel %)) (:slots sdef))))
 
+(def ^:private instance-line-key
+  "Var metadata recording the source line an instance was authored on — the only evidence
+   `claim-instance-name!` has that two `def`s of one symbol are two INSTANCES rather than one
+   instance loaded twice."
+  ::instance-line)
+
+(defn- claim-instance-name!
+  "Throw when `sym` already names an instance interned in this namespace at a DIFFERENT line.
+
+   An instance's leading symbol is its VAR, so two instances sharing a name in one namespace are
+   two `def`s of one var. Clojure allows that silently, and here it is never what was meant: the
+   second value replaces the first, and the first's container captured the VAR rather than the
+   value, so the container ends up owning the second instance's node. The model then has one
+   operation where two were authored, and the missing one surfaces — if at all — as a
+   correspondence disagreement several laws away from its cause.
+
+   The LINE is what makes this safe at expansion time. Re-loading a file re-defines every
+   instance at the line it already had, so only a genuine second instance — a different line —
+   trips it. `ns-interns` rather than `ns-resolve`, because a spec commonly `:refer`s another
+   spec's instance var (a `Kind` it takes in a signature) and that var is not this file's to
+   collide with."
+  [tag sym line]
+  (when line
+    (when-let [v (get (ns-interns *ns*) sym)]
+      (when-let [prev (get (meta v) instance-line-key)]
+        (when (not= prev line)
+          (throw (ex-info
+                  (str (name tag) " " sym ": an instance named `" sym "` was already authored at "
+                       "line " prev " of this namespace. An instance's symbol IS its var, so the "
+                       "second `def` silently replaces the first — and the first's container "
+                       "keeps the var, so it ends up owning THIS node. Rename one of them, or "
+                       "give the two containers separate spec files.")
+                  {:tag tag :sym sym :line line :shadows-line prev :ns (ns-name *ns*)}))))))
+  sym)
+
+(defn- claim-distinct-names!
+  "Throw when one top-level form authors two instances under the same symbol — the case
+   `claim-instance-name!` cannot see, because neither `def` has run yet when the form expands."
+  [tag sym syms]
+  (doseq [[dup n] (frequencies syms) :when (> n 1)]
+    (throw (ex-info
+            (str (name tag) " " sym ": authors " n " instances named `" dup
+                 "` — one `def`, so only the last survives and the others are lost. Rename them.")
+            {:tag tag :sym sym :duplicate dup :count n})))
+  syms)
+
 (declare expand-instance)
 
 (defn ^:export expand-instance
   "Def-emitting + nesting expansion of `(sym \"doc\"? {slot → value}? nested…)` for
-   structure `tag` — the named-instance authoring surface. Returns {:defs [forms] :sym :tag}:
-   nested named instances are lifted to sibling `def`s (cross-refs stay var-refs) and routed
-   by target-type into the container's slots; this instance's `def` is last. The leading
+   structure `tag` — the named-instance authoring surface. Returns
+   {:defs [forms] :sym :tag :syms}: nested named instances are lifted to sibling `def`s
+   (cross-refs stay var-refs) and routed by target-type into the container's slots; this
+   instance's `def` is last, and `:syms` is every symbol the expansion interns. The leading
    symbol is the name AND the var; `^{:name \"…\"}` metadata on it overrides the entity
-   name (the rare case: a name the var can't carry, or same-named instances across cases)."
-  [tag args]
+   name (the rare case: a name the var can't carry, or same-named instances across cases).
+
+   `form-meta` is the reader metadata of the form being expanded — its `:line` is what lets a
+   name collision be told from a re-load. Absent (a programmatic expansion), the collision
+   check is skipped rather than guessed at."
+  ([tag args] (expand-instance tag args nil))
+  ([tag args form-meta]
   (let [sym   (first args)
         more  (rest args)
         doc   (when (string? (first more)) (first more))
@@ -558,8 +610,12 @@
                                      (pr-str (vec cls)))
                                 {:tag tag :sym sym :body (vec cls)})))
         m     (apply-syntax sdef (syntax-input sdef cls))
-        kids  (mapv (fn [nf] (assoc (expand-instance (resolve-struct-tag (first nf)) (rest nf))
+        line  (:line form-meta)
+        _     (claim-instance-name! tag sym line)
+        kids  (mapv (fn [nf] (assoc (expand-instance (resolve-struct-tag (first nf)) (rest nf)
+                                                     (meta nf))
                                     :private? (boolean (:private (meta (second nf)))))) nests)
+        syms  (claim-distinct-names! tag sym (conj (vec (mapcat :syms kids)) sym))
         routed (->> kids
                     (group-by #(route-slot sdef (:tag %) (:private? %)))
                     (map (fn [[rel ks]] (cons (symbol (name rel)) (map :sym ks)))))
@@ -570,8 +626,8 @@
     ;; later, at assemble time, once every def has run.
     {:defs (concat (when (seq kids) [(cons 'declare (map :sym kids))])
                    (mapcat :defs kids)
-                   [(list 'def sym value)])
-     :sym sym :tag tag}))
+                   [(list 'def (cond-> sym line (vary-meta assoc instance-line-key line)) value)])
+     :sym sym :tag tag :syms syms})))
 
 (defn ^{:malli/schema [:=> [:cat :keyword :any] :any]}
   value-literal->iv
@@ -1063,8 +1119,11 @@
                       (fukan.canvas.core.structure/value-form ~tag body#))
           :else    `(defmacro ~sname ~docstring [& args#]
                       (if (symbol? (first args#))
-                        ;; def-emitting + nesting: `(Tag sym "doc"? {…} nested…)` interns the var
-                        (cons 'do (:defs (fukan.canvas.core.structure/expand-instance ~tag args#)))
+                        ;; def-emitting + nesting: `(Tag sym "doc"? {…} nested…)` interns the var.
+                        ;; `&form`'s reader metadata carries the line, which is how a second
+                        ;; instance of the same name is told from the same instance loaded twice.
+                        (cons 'do (:defs (fukan.canvas.core.structure/expand-instance
+                                          ~tag args# (meta ~'&form))))
                         (throw (ex-info (str ~(name sname) ": entity instances require a name symbol; "
                                              "only ^:value structures are anonymous")
                                         {:tag ~tag :args args#}))))))))

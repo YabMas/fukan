@@ -691,3 +691,80 @@
       (is (contains? (set (map :law (law/check bad)))
                      "SyntClass.n value must satisfy :int")
           "the generated law routes :int through value-valid?, not a kernel predicate"))))
+
+;; ── an instance's symbol IS its var ──────────────────────────────────────────
+;; So two instances sharing a name in one namespace are two `def`s of one var: the second
+;; value replaces the first, and the first's container — which captured the VAR, not the value —
+;; ends up owning the second's node. Nothing downstream can see it happened. The model simply
+;; has one operation where two were authored, and the loss surfaces, if at all, as a
+;; correspondence disagreement several laws from its cause.
+
+(defstructure sh-Op "Shadowing fixture: a nested member." {:note [:? :string]})
+(defstructure sh-Mod "Shadowing fixture: a container of members." {:child [:* sh-Op]})
+
+(defn- read-with-lines
+  "Read every form in `src`, each carrying the reader's line metadata — the same forms a spec
+   file's load hands the instance macro, which is what the collision check reads."
+  [src]
+  (let [rdr (clojure.lang.LineNumberingPushbackReader. (java.io.StringReader. src))]
+    (loop [acc []]
+      (let [f (read {:eof ::eof} rdr)]
+        (if (= f ::eof) acc (recur (conj acc f)))))))
+
+(defn- load-spec
+  "Evaluate `src` in a throwaway namespace, the way a spec file is loaded. Returns the ns."
+  ([src] (load-spec src (create-ns (gensym "fukan-shadow"))))
+  ([src n]
+   (binding [*ns* n]
+     (eval '(clojure.core/refer-clojure))
+     (doseq [f (read-with-lines src)] (eval f)))
+   n))
+
+(def ^:private two-containers
+  "sh-Mod alpha at line 1 and sh-Mod beta at line 3, each nesting a member called `write!`."
+  (str "(fukan.canvas.core.structure-test/sh-Mod alpha {}\n"
+       "  (fukan.canvas.core.structure-test/sh-Op write! {}))\n"
+       "(fukan.canvas.core.structure-test/sh-Mod beta {}\n"
+       "  (fukan.canvas.core.structure-test/sh-Op write! {}))\n"))
+
+(defn- root-message
+  "The message under a load failure. A macro that throws during a spec's load surfaces wrapped
+   in the compiler's exception, and it is the wrapped message that says what to fix."
+  [f]
+  (try (f) nil
+       (catch Throwable t
+         (loop [e t] (if-let [c (ex-cause e)] (recur c) (ex-message e))))))
+
+(deftest a-second-instance-of-the-same-name-is-refused
+  (testing "the message names the line it shadows, because that is the edit to make"
+    (is (re-find #"already authored at line 2"
+                 (root-message #(load-spec two-containers))))))
+
+(deftest one-form-authoring-two-members-of-the-same-name-is-refused
+  (testing "neither `def` has run when the form expands, so the var check cannot see this one"
+    (is (re-find #"authors 2 instances named `write!`"
+                 (root-message
+                  #(load-spec (str "(fukan.canvas.core.structure-test/sh-Mod alpha {}\n"
+                                   "  (fukan.canvas.core.structure-test/sh-Op write! {})\n"
+                                   "  (fukan.canvas.core.structure-test/sh-Op write! {}))\n")))))))
+
+(deftest loading-the-same-spec-twice-is-not-a-collision
+  (testing "a re-load re-defines every instance at the line it already had — which is exactly
+            what tells a second instance from the same instance loaded again"
+    (let [src "(fukan.canvas.core.structure-test/sh-Mod alpha {}\n  (fukan.canvas.core.structure-test/sh-Op write! {}))\n"
+          n   (load-spec src)]
+      (is (nil? (root-message #(load-spec src n)))))))
+
+(deftest a-referred-instance-var-is-left-to-clojure
+  (testing "a spec routinely `:refer`s another spec's instance var — a Kind it takes in a
+            signature. Reading ns-interns rather than ns-resolve is what keeps fukan from
+            answering first with a line number from someone else's file; Clojure's own refusal
+            says the true thing, which is that the two names clash."
+    (let [owner (load-spec "(fukan.canvas.core.structure-test/sh-Op write! {})\n")
+          n     (create-ns (gensym "fukan-shadow-referrer"))]
+      (binding [*ns* n]
+        (eval '(clojure.core/refer-clojure))
+        (eval (list 'clojure.core/refer (list 'quote (ns-name owner)))))
+      (let [msg (root-message #(load-spec "(fukan.canvas.core.structure-test/sh-Op write! {})\n" n))]
+        (is (re-find #"already refers to" msg))
+        (is (not (re-find #"already authored" msg)))))))
