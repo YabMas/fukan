@@ -33,6 +33,7 @@
             ;; so only an explicit require keeps its 7 terms + 4 laws in the snapshot (the same
             ;; order-dependence lesson as the extraction nss below).
             [fukan.common.vocab.patterns.plug-point]
+            [fukan.common.vocab.patterns.fulfilment]
             ;; …and the Clojure extraction plugin, which since 2026-07-17 declares the design↔Clojure
             ;; CORRESPONDENCE (the fact-slots + demands) against the Operation/Module tags. Without
             ;; these the snapshot silently drops 5 terms + 11 laws — and passes anyway in a full run,
@@ -428,8 +429,18 @@
 ;; the public-unaccounted law's view. The ambiguity was visible only as a count on the
 ;; correspondence card, which nothing gates on. Two laws rather than one, because a module
 ;; matching twice and a namespace matched twice are two different edits.
-(def ^:private golden-terms {:count 129 :hash 1658986965})
-(def ^:private golden-laws  {:count 67 :hash -1388936911})
+;; 2026-08-31: the SUPPLY half of a call enters the pattern tier —
+;; `fukan.common.vocab.patterns.fulfilment`. A `Fulfilment` declares that a Module supplies a
+;; surface another Module owns; `fulfils` is the domain-altitude reading, declared `(:sup [:cat
+;; [:inv :satisfier] :surface])` rather than DERIVED so its head stays OPEN — the fact stratum
+;; feeds the same relation through a slot of its own name, the way `:child` is already one
+;; relation across both strata. Terms 129→139 (+10): the Fulfilment kind rule, the
+;; `satisfier`/`surface` slot rules with their compiler-minted closure pairs (3 each), and
+;; `fulfils`'s own inclusion rule plus its closure pair (3). Laws 67→73 (+6): both slots are
+;; cardinality ONE — a fulfilment naming one end states nothing — so each contributes a
+;; target-type law plus the found-none/found-several pair.
+(def ^:private golden-terms {:count 139 :hash 503536076})
+(def ^:private golden-laws  {:count 73 :hash -1573712808})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

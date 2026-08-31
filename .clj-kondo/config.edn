@@ -47,6 +47,9 @@
   fukan.common.vocab.patterns.plug-point
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  fukan.common.vocab.patterns.fulfilment
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.common.vocab.code.effect
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
