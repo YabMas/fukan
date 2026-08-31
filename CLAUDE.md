@@ -338,7 +338,14 @@ A `defstructure` is a composition of **slots** plus **laws**:
   (authoring order = `:rel/order`; the bracket mirrors the quantifier), a labelled
   target is a `[label target]` pair, a payload slot takes `[value payload]`, reader
   literals pass as values. Entity instances always require the symbol; only
-  `^:value` structures are anonymous expressions. Nested member instances trail where
+  `^:value` structures are anonymous expressions. ⚠ TWO INSTANCES MAY NOT SHARE A SYMBOL in one
+  namespace — the symbol IS the var, so a second `def` replaces the first while the first's
+  container keeps the VAR and ends up owning the second's node. Silently: one operation where two
+  were authored, surfacing (if at all) as a correspondence disagreement several laws from its
+  cause. `expand-instance` REFUSES it since 2026-08-31 — across forms by the line recorded on the
+  var (a re-load re-defines at the same line, which is what tells a re-load from a second
+  instance), within one form by checking its own symbols. Two same-NAMED instances under different
+  symbols stay legal (`^{:name "…"}`); it is the VAR that must be unique. Nested member instances trail where
   defstructure's laws sit and route by target-type into the container's slots.
 - `^:value` structures are content-deduped, inline-anonymous nodes (structurally
   equal values collapse to one node) — used for nameless compound data.
