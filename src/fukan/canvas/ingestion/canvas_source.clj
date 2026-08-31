@@ -55,14 +55,19 @@
     (map (fn [r] {:dir dir :root r}) roots)))
 
 (defn- discover-canvas-files-in
-  "Yield {:root :rel-path} for every non-test `*.clj` under one canvas root."
+  "Yield {:root :rel-path} for every `*.clj` under one canvas root.
+
+   EVERY one. A spec directory is declared, not guessed at — `*spec-dirs*` names it — so its
+   contents are specs by construction, and a filename filter over them can only take specs away.
+   One did: files ending `_test.clj` were skipped as a project's own tests, which made a
+   namespace unmodellable for being CALLED a test. `nido.tasks.nido-test` is a task-runner
+   namespace like its thirty-seven siblings, and the spec that would have modelled it was the
+   one spec discovery never found."
   [^java.io.File root]
   (let [root-path (.getCanonicalPath root)]
     (->> (file-seq root)
          (filter (fn [^java.io.File f]
-                   (let [n (.getName f)]
-                     (and (.isFile f) (str/ends-with? n ".clj")
-                          (not (str/ends-with? n "_test.clj"))))))
+                   (and (.isFile f) (str/ends-with? (.getName f) ".clj"))))
          (map (fn [^java.io.File f]
                 {:root root :rel-path (subs (.getCanonicalPath f) (inc (count root-path)))})))))
 
