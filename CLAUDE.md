@@ -40,7 +40,7 @@ query is empty. Its map table is the contract with this codebase. The operationa
   is constraint refinement. Model growth is separate: it adds facts and may turn laws red.
 - **No proof theory.** Fukan checks one concrete finite model. `correspond` lowers to
   definitional pairing/`realized-*` rules, not constraints; a correspondence CONSTRAINT is an
-  ordinary law model-checked in the joint model (four are authored — see the correspondence LAWS
+  ordinary law model-checked in the joint model (six are authored — see the correspondence LAWS
   below), never a theory-morphism proof obligation over all target models. An unsupported law makes `check` fail closed.
 
 The frame says what a mechanism *is*, never that it should exist — vocabulary and
@@ -198,15 +198,28 @@ separate seam, `common/fukan/common/extraction/`; the type dialect is
   conservative, no denials (THE TEST verdict: declarations → rules). A realization entry `R ↦ E` reads:
   an `R`-edge is realized by an `E`-path from the source's code witness to the target's code witness;
   a content-identified `^:value` node is its own witness, which is why entries never mention transport.
-  Coverage over those rules is FOUR LAWS (2026-08-29 — the declaration stays definitional; the laws
-  are ordinary denials riding the CODOMAIN structures, since `correspond` has no law position):
+  Coverage over those rules is SIX LAWS (2026-08-29, +2 on 2026-08-31 — the declaration stays
+  definitional; the laws are ordinary denials riding the CODOMAIN structures, since `correspond`
+  has no law position; six of one shape across two files is close enough to a pattern that a law
+  position on `correspond` is the next real change there):
   `:correspondence/module-unrealized` (a Module no namespace realizes — gated on an `Ns` existing),
   `:correspondence/operation-unrealized` (an Operation no function realizes — scoped to PAIRED
   modules, which is both its gate and what keeps one cause to one finding),
   `:correspondence/public-unaccounted` (a public Fn in an ADOPTED namespace no Operation models),
   `:correspondence/signature-disagrees` (a paired pair whose `:in`/`:out` differ — symmetric and
   POSITIONAL, through the `in-at` defrelation: `:in` carries `:rel/order`, and comparing the type
-  SET could see neither a reordering nor an ARITY difference among same-typed params).
+  SET could see neither a reordering nor an ARITY difference among same-typed params), and — since
+  2026-08-31 — the two that make the `Module ↦ Ns` pairing ONE-TO-ONE:
+  `:correspondence/module-ambiguous` (a Module two namespaces realize) and
+  `:correspondence/namespace-ambiguous` (a namespace realizing two Modules). ⚠ Matching by NAME is
+  what makes adoption cheap — no module names the namespace realizing it — and a name can match
+  TWICE: `-` and `.` normalize alike, so nido's bb-task wrapper `tasks.nido-notion-views` answered
+  to the design module `notion-views` exactly as `nido.notion.views` did. The four laws above then
+  read a pairing that was no longer one, SILENTLY — a module counted as realized by somebody else's
+  code, a namespace counted as ADOPTED so its unmodelled functions left public-unaccounted's view.
+  The ambiguity was visible only as the correspondence card's `ambiguous:` count, which nothing
+  gates on. Two laws, not one: a module matching twice is fixed by a name that picks one, a
+  namespace matched twice by deciding which design boundary owns it, and each occurs alone.
   MULTI-ARITY needs no vocabulary of its own since 2026-08-29: a signature is ONE `Schema`
   (`Operation`/`Fn` both carry `:signature [:? Schema]` — NOT decomposed `:in`/`:out`, which was
   fukan restating the dialect's arrow at the vocab altitude), so malli's `[:function [:=> …]
@@ -610,7 +623,8 @@ mixing them corrupts history.
   `(correspond [Operation ?op Fn ?fn] match {:signature nil :performs … :delegates …})`, whose
   realization map lowers to `realized-<rel>` rules, plus the three `Fn`-borne correspondence laws
   (operation-unrealized, public-unaccounted, signature-disagrees); `module.clj` holds the `Ns` codomain and the twin ROOT
-  `(correspond [Module ?m Ns ?ns] match {:child :child})`, plus the INCREMENTAL-ADOPTION readings —
+  `(correspond [Module ?m Ns ?ns] match {:child :child})` plus its three `Ns`-borne laws
+  (module-unrealized, module-ambiguous, namespace-ambiguous), plus the INCREMENTAL-ADOPTION readings —
   the `adopted` relation (the Ns half of a live pairing, which is what makes the frontier need no new
   declaration) and `ns-dependencies`/`adoption-frontier`/`adoption-candidates`. `ns-depends` is a DEFRELATION
   again since the substrate fix: the three-way join that once cost 58-69s on clojure-mcp against 0.70s
