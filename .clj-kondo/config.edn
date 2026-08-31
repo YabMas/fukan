@@ -70,6 +70,9 @@
   fukan.common.extraction.clojure.module
   {:linters {:unused-namespace {:level :off}
              :unused-referred-var {:level :off}}}
+  fukan.common.extraction.clojure.method
+  {:linters {:unused-namespace {:level :off}
+             :unused-referred-var {:level :off}}}
   fukan.canvas.core.assemble-test
   {:linters {:unused-public-var {:level :off}
              :unused-namespace {:level :off}

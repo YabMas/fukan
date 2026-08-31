@@ -11,14 +11,21 @@
   (:require [fukan.canvas.core.substrate :as sub]
             [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.cozo.query :as cq]
+            [fukan.common.extraction.clojure.method :refer [Method]]
             [fukan.common.extraction.clojure.operation :refer [Fn]]
             [fukan.common.vocab.code.module :as module :refer [Module]]))
 
 ;; ── the FACT vocabulary: a Clojure namespace ─────────────────────────────────
 (defstructure Ns
-  "The Clojure realization of a Module — an EXTRACTED namespace, owning its functions via `:child`
-   (a `contains` species). The fact-side root the design Module twins with by name."
-  {:child [:* Fn]}
+  "The Clojure realization of a Module — an EXTRACTED namespace, owning its functions AND its
+   methods via `:child` (a `contains` species). The fact-side root the design Module twins with
+   by name.
+
+   The container is HETEROGENEOUS for the same reason the design Module's is: a namespace holds
+   more than one sort of code element. A method belongs to the namespace that writes it, never
+   to the one that owns the surface it supplies, and the union is what makes that membership
+   sayable — its generated target-type law being the teeth, not a formality."
+  {:child [:* Fn Method]}
 
   ;; ── the correspondence's TEETH, at the ROOT altitude ────────────────────────────────────────
   ;; The law rides `Ns` because `correspond` has no law position of its own: it lowers EXCLUSIVELY

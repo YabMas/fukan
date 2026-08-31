@@ -40,7 +40,8 @@
             ;; because some other test's composition root registers them. Order-dependence is exactly
             ;; what this namespace's explicit requires exist to prevent.
             [fukan.common.extraction.clojure.module]
-            [fukan.common.extraction.clojure.operation]))
+            [fukan.common.extraction.clojure.operation]
+            [fukan.common.extraction.clojure.method]))
 
 (defn self-model-structures
   "The registered structures defined in the self-model vocabulary — stable regardless of which test
@@ -439,8 +440,19 @@
 ;; `fulfils`'s own inclusion rule plus its closure pair (3). Laws 67→73 (+6): both slots are
 ;; cardinality ONE — a fulfilment naming one end states nothing — so each contributes a
 ;; target-type law plus the found-none/found-several pair.
-(def ^:private golden-terms {:count 139 :hash 503536076})
-(def ^:private golden-laws  {:count 73 :hash -1573712808})
+;; 2026-08-31 (b): the fact side of it — `fukan.common.extraction.clojure.method`. A `defmethod`
+;; extracts as a `Method`, deliberately NOT an `Fn` (a co-owned method would key as `ns/name`,
+;; the same natural key as its own defmulti; public-unaccounted would fire per dispatch value;
+;; and name-only matching would pair it with a same-named Operation), and `Ns :child` widens to
+;; the union `[:* Fn Method]` so a namespace can own it. Terms 144 (+5): the Method kind rule,
+;; its `:fulfils` slot rule feeding the open `fulfils` head (its closure pair already minted, and
+;; `:calls`/`:child` dedup against the rules `Fn`/`Ns` already emit), and the `Fulfilment ↦ Method`
+;; correspondence's pairing rule plus `realized-satisfier`/`realized-surface`. Laws 79 (+6): the
+;; `:fulfils` slot's target-type and found-none/found-several pair, `:calls`'s target-type, and
+;; the two coverage laws. `Ns.child`'s target-type law only changes its disjunction, so it moves
+;; the hash and not the count.
+(def ^:private golden-terms {:count 144 :hash -720294356})
+(def ^:private golden-laws  {:count 79 :hash 1533973671})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]
