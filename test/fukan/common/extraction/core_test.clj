@@ -168,6 +168,18 @@
       (is (not (contains? (clj-module/ns-dependencies db) ["poly" "poly-ext"]))
           "so the inverted namespace dependency is gone"))))
 
+(deftest supplying-a-surface-is-a-namespace-dependency
+  (testing "the direction that surprises people, and the one no call edge can carry: a method is
+            invoked through the surface, never by name, so without a supply clause in `ns-depends`
+            this dependency exists in the code and nowhere in the graph.
+
+            The fixture makes the claim exact, and sharply: `poly-ext` calls nothing in `poly`.
+            Its method's body reaches only its own functions, and the trailing top-level form
+            NAMES `poly/area` but is bounded out of the method, so it contributes nothing. The
+            ONE edge below can therefore have come from nothing but the fulfilment."
+    (let [db (apply extract poly-fixture)]
+      (is (= #{["poly-ext" "poly"]} (clj-module/ns-dependencies db))))))
+
 (deftest a-top-level-form-after-a-method-is-not-attributed-to-it
   (testing "where positional attribution STOPS. A defmethod body call has no enclosing var and the
             analysis offers no extent for the method, so the bound has to come from somewhere: the

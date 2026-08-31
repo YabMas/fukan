@@ -116,16 +116,29 @@
   [(is ?ns ::Ns) (corresponds ?_m ?ns)])
 
 (s/defrelation :ns-depends
-  "Namespace ?a depends on ?b — ?a owns a function that calls one ?b owns (the extracted `:calls`
-   graph at namespace altitude). Intra-project only: extraction resolves `:calls` between extracted
-   functions, so calls into libraries are not edges here (they surface as `:performs` effects).
+  "Namespace ?a depends on ?b — the extracted DEMAND and SUPPLY graphs at namespace altitude: ?a
+   owns something that CALLS one ?b owns, or something that FULFILS one ?b owns. Intra-project
+   only: extraction resolves both between extracted nodes, so calls into libraries are not edges
+   here (they surface as `:performs` effects) and neither are methods on a library's multimethod.
+
+   Supply is a dependency in the direction that surprises people, which is exactly why it needs
+   stating: a namespace writing a `defmethod` depends on the namespace that owns the multimethod,
+   and never the reverse. It is also the direction no call edge can carry — a method is invoked
+   through the surface, never by name — so without this clause the dependency exists in the code
+   and nowhere in the graph.
 
    Its design-side counterpart `module-depends` (fukan.common.vocab.code.subsystem) is built from
-   authored `:delegates` and so says nothing until a region is modelled; this one needs no authoring
-   at all and is visible the moment extraction runs. That is what makes it the SCOUTING instrument —
-   the leaves of an entirely unmodelled codebase are readable before a line is authored."
+   authored `:delegates` and `fulfils` and so says nothing until a region is modelled; this one
+   needs no authoring at all and is visible the moment extraction runs. That is what makes it the
+   SCOUTING instrument — the leaves of an entirely unmodelled codebase are readable before a line
+   is authored.
+
+   Two bodies rather than one `or-join`, because they are two independent readings of the same
+   altitude; the union is what a multi-bodied rule already means. Neither needs a sort guard on
+   the member it walks: `contains` reaches a function or a method only from its namespace."
   [?a ?b]
-  [(is ?a ::Ns) (contains ?a ?f) (calls ?f ?g) (contains ?b ?g) (is ?b ::Ns) [(not= ?a ?b)]])
+  [(is ?a ::Ns) (contains ?a ?f) (calls ?f ?g)   (contains ?b ?g) (is ?b ::Ns) [(not= ?a ?b)]]
+  [(is ?a ::Ns) (contains ?a ?m) (fulfils ?m ?g) (contains ?b ?g) (is ?b ::Ns) [(not= ?a ?b)]])
 
 (defn ns-dependencies
   "The complete CODE-side namespace dependency graph as a set of [from to] name pairs."

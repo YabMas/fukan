@@ -451,7 +451,15 @@
 ;; `:fulfils` slot's target-type and found-none/found-several pair, `:calls`'s target-type, and
 ;; the two coverage laws. `Ns.child`'s target-type law only changes its disjunction, so it moves
 ;; the hash and not the count.
-(def ^:private golden-terms {:count 144 :hash -720294356})
+;; 2026-08-31 (c): both dependency graphs count supply. `ns-depends` and `module-depends` each
+;; gain a SECOND rule body reading `fulfils` — the union a multi-bodied derived relation already
+;; means. Supply is a dependency in the direction no call edge can carry (a method is invoked
+;; through its surface, never by name), so without these clauses it existed in the code and
+;; nowhere in the graph; on the design side it also brings a declared fulfilment under
+;; `:may-depend` conformance, which is the point of declaring one. Terms 146 (+2), one rule each.
+;; Laws hold at 79 — a defrelation declares no denial, and the architecture laws read the relation
+;; by name, so they widen without moving.
+(def ^:private golden-terms {:count 146 :hash 791417815})
 (def ^:private golden-laws  {:count 79 :hash 1533973671})
 
 (deftest terms-are-stable

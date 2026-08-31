@@ -37,18 +37,29 @@
   [(is ?m Module) (contains ?m ?x)])
 
 (s/defrelation :module-depends
-  "the COMPLETE module→module dependency graph: a call dependency (?m owns an op that :delegates to
-   an op ?n owns) UNIONed with data-adoption (?m owns an op whose SIGNATURE mentions a ref-Schema
-   naming a Kind ?n owns). `signature-type` is the dialect's — it reaches parameter and result
-   types through an arrow directly and through each arity of a multi-arity function, which is one
-   place this file no longer has to know the shape of a function type. The reader `module-dependencies` and the layering laws below read this by name."
+  "the COMPLETE module→module dependency graph, over the three ways one module can rely on
+   another: a CALL dependency (?m owns an op that :delegates to an op ?n owns), DATA-ADOPTION (?m
+   owns an op whose SIGNATURE mentions a ref-Schema naming a Kind ?n owns), and SUPPLY (?m fulfils
+   a surface ?n owns). `signature-type` is the dialect's — it reaches parameter and result types
+   through an arrow directly and through each arity of a multi-arity function, which is one place
+   this file no longer has to know the shape of a function type. The reader `module-dependencies`
+   and the layering laws below read this by name.
+
+   Supply rides a SECOND rule body rather than the or-join, because its edge leaves the module
+   itself and not something the module owns — a fulfilment is a claim a module makes about the
+   whole of itself. Omitting it would leave a hole exactly where the word is most used: a
+   satisfier is usually in a different subsystem from the surface it supplies, which is what makes
+   the inversion worth declaring, and a declared fulfilment that escaped conformance would be the
+   one dependency a module could author with no architectural consequence. `fulfils` is read by
+   name, so nothing here requires the pattern tier that declares it."
   [?m ?n]
   [(module-owns ?m ?op)
    (or-join [?op ?n]
      (and (delegates ?op ?op2) (module-owns ?n ?op2))
      (and (signature ?op ?sig) (signature-type ?sig ?sch)
           (names-kind ?sch ?k) (module-owns ?n ?k)))
-   [(not= ?m ?n)]])
+   [(not= ?m ?n)]]
+  [(is ?m Module) (fulfils ?m ?op) (module-owns ?n ?op) [(not= ?m ?n)]])
 
 (defstructure Subsystem
   "A cluster of Modules realizing a capability — the rung above Module in the grouping ladder
