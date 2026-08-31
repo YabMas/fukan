@@ -172,8 +172,11 @@
 (def fn-defining
   "clj-kondo `:defined-by` values that denote a computation unit.
    `defn`/`defn-` are functions; `defmulti` is a POLYMORPHIC operation (a dispatch fn with a
-   uniform signature its co-owned methods implement) — a concrete surface, not a split-ownership
-   plug-point. `def`, `defmacro`, `defmethod`, etc. stay excluded."
+   uniform signature its methods implement) — a concrete surface, not a split-ownership
+   plug-point. `def`, `defmacro`, etc. stay excluded. So does `defmethod`, for a different reason:
+   not that it is uninteresting, but that it is not a SURFACE — nobody calls it by name — so it
+   extracts as a sort of its OWN (`fukan.common.extraction.clojure.method/Method`), supplying a
+   unit rather than defining one."
   #{'clojure.core/defn 'clojure.core/defn- 'clojure.core/defmulti})
 
 (defn extract-operation

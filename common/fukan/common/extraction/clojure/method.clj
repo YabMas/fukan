@@ -21,7 +21,8 @@
    The generic `Fulfilment` structure — pure, language-neutral intent — lives in
    `fukan.common.vocab.patterns.fulfilment`, which also owns the `fulfils` relation this
    contributes its fact-side edges to."
-  (:require [fukan.canvas.core.structure :as s :refer [defstructure]]
+  (:require [fukan.canvas.core.substrate :as sub]
+            [fukan.canvas.core.structure :as s :refer [defstructure]]
             [fukan.common.extraction.clojure.operation :refer [Fn]]
             [fukan.common.vocab.code.module :refer [Module]]
             [fukan.common.vocab.patterns.fulfilment :refer [Fulfilment]]))
@@ -111,3 +112,35 @@
    ;; Operation of the function it fulfils.
    :satisfier [:inv :child]
    :surface   :fulfils})
+
+(defn method-id
+  "The natural key of a satisfier node — the TRIPLE (surface, dispatch value, implementing
+   namespace), spelled `\"ns/surface[dispatch]@impl-ns\"`. Two namespaces supplying the same value
+   are two nodes because the last component differs; the same namespace supplying it twice is the
+   same node, which is the honest answer to a duplicate `defmethod`.
+
+   The bracket is what keeps it out of `Fn`'s key space: an extracted function keys as `ns/name`,
+   and neither a namespace nor a var name can hold one."
+  [surface-id dispatch impl-ns]
+  (str surface-id "[" dispatch "]@" impl-ns))
+
+(defn extract-method
+  "Build an extracted `Method` InstanceValue (the fact twin of a design Fulfilment) from its
+   natural-key id `mid`, the id of the `Fn` it implements, the `dispatch` value as clj-kondo
+   spells it, and `call-ids` — the natural-key ids of the functions its body calls (a `:calls`
+   clause of `substrate/Ref`s, resolved by the assembler like an authored ref).
+
+   `mid` is also the NAME. A satisfier has no simple name of its own — it is identified by the
+   triple, and nothing calls it — so the key is the only label a finding can carry.
+
+   The dispatch value rides the `:fulfils` edge as its `:rel/label` rather than a slot on the
+   node, because it is a property of the SUPPLY relation and not of the supplier: it is what
+   selects this method for that surface."
+  [mid surface-id dispatch call-ids]
+  (sub/->InstanceValue ::Method mid nil nil
+                       (cond-> [{:rk :fulfils :card :one
+                                 :targets [(sub/->Ref surface-id)]
+                                 :labels  [dispatch]}]
+                         (seq call-ids) (conj {:rk :calls :card :many
+                                               :targets (mapv sub/->Ref call-ids)}))
+                       false))

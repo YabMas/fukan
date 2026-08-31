@@ -8,6 +8,14 @@
         metosin/malli {:mvn/version "0.16.4"}
         instaparse/instaparse {:mvn/version "1.5.0"}
         org.babashka/sci {:mvn/version "0.8.41"}
+        ;; The reader, for TOP-LEVEL FORM BOUNDS in the extraction seam. clj-kondo's analysis
+        ;; gives a defmethod no var-definition and no extent, so where one method's body stops is
+        ;; readable nowhere else — and a column test cannot stand in, because a top-level form may
+        ;; be indented. Pinned explicitly rather than inherited through clj-kondo's edamame: a
+        ;; transitive version that moved would move attribution with it — and that read is
+        ;; permissive by binding `*alias-map*`/`*data-readers*` to FUNCTIONS, which this version
+        ;; consults by invocation.
+        org.clojure/tools.reader {:mvn/version "1.3.4"}
         clj-kondo/clj-kondo {:mvn/version "2024.03.13"}
         ;; Cozo query engine. JNI native lib auto-downloads on first use to ~/.cozo_java_native_lib/.
         io.github.cozodb/cozo-clj {:mvn/version "0.7.5"}}
