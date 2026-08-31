@@ -243,3 +243,41 @@
             multi-arity function — the kinds differ before the arities are even compared"
     (let [db (build/vars->cozo [#'t-op-multi #'t-mod-multi #'t-fn-half #'t-ns-half])]
       (is (= #{["gates" "multi-thing"]} (offenders db :correspondence/signature-disagrees))))))
+
+;; ── the pairing must be one-to-one ───────────────────────────────────────────
+;; Matching by NAME is what makes adoption cheap — no module names the namespace realizing it —
+;; and a name can match twice. When it does, every law above reads a pairing that is no longer a
+;; pairing, and reads it silently: a module counts as realized by code that was somebody else's,
+;; and a namespace counts as adopted so the functions in it stop being unaccounted for.
+
+;; One module, two namespaces: `views` is a dotted suffix of both.
+(Module ^{:name "views"} t-mod-views)
+(clj-module/Ns ^{:name "app.ui.views"}     t-ns-ui-views)
+(clj-module/Ns ^{:name "app.notion.views"} t-ns-notion-views)
+
+(deftest a-module-matching-two-namespaces-is-an-offender
+  (testing "the offender carries both namespaces, because the edit is a name that picks one"
+    (let [db (build/vars->cozo [#'t-mod-views #'t-ns-ui-views #'t-ns-notion-views])]
+      (is (= #{["views" "app.notion.views" "app.ui.views"]}
+             (offenders db :correspondence/module-ambiguous))
+          "ordered by name, so one ambiguity is one finding and not the same pair twice")
+      (testing "and neither namespace is claimed twice, so the other direction stays quiet"
+        (is (empty? (offenders db :correspondence/namespace-ambiguous))))
+      (testing "nor does the module read as unrealized — it pairs, twice over"
+        (is (empty? (offenders db :correspondence/module-unrealized)))))))
+
+;; Two modules, one namespace: `views` and `ui-views` are both dotted suffixes of `app.ui.views`.
+(Module ^{:name "ui-views"} t-mod-ui-views)
+
+(deftest a-namespace-matching-two-modules-is-an-offender
+  (testing "the other direction, and a different edit — which of two design boundaries owns it"
+    (let [db (build/vars->cozo [#'t-mod-views #'t-mod-ui-views #'t-ns-ui-views])]
+      (is (= #{["app.ui.views" "ui-views" "views"]}
+             (offenders db :correspondence/namespace-ambiguous)))
+      (testing "each module matched exactly one namespace, so the first direction stays quiet"
+        (is (empty? (offenders db :correspondence/module-ambiguous)))))))
+
+(deftest an-unambiguous-pairing-offends-neither
+  (let [db (build/vars->cozo (into design-vars [#'t-fn-read #'t-fn-write #'t-ns]))]
+    (is (empty? (offenders db :correspondence/module-ambiguous)))
+    (is (empty? (offenders db :correspondence/namespace-ambiguous)))))

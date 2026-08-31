@@ -419,8 +419,17 @@
 ;; "every type-reference resolves to a modelled Kind" now reports the NAME, which is the only part
 ;; a reader can act on (the anonymous `^:value` Schema rendered as a bare eid). Two failures, two
 ;; findings, each naming what it can.
+;;
+;; Laws 65→67 (+2): the `Module ↦ Ns` pairing must be one-to-one, and until now nothing said so.
+;; Matching by NAME is what makes adoption cheap, and a name can match twice — `notion-views`
+;; matched both `nido.notion.views` and the bb-task wrapper `tasks.nido-notion-views`. Every law
+;; downstream then read a pairing that was no longer one, silently: a module counted as realized
+;; by somebody else's code, and a namespace counted as adopted so its unmodelled functions left
+;; the public-unaccounted law's view. The ambiguity was visible only as a count on the
+;; correspondence card, which nothing gates on. Two laws rather than one, because a module
+;; matching twice and a namespace matched twice are two different edits.
 (def ^:private golden-terms {:count 129 :hash 1658986965})
-(def ^:private golden-laws  {:count 65 :hash -919841517})
+(def ^:private golden-laws  {:count 67 :hash -1388936911})
 
 (deftest terms-are-stable
   (let [terms (normalized-terms)]

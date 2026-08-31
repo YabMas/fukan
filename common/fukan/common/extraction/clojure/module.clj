@@ -24,8 +24,9 @@
   ;; The law rides `Ns` because `correspond` has no law position of its own: it lowers EXCLUSIVELY
   ;; to rules — definitional and conservative, which is THE TEST's verdict on it — so a denial
   ;; ABOUT a correspondence has to ride some structure, and the codomain declared beside it is the
-  ;; honest one. If these accumulate, a law position on `correspond` is the change to make; two
-  ;; laws across two files is not yet a pattern.
+  ;; honest one. Six across two files now, all of them the same shape — the pairing's coverage and
+  ;; its uniqueness — which is close enough to a pattern that a law position on `correspond` is the
+  ;; next real change here.
   (law "every modelled Module is realized by a namespace"
     ;; Without this, a Module that fails to pair is INVISIBLE. The Operation-level law
     ;; (fukan.common.extraction.clojure.operation) is scoped to modules that DID pair, so an
@@ -43,7 +44,42 @@
      :rules     [[(some-ns ?ns) (is ?ns ::Ns)]]
      :where     [(some-ns ?_ns)
                  (is ?m Module) (design ?m)
-                 (not-join [?m] (corresponds ?m ?ns))]}))
+                 (not-join [?m] (corresponds ?m ?ns))]})
+
+  ;; ── the pairing must be one-to-one, in BOTH directions ──────────────────────────────────────
+  ;; Matching by name is what makes adoption cheap — no module names the namespace realizing it —
+  ;; and a name can match twice. When it does, everything downstream reads a pairing that is no
+  ;; longer a pairing, and reads it SILENTLY: coverage counts a module realized when the code that
+  ;; realized it was somebody else's, and the public-unaccounted law counts a namespace adopted so
+  ;; every unmodelled function in it drops out of view. Measured on nido: `notion-views` matched
+  ;; both `nido.notion.views` and the bb-task wrapper `tasks.nido-notion-views`, because `-` and
+  ;; `.` normalize alike and the wrapper's name ends in the production one. Four laws found
+  ;; nothing; the ambiguity was visible only in the correspondence card's `ambiguous:` count,
+  ;; which nothing gates on.
+  ;;
+  ;; Two laws rather than one, because the two directions are two different edits. A module
+  ;; matching twice is fixed by a name that picks one; a namespace matched twice is fixed by
+  ;; deciding which of two design boundaries owns it. Each also occurs alone: the first when one
+  ;; module's name suffixes two namespaces, the second when two module names suffix one namespace.
+  ;;
+  ;; Ordered by name (`<`) so one ambiguity is one finding rather than the same pair twice.
+  (law "a modelled Module is realized by at most one namespace"
+    {:scope     :global
+     :key       :correspondence/module-ambiguous
+     :offenders [?m ?ns1 ?ns2]
+     :where     [(is ?m Module) (design ?m)
+                 (corresponds ?m ?ns1) (corresponds ?m ?ns2)
+                 (named ?ns1 ?n1) (named ?ns2 ?n2)
+                 [(< ?n1 ?n2)]]})
+
+  (law "a namespace realizes at most one Module"
+    {:scope     :global
+     :key       :correspondence/namespace-ambiguous
+     :offenders [?ns ?m1 ?m2]
+     :where     [(is ?ns ::Ns)
+                 (corresponds ?m1 ?ns) (corresponds ?m2 ?ns)
+                 (named ?m1 ?n1) (named ?m2 ?n2)
+                 [(< ?n1 ?n2)]]}))
 
 ;; ── the correspondence: the ENTIRE Module ↔ Ns bridge (the twin ROOT) ────────
 ;; Matching is a flat identity query — a canvas short-name is a separator-agnostic dotted suffix of the
